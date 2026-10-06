@@ -82,7 +82,7 @@ private:
         const char* header = nullptr;
     };
 
-    static constexpr size_t CATEGORY_COUNT = 5;
+    static constexpr size_t CATEGORY_COUNT = 6;
 
     static bool AnyVisible(const Category& category);
 

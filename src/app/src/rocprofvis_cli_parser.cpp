@@ -38,7 +38,8 @@ bool
 CLIParser::AddOption(const std::string& short_flag,
                      const std::string& long_flag,
                      const std::string& desc,
-                     bool               take_arg)
+                     bool               take_arg,
+                     const std::string& optional_value)
 {
     if(short_flag.empty() || long_flag.empty())
     {
@@ -60,7 +61,7 @@ CLIParser::AddOption(const std::string& short_flag,
         return false;
     }
     
-    m_options[long_flag] = { short_flag, long_flag, desc, take_arg };
+    m_options[long_flag] = { short_flag, long_flag, desc, take_arg, optional_value };
     m_short_to_long[short_flag] = long_flag;
     return true;
 }
@@ -104,6 +105,15 @@ CLIParser::Parse(int argc, char** argv)
                 m_results[long_flag].argument = argv[i + 1];
                 i++;  // Skip the next argument as it's consumed
             }
+            else if(!opt.optional_value.empty() && (i + 1 < argc))
+            {
+                std::string next_arg = argv[i + 1];
+                if(next_arg == opt.optional_value)
+                {
+                    m_results[long_flag].argument = next_arg;
+                    i++;
+                }
+            }
         }
     }
 }
@@ -146,14 +156,32 @@ CLIParser::GetHelp() const
     ss << "Usage: " << m_app_name << " ";
     for(const auto& [_, opt] : m_options)
     {
-        ss << "[-" << opt.short_flag << (opt.take_arg ? " <arg>] " : "] ");
+        if(opt.take_arg)
+        {
+            ss << "[-" << opt.short_flag << " <arg>] ";
+        }
+        else if(!opt.optional_value.empty())
+        {
+            ss << "[-" << opt.short_flag << " [" << opt.optional_value << "]] ";
+        }
+        else
+        {
+            ss << "[-" << opt.short_flag << "] ";
+        }
     }
     ss << "\n\nOptions:\n";
 
     for(const auto& [_, opt] : m_options)
     {
-        ss << "  -" << opt.short_flag << ", --" << std::left << std::setw(20) << opt.long_flag
-           << opt.description << "\n";
+        std::string flag_label = opt.long_flag;
+        if(!opt.optional_value.empty())
+        {
+            flag_label += " [";
+            flag_label += opt.optional_value;
+            flag_label += "]";
+        }
+        ss << "  -" << opt.short_flag << ", --" << std::left << std::setw(20)
+           << flag_label << opt.description << "\n";
     }
 
     return ss.str();

@@ -53,13 +53,16 @@ source wins; please update this file in the same change.
     `roc-optiq-controller-script-tests`.
 
 The View must never include controller `src/` headers - only `inc/`.
+This is enforced by CMake: `inc/` is a `PUBLIC` include directory of
+`roc-optiq-controller` and `src/` is `PRIVATE`. Controller tests that
+exercise internals add `src/` to their own target explicitly.
 The controller must never include View headers.
 
 ## 2. Public C ABI Surface (`src/controller/inc/`)
 
-Three headers form the entire public contract:
+The core public contract is three headers:
 
-- `rocprofvis_controller.h` - all functions.
+- `rocprofvis_controller.h` - all core functions.
 - `rocprofvis_controller_types.h` - opaque handle typedefs and the full
   set of `*_properties_t` enums (the property IDs you pass to the
   generic getters).
@@ -67,6 +70,9 @@ Three headers form the entire public contract:
   `rocprofvis_controller_object_type_t`,
   `rocprofvis_controller_primitive_type_t`, sort orders, the property
   banks for events / samples / tracks / tables / summary / etc.
+
+Feature sub-APIs add `rocprofvis_controller_analysis.h` (section 2.7),
+`rocprofvis_controller_script.h`, and `rocprofvis_profiler.h`.
 
 ### 2.1 Handle types
 
@@ -235,8 +241,10 @@ For compute metric fetches, results land in a
 
 ### 2.7 The "analysis" sub-API
 
-Cross-cutting analytics live in
-`src/controller/src/rocprofvis_controller_analysis.{h,cpp}` and are
+Cross-cutting analytics are declared in the public
+`inc/rocprofvis_controller_analysis.h`, implemented by the `Analysis`
+class in `src/rocprofvis_controller_analysis_internal.h` /
+`src/rocprofvis_controller_analysis.cpp`, and are
 exposed as `rocprofvis_analysis_*` functions (note this family drops
 the `_controller` infix). They reuse the same `Job + Future` plumbing
 as the data fetchers and back the View's Track Details and Top Events
@@ -866,7 +874,18 @@ QueryArgumentStore          m_query_arguments;
 QueryDataStore              m_query_output;
 std::atomic<uint64_t>       m_async_fetch_counter;
 ComputePivotTable*          m_kernel_metric_table;
+std::string                 m_profiler_version;
+std::string                 m_profiler_git_version;
+std::string                 m_schema_version;
 ```
+
+`LoadRocpd` calls `FetchMetadata` (use case `kRPVComputeFetchMetadata`)
+before loading workloads and stores the single `compute_metadata` row.
+The strings are exposed through `GetString` as
+`kRPVControllerComputeProfilerVersion`,
+`kRPVControllerComputeProfilerGitVersion`, and
+`kRPVControllerComputeSchemaVersion`. A failed metadata read logs a
+warning and leaves the strings empty; it does not fail the load.
 
 Two `AsyncFetch` overloads:
 
@@ -1321,7 +1340,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Implement a new compute pre-baked table                 | Add a `ComputeTableDefinition` row in `COMPUTE_TABLE_DEFINITIONS`       |
 | Implement a new compute plot                            | Add a `ComputeTablePlotDefinition` row in `COMPUTE_PLOT_DEFINITIONS`    |
 | Fetch one PC-sampling layer                             | Use the matching `ComputeTrace::AsyncFetchPcSampling*` method and the kernel-owned `PcSampling` handle |
-| Implement a new analysis function                       | Extend `Analysis` and add a free function in `rocprofvis_controller_analysis.h` |
+| Implement a new analysis function                       | Extend `Analysis` and add a free function in `inc/rocprofvis_controller_analysis.h` |
 | Add a new object type                                   | See section 9 (six-step recipe)                                         |
 | Add a new property to an existing object type           | Append to that bank's enum inside the `__first / __last` brackets       |
 | Generate / consume a unique 64-bit per-type id          | `IdGenerator<MyType>` (see `rocprofvis_controller_id.h`)                |
@@ -1411,6 +1430,8 @@ free" sequence.
   `rocprofvis_controller_object_type_t`,
   `rocprofvis_controller_primitive_type_t`, sort orders, table types,
   table arguments, and PC-sampling property groups/arguments.
+- `rocprofvis_controller_analysis.h` -> `rocprofvis_analysis_*`
+  functions and `rocprofvis_analysis_counter_statistics_t`.
 
 ### Core building blocks (`src/controller/src/`)
 
@@ -1426,7 +1447,8 @@ free" sequence.
 - `rocprofvis_controller_job_system.{h,cpp}` -> `Job`, `JobSystem`.
 - `rocprofvis_controller_table.{h,cpp}` -> `Table` base.
 - `rocprofvis_controller_trace.{h,cpp}` -> `Trace` base.
-- `rocprofvis_controller_analysis.{h,cpp}` -> `Analysis` (queue
+- `rocprofvis_controller_analysis_internal.h` /
+  `rocprofvis_controller_analysis.cpp` -> `Analysis` (queue
   utilization, room for more).
 - `rocprofvis_controller_script.{h,cpp}` / `script_engine.h` ->
   `ScriptEngine`, `rocprofvis_script_*` (when scripting is enabled).

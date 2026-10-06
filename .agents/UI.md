@@ -80,9 +80,10 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
 - **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`, a submodule
-  pinned to v0.53.1) with vendored mbedTLS. Targets the OpenAI
-  chat-completions API. Built only under
-  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
+  pinned to v0.53.1). TLS follows `CRYPTO_BACKEND`: vendored mbedTLS by
+  default, or a system OpenSSL when `-DCRYPTO_BACKEND=OpenSSL` (the same
+  choice as remote/SSH). Targets the OpenAI chat-completions API. Built
+  only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -258,8 +259,11 @@ Owns the OS-level shell. Specifically:
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
   (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
-  `-v/--version`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Add new flags by
+  `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
+  version. `-v hash` also prints the git commit. Official builds print the
+  hash alone. An unofficial build prints `unknown` and a line that the
+  commit hash is not recorded. About shows the same text. Add new flags by
   calling `AddOption` in `main.cpp::parse_command_line_args`.
 
 ### `src/core/`
@@ -315,6 +319,12 @@ The bridge between model and view. **Public** API in `inc/`:
   (`rocprofvis_handle_t`, `rocprofvis_controller_t`, ...) and result codes.
 - `rocprofvis_profiler.h` - profiler config/session C API used by the
   optional launcher, including local and remote async launch.
+- `rocprofvis_controller_analysis.h` - `rocprofvis_analysis_*` C API
+  (queue utilization, counter statistics, top-events tables).
+
+Only `inc/` is exported to consumers; `src/` is a `PRIVATE` include
+directory of `roc-optiq-controller`, so a View include of a controller
+`src/` header fails to compile.
 
 Internal source layout under `src/controller/src/`:
 
@@ -335,7 +345,8 @@ Internal source layout under `src/controller/src/`:
 - `rocprofvis_controller_string_table.{h,cpp}` - intern-style table.
 - `rocprofvis_controller_table.{h,cpp}` - generic table support.
 - `rocprofvis_controller_trace.{h,cpp}` - trace-file lifecycle.
-- `rocprofvis_controller_analysis.{h,cpp}` - cross-cutting analytics
+- `rocprofvis_controller_analysis.cpp` /
+  `rocprofvis_controller_analysis_internal.h` - cross-cutting analytics
   (e.g. queue utilization).
 - `system/` - per-domain modules covering events, ext_data, flow
   control, graphs, memory management, samples (and sample LOD),
@@ -1343,7 +1354,8 @@ The compute analogue of `TraceView`. Owns:
     workload SOL, workload roofline).
   - `ComputeKernelDetailsView` - per-kernel deep-dive.
   - `ComputeTableView` - hierarchical metric tables.
-  - `ComputeWorkloadView` - system info + profiling config tables.
+  - `ComputeWorkloadView` - "Profile Details" tab: analysis metadata,
+    system info, and profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
   - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
   - `ComputeTester` - dev-mode scratchpad
@@ -1381,9 +1393,19 @@ sentinel.
 
 ### `ComputeWorkloadView` (`rocprofvis_compute_workload_view.{h,cpp}`)
 
-Shows the two static tables for a workload:
-`RenderSystemInfo(WorkloadInfo)` and
-`RenderProfilingConfig(WorkloadInfo)`. Layout uses an `HSplitContainer`.
+Backs the **Profile Details** tab (class and `TAB_ID` keep their older
+"workload" names). Two bordered panels, top to bottom:
+
+- **Analysis Information** - `RenderAnalysisInfo(AnalysisInfo)` renders the
+  trace-level `compute_metadata` row (ROCm Compute Profiler version, Git
+  revision, database schema version) from
+  `ComputeDataModel::GetAnalysisInfo()`. It does not depend on the selected
+  workload, so it renders even when workload info is unavailable.
+- **Workload Information** - `RenderSystemInfo(WorkloadInfo)` and
+  `RenderProfilingConfig(WorkloadInfo)` side by side in an
+  `HSplitContainer`.
+
+All three tables draw rows through `RenderInfoRow` (two copyable cells).
 
 ### `ComputeKernelDetailsView` (`rocprofvis_compute_kernel_details.{h,cpp}`)
 
@@ -1423,20 +1445,29 @@ Data-driven block diagram of the GPU memory hierarchy, built from a
 layout model and its parser live in
 `model/compute/rocprofvis_memory_chart_model.{h,cpp}`:
 
-- `MemChartBlock` - one node: `id`, `column`, optional `order`, `title`,
-  `content` (a list of `MemChartContentItem`, each a metric ref plus an
-  optional label override and semantic `category`), and optional
+- `MemChartBlock` - one node: a string `id`, `column`, optional `order`,
+  `title`, `content` (a list of `MemChartContentItem`, each a metric ref
+  plus an optional label override and semantic `category`), and optional
   `children` (nested blocks, making the block a container box).
 - `MemChartArrow` - one edge: `from`/`to` block ids, `direction`
   (`MemChartArrowDir::kForward|kBackward|kBoth`), a metric ref, an
   optional title override, and a semantic `category`.
+  `OnLayoutLoaded()` resolves `from`/`to` to `from_block`/`to_block`
+  pointers once, so layout and routing never look ids up.
+
+Block ids are readable strings (`"l2"`, `"data_fabric"`), unique across
+the whole layout including nested children, so an arrow reads as
+`{ "from": "l2", "to": "data_fabric" }`. `ParseFromString()` rejects a
+layout with a missing, numeric, or duplicate block id, or an arrow whose
+`from`/`to` names no block; the caller then falls back to the next layout
+source instead of drawing disconnected arrows.
 - `MemChartMetricRef` - references a metric by its full dotted id
   `category.table.entry` (e.g. "3.1.0").
 - `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
   No ImGui is pulled into the model file.
 
 This shape mirrors what the data team stores in the `compute_workload`
-table (block rows + arrow rows keyed by id). `LoadWorkloadLayout()`
+table (block rows + arrow rows keyed by block id). `LoadWorkloadLayout()`
 resolves a layout in priority order: an optional dev override at
 `<config-dir>/memory_chart.json` -> the per-workload JSON blob in
 `compute_workload.memory_chart_extdata` -> an **architecture-specific
@@ -1527,6 +1558,8 @@ display modes, several `KernelInfo::DispatchMetric`s
 Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
+Dynamic text uses `ImGui::TextUnformatted` so names, descriptions,
+and units containing percent signs are displayed literally.
 
 ### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
@@ -1638,10 +1671,11 @@ performing the scroll.
   `SetFetchMetricsCallback`).
 - `ComputeDataModel` (`model/compute/rocprofvis_compute_data_model.{h,cpp}`)
   holds `WorkloadInfo`, `KernelInfo`, `MetricValue` per
-  `(store_id, kernel_id|workload_id)`.
+  `(store_id, kernel_id|workload_id)`, plus the single trace-level
+  `AnalysisInfo` filled by `DataProvider::LoadAnalysisInfo()`.
 - `compute_model_types.h` is the core type vocabulary:
   `AvailableMetrics::Entry/Table/Category`, `KernelInfo`,
-  `WorkloadInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
+  `WorkloadInfo`, `AnalysisInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
   `ComputeTableInfo`, `Point`. Reuse these types whenever you handle
   metric IDs or roofline geometry - **do not reinvent metric
   identifiers**; use `MetricId::ToString()` etc.
@@ -1787,7 +1821,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
 `kGoToTimelineSpot`, `kTimeFormatChanged`,
-`kRequestProgressUpdate`, `kProfilerStatusChanged`,
+`kThemeChanged`, `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
@@ -1826,6 +1860,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 
 - `GetUserSettings()` -> `UserSettings` (display, units, "don't ask"
   flags). `ApplyUserSettings(old, save_json)` writes JSON to disk.
+  A change of `use_dark_mode` emits `kThemeChanged` (no payload / no
+  source ID) so widgets that cache palette colors can rebuild. Live
+  `GetColor()` callers do not need to subscribe.
 - `DisplaySettings::show_node_colors` /
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
@@ -2020,10 +2057,12 @@ does not offer the toolbar button.
 **Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
 same way remote and profiler launch are gated. Everything in
 `src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
-option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
-unless remote asks for them - which is why a default clone needs
-neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
-submodule. Every call site outside the folder is
+option is off, and so are `cpp-httplib`, its TLS backend, and
+`SecretStore` unless remote asks for them. The default backend is
+vendored mbedTLS; `-DCRYPTO_BACKEND=OpenSSL` links a system OpenSSL
+instead and does not build mbedTLS. A default clone needs neither the
+`thirdparty/cpp-httplib` nor the `thirdparty/mbedtls` submodule. Every
+call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
 View-menu item), the `TraceView` toolbar, and `SettingsPanel` (the
@@ -2330,8 +2369,10 @@ focus, and it is already false by the frame after a checkbox toggles,
 since `ButtonBehavior` clears `ActiveId` in the same frame it reports
 the press), `Validate` (empty string = OK), `FlattenToExecution`
 (curated settings -> env + the **complete** argv after `argv[0]`,
-including `extra_argv`, the output flag in this profiler's spelling, and
-the target plus its arguments; caller then merges `extra_env`),
+including `extra_argv`, any output-path flag this profiler uses, and
+the target plus its arguments; some tools put the output path only in
+env, or nowhere - do not assume `--output`. Caller then merges
+`extra_env`),
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
@@ -2341,13 +2382,35 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
 Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
-Tabs: Quick, Sampling, ROCm,
+Tabs: General, Sampling, ROCm,
 Process Sampling, Parallelism, Advanced, plus Instrument (only when the
 tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
 Perfetto options are nested inside Advanced, not a top-level tab.
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
+
+`FlattenToExecution` is per-tool, not one run-shaped argv for every
+binary. Shared `EmitCuratedEnv` writes `ROCPROFSYS_*` (including
+`ROCPROFSYS_OUTPUT_PATH` from the Output folder field). Then:
+
+- **Run and Sample** share `FlattenRunOrSample`: `--preset=`, `--trace=`
+  (to override preset precedence), `--output <dir>`, `--`, target plus
+  `SplitArguments` of its args. `rocprof-sys-sample` registers the same
+  common argv as run; it forces sampling inside the binary, so Flatten
+  does not special-case Sample.
+- **Instrument** is one-shot **runtime** instrumentation
+  (`FlattenInstrumentRuntime`): `-I` / `-E` / `--min-instructions` when
+  set, then `--` plus the full target command. It does **not** emit
+  `--preset`, `--trace`, or `--output`. `-o`/`--output` is a rewritten-
+  binary filename on this tool and switches Dyninst into rewrite-and-
+  stop, which is a later two-stage mode, not the Output folder. Perfetto
+  enablement is `ROCPROFSYS_TRACE` in env. A leftover `--preset` selection
+  is ignored and `GetWarnings` says so; choose Custom or switch tool.
+
+`extra_argv` stays the override hatch on every tool (last profiler flags,
+still ahead of `--`). Putting `-o <file>` there is how a power user would
+opt into rewrite on Instrument; do not strip it.
 
 **`LaunchConfig` (`rocprofvis_launch_config.h`)** is the serializable
 payload: `profiler_id`, `tool`, `connection` (`ConnectionType
@@ -2407,7 +2470,13 @@ connection-mode selector and SSH UI live in the dialog
 an `ExecutionCache` (lazy `FlattenToExecution` result + command
 preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
 lazily creates it; the only entry point is `File > Launch Profiler...`
-(`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
+(`#ifdef ROCPROFVIS_ENABLE_PROFILER`). Closing the window **hides** it:
+the orchestrator and last-run console stay, `Update()` is still pumped
+every frame from `AppWindow`, and reopen lands on the configure screen
+so **View Last Run** / **View Run** still bind to that session. A new
+`Launch` replaces the session; destroying the dialog (app shutdown)
+tears it down. Remote download-progress popups still render while the
+launcher is hidden; SSH auth modals are already owned by `AppWindow`.
 
 There is deliberately **no** selected-tool index beside `m_config.tool` -
 the enum is the only copy. An earlier version kept an `m_tool_index` in
@@ -2436,8 +2505,9 @@ list from `FlattenToExecution`, one entry per argv entry - the controller
 never re-splits it), `env_vars`, `working_directory` (applied to the child
 process only), and `output_directory`, which deliberately does **not**
 reach the command line and currently has no reader in the controller at
-all - the backend emits the output flag itself, because profilers spell it
-differently and some take none. A struct rather than a parameter list
+all - the backend emits any output flag itself, because profilers spell it
+differently and some take none (rocprof-sys-instrument one-shot uses
+`ROCPROFSYS_OUTPUT_PATH` only). A struct rather than a parameter list
 because a transposed pair of the string fields would compile cleanly and
 launch the wrong command.
 
@@ -2941,6 +3011,11 @@ for nearly every common pattern.
 - **Confusing remote display detection with remote I/O.**
   `is_remote_display_session()` selects a file-dialog backend; it does
   not represent an `SshSession`.
+- **Assuming every rocprof-sys tool accepts `--output` / `--preset`.**
+  Those flags are run/sample only. On instrument, `--output` is a
+  rewritten-binary filename and `--preset` is a parse error. One-shot
+  instrument uses `ROCPROFSYS_OUTPUT_PATH` (and `ROCPROFSYS_TRACE`) in
+  env. Do not restore a single run-shaped argv for every tool.
 
 ## 19. Quick Reference Index of Every UI Class
 

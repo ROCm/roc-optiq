@@ -84,6 +84,13 @@ TopEventsView::TopEventsView(DataProvider&                      data_provider,
           DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,
           kRocProfVisDmOperationLaunchSample,
           "Top Sampled Thread Events" },
+        { { TableType::kAnalysisTopHipEventsTable,
+            TableType::kAnalysisTopHipEventsTableB },
+          kRPVControllerTableTypeHipEvents,
+          RequestType::kFetchAnalysisTopHipEventsTable,
+          DataProvider::ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID,
+          kRocProfVisDmOperationHipEvent,
+          "Top Hip Events" },
     };
 
     m_widget_name  = GenUniqueName("Top Events View");

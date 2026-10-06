@@ -444,6 +444,7 @@ const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t cat
         case kRocProfVisDmKernelDispatchTrack:
         case kRocProfVisDmMemoryAllocationTrack:
         case kRocProfVisDmMemoryCopyTrack:
+        case kRocProfVisDmHipEventTrack:
             return "Queue ";
         case kRocProfVisDmRegionTrack:
         case kRocProfVisDmRegionMainTrack:

@@ -199,7 +199,7 @@ namespace DataModel
         {
             return db->CachedTables(node_id)->GetTableCell("Stream", value, "name");
         } else
-        if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME)
+        if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME || column_index == Builder::SCHEMA_INDEX_SRC_QUEUE)
         {
             return db->CachedTables(node_id)->GetTableCell("Queue", value, "name");
         } else

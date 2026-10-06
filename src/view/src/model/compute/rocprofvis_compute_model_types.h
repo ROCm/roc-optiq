@@ -56,6 +56,10 @@ struct Point
 {
     double x;
     double y;
+    bool operator==(const Point& other) const
+    {
+        return x == other.x && y == other.y;
+    }
 };
 
 struct PcSampleState
@@ -189,8 +193,6 @@ struct WorkloadInfo
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
               ceiling_compute;
-        Point max;
-        Point min;
     };
     uint32_t                                 id;
     std::string                              name;
@@ -201,6 +203,14 @@ struct WorkloadInfo
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null
     Roofline                                 roofline;
+};
+
+// Trace-level compute_metadata describing the profiler that produced the database.
+struct AnalysisInfo
+{
+    std::string profiler_version;
+    std::string profiler_git_version;
+    std::string schema_version;
 };
 
 struct MetricValue

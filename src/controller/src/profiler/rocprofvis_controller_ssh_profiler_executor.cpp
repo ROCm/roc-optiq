@@ -147,12 +147,7 @@ std::string SshProfilerExecutor::DrainBridgeOutput()
 std::string SshProfilerExecutor::ReadOutput()
 {
     std::lock_guard<std::mutex> lock(m_output_mutex);
-    std::string chunk = DrainBridgeOutput();
-    if (!chunk.empty())
-    {
-        m_output_buffer += chunk;
-    }
-    return chunk;
+    return DrainBridgeOutput();
 }
 
 int SshProfilerExecutor::GetExitCode() const
@@ -160,11 +155,11 @@ int SshProfilerExecutor::GetExitCode() const
     return m_exit_code.load();
 }
 
-bool SshProfilerExecutor::Cancel()
+CancelOutcome SshProfilerExecutor::Cancel()
 {
     if (m_connection == nullptr)
     {
-        return false;
+        return CancelOutcome::kNotRunning;
     }
 
     // Signal the exec loop (via the bridge) to stop. Do NOT clear m_is_running
@@ -178,7 +173,7 @@ bool SshProfilerExecutor::Cancel()
     {
         bridge->Cancel();
     }
-    return true;
+    return CancelOutcome::kStopped;
 }
 
 } // namespace Controller

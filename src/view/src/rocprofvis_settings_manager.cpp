@@ -108,10 +108,10 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
     IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
     IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
-    IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
-    IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
+    IM_COL32(60, 114, 165, 255),   // Colors::kComparisonBase
+    IM_COL32(30, 124, 118, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
-    IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
+    IM_COL32(190, 150, 235, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(29, 30, 38, 255),     // Colors::kMemChartBg
@@ -231,10 +231,10 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
     IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
     IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
-    IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
-    IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
-    IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
-    IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
+    IM_COL32(123, 179, 224, 255),  // Colors::kComparisonBase
+    IM_COL32(101, 184, 174, 255),  // Colors::kComparisonTarget
+    IM_COL32(204, 177, 112, 255),  // Colors::kComparisonLesser
+    IM_COL32(185, 133, 242, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(248, 251, 255, 255),  // Colors::kMemChartBg
@@ -558,7 +558,9 @@ SettingsManager::GetStandardConfigPath()
 void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
-    (void) old_settings;  // currently unused
+    const bool theme_changed = old_settings.display_settings.use_dark_mode !=
+                               m_usersettings.display_settings.use_dark_mode;
+
     if(m_usersettings.display_settings.use_dark_mode)
     {
         m_color_store = &DARK_THEME_COLORS;
@@ -576,6 +578,14 @@ SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
     m_usersettings.display_settings.font_size_index =
         GetFontManager().ClampFontSizeIndex(m_usersettings.display_settings.font_size_index);
     GetFontManager().SetFontSize(m_usersettings.display_settings.font_size_index);
+
+    // Notify views that cache palette colors (e.g. the memory chart). Deferred
+    // until DispatchEvents, after m_color_store already points at the new theme.
+    if(theme_changed)
+    {
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kThemeChanged)));
+    }
 }
 
 void

@@ -293,6 +293,30 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
         REQUIRE(!m_workloads.empty());
     }
 
+    // Queries the single compute_metadata row describing the profiler that produced
+    // the database.
+    // Fixture Reads: m_db, m_trace
+    SECTION("Fetch Metadata")
+    {
+        PrintHeader("Fetch metadata");
+        rocprofvis_dm_table_id_t table_id = 0;
+        rocprofvis_dm_result_t   dm_result =
+            ExecuteComputeQuery(m_db, kRPVComputeFetchMetadata, {}, table_id);
+        REQUIRE(kRocProfVisDmResultSuccess == dm_result);
+        ComputeQueryResult result = ParseComputeQueryResult(m_trace, table_id);
+        REQUIRE(result.rows.size() == 1);
+        REQUIRE(result.columns.count(kRPVComputeColumnMetadataComputeVersion) > 0);
+        REQUIRE(result.columns.count(kRPVComputeColumnMetadataGitVersion) > 0);
+        REQUIRE(result.columns.count(kRPVComputeColumnMetadataSchemaVersion) > 0);
+
+        const std::vector<std::string>& row = result.rows[0];
+        REQUIRE(!row[result.columns.at(kRPVComputeColumnMetadataSchemaVersion)].empty());
+        spdlog::info("Metadata: compute_version={}, git_version={}, schema_version={}",
+                     row[result.columns.at(kRPVComputeColumnMetadataComputeVersion)],
+                     row[result.columns.at(kRPVComputeColumnMetadataGitVersion)],
+                     row[result.columns.at(kRPVComputeColumnMetadataSchemaVersion)]);
+    }
+
     // Fetches the metric catalog for each workload. Builds unique metric prefixes
     // (tableId.subTableId) and full metric IDs from the parsed category, table, and
     // entry components. Asserts that entry_id is the trailing metric_id component

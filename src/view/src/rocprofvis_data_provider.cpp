@@ -60,6 +60,9 @@ const uint64_t DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID =
 const uint64_t DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(
         RequestType::kFetchAnalysisTopLaunchSampleEventsTable);
+const uint64_t DataProvider::ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID =
+RequestIdBuilder::MakeRequestId(
+    RequestType::kFetchAnalysisTopHipEventsTable);
 const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
@@ -1913,6 +1916,9 @@ DataProvider::ClientTableSlot(rocprofvis_controller_table_type_t table_type,
         case kRPVControllerTableTypeSampledEvents:
             is_analysis_model = true;
             return TableType::kAnalysisTopSampledEventsTable;
+        case kRPVControllerTableTypeHipEvents:
+            is_analysis_model = true;
+            return TableType::kAnalysisTopHipEventsTable;
         default: return TableType::__kTableTypeCount;
     }
 }
@@ -1978,6 +1984,11 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
             case kRPVControllerTableTypeSampledEvents:
             {
                 request_id = ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
+                break;
+            }
+            case kRPVControllerTableTypeHipEvents:
+            {
+                request_id = ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID;
                 break;
             }
             default:
@@ -2051,6 +2062,10 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                     result = rocprofvis_analysis_get_sampled_events_table(
                         m_trace_controller, &table_handle);
                     break;
+                case kRPVControllerTableTypeHipEvents:
+                    result = rocprofvis_analysis_get_hip_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
                 default: break;
                 }
             }
@@ -2075,6 +2090,8 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                         kRPVControllerTableTypeMemoryAllocationEvents ||
                     table_params.m_table_type ==
                         kRPVControllerTableTypeMemoryCopyEvents ||
+                    table_params.m_table_type ==
+                        kRPVControllerTableTypeHipEvents ||
                     table_params.m_table_type == kRPVControllerTableTypeSampledEvents) &&
                    metadata->track_type != kRPVControllerTrackTypeEvents)
                 {
@@ -2142,6 +2159,7 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                table_params.m_table_type ==
                    kRPVControllerTableTypeMemoryAllocationEvents ||
                table_params.m_table_type == kRPVControllerTableTypeMemoryCopyEvents ||
+               table_params.m_table_type == kRPVControllerTableTypeHipEvents ||
                table_params.m_table_type == kRPVControllerTableTypeSampledEvents)
             {
                 result = rocprofvis_analysis_table_export_csv(
@@ -2228,6 +2246,12 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                         RequestType::kFetchAnalysisTopLaunchSampleEventsTable;
                     break;
                 }
+                case kRPVControllerTableTypeHipEvents:
+                {
+                    request_info.request_type =
+                        RequestType::kFetchAnalysisTopHipEventsTable;
+                    break;
+                }
             }
         }
 
@@ -2280,6 +2304,12 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                 {
                     spdlog::debug(
                         "Fetching analysis top launch sample events table data");
+                    break;
+                }
+                case kRPVControllerTableTypeHipEvents:
+                {
+                    spdlog::debug(
+                        "Fetching analysis top hip events table data");
                     break;
                 }
             }
@@ -3241,6 +3271,7 @@ DataProvider::ProcessRequest(RequestInfo& req)
         case RequestType::kFetchAnalysisTopMemoryAllocationEventsTable:
         case RequestType::kFetchAnalysisTopMemoryCopyEventsTable:
         case RequestType::kFetchAnalysisTopLaunchSampleEventsTable:
+        case RequestType::kFetchAnalysisTopHipEventsTable:
         {
             spdlog::debug("Processing table data {}", req.request_id);
             ProcessTableRequest(req);
@@ -3621,6 +3652,11 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 table_type = kRPVControllerTableTypeSampledEvents;
                 break;
             }
+            case RequestType::kFetchAnalysisTopHipEventsTable:
+            {
+                table_type = kRPVControllerTableTypeHipEvents;
+                break;
+            }
             default:
             {
                 spdlog::error("Invalid table request type: {}",
@@ -3712,6 +3748,12 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             {
                 result = rocprofvis_analysis_get_sampled_events_table(m_trace_controller,
                                                                       &table_handle);
+                break;
+            }
+            case kRPVControllerTableTypeHipEvents:
+            {
+                result = rocprofvis_analysis_get_hip_events_table(
+                    m_trace_controller, &table_handle);
                 break;
             }
             default:
@@ -4878,6 +4920,8 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         }
         return;
     }
+    LoadAnalysisInfo();
+
     uint64_t            num_workloads = 0;
     rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
@@ -4892,6 +4936,20 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
     {
         m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
     }
+}
+
+inline void
+DataProvider::LoadAnalysisInfo()
+{
+    // Metadata is best-effort: a missing value leaves its field empty.
+    AnalysisInfo analysis_info;
+    GetString(m_trace_controller, kRPVControllerComputeProfilerVersion, 0,
+              analysis_info.profiler_version);
+    GetString(m_trace_controller, kRPVControllerComputeProfilerGitVersion, 0,
+              analysis_info.profiler_git_version);
+    GetString(m_trace_controller, kRPVControllerComputeSchemaVersion, 0,
+              analysis_info.schema_version);
+    m_compute_model.SetAnalysisInfo(analysis_info);
 }
 
 inline void
@@ -5450,8 +5508,6 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
     rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsRidge, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    workload.roofline.max = { DBL_MIN, DBL_MIN };
-    workload.roofline.min = { DBL_MAX, DBL_MAX };
 
     for(uint64_t j = 0; j < num_entries; j++)
     {
@@ -5530,10 +5586,6 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.max.x =
-                    std::max(workload.roofline.max.x, ceiling.position.p2.x);
-                workload.roofline.max.y =
-                    std::max(workload.roofline.max.y, ceiling.position.p2.y);
                 workload.roofline
                     .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] =
                     ceiling;
@@ -5594,10 +5646,6 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.min.x =
-                    std::min(workload.roofline.min.x, ceiling.position.p1.x);
-                workload.roofline.min.y =
-                    std::min(workload.roofline.min.y, ceiling.position.p1.y);
                 workload.roofline
                     .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
                     ceiling;
@@ -5649,10 +5697,6 @@ DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
                 &double_data);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             intensity.position.y = double_data;
-            workload.roofline.max.y =
-                std::max(workload.roofline.max.y, intensity.position.y);
-            workload.roofline.min.y =
-                std::min(workload.roofline.min.y, intensity.position.y);
             workload.kernels[kernel_id].roofline.intensities[intensity.type] =
                 std::move(intensity);
         }

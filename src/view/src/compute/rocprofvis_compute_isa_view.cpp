@@ -86,7 +86,7 @@ constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
     "How often this instruction was unable to issue and was waiting when sampled.\n"
     "Higher values identify where to investigate, but not the cause of the wait.\n"
     "Hover a value to see every recorded stall reason, ordered by sample count.\n"
-    "If progress data was not recorded, the column is disabled and displays NULL.",
+    "If progress data was not recorded, the column is disabled and displays N/A.",
     "DB fields: compute_pc_sample_state.issue_count, stall_count, total_count\n"
     "Group key: compute_pc_sample_state.instruction_uuid\n"
     "Value: 100 * SUM(stall_count) / SUM(total_count)\n"
@@ -118,7 +118,7 @@ constexpr const char* STALL_REASON_TOOLTIP_NO_STALLS =
     "No stalled samples were recorded for this instruction.";
 constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
     "No stall-reason details were recorded for this instruction.";
-constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TEXT = "NULL";
+constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TEXT = "N/A";
 constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TOOLTIP =
     "Stall percentage is unavailable because this profile did not record whether "
     "sampled waves issued or stalled.\n"
@@ -887,21 +887,17 @@ SourceCodeWidget::RenderLine(uint32_t index)
     const uint64_t   display_num = source_row.line_number;
     const bool row_selected = source_row.id != 0 &&
                               source_row.id == m_line_selection.selected_line;
-    const bool row_hovered = source_row.id != 0 &&
-                             source_row.id == m_line_selection.hovered_line;
+    const bool row_hovered =
+        source_row.id != 0 && source_row.id == m_line_selection.hovered_line;
 
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(0);
     ImGui::PushID(static_cast<int>(source_row.id));
-    if(ImGui::Selectable("##row", row_selected,
-                         ImGuiSelectableFlags_SpanAllColumns |
-                             ImGuiSelectableFlags_AllowOverlap,
-                         ImVec2(0.0f, ImGui::GetTextLineHeight())))
-    {
-        m_line_selection.selected_line = source_row.id;
-        m_line_selection.isa_scroll_line = source_row.id;
-    }
+    bool       row_clicked = ImGui::Selectable("##row", row_selected,
+                                               ImGuiSelectableFlags_SpanAllColumns |
+                                                   ImGuiSelectableFlags_AllowOverlap,
+                                               ImVec2(0.0f, ImGui::GetTextLineHeight()));
     const bool item_hovered =
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
                              ImGuiHoveredFlags_AllowWhenOverlappedByItem);
@@ -926,15 +922,20 @@ SourceCodeWidget::RenderLine(uint32_t index)
 
     ImGui::TableSetColumnIndex(1);
     ImGui::PushID(static_cast<int>(index));
-    CopyableTextUnformatted(source_row.content.c_str(), "source", COPY_DATA_NOTIFICATION,
-                            false, true);
+    row_clicked |= CopyableTextUnformatted(source_row.content.c_str(), "source",
+                                           COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
+
+    if(row_clicked)
+    {
+        m_line_selection.selected_line   = source_row.id;
+        m_line_selection.isa_scroll_line = source_row.id;
+    }
 }
 
 IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
 : BaseCodeWidget(selection)
-{
-}
+{}
 
 const CodeObjectStore*
 IsaCodeWidget::FindCodeObject(const PcSamplingData& data, uint64_t code_object_uuid)
@@ -1202,9 +1203,9 @@ void
 IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 {
     m_entries.clear();
-    m_kernel_total_samples        = 0;
-    m_hottest_instruction_samples = 0;
-    m_largest_code_object_offset  = 0;
+    m_kernel_total_samples         = 0;
+    m_hottest_instruction_samples  = 0;
+    m_largest_code_object_offset   = 0;
     m_stall_data_available         = false;
 
     const CodeObjectStore* code_object = FindCodeObject(data, code_object_uuid);
@@ -1233,8 +1234,6 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
             m_entries.emplace_back(std::move(row));
         }
     }
-
-    CalculateLineNumberWidth(m_entries.size());
 }
 
 void
@@ -1246,9 +1245,10 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const bool show_sampling_details = IsStallShown();
-    const int sampling_detail_columns = show_sampling_details ? 2 : 0;
-    const int columns_count = 3 + sampling_detail_columns;
+    const bool show_sampling_details   = IsStallShown();
+    const int  sampling_detail_columns = show_sampling_details ? 2 : 0;
+    const int  columns_count           = 3 + sampling_detail_columns;
+    CalculateLineNumberWidth(m_entries.size());
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
@@ -1260,9 +1260,11 @@ IsaCodeWidget::Render()
 
     ImGui::TableSetupScrollFreeze(0, 1);
 
-    ImGui::TableSetupColumn(
-        "#", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed,
-        m_line_num_width);
+    // NoResize makes ImGui reapply the calculated widths after data or font changes.
+    const ImGuiTableColumnFlags numeric_column_flags =
+        ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed;
+    ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_NoHide | numeric_column_flags,
+                            m_line_num_width);
 
     if(show_sampling_details)
     {
@@ -1279,21 +1281,18 @@ IsaCodeWidget::Render()
             ImGui::CalcTextSize(widest_sample_count_text.c_str()).x;
         const float samples_column_width =
             std::max(samples_header_width, sample_count_width);
-        ImGui::TableSetupColumn("Samples", ImGuiTableColumnFlags_WidthFixed,
-                                samples_column_width);
+        ImGui::TableSetupColumn("Samples", numeric_column_flags, samples_column_width);
     }
 
     char largest_offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
     std::snprintf(largest_offset_text, sizeof(largest_offset_text),
                   CODE_OBJECT_OFFSET_FORMAT,
                   static_cast<unsigned long long>(m_largest_code_object_offset));
-    const float offset_column_width =
-        std::max(ImGui::CalcTextSize("Offset").x,
-                 ImGui::CalcTextSize(largest_offset_text).x);
-    ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_WidthFixed,
-                            offset_column_width);
-    ImGui::TableSetupColumn(
-        "ISA", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch);
+    const float offset_column_width = std::max(
+        ImGui::CalcTextSize("Offset").x, ImGui::CalcTextSize(largest_offset_text).x);
+    ImGui::TableSetupColumn("Offset", numeric_column_flags, offset_column_width);
+    ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_NoHide |
+                                       ImGuiTableColumnFlags_WidthStretch);
 
     if(show_sampling_details)
     {
@@ -1590,18 +1589,10 @@ IsaCodeWidget::RenderLine(uint32_t index)
     int column = 0;
     ImGui::TableSetColumnIndex(column);
     ImGui::PushID(static_cast<int>(isa_row.id));
-    if(ImGui::Selectable("##row", row_selected,
-                         ImGuiSelectableFlags_SpanAllColumns |
-                             ImGuiSelectableFlags_AllowOverlap,
-                         ImVec2(0.0f, ImGui::GetTextLineHeight())))
-    {
-        if(isa_row.source_line_id != LineSelection::UNSELECTED)
-        {
-            m_line_selection.selected_line = isa_row.source_line_id;
-            m_line_selection.source_scroll_line = isa_row.source_line_id;
-            m_line_selection.source_scroll_file = isa_row.source_file_id;
-        }
-    }
+    bool       row_clicked = ImGui::Selectable("##row", row_selected,
+                                               ImGuiSelectableFlags_SpanAllColumns |
+                                                   ImGuiSelectableFlags_AllowOverlap,
+                                               ImVec2(0.0f, ImGui::GetTextLineHeight()));
     const bool item_hovered =
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
                              ImGuiHoveredFlags_AllowWhenOverlappedByItem);
@@ -1634,13 +1625,14 @@ IsaCodeWidget::RenderLine(uint32_t index)
     std::snprintf(offset_text, sizeof(offset_text), CODE_OBJECT_OFFSET_FORMAT,
                   static_cast<unsigned long long>(isa_row.code_object_offset));
     ImGui::PushID(static_cast<int>(index));
-    CopyableTextUnformatted(offset_text, "offset", COPY_DATA_NOTIFICATION, false, true);
+    row_clicked |= CopyableTextUnformatted(offset_text, "offset", COPY_DATA_NOTIFICATION,
+                                           false, true);
     ImGui::PopID();
 
     ImGui::TableSetColumnIndex(++column);
     ImGui::PushID(static_cast<int>(index));
-    CopyableTextUnformatted(isa_row.instruction.c_str(), "instruction",
-                            COPY_DATA_NOTIFICATION, false, true);
+    row_clicked |= CopyableTextUnformatted(isa_row.instruction.c_str(), "instruction",
+                                           COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
 
     if(IsStallShown())
@@ -1658,6 +1650,12 @@ IsaCodeWidget::RenderLine(uint32_t index)
         }
     }
 
+    if(row_clicked && isa_row.source_line_id != LineSelection::UNSELECTED)
+    {
+        m_line_selection.selected_line      = isa_row.source_line_id;
+        m_line_selection.source_scroll_line = isa_row.source_line_id;
+        m_line_selection.source_scroll_file = isa_row.source_file_id;
+    }
 }
 
 }  // namespace View

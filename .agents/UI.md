@@ -1580,7 +1580,7 @@ Samples, aggregated by instruction UUID across returned sample states, and the
 Stall % column. When every returned sample state has non-NULL issued and stall
 counts, Stall % shows the measured percentage. Host-trap captures leave those
 progress counts NULL, so their Stall % column remains visible but disabled;
-each row displays `NULL` and its tooltip explains why the data is unavailable.
+each row displays `N/A` and its tooltip explains why the data is unavailable.
 The disabled header is dimmed but remains interactive so its right-click column
 visibility menu is available. A stochastic capture's real zero counts remain
 available and are not confused with NULL. Samples shows a right-aligned
@@ -1588,12 +1588,16 @@ raw count over a heat bar normalized to the hottest displayed instruction. Its
 tooltip reports both kernel share and relative hotness. Counts from one through
 ten carry a low-confidence marker for the derived percentages, while zero-count
 lines remain unmarked and the exact count remains prominent. The Samples column starts
-at the wider of its header and largest formatted count. All ISA-table columns
-are user-resizable and user-hideable through the ImGui header context menu;
-the source table supports the same per-column visibility menu. Both native
+at the wider of its header and largest formatted count. Samples, Offset, and `#`
+use the public ImGui `NoResize` column flag so their calculated widths follow
+kernel/workload data and font changes, including sampling-detail data that arrives
+later. The `#` width is measured with the active code font during rendering.
+ISA and Stall % remain user-resizable; Samples, Offset, and Stall % are
+user-hideable through the ImGui header context menu. The source table supports
+the same per-column visibility menu. Both native
 column menus use the application's default window padding, matching the event
-table menus. Each heat bar uses the live cell width so it follows both manual
-resizing and data- or font-driven width changes. Hovering a data column header shows a user-facing
+table menus. Each heat bar uses the live cell width so it follows automatic
+Samples sizing or manual Stall % resizing. Hovering a data column header shows a user-facing
 explanation; the `#` line-number headers do not show tooltips. When
 `ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column tooltip also shows the
 database fields, grouping or filtering keys, and formulas used by the column.
@@ -1616,6 +1620,10 @@ sampling details can be retried from the control panel.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.
+The row selectable allows overlap so text cells can receive their copy-menu
+interactions. Both widgets combine the selectable's click with the
+`CopyableTextUnformatted` return value, so clicking instruction text, offsets,
+or source text selects the row as well as clicking its empty space.
 Clicking a correlated ISA or source row scrolls the opposite code pane so its
 first corresponding row is the top visible line. If an ISA row maps to a
 different source file, the view selects that file and fetches its lines before

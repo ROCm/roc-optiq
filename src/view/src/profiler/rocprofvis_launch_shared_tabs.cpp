@@ -27,6 +27,8 @@ static char s_save_preset_name[128] = {};
 // rest of the application rather than inventing its own spacing rules.
 constexpr float kAccentBarWidth     = 4.0f;   // card-header leading accent bar
 constexpr float kAccentBarGap       = 8.0f;
+constexpr float kChipBgAlpha        = 0.16f;
+constexpr float kChipEdgeAlpha      = 0.55f;
 constexpr float kPillGap            = 7.0f;   // gap between pill label and close "x"
 constexpr float kPillCloseScale     = 0.75f;  // close glyph size, fraction of font
 constexpr float kPillBgAlpha        = 0.16f;
@@ -123,6 +125,24 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
 }
 
+void Chip(const char* label, ImU32 accent_color)
+{
+    const ImVec2 pad       = ImGui::GetStyle().FramePadding;
+    ImVec2       text_size = ImGui::CalcTextSize(label);
+    ImVec2       p         = ImGui::GetCursorScreenPos();
+    ImVec2       size(text_size.x + pad.x * 2.0f, text_size.y + pad.y * 2.0f);
+    ImDrawList*  dl  = ImGui::GetWindowDrawList();
+    float        rnd = size.y * 0.5f;
+
+    dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
+                      ApplyAlpha(accent_color, kChipBgAlpha), rnd);
+    dl->AddRect(p, ImVec2(p.x + size.x, p.y + size.y),
+                ApplyAlpha(accent_color, kChipEdgeAlpha), rnd);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
+
+    ImGui::Dummy(size);
+}
+
 PillAction EditablePill(const char* label, ImU32 accent_color)
 {
     const ImVec2 pad       = ImGui::GetStyle().FramePadding;
@@ -158,6 +178,45 @@ PillAction EditablePill(const char* label, ImU32 accent_color)
         return over_x ? PillAction::kRemove : PillAction::kEdit;
     }
     return PillAction::kNone;
+}
+
+void RenderConfigChips(const char* lead_label, std::vector<std::string> const& tags)
+{
+    SettingsManager& settings = SettingsManager::Get();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("%s", lead_label);
+
+    if (tags.empty())
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("nothing selected yet");
+        return;
+    }
+
+    const ImU32  accent    = settings.GetColor(Colors::kAccent);
+    ImGuiStyle&  style     = ImGui::GetStyle();
+    const float  window_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+
+    // Chip width matches Chip(): text width plus its horizontal frame padding.
+    const float chip_pad_x = ImGui::GetStyle().FramePadding.x;
+    auto chip_width = [chip_pad_x](std::string const& s)
+    { return ImGui::CalcTextSize(s.c_str()).x + chip_pad_x * 2.0f; };
+
+    ImGui::SameLine();
+    for (size_t i = 0; i < tags.size(); i++)
+    {
+        Chip(tags[i].c_str(), accent);
+        if (i + 1 < tags.size())
+        {
+            float last_x2 = ImGui::GetItemRectMax().x;
+            float next_x2 = last_x2 + style.ItemSpacing.x + chip_width(tags[i + 1]);
+            if (next_x2 < window_x2)
+            {
+                ImGui::SameLine();
+            }
+        }
+    }
 }
 
 void StatusPill(const char* label, ImU32 bg_color)
@@ -310,10 +369,6 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     if (exe_disabled)
     {
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Choose an SSH connection first");
-        }
     }
 
     if (has_recent)
@@ -395,10 +450,6 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     if (out_disabled)
     {
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Choose an SSH connection first");
-        }
     }
 
     ImGui::Spacing();
@@ -465,10 +516,6 @@ bool RenderToolLocationSection(std::string& tool_directory, ConnectionType conne
     if (browse_disabled)
     {
         ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Choose an SSH connection first");
-        }
     }
 
     if (!resolved_hint.empty())
@@ -620,6 +667,98 @@ void RenderCommandPreview(std::string const& preview_text)
         ImGui::SetClipboardText(preview_text.c_str());
     }
     RenderCodeBox("CmdPreview", preview_text, false);
+}
+
+bool RenderOutputConsole(
+    std::string const& output_text,
+    std::string const& error_message,
+    std::string const& state_label,
+    ConsoleStatusLevel state_level,
+    std::string const& detail,
+    bool&              auto_scroll)
+{
+    bool clear_requested = false;
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Output");
+
+    // The badge color follows the semantic level, sourced from the theme so it
+    // stays consistent with the rest of the app (and tracks light/dark themes).
+    SettingsManager& settings = SettingsManager::Get();
+    Colors color_id = Colors::kTextMain;
+    switch (state_level)
+    {
+        case ConsoleStatusLevel::kSuccess: color_id = Colors::kTextSuccess; break;
+        case ConsoleStatusLevel::kError:   color_id = Colors::kTextError;   break;
+        case ConsoleStatusLevel::kIdle:
+        case ConsoleStatusLevel::kRunning:
+        default:                           color_id = Colors::kTextMain;    break;
+    }
+    ImVec4 state_color = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color_id));
+
+    float spacing = 4.0f;
+    ImGui::SameLine(0.0f, spacing);
+    ImGui::TextColored(state_color, "[%s]", state_label.c_str());
+
+    // Optional phase detail (e.g. the remote download path) next to the badge.
+    if (!detail.empty())
+    {
+        ImGui::SameLine(0.0f, spacing);
+        ImGui::TextDisabled("%s", detail.c_str());
+    }
+
+    VerticalSeparator();
+
+    if (ImGui::Button("Copy##OutputCopy"))
+    {
+        std::string clip;
+        if (!error_message.empty())
+        {
+            clip = error_message + "\n\n";
+        }
+        clip += output_text;
+        ImGui::SetClipboardText(clip.c_str());
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Clear##OutputClear"))
+    {
+        clear_requested = true;
+    }
+
+    VerticalSeparator();
+    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
+
+    FontManager&     fonts       = settings.GetFontManager();
+    ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
+    float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
+
+    // Terminal-style panel: darker background, soft corners, monospaced text.
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
+    ImGui::BeginChild("OutputText", ImVec2(0, output_height), ImGuiChildFlags_Borders,
+                      output_flags);
+    ImGui::PushFont(fonts.GetFont(FontType::kCode), 0.0f);
+
+    if (!error_message.empty())
+    {
+        ImVec4 err = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextError));
+        ImGui::TextColored(err, "%s", error_message.c_str());
+        ImGui::Separator();
+    }
+
+    ImGui::TextUnformatted(output_text.c_str());
+
+    if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+    {
+        ImGui::SetScrollHereY(1.0f);
+    }
+
+    ImGui::PopFont();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+
+    return clear_requested;
 }
 
 std::string RenderSavedProfileBar(

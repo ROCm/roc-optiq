@@ -532,8 +532,8 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
         return const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
     }, false});
 
-    // Advanced: power-user detail, grouped by domain in the separate Advanced
-    // Options window so the common case stays simple.
+    // Advanced: power-user detail, grouped by domain and tucked under the
+    // collapsible "Advanced Options" section so the common case stays simple.
     tabs.push_back({"sampling", "Sampling", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }, true});
     tabs.push_back({"rocm", "ROCm", [this]() {
@@ -567,11 +567,11 @@ std::string RocprofSysBackend::Validate(LaunchConfig const& config) const
 {
     if (config.target.executable.empty())
     {
-        return "Choose the program to profile";
+        return "Target executable is required";
     }
     if (config.target.output_directory.empty())
     {
-        return "Choose an output folder for the results";
+        return "Output directory is required";
     }
 
     // Hierarchical vs flat profile
@@ -667,6 +667,47 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     }
 
     return warnings;
+}
+
+std::vector<std::string> RocprofSysBackend::GetSummaryTags(
+    LaunchConfig const& config) const
+{
+    std::vector<std::string> tags;
+
+    // Output format (what the run will produce).
+    std::string output;
+    if (m_settings.trace_backend && m_settings.use_rocpd)
+    {
+        output = "Perfetto + ROCpd";
+    }
+    else if (m_settings.trace_backend)
+    {
+        output = "Perfetto trace";
+    }
+    else if (m_settings.use_rocpd)
+    {
+        output = "ROCpd database";
+    }
+    else
+    {
+        output = "No trace output";
+    }
+    tags.push_back(output);
+
+    // Instrument does not accept --preset, so never label the run with a
+    // preset that FlattenToExecution will not emit.
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+    {
+        tags.push_back("Runtime instrumentation");
+    }
+    else
+    {
+        tags.push_back(m_settings.rocprof_preset.empty()
+                           ? std::string("none")
+                           : m_settings.rocprof_preset);
+    }
+
+    return tags;
 }
 
 // ==================================================================================

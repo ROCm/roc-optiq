@@ -45,6 +45,10 @@ void LaunchSubHeader(const char* text, const char* help = nullptr);
 // Draws the label (and keeps it clickable) to the right of the switch.
 bool ToggleSwitch(const char* label, bool* value);
 
+// A small rounded "tag": tinted background + accent border + accent text.
+// Advances the cursor by the chip size (use SameLine to place several).
+void Chip(const char* label, ImU32 accent_color);
+
 // Result of interacting with an EditablePill.
 enum class PillAction
 {
@@ -57,6 +61,10 @@ enum class PillAction
 // Clicking the x returns kRemove; clicking the body returns kEdit. Used for the
 // command-line argument and environment-variable lists.
 PillAction EditablePill(const char* label, ImU32 accent_color);
+
+// Lays out a set of tags as wrapping accent chips, prefixed by a dim label.
+// Used for the live "this run will..." configuration summary.
+void RenderConfigChips(const char* lead_label, std::vector<std::string> const& tags);
 
 // A filled, rounded status badge with contrasting text - used for the run
 // status (Running / Completed / Failed).
@@ -165,6 +173,22 @@ enum class ConsoleStatusLevel
     kSuccess,  // completed
     kError,    // failed
 };
+
+/**
+ * Renders the Output Console panel with status badge, auto-scroll, copy, and clear buttons.
+ * state_label is the badge text (e.g. "Running", "Downloading", "Completed");
+ * state_level selects the badge color from the theme palette. detail is an
+ * optional phase description shown next to the badge (e.g. the download path);
+ * pass an empty string to omit it.
+ * Returns true if the user clicked "Clear".
+ */
+bool RenderOutputConsole(
+    std::string const& output_text,
+    std::string const& error_message,
+    std::string const& state_label,
+    ConsoleStatusLevel state_level,
+    std::string const& detail,
+    bool&              auto_scroll);
 
 /**
  * Renders the "Saved Profile" bar (Optiq JSON presets):

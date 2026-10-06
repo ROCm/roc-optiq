@@ -161,20 +161,16 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
     {
         switch(m_phase)
         {
-            case Phase::Connecting:
-                Fail("Could not reach the server. Check the host, port, and network.");
-                break;
-            case Phase::Authenticating:
-                Fail("Sign-in failed. Check the user name, password, or key.");
-                break;
+            case Phase::Connecting:    Fail("SSH connection failed."); break;
+            case Phase::Authenticating: Fail("SSH authentication failed."); break;
             case Phase::Executing:
                 Fail("CLI execution failed. Check remote command syntax and try again.");
                 break;
             case Phase::Downloading:
-                Fail("The download failed.");
+                Fail("Result database download failed. Check profiler result path and try again.");
                 break;
             case Phase::Browsing:
-                Fail("Could not list this folder.");
+                Fail("Remote filesystem browsing failed.");
                 break;
             default: Fail("SSH operation failed."); break;
         }
@@ -203,7 +199,7 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
 void
 RemoteTraceOrchestrator::AdvanceAfterConnect()
 {
-    m_status_message = "Signing in...";
+    m_status_message = "Authenticating...";
     m_phase          = Phase::Authenticating;
     if(m_session->StartAuthenticate() == 0)
     {

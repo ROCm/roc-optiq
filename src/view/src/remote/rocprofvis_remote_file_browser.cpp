@@ -317,13 +317,6 @@ void RemoteFileBrowser::Render()
             {
                 m_browser_error = status;
                 m_browser_busy  = false;
-                // The table still shows the last folder that listed; point the
-                // path bar back at it rather than at the one that failed.
-                if (!m_last_directory_state.path.empty())
-                {
-                    m_browser_dir  = m_last_directory_state.path;
-                    m_address_edit = m_browser_dir;
-                }
             }
         }
     }

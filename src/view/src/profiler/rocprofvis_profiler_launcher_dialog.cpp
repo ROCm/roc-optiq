@@ -92,32 +92,6 @@ void FittedDimText(std::string const& text, float width)
         EndTooltipStyled();
     }
 }
-
-// "5.3 s", "2 min 05 s", "1 h 02 min": a bare seconds count stops being
-// readable once a run takes minutes.
-std::string FormatElapsed(double seconds)
-{
-    constexpr int SECONDS_PER_MINUTE = 60;
-    constexpr int SECONDS_PER_HOUR   = 3600;
-
-    const int whole = static_cast<int>(seconds);
-    char      buf[32];
-    if (whole < SECONDS_PER_MINUTE)
-    {
-        std::snprintf(buf, sizeof(buf), "%.1f s", seconds);
-    }
-    else if (whole < SECONDS_PER_HOUR)
-    {
-        std::snprintf(buf, sizeof(buf), "%d min %02d s", whole / SECONDS_PER_MINUTE,
-                      whole % SECONDS_PER_MINUTE);
-    }
-    else
-    {
-        std::snprintf(buf, sizeof(buf), "%d h %02d min", whole / SECONDS_PER_HOUR,
-                      (whole % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
-    }
-    return buf;
-}
 }  // namespace
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
@@ -384,7 +358,9 @@ void ProfilerLauncherDialog::RenderRunView()
     {
         double end     = (m_run_end_time > 0.0) ? m_run_end_time : ImGui::GetTime();
         double elapsed = end - m_run_start_time;
-        info           = "Elapsed " + FormatElapsed(elapsed);
+        char   elapsed_text[32];
+        std::snprintf(elapsed_text, sizeof(elapsed_text), "Elapsed %.1fs", elapsed);
+        info = elapsed_text;
     }
     if (!status_detail.empty())
     {
@@ -446,13 +422,8 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if (IsSshMode())
     {
-        constexpr int DEFAULT_SSH_PORT = 22;
         ss << SUMMARY_SEPARATOR << m_remote_uri->GetRemoteUserString() << "@"
            << m_remote_uri->GetRemoteHostString();
-        if (m_remote_uri->GetRemotePortInt() != DEFAULT_SSH_PORT)
-        {
-            ss << ":" << m_remote_uri->GetRemotePortString();
-        }
     }
     else
     {
@@ -744,14 +715,6 @@ void ProfilerLauncherDialog::RenderToolResolutionNotice()
                               ImGuiChildFlags_AlwaysUseWindowPadding,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::TextWrapped("%s", m_execution_cache.resolve_error.c_str());
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-        // The usual way out is a machine that has ROCm, so offer it in place.
-        if (AccentButton("Run on a remote machine", ImVec2(0.0f, 0.0f), &settings))
-        {
-            m_config.connection     = ConnectionType::kSsh;
-            m_execution_cache_dirty = true;
-        }
-#endif
         ImGui::EndChild();
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
@@ -819,8 +782,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
         }
 #endif
         if (RenderToolLocationSection(m_config.tool_directory, m_config.connection, m_app_window,
-                                      m_config.tool_directory.empty() ? std::string()
-                                                                      : m_execution_cache.argv0,
+                                      IsSshMode() ? std::string() : m_execution_cache.argv0,
                                       on_browse_tool_dir))
         {
             m_execution_cache_dirty = true;
@@ -838,10 +800,8 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                 }
                 if (ImGui::BeginTabItem(tab.display_name.c_str()))
                 {
-                    std::string child_id = "adv_scroll##" + tab.id;
                     PushSlimScrollbarStyle();
-                    ImGui::BeginChild(child_id.c_str(), ImVec2(0.0f, 0.0f),
-                                      ImGuiChildFlags_None);
+                    ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
                     PopSlimScrollbarStyle();
                     m_execution_cache_dirty |= tab.render_fn();
                     ImGui::EndChild();
@@ -894,7 +854,7 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     };
 
     // ===== Command line arguments (lead - they read as a one-liner) =====
-    LaunchSubHeader("ARGUMENTS",
+    LaunchSubHeader("COMMAND LINE ARGUMENTS",
                     "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
 
     bool add_arg = false;
@@ -1516,6 +1476,10 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     {
         // Build the command-preview preamble for the console.
         std::ostringstream preamble;
+        if (is_remote)
+        {
+            preamble << "[remote] ";
+        }
         preamble << m_execution_cache.command_preview << "\n\n";
         m_output_preamble = preamble.str();
         m_last_seen_state = kRPVProfilerStateRunning;
@@ -1567,7 +1531,17 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
 
     if (new_state == kRPVProfilerStateCompleted)
     {
-        m_output_epilogue += "\nProfiling finished.\n";
+        if (is_remote)
+        {
+            // Remote completion here means the remote profiler finished; the
+            // trace download/open is driven by the orchestrator's session.
+            m_output_epilogue += "\nRemote profiler completed.\n";
+        }
+        else
+        {
+            m_output_epilogue += "\nProfiler completed successfully.\n";
+        }
+
         std::string trace_path = m_orchestrator.GetTracePath();
         if (!trace_path.empty())
         {
@@ -1583,24 +1557,36 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
             // failure, "could not determine remote trace path", etc.) instead of
             // a generic line with no cause.
             std::string remote_msg = m_orchestrator.GetRemoteStatusMessage();
+            m_output_epilogue += "\nRemote profiler failed.\n";
             m_error_message = remote_msg.empty() ? std::string("Remote profiler failed.")
                                                  : remote_msg;
+            RebuildComposedOutput();
         }
         else
         {
-            constexpr int32_t COMMAND_NOT_FOUND_EXIT_CODE = 127;
-            int32_t           exit_code = m_orchestrator.GetExitCode();
-            m_error_message =
-                exit_code == COMMAND_NOT_FOUND_EXIT_CODE
-                    ? std::string("The profiler could not be started (exit code 127).")
-                    : "The profiler exited with code " + std::to_string(exit_code) + ".";
+            int32_t exit_code = m_orchestrator.GetExitCode();
+            char exit_msg[128];
+            std::snprintf(exit_msg, sizeof(exit_msg),
+                          "\nProfiler failed (exit code %d).\n", exit_code);
+            m_output_epilogue += exit_msg;
+            RebuildComposedOutput();
+            if (exit_code == 127)
+            {
+                m_error_message =
+                    "Profiler executable not found or could not be started (exit code 127)";
+            }
+            else
+            {
+                std::snprintf(exit_msg, sizeof(exit_msg),
+                              "Profiler execution failed (exit code %d)", exit_code);
+                m_error_message = exit_msg;
+            }
         }
-        m_output_epilogue += "\nProfiling failed: " + m_error_message + "\n";
-        RebuildComposedOutput();
     }
     else if (new_state == kRPVProfilerStateCancelled)
     {
-        m_output_epilogue += "\nProfiling cancelled.\n";
+        m_output_epilogue += is_remote ? "\nRemote profiler cancelled by user.\n"
+                                       : "\nProfiler cancelled by user.\n";
         RebuildComposedOutput();
     }
 

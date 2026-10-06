@@ -2410,12 +2410,11 @@ express.
 
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
 these instead of re-authoring launcher UI: `RenderTargetSection`,
-`RenderToolLocationSection`, `BuildCommandPreviewString`,
-`RenderCommandPreview`, `RenderSavedProfileBar`, and the code-panel
-pieces (`BeginCodePanel` / `RenderCodeBox` / `EndCodePanel`) that frame
-both the Command Preview and the run output. The run output's header
-carries the status pill (`ConsoleStatusLevel {kIdle, kRunning, kSuccess,
-kError}`). The connection-mode selector and SSH UI live in the dialog
+`RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
+`RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
+{kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`, and the
+code-panel pieces (`BeginCodePanel` / `RenderCodeBox` / `EndCodePanel`). The
+connection-mode selector and SSH UI live in the dialog
 (`RenderRemoteSection`), not here.
 
 **`ProfilerLauncherDialog`** owns `m_backends`, the

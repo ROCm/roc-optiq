@@ -3,11 +3,8 @@
 
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "rocprofvis_font_manager.h"
-#include "rocprofvis_remote_trace_orchestrator.h"
 #include "rocprofvis_secret_store.h"
 #include "rocprofvis_settings_manager.h"
-#include "rocprofvis_ssh_auth_modal.h"
-#include "rocprofvis_ssh_uri.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -30,10 +27,6 @@ SshSettingsDialog::SshSettingsDialog(SshConnectionStore& store, const std::strin
 : m_store(store)
 , m_working()
 , m_on_commit(std::move(on_commit))
-, m_test_uri(std::make_shared<RemoteUri>())
-, m_test(nullptr)
-, m_test_result()
-, m_test_ok(false)
 , m_secrets_persist(SecretStore::IsAvailable())
 , m_show_password(false)
 , m_show_passphrase(false)
@@ -78,17 +71,6 @@ SshSettingsDialog::BeginNewConnection()
     m_working.id = SshConnectionConfig::GenerateId();
 }
 
-void
-SshSettingsDialog::StartConnectionTest()
-{
-    // With no command or result path on the URI, Start() stops after a
-    // successful authentication.
-    m_test_uri->SetConnection(m_working);
-    m_test_result.clear();
-    m_test = std::make_unique<RemoteTraceOrchestrator>(m_test_uri, nullptr);
-    m_test->Start();
-}
-
 bool
 SshSettingsDialog::Render()
 {
@@ -128,14 +110,6 @@ SshSettingsDialog::Render()
                                   ImGuiWindowFlags_NoScrollbar |
                                   ImGuiWindowFlags_NoTitleBar))
     {
-        // Keep only a finished test's verdict, so its connection is not left open.
-        if(m_test && !m_test->IsRunning())
-        {
-            m_test_ok     = !m_test->HasFailed();
-            m_test_result = m_test_ok ? "Connection succeeded." : m_test->GetStatusMessage();
-            m_test.reset();
-        }
-
         constexpr float CONTENT_PADDING_X = 14.0f;
         constexpr float CONTENT_PADDING_Y = 8.0f;
         constexpr float LABEL_WIDTH       = 104.0f;
@@ -408,9 +382,7 @@ SshSettingsDialog::Render()
         BeginPanelCard("##ssh_settings_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
                        true, &settings);
         {
-            const float test_width =
-                ImGui::CalcTextSize("Test connection").x + style.FramePadding.x * 4.0f;
-            const float action_width = test_width + BUTTON_WIDTH * 2.0f + style.ItemSpacing.x * 2.0f;
+            const float action_width = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
             if(ImGui::BeginTable("##ssh_settings_footer_table", 2,
                                   ImGuiTableFlags_SizingStretchProp))
             {
@@ -419,47 +391,13 @@ SshSettingsDialog::Render()
                                         action_width);
                 ImGui::TableNextRow();
 
-                const bool  testing  = m_test != nullptr;
-                ImU32       note_col = text_dim;
-                std::string note;
-                if(testing)
-                {
-                    note_col = settings.GetColor(Colors::kAccent);
-                    note     = m_test->GetStatusMessage();
-                }
-                else if(!m_test_result.empty())
-                {
-                    note_col = settings.GetColor(m_test_ok ? Colors::kTextSuccess
-                                                           : Colors::kTextError);
-                    note     = m_test_result;
-                }
                 ImGui::TableSetColumnIndex(0);
-                if(!note.empty())
-                {
-                    ImGui::AlignTextToFramePadding();
-                    ImGui::PushStyleColor(ImGuiCol_Text, note_col);
-                    ElidedText(note.c_str(), ImGui::GetContentRegionAvail().x, 360.0f,
-                               Alignment_Left, true);
-                    ImGui::PopStyleColor();
-                }
+                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+                ElidedText("Profiles are saved locally and reused by remote trace open.",
+                           ImGui::GetContentRegionAvail().x, 360.0f, Alignment_Left, true);
+                ImGui::PopStyleColor();
 
                 ImGui::TableSetColumnIndex(1);
-                const bool can_test = !testing && !m_working.HostTrimmed().empty() &&
-                                      !m_working.UserTrimmed().empty();
-                if(!can_test)
-                {
-                    ImGui::BeginDisabled();
-                }
-                if(ImGui::Button(testing ? "Testing...##test" : "Test connection##test",
-                                 ImVec2(test_width, 0.0f)))
-                {
-                    StartConnectionTest();
-                }
-                if(!can_test)
-                {
-                    ImGui::EndDisabled();
-                }
-                ImGui::SameLine();
                 if(ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0.0f)))
                 {
                     close_popup = true;
@@ -474,17 +412,6 @@ SshSettingsDialog::Render()
             }
         }
         EndPanelCard();
-
-        // This dialog is itself a modal, so the test session's prompts are drawn
-        // nested inside it instead of by the centralized path.
-        if(m_test)
-        {
-            if(SshSession* session = m_test->GetSession())
-            {
-                session->SetAuthModalSelfManaged(true);
-                RenderSshAuthModal(session);
-            }
-        }
 
         if(accept)
         {

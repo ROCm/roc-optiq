@@ -250,14 +250,8 @@ std::string ResolveToolPath(rocprofvis_profiler_tool_t tool,
             // specifically, so the fix is to correct it or clear it.
             out_error = !tool_directory.empty()
                             ? (name + " was not found in " + tool_directory)
-#ifdef _WIN32
-                            // ROCm's profilers ship for Linux only.
-                            : (name + " was not found on this machine. ROCm profilers "
-                                      "currently run on Linux.");
-#else
                             : (name + " was not found. Check that ROCm is installed and that "
                                       "$ROCM_PATH or $PATH points at it.");
-#endif
             break;
         case kRocProfVisResultInvalidArgument:
             out_error = tool_directory.empty()

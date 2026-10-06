@@ -53,7 +53,7 @@ private:
     void ApplySelectedConnection();
 
     AppWindow*                               m_app_window;
-    SshConnectionStore&                      m_connection_store;
+    SshConnectionStore                       m_connection_store;
     std::string                              m_selected_connection_id;
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<SshSettingsDialog>       m_settings_dialog;

@@ -13,6 +13,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_ssh_known_hosts.h"
 #include "rocprofvis_controller_ssh_bridge.h"
+#include "rocprofvis_core_string_utils.h"
 #include <libssh2.h>
 #include <libssh2_sftp.h>
 #include <iostream>
@@ -205,7 +206,7 @@ namespace Controller
 
 
     bool SshClient::TryPublicKey(SshConnection * connection, const std::string& user,
-        const std::string& priv_path_in, const std::string& passphrase)
+        const std::string& priv_path_in, const std::string& passphrase, Future* future)
     {
         std::string priv_path = ExpandTilde(priv_path_in);
         if(!std::filesystem::exists(priv_path))
@@ -216,6 +217,12 @@ namespace Controller
         }
 
         std::filesystem::path pub_path = std::filesystem::weakly_canonical(priv_path+".pub");
+        auto p = std::filesystem::path(priv_path+".pub").lexically_normal();
+        
+        if ( pub_path!=p) {
+            return false;
+        }
+
         bool        have_pub = std::filesystem::exists(pub_path);
         std::string pub      = pub_path.string();
         spdlog::debug("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
@@ -224,6 +231,16 @@ namespace Controller
         int rc = libssh2_userauth_publickey_fromfile(
             connection->GetSession(), user.c_str(), have_pub ? pub.c_str() : nullptr, priv_path.c_str(),
             passphrase.empty() ? nullptr : passphrase.c_str());
+        if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+        {
+            std::string u = Core::String::to_lower_copy(user);
+            if (u != user && Reconnect(connection, future))
+            {
+                rc = libssh2_userauth_publickey_fromfile(
+                    connection->GetSession(), u.c_str(), have_pub ? pub.c_str() : nullptr, priv_path.c_str(),
+                    passphrase.empty() ? nullptr : passphrase.c_str());
+            }
+        }
         if(rc == 0)
         {
             spdlog::info("[ssh] publickey auth OK ({})", priv_path);
@@ -250,7 +267,7 @@ namespace Controller
     }
 
 
-    bool SshClient::TryAgent(SshConnection * connection, const std::string& user)
+    bool SshClient::TryAgent(SshConnection * connection, const std::string& user, Future* future)
     {
         LIBSSH2_AGENT* agent = libssh2_agent_init(connection->GetSession());
         if(!agent)
@@ -290,6 +307,15 @@ namespace Controller
                 identity->comment ? identity->comment : "(no comment)");
 
             rc = libssh2_agent_userauth(agent, user.c_str(), identity);
+            if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+            {
+                std::string u = Core::String::to_lower_copy(user);
+                if (u!=user && Reconnect(connection, future))
+                {
+                    rc = libssh2_agent_userauth(agent, u.c_str(), identity);
+                }
+            }
+
             if(rc == 0)
             {
                 spdlog::info("[ssh] agent: auth OK with '{}'",
@@ -402,7 +428,7 @@ namespace Controller
         return sock;
     }
 
-    bool SshClient::WaitSocket(SshConnection* connection, int timeout_ms)
+    bool SshClient::WaitSocket(SshConnection* connection)
     {
         struct timeval timeout;
         fd_set fdread, fdwrite, fdex;
@@ -410,8 +436,8 @@ namespace Controller
         socket_t sock = connection->GetSocket();
         int dir = libssh2_session_block_directions(connection->GetSession());
 
-        timeout.tv_sec = timeout_ms / 1000;
-        timeout.tv_usec = (timeout_ms % 1000) * 1000;
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
 
         FD_ZERO(&fdread);
         FD_ZERO(&fdwrite);
@@ -458,7 +484,7 @@ namespace Controller
 
     void SshClient::DeleteConnection(
         SshConnection* connection) {
-        auto it = std::find_if(m_connections.begin(), m_connections.end(), [connection](std::unique_ptr<SshConnection>& c) {return c.get() == connection; });
+        auto it = std::find_if(m_connections.begin(), m_connections.end(), [connection](std::unique_ptr<SshConnection>& c) {return connection->GetSession() == c->GetSession() && connection->GetSocket() == c->GetSocket(); });
         if (it != m_connections.end())
         {
             if (it->get()->IsConnected())
@@ -529,6 +555,12 @@ namespace Controller
         connection->SetConnected();
 
         return SshClient::Result::Success;
+    }
+
+    bool SshClient::Reconnect(SshConnection * connection, Future* future)
+    {
+        connection->Disconnect();
+        return Connect(connection, future) == SshClient::Result::Success;
     }
 
     //---------------------------------------------SSH CLIENT AUTHENTICATE-------------------------------------------//
@@ -624,14 +656,14 @@ namespace Controller
             if(!identity_file.empty())
             {
 
-                if (TryPublicKey(connection, user, identity_file, passphrase))
+                if (TryPublicKey(connection, user, identity_file, passphrase, future))
                 {
                     return Result::Success;
                 }
             }
             // 1b) ssh-agent - handles encrypted keys without us needing a passphrase.
             spdlog::debug("[ssh] trying ssh-agent");
-            if (TryAgent(connection, user))
+            if (TryAgent(connection, user, future))
             {
                 return Result::Success;
             }
@@ -648,7 +680,7 @@ namespace Controller
                 {
                     return SshClient::Result::Cancelled;
                 }
-                if(TryPublicKey(connection, user, p, passphrase))
+                if(TryPublicKey(connection, user, p, passphrase, future))
                 {
                     return Result::Success;
                 }
@@ -705,6 +737,16 @@ namespace Controller
                 tried_password = true;
                 auth_rc = libssh2_userauth_password(connection->GetSession(), user.c_str(),
                     effective_password.c_str());
+                if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+                {
+
+                    std::string u = Core::String::to_lower_copy(user);
+                    if (u != user && Reconnect(connection, future))
+                    {
+                        auth_rc = libssh2_userauth_password(connection->GetSession(), u.c_str(),
+                            effective_password.c_str());
+                    }
+                }
                 if(auth_rc == 0)
                 {
                     spdlog::info("[ssh] password auth OK");
@@ -740,6 +782,15 @@ namespace Controller
             if(abstract) *abstract = kbd_ctx.get();
             auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), user.c_str(),
                 &KbdIntCallback);
+            if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
+            {
+                std::string u = Core::String::to_lower_copy(user);
+                if (u != user && Reconnect(connection, future))
+                {
+                    auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), u.c_str(),
+                        &KbdIntCallback);
+                }
+            }
             if(abstract) *abstract = nullptr;
             if(kbd_ctx->was_cancelled)
             {
@@ -853,26 +904,11 @@ namespace Controller
         }
 
         char buffer[4096];
-        Result result = Result::Success;
-
-        // A profiled program can stay silent for minutes, so a quiet socket is
-        // not an error here: poll in short slices to stay responsive to Cancel,
-        // and let keepalives turn a dead link into a failed send.
-        constexpr int POLL_SLICE_MS        = 250;
-        constexpr int KEEPALIVE_INTERVAL_S = 15;
-        libssh2_keepalive_config(connection->GetSession(), 0, KEEPALIVE_INTERVAL_S);
 
         while (true)
         {
             if (IsCancelRequested(connection, future))
             {
-                // sshd delivers this to the command's process group, so the
-                // profiler and the profiled program stop instead of running on.
-                while (libssh2_channel_signal(channel, "TERM") == LIBSSH2_ERROR_EAGAIN &&
-                       WaitSocket(connection))
-                {
-                }
-                result = Result::Cancelled;
                 break;
             }
 
@@ -899,18 +935,12 @@ namespace Controller
 
             if (n1 == LIBSSH2_ERROR_EAGAIN && n2 == LIBSSH2_ERROR_EAGAIN)
             {
-                int seconds_to_next_keepalive = 0;
-                if (!WaitSocket(connection, POLL_SLICE_MS) &&
-                    libssh2_keepalive_send(connection->GetSession(), &seconds_to_next_keepalive) != 0)
+                if (!WaitSocket(connection))
                 {
-                    result = Result::ReadError;
+                    output = "Network failure while execuing";
+                    connection->GetSshBridge()->SaveError(output);
                     break;
                 }
-            }
-            else if ((n1 < 0 && n1 != LIBSSH2_ERROR_EAGAIN) || (n2 < 0 && n2 != LIBSSH2_ERROR_EAGAIN))
-            {
-                result = Result::ReadError;
-                break;
             }
 
             if (!got_data)
@@ -920,49 +950,19 @@ namespace Controller
             }
         }
 
-        // In non-blocking mode these return before the server answers, and the
-        // exit status (or signal) of a finished command is only certain once the
-        // server has closed the channel.
-        while (libssh2_channel_close(channel) == LIBSSH2_ERROR_EAGAIN && WaitSocket(connection))
+        libssh2_channel_close(channel);
+
+        libssh2_channel_wait_closed(channel);
+
+        exit_code = libssh2_channel_get_exit_status(channel);
+
+        if (exit_code_out != nullptr)
         {
-        }
-        int closed_rc = 0;
-        while (result == Result::Success &&
-               (closed_rc = libssh2_channel_wait_closed(channel)) == LIBSSH2_ERROR_EAGAIN &&
-               WaitSocket(connection))
-        {
-        }
-        if (result == Result::Success && closed_rc != 0)
-        {
-            result = Result::ReadError;
+            *exit_code_out = exit_code;
         }
 
-        if (result == Result::Success)
-        {
-            exit_code = libssh2_channel_get_exit_status(channel);
-            char* exit_signal = nullptr;
-            libssh2_channel_get_exit_signal(channel, &exit_signal, nullptr, nullptr, nullptr,
-                                            nullptr, nullptr);
-            if (exit_signal != nullptr)
-            {
-                // There is no exit code to report, so say it in the output.
-                output = "\nRemote command was terminated by signal " + std::string(exit_signal) + "\n";
-                connection->GetSshBridge()->AddStdOut(output.data(), output.size());
-                libssh2_free(connection->GetSession(), exit_signal);
-                exit_code = -1;
-            }
-            if (exit_code_out != nullptr)
-            {
-                *exit_code_out = exit_code;
-            }
-        }
-        else if (result == Result::ReadError)
-        {
-            output = "Lost the connection while the remote command was running";
-            connection->GetSshBridge()->SaveError(output);
-            output = "\n" + output + "\n";
-            connection->GetSshBridge()->AddStdOut(output.data(), output.size());
-        }
+        output = "Exit code : " + std::to_string(exit_code);
+        connection->GetSshBridge()->AddStdOut(output.data(), output.size());
 
         libssh2_channel_free(channel);
 
@@ -971,7 +971,7 @@ namespace Controller
             return SshClient::Result::Cancelled;
         }
 
-        return result;
+        return Result::Success;
     }
  
     // Download a remote file via SCP/SFTP path handling and mirror it locally.
@@ -1438,7 +1438,6 @@ namespace Controller
         {
             libssh2_session_disconnect(m_session, "Normal Shutdown");
             libssh2_session_free(m_session);
-            m_session = nullptr;
         }
 
         if (m_socket != kInvalidSocket)

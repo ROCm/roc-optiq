@@ -15,7 +15,6 @@ namespace View
 
 SshTestDialog::SshTestDialog(AppWindow* app_window)
 : m_app_window(app_window)
-, m_connection_store(SshConnectionStore::GetInstance())
 , m_uri(std::make_shared<RemoteUri>())
 , m_settings_dialog(nullptr)
 , m_orchestrator(nullptr)
@@ -24,6 +23,7 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_show_progress_popup(false)
 , m_last_progress()
 {
+    m_connection_store.Load();
     m_file_browser.SetConnectionAction([this]() { OpenConnectionSettings(); });
     m_file_browser.SetTypeFilter(RemoteFileBrowser::TypeFilter::kTraces);
     m_file_browser.SetTitle("Open Remote Trace");

@@ -2257,9 +2257,7 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
 - `SshConnectionConfig` - named host/port/user/auth profile with JSON
   serialization.
 - `SshConnectionStore` - profile registry backed by
-  the `"ssh_connections"` section of `profiles.json`. One shared
-  instance (`GetInstance()`): `Persist()` writes the full list, so a
-  second copy would erase connections added elsewhere.
+  the `"ssh_connections"` section of `profiles.json`.
 - `RemoteUri` - per-operation state: selected connection, command,
   remote result, browse state, cache key, and local download path.
   Keep persisted connection identity separate from ephemeral operation
@@ -2291,8 +2289,8 @@ a freed connection.
 
 Downloaded traces are cached under
 `{config}/remote_cache/<connection-and-path-hash>/<filename>`.
-Permanent host-key trust appends to the platform user's standard
-`.ssh/known_hosts` (`[host]:port` for non-default ports).
+Permanent host-key trust uses the platform user's standard
+`.ssh/known_hosts`.
 
 ### 13.2 Profiler launch stack (`src/view/src/profiler/`)
 

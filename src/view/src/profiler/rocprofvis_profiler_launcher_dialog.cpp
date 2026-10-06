@@ -93,14 +93,6 @@ void FittedDimText(std::string const& text, float width)
     }
 }
 
-// The target fields that appear in the launched command.
-bool SameCommandTarget(TargetSpec const& a, TargetSpec const& b)
-{
-    return a.executable == b.executable && a.arguments == b.arguments &&
-           a.working_directory == b.working_directory &&
-           a.output_directory == b.output_directory;
-}
-
 // "5.3 s", "2 min 05 s", "1 h 02 min": a bare seconds count stops being
 // readable once a run takes minutes.
 std::string FormatElapsed(double seconds)
@@ -133,7 +125,6 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_orchestrator(app_window)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     , m_remote_uri(std::make_shared<RemoteUri>())
-    , m_connection_store(SshConnectionStore::GetInstance())
     , m_ssh_settings_dialog(nullptr)
     , m_remote_show_progress_popup(false)
     , m_remote_last_progress()
@@ -166,11 +157,21 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_backends[0]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Before LoadFromSettings() so it can validate the saved profile's
+    // connection ref against the store.
+    m_connection_store.Load();
+#endif
+
     LoadFromSettings();
     RefreshExecutionCache();
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    SyncSelectedConnection();
+    if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
+    {
+        m_selected_connection_id = m_connection_store.List().front().id;
+    }
+    ApplySelectedConnection();
 #endif
 
     // Run orchestration (sessions, profiler-state events, teardown) is owned by
@@ -188,9 +189,6 @@ void ProfilerLauncherDialog::Show()
     // on the button row. The run view is one click away and the capture is not
     // cancelled.
     m_show_run_view = false;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    SyncSelectedConnection();
-#endif
 }
 
 void ProfilerLauncherDialog::Render()
@@ -1338,12 +1336,10 @@ void ProfilerLauncherDialog::Update()
         // Rebuild the (allocation-heavy) execution cache / command preview only
         // when a control reported an actual change - every widget, including the
         // backend-owned settings tabs, ORs its ImGui return value into the dirty
-        // flag. The target can also change outside a widget's frame (a Browse
-        // dialog's asynchronous pick), so it is compared with the previewed one.
-        if (m_execution_cache_dirty || !SameCommandTarget(m_config.target, m_previewed_target))
+        // flag. 
+        if (m_execution_cache_dirty)
         {
             RefreshExecutionCache();
-            m_previewed_target      = m_config.target;
             m_execution_cache_dirty = false;
         }
     }
@@ -1845,15 +1841,6 @@ void ProfilerLauncherDialog::SaveToSettings()
 }
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-void ProfilerLauncherDialog::SyncSelectedConnection()
-{
-    if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
-    {
-        m_selected_connection_id = m_connection_store.List().front().id;
-    }
-    ApplySelectedConnection();
-}
-
 void ProfilerLauncherDialog::ApplySelectedConnection()
 {
     const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);

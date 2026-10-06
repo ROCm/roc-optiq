@@ -2,34 +2,21 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_remote.h"
-#include <string>
+#include <array>
 
 
 namespace RocProfVis
 {
 namespace Controller
 {
-    // Reads a string argument of any length: a size query, then an exact-fit copy.
-    static bool ReadString(Arguments& args, rocprofvis_property_t property, uint64_t index,
-                           std::string& out)
-    {
-        uint32_t length = 0;
-        if (args.GetString(property, index, nullptr, &length) != kRocProfVisResultSuccess)
-        {
-            return false;
-        }
-        out.assign(length, '\0');
-        return length == 0 ||
-               args.GetString(property, index, out.data(), &length) == kRocProfVisResultSuccess;
-    }
-
     SshClient Remote::s_ssh_client;
 
     rocprofvis_result_t  Remote::AllocateConnection(
         Arguments& args,
         Array& output)
     {
-        std::string host;
+        std::array<char, 128> host{};
+        uint32_t host_length = static_cast<uint32_t>(host.size());
 
         uint64_t port;
         if (kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerRemoteTypePort, 0, &port))
@@ -37,7 +24,7 @@ namespace Controller
             port = 22;
         }
 
-        if (ReadString(args, kRPVControllerRemoteTypeHost, 0, host))
+        if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeHost, 0, host.data(), &host_length))
         {
             SshConnection * connection = s_ssh_client.AllocateConnection(host.data(), static_cast<int>(port));
             if (connection)
@@ -97,15 +84,19 @@ namespace Controller
     {
         rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
 
-        std::string password;
-        std::string user;
-        std::string key_path;
-        std::string key_passphrase;
+        std::array<char, 128> password{};
+        uint32_t password_length = static_cast<uint32_t>(password.size());
+        std::array<char, 128> user{};
+        uint32_t user_length = static_cast<uint32_t>(user.size());
+        std::array<char, 1024> key_path{};
+        uint32_t key_path_length = static_cast<uint32_t>(key_path.size());
+        std::array<char, 128> key_passphrase{};
+        uint32_t key_passphrase_length = static_cast<uint32_t>(key_passphrase.size());
 
-        if (ReadString(args, kRPVControllerRemoteTypeUser, 0, user) &&
-            ReadString(args, kRPVControllerRemoteTypePassword, 0, password) &&
-            ReadString(args, kRPVControllerRemoteTypeKeyPath, 0, key_path) &&
-            ReadString(args, kRPVControllerRemoteTypeKeyPassphrase, 0, key_passphrase))
+        if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeUser, 0, user.data(), &user_length) &&
+            kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypePassword, 0, password.data(), &password_length) &&
+            kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeKeyPath, 0, key_path.data(), &key_path_length) &&
+            kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeKeyPassphrase, 0, key_passphrase.data(), &key_passphrase_length))
         {
 
             future.Set(JobSystem::Get().IssueJob([&connection, user, password, key_path, key_passphrase](Future* future) -> rocprofvis_result_t {
@@ -153,8 +144,9 @@ namespace Controller
                 std::vector<std::string> responses;
                 for (uint64_t i = 0; i < num_responses; i++)
                 {
-                    std::string response;
-                    if (ReadString(args, kRPVControllerUserResponseIndexed, i, response))
+                    std::array<char, 128> response{};
+                    uint32_t response_length = static_cast<uint32_t>(response.size());
+                    if (kRocProfVisResultSuccess == args.GetString(kRPVControllerUserResponseIndexed, i, response.data(), &response_length))
                     {
                         responses.push_back(response.data());
                     }
@@ -208,9 +200,10 @@ namespace Controller
         Arguments& args)
 	{
         rocprofvis_result_t   error     = kRocProfVisResultInvalidArgument;
-        std::string command;
+        std::array<char, 4096> command{};
+        uint32_t command_length = static_cast<uint32_t>(command.size());
 
-        if (ReadString(args, kRPVControllerRemoteTypeCommand, 0, command))
+        if (args.GetString(kRPVControllerRemoteTypeCommand, 0, command.data(), &command_length) == kRocProfVisResultSuccess)
         {
             future.Set(JobSystem::Get().IssueJob([&connection, command](Future* future) -> rocprofvis_result_t {
                 if (SshClient::Result::Success == s_ssh_client.ExecuteCommand(&connection, command.data(), future))
@@ -241,11 +234,13 @@ namespace Controller
         Arguments& args)
     {
         rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
-        std::string src_path;
-        std::string dst_path;
+        std::array<char, 128> src_path{};
+        uint32_t src_path_length = static_cast<uint32_t>(src_path.size());
+        std::array<char, 128> dst_path{};
+        uint32_t dst_path_length = static_cast<uint32_t>(dst_path.size());
         uint64_t direction = 0;
-        if (ReadString(args, kRPVControllerRemoteTypeFilePathSrc, 0, src_path) &&
-            ReadString(args, kRPVControllerRemoteTypeFilePathDst, 0, dst_path) &&
+        if (args.GetString(kRPVControllerRemoteTypeFilePathSrc, 0, src_path.data(), &src_path_length) == kRocProfVisResultSuccess &&
+            args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, dst_path.data(), &dst_path_length) == kRocProfVisResultSuccess &&
             args.GetUInt64(kRPVControllerRemoteTypeDirection, 0, &direction) == kRocProfVisResultSuccess)
         {
 
@@ -285,8 +280,9 @@ namespace Controller
         Arguments& args)
     {
         rocprofvis_result_t   error = kRocProfVisResultInvalidArgument;
-        std::string path;
-        if (ReadString(args, kRPVControllerRemoteTypeFilePathDst, 0, path))
+        std::array<char, 128> path{};
+        uint32_t path_length = static_cast<uint32_t>(path.size());
+        if (args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, path.data(), &path_length) == kRocProfVisResultSuccess)
         {
 
             future.Set(JobSystem::Get().IssueJob([&connection, path](Future* future) -> rocprofvis_result_t {

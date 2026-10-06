@@ -18,19 +18,12 @@ namespace View
 //
 // Profiles are keyed by their stable SshConnectionConfig::id. Display names are
 // for the UI only and need not be unique (though the dialog encourages it).
-//
-// There is one store for the whole app: Persist() writes the full list, so a
-// second copy holding an older list would erase connections added elsewhere.
 class SshConnectionStore
 {
 public:
-    // The shared store, loaded from disk on first use.
-    static SshConnectionStore& GetInstance();
+    SshConnectionStore();
 
-    SshConnectionStore(const SshConnectionStore&)            = delete;
-    SshConnectionStore& operator=(const SshConnectionStore&) = delete;
-
-    // Reloads connections from disk (clears current in-memory state first).
+    // Loads connections from disk (clears current in-memory state first).
     // Returns false if the file is missing/unreadable; the store is then empty.
     bool Load();
 
@@ -53,8 +46,6 @@ public:
     bool Empty() const { return m_connections.empty(); }
 
 private:
-    SshConnectionStore();
-
     std::vector<SshConnectionConfig> m_connections;
 };
 

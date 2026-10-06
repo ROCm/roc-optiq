@@ -14,25 +14,6 @@ namespace RocProfVis
 {
 namespace View
 {
-namespace
-{
-// The remote shell's exit code when it cannot find the command.
-constexpr int32_t COMMAND_NOT_FOUND_EXIT_CODE = 127;
-
-std::string ProfilerFailureMessage(int32_t exit_code)
-{
-    if(exit_code == COMMAND_NOT_FOUND_EXIT_CODE)
-    {
-        return "The profiler was not found on the remote machine. Set the Tools folder "
-               "under Advanced Options (for example /opt/rocm/bin).";
-    }
-    if(exit_code > 0)
-    {
-        return "The remote profiler exited with code " + std::to_string(exit_code) + ".";
-    }
-    return "The remote profiler stopped unexpectedly. See the output for details.";
-}
-}  // namespace
 
 RemoteProfilerSession::RemoteProfilerSession(
     std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file,
@@ -185,12 +166,8 @@ RemoteProfilerSession::OnRemoteStatus(uint64_t operation_id, uint64_t status,
     {
         switch(m_phase)
         {
-            case Phase::Connecting:
-                Fail("Could not reach the server. Check the host, port, and network.");
-                break;
-            case Phase::Authenticating:
-                Fail("Sign-in failed. Check the user name, password, or key.");
-                break;
+            case Phase::Connecting:     Fail("SSH connection failed."); break;
+            case Phase::Authenticating: Fail("SSH authentication failed."); break;
             case Phase::Downloading:
                 Fail("Trace download failed. Check the remote output path.");
                 break;
@@ -287,7 +264,7 @@ RemoteProfilerSession::OnProfilerStatus(uint64_t operation_id, rocprofvis_profil
     }
     else if(state == kRPVProfilerStateFailed)
     {
-        Fail(ProfilerFailureMessage(GetExitCode()));
+        Fail("Remote profiler failed.");
     }
     else if(state == kRPVProfilerStateCancelled)
     {
@@ -310,10 +287,15 @@ RemoteProfilerSession::StartDownload()
 
     // Deduce the remote trace path from the profiler's captured stdout (the
     // profiler reports the file it produced). This replaces the old manual
-    // "Remote output database" field. Never fall back to a path an earlier run
-    // left on the shared URI: that would reopen the old trace.
-    m_uri->GetRemoteResultPath() =
-        m_parse_trace_path ? m_parse_trace_path(GetOutput()) : std::string();
+    // "Remote output database" field.
+    if(m_parse_trace_path)
+    {
+        std::string parsed = m_parse_trace_path(GetOutput());
+        if(!parsed.empty())
+        {
+            m_uri->GetRemoteResultPath() = parsed;
+        }
+    }
 
     if(m_uri->GetRemoteResultPathString().empty())
     {
@@ -350,8 +332,7 @@ RemoteProfilerSession::Fail(const std::string& message)
         Cancel();
     }
 
-    // Includes Completed: a run whose trace then fails to download has failed.
-    if(m_profiler_state != kRPVProfilerStateCancelled)
+    if(m_profiler_state == kRPVProfilerStateRunning || m_profiler_state == kRPVProfilerStateIdle)
     {
         m_profiler_state = kRPVProfilerStateFailed;
     }

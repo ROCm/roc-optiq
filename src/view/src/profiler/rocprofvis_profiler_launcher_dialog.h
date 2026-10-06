@@ -151,9 +151,6 @@ private:
     void LoadFromSettings();
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // Keeps the selection valid (connections are shared with Open Remote, which
-    // may remove one) and binds the selected connection into m_remote_uri.
-    void SyncSelectedConnection();
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
     // True when the bound connection has the host and user needed to connect.
     bool HasRemoteConnection() const;
@@ -176,7 +173,7 @@ private:
     // SshSettingsDialog) and handed to the orchestrator at launch, mirroring the
     // SshTestDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
-    SshConnectionStore&                    m_connection_store;
+    SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
     // Shared remote file/directory picker for the Target section's Browse
@@ -223,9 +220,6 @@ private:
     // only when a control reported an actual change, not every frame. Also set
     // on open / backend switch / preset load.
     bool m_execution_cache_dirty = true;
-    // The target m_execution_cache was built from, to catch target changes that
-    // no widget reported (asynchronous Browse picks).
-    TargetSpec m_previewed_target;
 
     // Presets
     LaunchPresetManager m_preset_manager;

@@ -41,7 +41,7 @@ public:
     // Adds the live server key for `host`/`port` to the in-memory store.
     bool Add(const std::string& host, int port);
 
-    // Appends the entry from the last Add() to the known_hosts file.
+    // Persists the in-memory store back to disk.
     bool Save() const;
 
     // Returns the path that Load/Save use (resolved at construction time).
@@ -51,8 +51,6 @@ private:
     LIBSSH2_SESSION*    m_session = nullptr;
     LIBSSH2_KNOWNHOSTS* m_kh      = nullptr;
     std::string         m_path;
-    // The entry Save() appends.
-    struct libssh2_knownhost* m_added = nullptr;
 };
 
 // Returns base64(SHA256(host_key_bytes)) — matches `ssh-keygen -lf` output.

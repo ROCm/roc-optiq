@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <spdlog/spdlog.h>
 
 #if defined(_WIN32)
@@ -25,8 +24,6 @@ namespace Controller
 
 namespace
 {
-
-constexpr int DEFAULT_SSH_PORT = 22;
 
 std::string DefaultHomePath()
 {
@@ -133,6 +130,9 @@ KnownHostMatch KnownHosts::Check(const std::string& host, int port) const
 
 bool KnownHosts::Add(const std::string& host, int port)
 {
+    // libssh2_knownhost_addc keys entries by host only; the port is part of the
+    // signature for symmetry with Check() but is not needed to store the entry.
+    (void) port;
     if(!m_kh) return false;
     size_t      key_len  = 0;
     int         key_type = 0;
@@ -156,12 +156,9 @@ bool KnownHosts::Add(const std::string& host, int port)
         default: return false;
     }
 
-    // Check() looks a non-default port up as "[host]:port", as OpenSSH writes it.
-    const std::string name =
-        port == DEFAULT_SSH_PORT ? host : "[" + host + "]:" + std::to_string(port);
-    rc = libssh2_knownhost_addc(m_kh, name.c_str(), nullptr, key, key_len,
+    rc = libssh2_knownhost_addc(m_kh, host.c_str(), nullptr, key, key_len,
         "added by roc-optiq", strlen("added by roc-optiq"),
-        type_mask, &m_added);
+        type_mask, nullptr);
     if (rc != 0) {
         spdlog::error("failed adding new host: {}", rc);
         return false;
@@ -172,37 +169,13 @@ bool KnownHosts::Add(const std::string& host, int port)
 
 bool KnownHosts::Save() const
 {
-    if (!m_kh || !m_added) return false;
+    if (!m_kh) return false;
 
-    constexpr size_t LINE_CAPACITY = 4096;  // fits an RSA-16384 key line
-    char             line[LINE_CAPACITY];
-    size_t           line_len = 0;
-    if (libssh2_knownhost_writeline(m_kh, m_added, line, sizeof(line), &line_len,
-                                    LIBSSH2_KNOWNHOST_FILE_OPENSSH) != 0)
-    {
-        return false;
-    }
-
-    // Append rather than rewrite, so comments and entries libssh2 cannot parse
-    // survive. A last line without a newline would run into the new entry.
-    bool needs_newline = false;
-    {
-        std::ifstream in(m_path, std::ios::binary | std::ios::ate);
-        if (in && in.tellg() > 0)
-        {
-            in.seekg(-1, std::ios::end);
-            needs_newline = in.get() != '\n';
-        }
-    }
-    std::error_code ec;
-    std::filesystem::create_directories(std::filesystem::path(m_path).parent_path(), ec);
-    std::ofstream out(m_path, std::ios::binary | std::ios::app);
-    if (needs_newline)
-    {
-        out.put('\n');
-    }
-    out.write(line, static_cast<std::streamsize>(line_len));
-    return static_cast<bool>(out);
+    return libssh2_knownhost_writefile(
+        m_kh,
+        m_path.c_str(),
+        LIBSSH2_KNOWNHOST_FILE_OPENSSH
+    ) == 0;
 }
 
 std::string FormatHostKeyFingerprint(LIBSSH2_SESSION* session)

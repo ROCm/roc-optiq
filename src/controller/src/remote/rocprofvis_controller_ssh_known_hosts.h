@@ -19,8 +19,8 @@ enum class KnownHostMatch
     Failure
 };
 
-// Thin RAII wrapper around libssh2_knownhost_*. Reads the per-user OpenSSH
-// known_hosts file and appends newly trusted keys to it.
+// Thin RAII wrapper around libssh2_knownhost_*. Loads (and writes) the
+// per-user OpenSSH known_hosts file.
 class KnownHosts
 {
 public:
@@ -38,19 +38,21 @@ public:
     // known_hosts entries.
     KnownHostMatch Check(const std::string& host, int port) const;
 
-    // Appends the live server key for `host`/`port` to the known_hosts file,
-    // recorded as "[host]:port" for non-default ports like OpenSSH does. The
-    // file is appended to rather than rewritten so comments and entries libssh2
-    // cannot parse survive.
-    bool Remember(const std::string& host, int port);
+    // Adds the live server key for `host`/`port` to the in-memory store.
+    bool Add(const std::string& host, int port);
 
-    // Returns the known_hosts path (resolved at construction time).
+    // Appends the entry from the last Add() to the known_hosts file.
+    bool Save() const;
+
+    // Returns the path that Load/Save use (resolved at construction time).
     const std::string& Path() const { return m_path; }
 
 private:
     LIBSSH2_SESSION*    m_session = nullptr;
     LIBSSH2_KNOWNHOSTS* m_kh      = nullptr;
     std::string         m_path;
+    // The entry Save() appends.
+    struct libssh2_knownhost* m_added = nullptr;
 };
 
 // Returns base64(SHA256(host_key_bytes)) — matches `ssh-keygen -lf` output.

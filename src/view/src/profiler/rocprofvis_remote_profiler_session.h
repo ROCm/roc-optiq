@@ -55,8 +55,9 @@ public:
     // on_open_file is invoked with the local trace path once downloaded.
     // parse_trace_path is invoked with the remote profiler's captured stdout
     // once profiling completes; it must return the remote trace file path the
-    // profiler produced, which drives the download. An empty result (or a null
-    // parser) fails the run rather than reusing a path from an earlier run.
+    // profiler produced (or empty if it cannot be determined), which drives the
+    // SFTP download. An empty result (or a null parser) fails the run rather
+    // than reusing a path from an earlier run.
     RemoteProfilerSession(std::shared_ptr<RemoteUri>                     uri,
                           std::function<void(const std::string&)>       on_open_file,
                           std::function<std::string(const std::string&)> parse_trace_path = nullptr);

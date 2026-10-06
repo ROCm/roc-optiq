@@ -433,7 +433,7 @@ AppWindow (singleton, RocWidget)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
 +-- ProfilerLauncherDialog   : optional profiler UI
-+-- RemoteTraceOpener        : remote trace opener (File > Open Remote..., ROCPROFVIS_ENABLE_REMOTE)
++-- SshTestDialog            : File > Open Remote... (ROCPROFVIS_ENABLE_REMOTE)
 +-- AppMonitor               : singleton; polls background controller operations
 +-- LogViewer                : singleton production log overlay
 +-- NotificationManager     : singleton, drawn last (toasts overlay)
@@ -2260,37 +2260,28 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
   the `"ssh_connections"` section of `profiles.json`. One shared
   instance (`GetInstance()`): `Persist()` writes the full list, so a
   second copy would erase connections added elsewhere.
-- `RemoteUri` - per-operation state: selected connection, remote
-  result, browse state, cache key, and local download path. Keep
-  persisted connection identity separate from ephemeral operation
+- `RemoteUri` - per-operation state: selected connection, command,
+  remote result, browse state, cache key, and local download path.
+  Keep persisted connection identity separate from ephemeral operation
   fields.
 - `SshSession` - owns one controller SSH connection and permits one
-  `SshOperation` (`Connect`, `Authenticate`, `Download`, or `Browse`) at
-  a time. Each phase registers with `AppMonitor`.
-- `RemoteTraceOrchestrator` - connect -> authenticate -> one task:
-  `Connect()` stops there (connection test), `BrowsePath()` lists a
-  folder, `DownloadPath()` downloads `RemoteUri`'s result path. It
-  filters `kRemoteStatusChanged` by active operation ID, and later tasks
-  reuse the authenticated session.
+  `SshOperation` (`Connect`, `Authenticate`, `Execute`, `Download`, or
+  `Browse`) at a time. Each phase registers with `AppMonitor`.
+- `RemoteTraceOrchestrator` - connect -> authenticate -> optional
+  execute -> optional download state machine. It filters
+  `kRemoteStatusChanged` by active operation ID and reuses an
+  authenticated session for browsing and `DownloadPath()`.
 - `RenderSshAuthModal(session)` - renders keyboard-interactive and
-  host-key requests. `AppWindow::RenderSshAuthModals()` draws it for
-  every live session each frame. An owner that is itself a modal
-  (`RemoteFileBrowser`, the `SshSettingsDialog` Test) marks its session
-  `SetAuthModalSelfManaged(true)` and renders it nested instead. The
-  host-key prompt offers Cancel or "Trust and connect", which appends
-  the key to `known_hosts`.
-- `SshSettingsDialog` - connection-profile CRUD modal; Test connects and
-  authenticates with the unsaved working copy.
-- `RemoteTraceOpener` - the `File > Open Remote...` flow
-  (`ROCPROFVIS_ENABLE_REMOTE`), owned lazily by `AppWindow`, with no
-  window of its own: it opens `RemoteFileBrowser` (or `SshSettingsDialog`
-  first when no connection is saved), downloads the picked file over the
-  browser's session (`RemoteFileBrowser::TakeSession`), then calls
-  `AppWindow::OpenFile()`. The browser's connection chip reopens the
-  editor.
-- `PromptRequest`, `HostKeyRequest`, `FileStat`, and `RemoteDir` in
-  `rocprofvis_ssh_fetch.*` are mutex-protected snapshots; consume
-  updates without holding locks across ImGui calls.
+  host-key requests. The owning dialog must call it every frame while
+  the session exists; it is not rendered globally by `AppWindow`.
+- `SshSettingsDialog` - connection-profile CRUD modal.
+- `SshTestDialog` - the `File > Open Remote...` flow, owned lazily by
+  `AppWindow`: it opens `RemoteFileBrowser` (or `SshSettingsDialog` when
+  no connection is saved) and downloads the picked file over the
+  browser's session (`RemoteFileBrowser::TakeSession`).
+- `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`, and
+  `RemoteDir` in `rocprofvis_ssh_fetch.*` are mutex-protected snapshots;
+  consume updates without holding locks across ImGui calls.
 
 `SshSession::IsConnected()` means a connection handle is allocated,
 not that transport and authentication succeeded. Do not start a second
@@ -2300,14 +2291,8 @@ a freed connection.
 
 Downloaded traces are cached under
 `{config}/remote_cache/<connection-and-path-hash>/<filename>`.
-Host-key trust appends to the platform user's standard
-`.ssh/known_hosts` (`[host]:port` for non-default ports) rather than
-rewriting it, so comments and entries libssh2 cannot parse survive.
-
-A remote command (the profiler) may stay silent for minutes, so the
-controller's exec loop treats a quiet socket as normal and sends
-keepalives; it reports the exit status only after the channel closes.
-Cancelling sends `TERM` to the remote process group.
+Permanent host-key trust appends to the platform user's standard
+`.ssh/known_hosts` (`[host]:port` for non-default ports).
 
 ### 13.2 Profiler launch stack (`src/view/src/profiler/`)
 
@@ -2352,9 +2337,8 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
 Tabs: General sits in the launcher form; Sampling, ROCm, Perfetto,
 Process, Parallelism, Logging, plus Instrument (only when the tool is
-`instrument`) are `advanced` and live in the separate Advanced Options
-window, where the dialog appends its own Overrides tab (`extra_argv` and
-`extra_env`).
+`instrument`) live in the Advanced Options window, where the dialog
+appends an Overrides tab (`extra_argv` and `extra_env`).
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
@@ -2427,19 +2411,14 @@ express.
   controls while active.
 
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
-these instead of re-authoring launcher UI: `BeginLaunchCard` /
-`LaunchCardHeader`, `RenderTargetSection`, `RenderToolLocationSection`,
-`BuildCommandPreviewString`, `RenderCommandPreview`, `RenderSavedProfileBar`,
-and the code-panel pieces `BeginCodePanel` / `RenderCodeBox` /
-`EndCodePanel` with `SameLineRightAligned`, `ButtonWidth` and
-`CheckboxWidth` for a header's right-aligned actions. The Command Preview
-and the run output are both code panels. Both views share one frame: a
-top line (the toolbar, or the run summary), cards filling the middle over
-the window backdrop, and the same footer, so Close and the primary action
-never move between views. The run output card's header carries the status
-pill (`ConsoleStatusLevel {kIdle, kRunning, kSuccess, kError}`) with
-Auto-scroll, Copy and Clear at the right. The connection-mode selector and
-SSH UI live in the dialog (`RenderRemoteSection`), not here.
+these instead of re-authoring launcher UI: `RenderTargetSection`,
+`RenderToolLocationSection`, `BuildCommandPreviewString`,
+`RenderCommandPreview`, `RenderSavedProfileBar`, and the code-panel
+pieces (`BeginCodePanel` / `RenderCodeBox` / `EndCodePanel`) that frame
+both the Command Preview and the run output. The run output's header
+carries the status pill (`ConsoleStatusLevel {kIdle, kRunning, kSuccess,
+kError}`). The connection-mode selector and SSH UI live in the dialog
+(`RenderRemoteSection`), not here.
 
 **`ProfilerLauncherDialog`** owns `m_backends`, the
 `LaunchPresetManager`, the `ProfilerLaunchOrchestrator`, `m_config`, and
@@ -2511,9 +2490,9 @@ wrong machine's install and print a path that is not what executes.
 shared `RenderToolLocationSection`, placed above the backend tabs because
 it belongs to the profile rather than to any one backend; in local mode the
 field also shows the absolute path the selection currently resolves to. A
-set directory, or a tool that cannot be found locally, is shown under
-"Where to run" by `RenderToolResolutionNotice`, so a profile imported from
-elsewhere cannot silently run a different build. If the tool is not in the configured
+set directory is repeated under "Where to run" by
+`RenderToolResolutionNotice`, so a profile imported from elsewhere cannot
+silently run a different build. If the tool is not in the configured
 directory the launch fails rather than falling back to `$ROCM_PATH` or
 `$PATH`.
 
@@ -2910,7 +2889,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Read/write shared UI JSON safely              | `JsonUtils`                                                                                    |
 | Manage SSH connection profiles                | `SshConnectionStore` + `SshSettingsDialog` + `ProfilesDocument`                               |
 | Run SSH connect/auth/download/browse phases   | `SshSession` + `AppMonitor`                                                                    |
-| Open a remote trace end-to-end                | `RemoteTraceOpener` + `RemoteTraceOrchestrator` + `RemoteUri`                                  |
+| Open a remote trace end-to-end                | `RemoteTraceOrchestrator` + `RemoteUri`                                                        |
 | Render SSH auth/host-key prompts               | `RenderSshAuthModal(session)` every frame while active                                         |
 | Launch a profiler locally or over SSH         | `ProfilerLauncherDialog` + `ProfilerLaunchOrchestrator`                                        |
 | Add profiler-specific settings UI             | Implement `IProfilerBackend` and register it with the launcher                                 |
@@ -3259,19 +3238,19 @@ All under `agenticprofiling/`, compiled only with
 - `SshConnectionStore` -> `remote/rocprofvis_ssh_connection_store.h`
   -> Profile registry backed by `ProfilesDocument`.
 - `RemoteUri` -> `remote/rocprofvis_ssh_uri.h` -> Per-operation remote
-  path/cache state.
+  path/command/cache state.
 - `SshSession`, `SshOperation` -> `remote/rocprofvis_ssh_session.h` ->
   One non-blocking controller SSH phase at a time.
 - `RemoteTraceOrchestrator` ->
-  `remote/rocprofvis_remote_trace_orchestrator.h` -> Connect/auth, then
-  browse or download.
+  `remote/rocprofvis_remote_trace_orchestrator.h` -> Connect/auth/
+  execute/download/browse workflow.
 - `RenderSshAuthModal` -> `remote/rocprofvis_ssh_auth_modal.h` ->
   Keyboard-interactive and host-key UI.
-- `SshSettingsDialog`, `RemoteTraceOpener` -> `remote/rocprofvis_ssh_settings_dialog.h`,
-  `remote/rocprofvis_remote_trace_opener.h` -> Profile editor (with
-  Test) and the `File > Open Remote...` flow.
-- `PromptRequest`, `HostKeyRequest`, `FileStat`, `RemoteDir` ->
-  `remote/rocprofvis_ssh_fetch.h` -> Thread-safe UI snapshots.
+- `SshSettingsDialog`, `SshTestDialog` -> matching `remote/` headers ->
+  Profile editor and the `File > Open Remote...` flow.
+- `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`,
+  `RemoteDir` -> `remote/rocprofvis_ssh_fetch.h` -> Thread-safe UI
+  snapshots.
 
 ### Profiler launch UI (`#ifdef ROCPROFVIS_ENABLE_PROFILER`)
 

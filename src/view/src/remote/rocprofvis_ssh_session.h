@@ -27,6 +27,7 @@ namespace View
         None,
         Connect,
         Authenticate,
+        Execute,
         Download,
         Browse,
     };
@@ -60,6 +61,7 @@ namespace View
         // Phase starters. Return the monitor operation id, or 0 on failure.
         uint64_t StartConnect();
         uint64_t StartAuthenticate();
+        uint64_t StartExecute(const char* command_line = nullptr);
         uint64_t StartDownload(const char* remote_path = nullptr, const char* local_path = nullptr);
         uint64_t StartBrowsing(const char* remote_path);
 
@@ -94,12 +96,13 @@ namespace View
         rocprofvis_result_t SubmitHostKeyDecision(HostKeyDecision decision);
         PromptRequest* GetPromptRequest() { return &m_prompt_request; };
         HostKeyRequest* GetHostKeyRequest() { return &m_host_key_request; };
+        ExecutionOutput* GetExecutionOutput() { return &m_stdout; };
         FileStat* GetFileStat() { return &m_file_stat; };
         RemoteDir* GetRemoteDir() { return &m_directory; };
 
     private:
-        // Runs the check phase for the active operation (side effects: update
-        // progress, populate prompt/host-key requests) and
+        // Runs the check phase for the active operation (side effects: append
+        // stdout, update progress, populate prompt/host-key requests) and
         // returns the raw remote status (rocprofvis_controller_remote_status_t).
         // The latest check result is stored in m_last_result.
         uint64_t Poll();
@@ -113,13 +116,17 @@ namespace View
         rocprofvis_result_t StartConnection(rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartAuthentication(rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartAuthentication(const char* user, const char* password, const char* identity_file, const char* passphrase, rocprofvis_controller_future_t* future);
+        rocprofvis_result_t StartExecution(rocprofvis_controller_future_t* future);
+        rocprofvis_result_t StartExecution(const char* command_line, rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartDownloadOp(rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartDownloadOp(const char* remote_path, const char* local_path, rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartBrowsingOp(const char* remote_path, rocprofvis_controller_future_t* future);
         rocprofvis_result_t CheckConnection();
         rocprofvis_result_t CheckAuthentication();
+        rocprofvis_result_t CheckExecution();
         rocprofvis_result_t CheckDownload();
         rocprofvis_result_t CheckBrowsing();
+        void FinalizeExecution();
         rocprofvis_result_t GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
                 uint64_t index, std::string& out_string);
 
@@ -127,6 +134,7 @@ namespace View
         rocprofvis_handle_t* m_connection;
         PromptRequest m_prompt_request;
         HostKeyRequest m_host_key_request;
+        ExecutionOutput m_stdout;
         FileStat m_file_stat;
         RemoteDir m_directory;
 
@@ -141,8 +149,9 @@ namespace View
         // See SetAuthModalSelfManaged: owner renders this session's auth modal
         // nested, so the centralized path skips it.
         bool                m_auth_modal_self_managed = false;
-        // Pending paths captured for the active operation so the start happens
-        // lazily inside BeginOperation's start_fn.
+        // Pending command/paths captured for the active operation so the start
+        // happens lazily inside BeginOperation's start_fn.
+        std::string         m_pending_command;
         std::string         m_pending_remote_path;
         std::string         m_pending_local_path;
 

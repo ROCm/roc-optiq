@@ -118,6 +118,62 @@ namespace View
     }
 
 
+    void ExecutionOutput::Append(std::string text)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        m_text += text;
+        m_updated = true;
+    }
+
+    std::optional<ExecutionOutput::Snapshot> ExecutionOutput::ConsumeIfUpdated()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        if (!m_updated)
+        {
+            return std::nullopt;
+        }
+
+        // The terminal (finished) snapshot must reach the UI exactly once so the
+        // output popup can auto-close; clear the latch after delivering it so it
+        // is not re-emitted every frame.
+        Snapshot snapshot{ m_text, m_finished };
+        if (m_finished)
+        {
+            m_updated = false;
+        }
+        return snapshot;
+    }
+
+    void ExecutionOutput::ClearUpdated()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_updated = false;
+        m_finished = false;
+    }
+
+    void ExecutionOutput::Finish()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_finished = true;
+        m_updated = true;
+    }
+
+    ExecutionOutput::Snapshot ExecutionOutput::Get() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return Snapshot{ m_text };
+    }
+
+    void ExecutionOutput::Clear()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        m_text.clear();
+        m_updated = true;
+    }
+
     void FileStat::Update(std::string name,
         uint64_t size,
         uint64_t time,

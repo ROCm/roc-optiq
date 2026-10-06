@@ -207,7 +207,7 @@ RemoteProfilerSession::OnRemoteStatus(uint64_t operation_id, uint64_t status,
     switch(m_phase)
     {
         case Phase::Connecting:
-            m_status_message = "Signing in...";
+            m_status_message = "Authenticating...";
             m_phase          = Phase::Authenticating;
             if(m_session->StartAuthenticate() == 0)
             {
@@ -308,14 +308,17 @@ RemoteProfilerSession::StartDownload()
         return;
     }
 
-    // The profiler's output names the trace it wrote. Never fall back to a path
-    // an earlier run left on the shared URI: that would reopen the old trace.
-    const std::string parsed = m_parse_trace_path ? m_parse_trace_path(GetOutput()) : std::string();
-    m_uri->GetRemoteResultPath() = parsed;
-    if(parsed.empty())
+    // Deduce the remote trace path from the profiler's captured stdout (the
+    // profiler reports the file it produced). This replaces the old manual
+    // "Remote output database" field. Never fall back to a path an earlier run
+    // left on the shared URI: that would reopen the old trace.
+    m_uri->GetRemoteResultPath() =
+        m_parse_trace_path ? m_parse_trace_path(GetOutput()) : std::string();
+
+    if(m_uri->GetRemoteResultPathString().empty())
     {
-        Fail("The profiler finished without reporting a trace file. See the output for "
-             "details.");
+        // The run completed but we could not determine a trace path to fetch.
+        Fail("Could not determine remote trace path from profiler output.");
         return;
     }
 

@@ -119,8 +119,8 @@ private:
 
     void RenderToolbar();
     void RenderMainContent();
-    // One line above the command preview: why the tool could not be resolved, or
-    // that a configured tool directory is deciding which build runs.
+    // Under "Where to run": why the tool could not be resolved, or that a
+    // configured tool directory is deciding which build runs.
     void RenderToolResolutionNotice();
     // Deeper, less-common backend settings, shown in a separate floating window
     // opened from the "Advanced Options..." button.
@@ -130,13 +130,9 @@ private:
     // below. Clicking a pill pulls it back into the editor to edit/remove.
     void RenderArgsEnvPanel();
     void RenderButtonRow();
-    // The run view's footer, laid out like the configure view's: Close and
-    // Cancel while running; Open Trace / Back to Configuration / Close / Run
-    // Again once the run has finished.
+    // Buttons for the run view: Cancel while running; Run Again / Back to
+    // Configuration / Open Trace / Close once the run has finished.
     void RenderRunButtonRow();
-    // The run output card's header: the status badge, elapsed time and any
-    // phase detail, kept within `max_width` so it never reaches the actions.
-    void RenderRunStatus(float max_width);
     // One-line "what is being run" summary shown atop the run view.
     std::string BuildRunSummary() const;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
@@ -175,10 +171,10 @@ private:
     ProfilerLaunchOrchestrator m_orchestrator;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // TEMPORARY (remote/SSH): SSH connection authoring. The selected connection
-    // is bound into a shared RemoteUri (edited via the on-demand
-    // SshSettingsDialog) and handed to the orchestrator at launch, mirroring
-    // RemoteTraceOpener.
+    // TEMPORARY (remote/SSH): SSH connection authoring. The connection config is
+    // owned here as a shared RemoteUri (edited via the on-demand
+    // SshSettingsDialog) and handed to the orchestrator at launch, mirroring the
+    // SshTestDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
     SshConnectionStore&                    m_connection_store;
     std::string                            m_selected_connection_id;

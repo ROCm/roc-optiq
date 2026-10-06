@@ -92,6 +92,7 @@ namespace View
         {
             case SshOperation::Connect:      m_last_result = CheckConnection(); break;
             case SshOperation::Authenticate: m_last_result = CheckAuthentication(); break;
+            case SshOperation::Execute:      m_last_result = CheckExecution(); break;
             case SshOperation::Download:     m_last_result = CheckDownload(); break;
             case SshOperation::Browse:       m_last_result = CheckBrowsing(); break;
             case SshOperation::None:
@@ -109,6 +110,12 @@ namespace View
             remote_status == kRPVControllerSshCompleted || remote_status == kRPVControllerSshFailed;
         if (terminal)
         {
+            // Flush buffered stdout once an execute phase finishes, mirroring the
+            // old blocking path's post-loop FinalizeExecution().
+            if (m_active_operation == SshOperation::Execute)
+            {
+                FinalizeExecution();
+            }
             // The monitor will remove this op (it waits on then frees the
             // future). Clear our in-flight markers so the next phase can start;
             // the monitor-owned future and operation id are no longer ours to
@@ -203,6 +210,19 @@ namespace View
             [this](rocprofvis_controller_future_t* future) { return StartAuthentication(future); });
     }
 
+    // if command_line is omitted, the data will be taken from m_uri
+    uint64_t SshSession::StartExecute(const char* command_line)
+    {
+        m_pending_command = command_line ? command_line : std::string();
+        bool have_cmd = command_line != nullptr;
+        return BeginOperation(SshOperation::Execute, MonitorOperationType::SshConnection,
+            [this, have_cmd](rocprofvis_controller_future_t* future)
+            {
+                return have_cmd ? StartExecution(m_pending_command.c_str(), future)
+                                : StartExecution(future);
+            });
+    }
+
     // if remote_path or local_path omitted, the data will be taken from m_uri
     uint64_t SshSession::StartDownload(const char* remote_path, const char* local_path)
     {
@@ -239,6 +259,11 @@ namespace View
         {
             m_active_operation_id = 0;
             return;
+        }
+
+        if (m_active_operation == SshOperation::Execute)
+        {
+            FinalizeExecution();
         }
 
         // RemoveOperation signals the bridge (cancel_fn) and requests cancel.
@@ -494,6 +519,82 @@ namespace View
         return kRocProfVisResultPending;
     }
     
+    rocprofvis_result_t SshSession::StartExecution(rocprofvis_controller_future_t* future)
+    {
+        if (m_connection && m_uri && future && !m_uri->GetRemoteCommandLineString().empty())
+        {
+            return StartExecution(m_uri->GetRemoteCommandLineString().c_str(), future);
+        }
+        else
+        {
+            return kRocProfVisResultInvalidArgument;
+        }
+    }
+
+    rocprofvis_result_t SshSession::StartExecution(const char* command_line, rocprofvis_controller_future_t* future)
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (m_connection && command_line && future)
+        {
+            m_stdout.ClearUpdated();
+
+            rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+            ROCPROFVIS_ASSERT(args != nullptr);
+
+            result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeCommand, 0, command_line);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            if (result == kRocProfVisResultSuccess)
+            {
+                result = rocprofvis_controller_remote_execute_async(future, m_connection, args);
+            }
+            rocprofvis_controller_arguments_free(args);
+        }
+        return result;
+    }
+
+    rocprofvis_result_t SshSession::CheckExecution()
+    {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        if (m_connection)
+        {
+            uint64_t remote_status;
+            rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, (uint64_t*)&remote_status);
+            if (kRocProfVisResultSuccess == remote_result)
+            {
+                if (remote_status == kRPVControllerSshCompleted)
+                {
+                    result = kRocProfVisResultSuccess;
+                }
+                else if (remote_status == kRPVControllerSshFailed)
+                {
+                    result = kRocProfVisResultFailedSshCommunication;
+                } else
+                if (remote_status == kRPVControllerSshExecuteStdOut)
+                {
+                    std::string out;
+                    rocprofvis_result_t stdout_result = GetString(m_connection, kRPVControllerRemoteExecuteStdOut, 0, out);
+                    if (kRocProfVisResultSuccess != stdout_result)
+                    {
+                        result = kRocProfVisResultFailedSshCommunication;
+                    }
+                    else
+                    {
+                        m_stdout.Append(out);
+                        result = kRocProfVisResultPending;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    void SshSession::FinalizeExecution() 
+    {
+        m_stdout.Finish();
+    }
+
+
     rocprofvis_result_t SshSession::StartDownloadOp(rocprofvis_controller_future_t* future)
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;

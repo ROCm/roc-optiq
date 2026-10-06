@@ -16,9 +16,10 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
-// TEMPORARY (remote/SSH): remove this guard when the remote feature graduates.
+// TEMPORARY (remote/SSH): the SSH test dialog backs File > Open Remote.
+// Remove this guard when the remote feature graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-#include "remote/rocprofvis_remote_trace_opener.h"
+#include "remote/rocprofvis_ssh_test_dialog.h"
 #endif
 
 #include <atomic>
@@ -157,7 +158,7 @@ private:
     void HandleFontChanged();
     void HandleOpenFile();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    void HandleOpenRemoteFile();  // TEMPORARY (remote/SSH)
+    void HandleTestRemoteSSH();
 #endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     void HandleCompareFiles();
@@ -255,7 +256,7 @@ private:
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    std::unique_ptr<RemoteTraceOpener> m_remote_trace_opener;
+    std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
 #endif
 
     std::string m_status_message;

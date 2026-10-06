@@ -93,13 +93,6 @@ namespace Controller
             KEY_DSA
         };
 
-        enum class PollResult
-        {
-            kReady,
-            kTimeout,
-            kError
-        };
-
         // kbdint trampoline. The libssh2 callback signature gives us only an
         // `abstract` void**, which we set to the SshBridge before kicking auth.
         struct KbdintCtx
@@ -138,12 +131,11 @@ namespace Controller
 
 
         // Executes `command` on the remote host, streaming stdout/stderr into
-        // the connection's bridge until the command exits, however long it stays
-        // silent. If `exit_code` is non-null, the remote exit status is written to
-        // it on Success (-1 if a signal ended the command). The returned Result
-        // reflects the SSH transport outcome (Success/Cancelled/transport errors),
-        // NOT the remote process exit code. Cancelling sends SIGTERM to the
-        // remote process group (on servers that support the "signal" request).
+        // the connection's bridge until it exits, however long it stays silent.
+        // If `exit_code` is non-null, the remote process's exit status is written
+        // to it on Success (-1 if a signal ended it). The returned Result reflects
+        // the SSH transport outcome (Success/Cancelled/transport errors), NOT the
+        // remote process exit code. Cancelling sends TERM to the remote command.
         static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future, int* exit_code = nullptr);
         static Result DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future);
         static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
@@ -152,13 +144,10 @@ namespace Controller
         static bool IsCancelRequested(SshConnection * connection, Future* future);
         static void SetKeepAlive(SshConnection * connection, int interval_seconds);
 
-        // Waits up to `timeout_ms` for the session socket to be ready in the
-        // direction libssh2 is blocked on.
-        static PollResult PollSocket(SshConnection* connection, int timeout_ms);
-
-        // PollSocket() bounded by the transfer stall timeout. False on timeout
-        // or socket error.
-        static bool WaitSocket(SshConnection* connection);
+        // Waits (bounded) for the session socket to be ready in the direction
+        // libssh2 is blocked on. False on timeout or socket error.
+        static constexpr int WAIT_SOCKET_TIMEOUT_MS = 10000;
+        static bool WaitSocket(SshConnection* connection, int timeout_ms = WAIT_SOCKET_TIMEOUT_MS);
 
     private:
 

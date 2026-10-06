@@ -86,7 +86,7 @@ SshSettingsDialog::StartConnectionTest()
     m_test_uri->SetConnection(m_working);
     m_test_result.clear();
     m_test = std::make_unique<RemoteTraceOrchestrator>(m_test_uri, nullptr);
-    m_test->Connect();
+    m_test->Start();
 }
 
 bool

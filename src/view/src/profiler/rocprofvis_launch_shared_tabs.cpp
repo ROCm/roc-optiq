@@ -71,8 +71,12 @@ ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 
 void BeginLaunchCard(const char* id)
 {
-    SettingsManager& settings = SettingsManager::Get();
-    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(kCardPadX, kCardPadY), true, &settings);
+    // Delegate to the shared design-language panel card so the launcher tracks
+    // the same rounded/bordered/tiered look as the remote dialogs. The tighter
+    // kCardPadY keeps the stacked launcher cards reading as one compact form.
+    SettingsManager&  settings = SettingsManager::Get();
+    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(kCardPadX, kCardPadY), true,
+                   &settings);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kCardRowSpacing);
 }
 
@@ -80,6 +84,7 @@ void EndLaunchCard()
 {
     ImGui::PopStyleVar();  // ItemSpacing
     EndPanelCard();
+    // Cards are separated by the surrounding item spacing only.
 }
 
 void LaunchCardHeader(const char* icon, const char* title, const char* help)
@@ -87,16 +92,16 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     SettingsManager& settings = SettingsManager::Get();
     FontManager&     fonts    = settings.GetFontManager();
 
-    // A short accent bar, at the body's own text size, so a card title doesn't
-    // tower over the fields it introduces.
-    const float bar_h = ImGui::GetFontSize();
-    ImVec2      p     = ImGui::GetCursorScreenPos();
-    ImDrawList* dl    = ImGui::GetWindowDrawList();
+    // Leading accent bar sized to the header text.
+    const float  bar_h = ImGui::GetFontSize();
+    ImVec2       p     = ImGui::GetCursorScreenPos();
+    ImDrawList*  dl    = ImGui::GetWindowDrawList();
     dl->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + kAccentBarWidth, p.y + bar_h - 1.0f),
                       settings.GetColor(Colors::kAccent), 2.0f);
 
     ImGui::Indent(kAccentBarWidth + kAccentBarGap);
 
+    // Optional leading icon (drawn from the icon font, in the accent color).
     if (icon && icon[0])
     {
         ImGui::PushFont(fonts.GetFont(FontType::kIcon), ImGui::GetFontSize());
@@ -107,7 +112,9 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
         ImGui::SameLine(0.0f, kAccentBarGap);
     }
 
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::TextUnformatted(title);
+    ImGui::PopStyleColor();
 
     if (help && help[0])
     {

@@ -176,7 +176,7 @@ AppWindow::~AppWindow()
     m_profiler_launcher_dialog.reset();
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_remote_trace_opener.reset();
+    m_ssh_test_dialog.reset();
 #endif
     AppMonitor::DestroyInstance();
 
@@ -534,7 +534,7 @@ AppWindow::BeginAppShutdown()
     m_profiler_launcher_dialog.reset();
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_remote_trace_opener.reset();
+    m_ssh_test_dialog.reset();
 #endif
 
     if(!m_provider_cleanup_jobs.empty())
@@ -831,9 +831,9 @@ AppWindow::Render()
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(m_remote_trace_opener)
+    if(m_ssh_test_dialog)
     {
-        m_remote_trace_opener->Render();
+        m_ssh_test_dialog->Render();
     }
 #endif
     m_confirmation_dialog->Render();
@@ -1117,10 +1117,9 @@ AppWindow::RenderFileMenu(Project* project)
             HandleOpenFile();
         }
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-        // TEMPORARY (remote/SSH): remove guard when the feature graduates.
         if(ImGui::MenuItem("Open Remote..."))
         {
-            HandleOpenRemoteFile();
+            HandleTestRemoteSSH();
         }
 #endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
@@ -1855,16 +1854,16 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 
 void
-AppWindow::HandleOpenRemoteFile()
+AppWindow::HandleTestRemoteSSH()
 {
-    if(!m_remote_trace_opener)
+    if(!m_ssh_test_dialog)
     {
-        m_remote_trace_opener = std::make_unique<RemoteTraceOpener>(this);
+        m_ssh_test_dialog = std::make_unique<SshTestDialog>(this);
     }
-    m_remote_trace_opener->Show();
+    m_ssh_test_dialog->Show();
 }
 
-#endif  // ROCPROFVIS_ENABLE_REMOTE
+#endif // ROCPROFVIS_ENABLE_REMOTE
 void
 AppWindow::UpdateStatusBar()
 {

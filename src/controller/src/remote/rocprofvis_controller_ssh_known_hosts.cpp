@@ -26,6 +26,8 @@ namespace Controller
 namespace
 {
 
+constexpr int DEFAULT_SSH_PORT = 22;
+
 std::string DefaultHomePath()
 {
 #if defined(_WIN32)
@@ -71,40 +73,6 @@ std::string Base64Encode(const unsigned char* data, size_t n)
     }
     return out;
 }
-
-constexpr int DEFAULT_SSH_PORT = 22;
-
-// Maps a libssh2 session host-key type to its known_hosts key-type bits, or 0
-// for a type libssh2's known_hosts code cannot store.
-int KnownHostKeyBits(int hostkey_type)
-{
-    switch(hostkey_type)
-    {
-        case LIBSSH2_HOSTKEY_TYPE_RSA: return LIBSSH2_KNOWNHOST_KEY_SSHRSA;
-        case LIBSSH2_HOSTKEY_TYPE_DSS: return LIBSSH2_KNOWNHOST_KEY_SSHDSS;
-#ifdef LIBSSH2_HOSTKEY_TYPE_ECDSA_256
-        case LIBSSH2_HOSTKEY_TYPE_ECDSA_256: return LIBSSH2_KNOWNHOST_KEY_ECDSA_256;
-        case LIBSSH2_HOSTKEY_TYPE_ECDSA_384: return LIBSSH2_KNOWNHOST_KEY_ECDSA_384;
-        case LIBSSH2_HOSTKEY_TYPE_ECDSA_521: return LIBSSH2_KNOWNHOST_KEY_ECDSA_521;
-#endif
-#ifdef LIBSSH2_HOSTKEY_TYPE_ED25519
-        case LIBSSH2_HOSTKEY_TYPE_ED25519: return LIBSSH2_KNOWNHOST_KEY_ED25519;
-#endif
-        default: return 0;
-    }
-}
-
-// True when the file exists, is non-empty, and its last byte is not '\n'.
-bool MissingTrailingNewline(const std::filesystem::path& path)
-{
-    std::ifstream in(path, std::ios::binary | std::ios::ate);
-    if(!in || in.tellg() <= 0)
-    {
-        return false;
-    }
-    in.seekg(-1, std::ios::end);
-    return in.get() != '\n';
-}
 }  // namespace
 
 KnownHosts::KnownHosts(LIBSSH2_SESSION* session)
@@ -135,8 +103,21 @@ KnownHostMatch KnownHosts::Check(const std::string& host, int port) const
     const char* key      = libssh2_session_hostkey(m_session, &key_len, &key_type);
     if(!key) return KnownHostMatch::Failure;
 
-    const int kh_type_mask = LIBSSH2_KNOWNHOST_TYPE_PLAIN | LIBSSH2_KNOWNHOST_KEYENC_RAW |
-                             KnownHostKeyBits(key_type);
+    int kh_type_mask = LIBSSH2_KNOWNHOST_TYPE_PLAIN | LIBSSH2_KNOWNHOST_KEYENC_RAW;
+    switch(key_type)
+    {
+        case LIBSSH2_HOSTKEY_TYPE_RSA:     kh_type_mask |= LIBSSH2_KNOWNHOST_KEY_SSHRSA; break;
+        case LIBSSH2_HOSTKEY_TYPE_DSS:     kh_type_mask |= LIBSSH2_KNOWNHOST_KEY_SSHDSS; break;
+#ifdef LIBSSH2_HOSTKEY_TYPE_ECDSA_256
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_256: kh_type_mask |= LIBSSH2_KNOWNHOST_KEY_ECDSA_256; break;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_384: kh_type_mask |= LIBSSH2_KNOWNHOST_KEY_ECDSA_384; break;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_521: kh_type_mask |= LIBSSH2_KNOWNHOST_KEY_ECDSA_521; break;
+#endif
+#ifdef LIBSSH2_HOSTKEY_TYPE_ED25519
+        case LIBSSH2_HOSTKEY_TYPE_ED25519: kh_type_mask |= LIBSSH2_KNOWNHOST_KEY_ED25519; break;
+#endif
+        default: break;
+    }
 
     struct libssh2_knownhost* match = nullptr;
     int rc = libssh2_knownhost_checkp(m_kh, host.c_str(), port, key, key_len,
@@ -150,53 +131,73 @@ KnownHostMatch KnownHosts::Check(const std::string& host, int port) const
     }
 }
 
-bool KnownHosts::Remember(const std::string& host, int port)
+bool KnownHosts::Add(const std::string& host, int port)
 {
-    if(!m_kh || m_path.empty())
-    {
-        return false;
-    }
+    if(!m_kh) return false;
     size_t      key_len  = 0;
     int         key_type = 0;
+    int         rc = 0;
     const char* key      = libssh2_session_hostkey(m_session, &key_len, &key_type);
-    const int   key_bits = KnownHostKeyBits(key_type);
-    if(!key || key_bits == 0)
+    if(!key) return false;
+
+    int type_mask = LIBSSH2_KNOWNHOST_TYPE_PLAIN | LIBSSH2_KNOWNHOST_KEYENC_RAW;
+    switch(key_type)
     {
-        return false;
+        case LIBSSH2_HOSTKEY_TYPE_RSA:     type_mask |= LIBSSH2_KNOWNHOST_KEY_SSHRSA; break;
+        case LIBSSH2_HOSTKEY_TYPE_DSS:     type_mask |= LIBSSH2_KNOWNHOST_KEY_SSHDSS; break;
+#ifdef LIBSSH2_HOSTKEY_TYPE_ECDSA_256
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_256: type_mask |= LIBSSH2_KNOWNHOST_KEY_ECDSA_256; break;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_384: type_mask |= LIBSSH2_KNOWNHOST_KEY_ECDSA_384; break;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_521: type_mask |= LIBSSH2_KNOWNHOST_KEY_ECDSA_521; break;
+#endif
+#ifdef LIBSSH2_HOSTKEY_TYPE_ED25519
+        case LIBSSH2_HOSTKEY_TYPE_ED25519: type_mask |= LIBSSH2_KNOWNHOST_KEY_ED25519; break;
+#endif
+        default: return false;
     }
 
+    // Check() looks a non-default port up as "[host]:port", as OpenSSH writes it.
     const std::string name =
         port == DEFAULT_SSH_PORT ? host : "[" + host + "]:" + std::to_string(port);
-    static const char         comment[] = "added by roc-optiq";
-    struct libssh2_knownhost* entry     = nullptr;
-    int rc = libssh2_knownhost_addc(m_kh, name.c_str(), nullptr, key, key_len, comment,
-                                    sizeof(comment) - 1,
-                                    LIBSSH2_KNOWNHOST_TYPE_PLAIN |
-                                        LIBSSH2_KNOWNHOST_KEYENC_RAW | key_bits,
-                                    &entry);
-    if(rc != 0)
+    rc = libssh2_knownhost_addc(m_kh, name.c_str(), nullptr, key, key_len,
+        "added by roc-optiq", strlen("added by roc-optiq"),
+        type_mask, &m_added);
+    if (rc != 0) {
+        spdlog::error("failed adding new host: {}", rc);
+        return false;
+    }
+    return true;
+}
+
+
+bool KnownHosts::Save() const
+{
+    if (!m_kh || !m_added) return false;
+
+    constexpr size_t LINE_CAPACITY = 4096;  // fits an RSA-16384 key line
+    char             line[LINE_CAPACITY];
+    size_t           line_len = 0;
+    if (libssh2_knownhost_writeline(m_kh, m_added, line, sizeof(line), &line_len,
+                                    LIBSSH2_KNOWNHOST_FILE_OPENSSH) != 0)
     {
-        spdlog::error("[ssh] could not add known host {}: {}", name, rc);
         return false;
     }
 
-    // Large enough for an RSA-16384 key line.
-    char   line[4096];
-    size_t line_len = 0;
-    rc = libssh2_knownhost_writeline(m_kh, entry, line, sizeof(line), &line_len,
-                                     LIBSSH2_KNOWNHOST_FILE_OPENSSH);
-    if(rc != 0)
+    // Append rather than rewrite, so comments and entries libssh2 cannot parse
+    // survive. A last line without a newline would run into the new entry.
+    bool needs_newline = false;
     {
-        spdlog::error("[ssh] could not format known host {}: {}", name, rc);
-        return false;
+        std::ifstream in(m_path, std::ios::binary | std::ios::ate);
+        if (in && in.tellg() > 0)
+        {
+            in.seekg(-1, std::ios::end);
+            needs_newline = in.get() != '\n';
+        }
     }
-
-    const std::filesystem::path path(m_path);
-    std::error_code             ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
-    const bool    needs_newline = MissingTrailingNewline(path);
-    std::ofstream out(path, std::ios::binary | std::ios::app);
-    if(needs_newline)
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(m_path).parent_path(), ec);
+    std::ofstream out(m_path, std::ios::binary | std::ios::app);
+    if (needs_newline)
     {
         out.put('\n');
     }

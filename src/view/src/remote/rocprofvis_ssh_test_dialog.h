@@ -5,7 +5,7 @@
 
 #include "rocprofvis_ssh_uri.h"
 #include "rocprofvis_ssh_connection_store.h"
-#include "rocprofvis_ssh_fetch.h"
+#include "rocprofvis_ssh_session.h"
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "rocprofvis_remote_trace_orchestrator.h"
 #include "rocprofvis_remote_file_browser.h"
@@ -27,13 +27,13 @@ class AppWindow;
 // connection; closing the editor returns to the browser.
 //
 // The connection configuration is owned as a std::shared_ptr<RemoteUri> so it
-// can be shared with the browser and the RemoteTraceOrchestrator / SshSession,
-// which read it lazily across the whole non-blocking workflow.
-class RemoteTraceOpener
+// can be shared with the spawned RemoteTraceOrchestrator / SshSession, which
+// read it lazily across the whole non-blocking workflow.
+class SshTestDialog
 {
 public:
-    explicit RemoteTraceOpener(AppWindow* app_window);
-    ~RemoteTraceOpener();
+    explicit SshTestDialog(AppWindow* app_window);
+    ~SshTestDialog();
 
     // Starts the open-remote flow (from the File menu).
     void Show();
@@ -43,13 +43,14 @@ public:
     void Render();
 
 private:
-    // Binds the currently selected SSH connection profile into m_uri so the
-    // browser / orchestrator read the right host/credentials.
-    void ApplySelectedConnection();
+    void RenderProgressPopup();
     void OpenBrowser();
     void OpenConnectionSettings();
     void StartDownload(const std::string& remote_path);
-    void RenderProgressPopup();
+
+    // Binds the currently selected SSH connection profile into m_uri so the
+    // spawned orchestrator/session read the right host/credentials.
+    void ApplySelectedConnection();
 
     AppWindow*                               m_app_window;
     SshConnectionStore&                      m_connection_store;
@@ -57,6 +58,8 @@ private:
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<SshSettingsDialog>       m_settings_dialog;
     std::unique_ptr<RemoteTraceOrchestrator> m_orchestrator;
+    // Shared remote file/directory picker. Owns its own SSH session for listing
+    // directories, reading the connection from m_uri.
     RemoteFileBrowser                        m_file_browser;
 
     bool                                     m_failure_reported;

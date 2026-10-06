@@ -223,7 +223,7 @@ InfiniteScrollTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& para
         params->m_req_row_count     = m_fetch_chunk_size;
         params->m_sort_column_index = m_sort_column_index;
         params->m_sort_order        = m_sort_order;
-        params->m_where             = "";
+        params->m_source_filter     = std::nullopt;
         params->m_filter            = request_filter.filter;
         params->m_group             = request_filter.group_by;
         params->m_group_columns     = request_filter.group_columns;

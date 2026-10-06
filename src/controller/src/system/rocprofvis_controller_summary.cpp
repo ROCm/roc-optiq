@@ -507,8 +507,8 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
         {
             rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
             uint32_t op[1] = { TABLE_QUERY_PACK_OP_TYPE(kRocProfVisDmOperationDispatch) };
-            rocprofvis_dm_processor_descriptor_t processor_id;
-            rocprofvis_dm_processor_descriptor_t* processor_id_ptr = nullptr;
+            rocprofvis_dm_query_criteria_t source_filter;
+            rocprofvis_dm_query_criteria_t* source_filter_ptr = nullptr;
             uint64_t node_id  = 0;  
             uint64_t agent_id = 0;
             if(node)
@@ -516,15 +516,15 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
                 result = node->GetUInt64(kRPVControllerNodeId, 0, &node_id);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    processor_id.node_id = &node_id;
+                    source_filter.node_id = node_id;
                     if(processor)
                     {
                         result = processor->GetUInt64(kRPVControllerProcessorId, 0, &agent_id);
                         agent_id &= TOPOLOGY_ID_MASK;
                         if(result == kRocProfVisResultSuccess)
                         {
-                            processor_id.agent_id = &agent_id;
-                            processor_id_ptr = &processor_id;
+                            source_filter.agent_id = agent_id;
+                            source_filter_ptr = &source_filter;
                         }
                     }
                 }
@@ -535,7 +535,7 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
             dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseEventTrackTable, 
                                                         static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 
                                                         1, (rocprofvis_db_track_selection_t)op, 
-                                                        processor_id_ptr, nullptr, 
+                                                        source_filter_ptr, nullptr, 
                                                         "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration", "name", 
                                                         sort_column.c_str(), kRPVDMSortOrderDesc,
                                                         0, 0, false, &query);

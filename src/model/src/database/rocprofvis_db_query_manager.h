@@ -177,7 +177,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_timestamp_t end,
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_processor_descriptor_ptr processor,
+            rocprofvis_dm_query_criteria_ptr source_filter,
             rocprofvis_dm_charptr_t filter,
             rocprofvis_dm_charptr_t group,
             rocprofvis_dm_charptr_t group_cols, 
@@ -208,7 +208,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_timestamp_t end,
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t ops,
-            rocprofvis_dm_processor_descriptor_ptr processor,
+            rocprofvis_dm_query_criteria_ptr source_filter,
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
             bool include_substring,
@@ -345,7 +345,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
         virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
-        virtual std::string GetProcessorIDSubquery(rocprofvis_dm_processor_descriptor_ptr processor) { return std::string(); }
+        virtual std::string GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
 
         //--------------------------------------Table accessors-----------------------------------------------------------------
         std::string TableColumnText(void* func, void* handle, char** azColName, int index) override;

@@ -645,17 +645,17 @@ RocprofDatabase::CreateIndexes()
 }
 
 
-std::string RocprofDatabase::GetProcessorIDSubquery(rocprofvis_dm_processor_descriptor_ptr processor)
+std::string RocprofDatabase::GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
 {
     std::string where_str;
-    if(processor)
+    if(source_filter)
     {
-        if(processor->node_id)
+        if(source_filter->node_id.has_value)
         {
-            where_str = std::string(Builder::NODE_ID_SERVICE_NAME) +" = " + std::to_string(*processor->node_id);
-            if(processor->agent_id)
+            where_str = std::string(Builder::NODE_ID_SERVICE_NAME) +" = " + std::to_string(source_filter->node_id.value);
+            if(source_filter->agent_id.has_value)
             {
-                where_str += std::string(" AND ") + Builder::AGENT_ID_SERVICE_NAME + " = " + std::to_string(*processor->agent_id & TOPOLOGY_ID_MASK);
+                where_str += std::string(" AND ") + Builder::AGENT_ID_SERVICE_NAME + " = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
             }
         }
     }

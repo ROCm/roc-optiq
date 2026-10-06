@@ -36,7 +36,6 @@ void SystemTable::Reset()
     m_end_ts = 0;
     m_use_case = kRPVDMTableUseCaseEventTrackTable;
     m_tracks.clear();
-    m_where.clear();
     m_filter.clear();
     m_group.clear();
     m_group_cols.clear();
@@ -433,7 +432,8 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         rocprofvis_dm_table_use_case_enum_t use_case = kRPVDMTableUseCaseEventTrackTable;
         rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeEvents;
         uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeEvents);
-
+        c_optional_uint64_t node_id;
+        c_optional_uint64_t agent_id;
         result = UnpackUseCase(args, use_case);
         if (result == kRocProfVisResultSuccess)
         {
@@ -554,6 +554,7 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                 result = args.GetString(kRPVControllerTableArgsGroupColumns, 0, group_cols.data(), &length);
             }
         }
+
         if(result == kRocProfVisResultSuccess)
         {
             sys_out->m_filter = std::move(filter);
@@ -564,6 +565,17 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             sys_out->m_start_ts = start_ts;
             sys_out->m_end_ts = end_ts;
         }   
+
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNode, 0, &node_id.value))
+        {
+            node_id.has_value = true;
+        }
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgent, 0, &agent_id.value))
+        {
+            agent_id.has_value = true;
+        }
+
+        sys_out->m_source_filter = node_id.has_value || agent_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id }) : std::nullopt;
     }
 	return result;
 }
@@ -584,6 +596,7 @@ SystemTable::GetCurrentArguments(TableArguments*& out) const
     sys_out->m_use_case = m_use_case;
     sys_out->m_start_ts = m_start_ts;
     sys_out->m_end_ts = m_end_ts;
+    sys_out->m_source_filter = m_source_filter;
 }
 
 void
@@ -598,6 +611,7 @@ SystemTable::SetCurrentArguments(TableArguments& in)
     m_use_case = sys_in.m_use_case;
     m_start_ts = sys_in.m_start_ts;
     m_end_ts = sys_in.m_end_ts;
+    m_source_filter = sys_in.m_source_filter;
 }
 
 bool
@@ -669,7 +683,7 @@ SystemTable::BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, uint6
     result = rocprofvis_db_build_table_query(db, arguments.m_use_case, 
                                              static_cast<rocprofvis_dm_timestamp_t>(arguments.m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(arguments.m_end_ts),
                                              static_cast<rocprofvis_db_num_of_tracks_t>(arguments.m_tracks.size()), arguments.m_tracks.data(), 
-                                             nullptr, arguments.m_filter.c_str(), 
+                                             arguments.m_source_filter.has_value() ? &arguments.m_source_filter.value() : nullptr, arguments.m_filter.c_str(),
                                              arguments.m_group.c_str(), arguments.m_group_cols.c_str(), 
                                              sort_column, (rocprofvis_dm_sort_order_t)arguments.m_sort_order,
                                              count_only ? 0 : count, count_only ? 0 : index, count_only, out);

@@ -227,14 +227,14 @@ std::string RocpdDatabase::GetLevelSchemaHashStr()
     return hash_str;
 }
 
-std::string RocpdDatabase::GetProcessorIDSubquery(rocprofvis_dm_processor_descriptor_ptr processor)
+std::string RocpdDatabase::GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
 {
     std::string where_str;
-    if(processor)
+    if(source_filter)
     {
-        if(processor->agent_id)
+        if(source_filter->agent_id.has_value)
         {
-            where_str += " gpuId = " + std::to_string(*processor->agent_id & TOPOLOGY_ID_MASK);
+            where_str += " gpuId = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
         }
     }
     return where_str;

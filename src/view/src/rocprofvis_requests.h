@@ -171,7 +171,7 @@ public:
     uint64_t m_req_row_count;      // number of rows requested
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
-    std::string                        m_where;       // SQL where clause
+    std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
     std::string                        m_filter;      // CMD filter
     std::string                        m_group;
     std::string                        m_group_columns;
@@ -194,7 +194,7 @@ protected:
 
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type, double start_ts, double end_ts,
-        const char* where, char const* filter, char const* group, char const* group_cols,
+        rocprofvis_dm_query_criteria_ptr source_filter, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
@@ -208,7 +208,7 @@ protected:
     , m_req_row_count(req_row_count)
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
-    , m_where(where)
+    , m_source_filter(source_filter ? std::make_optional(*source_filter) : std::nullopt)
     , m_filter(filter)
     , m_group(group)
     , m_group_columns(group_cols)
@@ -231,14 +231,14 @@ public:
     TrackTableRequestParams(
         rocprofvis_controller_table_type_t table_type,
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
-        const char* where, char const* filter, char const* group, char const* group_cols,
+        rocprofvis_dm_query_criteria_ptr source_filter, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
         std::string                        export_to_file_path = "",
         TableType view_table_type = TableType::__kTableTypeCount,
         uint64_t  request_id      = INFER_REQUEST_ID)
-    : TableRequestParams(table_type, start_ts, end_ts, where, filter, group, group_cols, start_row,
+    : TableRequestParams(table_type, start_ts, end_ts, source_filter, filter, group, group_cols, start_row,
                          req_row_count, sort_column_index, sort_order,
                          export_to_file_path, view_table_type, request_id)
     , m_track_ids(track_ids)
@@ -264,13 +264,13 @@ public:
     EventSearchRequestParams(
         rocprofvis_controller_table_type_t                  table_type,
         const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, const char* where, bool include_substrings, bool include_category,
+        double end_ts, rocprofvis_dm_query_criteria_ptr source_filter, bool include_substrings, bool include_category,
         bool partial_matching, const std::vector<std::string> string_table_filters = {},
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
         std::string                        export_to_file_path = "")
-    : TableRequestParams(table_type, start_ts, end_ts, where, "", "", "", start_row,
+    : TableRequestParams(table_type, start_ts, end_ts, source_filter, "", "", "", start_row,
                          req_row_count, sort_column_index, sort_order,
                          export_to_file_path)
     , m_op_types(op_types)

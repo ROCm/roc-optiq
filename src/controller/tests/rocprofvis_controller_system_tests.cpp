@@ -651,10 +651,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
-            rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result =
             rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
 

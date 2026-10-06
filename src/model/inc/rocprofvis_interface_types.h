@@ -434,11 +434,23 @@ typedef enum rocprofvis_dm_sort_order_t {
     kRPVDMSortOrderDesc,
 } rocprofvis_dm_sort_order_t;
 
-typedef struct rocprofvis_dm_processor_descriptor_t
+// C version of std::optional
+typedef struct c_optional_uint64_t
 {
-    uint64_t* node_id;
-    uint64_t* agent_id;
-} rocprofvis_dm_processor_decriptor_t,  * rocprofvis_dm_processor_descriptor_ptr;
+    uint64_t value = 0;
+    bool has_value = false;
+    c_optional_uint64_t() = default;
+    c_optional_uint64_t(uint64_t v) : value(v), has_value(true) {}
+} c_optional_uint64_t;
+
+// Former WHERE parameter to all table query methods
+// Contains variables for firtering primary source by essential identifiers
+typedef struct rocprofvis_dm_query_criteria_t
+{
+    c_optional_uint64_t node_id;
+    c_optional_uint64_t agent_id;
+
+} rocprofvis_dm_query_criteria_t,  * rocprofvis_dm_query_criteria_ptr;
 
 // Tags for hrocprofvis_dm_hashed_timestamp
 typedef enum rocprofvis_dm_hashed_timestamp_tag_t

@@ -517,16 +517,16 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
                 if(result == kRocProfVisResultSuccess)
                 {
                     source_filter.node_id = node_id;
-                    if(processor)
-                    {
-                        result = processor->GetUInt64(kRPVControllerProcessorId, 0, &agent_id);
-                        agent_id &= TOPOLOGY_ID_MASK;
-                        if(result == kRocProfVisResultSuccess)
-                        {
-                            source_filter.agent_id = agent_id;
-                            source_filter_ptr = &source_filter;
-                        }
-                    }
+                    source_filter_ptr = &source_filter;
+                }
+            }
+            if(processor)
+            {
+                result = processor->GetUInt64(kRPVControllerProcessorId, 0, &agent_id);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    source_filter.agent_id = agent_id & TOPOLOGY_ID_MASK;
+                    source_filter_ptr = &source_filter;
                 }
             }
             rocprofvis_dm_table_id_t table_id = 0;

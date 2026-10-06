@@ -520,11 +520,11 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
     sys_out->m_sort_column = sort_column_index;
     sys_out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
-    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNode, 0, &node_id.value))
+    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
     {
         node_id.has_value = true;
     }
-    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgent, 0, &agent_id.value))
+    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
     {
         agent_id.has_value = true;
     }

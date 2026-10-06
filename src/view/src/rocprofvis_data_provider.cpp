@@ -1680,14 +1680,14 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
 
     if (table_params.m_source_filter.has_value() && table_params.m_source_filter->node_id.has_value)
     {
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNode, 0,
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNodeId, 0,
                                               table_params.m_source_filter->node_id.value);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     }
 
     if (table_params.m_source_filter.has_value() && table_params.m_source_filter->agent_id.has_value)
     {
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsAgent, 0,
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsAgentId, 0,
                                               table_params.m_source_filter->agent_id.value);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     }

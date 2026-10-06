@@ -566,11 +566,11 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             sys_out->m_end_ts = end_ts;
         }   
 
-        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNode, 0, &node_id.value))
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
         {
             node_id.has_value = true;
         }
-        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgent, 0, &agent_id.value))
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
         {
             agent_id.has_value = true;
         }
@@ -619,7 +619,7 @@ SystemTable::ArgumentsChanged(SystemTableArguments& in) const
 {
     bool result = true;
     if(m_tracks.size() == in.m_tracks.size() && m_start_ts == in.m_start_ts &&
-        m_end_ts == in.m_end_ts  && m_filter == in.m_filter && 
+        m_end_ts == in.m_end_ts && m_source_filter == in.m_source_filter && m_filter == in.m_filter && 
         m_group == in.m_group && m_group_cols == in.m_group_cols && 
         m_use_case == in.m_use_case)
     {

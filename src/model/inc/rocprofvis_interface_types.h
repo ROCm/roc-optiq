@@ -452,6 +452,24 @@ typedef struct rocprofvis_dm_query_criteria_t
 
 } rocprofvis_dm_query_criteria_t,  * rocprofvis_dm_query_criteria_ptr;
 
+#ifdef __cplusplus
+inline bool operator==(const c_optional_uint64_t& lhs, const c_optional_uint64_t& rhs)
+{
+    if(lhs.has_value != rhs.has_value)
+        return false;
+    if(!lhs.has_value)
+        return true;  
+    return lhs.value == rhs.value;
+}
+
+inline bool operator==(const rocprofvis_dm_query_criteria_t& lhs, 
+    const rocprofvis_dm_query_criteria_t& rhs)
+{
+    return lhs.node_id == rhs.node_id &&
+        lhs.agent_id == rhs.agent_id;
+}
+#endif
+
 // Tags for hrocprofvis_dm_hashed_timestamp
 typedef enum rocprofvis_dm_hashed_timestamp_tag_t
 {

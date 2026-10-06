@@ -1678,9 +1678,19 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               table_params.m_sort_order);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0,
-                                              table_params.m_where.data());
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    if (table_params.m_source_filter.has_value() && table_params.m_source_filter->node_id.has_value)
+    {
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNodeId, 0,
+                                              table_params.m_source_filter->node_id.value);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    }
+
+    if (table_params.m_source_filter.has_value() && table_params.m_source_filter->agent_id.has_value)
+    {
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsAgentId, 0,
+                                              table_params.m_source_filter->agent_id.value);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    }
 
     result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0,
                                               table_params.m_filter.data());
@@ -1718,7 +1728,7 @@ DataProvider::FetchSingleTrackSampleTable(uint64_t track_id, double start_ts,
                                           rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts, "", filter, "",
+        kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts, nullptr, filter, "",
         "", start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1731,7 +1741,7 @@ DataProvider::FetchSingleTrackEventTable(uint64_t track_id, double start_ts,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts, "", filter, group,
+        kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts, nullptr, filter, group,
         group_cols, start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1744,7 +1754,7 @@ DataProvider::FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts, "", filter, "", "",
+        kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts, nullptr, filter, "", "",
         start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1759,7 +1769,7 @@ DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids,
 
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts, "", filter, group,
+        kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts, nullptr, filter, group,
         group_cols, start_row, req_row_count, sort_column_index, sort_order));
 }
 

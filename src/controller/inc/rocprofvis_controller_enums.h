@@ -663,7 +663,7 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsSortOrder                           = 0xE0000006,
     kRPVControllerTableArgsStartIndex                          = 0xE0000007,
     kRPVControllerTableArgsStartCount                          = 0xE0000008,
-    kRPVControllerTableArgsWhere                               = 0xE0000009,
+    kRPVControllerTableArgsNodeId                              = 0xE0000009,
     kRPVControllerTableArgsFilter                              = 0xE000000A,
     kRPVControllerTableArgsGroup                               = 0xE000000B,
     kRPVControllerTableArgsGroupColumns                        = 0xE000000C,
@@ -674,6 +674,7 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsStringTableFiltersIncludeSubstrings = 0xE0000011,
     kRPVControllerTableArgsStringTableFiltersIncludeCategory   = 0xE0000012,
     kRPVControllerTableArgsStringTableFiltersPartialMatching   = 0xE0000013,
+    kRPVControllerTableArgsAgentId                             = 0xE0000014,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t

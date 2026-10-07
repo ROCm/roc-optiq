@@ -980,7 +980,17 @@ if(WIN32)
     set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
     set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
     set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+    set(_wix_payload "${CMAKE_BINARY_DIR}/roc-optiq-payload.wxs")
+    set(_wix_python_dir "")
+    if(ROCPROFVIS_VENDOR_PYTHON)
+      get_target_property(_wix_python_dir RocProfVis::Python ROCPROFVIS_PYTHON_STAGE_DIR)
+    endif()
     add_custom_target(PACKAGE_WIX
+      COMMAND "${CMAKE_COMMAND}"
+        "-DEXE_DIR=$<TARGET_FILE_DIR:${TARGET_NAME}>"
+        "-DPYTHON_DIR=${_wix_python_dir}"
+        "-DOUTPUT=${_wix_payload}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/rocprofvis_wix_payload.cmake"
       COMMAND "${WIX_EXECUTABLE}" build
         -arch x64
         -d "Version=${_wix_version}"
@@ -992,6 +1002,7 @@ if(WIN32)
         -ext WixToolset.UI.wixext
         -out "${_wix_out}"
         "${_wix_src}"
+        "${_wix_payload}"
       DEPENDS ${TARGET_NAME}
       COMMENT "Building WiX MSI installer: ${_wix_out}"
       VERBATIM

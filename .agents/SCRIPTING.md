@@ -694,8 +694,8 @@ and a release build does not require a system Python.
 - ~~Editor shows the source before or as it runs.~~ In tree via
   `ShowGeneratedScript`.
 - ~~Vendor embeddable CPython into the package; CI builds against it.~~
-  In tree as `ROCPROFVIS_VENDOR_PYTHON` (§7). The MSI does not carry
-  it yet. In CI the per-platform workflows take a `vendor_python`
+  In tree as `ROCPROFVIS_VENDOR_PYTHON` (§7). The MSI and the Windows
+  CI artifact carry it. In CI the per-platform workflows take a `vendor_python`
   input (default off); the controller's experimental jobs turn it on.
   With scripting on and `vendor_python` off, each workflow installs
   the build machine's Python development files instead.
@@ -808,10 +808,13 @@ reasoning moved to the section it belongs to.
 
 ### Build and shipping
 
-- **The MSI does not ship the interpreter.** `wix/roc-optiq.wxs`
-  packages `roc-optiq.exe` only. A scripting build also needs
-  `python312.dll` and the `python/` directory beside it, which the
-  CPack archives already carry.
+- **Windows `cmake --install` and CPack are broken.** The
+  `install(PROGRAMS ${BUILD_DIR}/roc-optiq)` rule names neither the
+  `.exe` nor the Visual Studio configuration directory, and nothing
+  installs the runtime DLLs. The MSI (`PACKAGE_WIX`, through the
+  generated `roc-optiq-payload.wxs`) and the CI zip artifact copy
+  from the executable's directory instead, so both carry
+  `python312.dll` and `python\`.
 - **macOS packaging is unverified.** The bundle copies are wired, and
   configure fails if the stage holds any `.so` or `.dylib`, because
   `codesign --deep` does not sign under `Resources` and notarization

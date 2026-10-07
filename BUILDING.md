@@ -89,6 +89,8 @@ cmake --build build/x64-release --preset "Windows Release Build" --target PACKAG
 
 CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` picks up the executable already on disk and passes it directly to `wix.exe`.
 
+Besides `roc-optiq.exe`, the MSI installs every `*.dll` in the executable's directory (for example `perfetto_trace_processor_dll.dll`, the OpenSSL DLLs, and `python312.dll`) and, in a vendored scripting build (`ROCPROFVIS_ENABLE_SCRIPTING=ON`), the Python runtime as `python\`. `PACKAGE_WIX` lists them in a generated `roc-optiq-payload.wxs` (`cmake/rocprofvis_wix_payload.cmake`) on every run, so a stale DLL left in the build directory will be packaged too.
+
 ---
 
 ## Linux (Ubuntu 22.04 / 24.04)

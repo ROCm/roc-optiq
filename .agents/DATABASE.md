@@ -452,15 +452,19 @@ does not race when multiple nodes are loaded concurrently.
 
 ### 4.2 `SqliteDatabase` (`rocprofvis_db_sqlite.h`)
 
-Adds SQLite plumbing on top of `Database`. Key concepts:
+SQLite plumbing that `QueryManager` and `ComputeDatabase` inherit
+alongside their `Database` base. Key concepts:
 
 - **DB nodes (`rocprofvis_db_sqlite_db_node_t`):** one per file in a
   multinode set. Carries the `node_id`, file path, and the
   available/in-use connection pools. `MAX_CONNECTIONS = 100`.
 - **Connection management:** `OpenConnection`, `GetConnection`,
-  `GetServiceConnection`, `ReleaseConnection`, `InterruptQuery`. New
+  `GetServiceConnection`, `ReleaseConnection`, `InterruptAsSqlite`. New
   query paths must release every connection they take, even on early
-  exit.
+  exit. `SqliteDatabase` does not derive from `Database`, so a class
+  that inherits both must override `Database::InterruptQuery` to call
+  `InterruptAsSqlite`; otherwise cancelling a future never interrupts
+  its running query.
 - **`Sqlite3Exec` / `ExecuteSQLQuery` overloads:** the canonical way
   to run SQL. The internal `Sqlite3Exec` mimics `sqlite3_exec` using
   `sqlite3_prepare_v2` so callbacks receive a real `sqlite3_stmt*`

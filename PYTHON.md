@@ -152,7 +152,6 @@ Keyword arguments:
 | `tracks` | all matching tracks | Sequence of `optiq.Track`. Only tracks whose type matches the table type are used. |
 | `start` | timeline min | Query start timestamp. |
 | `end` | timeline max | Query end timestamp. |
-| `where` | `""` | SQL-shaped `WHERE` fragment (same language as the Event / Sample Table). Passed to the query layer as written - see the note below. |
 | `filter` | `""` | Expression filter string. |
 | `group` | `""` | Group-by expression. |
 | `group_columns` | `""` | Grouped column list. |
@@ -165,7 +164,7 @@ Keyword arguments:
 At least one track of the matching type is required. Otherwise
 `RuntimeError` is raised.
 
-`where`, `filter`, `group` and `group_columns` are handed to the query
+`filter`, `group` and `group_columns` are handed to the query
 layer exactly as you write them - they are a query language, not
 validated input. That is deliberate, so hand-written analysis is not
 limited to a fixed column list, and it is safe for the same reason the

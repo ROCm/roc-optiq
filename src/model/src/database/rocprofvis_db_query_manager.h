@@ -75,6 +75,9 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close()  override { return CloseAsSqlite(); };
+        // Method to interrupt a running sqlite query
+        // @param connection - sqlite connection running the query
+        void InterruptQuery(void* connection) override { InterruptAsSqlite(connection); };
 
         // worker method to execute database query
         // @param query - database query 

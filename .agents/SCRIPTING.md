@@ -301,8 +301,8 @@ void rocprofvis_controller_table_free(rocprofvis_controller_table_t* table);
 
 Implementation: `new SystemTable`. Fetch remains
 `rocprofvis_controller_table_fetch_async` with the existing
-`kRPVControllerTableArgs*` (type, tracks, start/end, where, filter,
-group, sort, page).
+`kRPVControllerTableArgs*` (type, tracks, start/end, node / agent ids,
+filter, group, sort, page).
 
 Per-`use_case` mutex on `SystemTrace` **serializes** a script query
 with the UI event-table query; it does not merge row caches. The UI
@@ -331,7 +331,7 @@ optiq.result.text(str)
 optiq.on_progress(cb)       # optional; default is none
 
 t = optiq.table()           # table_alloc; NOT the UI singleton
-t.fetch(tracks=..., start=..., end=..., where=..., group=...)
+t.fetch(tracks=..., start=..., end=..., filter=..., group=...)
 for row in t.rows():
     ...
 
@@ -667,12 +667,14 @@ and a release build does not require a system Python.
 - Vendor embeddable CPython into the package; CI builds against it.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
 - ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and
-  approval is why.** `Table.fetch` passes those strings to the table
+  approval is why.** The table args have since lost `where` (the query
+  layer takes typed node / agent ids instead), so this now covers
+  `filter` and `group`. `Table.fetch` passes those strings to the table
   args untouched, while the assistant's own `BuildAssistantWhereClause`
   whitelists columns, quotes literals and escapes `LIKE` wildcards,
   because a tool call arrives without anyone reading it. A script does
   not: `run_analysis_script` only ever *offers* source, and a person
-  reads it before it runs (§6). Whitelisting a script's `where` would
+  reads it before it runs (§6). Whitelisting a script's `filter` would
   therefore buy nothing against a model - the same person would have
   approved the script either way - while taking the query language away
   from the users the feature exists for, who are writing analysis by
@@ -684,7 +686,7 @@ and a release build does not require a system Python.
     unattended, this decision is void and these strings need the query
     builder - along with the rest of §7.
   - The reach is read-only trace data the user already opened. A script
-    has no wider access through `where` than it already has through
+    has no wider access through `filter` than it already has through
     `Track.events()`.
   - Say so in [`PYTHON.md`](../PYTHON.md), so a script author knows the
     fragment reaches the query layer as written.

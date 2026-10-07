@@ -670,7 +670,7 @@ and a release build does not require a system Python.
   approval is why.** The table args have since lost `where` (the query
   layer takes typed node / agent ids instead), so this now covers
   `filter` and `group`. `Table.fetch` passes those strings to the table
-  args untouched, while the assistant's own `BuildAssistantWhereClause`
+  args untouched, while the assistant's own `BuildAssistantFilterExpression`
   whitelists columns, quotes literals and escapes `LIKE` wildcards,
   because a tool call arrives without anyone reading it. A script does
   not: `run_analysis_script` only ever *offers* source, and a person

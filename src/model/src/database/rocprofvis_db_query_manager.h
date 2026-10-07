@@ -212,6 +212,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t ops,
             rocprofvis_dm_query_criteria_ptr source_filter,
+            rocprofvis_dm_charptr_t filter,
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
             bool include_substring,

@@ -1341,7 +1341,16 @@ compute pivot table's per-column filter. The recipe:
    `ParseAggregationSpec(line)` returning a list of
    `SqlAggregation { column, command (Count|Avg|Min|Max|Sum), public_name }`.
 
-`MatchLike(text, pattern)` supports SQL `%` and `_` wildcards.
+`MatchLike(text, pattern, escape)` supports SQL `%` and `_` wildcards,
+case-insensitively, and `LIKE 'pattern' ESCAPE 'c'` to match a
+wildcard literally. `LIKE` on a number matches its printed text.
+Number literals may be negative or carry an exponent. Strings compare
+with every comparison operator, byte by byte. A number compared with
+text that reads as a number compares numerically; with other text it
+matches only `!=`, and with empty text (a column the row lacks) it
+matches nothing. Parsing stops at the first token it does not
+recognise rather than failing, so a caller that builds expressions
+must emit only this syntax or later conditions are silently dropped.
 
 The expression layer is intentionally schema-agnostic - any caller
 that wants to filter rows hands it a row-as-map representation.

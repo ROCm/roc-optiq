@@ -225,7 +225,7 @@ constexpr const char* ASSISTANT_SYSTEM_PROMPT =
     "start_ns/end_ns to pick a window, filters to narrow rows, sort_by/sort_order, "
     "and limit/offset to page. Filter, group, and sort columns must come from: "
     "name, category, duration, start, end, id, __uuid, PID, TID, queue, stream, "
-    "node, nodeId, size, address, SrcAddr, value, counter, arguments, GridSizeX, "
+    "node, size, address, SrcAddr, value, counter, arguments, GridSizeX, "
     "GridSizeY, GridSizeZ, WGSizeX, WGSizeY, WGSizeZ, LDSSize, ScratchSize, "
     "StaticLDSSize, StaticScratchSize, AgentAbsoluteIndex, AgentType, "
     "AgentTypeIndex, AgentName, SrcAgentAbsoluteIndex, SrcAgentType, "

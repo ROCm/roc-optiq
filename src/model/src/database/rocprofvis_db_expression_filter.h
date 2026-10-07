@@ -121,21 +121,55 @@ namespace DataModel
             return m_text.substr(start, m_pos - start);
         }
 
+        // A number literal: an optional '-', digits with at most one '.', and an optional
+        // exponent. Only called where an operand starts, so a '-' here is a sign; a '-'
+        // between two operands has already been taken by ParseArithmetic as a subtraction.
         std::string GetNumber()
         {
             SkipSpaces();
-            size_t start = m_pos;
-            bool hasDot = false;
-            while (m_pos < m_text.size() && (std::isdigit((unsigned char)m_text[m_pos]) || m_text[m_pos] == '.'))
+            size_t pos = m_pos;
+            if (pos < m_text.size() && m_text[pos] == '-')
             {
-                if (m_text[m_pos] == '.')
-                {
-                    if (hasDot) break;
-                    hasDot = true;
-                }
-                ++m_pos;
+                ++pos;
             }
-            return (m_pos > start) ? m_text.substr(start, m_pos - start) : "";
+            size_t digits = 0;
+            while (pos < m_text.size() && std::isdigit((unsigned char)m_text[pos]))
+            {
+                ++pos;
+                ++digits;
+            }
+            if (pos < m_text.size() && m_text[pos] == '.')
+            {
+                ++pos;
+                while (pos < m_text.size() && std::isdigit((unsigned char)m_text[pos]))
+                {
+                    ++pos;
+                    ++digits;
+                }
+            }
+            if (digits == 0)
+            {
+                return "";
+            }
+            if (pos < m_text.size() && (m_text[pos] == 'e' || m_text[pos] == 'E'))
+            {
+                size_t exponent = pos + 1;
+                if (exponent < m_text.size() && (m_text[exponent] == '+' || m_text[exponent] == '-'))
+                {
+                    ++exponent;
+                }
+                if (exponent < m_text.size() && std::isdigit((unsigned char)m_text[exponent]))
+                {
+                    while (exponent < m_text.size() && std::isdigit((unsigned char)m_text[exponent]))
+                    {
+                        ++exponent;
+                    }
+                    pos = exponent;
+                }
+            }
+            std::string number = m_text.substr(m_pos, pos - m_pos);
+            m_pos = pos;
+            return number;
         }
 
         std::string GetHexNumber()
@@ -263,6 +297,8 @@ namespace DataModel
             Operator m_op;
             std::unique_ptr<ExprNode> m_rightExpr;
             bool m_negate = false;
+            // Character named by LIKE ... ESCAPE 'c', or 0 when the pattern has none.
+            char m_escape = 0;
         };
 
         struct Node {
@@ -293,7 +329,7 @@ namespace DataModel
 
         // Helpers
         static bool EvaluateNode(const Node* node, const std::unordered_map<std::string, Value>& row);
-        static bool MatchLike(const std::string& text, const std::string& pattern);
+        static bool MatchLike(const std::string& text, const std::string& pattern, char escape);
 
         // Helper to deep copy Node tree
         static std::unique_ptr<Node> CopyNode(const std::unique_ptr<Node>& node);

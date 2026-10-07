@@ -2039,11 +2039,14 @@ Layered, transport at the bottom and the panel at the top:
   about what each tool is for, so they are product behaviour rather
   than incidental text.
 - `rocprofvis_ai_tool_query.{h,cpp}` - turns query-shaped tool
-  arguments into the SQL fragments `DataProvider` takes. The one place
-  a bad argument could become bad SQL, so it treats model input as
-  hostile: column and operator whitelists rather than escaping, quoted
-  string literals, and escaped `LIKE` wildcards paired with an explicit
-  `ESCAPE` clause.
+  arguments into the table filter and grouping `DataProvider` takes. The
+  filter is written in the table filter-row language and applied to each
+  row before grouping and paging. The one place a bad argument could
+  become a bad filter, so it treats model input as hostile: column and
+  operator whitelists rather than escaping, quoted string literals, and
+  escaped `LIKE` wildcards paired with an explicit `ESCAPE` clause. Its
+  columns must be names the returned rows carry (`node`, not the SQL
+  `nodeId`), since a filter on any other name matches nothing.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
   `StartAssistantTool`, which parses the arguments, refuses everything
   but `offer_next_steps` when no trace is ready, then searches the UI

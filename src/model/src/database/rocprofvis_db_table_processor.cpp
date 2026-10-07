@@ -1075,13 +1075,27 @@ namespace DataModel
         }
 
         uint32_t track_id;
-        if (!db->FindTrack(db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op),
-            db->TableColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
-            db->TableColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
-            callback_params->db_instance->GuidIndex(),
-            track_id))
+        if (table_processor->m_tables[callback_params->track_id]->track_ids_indices.is_rocpd_pmc)
         {
-            track_id = INVALID_INDEX;
+            if (!db->FindTrack(db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op),
+                db->TableColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
+                db->TableColumnText(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index).c_str(),
+                callback_params->db_instance->GuidIndex(),
+                track_id))
+            {
+                track_id = INVALID_INDEX;
+            }
+        }
+        else
+        {
+            if (!db->FindTrack(db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op),
+                db->TableColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
+                db->TableColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
+                callback_params->db_instance->GuidIndex(),
+                track_id))
+            {
+                track_id = INVALID_INDEX;
+            }
         }
 
         table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, (uint64_t)track_id);

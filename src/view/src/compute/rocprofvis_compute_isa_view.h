@@ -206,8 +206,8 @@ private:
     struct SampleCounts
     {
         uint64_t                total_count = 0;
-        std::optional<uint64_t> issue_count = 0;
-        std::optional<uint64_t> stall_count = 0;
+        std::optional<uint64_t> issue_count;
+        std::optional<uint64_t> stall_count;
     };
 
     struct IsaRow
@@ -234,7 +234,6 @@ private:
         std::unordered_map<uint64_t, SampleCounts>         counts_by_instruction;
         std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
         uint64_t                                           kernel_total_samples = 0;
-        bool                                               stall_data_available = false;
     };
 
     using StallReasonCounts = std::unordered_map<uint64_t, uint64_t>;

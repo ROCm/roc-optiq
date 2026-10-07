@@ -86,11 +86,13 @@ constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
     "How often this instruction was unable to issue and was waiting when sampled.\n"
     "Higher values identify where to investigate, but not the cause of the wait.\n"
     "Hover a value to see every recorded stall reason, ordered by sample count.\n"
-    "If progress data was not recorded, the column is disabled and displays N/A.",
+    "Instructions with missing progress data display N/A.\n"
+    "The column is hidden when no instruction has progress data.",
     "DB fields: compute_pc_sample_state.issue_count, stall_count, total_count\n"
     "Group key: compute_pc_sample_state.instruction_uuid\n"
     "Value: 100 * SUM(stall_count) / SUM(total_count)\n"
-    "Availability: issue_count and stall_count must be non-NULL for every sample state.\n"
+    "Availability: issue_count and stall_count must be non-NULL for every sample state "
+    "of this instruction.\n"
     "If SUM(total_count) is zero, the displayed value is 0%.\n"
     "Reason fields: compute_pc_sample_stall_reason.pc_sample_state_uuid, "
     "pc_sample_stall_reason_lookup_uuid, count\n"
@@ -120,8 +122,8 @@ constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
     "No stall-reason details were recorded for this instruction.";
 constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TEXT = "N/A";
 constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TOOLTIP =
-    "Stall percentage is unavailable because this profile did not record whether "
-    "sampled waves issued or stalled.\n"
+    "Stall percentage is unavailable because progress data is missing for this "
+    "instruction.\n"
     "This is expected for host-trap PC sampling.";
 constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
     "Shares use all %s stalled samples as the denominator.";
@@ -971,36 +973,54 @@ IsaCodeWidget::BuildSourceLocations(const PcSamplingData& data)
 IsaCodeWidget::SampleAggregation
 IsaCodeWidget::AggregateSampleCounts(const PcSamplingData& data)
 {
+    struct SampleTotals
+    {
+        uint64_t total_count         = 0;
+        uint64_t issue_count         = 0;
+        uint64_t stall_count         = 0;
+        bool     missing_issue_count = false;
+        bool     missing_stall_count = false;
+    };
+
+    std::unordered_map<uint64_t, SampleTotals> totals_by_instruction;
+    totals_by_instruction.reserve(data.pc_sample_states.size());
     SampleAggregation aggregation;
-    aggregation.stall_data_available = !data.pc_sample_states.empty();
     aggregation.counts_by_instruction.reserve(data.pc_sample_states.size());
     aggregation.sample_state_by_uuid.reserve(data.pc_sample_states.size());
     for(const PcSampleState& state : data.pc_sample_states)
     {
-        SampleCounts& counts = aggregation.counts_by_instruction[state.instruction_uuid];
+        SampleTotals& counts = totals_by_instruction[state.instruction_uuid];
         counts.total_count += state.total_count;
-        if(counts.issue_count && state.issue_count)
+        if(state.issue_count)
         {
-            *counts.issue_count += *state.issue_count;
+            counts.issue_count += *state.issue_count;
         }
         else
         {
-            counts.issue_count.reset();
+            counts.missing_issue_count = true;
         }
-        if(counts.stall_count && state.stall_count)
+        if(state.stall_count)
         {
-            *counts.stall_count += *state.stall_count;
+            counts.stall_count += *state.stall_count;
         }
         else
         {
-            counts.stall_count.reset();
-        }
-        if(!state.issue_count || !state.stall_count)
-        {
-            aggregation.stall_data_available = false;
+            counts.missing_stall_count = true;
         }
         aggregation.kernel_total_samples += state.total_count;
         aggregation.sample_state_by_uuid.emplace(state.pc_sample_state_uuid, &state);
+    }
+    for(const auto& [instruction_uuid, totals] : totals_by_instruction)
+    {
+        SampleCounts counts;
+        counts.total_count = totals.total_count;
+        counts.issue_count = totals.missing_issue_count
+                                 ? std::nullopt
+                                 : std::optional<uint64_t>(totals.issue_count);
+        counts.stall_count = totals.missing_stall_count
+                                 ? std::nullopt
+                                 : std::optional<uint64_t>(totals.stall_count);
+        aggregation.counts_by_instruction.emplace(instruction_uuid, counts);
     }
     return aggregation;
 }
@@ -1219,7 +1239,6 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
         BuildStallReasonCounts(data, sample_aggregation, stall_reason_text);
 
     m_kernel_total_samples = sample_aggregation.kernel_total_samples;
-    m_stall_data_available = sample_aggregation.stall_data_available;
 
     for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
     {
@@ -1231,6 +1250,8 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
                 std::max(m_hottest_instruction_samples, row.sample_counts.total_count);
             m_largest_code_object_offset =
                 std::max(m_largest_code_object_offset, row.code_object_offset);
+            m_stall_data_available |= row.sample_counts.issue_count.has_value() &&
+                                      row.sample_counts.stall_count.has_value();
             m_entries.emplace_back(std::move(row));
         }
     }
@@ -1245,9 +1266,11 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const bool show_sampling_details   = IsStallShown();
-    const int  sampling_detail_columns = show_sampling_details ? 2 : 0;
-    const int  columns_count           = 3 + sampling_detail_columns;
+    const bool show_sampling_details = IsStallShown();
+    const bool show_stall_percent    = show_sampling_details && m_stall_data_available;
+    const int  sampling_detail_columns =
+        (show_sampling_details ? 1 : 0) + (show_stall_percent ? 1 : 0);
+    const int columns_count = 3 + sampling_detail_columns;
     CalculateLineNumberWidth(m_entries.size());
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
@@ -1294,7 +1317,7 @@ IsaCodeWidget::Render()
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_NoHide |
                                        ImGuiTableColumnFlags_WidthStretch);
 
-    if(show_sampling_details)
+    if(show_stall_percent)
     {
         const float stall_column_width = ImGui::CalcTextSize("Stall %").x;
         ImGui::TableSetupColumn("Stall %", ImGuiTableColumnFlags_WidthFixed,
@@ -1311,19 +1334,10 @@ IsaCodeWidget::Render()
     RenderTableHeaderWithTooltip(header_column++, "Offset",
                                  CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     RenderTableHeaderWithTooltip(header_column++, "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
-    if(show_sampling_details)
+    if(show_stall_percent)
     {
-        if(!m_stall_data_available)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text,
-                                  ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        }
         RenderTableHeaderWithTooltip(header_column, "Stall %",
                                      STALL_PERCENT_HEADER_TOOLTIP);
-        if(!m_stall_data_available)
-        {
-            ImGui::PopStyleColor();
-        }
     }
     PushStyles();
 
@@ -1446,8 +1460,10 @@ IsaCodeWidget::RenderSamplesCell(uint64_t sample_count)
     const float text_width = ImGui::CalcTextSize(display_text.c_str()).x;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, cell_width - text_width));
     ImGui::TextUnformatted(display_text.c_str());
+    ImGui::SetCursorScreenPos(cell_start);
+    ImGui::Dummy(ImVec2(cell_width, cell_height));
 
-    if(ImGui::IsMouseHoveringRect(cell_start, cell_end))
+    if(ImGui::IsItemHovered())
     {
         if(is_low_confidence)
         {
@@ -1481,7 +1497,9 @@ IsaCodeWidget::RenderPercentBarCell(double percent)
         draw_list->PopClipRect();
     }
     ImGui::TextDisabled("%.1f%%", percent);
-    return ImGui::IsMouseHoveringRect(cell_start, cell_end);
+    ImGui::SetCursorScreenPos(cell_start);
+    ImGui::Dummy(ImVec2(cell_width, cell_height));
+    return ImGui::IsItemHovered();
 }
 
 void
@@ -1490,13 +1508,14 @@ IsaCodeWidget::RenderUnavailableStallCell()
     const ImVec2 cell_start = ImGui::GetCursorScreenPos();
     const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
     const float  cell_height = ImGui::GetTextLineHeight();
-    const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
 
     ImGui::BeginDisabled();
     ImGui::TextUnformatted(STALL_DATA_UNAVAILABLE_CELL_TEXT);
     ImGui::EndDisabled();
+    ImGui::SetCursorScreenPos(cell_start);
+    ImGui::Dummy(ImVec2(cell_width, cell_height));
 
-    if(ImGui::IsMouseHoveringRect(cell_start, cell_end))
+    if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("%s", STALL_DATA_UNAVAILABLE_CELL_TOOLTIP);
     }
@@ -1635,15 +1654,15 @@ IsaCodeWidget::RenderLine(uint32_t index)
                                            COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
 
-    if(IsStallShown())
+    if(IsStallShown() && m_stall_data_available)
     {
         ImGui::TableSetColumnIndex(++column);
-        if(!m_stall_data_available)
+        if(!isa_row.sample_counts.issue_count || !isa_row.sample_counts.stall_count)
         {
             RenderUnavailableStallCell();
         }
         else if(RenderPercentBarCell(
-                    CalculatePercentage(isa_row.sample_counts.stall_count.value_or(0),
+                    CalculatePercentage(*isa_row.sample_counts.stall_count,
                                         isa_row.sample_counts.total_count)))
         {
             RenderStallReasonsTooltip(isa_row);

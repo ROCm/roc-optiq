@@ -1610,15 +1610,19 @@ byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset, ISA instruction, or
 source-code line opens its copy context menu. `Show Sampling Details` adds
 Samples, aggregated by instruction UUID across returned sample states, and the
-Stall % column. When every returned sample state has non-NULL issued and stall
-counts, Stall % shows the measured percentage. Host-trap captures leave those
-progress counts NULL, so their Stall % column remains visible but disabled;
-each row displays `N/A` and its tooltip explains why the data is unavailable.
-The disabled header is dimmed but remains interactive so its right-click column
-visibility menu is available. A stochastic capture's real zero counts remain
-available and are not confused with NULL. Samples shows a right-aligned
+Stall % column when at least one displayed instruction has progress data.
+For each instruction, Stall % shows the measured percentage only when every
+sample state for that instruction has non-NULL issued and stall counts.
+In mixed captures, instructions with missing progress counts display disabled
+`N/A` cells with explanatory tooltips; other instructions retain their measured
+percentages. Entirely host-trap captures have no progress counts, so Stall % is
+omitted. Unsampled instructions also have unavailable progress counts. A
+stochastic capture's real zero counts remain available and are not confused
+with NULL. Samples shows a right-aligned
 raw count over a heat bar normalized to the hottest displayed instruction. Its
-tooltip reports both kernel share and relative hotness. Counts from one through
+tooltip reports both kernel share and relative hotness. Cell tooltips use
+`IsItemHovered()` over the full cell so covering windows and popups suppress
+them. Counts from one through
 ten carry a low-confidence marker for the derived percentages, while zero-count
 lines remain unmarked and the exact count remains prominent. The Samples column starts
 at the wider of its header and largest formatted count. Samples, Offset, and `#`

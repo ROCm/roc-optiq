@@ -7,7 +7,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace App
 {
 
 // Upper bound on the corrective resizes issued after leaving fullscreen. The
@@ -274,5 +274,5 @@ is_fullscreen_active(GLFWwindow* window)
     return glfwGetWindowMonitor(window) != nullptr;
 }
 
-}  // namespace View
+}  // namespace App
 }  // namespace RocProfVis

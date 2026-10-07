@@ -9,7 +9,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace App
 {
 
 class CLIParser;
@@ -28,13 +28,14 @@ constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
 void
 enable_application_log();
 
-// Sets the app description and registers --version, --file, --backend and
-// --file-dialog. Returns false if an option could not be registered.
+// Sets the app description and registers --version [hash], --file, --backend
+// and --file-dialog. Returns false if an option could not be registered.
 bool
 add_common_cli_options(CLIParser& cli_parser);
 
-// Prints --help or --version after Parse(). Sets exit_app when the process has
-// nothing else to do.
+// Prints --help or --version after Parse(). Sets exit_app for --help, and for
+// --version only when it is the sole option; its 'hash' value does not count as
+// a second option.
 void
 handle_help_and_version(const CLIParser& cli_parser, bool& exit_app);
 
@@ -100,5 +101,5 @@ void
 mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 #endif
 
-}  // namespace View
+}  // namespace App
 }  // namespace RocProfVis

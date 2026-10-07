@@ -1,12 +1,15 @@
 #ifdef __linux__
 
 #    include "imgui.h"
+#    include <algorithm>
+#    include <cmath>
 #    include <cstdlib>
 #    include <cstring>
 #    include <unordered_map>
 
 #    include <GLFW/glfw3.h>
 
+#    include "glfw_util.h"
 #    include "rocprofvis_platform_helpers.h"
 #    include "spdlog/spdlog.h"
 
@@ -306,6 +309,44 @@ raise_dragged_viewport_after_release()
         g_dragged_viewport_id = 0;
     }
     g_prev_mouse_left_down = curr_mouse_down;
+}
+
+// GLFW's X11 backend takes the content scale from the global Xft.dpi resource,
+// which GNOME leaves at 96 for XWayland clients however it scales each monitor.
+// Fall back to the monitor's physical DPI so ImGui's DPI font scaling has a
+// truthful value to work with.
+float
+get_content_scale(GLFWwindow* window)
+{
+    constexpr float BASE_DPI    = 96.0f;
+    constexpr float MM_PER_INCH = 25.4f;
+    // Bias so a monitor slightly denser than a whole step still snaps up to it.
+    constexpr float SNAP_BIAS = 0.25f;
+
+    float scale  = 1.0f;
+    float yscale = 1.0f;
+    glfwGetWindowContentScale(window, &scale, &yscale);
+
+    if(scale <= 1.0f)
+    {
+        GLFWmonitor* monitor = RocProfVis::App::get_current_monitor(window);
+        if(monitor != nullptr)
+        {
+            const GLFWvidmode* mode      = glfwGetVideoMode(monitor);
+            int                width_mm  = 0;
+            int                height_mm = 0;
+            glfwGetMonitorPhysicalSize(monitor, &width_mm, &height_mm);
+
+            if(mode != nullptr && width_mm > 0)
+            {
+                const float dpi = (static_cast<float>(mode->width) * MM_PER_INCH) /
+                                  static_cast<float>(width_mm);
+                scale = std::floor(dpi / BASE_DPI + SNAP_BIAS);
+            }
+        }
+    }
+
+    return std::max(scale, 1.0f);
 }
 
 }  // namespace Platform

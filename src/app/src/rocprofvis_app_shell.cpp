@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 #include "imgui.h"
 #include "rocprofvis_cli_parser.h"
@@ -17,7 +18,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace App
 {
 
 // GLFW callbacks take no user pointer here, so the state they hand to the frame
@@ -72,11 +73,20 @@ enable_application_log()
 }
 
 static void
-print_version()
+print_version(bool include_commit)
 {
     std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
               << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
-              << ROCPROFVIS_VERSION_BUILD << std::endl;
+              << ROCPROFVIS_VERSION_BUILD;
+    if(include_commit)
+    {
+        std::cout << " commit: " << ROCPROFVIS_GIT_COMMIT;
+        if(std::string_view(ROCPROFVIS_GIT_COMMIT) == "unknown")
+        {
+            std::cout << "\n" << ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE;
+        }
+    }
+    std::cout << std::endl;
 }
 
 bool
@@ -84,7 +94,10 @@ add_common_cli_options(CLIParser& cli_parser)
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     bool result = true;
-    result &= cli_parser.AddOption("v", "version", "Print version and exit", false);
+    result &= cli_parser.AddOption(
+        "v", "version",
+        "Print version and exit. Pass 'hash' to also print the git commit", false,
+        "hash");
     result &= cli_parser.AddOption("f", "file", "Open a trace or project file", true);
     result &= cli_parser.AddOption(
         "b", "backend",
@@ -108,7 +121,7 @@ handle_help_and_version(const CLIParser& cli_parser, bool& exit_app)
 
     if(!exit_app && cli_parser.WasOptionFound("version"))
     {
-        print_version();
+        print_version(!cli_parser.GetOptionValue("version").empty());
 
         if(cli_parser.GetOptionCount() == 1)
         {
@@ -311,5 +324,5 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 }
 #endif
 
-}  // namespace View
+}  // namespace App
 }  // namespace RocProfVis

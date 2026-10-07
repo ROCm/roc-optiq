@@ -9,7 +9,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace App
 {
 
 // Default windowed mode settings
@@ -54,6 +54,6 @@ void sync_fullscreen_state(GLFWwindow* window, int width, int height, Fullscreen
 // Check if the window is currently in fullscreen mode
 bool is_fullscreen_active(GLFWwindow* window);
 
-}  // namespace View
+}  // namespace App
 }  // namespace RocProfVis
 

@@ -5,6 +5,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_controller_string_table.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_segment.h"
@@ -13,6 +14,7 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
+#include <cstring>
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -3212,6 +3214,33 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         spdlog::info("Free Controller");
         rocprofvis_controller_free(m_controller);
     }
+}
+
+// Empty names are copied into the table. Distinct temporary buffers share one
+// id, and that pointer stays valid after the temporaries die.
+TEST_CASE("StringTable empty string is stored by value")
+{
+    using RocProfVis::Controller::StringTable;
+
+    size_t id_a = 0;
+    size_t id_b = 0;
+    {
+        std::string temporary_a = "";
+        id_a = StringTable::Get().AddString(temporary_a.c_str());
+    }
+    {
+        std::string temporary_b = "";
+        id_b = StringTable::Get().AddString(temporary_b.c_str());
+    }
+
+    REQUIRE(id_a == id_b);
+    char const* interned = StringTable::Get().GetString(id_a);
+    REQUIRE(interned != nullptr);
+    REQUIRE(interned[0] == '\0');
+    REQUIRE(std::strlen(interned) == 0);
+
+    size_t id_null = StringTable::Get().AddString(nullptr);
+    REQUIRE(id_null == id_a);
 }
 
 // Regression coverage for the JobSystem Job::Wait primitive (lost-wakeup /

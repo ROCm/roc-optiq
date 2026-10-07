@@ -516,7 +516,7 @@ having to hand-roll a struct per call.
 File: `rocprofvis_controller_string_table.{h,cpp}`.
 
 Process-global string interning, singleton via `StringTable::Get()`.
-`AddString(str, store)` returns a stable `size_t` ID, `GetString(id)`
+`AddString(str)` returns a stable `size_t` ID, `GetString(id)`
 returns the canonical pointer. Used heavily in `Event` (name, category,
 combined-top name) and in `Workload` metric definitions to avoid
 duplicating millions of identical strings across events.
@@ -1311,7 +1311,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Pass typed call arguments                               | `Arguments` (`Set*`/`Get*` per `property` bank)                         |
 | Return a list of typed values                           | `Array` (heap-allocated via `rocprofvis_controller_array_alloc`)        |
 | Return a primitive cell                                 | `Data` tagged union                                                     |
-| Hold an interned string                                 | `StringTable::Get().AddString(s, store)`                                |
+| Hold an interned string                                 | `StringTable::Get().AddString(s)`                                       |
 | Allocate an `Event` / `Sample` / `SampleLOD`            | `MemoryManager::NewEvent` / `NewSample` / `NewSampleLOD`                |
 | Mark an array as in-use so segments survive eviction    | `MemoryManager::EnterArrayOwnership(arr, kRocProfVisOwnerTypeGraph)`    |
 | Release an array's in-use grip                          | `MemoryManager::CancelArrayOwnership(arr, type)` (called by `array_free`) |

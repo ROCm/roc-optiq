@@ -541,6 +541,10 @@ bool ProfileDatabase::FindTrack(rocprofvis_dm_track_category_t category, uint64_
     return TrackTracker()->FindTrack(category, id_process, id_subprocess, db_instance, out_track);
 }
 
+bool ProfileDatabase::FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, const char* id_subprocess, uint32_t db_instance, uint32_t& out_track)
+{
+    return TrackTracker()->FindTrack(category, id_process, id_subprocess, db_instance, out_track);
+}
 
 void
 ProfileDatabase::GetTrackIdentifierIndices(

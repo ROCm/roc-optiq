@@ -341,6 +341,7 @@ class SystemDatabase : public Database
 
         virtual void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_track_descriptor_t& track_ids_indices) = 0;
         virtual bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) = 0;
+        virtual bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, const char* id_subprocess, uint32_t db_instance, uint32_t& out_track) { return false; };
 
         //--------------------------------------Table accessors-----------------------------------------------------------------
         virtual std::string TableColumnText(void* func, void* handle, char** azColName, int index) = 0;

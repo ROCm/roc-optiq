@@ -161,6 +161,7 @@ class ProfileDatabase : public QueryManager
 
         // Find track essential identifiers
         bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
+        bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, const char* id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
 
     protected:
     // offset of kernel symbols in string table

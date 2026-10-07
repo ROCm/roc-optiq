@@ -6,6 +6,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface_types.h"
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -96,8 +97,8 @@ private:
         uint64_t pc_sample_state_uuid    = 0;
         uint64_t instruction_uuid        = 0;
         uint64_t total_count             = 0;
-        uint64_t issue_count             = 0;
-        uint64_t stall_count             = 0;
+        std::optional<uint64_t> issue_count;
+        std::optional<uint64_t> stall_count;
         double   active_thread_percent   = 0.0;
         double   wave_occupancy_percent = 0.0;
         uint64_t dispatch_uuid           = 0;

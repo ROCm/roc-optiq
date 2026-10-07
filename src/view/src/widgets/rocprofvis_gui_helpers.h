@@ -227,6 +227,8 @@ inline constexpr std::string_view COPY_ROW_DATA_NOTIFICATION = "Row data copied 
 // If multiple instances with the same text can appear within the same frame,
 // the caller must provide a unique, stable identifier to avoid ID collisions.
 // For items created in loops, the loop index or iterator is typically sufficient.
+// A custom menu callback runs while the identified interaction item is current;
+// it remains responsible for beginning and ending its context popup.
 bool
 CopyableTextUnformatted(
     const char* text, std::string_view unique_id = "", std::string_view notification = "",
@@ -269,7 +271,7 @@ RenderRowHitbox(const char* hitbox_id, int row, int column_count,
                 CellMenuTarget& target, bool& open);
 
 // Records a right-click that landed on the cell content just submitted (the
-// copyable text/button steals hover from the row hit-box over its own area).
+// copyable text interaction target steals hover from the row hit-box over its area).
 // Call immediately after rendering a cell's content.
 void
 CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open);

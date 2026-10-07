@@ -182,7 +182,7 @@ optional source and sampling-state data do not block the initial ISA display:
 ```c
 rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
 rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
-rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons/instruction samples
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons + optional instruction samples
 ```
 
 Two more async surface APIs sit on the controller handle directly,
@@ -942,12 +942,17 @@ source-file metadata, instruction/source mappings, and the requested source
 file's lines. Each instruction/source mapping includes the owning source-file
 UUID so ISA View can switch files for cross-pane navigation. Source file ID 0
 selects the first available source file. The stall fetch independently loads
-PC sample states, stall-reason counts, and
-instruction-sample metadata. Per-table flags on `PcSampling` prevent repeated
-queries while `m_source_line_cache` stores source lines separately by file UUID.
+PC sample states and stall-reason counts. It also loads instruction-sample
+metadata by default for compatibility, unless the caller sets
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
+that opt-out because it does not consume the metadata. Per-table flags on
+`PcSampling` prevent repeated queries while `m_source_line_cache` stores source
+lines separately by file UUID.
 
 Only `kRPVControllerPcSamplingArgsKernelId` is required by the ISA and stall
-entry points. The source entry point additionally requires
+entry points. The stall entry point also accepts the optional
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` flag, which defaults to
+enabled when omitted. The source entry point additionally requires
 `kRPVControllerPcSamplingArgsSourceFileUuid`; zero selects the first source
 file. `kRPVControllerPcSamplingArgsWorkloadId` remains in the public enum but
 is not read by these controller methods. The View uses its workload ID before
@@ -1035,6 +1040,8 @@ Cached query-group booleans (`m_code_object_store_loaded`,
 `m_instruction_source_lines_loaded`, `m_source_files_loaded`,
 `m_pc_sample_states_loaded`, `m_stalls_loaded`,
 `m_instruction_samples_loaded`) prevent repeated queries.
+Row-count setters clear their destination vectors before resizing so a failed
+fetch followed by a retry cannot preserve fields from an earlier result.
 
 `GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
 locking to the right mutex for each property ID.
@@ -1042,6 +1049,12 @@ locking to the right mutex for each property ID.
 `QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t, property&,
 type&)` is the internal helper `ComputeTrace` uses to map a DB column
 enum to the right `kRPVControllerPCSampling*` property ID.
+
+PC-sample-state `issue_count` and `stall_count` are optional because host-trap
+sampling does not measure progress state. Empty database cells leave the
+corresponding `std::optional` unset. Their UInt64 getters return
+`kRocProfVisResultNotLoaded` for an unset value, while a measured zero returns
+success with zero; `total_count` remains a required UInt64 value.
 
 Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 (guarded by `__kRPVControllerPCSamplingPropertiesFirst` and

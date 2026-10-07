@@ -528,6 +528,11 @@ embed uses the full C API, not the stable ABI, so the headers,
 | Linux package | `$ORIGIN/../lib/roc-optiq/python/lib` | `<libdir>/roc-optiq/python` |
 | macOS bundle | `Contents/Frameworks/libpython3.12.dylib` | `Contents/Resources/python` |
 
+The Windows install is flat: `cmake --install --component RV_RUNTIME`
+puts the executable, its DLLs, the license notices and `python\` at the
+prefix root. The MSI (`PACKAGE_WIX`) and the CI zip artifact both
+package that install tree.
+
 `resolve_layout` in `rocprofvis_python_runtime.cpp` finds the prefix
 from the executable's own path (`<exe dir>/python`, then
 `ROCPROFVIS_PYTHON_RELDIR`) and checks it with CPython's landmark,
@@ -808,13 +813,6 @@ reasoning moved to the section it belongs to.
 
 ### Build and shipping
 
-- **Windows `cmake --install` and CPack are broken.** The
-  `install(PROGRAMS ${BUILD_DIR}/roc-optiq)` rule names neither the
-  `.exe` nor the Visual Studio configuration directory, and nothing
-  installs the runtime DLLs. The MSI (`PACKAGE_WIX`, through the
-  generated `roc-optiq-payload.wxs`) and the CI zip artifact copy
-  from the executable's directory instead, so both carry
-  `python312.dll` and `python\`.
 - **macOS packaging is unverified.** The bundle copies are wired, and
   configure fails if the stage holds any `.so` or `.dylib`, because
   `codesign --deep` does not sign under `Resources` and notarization

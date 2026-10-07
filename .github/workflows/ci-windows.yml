@@ -344,15 +344,13 @@ jobs:
 
       - name: Prepare Distribution Artifacts
         run: |
-          mkdir ${{ env.DIST_DIR }} -Force
-          $Bin = "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}"
-          Copy-Item "$Bin/${{ env.BUILD_FILE_NAME }}.exe" "${{ env.DIST_DIR }}/"
-          Copy-Item "$Bin/*.dll" "${{ env.DIST_DIR }}/" -ErrorAction SilentlyContinue
-          Copy-Item "$Bin/${{ env.BUILD_FILE_NAME }}.pdb" "${{ env.DIST_DIR }}/" -ErrorAction SilentlyContinue
-          # The vendored Python runtime of a scripting build.
-          if (Test-Path "$Bin/python") {
-            Copy-Item "$Bin/python" "${{ env.DIST_DIR }}/" -Recurse
-          }
+          $Build = "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}"
+          # The runtime component installs flat on Windows: the executable, its
+          # DLLs, the license notices and, in a scripting build, python\.
+          cmake --install $Build --config ${{ env.BINARY_DIR }} --component RV_RUNTIME `
+            --prefix (Join-Path $PWD "${{ env.DIST_DIR }}")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "$Build/${{ env.BINARY_DIR }}/${{ env.BUILD_FILE_NAME }}.pdb" "${{ env.DIST_DIR }}/" -ErrorAction SilentlyContinue
           Get-ChildItem "${{ env.DIST_DIR }}"
 
       - name: Build MSI Installer

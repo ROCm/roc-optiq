@@ -115,7 +115,7 @@ endif()
 set(_rpv_install_dir "")
 set(_rpv_reldir "")
 if(WIN32)
-    set(_rpv_install_dir "${CMAKE_INSTALL_BINDIR}/python")
+    set(_rpv_install_dir "${ROCPROFVIS_INSTALL_BINDIR}/python")
 elseif(APPLE)
     set(_rpv_reldir "../Resources/python")
 else()
@@ -242,14 +242,14 @@ function(rocprofvis_python_vendor_install target component)
     get_target_property(_reldir RocProfVis::Python ROCPROFVIS_PYTHON_RELDIR)
     get_target_property(_license RocProfVis::Python ROCPROFVIS_PYTHON_LICENSE)
     if(NOT APPLE)
-        install(FILES "${_license}" DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+        install(FILES "${_license}" DESTINATION "${ROCPROFVIS_INSTALL_DOCDIR}"
             RENAME Python-LICENSE.txt COMPONENT ${component})
     endif()
     if(WIN32)
+        # python3xx.dll is one of the target's runtime DLLs, which the
+        # top-level install rules put beside the executable.
         install(DIRECTORY "${_stage}/" DESTINATION "${_install_dir}"
             COMPONENT ${component})
-        install(FILES "$<TARGET_FILE:RocProfVis::Python>"
-            DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT ${component})
     elseif(NOT APPLE)
         install(DIRECTORY "${_stage}/" DESTINATION "${_install_dir}"
             COMPONENT ${component} USE_SOURCE_PERMISSIONS)

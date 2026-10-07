@@ -87,9 +87,13 @@ cmake --build build/x64-release --preset "Windows Release Build" --target PACKAG
 # Output: build\x64-release\roc-optiq-X.X.X.X-win64.msi
 ```
 
-CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` picks up the executable already on disk and passes it directly to `wix.exe`.
+CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` installs the `RV_RUNTIME` component of that build into `build/<preset>/wix_stage` and packages the result, so the MSI holds exactly what `cmake --install` produces:
 
-Besides `roc-optiq.exe`, the MSI installs every `*.dll` in the executable's directory (for example `perfetto_trace_processor_dll.dll`, the OpenSSL DLLs, and `python312.dll`) and, in a vendored scripting build (`ROCPROFVIS_ENABLE_SCRIPTING=ON`), the Python runtime as `python\`. `PACKAGE_WIX` lists them in a generated `roc-optiq-payload.wxs` (`cmake/rocprofvis_wix_payload.cmake`) on every run, so a stale DLL left in the build directory will be packaged too.
+```powershell
+cmake --install build/x64-release --config Release --component RV_RUNTIME --prefix <dir>
+```
+
+On Windows that install is flat: `roc-optiq.exe`, the DLLs it loads (`perfetto_trace_processor_dll.dll`, the OpenSSL DLLs, `python312.dll`), `LICENSE.txt` and, in a vendored scripting build (`ROCPROFVIS_ENABLE_SCRIPTING=ON`), `Python-LICENSE.txt` and the Python runtime as `python\`. `cmake/rocprofvis_wix_payload.cmake` lists the staged files in a generated `roc-optiq-payload.wxs` on every run.
 
 ---
 

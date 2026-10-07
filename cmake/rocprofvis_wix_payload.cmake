@@ -1,19 +1,24 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-# Writes the WiX fragment for everything the MSI installs beside roc-optiq.exe
-# other than the executable itself: the runtime DLLs in the executable's
-# directory and, for a vendored scripting build, the Python runtime under
-# python\. The PACKAGE_WIX target runs it before wix build:
+# Writes the WiX fragment for everything the MSI installs other than
+# roc-optiq.exe itself, which wix/roc-optiq.wxs installs and points the
+# shortcuts at. The PACKAGE_WIX target installs the runtime component into
+# STAGE_DIR and then runs this script before wix build:
 #
-#   cmake -DEXE_DIR=<dir> [-DPYTHON_DIR=<stage>] -DOUTPUT=<file.wxs>
-#         -P rocprofvis_wix_payload.cmake
+#   cmake -DSTAGE_DIR=<install tree> -DEXE_NAME=roc-optiq.exe
+#         -DOUTPUT=<file.wxs> -P rocprofvis_wix_payload.cmake
 #
-# The fragment defines the RuntimePayload component group, empty when there is
-# nothing to add, so roc-optiq.wxs can always reference it.
+# The install tree is laid out as INSTALLDIR is, so every file keeps its
+# relative path. The fragment defines the RuntimePayload component group,
+# empty when there is nothing besides the executable, so roc-optiq.wxs can
+# always reference it.
 
-if(NOT EXE_DIR OR NOT OUTPUT)
-    message(FATAL_ERROR "EXE_DIR and OUTPUT are required.")
+if(NOT STAGE_DIR OR NOT EXE_NAME OR NOT OUTPUT)
+    message(FATAL_ERROR "STAGE_DIR, EXE_NAME and OUTPUT are required.")
+endif()
+if(NOT EXISTS "${STAGE_DIR}/${EXE_NAME}")
+    message(FATAL_ERROR "${STAGE_DIR} holds no ${EXE_NAME}; was the runtime component installed?")
 endif()
 
 macro(_payload_xml_escape var)
@@ -26,16 +31,19 @@ endmacro()
 # One component per file, keyed on the file, so Windows Installer tracks and
 # removes each one. Ids derive from the install path so they stay stable
 # between builds.
+file(GLOB_RECURSE _files RELATIVE "${STAGE_DIR}" "${STAGE_DIR}/*")
+list(SORT _files)
+list(REMOVE_ITEM _files "${EXE_NAME}")
+
 set(_components "")
-macro(_payload_add source subdir)
-    get_filename_component(_name "${source}" NAME)
-    string(MD5 _id "${subdir}/${_name}")
-    file(TO_NATIVE_PATH "${source}" _source)
+foreach(_rel IN LISTS _files)
+    string(MD5 _id "${_rel}")
+    file(TO_NATIVE_PATH "${STAGE_DIR}/${_rel}" _source)
     _payload_xml_escape(_source)
-    if("${subdir}" STREQUAL "")
-        set(_subdir_attr "")
-    else()
-        string(REPLACE "/" "\\" _subdir "${subdir}")
+    get_filename_component(_rel_dir "${_rel}" DIRECTORY)
+    set(_subdir_attr "")
+    if(NOT "${_rel_dir}" STREQUAL "")
+        string(REPLACE "/" "\\" _subdir "${_rel_dir}")
         _payload_xml_escape(_subdir)
         set(_subdir_attr " Subdirectory=\"${_subdir}\"")
     endif()
@@ -43,35 +51,10 @@ macro(_payload_add source subdir)
         "      <Component Id=\"c${_id}\"${_subdir_attr}>\n"
         "        <File Id=\"f${_id}\" Source=\"${_source}\" KeyPath=\"yes\" />\n"
         "      </Component>\n")
-endmacro()
-
-file(GLOB _dlls "${EXE_DIR}/*.dll")
-list(SORT _dlls)
-foreach(_dll IN LISTS _dlls)
-    _payload_add("${_dll}" "")
 endforeach()
 
-set(_python_count 0)
-if(PYTHON_DIR)
-    if(NOT IS_DIRECTORY "${PYTHON_DIR}")
-        message(FATAL_ERROR "PYTHON_DIR does not exist: ${PYTHON_DIR}")
-    endif()
-    file(GLOB_RECURSE _python_files RELATIVE "${PYTHON_DIR}" "${PYTHON_DIR}/*")
-    list(SORT _python_files)
-    list(LENGTH _python_files _python_count)
-    foreach(_rel IN LISTS _python_files)
-        get_filename_component(_rel_dir "${_rel}" DIRECTORY)
-        if("${_rel_dir}" STREQUAL "")
-            set(_subdir "python")
-        else()
-            set(_subdir "python/${_rel_dir}")
-        endif()
-        _payload_add("${PYTHON_DIR}/${_rel}" "${_subdir}")
-    endforeach()
-endif()
-
-list(LENGTH _dlls _dll_count)
-message(STATUS "WiX payload: ${_dll_count} DLL(s), ${_python_count} Python runtime file(s)")
+list(LENGTH _files _count)
+message(STATUS "WiX payload: ${_count} file(s) besides ${EXE_NAME}")
 
 file(WRITE "${OUTPUT}"
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"

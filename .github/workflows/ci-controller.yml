@@ -128,7 +128,7 @@ jobs:
       enable_remote: true
       enable_agentic_profiling: true
       enable_scripting: true
-      vendor_python: true
+      enable_vendor_python: true
       enable_trace_compare: true
       enable_multi_window: true
 
@@ -165,7 +165,7 @@ jobs:
       enable_remote: true
       enable_agentic_profiling: true
       enable_scripting: true
-      vendor_python: true
+      enable_vendor_python: true
       enable_trace_compare: true
       enable_multi_window: true
 
@@ -200,7 +200,7 @@ jobs:
       enable_remote: true
       enable_agentic_profiling: true
       enable_scripting: true
-      vendor_python: true
+      enable_vendor_python: true
       enable_trace_compare: true
       enable_multi_window: true
 
@@ -235,7 +235,7 @@ jobs:
       enable_remote: true
       enable_agentic_profiling: true
       enable_scripting: true
-      vendor_python: true
+      enable_vendor_python: true
       enable_trace_compare: true
       enable_multi_window: true
 
@@ -279,6 +279,6 @@ jobs:
       enable_remote: true
       enable_agentic_profiling: true
       enable_scripting: true
-      vendor_python: true
+      enable_vendor_python: true
       enable_trace_compare: true
       enable_multi_window: true

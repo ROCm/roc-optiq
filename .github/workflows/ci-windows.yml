@@ -66,7 +66,7 @@ on:
         description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
         type: boolean
         default: false
-      vendor_python:
+      enable_vendor_python:
         description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_VENDOR_PYTHON). Off links the build machine Python.'
         type: boolean
         default: false
@@ -108,7 +108,7 @@ on:
         description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
         type: boolean
         default: false
-      vendor_python:
+      enable_vendor_python:
         description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_VENDOR_PYTHON). Off links the build machine Python.'
         type: boolean
         default: false
@@ -164,13 +164,15 @@ env:
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || inputs.cmake_config_preset == 'x64-release-symbols' && 'RelWithDebInfo' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
   VULKAN_SDK_VERSION: "1.4.328.1"
+  # WiX toolset used by PACKAGE_WIX. BUILDING.md documents this pin.
+  WIX_VERSION: "4.0.6"
   ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
   ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
   ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
   ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
-  VENDOR_PYTHON: ${{ (inputs.vendor_python == true || inputs.vendor_python == 'true') && 'ON' || 'OFF' }}
+  VENDOR_PYTHON: ${{ (inputs.enable_vendor_python == true || inputs.enable_vendor_python == 'true') && 'ON' || 'OFF' }}
   ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
   ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
@@ -274,10 +276,10 @@ jobs:
       - name: Install WiX
         run: |
           # Before configure: CMake only defines PACKAGE_WIX when it finds wix.
-          # Pinned to the version BUILDING.md documents.
-          dotnet tool install --global wix --version 4.0.6
+          # Version comes from WIX_VERSION (BUILDING.md documents the pin).
+          dotnet tool install --global wix --version $env:WIX_VERSION
           $tools = Join-Path $env:USERPROFILE ".dotnet\tools"
-          & (Join-Path $tools "wix.exe") extension add --global WixToolset.UI.wixext/4.0.6
+          & (Join-Path $tools "wix.exe") extension add --global "WixToolset.UI.wixext/$env:WIX_VERSION"
           echo $tools | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Build, Make, and Verify Installation

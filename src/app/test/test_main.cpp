@@ -46,6 +46,8 @@ main(int argc, char** argv)
 {
     int app_result_code = 0;
 
+    RocProfVis::App::enable_application_log();
+
     RocProfVis::App::CLIParser::AttachToConsole();
     RocProfVis::App::CLIParser cli_parser;
     bool                       exit_app = false;
@@ -54,8 +56,6 @@ main(int argc, char** argv)
     {
         return app_result_code;
     }
-
-    RocProfVis::App::enable_application_log();
 
     rocprofvis_imgui_backend_preference_t    backend_pref = kRPVBackendAuto;
     rocprofvis_view_file_dialog_preference_t fd_pref      = kRocProfVisViewFileDialog_Auto;

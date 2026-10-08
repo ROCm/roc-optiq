@@ -80,8 +80,6 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
         "passed when changing it (default: off)",
         true);
 #endif
-    result &= cli_parser.AddOption("h", "help",
-        "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);

@@ -32,8 +32,6 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
                         bool& exit_app)
 {
     bool result = RocProfVis::App::add_common_cli_options(cli_parser);
-    result &= cli_parser.AddOption("h", "help",
-        "Show this help message and exit", false);
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);

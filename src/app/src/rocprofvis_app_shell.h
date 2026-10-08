@@ -28,8 +28,8 @@ constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
 void
 enable_application_log();
 
-// Sets the app description and registers --version [hash], --file, --backend
-// and --file-dialog. Returns false if an option could not be registered.
+// Sets the app description and registers --version [hash], --file, --backend,
+// --file-dialog, and --help. Returns false if an option could not be registered.
 bool
 add_common_cli_options(CLIParser& cli_parser);
 

@@ -273,10 +273,10 @@ Owns the OS-level shell. Code declared here lives in
   (`CLIParser::AddOption`). Flags both executables take are registered in
   `add_common_cli_options` (`rocprofvis_app_shell.cpp`):
   `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`. Each executable's
-  `parse_command_line_args` adds `-h/--help` and its own flags
-  (`-r/--drag-repair` in Linux multi-window builds, `-t/--run-tests` in
-  the test harness). `-v` prints the version. `-v hash` also prints the
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Each executable's
+  `parse_command_line_args` adds its own flags (`-r/--drag-repair` in Linux
+  multi-window builds, `-t/--run-tests` in the test harness). `-v` prints the
+  version. `-v hash` also prints the
   git commit. Official builds print the hash alone. An unofficial build
   prints `unknown` and a line that the commit hash is not recorded. About
   shows the same text.

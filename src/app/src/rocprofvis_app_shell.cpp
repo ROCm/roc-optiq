@@ -107,6 +107,8 @@ add_common_cli_options(CLIParser& cli_parser)
         "Set file dialog backend: 'auto' (default), 'native' (system file "
         "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
         true);
+    result &= cli_parser.AddOption("h", "help", "Show this help message and exit",
+                                   false);
     return result;
 }
 

@@ -66,12 +66,16 @@ jobs:
 
     # paths-ignore in codeql-config.yml has no effect for compiled languages,
     # so vendored code is removed from the results before upload instead.
-    - name: Filter out third-party results
+    # Catch2 TEST_CASE registrations are static functions that CodeQL reports
+    # as unused. Drop that query on test paths and keep it for application code.
+    - name: Filter CodeQL results
       uses: advanced-security/filter-sarif@v1
       with:
         patterns: |
           -thirdparty/**
           -build/**
+          -**/tests/**:cpp/unused-static-function
+          -**/test/**:cpp/unused-static-function
         input: sarif-results/cpp.sarif
         output: sarif-results/cpp.sarif
 

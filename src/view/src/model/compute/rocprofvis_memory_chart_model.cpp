@@ -82,8 +82,9 @@ ParseContentItem(jt::Json& element)
     MemChartContentItem item;
     if(element.isObject())
     {
-        item.metric   = ReadMetricRef(element, "metric");
-        item.title    = ReadString(element, "title");
+        item.metric             = ReadMetricRef(element, "metric");
+        item.metric.metric_name = ReadString(element, "metric_name");
+        item.title              = ReadString(element, "title");
         item.category = ReadString(element, "category");
         item.unit     = ReadString(element, "unit");
     }
@@ -138,8 +139,9 @@ ParseArrow(jt::Json& node)
     arrow.from      = ReadString(node, "from");
     arrow.to        = ReadString(node, "to");
     arrow.direction = ParseDirection(ReadString(node, "direction", "forward"));
-    arrow.metric    = ReadMetricRef(node, "metric");
-    arrow.title     = ReadString(node, "title");
+    arrow.metric             = ReadMetricRef(node, "metric");
+    arrow.metric.metric_name = ReadString(node, "metric_name");
+    arrow.title              = ReadString(node, "title");
     arrow.category  = ReadString(node, "category");
     return arrow;
 }
@@ -305,6 +307,108 @@ const MemChartBlock*
 MemChartLayout::FindBlock(const std::string& id) const
 {
     return FindInBlocks(const_cast<std::vector<MemChartBlock>&>(blocks), id);
+}
+
+void
+MemChartMetricNameIndex::Add(const std::string& name, uint32_t category_id, uint32_t table_id,
+                             uint32_t entry_id)
+{
+    if(category_id != kMemChartMetricCategoryId || name.empty())
+    {
+        return;
+    }
+    std::string dotted_id = std::to_string(category_id) + "." + std::to_string(table_id) + "." +
+                            std::to_string(entry_id);
+    std::vector<std::string>& ids = m_by_name[name];
+    for(const std::string& existing : ids)
+    {
+        if(existing == dotted_id)
+        {
+            return;
+        }
+    }
+    ids.push_back(std::move(dotted_id));
+}
+
+MemChartRemapStatus
+MemChartMetricNameIndex::Lookup(const std::string& metric_name, std::string& dotted_id,
+                                std::vector<std::string>& match_ids) const
+{
+    dotted_id.clear();
+    match_ids.clear();
+    std::unordered_map<std::string, std::vector<std::string>>::const_iterator it =
+        m_by_name.find(metric_name);
+    if(it == m_by_name.end() || it->second.empty())
+    {
+        return MemChartRemapStatus::kNoMatch;
+    }
+    if(it->second.size() == 1)
+    {
+        dotted_id = it->second.front();
+        return MemChartRemapStatus::kReplaced;
+    }
+    match_ids = it->second;
+    return MemChartRemapStatus::kAmbiguous;
+}
+
+namespace
+{
+
+void
+RemapRef(MemChartMetricRef& ref, const MemChartMetricNameIndex& index,
+         std::vector<MemChartRemapFailure>& failures)
+{
+    // A row with no metric is not a lookup. Arrows often name endpoints only.
+    if(!ref.valid)
+    {
+        return;
+    }
+    if(ref.metric_name.empty())
+    {
+        failures.push_back({ ref.name, ref.metric_name, MemChartRemapStatus::kEmptyName, {} });
+        return;
+    }
+
+    std::string              dotted_id;
+    std::vector<std::string> match_ids;
+    MemChartRemapStatus      status = index.Lookup(ref.metric_name, dotted_id, match_ids);
+    if(status == MemChartRemapStatus::kReplaced)
+    {
+        ref.name = std::move(dotted_id);
+        return;
+    }
+    failures.push_back(
+        { ref.name, ref.metric_name, status, std::move(match_ids) });
+}
+
+void
+RemapBlock(MemChartBlock& block, const MemChartMetricNameIndex& index,
+           std::vector<MemChartRemapFailure>& failures)
+{
+    for(MemChartContentItem& item : block.content)
+    {
+        RemapRef(item.metric, index, failures);
+    }
+    for(MemChartBlock& child : block.children)
+    {
+        RemapBlock(child, index, failures);
+    }
+}
+
+}  // namespace
+
+void
+MemChartLayout::RemapMetricIds(const MemChartMetricNameIndex&     index,
+                               std::vector<MemChartRemapFailure>& failures)
+{
+    for(MemChartBlock& block : blocks)
+    {
+        RemapBlock(block, index, failures);
+    }
+    for(MemChartArrow& arrow : arrows)
+    {
+        RemapRef(arrow.metric, index, failures);
+    }
 }
 
 }  // namespace View

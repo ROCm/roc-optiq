@@ -31,6 +31,10 @@
             "additionalProperties": false,
             "properties": {
                 "metric": { "$ref": "#/definitions/metricRef" },
+                "metric_name": {
+                    "type": "string",
+                    "description": "Database metric name (compute_metric_definition.name). When metric-id remap is enabled, the chart replaces `metric` with the category-3 (3.x.x) id that has this name. `title` remains the display override."
+                },
                 "title": { "type": "string" },
                 "category": { "$ref": "#/definitions/category" },
                 "unit": { "type": "string", "description": "Unit suffix appended to the value (e.g. \"%\", \"cycles\", \"Gb/s\")." },
@@ -61,6 +65,10 @@
                 "to": { "$ref": "#/definitions/blockId", "description": "Id of the block the arrow ends at." },
                 "direction": { "type": "string", "enum": ["forward", "backward", "both"] },
                 "metric": { "$ref": "#/definitions/metricRef" },
+                "metric_name": {
+                    "type": "string",
+                    "description": "Database metric name (compute_metric_definition.name). When metric-id remap is enabled, the chart replaces `metric` with the category-3 (3.x.x) id that has this name. `title` remains the display override."
+                },
                 "title": { "type": "string" },
                 "category": { "$ref": "#/definitions/category" },
                 "note": { "type": "string" }

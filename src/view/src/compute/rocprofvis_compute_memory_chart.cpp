@@ -39,6 +39,47 @@ namespace View
 // Filename of an optional runtime override dropped at <config-dir>/.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
+// When true, every loaded template replaces its dotted metric ids with the
+// category-3 id whose database name matches metric_name. Failures are logged
+// and the template id is kept. On until profiler metric ids stop moving.
+static constexpr bool kRemapMemoryChartMetricIds = true;
+
+static void
+LogRemapFailure(const MemChartRemapFailure& failure)
+{
+    switch(failure.status)
+    {
+    case MemChartRemapStatus::kEmptyName:
+        spdlog::warn(
+            "Memory chart: metric id remap failed for template id '{}': empty metric_name",
+            failure.template_id);
+        break;
+    case MemChartRemapStatus::kNoMatch:
+        spdlog::warn("Memory chart: metric id remap failed for template id '{}', metric_name "
+                     "'{}': no category-3 match",
+                     failure.template_id, failure.metric_name);
+        break;
+    case MemChartRemapStatus::kAmbiguous:
+    {
+        std::string ids;
+        for(size_t i = 0; i < failure.match_ids.size(); ++i)
+        {
+            if(i != 0)
+            {
+                ids += ", ";
+            }
+            ids += failure.match_ids[i];
+        }
+        spdlog::warn("Memory chart: metric id remap failed for template id '{}', metric_name "
+                     "'{}': {} category-3 matches ({})",
+                     failure.template_id, failure.metric_name, failure.match_ids.size(), ids);
+        break;
+    }
+    case MemChartRemapStatus::kReplaced:
+        break;
+    }
+}
+
 // Layout constants.
 static constexpr float CHART_PADDING     = 20.0f;
 static constexpr float LEFT_MARGIN       = 60.0f;   // Lane for arrows entering column 0 from the left.
@@ -568,7 +609,7 @@ ComputeMemoryChartView::LoadLayout()
             spdlog::error("Memory chart: failed to parse embedded default layout: {}", error);
         }
     }
-    OnLayoutLoaded();
+    OnLayoutLoaded(ComputeSelection::INVALID_SELECTION_ID);
 }
 
 void
@@ -578,7 +619,7 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
     // data provider) -> architecture-specific embedded layout -> embedded default.
     if(TryLoadOverrideFile())
     {
-        OnLayoutLoaded();
+        OnLayoutLoaded(workload_id);
         return;
     }
 
@@ -588,7 +629,7 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
     {
         m_layout = workload->memory_chart_layout;
         spdlog::info("Memory chart: using layout from workload {} database blob", workload_id);
-        OnLayoutLoaded();
+        OnLayoutLoaded(workload_id);
         return;
     }
 
@@ -605,12 +646,48 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
         spdlog::error("Memory chart: failed to parse embedded layout for arch '{}': {}", arch,
                       error);
     }
-    OnLayoutLoaded();
+    OnLayoutLoaded(workload_id);
 }
 
 void
-ComputeMemoryChartView::OnLayoutLoaded()
+ComputeMemoryChartView::RemapMetricIds(uint32_t workload_id)
 {
+    if(!kRemapMemoryChartMetricIds)
+    {
+        return;
+    }
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
+    if(!workload)
+    {
+        spdlog::warn("Memory chart: metric id remap skipped, workload {} is not open",
+                     workload_id);
+        return;
+    }
+
+    MemChartMetricNameIndex index;
+    for(const AvailableMetrics::Entry& entry : workload->available_metrics.list)
+    {
+        index.Add(entry.name, entry.category_id, entry.table_id, entry.id);
+    }
+
+    std::vector<MemChartRemapFailure> failures;
+    m_layout.RemapMetricIds(index, failures);
+    for(const MemChartRemapFailure& failure : failures)
+    {
+        LogRemapFailure(failure);
+    }
+}
+
+void
+ComputeMemoryChartView::OnLayoutLoaded(uint32_t workload_id)
+{
+    RemapMetricIds(workload_id);
+
     // Sort by column/order before resolving: ComputeLayout and PositionBlock must
     // not move these objects, or the arrows' endpoint pointers would dangle.
     SortLayoutBlocks(m_layout.blocks);

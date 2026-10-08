@@ -99,10 +99,16 @@ private:
     // Returns true if a valid override was found and applied.
     bool TryLoadOverrideFile();
 
-    // Called once whenever m_layout is (re)assigned (workload change): sorts
-    // blocks by column/`order`, resolves each arrow's endpoint ids to block
-    // pointers, and primes the per-item/arrow render strings.
-    void OnLayoutLoaded();
+    // Called once whenever m_layout is (re)assigned (workload change): remaps
+    // metric ids when that option is enabled, sorts blocks by column/`order`,
+    // resolves each arrow's endpoint ids to block pointers, and primes the
+    // per-item/arrow render strings. `workload_id` is
+    // ComputeSelection::INVALID_SELECTION_ID when no workload is open.
+    void OnLayoutLoaded(uint32_t workload_id);
+    // When metric-id remap is enabled, replace template ids in m_layout with
+    // the category-3 id for each metric_name. Failures are written to the log
+    // and those template ids are left unchanged.
+    void RemapMetricIds(uint32_t workload_id);
     // Recompute the cached label/value strings for every content item and arrow
     // from the currently-resolved metrics (on layout load and on metric fetch).
     void RefreshMetricStrings();

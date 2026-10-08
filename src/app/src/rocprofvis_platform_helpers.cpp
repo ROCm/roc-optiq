@@ -329,7 +329,7 @@ get_content_scale(GLFWwindow* window)
 
     if(scale <= 1.0f)
     {
-        GLFWmonitor* monitor = RocProfVis::App::get_current_monitor(window);
+        GLFWmonitor* monitor = get_current_monitor(window);
         if(monitor != nullptr)
         {
             const GLFWvidmode* mode      = glfwGetVideoMode(monitor);

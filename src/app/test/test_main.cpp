@@ -84,27 +84,27 @@ main(int argc, char** argv)
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #endif
         GLFWwindow* window =
-            glfwCreateWindow(RocProfVis::App::DEFAULT_WINDOWED_WIDTH,
-                             RocProfVis::App::DEFAULT_WINDOWED_HEIGHT,
+            glfwCreateWindow(RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
+                             RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,
                              RocProfVis::App::APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
         if(window && rocprofvis_imgui_backend_setup_with_fallback(
-                         &backend, &window, RocProfVis::App::DEFAULT_WINDOWED_WIDTH,
-                         RocProfVis::App::DEFAULT_WINDOWED_HEIGHT,
+                         &backend, &window, RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
+                         RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,
                          RocProfVis::App::APP_NAME, backend_pref))
         {
             RocProfVis::App::CLIParser::DetachFromConsole();
 
             if(rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
-                   &backend, &window, RocProfVis::App::DEFAULT_WINDOWED_WIDTH,
-                   RocProfVis::App::DEFAULT_WINDOWED_HEIGHT, RocProfVis::App::APP_NAME,
-                   backend_pref))
+                   &backend, &window, RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
+                   RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,
+                   RocProfVis::App::APP_NAME, backend_pref))
             {
                 // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
                 RocProfVis::App::install_window_callbacks(window);
 
-                RocProfVis::App::init_fullscreen_state(
+                RocProfVis::Platform::init_fullscreen_state(
                     window, RocProfVis::App::app_fullscreen_state());
                 glfwShowWindow(window);
 
@@ -245,7 +245,7 @@ main(int argc, char** argv)
 
                     // Correct the windowed geometry if the window manager did
                     // not honour the one requested when fullscreen was left.
-                    RocProfVis::App::settle_windowed_geometry(
+                    RocProfVis::Platform::settle_windowed_geometry(
                         window, RocProfVis::App::app_fullscreen_state());
 
 #ifdef __APPLE__
@@ -300,10 +300,8 @@ main(int argc, char** argv)
 #ifndef __APPLE__
                     // Applied after the frame so the window is never resized
                     // part-way through one.
-                    if(RocProfVis::App::take_fullscreen_toggle_request())
+                    if(RocProfVis::App::apply_fullscreen_toggle_request(window))
                     {
-                        RocProfVis::App::toggle_fullscreen(
-                            window, RocProfVis::App::app_fullscreen_state());
                         g_frames_to_render = RocProfVis::App::RENDER_FRAMES_AFTER_INPUT;
                     }
 #endif

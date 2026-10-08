@@ -27,7 +27,7 @@ static std::vector<std::string>         g_dropped_file_paths;
 static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
-static FullscreenState g_fullscreen_state = {};
+static Platform::FullscreenState g_fullscreen_state = {};
 #ifndef __APPLE__
 static bool g_toggle_fullscreen_requested = false;
 #endif
@@ -55,7 +55,10 @@ close_callback(GLFWwindow* window)
 static void
 window_size_change_callback(GLFWwindow* window, int width, int height)
 {
-    sync_fullscreen_state(window, width, height, g_fullscreen_state);
+    if(Platform::sync_fullscreen_state(window, width, height, g_fullscreen_state))
+    {
+        rocprofvis_view_set_fullscreen_state(g_fullscreen_state.is_fullscreen);
+    }
 }
 
 void
@@ -254,7 +257,7 @@ take_render_options()
     return options;
 }
 
-FullscreenState&
+Platform::FullscreenState&
 app_fullscreen_state()
 {
     return g_fullscreen_state;
@@ -268,11 +271,18 @@ request_fullscreen_toggle()
 }
 
 bool
-take_fullscreen_toggle_request()
+apply_fullscreen_toggle_request(GLFWwindow* window)
 {
-    const bool requested          = g_toggle_fullscreen_requested;
+    if(!g_toggle_fullscreen_requested)
+    {
+        return false;
+    }
     g_toggle_fullscreen_requested = false;
-    return requested;
+    if(Platform::toggle_fullscreen(window, g_fullscreen_state))
+    {
+        rocprofvis_view_set_fullscreen_state(g_fullscreen_state.is_fullscreen);
+    }
+    return true;
 }
 #endif
 

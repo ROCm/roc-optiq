@@ -246,8 +246,10 @@ Key invariants:
 ### `src/app/`
 
 Owns the OS-level shell. Code declared here lives in
-`namespace RocProfVis::App`, except the OS workarounds in
-`RocProfVis::Platform`. Specifically:
+`namespace RocProfVis::App`, except the GLFW window helpers and OS
+workarounds in `RocProfVis::Platform`. Platform code talks only to GLFW and
+the OS and never calls into the View; the app shell reports window changes
+to the View. Specifically:
 
 - `main.cpp` - GLFW window and the lazy frame loop that calls
   `rocprofvis_view_render()` and sleeps unless
@@ -257,14 +259,17 @@ Owns the OS-level shell. Code declared here lives in
 - `rocprofvis_app_shell.{h,cpp}` - startup code shared by both
   executables: log setup, common CLI options with `--help`/`--version`
   handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
-  callbacks, and fullscreen-toggle requests. Put code both executables
-  need here instead of copying it.
-- `rocprofvis_glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
-  `sync_fullscreen_state`. Use these instead of touching GLFW directly.
+  callbacks, and fullscreen toggles, including telling the View about
+  fullscreen changes. Put code both executables need here instead of
+  copying it.
+- `rocprofvis_glfw_util.{h,cpp}` - cross-platform GLFW window helpers in
+  `RocProfVis::Platform`: `FullscreenState`, `toggle_fullscreen`,
+  `sync_fullscreen_state`, `get_current_monitor`. Use these instead of
+  touching GLFW directly.
 - `rocprofvis_platform_helpers.{h,cpp}` /
   `rocprofvis_platform_helpers_macos.mm` - per-OS workarounds such as the
   Linux content-scale fallback and floating-viewport fixes. Each is only
-  declared for its platform, so guard calls with the matching macro.
+  implemented for its platform, so guard calls with the matching macro.
 - `rocprofvis_imgui_backend.{h,cpp}` plus `rocprofvis_imgui_opengl.cpp` /
   `rocprofvis_imgui_vulkan.cpp` - selects renderer at runtime, sets up
   ImGui's backend, and exposes the texture-creation callback that

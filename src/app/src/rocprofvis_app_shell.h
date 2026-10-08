@@ -68,7 +68,7 @@ open_dropped_files();
 rocprofvis_view_render_options_t
 take_render_options();
 
-FullscreenState&
+Platform::FullscreenState&
 app_fullscreen_state();
 
 #ifndef __APPLE__
@@ -77,8 +77,10 @@ app_fullscreen_state();
 void
 request_fullscreen_toggle();
 
+// Applies a pending toggle and reports the new state to the View. Returns true
+// if a toggle was pending.
 bool
-take_fullscreen_toggle_request();
+apply_fullscreen_toggle_request(GLFWwindow* window);
 #endif
 
 #ifdef __APPLE__

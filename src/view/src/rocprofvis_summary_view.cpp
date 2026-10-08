@@ -1113,6 +1113,10 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
             m_source_filter->agent_id = *device_id & TOPOLOGY_ID_MASK;
         }
     }
+    else
+    {
+        m_source_filter = std::nullopt;
+    }
     RequestFetch();
     m_fetched = true;
 }

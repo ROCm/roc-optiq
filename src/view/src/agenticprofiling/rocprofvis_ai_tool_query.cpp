@@ -3,6 +3,7 @@
 
 #include "rocprofvis_ai_tool_query.h"
 
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -19,18 +20,20 @@ namespace View
 namespace
 {
 
-// SQLite has no default LIKE escape character, so one is named explicitly and
-// the pattern is escaped to match. See EscapeLikeWildcards.
+// LIKE has no default escape character, so one is named explicitly and the
+// pattern is escaped to match. See EscapeLikeWildcards.
 constexpr char ASSISTANT_LIKE_ESCAPE_CHAR = '\\';
 
 // Columns a tool argument may filter, group, and sort on. Filters reach the
-// database as a SQL fragment, so only names on this list are accepted and the
-// values beside them are quoted by QuoteSqlLiteral. Adding a column here widens
-// what the model can query, so treat it as an interface change.
+// table as an expression over these names, so only names on this list are
+// accepted and the values beside them are quoted by QuoteSqlLiteral. Each must
+// be a column of the rows a table returns, not of the SQL behind them: a filter
+// on any other name matches nothing. Adding a column here widens what the model
+// can query, so treat it as an interface change.
 const char* const ASSISTANT_QUERY_COLUMNS[] = {
     "name",       "category",  "duration",   "start",      "end",
     "id",         "__uuid",    "PID",        "TID",        "queue",
-    "stream",     "node",      "nodeId",     "size",       "address",
+    "stream",     "node",      "size",       "address",
     "SrcAddr",    "value",     "counter",    "arguments",  "GridSizeX",
     "GridSizeY",  "GridSizeZ", "WGSizeX",    "WGSizeY",    "WGSizeZ",
     "LDSSize",    "ScratchSize", "StaticLDSSize", "StaticScratchSize",
@@ -49,7 +52,7 @@ enum class QueryWildcard
 struct QueryOperator
 {
     const char*   key;
-    const char*   sql;
+    const char*   token;
     QueryWildcard wildcard;
 };
 
@@ -119,7 +122,7 @@ QuoteSqlLiteral(const std::string& value)
 // Escapes the two characters LIKE treats as wildcards, plus the escape
 // character itself. Without this a value containing % or _ - which real kernel
 // names do - would silently widen the match instead of being looked for
-// literally. Pairs with the ESCAPE clause BuildAssistantWhereClause appends.
+// literally. Pairs with the ESCAPE clause BuildAssistantFilterExpression appends.
 std::string
 EscapeLikeWildcards(const std::string& value)
 {
@@ -180,6 +183,11 @@ FilterLiteral(jt::Json& value, QueryWildcard wildcard, const std::string& column
     }
     if(value.isDouble())
     {
+        if(!std::isfinite(value.getDouble()))
+        {
+            error_out = "Filter on \"" + column + "\" needs a finite number.";
+            return false;
+        }
         literal_out = FormatNumberLiteral(value.getDouble());
         return true;
     }
@@ -207,7 +215,7 @@ AssistantAllowedQueryColumnList()
 }
 
 std::string
-BuildAssistantWhereClause(const jt::Json& args, std::string& error_out)
+BuildAssistantFilterExpression(const jt::Json& args, std::string& error_out)
 {
     jt::Json& mutable_args = const_cast<jt::Json&>(args);
     if(!mutable_args.contains("filters"))
@@ -278,7 +286,7 @@ BuildAssistantWhereClause(const jt::Json& args, std::string& error_out)
         {
             out << " AND ";
         }
-        out << column << " " << op->sql << " " << literal;
+        out << column << " " << op->token << " " << literal;
         if(pattern_match)
         {
             out << " ESCAPE '" << ASSISTANT_LIKE_ESCAPE_CHAR << "'";
@@ -286,6 +294,25 @@ BuildAssistantWhereClause(const jt::Json& args, std::string& error_out)
         ++used;
     }
     return out.str();
+}
+
+std::vector<std::string>
+AssistantFilterColumns(const jt::Json& args)
+{
+    std::vector<std::string> columns;
+    jt::Json&                mutable_args = const_cast<jt::Json&>(args);
+    if(!mutable_args.contains("filters") || !mutable_args["filters"].isArray())
+    {
+        return columns;
+    }
+    for(jt::Json& entry : mutable_args["filters"].getArray())
+    {
+        if(entry.isObject())
+        {
+            columns.push_back(JsonUtils::GetString(entry, "column", ""));
+        }
+    }
+    return columns;
 }
 
 std::string

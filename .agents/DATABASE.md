@@ -452,15 +452,19 @@ does not race when multiple nodes are loaded concurrently.
 
 ### 4.2 `SqliteDatabase` (`rocprofvis_db_sqlite.h`)
 
-Adds SQLite plumbing on top of `Database`. Key concepts:
+SQLite plumbing that `QueryManager` and `ComputeDatabase` inherit
+alongside their `Database` base. Key concepts:
 
 - **DB nodes (`rocprofvis_db_sqlite_db_node_t`):** one per file in a
   multinode set. Carries the `node_id`, file path, and the
   available/in-use connection pools. `MAX_CONNECTIONS = 100`.
 - **Connection management:** `OpenConnection`, `GetConnection`,
-  `GetServiceConnection`, `ReleaseConnection`, `InterruptQuery`. New
+  `GetServiceConnection`, `ReleaseConnection`, `InterruptAsSqlite`. New
   query paths must release every connection they take, even on early
-  exit.
+  exit. `SqliteDatabase` does not derive from `Database`, so a class
+  that inherits both must override `Database::InterruptQuery` to call
+  `InterruptAsSqlite`; otherwise cancelling a future never interrupts
+  its running query.
 - **`Sqlite3Exec` / `ExecuteSQLQuery` overloads:** the canonical way
   to run SQL. The internal `Sqlite3Exec` mimics `sqlite3_exec` using
   `sqlite3_prepare_v2` so callbacks receive a real `sqlite3_stmt*`
@@ -1340,7 +1344,16 @@ compute pivot table's per-column filter. The recipe:
    `ParseAggregationSpec(line)` returning a list of
    `SqlAggregation { column, command (Count|Avg|Min|Max|Sum), public_name }`.
 
-`MatchLike(text, pattern)` supports SQL `%` and `_` wildcards.
+`MatchLike(text, pattern, escape)` supports SQL `%` and `_` wildcards,
+case-insensitively, and `LIKE 'pattern' ESCAPE 'c'` to match a
+wildcard literally. `LIKE` on a number matches its printed text.
+Number literals may be negative or carry an exponent. Strings compare
+with every comparison operator, byte by byte. A number compared with
+text that reads as a number compares numerically; with other text it
+matches only `!=`, and with empty text (a column the row lacks) it
+matches nothing. Parsing stops at the first token it does not
+recognise rather than failing, so a caller that builds expressions
+must emit only this syntax or later conditions are silently dropped.
 
 The expression layer is intentionally schema-agnostic - any caller
 that wants to filter rows hands it a row-as-map representation.

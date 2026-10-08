@@ -1,7 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "glfw_util.h"
+#include "rocprofvis_glfw_util.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "rocprofvis_app_shell.h"

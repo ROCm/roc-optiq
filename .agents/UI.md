@@ -133,7 +133,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- src/                  # All first-party code
 |   +-- app/              # Entry point: window, GLFW, ImGui backend, CLI
 |   |   +-- inc/          # rocprofvis_imgui_backend.h, rocprofvis_version.h
-|   |   +-- src/          # main.cpp, app_shell, glfw_util, imgui_(opengl|vulkan), cli_parser, platform_helpers
+|   |   +-- src/          # main.cpp, app_shell, rocprofvis_glfw_util, imgui_(opengl|vulkan), cli_parser, platform_helpers
 |   +-- core/             # Tiny core lib: assert macros, profile markers
 |   |   +-- inc/          # rocprofvis_core.h, rocprofvis_core_assert.h
 |   |   +-- src/
@@ -259,7 +259,7 @@ Owns the OS-level shell. Code declared here lives in
   handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
   callbacks, and fullscreen-toggle requests. Put code both executables
   need here instead of copying it.
-- `glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
+- `rocprofvis_glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
   `sync_fullscreen_state`. Use these instead of touching GLFW directly.
 - `rocprofvis_platform_helpers.{h,cpp}` /
   `rocprofvis_platform_helpers_macos.mm` - per-OS workarounds such as the

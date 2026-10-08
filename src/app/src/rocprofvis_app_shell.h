@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glfw_util.h"
+#include "rocprofvis_glfw_util.h"
 #include "rocprofvis_imgui_backend.h"
 #include "rocprofvis_view_module.h"
 

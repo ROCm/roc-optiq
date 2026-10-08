@@ -9,7 +9,7 @@
 
 #    include <GLFW/glfw3.h>
 
-#    include "glfw_util.h"
+#    include "rocprofvis_glfw_util.h"
 #    include "rocprofvis_platform_helpers.h"
 #    include "spdlog/spdlog.h"
 

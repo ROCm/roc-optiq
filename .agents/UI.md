@@ -133,7 +133,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- src/                  # All first-party code
 |   +-- app/              # Entry point: window, GLFW, ImGui backend, CLI
 |   |   +-- inc/          # rocprofvis_imgui_backend.h, rocprofvis_version.h
-|   |   +-- src/          # main.cpp, glfw_util, imgui_(opengl|vulkan), cli_parser
+|   |   +-- src/          # main.cpp, app_shell, rocprofvis_glfw_util, imgui_(opengl|vulkan), cli_parser, platform_helpers
 |   +-- core/             # Tiny core lib: assert macros, profile markers
 |   |   +-- inc/          # rocprofvis_core.h, rocprofvis_core_assert.h
 |   |   +-- src/
@@ -245,26 +245,46 @@ Key invariants:
 
 ### `src/app/`
 
-Owns the OS-level shell. Specifically:
+Owns the OS-level shell. Code declared here lives in
+`namespace RocProfVis::App`, except the GLFW window helpers and OS
+workarounds in `RocProfVis::Platform`. Platform code talks only to GLFW and
+the OS and never calls into the View; the app shell reports window changes
+to the View. Specifically:
 
-- `main.cpp` - GLFW window, fullscreen state, drag-and-drop callback, and
-  the lazy frame loop that calls `rocprofvis_view_render()` and sleeps
-  unless `rocprofvis_view_wants_continuous_render()` or an input/event
-  wake requires more frames.
-- `glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
-  `sync_fullscreen_state`. Use these instead of touching GLFW directly.
+- `main.cpp` - GLFW window and the lazy frame loop that calls
+  `rocprofvis_view_render()` and sleeps unless
+  `rocprofvis_view_wants_continuous_render()` or an input/event wake
+  requires more frames. `test/test_main.cpp` is the UI test harness's
+  counterpart with its own frame loop.
+- `rocprofvis_app_shell.{h,cpp}` - startup code shared by both
+  executables: log setup, common CLI options with `--help`/`--version`
+  handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
+  callbacks, and fullscreen toggles, including telling the View about
+  fullscreen changes. Put code both executables need here instead of
+  copying it.
+- `rocprofvis_glfw_util.{h,cpp}` - cross-platform GLFW window helpers in
+  `RocProfVis::Platform`: `FullscreenState`, `toggle_fullscreen`,
+  `sync_fullscreen_state`, `get_current_monitor`. Use these instead of
+  touching GLFW directly.
+- `rocprofvis_platform_helpers.{h,cpp}` /
+  `rocprofvis_platform_helpers_macos.mm` - per-OS workarounds such as the
+  Linux content-scale fallback and floating-viewport fixes. Each is only
+  implemented for its platform, so guard calls with the matching macro.
 - `rocprofvis_imgui_backend.{h,cpp}` plus `rocprofvis_imgui_opengl.cpp` /
   `rocprofvis_imgui_vulkan.cpp` - selects renderer at runtime, sets up
   ImGui's backend, and exposes the texture-creation callback that
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
-  (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
+  (`CLIParser::AddOption`). Flags both executables take are registered in
+  `add_common_cli_options` (`rocprofvis_app_shell.cpp`):
   `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
-  version. `-v hash` also prints the git commit. Official builds print the
-  hash alone. An unofficial build prints `unknown` and a line that the
-  commit hash is not recorded. About shows the same text. Add new flags by
-  calling `AddOption` in `main.cpp::parse_command_line_args`.
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Each executable's
+  `parse_command_line_args` adds its own flags (`-r/--drag-repair` in Linux
+  multi-window builds, `-t/--run-tests` in the test harness). `-v` prints the
+  version. `-v hash` also prints the
+  git commit. Official builds print the hash alone. An unofficial build
+  prints `unknown` and a line that the commit hash is not recorded. About
+  shows the same text.
 
 ### `src/core/`
 

@@ -10,6 +10,8 @@
 #ifdef __linux__
 #    include "imgui.h"
 #    include <unordered_map>
+
+struct GLFWwindow;
 #endif
 
 namespace RocProfVis
@@ -43,6 +45,11 @@ void
 configure_bundled_vulkan_icd();
 
 #ifdef __linux__
+
+// Linux only. Returns the window's content scale, never below 1, falling back
+// to the monitor's physical DPI when GLFW reports no scaling.
+float
+get_content_scale(GLFWwindow* window);
 
 // Linux only. Reconcile every secondary viewport's ImGui position with the
 // actual OS window position, so hit-testing agrees with what is on screen.

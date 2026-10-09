@@ -123,7 +123,7 @@ RemoteTraceOrchestrator::BrowsePath()
     // Reuse an already connected + authenticated session: skip connect / auth
     // and browse directly on the live connection. This is the fast path for
     // folder-to-folder navigation.
-    if(m_session && m_authenticated && m_session->IsConnected())
+    if(CanReuseSession())
     {
         m_running = true;
         m_task    = Phase::Browsing;
@@ -131,9 +131,36 @@ RemoteTraceOrchestrator::BrowsePath()
         return m_phase != Phase::Failed;
     }
 
-    // No live authenticated session yet (first browse, or the previous one was
-    // torn down): run the full connect -> authenticate -> browse pipeline.
+    // No reusable session (first browse, the previous one was dropped, or it is
+    // still finishing its last phase): run the full connect -> authenticate ->
+    // browse pipeline.
     return StartBrowsing();
+}
+
+bool
+RemoteTraceOrchestrator::DownloadPath()
+{
+    if(m_running)
+    {
+        return false;
+    }
+
+    if(CanReuseSession())
+    {
+        m_running = true;
+        m_task    = Phase::Executing;
+        AdvanceAfterExecute();
+        return m_phase != Phase::Failed;
+    }
+    return Start();
+}
+
+bool
+RemoteTraceOrchestrator::CanReuseSession()
+{
+    // A session whose last job still holds the connection is replaced rather
+    // than shared, so two jobs never use the connection at once.
+    return m_session && m_authenticated && m_session->IsConnected() && m_session->IsIdle();
 }
 
 void
@@ -287,12 +314,18 @@ void
 RemoteTraceOrchestrator::Fail(const std::string& message)
 {
     spdlog::warn("[remote-trace] {}", message);
+    // A failed listing is usually a missing or unreadable folder, which leaves
+    // the connection usable, so the next BrowsePath() reuses it instead of
+    // reconnecting and asking for credentials again. After any other failure
+    // the live connection can no longer be trusted; force the next BrowsePath()
+    // to build a fresh session rather than reusing a dead one.
+    if(m_phase != Phase::Browsing)
+    {
+        m_authenticated = false;
+    }
     m_status_message = message;
     m_phase          = Phase::Failed;
     m_running        = false;
-    // The live connection (if any) can no longer be trusted; force the next
-    // BrowsePath() to build a fresh session rather than reusing a dead one.
-    m_authenticated  = false;
 }
 
 }  // namespace View

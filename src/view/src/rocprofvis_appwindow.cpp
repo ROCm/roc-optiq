@@ -1116,6 +1116,12 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        if(ImGui::MenuItem("Open Remote..."))
+        {
+            HandleTestRemoteSSH();
+        }
+#endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
         // TEMPORARY (trace compare): remove guard when the feature graduates.
         if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
@@ -1845,7 +1851,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, filters, config);
 }
 
-#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(ROCPROFVIS_ENABLE_REMOTE)
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 
 void
 AppWindow::HandleTestRemoteSSH()
@@ -1857,7 +1863,7 @@ AppWindow::HandleTestRemoteSSH()
     m_ssh_test_dialog->Show();
 }
 
-#endif // ROCPROFVIS_DEVELOPER_MODE && ROCPROFVIS_ENABLE_REMOTE
+#endif // ROCPROFVIS_ENABLE_REMOTE
 void
 AppWindow::UpdateStatusBar()
 {
@@ -2024,12 +2030,6 @@ AppWindow::RenderDeveloperMenu()
                                    }
                                });
         }
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-        if(ImGui::MenuItem("Open Remote...", nullptr, false))
-        {
-            HandleTestRemoteSSH();
-        }
-#endif        
         ImGui::EndMenu();
     }
 }

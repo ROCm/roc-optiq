@@ -118,9 +118,48 @@ std::string BuildCommandPreviewString(
     std::vector<std::string> const& argv);
 
 /**
- * Renders the Command Preview panel showing the composed env block + full argv.
+ * A code panel - the Command Preview, the run output: a card holding a header
+ * row (title or status at the left, actions at the right) above a monospaced
+ * box that fills the rest of it. `size` follows BeginChild: (0, 0) fills the
+ * remaining space, a negative height leaves that much room below. Always pair
+ * Begin/End.
+ */
+void BeginCodePanel(const char* id, ImVec2 size);
+void EndCodePanel();
+
+/**
+ * The monospaced, bordered box that fills the rest of a code panel. With
+ * `follow_tail` it stays on the newest line while the user is scrolled to the
+ * bottom.
+ */
+void RenderCodeBox(const char* id, std::string const& text, bool follow_tail);
+
+/**
+ * Continues the current line so that items totalling `width` end at its right
+ * edge - a header's trailing actions.
+ */
+void SameLineRightAligned(float width);
+
+/**
+ * Widths of a button and of a labelled checkbox at the current style, for
+ * laying out a row of them before drawing it.
+ */
+float ButtonWidth(const char* label);
+float CheckboxWidth(const char* label);
+
+/**
+ * Renders the Command Preview panel's contents - its title with Copy at the
+ * right, above the composed env block + full argv. Call inside a code panel.
  */
 void RenderCommandPreview(std::string const& preview_text);
+
+/**
+ * Slim, trackless scrollbars for the launcher's scrolling panels. Push before
+ * the BeginChild that scrolls and pop right after it: the scrollbar style is
+ * read when the child begins.
+ */
+void PushSlimScrollbarStyle();
+void PopSlimScrollbarStyle();
 
 /**
  * Semantic severity of the console status badge. This lets

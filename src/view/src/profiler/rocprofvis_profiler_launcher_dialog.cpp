@@ -34,10 +34,64 @@ namespace
 // Configure-view split: the form and the command-preview panel are divided by a
 // draggable splitter, seeded to a 3:2 (form:preview) ratio on first open and
 // clamped so neither side collapses.
-constexpr float kSplitterWidth       = 6.0f;
+constexpr float kSplitterWidth       = 8.0f;
 constexpr float kMinPreviewWidth     = 300.0f;
 constexpr float kMinFormWidth        = 320.0f;
 constexpr float kInitialPreviewRatio = 2.0f / 5.0f;
+
+constexpr ImVec2 LAUNCHER_WINDOW_PADDING = ImVec2(16.0f, 12.0f);
+constexpr ImVec2 LAUNCHER_FRAME_PADDING  = ImVec2(8.0f, 4.0f);
+constexpr ImVec2 LAUNCHER_ITEM_SPACING   = ImVec2(8.0f, 10.0f);
+constexpr float  LAUNCHER_GROUP_GAP      = 16.0f;
+
+// Gap between the configuration form's cards and its scrollbar.
+constexpr float FORM_GUTTER = 8.0f;
+
+// Both views end with the same footer, and Close and the primary action keep
+// these widths in each, so switching views never moves those buttons.
+constexpr float FOOTER_BUTTON_WIDTH  = 120.0f;
+constexpr float FOOTER_PRIMARY_WIDTH = 160.0f;
+
+// Separates the parts of the run summary and status lines.
+constexpr const char* SUMMARY_SEPARATOR = "  \xC2\xB7  ";
+
+// Height of the footer: its divider with a gap either side, and one row of
+// buttons. Each view's content stops this far above the bottom. The divider's
+// thickness counts toward layout, as ImGui::Separator() takes it.
+float FooterHeight()
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    return style.ItemSpacing.y * 2.0f + std::max(style.SeparatorSize, 1.0f) +
+           ImGui::GetFrameHeight();
+}
+
+// A secondary footer button: a common minimum width so short labels line up,
+// wider only when the label needs it.
+float FooterButtonWidth(const char* label)
+{
+    return std::max(ButtonWidth(label), FOOTER_BUTTON_WIDTH);
+}
+
+// Where a row of footer buttons `width` wide starts so that it ends at the right
+// edge. Call at the start of the footer's line.
+float FooterActionsX(float width)
+{
+    return ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - width);
+}
+
+// One dim line cut to `width`, with the full text on hover when it was cut.
+void FittedDimText(std::string const& text, float width)
+{
+    const std::string shown = ElideWithEllipsis(text, width, text.size());
+    ImGui::PushStyleColor(ImGuiCol_Text, SettingsManager::Get().GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted(shown.c_str());
+    ImGui::PopStyleColor();
+    if (shown != text && BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted(text.c_str());
+        EndTooltipStyled();
+    }
+}
 }  // namespace
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
@@ -139,7 +193,7 @@ void ProfilerLauncherDialog::Render()
     // Restore the app's standard style so this dialog matches the rest of the
     // app (WindowPadding must be set before Begin() to take effect).
     const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_WINDOW_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool window_open = true;
@@ -147,7 +201,8 @@ void ProfilerLauncherDialog::Render()
                                     ImGuiWindowFlags_NoScrollbar);
     if (visible)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, LAUNCHER_FRAME_PADDING);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, LAUNCHER_ITEM_SPACING);
 
         // The dialog is a small two-step wizard: author the run (configure), then
         // watch it (run). Splitting them keeps the configuration uncluttered and
@@ -161,7 +216,7 @@ void ProfilerLauncherDialog::Render()
             RenderConfigureView();
         }
 
-        ImGui::PopStyleVar(1);
+        ImGui::PopStyleVar(2);  // FramePadding, ItemSpacing
     }
     ImGui::End();
     ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
@@ -199,38 +254,14 @@ void ProfilerLauncherDialog::RenderConfigureView()
 
     RenderToolbar();
     backend = m_backends[m_backend_index].get();
-    ImGui::Separator();
 
-    // Live "this run" summary: chips that update as options are toggled. Great
-    // for a quick read of exactly what will be collected.
-    {
-        std::vector<std::string> tags;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-        tags.push_back(IsSshMode() ? "Remote (SSH)" : "Local");
-#else
-        tags.push_back("Local");
-#endif
-        std::string const tool_name = CurrentToolDisplayName();
-        if (!tool_name.empty())
-        {
-            tags.push_back(tool_name);
-        }
-        std::vector<std::string> backend_tags = backend->GetSummaryTags(m_config);
-        tags.insert(tags.end(), backend_tags.begin(), backend_tags.end());
-        RenderConfigChips("This run:", tags);
-    }
-    ImGui::Spacing();
-
-    // Reserve exactly the height the bottom block (warnings + error + separator
-    // + buttons) needs, so it stays pinned to the bottom with no dead space.
+    // Reserve exactly the height the bottom block (warnings + error + footer)
+    // needs, so it stays pinned to the bottom with no dead space.
     auto warnings = backend->GetWarnings(m_config);
 
-    const ImGuiStyle& style  = ImGui::GetStyle();
-    const float       line_h = ImGui::GetTextLineHeightWithSpacing();
-    float bottom_reserve = style.ItemSpacing.y            // gap after the form
-                         + style.ItemSpacing.y + 1.0f     // separator line + gap to buttons
-                         + ImGui::GetFrameHeight();        // button row (no trailing spacing)
-    bottom_reserve += warnings.size() * line_h;
+    const ImGuiStyle& style          = ImGui::GetStyle();
+    const float       line_h         = ImGui::GetTextLineHeightWithSpacing();
+    float             bottom_reserve = FooterHeight() + warnings.size() * line_h;
     if (!m_error_message.empty())
     {
         float wrap_w = ImGui::GetContentRegionAvail().x;
@@ -238,7 +269,9 @@ void ProfilerLauncherDialog::RenderConfigureView()
                                               wrap_w).y + style.ItemSpacing.y;
     }
 
-    ImGui::BeginChild("MainPane", ImVec2(0, -bottom_reserve), ImGuiChildFlags_None);
+    // Layout only: the cards inside paint their own surfaces over the window.
+    ImGui::BeginChild("MainPane", ImVec2(0, -bottom_reserve), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoBackground);
     RenderMainContent();
     ImGui::EndChild();
 
@@ -288,6 +321,13 @@ void ProfilerLauncherDialog::RenderConfigureView()
 
 void ProfilerLauncherDialog::RenderRunView()
 {
+    // The configure view's frame: one line where its toolbar sits, a card
+    // filling the middle, and the same footer, so switching views moves nothing.
+    ImGui::AlignTextToFramePadding();
+    FittedDimText(BuildRunSummary(), ImGui::GetContentRegionAvail().x);
+
+    BeginCodePanel("RunOutput", ImVec2(0.0f, -FooterHeight()));
+
     // Collapse the local profiler state / remote workflow phase into a single
     // badge so remote runs show "Connecting", "Downloading", etc. (and only show
     // "Completed" once the trace is local), with the phase detail beside it.
@@ -304,40 +344,44 @@ void ProfilerLauncherDialog::RenderRunView()
         case ConsoleStatusLevel::kSuccess: pill_color_id = Colors::kTextSuccess; break;
         case ConsoleStatusLevel::kError:   pill_color_id = Colors::kTextError;   break;
         case ConsoleStatusLevel::kRunning: pill_color_id = Colors::kAccent;      break;
-        default:                           pill_color_id = Colors::kBorderGray;  break;
+        default:                           pill_color_id = Colors::kTextDim;     break;
     }
+    const float spacing   = ImGui::GetStyle().ItemSpacing.x;
+    const float actions_w = CheckboxWidth("Auto-scroll") + ButtonWidth("Copy") +
+                            ButtonWidth("Clear") + spacing * 2.0f;
+    const float status_end_x =
+        ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - actions_w - spacing;
     StatusPill(status_label.c_str(), settings.GetColor(pill_color_id));
 
+    std::string info;
     if (m_run_start_time > 0.0)
     {
         double end     = (m_run_end_time > 0.0) ? m_run_end_time : ImGui::GetTime();
         double elapsed = end - m_run_start_time;
-        ImGui::SameLine(0.0f, 12.0f);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("Elapsed  %.1fs", elapsed);
+        char   elapsed_text[32];
+        std::snprintf(elapsed_text, sizeof(elapsed_text), "Elapsed %.1fs", elapsed);
+        info = elapsed_text;
     }
     if (!status_detail.empty())
     {
-        ImGui::SameLine(0.0f, 12.0f);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("%s", status_detail.c_str());
+        info += (info.empty() ? "" : SUMMARY_SEPARATOR) + status_detail;
     }
-
-    std::string summary = BuildRunSummary();
-    if (!summary.empty())
+    if (!info.empty())
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-        ImGui::TextWrapped("%s", summary.c_str());
-        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::AlignTextToFramePadding();
+        FittedDimText(info, status_end_x - ImGui::GetCursorPosX());
     }
-    ImGui::Spacing();
 
-    // The console fills everything above the button row.
-    float button_h = ImGui::GetFrameHeightWithSpacing() + 16.0f;
-    ImGui::BeginChild("RunConsoleArea", ImVec2(0, -button_h), false);
-    if (RenderOutputConsole(m_output_text, m_error_message,
-                            status_label, status_level, status_detail,
-                            m_auto_scroll_output))
+    SameLineRightAligned(actions_w);
+    ImGui::Checkbox("Auto-scroll##Output", &m_auto_scroll_output);
+    ImGui::SameLine();
+    if (ImGui::Button("Copy##OutputCopy"))
+    {
+        ImGui::SetClipboardText(m_output_text.c_str());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Clear##OutputClear"))
     {
         m_output_text.clear();
         m_output_preamble.clear();
@@ -346,7 +390,8 @@ void ProfilerLauncherDialog::RenderRunView()
         m_process_output_stripped.clear();
         m_error_message.clear();
     }
-    ImGui::EndChild();
+    RenderCodeBox("OutputText", m_output_text, m_auto_scroll_output);
+    EndCodePanel();
 
     RenderRunButtonRow();
 }
@@ -367,7 +412,7 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
 
     if (!m_config.target.executable.empty())
     {
-        ss << "  ->  " << m_config.target.executable;
+        ss << SUMMARY_SEPARATOR << m_config.target.executable;
         if (!m_config.target.arguments.empty())
         {
             ss << " " << m_config.target.arguments;
@@ -377,17 +422,15 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if (IsSshMode())
     {
-        std::string host = m_remote_uri->GetRemoteHostString();
-        std::string user = m_remote_uri->GetRemoteUserString();
-        ss << "   [Remote: " << (user.empty() ? "?" : user.c_str()) << "@"
-           << (host.empty() ? "?" : host.c_str()) << "]";
+        ss << SUMMARY_SEPARATOR << m_remote_uri->GetRemoteUserString() << "@"
+           << m_remote_uri->GetRemoteHostString();
     }
     else
     {
-        ss << "   [Local]";
+        ss << SUMMARY_SEPARATOR << "This machine";
     }
 #else
-    ss << "   [Local]";
+    ss << SUMMARY_SEPARATOR << "This machine";
 #endif
 
     return ss.str();
@@ -395,11 +438,25 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
 
 void ProfilerLauncherDialog::RenderToolbar()
 {
+    // Combos fit their widest entry, so a long profiler name is never cut off.
+    auto fit_combo_width = [](std::vector<std::string> const& labels) {
+        float widest = 0.0f;
+        for (auto const& label : labels)
+        {
+            widest = std::max(widest, ImGui::CalcTextSize(label.c_str()).x);
+        }
+        return widest + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2.0f;
+    };
+
     // Profiler selector
-    ImGui::AlignTextToFramePadding();
-    ImGui::Text("Profiler:");
+    std::vector<std::string> backend_names;
+    for (auto const& entry : m_backends)
+    {
+        backend_names.emplace_back(entry->DisplayName());
+    }
+    PanelFieldLabel("Profiler");
     ImGui::SameLine();
-    ImGui::PushItemWidth(140);
+    ImGui::PushItemWidth(fit_combo_width(backend_names));
     if (ImGui::BeginCombo("##ProfilerBackend",
                           m_backends[m_backend_index]->DisplayName()))
     {
@@ -422,14 +479,19 @@ void ProfilerLauncherDialog::RenderToolbar()
     }
     ImGui::PopItemWidth();
 
-    VerticalSeparator();
+    ImGui::SameLine(0.0f, LAUNCHER_GROUP_GAP);
 
     // Tool selector
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
     auto tools = backend->GetTools();
-    ImGui::Text("Tool:");
+    std::vector<std::string> tool_names;
+    for (auto const& option : tools)
+    {
+        tool_names.push_back(option.display_name);
+    }
+    PanelFieldLabel("Tool");
     ImGui::SameLine();
-    ImGui::PushItemWidth(120);
+    ImGui::PushItemWidth(fit_combo_width(tool_names));
     if (ImGui::BeginCombo("##ToolSelector", CurrentToolDisplayName().c_str()))
     {
         for (auto const& option : tools)
@@ -444,7 +506,7 @@ void ProfilerLauncherDialog::RenderToolbar()
     }
     ImGui::PopItemWidth();
 
-    VerticalSeparator();
+    ImGui::SameLine(0.0f, LAUNCHER_GROUP_GAP);
 
     // Saved launch profiles (Optiq JSON presets)
     std::string load_name = RenderSavedProfileBar(
@@ -510,13 +572,25 @@ void ProfilerLauncherDialog::RenderMainContent()
     float left_w     = avail - kSplitterWidth - m_preview_width;
 
     // --- Left: the configuration form (scrolls if it overflows) ---
-    ImGui::BeginChild("cfg_form", ImVec2(left_w, 0.0f), ImGuiChildFlags_None);
+    // A slim, trackless scrollbar with a gutter before it, so it neither crowds
+    // the cards nor runs into the splitter. The form starts one gutter early,
+    // inside the window padding, so its cards stay aligned with the toolbar.
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() - FORM_GUTTER);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(FORM_GUTTER, 0.0f));
+    PushSlimScrollbarStyle();
+    ImGui::BeginChild("cfg_form", ImVec2(left_w + FORM_GUTTER, 0.0f),
+                      ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoBackground);
+    PopSlimScrollbarStyle();
+    ImGui::PopStyleVar();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Where to run first: pick the machine before the paths.
     BeginLaunchCard("card_connection");
     LaunchCardHeader(ICON_CHAIN, "Where to run");
     RenderRemoteSection();
+    RenderToolResolutionNotice();
     EndLaunchCard();
+#else
+    RenderToolResolutionNotice();
 #endif
 
     BeginLaunchCard("card_target");
@@ -526,9 +600,11 @@ void ProfilerLauncherDialog::RenderMainContent()
     // In remote (SSH) mode the Target Browse buttons open the shared remote file
     // browser (same UI as the "Open Remote Trace" dialog). Local mode keeps the
     // OS file/path dialogs, so the callbacks are only wired when targeting SSH.
+    // The connection is chosen under "Where to run", never in the browser, so
+    // Browse stays disabled until one is set up.
     std::function<void()> on_browse_program;
     std::function<void()> on_browse_output;
-    if (IsSshMode())
+    if (IsSshMode() && HasRemoteConnection())
     {
         on_browse_program = [this]()
         {
@@ -575,16 +651,10 @@ void ProfilerLauncherDialog::RenderMainContent()
             ImGui::EndTabBar();
         }
     }
-    EndLaunchCard();
-
-    BeginLaunchCard("card_inputs");
-    LaunchCardHeader(ICON_LIST, "Arguments & Environment");
-    RenderArgsEnvPanel();
-    EndLaunchCard();
-
     if (!advanced_tabs.empty())
     {
-        if (ImGui::Button("Advanced Options...", ImVec2(180, 0)))
+        ImGui::Spacing();
+        if (ImGui::Button("Advanced Options..."))
         {
             m_show_advanced_window = true;
         }
@@ -593,6 +663,8 @@ void ProfilerLauncherDialog::RenderMainContent()
             ImGui::SetTooltip("Sampling, ROCm domains, Perfetto, parallelism, logging");
         }
     }
+    EndLaunchCard();
+
     ImGui::EndChild();
 
     // --- Draggable splitter to resize the preview panel ---
@@ -615,17 +687,9 @@ void ProfilerLauncherDialog::RenderMainContent()
     ImGui::SameLine(0.0f, 0.0f);
 
     // --- Right: full-height command preview panel ---
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, settings.GetDefaultStyle().WindowPadding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
-    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-    ImGui::BeginChild("cfg_preview", ImVec2(0.0f, 0.0f),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-    RenderToolResolutionNotice();
+    BeginCodePanel("cfg_preview", ImVec2(0.0f, 0.0f));
     RenderCommandPreview(m_execution_cache.command_preview);
-    ImGui::EndChild();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    EndCodePanel();
 }
 
 void ProfilerLauncherDialog::RenderToolResolutionNotice()
@@ -636,11 +700,24 @@ void ProfilerLauncherDialog::RenderToolResolutionNotice()
     {
         // Said here rather than only on Launch, because "the profiler is not
         // installed" is not something the user should discover by pressing a
-        // button. The command preview below still shows the bare tool name, so
+        // button. The command preview still shows the bare tool name, so
         // this line is what explains why it has no path.
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+        constexpr float NOTICE_ROUNDING     = 6.0f;
+        constexpr float NOTICE_FILL_ALPHA   = 0.10f;
+        constexpr float NOTICE_BORDER_ALPHA = 0.45f;
+        const ImU32     warning = settings.GetColor(Colors::kTextWarning);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ApplyAlpha(warning, NOTICE_FILL_ALPHA));
+        ImGui::PushStyleColor(ImGuiCol_Border, ApplyAlpha(warning, NOTICE_BORDER_ALPHA));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, NOTICE_ROUNDING);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, settings.GetDefaultStyle().WindowPadding);
+        ImGui::BeginChild("tool_notice", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                              ImGuiChildFlags_AlwaysUseWindowPadding,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::TextWrapped("%s", m_execution_cache.resolve_error.c_str());
-        ImGui::PopStyleColor();
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
         return;
     }
 
@@ -672,23 +749,23 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
     // Restore the app's standard style (AppWindow's scope zeroes window padding /
     // item spacing / rounding). WindowPadding must be set before Begin().
     const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_WINDOW_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool open    = true;
     bool visible = ImGui::Begin("Advanced Profiling Options", &open);
     if (visible)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, LAUNCHER_FRAME_PADDING);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, LAUNCHER_ITEM_SPACING);
 
         ImGui::TextDisabled("Fine-grained settings, applied on top of the selected preset.");
-        ImGui::Spacing();
 
         // Where the tools live is a property of the launch profile rather than of
         // any one backend, so it sits above the backend tabs.
         std::function<void()> on_browse_tool_dir;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-        if (IsSshMode())
+        if (IsSshMode() && HasRemoteConnection())
         {
             on_browse_tool_dir = [this]()
             {
@@ -710,9 +787,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
         {
             m_execution_cache_dirty = true;
         }
-        ImGui::Spacing();
         ImGui::Separator();
-        ImGui::Spacing();
 
         auto tabs = backend->GetTabs(m_config.tool);
         if (ImGui::BeginTabBar("AdvancedWindowTabs"))
@@ -725,17 +800,28 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                 }
                 if (ImGui::BeginTabItem(tab.display_name.c_str()))
                 {
-                    ImGui::Spacing();
+                    PushSlimScrollbarStyle();
                     ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+                    PopSlimScrollbarStyle();
                     m_execution_cache_dirty |= tab.render_fn();
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
             }
+            if (ImGui::BeginTabItem("Overrides"))
+            {
+                PushSlimScrollbarStyle();
+                ImGui::BeginChild("adv_overrides_scroll", ImVec2(0.0f, 0.0f),
+                                  ImGuiChildFlags_None);
+                PopSlimScrollbarStyle();
+                RenderArgsEnvPanel();
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
 
-        ImGui::PopStyleVar(1);
+        ImGui::PopStyleVar(2);  // FramePadding, ItemSpacing
     }
     ImGui::End();
     ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
@@ -1077,19 +1163,6 @@ void ProfilerLauncherDialog::RenderButtonRow()
     bool valid      = readiness.empty();
     bool can_launch = state_ready && valid;
 
-    if (!can_launch)
-    {
-        ImGui::BeginDisabled();
-    }
-    if (AccentButton("Launch Profiler", ImVec2(160, 0)))
-    {
-        OnLaunchClicked();
-    }
-    if (!can_launch)
-    {
-        ImGui::EndDisabled();
-    }
-
     // If a run is in flight or a previous run's output is available, let the
     // user jump straight to the focused run view.
     bool has_run_view = is_running ||
@@ -1097,38 +1170,59 @@ void ProfilerLauncherDialog::RenderButtonRow()
         state == kRPVProfilerStateCompleted ||
         state == kRPVProfilerStateFailed ||
         state == kRPVProfilerStateCancelled;
-    if (has_run_view && !m_output_text.empty())
-    {
-        ImGui::SameLine();
-        if (ImGui::Button(is_running ? "View Run" : "View Last Run", ImVec2(130, 0)))
-        {
-            m_show_run_view = true;
-        }
-    }
+    const bool show_view_run = has_run_view && !m_output_text.empty();
 
-    ImGui::SameLine();
-    if (ImGui::Button("Close", ImVec2(120, 0)))
+    // Readiness on the left; actions on the right with the primary last, the
+    // same arrangement as the run view and the app's other dialogs.
+    const float spacing    = ImGui::GetStyle().ItemSpacing.x;
+    const char* view_label = is_running ? "View Run" : "View Last Run";
+    float       actions_w  = FOOTER_BUTTON_WIDTH + spacing + FOOTER_PRIMARY_WIDTH;
+    if (show_view_run)
     {
-        Hide();
+        actions_w += FooterButtonWidth(view_label) + spacing;
     }
+    const float actions_x = FooterActionsX(actions_w);
 
-    // Readiness feedback to the right of the buttons, so it is obvious why
-    // Launch is (or isn't) available.
     if (!is_running)
     {
         SettingsManager& settings = SettingsManager::Get();
-        ImGui::SameLine(0.0f, 16.0f);
         ImGui::AlignTextToFramePadding();
-        if (valid)
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(valid ? Colors::kTextSuccess
+                                                                     : Colors::kTextWarning));
+        ElidedText(valid ? "Ready to launch" : readiness.c_str(),
+                   std::max(actions_x - ImGui::GetCursorPosX() - spacing, 80.0f),
+                   360.0f, Alignment_Left, true);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+    }
+    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), actions_x));
+
+    if (show_view_run)
+    {
+        if (ImGui::Button(view_label, ImVec2(FooterButtonWidth(view_label), 0.0f)))
         {
-            ImVec4 ok = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextSuccess));
-            ImGui::TextColored(ok, "Ready to launch");
+            m_show_run_view = true;
         }
-        else
-        {
-            ImVec4 warn = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextWarning));
-            ImGui::TextColored(warn, "%s", readiness.c_str());
-        }
+        ImGui::SameLine();
+    }
+
+    if (ImGui::Button("Close", ImVec2(FOOTER_BUTTON_WIDTH, 0.0f)))
+    {
+        Hide();
+    }
+    ImGui::SameLine();
+
+    if (!can_launch)
+    {
+        ImGui::BeginDisabled();
+    }
+    if (AccentButton("Launch Profiler", ImVec2(FOOTER_PRIMARY_WIDTH, 0.0f)))
+    {
+        OnLaunchClicked();
+    }
+    if (!can_launch)
+    {
+        ImGui::EndDisabled();
     }
 }
 
@@ -1136,47 +1230,62 @@ void ProfilerLauncherDialog::RenderRunButtonRow()
 {
     ImGui::Separator();
 
-    bool                        is_running = m_orchestrator.IsRunning();
-    rocprofvis_profiler_state_t state      = m_orchestrator.GetState();
+    constexpr const char* OPEN_TRACE_LABEL = "Open Trace";
+    constexpr const char* BACK_LABEL       = "Back to Configuration";
 
-    if (is_running)
+    const bool        is_running = m_orchestrator.IsRunning();
+    const std::string trace_path = m_orchestrator.GetTracePath();
+    // A completed local run can be opened by hand; remote runs load the
+    // downloaded trace through the orchestrator.
+    const bool can_open_trace = !is_running && !trace_path.empty() &&
+                                m_orchestrator.GetState() == kRPVProfilerStateCompleted &&
+                                !m_orchestrator.IsRemote();
+
+    // The configure view's arrangement: actions at the right, primary last.
+    const float spacing   = ImGui::GetStyle().ItemSpacing.x;
+    float       actions_w = FOOTER_BUTTON_WIDTH + spacing + FOOTER_PRIMARY_WIDTH;
+    if (can_open_trace)
     {
-        if (AccentButton("Cancel", ImVec2(140, 0)))
-        {
-            OnCancelClicked();
-        }
+        actions_w += FooterButtonWidth(OPEN_TRACE_LABEL) + spacing;
     }
-    else
+    if (!is_running)
     {
-        if (AccentButton("Run Again", ImVec2(140, 0)))
-        {
-            OnLaunchClicked();
-        }
+        actions_w += FooterButtonWidth(BACK_LABEL) + spacing;
+    }
+    ImGui::SetCursorPosX(FooterActionsX(actions_w));
 
+    if (can_open_trace)
+    {
+        if (ImGui::Button(OPEN_TRACE_LABEL, ImVec2(FooterButtonWidth(OPEN_TRACE_LABEL), 0.0f)) &&
+            m_app_window)
+        {
+            m_app_window->OpenFile(trace_path);
+        }
         ImGui::SameLine();
-        if (ImGui::Button("Back to Configuration", ImVec2(190, 0)))
+    }
+    if (!is_running)
+    {
+        if (ImGui::Button(BACK_LABEL, ImVec2(FooterButtonWidth(BACK_LABEL), 0.0f)))
         {
             m_show_run_view = false;
         }
-
-        // Offer a manual open for a completed local run (remote runs auto-load
-        // the downloaded trace through the orchestrator).
-        std::string trace_path = m_orchestrator.GetTracePath();
-        if (state == kRPVProfilerStateCompleted && !trace_path.empty() &&
-            !m_orchestrator.IsRemote())
-        {
-            ImGui::SameLine();
-            if (ImGui::Button("Open Trace", ImVec2(140, 0)) && m_app_window)
-            {
-                m_app_window->OpenFile(trace_path);
-            }
-        }
+        ImGui::SameLine();
     }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Close", ImVec2(120, 0)))
+    if (ImGui::Button("Close", ImVec2(FOOTER_BUTTON_WIDTH, 0.0f)))
     {
         Hide();
+    }
+    ImGui::SameLine();
+    if (AccentButton(is_running ? "Cancel" : "Run Again", ImVec2(FOOTER_PRIMARY_WIDTH, 0.0f)))
+    {
+        if (is_running)
+        {
+            OnCancelClicked();
+        }
+        else
+        {
+            OnLaunchClicked();
+        }
     }
 }
 
@@ -1541,8 +1650,9 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
             out_level = ConsoleStatusLevel::kSuccess;
             break;
         case kRPVProfilerStateFailed:
-            out_label = "Failed";
-            out_level = ConsoleStatusLevel::kError;
+            out_label  = "Failed";
+            out_level  = ConsoleStatusLevel::kError;
+            out_detail = m_error_message;
             break;
         case kRPVProfilerStateCancelled:
             out_label = "Cancelled";
@@ -1728,6 +1838,12 @@ void ProfilerLauncherDialog::ApplySelectedConnection()
     {
         m_remote_uri->SetConnection(SshConnectionConfig());
     }
+}
+
+bool ProfilerLauncherDialog::HasRemoteConnection() const
+{
+    return !m_remote_uri->GetRemoteHostString().empty() &&
+           !m_remote_uri->GetRemoteUserString().empty();
 }
 
 void ProfilerLauncherDialog::EnsureRemoteFileBrowser()

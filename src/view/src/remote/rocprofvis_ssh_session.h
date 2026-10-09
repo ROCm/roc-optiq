@@ -70,6 +70,10 @@ namespace View
         void CancelActiveOperation();
 
         bool IsConnected();
+        // True once the last phase's job is done with the connection. A failure
+        // is reported before its job lets go of the connection, so wait for this
+        // before starting another phase after one.
+        bool IsIdle() const;
         SshOperation GetActiveOperation() const { return m_active_operation; }
         uint64_t GetActiveOperationId() const { return m_active_operation_id; }
 

@@ -24,8 +24,16 @@ on:
         description: 'Run macOS CI?'
         type: boolean
         default: true
+      enable_ci_manylinux:
+        description: 'Run ManyLinux CI?'
+        type: boolean
+        default: true
+      enable_ci_asan:
+        description: 'Run Ubuntu ASAN?'
+        type: boolean
+        default: true        
       enable_ci_experimental:
-        description: 'Run Experimental CI?'
+        description: 'Allow Experimental CI?'
         type: boolean
         default: false
       exp_crypto_backend:
@@ -55,7 +63,7 @@ on:
         description: 'Experimental: embedded Python analysis scripts'
         type: boolean
         default: true
-      exp_vendor_python:
+      exp_enable_vendor_python:
         description: 'Experimental: bundle a pinned CPython with scripting builds'
         type: boolean
         default: true
@@ -65,14 +73,6 @@ on:
         default: true
       exp_enable_multi_window:
         description: 'Experimental: multi-window / floating windows'
-        type: boolean
-        default: true
-      enable_ci_asan:
-        description: 'Run Ubuntu ASAN?'
-        type: boolean
-        default: true
-      enable_ci_manylinux:
-        description: 'Run ManyLinux CI?'
         type: boolean
         default: true
       upload_to_github:
@@ -128,7 +128,7 @@ jobs:
       exp-enable-remote: ${{ github.event_name == 'schedule' || inputs.exp_enable_remote }}
       exp-enable-agentic-profiling: ${{ github.event_name == 'schedule' || inputs.exp_enable_agentic_profiling }}
       exp-enable-scripting: ${{ github.event_name == 'schedule' || inputs.exp_enable_scripting }}
-      exp-vendor-python: ${{ github.event_name == 'schedule' || inputs.exp_vendor_python }}
+      exp-enable-vendor-python: ${{ github.event_name == 'schedule' || inputs.exp_enable_vendor_python }}
       exp-enable-trace-compare: ${{ github.event_name == 'schedule' || inputs.exp_enable_trace_compare }}
       exp-enable-multi-window: ${{ github.event_name == 'schedule' || inputs.exp_enable_multi_window }}
     steps:
@@ -178,7 +178,7 @@ jobs:
       enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
       enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
       enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-vendor-python) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
@@ -215,7 +215,7 @@ jobs:
       enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
       enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
       enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-vendor-python) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
@@ -250,7 +250,7 @@ jobs:
       enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
       enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
       enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-vendor-python) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
@@ -285,7 +285,7 @@ jobs:
       enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
       enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
       enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-vendor-python) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
@@ -329,6 +329,6 @@ jobs:
       enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
       enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
       enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-vendor-python) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}

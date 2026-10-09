@@ -1610,7 +1610,17 @@ byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset, ISA instruction, or
 source-code line opens its copy context menu. `Show Sampling Details` adds
 Samples and Sampling State, aggregated by instruction UUID across returned sample
-states, plus Stall % and Stall Reasons regardless of progress-data availability.
+states, plus Stall % and Stall Categories regardless of progress-data availability.
+The ISA table defaults to `# | Stall Categories | Offset | ISA`. Samples and Stall %
+are registered with `DefaultHide`; enabling them in the header context menu produces
+`# | Samples | Stall % | Stall Categories | Offset | ISA`. Sampling State is also
+hidden by default and appears between `#` and Samples when enabled through that
+menu. The table uses
+`IsaCodeStallCategories` as its ID so saved settings from the earlier layout do not
+override these defaults; subsequent visibility choices use normal ImGui persistence.
+The ISA table enables `Reorderable`, so users can drag any visible column header
+to change its display order. Order is saved through the same ImGui table settings;
+headers and cells still address logical column indices after reordering.
 For each instruction, Stall % shows the measured percentage only when every
 sample state for that instruction has non-NULL issued and stall counts.
 In mixed captures, instructions with missing progress counts display disabled
@@ -1619,7 +1629,7 @@ percentages. Entirely host-trap captures have no progress counts, so Stall % sta
 visible with a dimmed header and disabled `N/A` cells. Unsampled instructions also
 have unavailable progress counts. A
 stochastic capture's real zero counts remain available and are not confused
-with NULL. Sampling State draws a thin stacked bar before Samples: red for
+with NULL. Sampling State draws an optional thin stacked bar before Samples: red for
 stalled observations, green for issued observations, and gray for unavailable or
 unclassified progress data. Total bar length is normalized to the hottest displayed
 instruction; each colored segment uses its measured count over that same maximum.
@@ -1641,8 +1651,8 @@ at the wider of its header and largest formatted count. Samples, Offset, and `#`
 use the public ImGui `NoResize` column flag so their calculated widths follow
 kernel/workload data and font changes, including sampling-detail data that arrives
 later. The `#` width is measured with the active code font during rendering.
-ISA, Sampling State, Stall %, and Stall Reasons remain user-resizable; Sampling
-State, Samples, Offset, Stall %, and Stall Reasons are
+ISA, Sampling State, Stall %, and Stall Categories remain user-resizable; Sampling
+State, Samples, Offset, Stall %, and Stall Categories are
 user-hideable through the ImGui header context menu. The source table supports
 the same per-column visibility menu. Both native
 column menus use the application's default window padding, matching the event
@@ -1659,12 +1669,15 @@ sample state when raw reason totals include all samples. Each remaining reason
 includes its count and share of the instruction's stalled samples. The tooltip
 shows issued samples separately and warns when the normalized reason total
 differs from the instruction's stalled-sample count.
-Stall Reasons follows Stall % and draws a stacked distribution of those same
-normalized reason counts over the instruction's stalled-sample total. Missing
-classifications occupy a gray remainder. If recorded reasons exceed the stalled
-count, the bar uses the recorded reason total to fit all segments and the tooltip
-explains the mismatch; reported shares still use the stalled-sample count.
-Zero stalled samples have no bar unless inconsistent reason records exist.
+Stall Categories follows Stall % in the default order and draws a stacked bar
+whose total length matches the instruction's Stall %: full cell width represents
+100% of that instruction's total samples. Each reason occupies its share of the
+stalled portion, and missing classifications occupy a gray remainder within that
+portion. If recorded reasons exceed the stalled count, segment shares use the
+recorded reason total to fit inside the same stalled portion; the tooltip explains
+the mismatch and reported shares still use the stalled-sample count. Zero stalled
+samples or zero total samples have no bar. Counts above the total sample count
+are clamped to full width, matching Stall % bar rendering.
 Host-trap and incomplete progress data display disabled `N/A` cells with an
 explanation. Both stall columns reuse the same tooltip, which includes color
 swatches, raw database reason names, wrapped plain-language meanings, counts,

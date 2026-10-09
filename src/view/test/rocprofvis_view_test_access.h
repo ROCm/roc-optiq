@@ -15,6 +15,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_project.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
@@ -37,10 +38,42 @@ namespace RocProfVis
 namespace View
 {
 
+struct ProjectTestPeer
+{
+    const Project& v;
+    std::string OpenErrorMessage() const { return v.m_open_error_message; }
+};
+
 struct EventsViewTestPeer
 {
     const EventsView& v;
     size_t EventItemCount() const { return v.m_event_items.size(); }
+
+    // Args live on each cached event's EventInfo (populated async by the
+    // controller); info is null until it arrives, so every reach is guarded.
+    size_t ArgCount(size_t item_idx) const
+    {
+        size_t i = 0;
+        for(const auto& item : v.m_event_items)
+        {
+            if(i++ == item_idx)
+                return item.info ? item.info->args.size() : 0;
+        }
+        return 0;
+    }
+    std::string ArgName(size_t item_idx, size_t arg_idx) const
+    {
+        size_t i = 0;
+        for(const auto& item : v.m_event_items)
+        {
+            if(i++ == item_idx)
+            {
+                if(!item.info || arg_idx >= item.info->args.size()) return std::string();
+                return item.info->args[arg_idx].name;
+            }
+        }
+        return std::string();
+    }
 };
 
 struct AnalysisViewTestPeer
@@ -130,6 +163,9 @@ struct ComputeViewTestPeer
     ComputeView& v;
     TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
+    bool PopupPending() const { return v.m_error_dialog_state == ComputeView::ErrorDialogState::kPending; }
+    const std::string& PopupTitle() const { return v.m_popup_info.title; }
+    const std::string& PopupMessage() const { return v.m_popup_info.message; }
 };
 
 struct ComputeKernelDetailsViewTestPeer
@@ -167,27 +203,33 @@ struct ComputeWorkloadViewTestPeer
 struct ComputeComparisonViewTestPeer
 {
     ComputeComparisonView& v;
-    uint32_t TargetWorkloadId() const { return v.m_target_workload_id; }
-    uint32_t TargetKernelId() const { return v.m_target_kernel_id; }
-    size_t   CategoryCount() const { return v.m_categories.size(); }
+    ComparisonTable* ComparisonTablePtr() const { return v.m_comparison_table.get(); }
+};
+
+struct ComputeComparisonTableTestPeer
+{
+    ComparisonTable& t;
+    uint32_t TargetWorkloadId() const { return t.m_target_workload_id; }
+    uint32_t TargetKernelId() const { return t.m_target_kernel_id; }
+    size_t   CategoryCount() const { return t.m_categories.size(); }
     // True while either the baseline or target metrics fetch is still pending.
     bool RequestsPending() const
     {
-        return v.m_data_provider.IsRequestPending(v.m_baseline_request_id) ||
-               v.m_data_provider.IsRequestPending(v.m_target_request_id);
+        return t.m_data_provider.IsRequestPending(t.m_baseline_request_id) ||
+               t.m_data_provider.IsRequestPending(t.m_target_request_id);
     }
-    // True once a built table has a "Difference##" column, i.e. deltas were
+    // True once a built table has a "\xCE\x94 ##" column, i.e. deltas were
     // actually computed (not just tables allocated).
     bool HasDifferenceColumn() const
     {
-        for(const auto& category : v.m_categories)
+        for(const auto& category : t.m_categories)
         {
             for(const auto& table : category.tables)
             {
                 if(!table) continue;
                 for(const std::string& name : table->OrderedValueNames())
                 {
-                    if(name.rfind("Difference##", 0) == 0) return true;
+                    if(name.rfind("\xCE\x94 ##", 0) == 0) return true;
                 }
             }
         }

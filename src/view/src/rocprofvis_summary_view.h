@@ -179,7 +179,7 @@ private:
     void RowSelected(const ImGuiMouseButton mouse_button) override;
 
     std::string m_kernel_name;
-    std::string m_where;
+    std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
 
     bool m_fetched;
 };

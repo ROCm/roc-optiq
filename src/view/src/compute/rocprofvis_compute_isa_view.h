@@ -12,6 +12,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@ namespace View
 class SourceCodeWidget;
 class IsaCodeWidget;
 class DataProvider;
+struct TabItem;
 enum class PcSamplingLayer : uint32_t;
 
 struct LineSelection
@@ -34,14 +36,16 @@ struct LineSelection
     uint64_t source_scroll_line = UNSELECTED;
     uint64_t source_scroll_file = UNSELECTED;
     uint64_t isa_scroll_line    = UNSELECTED;
+    bool     hovered_this_frame = false;
 };
 
 struct FetchStateType
 {
-    bool     queued        = false;  // waiting to submit to DataProvider
-    bool     in_flight     = false;  // submitted, awaiting callback
-    bool     loaded        = false;  // data received and applied to model
-    uint64_t request_token = 0;      // identifies the latest request for this layer
+    bool     queued        = false;
+    bool     in_flight     = false;
+    bool     loaded        = false;
+    bool     failed        = false;
+    uint64_t request_token = 0;
 };
 
 struct IsaPane : FetchStateType
@@ -58,16 +62,16 @@ struct IsaPane : FetchStateType
 
 struct SourcePane : FetchStateType
 {
-    uint64_t                                        selected_uuid = 0;
-    std::map<std::string /*path*/, uint64_t /*id*/> files;
-    std::set<uint64_t>                              loaded_uuids;
-    std::shared_ptr<SourceCodeWidget>               widget;
+    uint64_t                             selected_uuid = 0;
+    std::map<std::string, uint64_t>      file_uuid_by_path;
+    std::set<uint64_t>                   loaded_uuids;
+    std::shared_ptr<SourceCodeWidget>    widget;
 
     void ResetFetch()
     {
         static_cast<FetchStateType&>(*this) = {};
         selected_uuid = 0;
-        files.clear();
+        file_uuid_by_path.clear();
         loaded_uuids.clear();
     }
 };
@@ -75,6 +79,11 @@ struct SourcePane : FetchStateType
 class ComputeIsaView : public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "isa_view";
+
+    static TabItem CreateTabItem(DataProvider& data_provider);
+    static TabItem CreateTabItem(DataProvider& data_provider, bool has_isa_lines);
+
     explicit ComputeIsaView(DataProvider& data_provider);
     ~ComputeIsaView();
 
@@ -135,7 +144,7 @@ public:
 
     virtual void Render() override = 0;
 
-    bool IsStallShown() { return m_show_stall; };
+    bool IsStallShown() const { return m_show_stall; };
     void ChangeStallVisibility(bool show) { m_show_stall = show; };
 
 protected:
@@ -150,9 +159,6 @@ protected:
 
     SettingsManager& m_settings;
     ImGuiTableFlags  m_table_flags;
-
-    ImU32  m_selected_colour;
-    ImU32  m_hovered_colour;
 
     ImVec4 m_line_num_color;
 };
@@ -170,14 +176,13 @@ public:
 
 private:
     uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void RenderLine(uint32_t index, uint32_t column_count);
+    void RenderLine(uint32_t index);
 
     struct SourceRow
     {
         std::string content;
-        uint64_t    id                = 0;
-        uint64_t    line_number       = 0;
-        float       summarised_stalls = 0.0f;
+        uint64_t    id          = 0;
+        uint64_t    line_number = 0;
     };
 
     std::vector<SourceRow> m_lines;
@@ -192,21 +197,105 @@ public:
     void Load(const PcSamplingData& data, uint64_t code_object_uuid);
 
 private:
-    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void RenderLine(uint32_t index, uint32_t column_count);
+    struct StallReason
+    {
+        std::string text;
+        uint64_t    count = 0;
+    };
+
+    struct SampleCounts
+    {
+        uint64_t                total_count = 0;
+        std::optional<uint64_t> issue_count;
+        std::optional<uint64_t> stall_count;
+    };
 
     struct IsaRow
     {
-        std::string instruction;
-        uint64_t    id                  = 0;
-        uint64_t    source_line_id      = 0;
-        uint64_t    source_file_id      = 0;
-        uint64_t    issue_count         = 0;
-        uint64_t    stall_count         = 0;
-        uint64_t    total_count         = 0;
+        std::string              instruction;
+        uint64_t                 id                         = 0;
+        uint64_t                 code_object_offset         = 0;
+        uint64_t                 source_line_id             = 0;
+        uint64_t                 source_file_id             = 0;
+        SampleCounts             sample_counts;
+        uint64_t                 stall_reason_sample_count  = 0;
+        std::vector<StallReason> stall_reasons;
     };
 
+    // Intermediate lookup tables built once per Load and consumed while assembling rows.
+    struct SourceLocation
+    {
+        uint64_t source_line_id = 0;
+        uint64_t source_file_id = 0;
+    };
+
+    struct SampleAggregation
+    {
+        std::unordered_map<uint64_t, SampleCounts>         counts_by_instruction;
+        std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
+        uint64_t                                           kernel_total_samples = 0;
+    };
+
+    using StallReasonCounts = std::unordered_map<uint64_t, uint64_t>;
+    using GroupedStallReasonCounts =
+        std::unordered_map<uint64_t, StallReasonCounts>;
+
+    static const CodeObjectStore* FindCodeObject(const PcSamplingData& data,
+                                                 uint64_t code_object_uuid);
+    static std::unordered_map<uint64_t, SourceLocation>
+        BuildSourceLocations(const PcSamplingData& data);
+    static SampleAggregation AggregateSampleCounts(const PcSamplingData& data);
+    static std::unordered_map<uint64_t, std::string>
+        BuildStallReasonText(const PcSamplingData& data);
+    static GroupedStallReasonCounts
+        BuildStallReasonCounts(const PcSamplingData&            data,
+                               const SampleAggregation&         sample_aggregation,
+                               const std::unordered_map<uint64_t, std::string>&
+                                   reason_text);
+    static GroupedStallReasonCounts
+        GroupStallReasonCountsBySampleState(const PcSamplingData& data);
+    static std::optional<uint64_t>
+        FindOtherWaitLookupUuid(
+            const std::unordered_map<uint64_t, std::string>& reason_text);
+    static uint64_t SumStallReasonCounts(const StallReasonCounts& reason_counts);
+    static void RemoveIssuedSamplesFromOtherWait(
+        const PcSampleState& state, std::optional<uint64_t> other_wait_lookup_uuid,
+        StallReasonCounts& reason_counts);
+    static GroupedStallReasonCounts AggregateStallReasonCountsByInstruction(
+        GroupedStallReasonCounts counts_by_sample_state,
+        const SampleAggregation& sample_aggregation,
+        std::optional<uint64_t>   other_wait_lookup_uuid);
+    static std::vector<StallReason>
+        BuildStallReasons(const StallReasonCounts&                         reason_counts,
+                          const std::unordered_map<uint64_t, std::string>& reason_text,
+                          uint64_t&                                        classified_sample_count);
+    static IsaRow
+        BuildRow(const InstructionLine&                              instruction_line,
+                 const std::unordered_map<uint64_t, SourceLocation>& source_locations,
+                 const SampleAggregation&                            sample_aggregation,
+                 const GroupedStallReasonCounts&                      stall_reason_counts,
+                 const std::unordered_map<uint64_t, std::string>&    stall_reason_text);
+    static std::string
+        ResolveStallReasonText(const std::unordered_map<uint64_t, std::string>& reason_text,
+                               uint64_t                                         lookup_uuid);
+
+    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
+    void RenderLine(uint32_t index);
+
+    static double      CalculatePercentage(uint64_t value, uint64_t total);
+    static ImU32       HeatmapColor(double percent);
+    static std::string FormatSampleCount(uint64_t value);
+    bool               RenderPercentBarCell(double percent);
+    void               RenderSamplesCell(uint64_t sample_count);
+    void               RenderUnavailableStallCell();
+    void               RenderStallReasonsTooltip(const IsaRow& row);
+    void               RenderStallReasonTable(const IsaRow& row);
+
     std::vector<IsaRow> m_entries;
+    uint64_t            m_kernel_total_samples        = 0;
+    uint64_t            m_hottest_instruction_samples = 0;
+    uint64_t            m_largest_code_object_offset  = 0;
+    bool                m_stall_data_available        = false;
 };
 
 }  // namespace View

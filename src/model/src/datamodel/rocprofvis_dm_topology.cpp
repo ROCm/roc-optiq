@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_dm_topology.h"
-#include "rocprofvis_dm_topology.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -397,6 +396,7 @@ rocprofvis_dm_result_t TopologyNodeSystemNode::AddNode(rocprofvis_dm_track_ident
 	if (track_identifiers->category == kRocProfVisDmKernelDispatchTrack || 
 	track_identifiers->category == kRocProfVisDmMemoryAllocationTrack || 
 	track_identifiers->category == kRocProfVisDmMemoryCopyTrack ||
+		track_identifiers->category == kRocProfVisDmHipEventTrack ||
     track_identifiers->category == kRocProfVisDmPmcTrack)
 	{
 			m_children.push_back(std::make_unique<TopologyNodeProcessor>(track_identifiers,this));
@@ -493,6 +493,10 @@ rocprofvis_dm_result_t TopologyNodeProcessor::AddNode(rocprofvis_dm_track_identi
 		{
 			m_children.push_back(std::make_unique<TopologyNodeMemoryCopy>(track_identifiers,  this));
 		} else
+		if (track_identifiers->category == kRocProfVisDmHipEventTrack)
+		{
+			m_children.push_back(std::make_unique<TopologyNodeHipEvent>(track_identifiers,  this));
+		} else
 		if (track_identifiers->category == kRocProfVisDmMemoryAllocationTrack)
 		{
 			m_children.push_back(std::make_unique<TopologyNodeMemoryAllocation>(track_identifiers,  this));
@@ -521,6 +525,7 @@ bool TopologyNodeProcessor::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_ide
 		result =
 			track_identifiers->category == kRocProfVisDmMemoryCopyTrack ||
 			track_identifiers->category == kRocProfVisDmMemoryAllocationTrack ||
+			track_identifiers->category == kRocProfVisDmHipEventTrack ||
 			track_identifiers->category == kRocProfVisDmKernelDispatchTrack ||
 			track_identifiers->category == kRocProfVisDmPmcTrack ||
 			track_identifiers->category == kRocProfVisDmNotATrack;
@@ -879,12 +884,44 @@ rocprofvis_dm_result_t TopologyNodeDownStreamProcessor::AddNode(rocprofvis_dm_tr
 {
 	ROCPROFVIS_ASSERT_MSG_RETURN(track_identifiers, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 	auto it = std::find_if(m_children.begin(), m_children.end(),
-		[track_identifiers, this](std::unique_ptr<TopologyNode>& node) {return node.get()->GetId() == track_identifiers->id[TRACK_ID_QUEUE]; });
+		[track_identifiers, this](std::unique_ptr<TopologyNode>& node) {return node.get()->GetId() == track_identifiers->id[TRACK_ID_QUEUE] 
+		&& ((TopologyNodeDownStreamQueue*)node.get())->GetTrackCategory() == track_identifiers->category; });
 	if (it == m_children.end())
 	{
 		m_children.push_back(std::make_unique<TopologyNodeDownStreamQueue>( track_identifiers,this));
 	}
 	return kRocProfVisDmResultSuccess;
+}
+
+std::string TopologyNodeHipEvent::GetNodeName() {
+	std::string name = "HIP Event ";
+	name += "(";
+	name += std::to_string(m_pid);
+	name += ")";
+	return name;
+}
+
+rocprofvis_dm_result_t TopologyNodeHipEvent::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value) {
+	if (kRPVControllerTopologyNodePropertyValueKeyed == property && kRPVControllerQueueId == index)
+	{
+		rocprofvis_dm_result_t result = TopologyNodeQueue::GetPropertyAsUint64(property, kRPVControllerQueueId, value);
+		*value += kRocProfVisDmHipEventTrack;
+		return result;
+	}
+	else
+	{
+		return TopologyNodeQueue::GetPropertyAsUint64(property, index, value);
+	}
+}
+
+bool TopologyNodeHipEvent::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers)
+{
+	bool result = TopologyNodeQueue::DoesThisNodeMatchIdentifiers(track_identifiers);
+	if (result)
+	{
+		result = track_identifiers->category == kRocProfVisDmHipEventTrack;
+	}
+	return result;
 }
 
 }  // namespace DataModel

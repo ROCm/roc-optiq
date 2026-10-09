@@ -1164,7 +1164,6 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     static char tracks_key[]        = "tracks";
     static char start_key[]         = "start";
     static char end_key[]           = "end";
-    static char where_key[]         = "where";
     static char filter_key[]        = "filter";
     static char group_key[]         = "group";
     static char group_columns_key[] = "group_columns";
@@ -1174,14 +1173,12 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     static char count_key[]         = "count";
     static char type_key[]          = "type";
     static char* keywords[]         = {tracks_key,        start_key,       end_key,
-                               where_key,         filter_key,      group_key,
-                               group_columns_key, sort_column_key, sort_order_key,
-                               start_index_key,   count_key,       type_key,
-                               nullptr};
+                               filter_key,        group_key,       group_columns_key,
+                               sort_column_key,   sort_order_key,  start_index_key,
+                               count_key,         type_key,        nullptr};
     PyObject*    tracks_obj         = Py_None;
     PyObject*    start_obj          = Py_None;
     PyObject*    end_obj            = Py_None;
-    char const*  where_text         = "";
     char const*  filter_text        = "";
     char const*  group_text         = "";
     char const*  group_columns_text = "";
@@ -1190,8 +1187,8 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     unsigned long long start_index  = 0;
     unsigned long long count        = DEFAULT_TABLE_FETCH_COUNT;
     PyObject*          type_obj     = Py_None;
-    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOOzzzzKKKKO:fetch", keywords,
-                                    &tracks_obj, &start_obj, &end_obj, &where_text,
+    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOOzzzKKKKO:fetch", keywords,
+                                    &tracks_obj, &start_obj, &end_obj,
                                     &filter_text, &group_text, &group_columns_text,
                                     &sort_column, &sort_order, &start_index, &count,
                                     &type_obj))
@@ -1276,7 +1273,6 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     const double_arg_t double_args[] = {{kRPVControllerTableArgsStartTime, start},
                                         {kRPVControllerTableArgsEndTime, end}};
     const string_arg_t string_args[] = {
-        {kRPVControllerTableArgsWhere, where_text},
         {kRPVControllerTableArgsFilter, filter_text},
         {kRPVControllerTableArgsGroup, group_text},
         {kRPVControllerTableArgsGroupColumns, group_columns_text}};

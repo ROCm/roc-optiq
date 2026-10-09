@@ -3,7 +3,11 @@
 
 #include "rocprofvis_db_expression_filter.h"
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <algorithm>
+#include <iomanip>
+#include <limits>
 #include <stdexcept>
 #include <regex>
 #include <sstream>
@@ -57,13 +61,75 @@ namespace DataModel
 
     // ---------------- Helpers ----------------
 
-    bool FilterExpression::MatchLike(const std::string& text, const std::string& pattern) {
+    // LIKE compares text, so a number is matched by how it prints: integral values without
+    // a fraction, others at full precision.
+    static std::string like_operand_text(const FilterExpression::Value& value) {
+        if (std::holds_alternative<std::string>(value)) {
+            return std::get<std::string>(value);
+        }
+        double number = std::get<double>(value);
+        std::ostringstream text;
+        if (std::isfinite(number) && std::trunc(number) == number) {
+            text << std::fixed << std::setprecision(0) << number;
+        } else {
+            text << std::setprecision(std::numeric_limits<double>::digits10) << number;
+        }
+        return text.str();
+    }
+
+    // True when the whole of text is a number, which is then written to number.
+    static bool parse_number_text(const std::string& text, double& number) {
+        if (text.empty()) {
+            return false;
+        }
+        char* end = nullptr;
+        number = std::strtod(text.c_str(), &end);
+        return end == text.c_str() + text.size();
+    }
+
+    static bool compare_numbers(FilterExpression::Operator op, double lv, double rv) {
+        switch (op) {
+        case FilterExpression::Operator::Equal: return lv == rv;
+        case FilterExpression::Operator::NotEqual: return lv != rv;
+        case FilterExpression::Operator::Less: return lv < rv;
+        case FilterExpression::Operator::LessEqual: return lv <= rv;
+        case FilterExpression::Operator::Greater: return lv > rv;
+        case FilterExpression::Operator::GreaterEqual: return lv >= rv;
+        default: return false;
+        }
+    }
+
+    static bool compare_text(FilterExpression::Operator op, const std::string& lv, const std::string& rv) {
+        switch (op) {
+        case FilterExpression::Operator::Equal: return lv == rv;
+        case FilterExpression::Operator::NotEqual: return lv != rv;
+        case FilterExpression::Operator::Less: return lv < rv;
+        case FilterExpression::Operator::LessEqual: return lv <= rv;
+        case FilterExpression::Operator::Greater: return lv > rv;
+        case FilterExpression::Operator::GreaterEqual: return lv >= rv;
+        default: return false;
+        }
+    }
+
+    bool FilterExpression::MatchLike(const std::string& text, const std::string& pattern, char escape) {
         std::string regexPattern;
-        for (char c : pattern) {
-            if (c == '%') regexPattern += ".*";
-            else if (c == '_') regexPattern += '.';
-            else if (std::strchr(".^$|()[]*+?\\", c)) { regexPattern += '\\'; regexPattern += c; }
-            else regexPattern += c;
+        for (size_t i = 0; i < pattern.size(); ++i) {
+            char c = pattern[i];
+            bool literal = false;
+            if (escape != 0 && c == escape && i + 1 < pattern.size()) {
+                c = pattern[++i];
+                literal = true;
+            }
+            if (!literal && c == '%') {
+                regexPattern += ".*";
+            } else if (!literal && c == '_') {
+                regexPattern += '.';
+            } else if (std::strchr(".^$|()[]{}*+?\\", c)) {
+                regexPattern += '\\';
+                regexPattern += c;
+            } else {
+                regexPattern += c;
+            }
         }
         return std::regex_match(text, std::regex(regexPattern, std::regex_constants::icase));
     }
@@ -78,42 +144,29 @@ namespace DataModel
             auto rhs = cond->m_rightExpr->Evaluate(row);
 
             if (cond->m_op == Operator::Like) {
-                auto lhs_str = std::get<std::string>(lhs);  
-                auto rhs_str = std::get<std::string>(rhs);   
-                bool result = MatchLike(lhs_str, rhs_str);
+                bool result = MatchLike(like_operand_text(lhs), like_operand_text(rhs), cond->m_escape);
                 if (cond->m_negate)
                     result = !result;
                 return result;
-            } else
-            if (std::holds_alternative<double>(lhs) && std::holds_alternative<double>(rhs))
-            {
-                double lv = std::get<double>(lhs);
-                double rv = std::get<double>(rhs);
-
-                switch (cond->m_op) {
-                case Operator::Equal: return lv == rv;
-                case Operator::NotEqual: return lv != rv;
-                case Operator::Less: return lv < rv;
-                case Operator::LessEqual: return lv <= rv;
-                case Operator::Greater: return lv > rv;
-                case Operator::GreaterEqual: return lv >= rv;
-                default: return false;
-                }
-            } else
-            if (std::holds_alternative<std::string>(lhs) && std::holds_alternative<std::string>(rhs) &&  
-                (cond->m_op == Operator::Equal || cond->m_op == Operator::NotEqual))
-            {
-                auto lhs_str = std::get<std::string>(lhs);  
-                auto rhs_str = std::get<std::string>(rhs);
-                return cond->m_op == Operator::Equal ? lhs_str == rhs_str : lhs_str != rhs_str;
             }
-
-            if (lhs.index() != rhs.index()) {
-
-                return false;
+            if (std::holds_alternative<double>(lhs) && std::holds_alternative<double>(rhs)) {
+                return compare_numbers(cond->m_op, std::get<double>(lhs), std::get<double>(rhs));
             }
-
-
+            if (std::holds_alternative<std::string>(lhs) && std::holds_alternative<std::string>(rhs)) {
+                return compare_text(cond->m_op, std::get<std::string>(lhs), std::get<std::string>(rhs));
+            }
+            // A number against text. Text that reads as a number compares as one, the way SQL
+            // applies numeric affinity. Empty text is a column this row does not have, so it
+            // matches nothing; other text only differs from the number.
+            const std::string& text = std::holds_alternative<std::string>(lhs) ? std::get<std::string>(lhs)
+                                                                               : std::get<std::string>(rhs);
+            double text_number = 0.0;
+            if (parse_number_text(text, text_number)) {
+                double lv = std::holds_alternative<double>(lhs) ? std::get<double>(lhs) : text_number;
+                double rv = std::holds_alternative<double>(rhs) ? std::get<double>(rhs) : text_number;
+                return compare_numbers(cond->m_op, lv, rv);
+            }
+            return !text.empty() && cond->m_op == Operator::NotEqual;
         }
 
         switch (node->m_logic) {
@@ -289,6 +342,23 @@ namespace DataModel
         if (!cond->m_rightExpr)
             throw std::runtime_error("Expected right-hand expression after operator: " + op);
 
+        if (cond->m_op == Operator::Like) {
+            std::string word = tk.GetWord();
+            std::string upper = word;
+            std::transform(upper.begin(), upper.end(), upper.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
+            if (upper == "ESCAPE") {
+                bool empty_string = false;
+                std::string escape = tk.GetStringLiteral(empty_string);
+                if (escape.size() != 1) {
+                    throw std::runtime_error("ESCAPE expects a single character");
+                }
+                cond->m_escape = escape[0];
+            } else {
+                tk.PutBack(word);
+            }
+        }
+
         return cond;
     }
 
@@ -395,7 +465,7 @@ namespace DataModel
         std::string hex = tk.GetHexNumber();
         if (!hex.empty())
         {
-            unsigned long long val = std::stoull(hex, nullptr, 16);
+            unsigned long long val = std::strtoull(hex.c_str(), nullptr, 16);
             auto node = std::make_unique<ExprNode>();
             node->m_type = ExprNode::Type::ConstantNumber;
             node->m_data = static_cast<double>(val);
@@ -408,7 +478,7 @@ namespace DataModel
         {
             auto node = std::make_unique<ExprNode>();
             node->m_type = ExprNode::Type::ConstantNumber;
-            node->m_data = std::stod(num);
+            node->m_data = std::strtod(num.c_str(), nullptr);
             return node;
         }
 
@@ -452,6 +522,8 @@ namespace DataModel
         copy->m_op = cond->m_op;
         copy->m_leftExpr = CopyExprNode(cond->m_leftExpr);
         copy->m_rightExpr = CopyExprNode(cond->m_rightExpr);
+        copy->m_negate = cond->m_negate;
+        copy->m_escape = cond->m_escape;
         return copy;
     }
 

@@ -8,10 +8,13 @@
 #include <algorithm>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cctype>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string.h>
+#include <string>
 #include <vector>
 
 #define MULTI_LINE_LOG_START auto multi_line_log = fmt::memory_buffer()
@@ -222,6 +225,85 @@ DeleteSliceData(rocprofvis_dm_trace_t trace, rocprofvis_dm_timestamp_t start_tim
                                     "deleting slice({1})" ANSI_COLOR_RESET,
                  accessInMillisec, start_time);
     rocprofvis_dm_delete_time_slice(trace, start_time, end_time);
+}
+
+// Runs a built table query and copies the table it produces out as text cells. The
+// table is deleted afterwards so the same query text runs again rather than being
+// answered from the trace's table cache.
+void
+ReadQueryTable(rocprofvis_dm_trace_t trace, rocprofvis_dm_database_t db, const char* query,
+               std::vector<std::string>& columns, std::vector<std::vector<std::string>>& rows)
+{
+    columns.clear();
+    rows.clear();
+    rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+    REQUIRE(nullptr != object2wait);
+    rocprofvis_dm_table_id_t table_id = 0;
+    REQUIRE(kRocProfVisDmResultSuccess ==
+            rocprofvis_db_execute_query_async(db, query, "Filtered table query test",
+                                              object2wait, &table_id));
+    REQUIRE(kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, UINT64_MAX));
+    rocprofvis_dm_table_t table =
+        rocprofvis_dm_get_property_as_handle(trace, kRPVDMTableHandleByID, table_id);
+    REQUIRE(table != nullptr);
+    uint64_t num_columns =
+        rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumnsUInt64, 0);
+    uint64_t num_rows =
+        rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableRowsUInt64, 0);
+    for(uint64_t c = 0; c < num_columns; c++)
+    {
+        const char* name = rocprofvis_dm_get_property_as_charptr(
+            table, kRPVDMExtTableColumnNameCharPtrIndexed, c);
+        columns.push_back(name ? name : "");
+    }
+    for(uint64_t r = 0; r < num_rows; r++)
+    {
+        rocprofvis_dm_table_row_t row =
+            rocprofvis_dm_get_property_as_handle(table, kRPVDMExtTableRowHandleIndexed, r);
+        REQUIRE(row != nullptr);
+        std::vector<std::string> cells;
+        for(uint64_t c = 0; c < num_columns; c++)
+        {
+            const char* cell = rocprofvis_dm_get_property_as_charptr(
+                row, kRPVDMExtTableRowCellValueCharPtrIndexed, c);
+            cells.push_back(cell ? cell : "");
+        }
+        rows.push_back(std::move(cells));
+    }
+    rocprofvis_dm_delete_all_tables(trace);
+    rocprofvis_db_future_free(object2wait);
+}
+
+// Quotes text as a "contains" LIKE pattern, escaping the wildcards so they match
+// themselves, for use with ESCAPE '\'.
+std::string
+ContainsLikeLiteral(const std::string& text)
+{
+    std::string literal = "'%";
+    for(char c : text)
+    {
+        if(c == '\\' || c == '%' || c == '_')
+        {
+            literal += '\\';
+        }
+        if(c == '\'')
+        {
+            literal += '\'';
+        }
+        literal += c;
+    }
+    literal += "%'";
+    return literal;
+}
+
+bool
+ContainsIgnoringCase(std::string text, std::string part)
+{
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(part.begin(), part.end(), part.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return text.find(part) != std::string::npos;
 }
 
 struct RocProfVisDMFixture
@@ -677,7 +759,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                            track_category == rocprofvis_dm_track_category_t::
                                                  kRocProfVisDmMemoryAllocationTrack ||
                            track_category == rocprofvis_dm_track_category_t::
-                                                 kRocProfVisDmMemoryCopyTrack)
+                                                 kRocProfVisDmMemoryCopyTrack ||
+                            track_category == rocprofvis_dm_track_category_t::
+                                                 kRocProfVisDmHipEventTrack)
 
                         {
                             int64_t duration = rocprofvis_dm_get_property_as_int64(
@@ -1138,6 +1222,104 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         }
         free(built_query);
         rocprofvis_db_future_free(object2wait);
+    }
+
+    // Filters dispatch rows and an event search in the table filter language: a
+    // duration bound, a LIKE pattern whose wildcards are escaped, and the two joined
+    // by AND. Every row returned must satisfy the filter it was asked for.
+    // Fixture Reads: m_trace, m_db, m_start_time, m_end_time
+    SECTION("Filtered Table Query")
+    {
+        PrintHeader("Filtered table query");
+        constexpr uint64_t ROW_LIMIT = 50;
+        uint32_t op[1] = { TABLE_QUERY_PACK_OP_TYPE(kRocProfVisDmOperationDispatch) };
+        std::vector<std::string>              columns;
+        std::vector<std::vector<std::string>> rows;
+        auto read_dispatches = [&](const std::string& filter) {
+            char* query = nullptr;
+            REQUIRE(kRocProfVisDmResultSuccess ==
+                    rocprofvis_db_build_table_query(
+                        m_db, kRPVDMTableUseCaseEventTrackTable, m_start_time, m_end_time, 1,
+                        (rocprofvis_db_track_selection_t) op, nullptr, filter.c_str(),
+                        nullptr, nullptr, "duration", kRPVDMSortOrderDesc, ROW_LIMIT, 0,
+                        false, &query));
+            REQUIRE(query != nullptr);
+            ReadQueryTable(m_trace, m_db, query, columns, rows);
+            free(query);
+        };
+        auto column = [&](const char* name) {
+            return static_cast<size_t>(std::find(columns.begin(), columns.end(), name) -
+                                       columns.begin());
+        };
+        auto duration = [&](const std::vector<std::string>& row) {
+            return std::strtod(row[column("duration")].c_str(), nullptr);
+        };
+
+        read_dispatches("");
+        if(rows.empty())
+        {
+            spdlog::info("No dispatches in this trace, nothing to filter");
+        }
+        else
+        {
+            REQUIRE(column("name") < columns.size());
+            REQUIRE(column("duration") < columns.size());
+            const std::string kernel = rows[0][column("name")];
+            const uint64_t threshold = static_cast<uint64_t>(duration(rows[rows.size() / 2]));
+
+            const std::string duration_filter = "duration >= " + std::to_string(threshold);
+            read_dispatches(duration_filter);
+            REQUIRE_FALSE(rows.empty());
+            for(const std::vector<std::string>& row : rows)
+            {
+                REQUIRE(duration(row) >= static_cast<double>(threshold));
+            }
+
+            const std::string name_filter =
+                "name LIKE " + ContainsLikeLiteral(kernel) + " ESCAPE '\\'";
+            read_dispatches(name_filter);
+            REQUIRE_FALSE(rows.empty());
+            for(const std::vector<std::string>& row : rows)
+            {
+                REQUIRE(ContainsIgnoringCase(row[column("name")], kernel));
+            }
+
+            // The condition after the ESCAPE clause has to apply too.
+            const uint64_t longest = static_cast<uint64_t>(duration(rows[0]));
+            read_dispatches(name_filter + " AND duration >= " + std::to_string(longest));
+            REQUIRE_FALSE(rows.empty());
+            for(const std::vector<std::string>& row : rows)
+            {
+                REQUIRE(ContainsIgnoringCase(row[column("name")], kernel));
+                REQUIRE(duration(row) >= static_cast<double>(longest));
+            }
+
+            const char* terms[1]     = { kernel.c_str() };
+            char*       search_query = nullptr;
+            REQUIRE(kRocProfVisDmResultSuccess ==
+                    rocprofvis_db_build_event_search_query(
+                        m_db, m_start_time, m_end_time, 1, (rocprofvis_db_track_selection_t) op,
+                        nullptr, duration_filter.c_str(), 1, terms, true, false, false,
+                        "duration", kRPVDMSortOrderDesc, ROW_LIMIT, 0, false, &search_query));
+            REQUIRE(search_query != nullptr);
+            if(strlen(search_query) > 0)
+            {
+                ReadQueryTable(m_trace, m_db, search_query, columns, rows);
+                spdlog::info(ANSI_COLOR_GREEN "Filtered event search returned {} rows",
+                             rows.size());
+                REQUIRE_FALSE(rows.empty());
+                REQUIRE(column("duration") < columns.size());
+                for(const std::vector<std::string>& row : rows)
+                {
+                    REQUIRE(duration(row) >= static_cast<double>(threshold));
+                }
+            }
+            else
+            {
+                spdlog::info("This database builds no event search query, skipping it");
+            }
+            free(search_query);
+        }
     }
 
     // Builds a structured table query, exports the result to a temporary CSV file

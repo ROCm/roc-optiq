@@ -724,6 +724,16 @@ ScriptEditor::WriteFile(const std::string& path)
         return;
     }
     file.write(m_source.data(), static_cast<std::streamsize>(m_source.size()));
+    // Close explicitly and check: a buffered write can fail on flush (e.g. a
+    // full disk), which is_open() cannot catch, so do not report "Saved" blindly.
+    file.close();
+    if(file.fail())
+    {
+        m_status = "Could not write file";
+        NotificationManager::GetInstance().Show("Failed to write " + path,
+                                                NotificationLevel::Error);
+        return;
+    }
     m_file_path = path;
     m_status    = "Saved";
 }

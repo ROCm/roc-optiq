@@ -1,39 +1,27 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "glfw_util.h"
+#include "rocprofvis_glfw_util.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
+#include "rocprofvis_app_shell.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_imgui_backend.h"
 #define GLFW_INCLUDE_NONE
 #include "AMD_LOGO.h"
 #include "rocprofvis_cli_parser.h"
-#include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #if defined(__APPLE__) || defined(__linux__)
 #include "rocprofvis_platform_helpers.h"
 #endif
 #include <GLFW/glfw3.h>
-#include <algorithm>
-#include <cmath>
-#include <filesystem>
-#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
 #    include <unordered_map>
 #endif
-
-const char* APP_NAME = "ROCm(TM) Optiq";
-
-// globals shared with callbacks
-static std::vector<std::string>         g_dropped_file_paths;
-static bool                             g_file_was_dropped = false;
-static rocprofvis_view_render_options_t g_render_options =
-    rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
 // Per-frame snapshot of the "intended" (drag-target) position that
@@ -44,181 +32,15 @@ static rocprofvis_view_render_options_t g_render_options =
 static std::unordered_map<ImGuiID, ImVec2> g_viewport_intended_pos;
 #endif
 
-// Fullscreen state (initialized after window creation)
-static RocProfVis::View::FullscreenState g_fullscreen_state = {};
-
-#ifndef __APPLE__
-// Set by F11 or by the View's fullscreen menu item, and applied once at the end
-// of the frame. Resizing the window part-way through a frame would leave the
-// already-built draw data describing the previous size.
-static bool g_toggle_fullscreen_requested = false;
-#endif
-
-// Lazy rendering: after each OS event render a few frames so animations and the
-// deferred event dispatch settle, then sleep until the next event when idle.
-static int       g_frames_to_render        = 1;
-constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
-constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
-
-#ifdef __linux__
-// GLFW's X11 backend takes the content scale from the global Xft.dpi resource,
-// which GNOME leaves at 96 for XWayland clients however it scales each monitor.
-// Fall back to the monitor's physical DPI so ImGui's DPI font scaling has a
-// truthful value to work with.
-static float
-get_content_scale(GLFWwindow* window)
-{
-    constexpr float BASE_DPI    = 96.0f;
-    constexpr float MM_PER_INCH = 25.4f;
-    // Bias so a monitor slightly denser than a whole step still snaps up to it.
-    constexpr float SNAP_BIAS = 0.25f;
-
-    float scale  = 1.0f;
-    float yscale = 1.0f;
-    glfwGetWindowContentScale(window, &scale, &yscale);
-
-    if(scale <= 1.0f)
-    {
-        GLFWmonitor* monitor = RocProfVis::View::get_current_monitor(window);
-        if(monitor != nullptr)
-        {
-            const GLFWvidmode* mode      = glfwGetVideoMode(monitor);
-            int                width_mm  = 0;
-            int                height_mm = 0;
-            glfwGetMonitorPhysicalSize(monitor, &width_mm, &height_mm);
-
-            if(mode != nullptr && width_mm > 0)
-            {
-                const float dpi = (static_cast<float>(mode->width) * MM_PER_INCH) /
-                                  static_cast<float>(width_mm);
-                scale = std::floor(dpi / BASE_DPI + SNAP_BIAS);
-            }
-        }
-    }
-
-    return std::max(scale, 1.0f);
-}
-#endif
-
-static void
-drop_callback(GLFWwindow* window, int count, const char* paths[])
-{
-    (void) window;  // Unused parameter
-    g_dropped_file_paths.clear();
-    for(int i = 0; i < count; i++)
-    {
-        g_dropped_file_paths.push_back(paths[i]);
-    }
-    g_file_was_dropped = true;
-}
-
-static void
-close_callback(GLFWwindow* window)
-{
-    g_render_options =
-        rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit;
-    glfwSetWindowShouldClose(window, GLFW_FALSE);
-}
-
-static void
-app_notification_callback(GLFWwindow* window, int notification)
-{
-    if(notification ==
-       static_cast<int>(
-           rocprofvis_view_notification_t::kRocProfVisViewNotification_Exit_App))
-    {
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-#ifndef __APPLE__
-    else if(notification ==
-            static_cast<int>(rocprofvis_view_notification_t::
-                                 kRocProfVisViewNotification_Toggle_Fullscreen))
-    {
-        g_toggle_fullscreen_requested = true;
-    }
-#endif
-}
-
-static void
-window_size_change_callback(GLFWwindow* window, int width, int height)
-{
-    RocProfVis::View::sync_fullscreen_state(window, width, height, g_fullscreen_state);
-}
-
-static void
-glfw_error_callback(int error, const char* description)
-{
-    spdlog::error("GLFW Error {}: {}", error, description);
-}
-
-#ifdef __APPLE__
-// Reconcile ImGui's modifier state with the live OS modifier state.
-//
-// macOS system gestures (e.g. Mission Control via Ctrl+Up while dragging the
-// window to a new Space) can consume the modifier key-up before GLFW sees it,
-// leaving GLFW's cached key state stuck "down". Because ImGui enables
-// ConfigMacOSXBehaviors on macOS, a stuck Control key makes ImGui translate
-// every left-click into a right-click, so buttons and menus stop responding.
-// Feeding the true OS state back into ImGui clears the phantom modifier.
-static void
-sync_imgui_modifiers_with_os()
-{
-    ImGuiIO&                            io = ImGui::GetIO();
-    RocProfVis::Platform::ModifierState m  = RocProfVis::Platform::get_os_modifier_state();
-
-    io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
-    io.AddKeyEvent(ImGuiMod_Shift, m.shift);
-    io.AddKeyEvent(ImGuiMod_Alt, m.alt);
-    io.AddKeyEvent(ImGuiMod_Super, m.super);
-
-    if(!m.ctrl)
-    {
-        io.AddKeyEvent(ImGuiKey_LeftCtrl, false);
-        io.AddKeyEvent(ImGuiKey_RightCtrl, false);
-    }
-    if(!m.shift)
-    {
-        io.AddKeyEvent(ImGuiKey_LeftShift, false);
-        io.AddKeyEvent(ImGuiKey_RightShift, false);
-    }
-    if(!m.alt)
-    {
-        io.AddKeyEvent(ImGuiKey_LeftAlt, false);
-        io.AddKeyEvent(ImGuiKey_RightAlt, false);
-    }
-    if(!m.super)
-    {
-        io.AddKeyEvent(ImGuiKey_LeftSuper, false);
-        io.AddKeyEvent(ImGuiKey_RightSuper, false);
-    }
-}
-
-// Replaces the ImGui GLFW backend's mouse-button callback on macOS so the
-// modifier state is corrected from the OS *before* the click is queued. This
-// guarantees a phantom-stuck Control key cannot turn a left-click into a
-// right-click for the very click that exposes the problem.
-static void
-mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
-{
-    (void) window;
-    (void) mods;
-
-    sync_imgui_modifiers_with_os();
-
-    ImGuiIO& io = ImGui::GetIO();
-    if(button >= 0 && button < ImGuiMouseButton_COUNT)
-    {
-        io.AddMouseButtonEvent(button, action == GLFW_PRESS);
-    }
-}
-#endif
+// Frames left to render before the loop may sleep; see RENDER_FRAMES_AFTER_INPUT.
+static int g_frames_to_render = 1;
 
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
 // Resolve the post-drag click-through workaround from the stored preference,
 // updating it first when --drag-repair was passed. Must run after the view is
 // initialized, because that is what loads the settings file.
 static void
-configure_drag_repair(RocProfVis::View::CLIParser& cli_parser)
+configure_drag_repair(RocProfVis::App::CLIParser& cli_parser)
 {
     if(cli_parser.WasOptionFound("drag-repair"))
     {
@@ -243,29 +65,10 @@ configure_drag_repair(RocProfVis::View::CLIParser& cli_parser)
 #endif
 
 static void
-print_version()
-{
-    std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
-              << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
-              << ROCPROFVIS_VERSION_BUILD << std::endl;
-}
-
-static void
-parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_parser,
+parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_parser,
                         bool& exit_app)
 {
-    cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
-    bool result = true;
-    result &= cli_parser.AddOption("v", "version", "Print version and exit", false);
-    result &= cli_parser.AddOption("f", "file", "Open a trace or project file", true);
-    result &= cli_parser.AddOption(
-        "b", "backend",
-        "Set rendering backend: 'auto' (default), 'vulkan', or 'opengl'", true);
-    result &= cli_parser.AddOption(
-        "d", "file-dialog",
-        "Set file dialog backend: 'auto' (default), 'native' (system file "
-        "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
-        true);
+    bool result = RocProfVis::App::add_common_cli_options(cli_parser);
 // The workaround only has anything to repair when panels can be dragged into
 // their own OS window, so the option is absent from a build without it.
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
@@ -277,36 +80,10 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         "passed when changing it (default: off)",
         true);
 #endif
-    result &= cli_parser.AddOption("h", "help",
-        "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
-
-    if(cli_parser.WasOptionFound("help"))
-    {
-        std::cout << cli_parser.GetHelp() << std::endl;
-        exit_app = true;
-    }
-
-    if(!exit_app && cli_parser.WasOptionFound("version"))
-    {
-        print_version();
-
-        if(cli_parser.GetOptionCount() == 1)
-        {
-            exit_app = true;
-        }
-    }
-
-    if(exit_app)
-    {
-        std::cout.flush();
-        std::cerr.flush();
-        fflush(stdout);
-        fflush(stderr);
-    }
- 
+    RocProfVis::App::handle_help_and_version(cli_parser, exit_app);
 }
 
 int
@@ -316,80 +93,30 @@ main(int argc, char** argv)
 
     // Enable logging before parsing arguments so diagnostics emitted while
     // handling CLI options reach the log file.
-    std::string log_dir = rocprofvis_get_application_log_path();
-#ifndef NDEBUG
-    std::filesystem::path log_path =
-        std::filesystem::path(log_dir) / "roc-optiq.debug.log";
-    rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
-#else
-    std::filesystem::path log_path =
-        std::filesystem::path(log_dir) / "roc-optiq.log";
-    rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
-#endif
+    RocProfVis::App::enable_application_log();
 
-    RocProfVis::View::CLIParser::AttachToConsole();
-    RocProfVis::View::CLIParser cli_parser;
-    bool                        exit_app = false;
+    RocProfVis::App::CLIParser::AttachToConsole();
+    RocProfVis::App::CLIParser cli_parser;
+    bool                       exit_app = false;
     parse_command_line_args(argc, argv, cli_parser, exit_app);
     if(exit_app)
     {
         return app_result_code;
     }
 
-    // Parse backend preference from command line
-    rocprofvis_imgui_backend_preference_t backend_pref = kRPVBackendAuto;
-    if(cli_parser.WasOptionFound("backend"))
+    rocprofvis_imgui_backend_preference_t    backend_pref = kRPVBackendAuto;
+    rocprofvis_view_file_dialog_preference_t fd_pref      = kRocProfVisViewFileDialog_Auto;
+    if(!RocProfVis::App::parse_backend_preference(cli_parser, backend_pref) ||
+       !RocProfVis::App::parse_file_dialog_preference(cli_parser, fd_pref))
     {
-        std::string backend_str = cli_parser.GetOptionValue("backend");
-        if(backend_str == "auto")
-        {
-            backend_pref = kRPVBackendAuto;
-        }
-        else if(backend_str == "vulkan")
-        {
-            backend_pref = kRPVBackendForceVulkan;
-        }
-        else if(backend_str == "opengl")
-        {
-            backend_pref = kRPVBackendForceOpenGL;
-        }
-        else
-        {
-            spdlog::error("Invalid backend '{}'. Valid options: auto, vulkan, opengl", backend_str);
-            return 1;
-        }
-    }
-
-    rocprofvis_view_file_dialog_preference_t fd_pref = kRocProfVisViewFileDialog_Auto;
-    if(cli_parser.WasOptionFound("file-dialog"))
-    {
-        std::string fd_str = cli_parser.GetOptionValue("file-dialog");
-        if(fd_str == "auto")
-        {
-            fd_pref = kRocProfVisViewFileDialog_Auto;
-        }
-        else if(fd_str == "native")
-        {
-            fd_pref = kRocProfVisViewFileDialog_Native;
-        }
-        else if(fd_str == "imgui")
-        {
-            fd_pref = kRocProfVisViewFileDialog_ImGui;
-        }
-        else
-        {
-            spdlog::error("Invalid --file-dialog '{}'. Valid options: auto, "
-                          "native, imgui",
-                          fd_str);
-            return 1;
-        }
+        return 1;
     }
 
 #ifdef __APPLE__
     RocProfVis::Platform::configure_bundled_vulkan_icd();
 #endif
 
-    glfwSetErrorCallback(glfw_error_callback);
+    glfwSetErrorCallback(RocProfVis::App::glfw_error_callback);
 #ifdef __linux__
     // Force X11 on Linux for multi-viewport and window positioning support
     // Wayland does not support window positioning which is required for ImGui viewports
@@ -403,27 +130,26 @@ main(int argc, char** argv)
 #if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #endif
-        GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
-                                              RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
-                                              APP_NAME, nullptr, nullptr);
+        GLFWwindow* window =
+            glfwCreateWindow(RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
+                             RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,
+                             RocProfVis::App::APP_NAME, nullptr, nullptr);
         rocprofvis_imgui_backend_t backend;
 
-        if(window && rocprofvis_imgui_backend_setup_with_fallback(&backend, &window,
-                                                                  RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
-                                                                  RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
-                                                                  APP_NAME,
-                                                                  backend_pref))
+        if(window && rocprofvis_imgui_backend_setup_with_fallback(
+                         &backend, &window, RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
+                         RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,
+                         RocProfVis::App::APP_NAME, backend_pref))
         {
-            RocProfVis::View::CLIParser::DetachFromConsole();
+            RocProfVis::App::CLIParser::DetachFromConsole();
 
             if(rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
-                   &backend, &window, RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
-                   RocProfVis::View::DEFAULT_WINDOWED_HEIGHT, APP_NAME, backend_pref))
+                   &backend, &window, RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
+                   RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,
+                   RocProfVis::App::APP_NAME, backend_pref))
             {
                 // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
-                glfwSetDropCallback(window, drop_callback);
-                glfwSetWindowCloseCallback(window, close_callback);
-                glfwSetWindowSizeCallback(window, window_size_change_callback);
+                RocProfVis::App::install_window_callbacks(window);
 
 #ifdef ROCPROFVIS_MULTI_WINDOW
                 // A fullscreen GLFW window iconifies itself whenever it loses
@@ -438,14 +164,18 @@ main(int argc, char** argv)
 #ifdef __linux__
                 // GLFW_SCALE_TO_MONITOR sized the window using the scale GLFW
                 // knew about, so redo it with the corrected one.
-                const float initial_scale = get_content_scale(window);
+                const float initial_scale =
+                    RocProfVis::Platform::get_content_scale(window);
                 glfwSetWindowSize(
                     window,
-                    static_cast<int>(RocProfVis::View::DEFAULT_WINDOWED_WIDTH * initial_scale),
-                    static_cast<int>(RocProfVis::View::DEFAULT_WINDOWED_HEIGHT * initial_scale));
+                    static_cast<int>(RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH *
+                                     initial_scale),
+                    static_cast<int>(RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT *
+                                     initial_scale));
 #endif
 
-                RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
+                RocProfVis::Platform::init_fullscreen_state(
+                    window, RocProfVis::App::app_fullscreen_state());
                 glfwShowWindow(window);
 
                 IMGUI_CHECKVERSION();
@@ -471,9 +201,11 @@ main(int argc, char** argv)
 
                 ImGui::StyleColorsLight();
 
-                rocprofvis_view_init([window](int notification) -> void {
-                    app_notification_callback(window, notification);
-                }, fd_pref);
+                rocprofvis_view_init(
+                    [window](int notification) -> void {
+                        RocProfVis::App::app_notification_callback(window, notification);
+                    },
+                    fd_pref);
 
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
                 configure_drag_repair(cli_parser);
@@ -483,7 +215,8 @@ main(int argc, char** argv)
 #ifdef __APPLE__
                 // Install after m_config so this overrides the ImGui GLFW
                 // backend's own mouse-button callback (set during m_config).
-                glfwSetMouseButtonCallback(window, mouse_button_callback);
+                glfwSetMouseButtonCallback(window,
+                                           RocProfVis::App::mouse_button_callback);
 #endif
                 rocprofvis_view_set_texture_backend(
                     rocprofvis_imgui_backend_create_gui_texture_rgba32,
@@ -510,18 +243,13 @@ main(int argc, char** argv)
 
                 while(!glfwWindowShouldClose(window))
                 {
-                    // handle dropped file signal flag from callback
-                    if(g_file_was_dropped)
-                    {
-                        rocprofvis_view_open_files(g_dropped_file_paths);
-                        g_file_was_dropped = false;
-                    }
+                    RocProfVis::App::open_dropped_files();
 
                     // Async work/animation in flight: refill the budget so the
                     // settle tail also covers the final frames after it finishes.
                     if(rocprofvis_view_wants_continuous_render())
                     {
-                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                        g_frames_to_render = RocProfVis::App::RENDER_FRAMES_AFTER_INPUT;
                     }
 
                     if(g_frames_to_render > 0)
@@ -535,19 +263,19 @@ main(int argc, char** argv)
                         // Idle: sleep until an OS event or a short timeout, then
                         // render a few frames. The timeout lets pending
                         // multi-frame layout settle without user input.
-                        glfwWaitEventsTimeout(IDLE_WAIT_TIMEOUT_SECONDS);
-                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                        glfwWaitEventsTimeout(RocProfVis::App::IDLE_WAIT_TIMEOUT_SECONDS);
+                        g_frames_to_render = RocProfVis::App::RENDER_FRAMES_AFTER_INPUT;
                     }
 
                     // Correct the windowed geometry if the window manager did
                     // not honour the one requested when fullscreen was left.
-                    RocProfVis::View::settle_windowed_geometry(window,
-                                                               g_fullscreen_state);
+                    RocProfVis::Platform::settle_windowed_geometry(
+                        window, RocProfVis::App::app_fullscreen_state());
 
 #ifdef __APPLE__
                     // Clear any phantom-stuck modifier (e.g. Control left down
                     // after a Mission Control gesture) before the frame renders.
-                    sync_imgui_modifiers_with_os();
+                    RocProfVis::App::sync_imgui_modifiers_with_os();
 #endif
 
                     // Handle changes in the frame buffer size
@@ -570,7 +298,8 @@ main(int argc, char** argv)
 #ifdef __linux__
                     // Re-read every frame so moving the window between monitors
                     // of different density rescales the UI.
-                    ImGui::GetStyle().FontScaleDpi = get_content_scale(window);
+                    ImGui::GetStyle().FontScaleDpi =
+                        RocProfVis::Platform::get_content_scale(window);
 #endif
 
                     backend.m_new_frame(&backend);
@@ -599,13 +328,11 @@ main(int argc, char** argv)
                     // panel in its own OS window holds focus.
                     if(ImGui::IsKeyPressed(ImGuiKey_F11, false))
                     {
-                        g_toggle_fullscreen_requested = true;
+                        RocProfVis::App::request_fullscreen_toggle();
                     }
 #endif
 
-                    rocprofvis_view_render(g_render_options);
-                    g_render_options = rocprofvis_view_render_options_t::
-                        kRocProfVisViewRenderOption_None;
+                    rocprofvis_view_render(RocProfVis::App::take_render_options());
 
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();
@@ -643,11 +370,9 @@ main(int argc, char** argv)
                     // Applied here so the window is never resized part-way
                     // through a frame, whether the request came from F11 or from
                     // the View's fullscreen menu item.
-                    if(g_toggle_fullscreen_requested)
+                    if(RocProfVis::App::apply_fullscreen_toggle_request(window))
                     {
-                        g_toggle_fullscreen_requested = false;
-                        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
-                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                        g_frames_to_render = RocProfVis::App::RENDER_FRAMES_AFTER_INPUT;
                     }
 #endif
 

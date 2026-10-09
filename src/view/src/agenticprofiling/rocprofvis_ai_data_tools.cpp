@@ -520,6 +520,40 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
     return TrimResult(out.str());
 }
 
+// For an empty read, names the filter columns the table does not have. Such a
+// filter matches nothing, which would otherwise read as no row qualifying.
+std::string
+MissingFilterColumnsNote(const TablesModel& tables, TableType type,
+                         const std::vector<std::string>& filter_columns)
+{
+    const std::vector<std::string>& header = tables.GetTableHeader(type);
+    if(filter_columns.empty() || header.empty() || !tables.GetTableData(type).empty())
+    {
+        return std::string();
+    }
+    std::vector<std::string> missing;
+    for(const std::string& column : filter_columns)
+    {
+        if(std::find(header.begin(), header.end(), column) == header.end() &&
+           std::find(missing.begin(), missing.end(), column) == missing.end())
+        {
+            missing.push_back(column);
+        }
+    }
+    if(missing.empty())
+    {
+        return std::string();
+    }
+    std::ostringstream out;
+    out << "\nNo rows matched because this table has no ";
+    for(size_t i = 0; i < missing.size(); ++i)
+    {
+        out << (i == 0 ? "" : i + 1 == missing.size() ? " or " : ", ") << missing[i];
+    }
+    out << " column. Filter on a column listed above instead.";
+    return out.str();
+}
+
 // Names a track type for the model, using the same words the UI does.
 const char*
 TrackTypeName(TrackInfo::TrackType type)
@@ -1341,7 +1375,7 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
     }
 
     std::string       query_error;
-    const std::string where    = BuildAssistantWhereClause(args, query_error);
+    const std::string filter   = BuildAssistantFilterExpression(args, query_error);
     const std::string group_by = AssistantGroupByFromArgs(args, query_error);
     if(!query_error.empty())
     {
@@ -1365,7 +1399,7 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
-            spec->controller_type, tracks, start_ns, end_ns, where.c_str(), "",
+            spec->controller_type, tracks, start_ns, end_ns, nullptr, filter.c_str(),
             group_by.c_str(), "", OffsetFromArgs(args),
             static_cast<uint64_t>(limit),
             ResolveAssistantSortColumnNamed(
@@ -1388,7 +1422,7 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     const size_t limit = RowLimitFromArgs(args);
 
     std::string       query_error;
-    const std::string where = BuildAssistantWhereClause(args, query_error);
+    const std::string filter = BuildAssistantFilterExpression(args, query_error);
     if(!query_error.empty())
     {
         return DoneResult(query_error, "Bad query argument");
@@ -1407,9 +1441,10 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
 
     const uint64_t request_id =
         DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
-    const AssistantFetchState fetch = TableFetch(
+    AssistantFetchState fetch = TableFetch(
         AssistantFetchKind::kKernelInstances, TableType::kAssistantSummaryKernelTable,
         limit);
+    fetch.filter_columns = AssistantFilterColumns(args);
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1417,30 +1452,30 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
-        EventSearchRequestParams(
-            kRPVControllerTableTypeSummaryKernelInstances,
-            // The true is include_substrings. Exact-match could not find a real
-            // dispatch: the stored name is the full mangled signature, so
-            // anything short of the whole
-            // "ncclDevKernel_Generic(ncclDevKernelArgsStorage<4096ul>)" matched
-            // nothing and came back as bare column headers with no rows. The
-            // schema already promises "exact or unique kernel name"; this is
-            // what makes the second half of that true.
-            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), true,
-            false, false, { kernel_name }, OffsetFromArgs(args),
-            static_cast<uint64_t>(limit),
-            // Slowest first, like top_events. This tool is nearly always asked
-            // "which run of this kernel was the bad one", and the row the model
-            // points the user at is whichever comes back first - so a default
-            // of column 0 ascending handed back an instance picked by name or
-            // id, with no relation to duration, while the model described it as
-            // the outlier.
-            ResolveAssistantSortColumnNamed(
-                tables, TableType::kAssistantSummaryKernelTable,
-                JsonUtils::GetString(args, "sort_by", ""), "duration",
-                ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN),
-            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending))));
+    EventSearchRequestParams params(
+        kRPVControllerTableTypeSummaryKernelInstances,
+        // The true is include_substrings. Exact-match could not find a real
+        // dispatch: the stored name is the full mangled signature, so
+        // anything short of the whole
+        // "ncclDevKernel_Generic(ncclDevKernelArgsStorage<4096ul>)" matched
+        // nothing and came back as bare column headers with no rows. The
+        // schema already promises "exact or unique kernel name"; this is
+        // what makes the second half of that true.
+        { kRocProfVisDmOperationDispatch }, start_ns, end_ns, nullptr, true, false,
+        false, { kernel_name }, OffsetFromArgs(args), static_cast<uint64_t>(limit),
+        // Slowest first, like top_events. This tool is nearly always asked
+        // "which run of this kernel was the bad one", and the row the model
+        // points the user at is whichever comes back first - so a default
+        // of column 0 ascending handed back an instance picked by name or
+        // id, with no relation to duration, while the model described it as
+        // the outlier.
+        ResolveAssistantSortColumnNamed(
+            tables, TableType::kAssistantSummaryKernelTable,
+            JsonUtils::GetString(args, "sort_by", ""), "duration",
+            ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN),
+        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending));
+    params.m_filter   = filter;
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1525,7 +1560,7 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     }
 
     std::string       query_error;
-    const std::string where    = BuildAssistantWhereClause(args, query_error);
+    const std::string filter   = BuildAssistantFilterExpression(args, query_error);
     const std::string group_by = AssistantGroupByFromArgs(args, query_error);
     if(!query_error.empty())
     {
@@ -1537,8 +1572,11 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns);
 
-    const AssistantFetchState fetch =
-        TableFetch(AssistantFetchKind::kDataTable, type, limit);
+    AssistantFetchState fetch = TableFetch(AssistantFetchKind::kDataTable, type, limit);
+    if(group_by.empty())
+    {
+        fetch.filter_columns = AssistantFilterColumns(args);
+    }
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1549,7 +1587,7 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
             events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
-            tracks, start_ns, end_ns, where.c_str(), "", group_by.c_str(), "",
+            tracks, start_ns, end_ns, nullptr, filter.c_str(), group_by.c_str(), "",
             OffsetFromArgs(args), static_cast<uint64_t>(limit),
             // Ask for the column by name, keeping the index only for the first
             // query of a session, before any header has been read. "id" is
@@ -1731,7 +1769,7 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
         JsonUtils::GetBool(args, "include_category", false);
 
     std::string       query_error;
-    const std::string where = BuildAssistantWhereClause(args, query_error);
+    const std::string filter = BuildAssistantFilterExpression(args, query_error);
     if(!query_error.empty())
     {
         return DoneResult(query_error, "Bad query argument");
@@ -1742,9 +1780,10 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns, false);
 
-    const uint64_t            request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
-    const AssistantFetchState fetch = TableFetch(
+    const uint64_t      request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    AssistantFetchState fetch      = TableFetch(
         AssistantFetchKind::kDataTable, TableType::kAssistantSearchTable, limit);
+    fetch.filter_columns = AssistantFilterColumns(args);
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1752,17 +1791,18 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
-        EventSearchRequestParams(
-            kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, where.c_str(),
-            contains, include_category, any_term, terms, OffsetFromArgs(args),
-            static_cast<uint64_t>(limit),
-            // "__uuid" is column 1 of the search table today - see the note on
-            // track rows for why the name leads and the index only trails.
-            ResolveAssistantSortColumnNamed(tables, TableType::kAssistantSearchTable,
-                                            JsonUtils::GetString(args, "sort_by", ""),
-                                            "__uuid", 1),
-            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
+    EventSearchRequestParams params(
+        kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, nullptr, contains,
+        include_category, any_term, terms, OffsetFromArgs(args),
+        static_cast<uint64_t>(limit),
+        // "__uuid" is column 1 of the search table today - see the note on
+        // track rows for why the name leads and the index only trails.
+        ResolveAssistantSortColumnNamed(tables, TableType::kAssistantSearchTable,
+                                        JsonUtils::GetString(args, "sort_by", ""),
+                                        "__uuid", 1),
+        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending));
+    params.m_filter   = filter;
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1823,8 +1863,9 @@ FinishAssistantFetch(const AssistantToolContext& context,
     if(fetch.kind == AssistantFetchKind::kKernelInstances ||
        fetch.kind == AssistantFetchKind::kDataTable)
     {
-        return FormatTableSnapshot(context.data_provider->DataModel().GetTables(),
-                                   fetch.table_type, limit);
+        const TablesModel& tables = context.data_provider->DataModel().GetTables();
+        return FormatTableSnapshot(tables, fetch.table_type, limit) +
+               MissingFilterColumnsNote(tables, fetch.table_type, fetch.filter_columns);
     }
     if(fetch.kind == AssistantFetchKind::kEventDetails)
     {

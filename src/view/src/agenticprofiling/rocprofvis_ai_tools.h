@@ -4,8 +4,8 @@
 #pragma once
 
 // The tool set is described in rocprofvis_ai_tool_schema.h and the query
-// arguments are turned into SQL in rocprofvis_ai_tool_query.h; this header is
-// the executor that sits between them.
+// arguments are turned into table filters in rocprofvis_ai_tool_query.h; this
+// header is the executor that sits between them.
 #include "json.h"
 #include "model/rocprofvis_common_defs.h"
 #include "model/rocprofvis_tables_model.h"
@@ -98,6 +98,9 @@ struct AssistantFetchState
     uint64_t           event_id    = 0;
     uint64_t           track_id    = 0;
     size_t             row_limit   = ASSISTANT_DEFAULT_ROW_LIMIT;
+    // Columns the filters of an ungrouped read named. A filter on a column the
+    // table does not have matches nothing, so an empty result names them.
+    std::vector<std::string> filter_columns;
 };
 
 // What one tool call produced: either finished content, or a set of requests

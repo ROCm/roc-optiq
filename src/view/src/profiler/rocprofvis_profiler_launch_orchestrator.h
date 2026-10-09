@@ -82,12 +82,14 @@ public:
     void Cancel();
 
     // Tears down all run state (sessions, futures) and resets to Idle. The
-    // orchestrator is reusable afterward.
+    // orchestrator is reusable afterward. Hiding the launcher does not call
+    // this: a finished run stays so the dialog can offer "View Last Run".
     void Close();
 
     // Per-frame pump. Drives the remote phase machine, pulls streamed output,
-    // and normalizes the run state. Must be called once per frame while the
-    // owning view is active.
+    // and normalizes the run state. AppWindow calls this every frame for as
+    // long as the dialog object exists, including while the window is hidden,
+    // so a capture that outlives the UI still settles and can auto-load.
     void Update();
 
     // --- Normalized, presentation-agnostic run state ------------------------

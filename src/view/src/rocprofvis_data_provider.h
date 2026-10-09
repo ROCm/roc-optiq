@@ -69,6 +69,7 @@ public:
     static const uint64_t ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
+    static const uint64_t ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_ISA_REQUEST_ID;
@@ -447,6 +448,7 @@ private:
 #endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);
+    inline void LoadAnalysisInfo();
     inline void LoadWorkload(uint64_t workload_index);
     inline void LoadSystemInfo(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);
@@ -476,6 +478,10 @@ private:
         KernelInfo& kernel, rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingStates(KernelInfo&          kernel,
                                      rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingStallReasons(KernelInfo&          kernel,
+                                           rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingStallReasonLookups(KernelInfo&          kernel,
+                                                 rocprofvis_handle_t* pc_handle);
     inline void LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle);
 
     using compute_ridge_map = std::unordered_map<

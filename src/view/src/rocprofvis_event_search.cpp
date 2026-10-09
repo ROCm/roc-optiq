@@ -546,7 +546,8 @@ EventSearch::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) cons
                                                   kRocProfVisDmOperationDispatch,
                                                   kRocProfVisDmOperationMemoryCopy,
                                                   kRocProfVisDmOperationMemoryAllocate,
-                                                  kRocProfVisDmOperationLaunchSample };
+                                                  kRocProfVisDmOperationLaunchSample,
+                                                  kRocProfVisDmOperationHipEvent};
         search_params->m_string_table_filters = m_terms;
         search_params->m_include_substrings   = m_include_substrings;
         search_params->m_include_category     = m_include_category;

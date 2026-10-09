@@ -36,7 +36,6 @@ void SystemTable::Reset()
     m_end_ts = 0;
     m_use_case = kRPVDMTableUseCaseEventTrackTable;
     m_tracks.clear();
-    m_where.clear();
     m_filter.clear();
     m_group.clear();
     m_group_cols.clear();
@@ -427,14 +426,14 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         uint64_t num_op_types = 0;
         double   end_ts     = 0;
         double   start_ts   = 0;
-        std::string where;
         std::string filter;
         std::string group;
         std::string group_cols;
         rocprofvis_dm_table_use_case_enum_t use_case = kRPVDMTableUseCaseEventTrackTable;
         rocprofvis_controller_track_type_t track_type = kRPVControllerTrackTypeEvents;
         uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeEvents);
-
+        c_optional_uint64_t node_id;
+        c_optional_uint64_t agent_id;
         result = UnpackUseCase(args, use_case);
         if (result == kRocProfVisResultSuccess)
         {
@@ -528,16 +527,6 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         if(result == kRocProfVisResultSuccess)
         {
             uint32_t length = 0;
-            result = args.GetString(kRPVControllerTableArgsWhere, 0, nullptr, &length);
-            if(result == kRocProfVisResultSuccess)
-            {
-                where.resize(length);
-                result = args.GetString(kRPVControllerTableArgsWhere, 0, where.data(), &length);
-            }
-        }
-        if(result == kRocProfVisResultSuccess)
-        {
-            uint32_t length = 0;
             result = args.GetString(kRPVControllerTableArgsFilter, 0, nullptr, &length);
             if(result == kRocProfVisResultSuccess)
             {
@@ -565,9 +554,9 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                 result = args.GetString(kRPVControllerTableArgsGroupColumns, 0, group_cols.data(), &length);
             }
         }
+
         if(result == kRocProfVisResultSuccess)
         {
-            sys_out->m_where = std::move(where);
             sys_out->m_filter = std::move(filter);
             sys_out->m_group = std::move(group);
             sys_out->m_group_cols = std::move(group_cols);
@@ -576,6 +565,17 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             sys_out->m_start_ts = start_ts;
             sys_out->m_end_ts = end_ts;
         }   
+
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
+        {
+            node_id.has_value = true;
+        }
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
+        {
+            agent_id.has_value = true;
+        }
+
+        sys_out->m_source_filter = node_id.has_value || agent_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id }) : std::nullopt;
     }
 	return result;
 }
@@ -589,7 +589,6 @@ SystemTable::GetCurrentArguments(TableArguments*& out) const
     }
     SystemTableArguments* sys_out = (SystemTableArguments*)out;
     Table::GetCurrentArguments(out);
-    sys_out->m_where = m_where;
     sys_out->m_filter = m_filter;
     sys_out->m_group = m_group;
     sys_out->m_group_cols = m_group_cols;
@@ -597,6 +596,7 @@ SystemTable::GetCurrentArguments(TableArguments*& out) const
     sys_out->m_use_case = m_use_case;
     sys_out->m_start_ts = m_start_ts;
     sys_out->m_end_ts = m_end_ts;
+    sys_out->m_source_filter = m_source_filter;
 }
 
 void
@@ -604,7 +604,6 @@ SystemTable::SetCurrentArguments(TableArguments& in)
 {
     SystemTableArguments& sys_in = (SystemTableArguments&)in;
     Table::SetCurrentArguments(sys_in);
-    m_where = sys_in.m_where;
     m_filter = sys_in.m_filter;
     m_group = sys_in.m_group;
     m_group_cols = sys_in.m_group_cols;
@@ -612,6 +611,7 @@ SystemTable::SetCurrentArguments(TableArguments& in)
     m_use_case = sys_in.m_use_case;
     m_start_ts = sys_in.m_start_ts;
     m_end_ts = sys_in.m_end_ts;
+    m_source_filter = sys_in.m_source_filter;
 }
 
 bool
@@ -619,7 +619,7 @@ SystemTable::ArgumentsChanged(SystemTableArguments& in) const
 {
     bool result = true;
     if(m_tracks.size() == in.m_tracks.size() && m_start_ts == in.m_start_ts &&
-        m_end_ts == in.m_end_ts && m_where == in.m_where && m_filter == in.m_filter && 
+        m_end_ts == in.m_end_ts && m_source_filter == in.m_source_filter && m_filter == in.m_filter && 
         m_group == in.m_group && m_group_cols == in.m_group_cols && 
         m_use_case == in.m_use_case)
     {
@@ -683,7 +683,7 @@ SystemTable::BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, uint6
     result = rocprofvis_db_build_table_query(db, arguments.m_use_case, 
                                              static_cast<rocprofvis_dm_timestamp_t>(arguments.m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(arguments.m_end_ts),
                                              static_cast<rocprofvis_db_num_of_tracks_t>(arguments.m_tracks.size()), arguments.m_tracks.data(), 
-                                             arguments.m_where.c_str(), arguments.m_filter.c_str(), 
+                                             arguments.m_source_filter.has_value() ? &arguments.m_source_filter.value() : nullptr, arguments.m_filter.c_str(),
                                              arguments.m_group.c_str(), arguments.m_group_cols.c_str(), 
                                              sort_column, (rocprofvis_dm_sort_order_t)arguments.m_sort_order,
                                              count_only ? 0 : count, count_only ? 0 : index, count_only, out);

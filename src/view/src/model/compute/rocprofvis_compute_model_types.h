@@ -4,8 +4,10 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_memory_chart_model.h"
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -54,22 +56,32 @@ struct Point
 {
     double x;
     double y;
+    bool operator==(const Point& other) const
+    {
+        return x == other.x && y == other.y;
+    }
 };
 
 struct PcSampleState
 {
-    // One reason the profiler recorded against these samples, and how many of
-    // them it accounts for.
-    struct Reason
-    {
-        std::string name;
-        uint64_t    count = 0;
-    };
-    uint64_t            instruction_uuid = 0;
-    uint64_t            total_count      = 0;
-    uint64_t            issue_count      = 0;
-    uint64_t            stall_count      = 0;
-    std::vector<Reason> reasons;
+    uint64_t pc_sample_state_uuid = 0;
+    uint64_t instruction_uuid     = 0;
+    uint64_t total_count          = 0;
+    std::optional<uint64_t> issue_count;
+    std::optional<uint64_t> stall_count;
+};
+
+struct PcSampleStallReason
+{
+    uint64_t pc_sample_state_uuid               = 0;
+    uint64_t pc_sample_stall_reason_lookup_uuid = 0;
+    uint64_t count                              = 0;
+};
+
+struct PcSampleStallReasonLookup
+{
+    uint64_t    pc_sample_stall_reason_lookup_uuid = 0;
+    std::string text;
 };
 
 struct InstructionSourceLine
@@ -82,7 +94,8 @@ struct InstructionSourceLine
 
 struct InstructionLine
 {
-    uint64_t    instruction_uuid = 0;
+    uint64_t    instruction_uuid   = 0;
+    uint64_t    code_object_offset = 0;
     std::string instruction;
 };
 
@@ -127,13 +140,15 @@ enum class PcSamplingLayerState : uint32_t
 
 struct PcSamplingData
 {
-    std::vector<CodeObjectStore>       code_objects;
-    std::vector<SourceFile>            source_files;
-    std::vector<InstructionSourceLine> instruction_source_lines;
-    std::vector<PcSampleState>         pc_sample_states;
-    PcSamplingLayerState               isa_state    = PcSamplingLayerState::kNotRead;
-    PcSamplingLayerState               source_state = PcSamplingLayerState::kNotRead;
-    PcSamplingLayerState               stalls_state = PcSamplingLayerState::kNotRead;
+    std::vector<CodeObjectStore>           code_objects;
+    std::vector<SourceFile>                source_files;
+    std::vector<InstructionSourceLine>     instruction_source_lines;
+    std::vector<PcSampleState>             pc_sample_states;
+    std::vector<PcSampleStallReason>       pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonLookup> pc_sample_stall_reason_lookups;
+    PcSamplingLayerState isa_state    = PcSamplingLayerState::kNotRead;
+    PcSamplingLayerState source_state = PcSamplingLayerState::kNotRead;
+    PcSamplingLayerState stalls_state = PcSamplingLayerState::kNotRead;
     // Files whose line text a read brought back. The source layer brings one
     // file's lines per read. A failure is not recorded here: that would make a
     // later call skip the file and then print its instructions with no line.
@@ -169,6 +184,7 @@ struct KernelInfo
     };
     uint32_t                         id;
     std::string                      name;
+    bool                             has_isa_lines = false;
     std::array<uint64_t, NumMetrics> dispatch_metrics;
     Roofline                         roofline;
     PcSamplingData                   pc_sampling_data;
@@ -200,17 +216,24 @@ struct WorkloadInfo
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
               ceiling_compute;
-        Point max;
-        Point min;
     };
     uint32_t                                 id;
     std::string                              name;
     std::vector<std::vector<std::string>>    system_info;
     std::vector<std::vector<std::string>>    profiling_config;
+    MemChartLayout                           memory_chart_layout;  // Parsed layout from the DB (empty blocks if absent).
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null
     Roofline                                 roofline;
+};
+
+// Trace-level compute_metadata describing the profiler that produced the database.
+struct AnalysisInfo
+{
+    std::string profiler_version;
+    std::string profiler_git_version;
+    std::string schema_version;
 };
 
 struct MetricValue

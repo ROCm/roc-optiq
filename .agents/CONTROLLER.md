@@ -53,13 +53,16 @@ source wins; please update this file in the same change.
     `roc-optiq-controller-script-tests`.
 
 The View must never include controller `src/` headers - only `inc/`.
+This is enforced by CMake: `inc/` is a `PUBLIC` include directory of
+`roc-optiq-controller` and `src/` is `PRIVATE`. Controller tests that
+exercise internals add `src/` to their own target explicitly.
 The controller must never include View headers.
 
 ## 2. Public C ABI Surface (`src/controller/inc/`)
 
-Three headers form the entire public contract:
+The core public contract is three headers:
 
-- `rocprofvis_controller.h` - all functions.
+- `rocprofvis_controller.h` - all core functions.
 - `rocprofvis_controller_types.h` - opaque handle typedefs and the full
   set of `*_properties_t` enums (the property IDs you pass to the
   generic getters).
@@ -67,6 +70,9 @@ Three headers form the entire public contract:
   `rocprofvis_controller_object_type_t`,
   `rocprofvis_controller_primitive_type_t`, sort orders, the property
   banks for events / samples / tracks / tables / summary / etc.
+
+Feature sub-APIs add `rocprofvis_controller_analysis.h` (section 2.7),
+`rocprofvis_controller_script.h`, and `rocprofvis_profiler.h`.
 
 ### 2.1 Handle types
 
@@ -124,6 +130,11 @@ void                      rocprofvis_controller_free(rocprofvis_controller_t*);
 caller treats both the same way - everything dispatches through the
 opaque handle and the runtime object type tag.
 
+`rocprofvis_controller_alloc_compare(filenames, count)` is the
+systems-trace comparison entry point (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
+It builds a `SystemTrace` from several rocprof SQLite files so each
+source's tracks carry a compare instance id.
+
 ### 2.3 Generic property accessors
 
 The single dispatch surface for every object:
@@ -171,7 +182,7 @@ optional source and sampling-state data do not block the initial ISA display:
 ```c
 rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
 rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
-rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons/instruction samples
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons + optional instruction samples
 ```
 
 Two more async surface APIs sit on the controller handle directly,
@@ -230,8 +241,10 @@ For compute metric fetches, results land in a
 
 ### 2.7 The "analysis" sub-API
 
-Cross-cutting analytics live in
-`src/controller/src/rocprofvis_controller_analysis.{h,cpp}` and are
+Cross-cutting analytics are declared in the public
+`inc/rocprofvis_controller_analysis.h`, implemented by the `Analysis`
+class in `src/rocprofvis_controller_analysis_internal.h` /
+`src/rocprofvis_controller_analysis.cpp`, and are
 exposed as `rocprofvis_analysis_*` functions (note this family drops
 the `_controller` infix). They reuse the same `Job + Future` plumbing
 as the data fetchers and back the View's Track Details and Top Events
@@ -503,7 +516,7 @@ having to hand-roll a struct per call.
 File: `rocprofvis_controller_string_table.{h,cpp}`.
 
 Process-global string interning, singleton via `StringTable::Get()`.
-`AddString(str, store)` returns a stable `size_t` ID, `GetString(id)`
+`AddString(str)` returns a stable `size_t` ID, `GetString(id)`
 returns the canonical pointer. Used heavily in `Event` (name, category,
 combined-top name) and in `Workload` metric definitions to avoid
 duplicating millions of identical strings across events.
@@ -861,7 +874,18 @@ QueryArgumentStore          m_query_arguments;
 QueryDataStore              m_query_output;
 std::atomic<uint64_t>       m_async_fetch_counter;
 ComputePivotTable*          m_kernel_metric_table;
+std::string                 m_profiler_version;
+std::string                 m_profiler_git_version;
+std::string                 m_schema_version;
 ```
+
+`LoadRocpd` calls `FetchMetadata` (use case `kRPVComputeFetchMetadata`)
+before loading workloads and stores the single `compute_metadata` row.
+The strings are exposed through `GetString` as
+`kRPVControllerComputeProfilerVersion`,
+`kRPVControllerComputeProfilerGitVersion`, and
+`kRPVControllerComputeSchemaVersion`. A failed metadata read logs a
+warning and leaves the strings empty; it does not fail the load.
 
 Two `AsyncFetch` overloads:
 
@@ -886,7 +910,9 @@ PC samples from a read that failed.
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
 `MetricID` class formats `"category.table.entry"` strings the View can
-parse back into typed metric refs.
+parse back into typed metric refs. A valid kernel/workload request for an
+unavailable metric completes successfully with an empty `MetricsContainer`;
+omitting metric selectors remains an invalid request.
 
 ### 6.2 `Workload` (`rocprofvis_controller_workload.{h,cpp}`)
 
@@ -908,8 +934,9 @@ Property bank: `rocprofvis_controller_workload_properties_t`.
 ### 6.3 `Kernel` (`rocprofvis_controller_kernel.{h,cpp}`)
 
 A kernel within a workload. Carries `m_id`, `m_name`,
-`m_invocation_count`, and the duration set
-(`total/min/max/median/mean`). Property bank:
+`m_invocation_count`, the duration set (`total/min/max/median/mean`),
+and `m_has_isa_lines`, which lets the View determine ISA availability
+without eagerly fetching PC-sampling rows. Property bank:
 `rocprofvis_controller_kernel_properties_t`.
 
 Each kernel also owns a `PcSampling` handle. The
@@ -920,12 +947,17 @@ source-file metadata, instruction/source mappings, and the requested source
 file's lines. Each instruction/source mapping includes the owning source-file
 UUID so ISA View can switch files for cross-pane navigation. Source file ID 0
 selects the first available source file. The stall fetch independently loads
-PC sample states, stall-reason counts, and
-instruction-sample metadata. Per-table flags on `PcSampling` prevent repeated
-queries while `m_source_line_cache` stores source lines separately by file UUID.
+PC sample states and stall-reason counts. It also loads instruction-sample
+metadata by default for compatibility, unless the caller sets
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
+that opt-out because it does not consume the metadata. Per-table flags on
+`PcSampling` prevent repeated queries while `m_source_line_cache` stores source
+lines separately by file UUID.
 
 Only `kRPVControllerPcSamplingArgsKernelId` is required by the ISA and stall
-entry points. The source entry point additionally requires
+entry points. The stall entry point also accepts the optional
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` flag, which defaults to
+enabled when omitted. The source entry point additionally requires
 `kRPVControllerPcSamplingArgsSourceFileUuid`; zero selects the first source
 file. `kRPVControllerPcSamplingArgsWorkloadId` remains in the public enum but
 is not read by these controller methods. The View uses its workload ID before
@@ -1013,6 +1045,8 @@ Cached query-group booleans (`m_code_object_store_loaded`,
 `m_instruction_source_lines_loaded`, `m_source_files_loaded`,
 `m_pc_sample_states_loaded`, `m_stalls_loaded`,
 `m_instruction_samples_loaded`) prevent repeated queries.
+Row-count setters clear their destination vectors before resizing so a failed
+fetch followed by a retry cannot preserve fields from an earlier result.
 
 `GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
 locking to the right mutex for each property ID.
@@ -1020,6 +1054,12 @@ locking to the right mutex for each property ID.
 `QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t, property&,
 type&)` is the internal helper `ComputeTrace` uses to map a DB column
 enum to the right `kRPVControllerPCSampling*` property ID.
+
+PC-sample-state `issue_count` and `stall_count` are optional because host-trap
+sampling does not measure progress state. Empty database cells leave the
+corresponding `std::optional` unset. Their UInt64 getters return
+`kRocProfVisResultNotLoaded` for an unset value, while a measured zero returns
+success with zero; `total_count` remains a required UInt64 value.
 
 Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 (guarded by `__kRPVControllerPCSamplingPropertiesFirst` and
@@ -1289,7 +1329,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Pass typed call arguments                               | `Arguments` (`Set*`/`Get*` per `property` bank)                         |
 | Return a list of typed values                           | `Array` (heap-allocated via `rocprofvis_controller_array_alloc`)        |
 | Return a primitive cell                                 | `Data` tagged union                                                     |
-| Hold an interned string                                 | `StringTable::Get().AddString(s, store)`                                |
+| Hold an interned string                                 | `StringTable::Get().AddString(s)`                                       |
 | Allocate an `Event` / `Sample` / `SampleLOD`            | `MemoryManager::NewEvent` / `NewSample` / `NewSampleLOD`                |
 | Mark an array as in-use so segments survive eviction    | `MemoryManager::EnterArrayOwnership(arr, kRocProfVisOwnerTypeGraph)`    |
 | Release an array's in-use grip                          | `MemoryManager::CancelArrayOwnership(arr, type)` (called by `array_free`) |
@@ -1305,7 +1345,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Implement a new compute pre-baked table                 | Add a `ComputeTableDefinition` row in `COMPUTE_TABLE_DEFINITIONS`       |
 | Implement a new compute plot                            | Add a `ComputeTablePlotDefinition` row in `COMPUTE_PLOT_DEFINITIONS`    |
 | Fetch one PC-sampling layer                             | Use the matching `ComputeTrace::AsyncFetchPcSampling*` method and the kernel-owned `PcSampling` handle |
-| Implement a new analysis function                       | Extend `Analysis` and add a free function in `rocprofvis_controller_analysis.h` |
+| Implement a new analysis function                       | Extend `Analysis` and add a free function in `inc/rocprofvis_controller_analysis.h` |
 | Add a new object type                                   | See section 9 (six-step recipe)                                         |
 | Add a new property to an existing object type           | Append to that bank's enum inside the `__first / __last` brackets       |
 | Generate / consume a unique 64-bit per-type id          | `IdGenerator<MyType>` (see `rocprofvis_controller_id.h`)                |
@@ -1395,6 +1435,8 @@ free" sequence.
   `rocprofvis_controller_object_type_t`,
   `rocprofvis_controller_primitive_type_t`, sort orders, table types,
   table arguments, and PC-sampling property groups/arguments.
+- `rocprofvis_controller_analysis.h` -> `rocprofvis_analysis_*`
+  functions and `rocprofvis_analysis_counter_statistics_t`.
 
 ### Core building blocks (`src/controller/src/`)
 
@@ -1410,7 +1452,8 @@ free" sequence.
 - `rocprofvis_controller_job_system.{h,cpp}` -> `Job`, `JobSystem`.
 - `rocprofvis_controller_table.{h,cpp}` -> `Table` base.
 - `rocprofvis_controller_trace.{h,cpp}` -> `Trace` base.
-- `rocprofvis_controller_analysis.{h,cpp}` -> `Analysis` (queue
+- `rocprofvis_controller_analysis_internal.h` /
+  `rocprofvis_controller_analysis.cpp` -> `Analysis` (queue
   utilization, room for more).
 - `rocprofvis_controller_script.{h,cpp}` / `script_engine.h` ->
   `ScriptEngine`, `rocprofvis_script_*` (when scripting is enabled).

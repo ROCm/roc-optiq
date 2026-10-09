@@ -1330,8 +1330,66 @@ struct PcInstructionSamples
     uint64_t                        total            = 0;
     uint64_t                        issued           = 0;
     uint64_t                        stalled          = 0;
+    // False when any sample state for this instruction left its issue or stall
+    // count unmeasured. issued and stalled then mean nothing and print as n/a.
+    bool                            progress_known = true;
     std::map<std::string, uint64_t> reasons;
 };
+
+// Stochastic profiles store an issued sample's unused stall reason as
+// OTHER_WAIT. The ISA View's stall tooltip drops that issued contribution
+// when a state's reason rows cover every sample; this does the same so the
+// two readings of one kernel agree.
+constexpr const char* ASSISTANT_OTHER_WAIT_REASON = "OTHER_WAIT";
+
+void
+DropIssuedOtherWait(const PcSampleState& state, std::map<std::string, uint64_t>& reasons)
+{
+    if(!state.issue_count || !state.stall_count)
+    {
+        return;
+    }
+    const uint64_t issue_count = *state.issue_count;
+    if(issue_count == 0 || issue_count > state.total_count ||
+       *state.stall_count != state.total_count - issue_count)
+    {
+        return;
+    }
+    uint64_t reason_total = 0;
+    for(const std::pair<const std::string, uint64_t>& reason : reasons)
+    {
+        reason_total += reason.second;
+    }
+    if(reason_total != state.total_count)
+    {
+        return;
+    }
+    const std::map<std::string, uint64_t>::iterator other_wait =
+        reasons.find(ASSISTANT_OTHER_WAIT_REASON);
+    if(other_wait == reasons.end() || other_wait->second < issue_count)
+    {
+        return;
+    }
+    other_wait->second -= issue_count;
+    if(other_wait->second == 0)
+    {
+        reasons.erase(other_wait);
+    }
+}
+
+// Matches the ISA View's stall tooltip, unnamed lookups included, so a reason
+// the assistant cites is one the user can find there.
+std::string
+StallReasonName(const std::unordered_map<uint64_t, std::string>& names,
+                uint64_t                                         lookup_uuid)
+{
+    auto name = names.find(lookup_uuid);
+    if(name != names.end() && !name->second.empty())
+    {
+        return name->second;
+    }
+    return "Unknown stall reason (lookup ID " + std::to_string(lookup_uuid) + ")";
+}
 
 /*
  * Which layers this call has submitted a read for.
@@ -1475,6 +1533,20 @@ ReadPcSamplingLayer(const AssistantToolContext& context, const WorkloadInfo& wor
 std::vector<PcInstructionSamples>
 RankPcSamples(const PcSamplingData& data)
 {
+    std::unordered_map<uint64_t, std::string> reason_names;
+    reason_names.reserve(data.pc_sample_stall_reason_lookups.size());
+    for(const PcSampleStallReasonLookup& lookup : data.pc_sample_stall_reason_lookups)
+    {
+        reason_names.emplace(lookup.pc_sample_stall_reason_lookup_uuid, lookup.text);
+    }
+
+    std::unordered_map<uint64_t, std::vector<const PcSampleStallReason*>>
+        reasons_by_state;
+    for(const PcSampleStallReason& reason : data.pc_sample_stall_reasons)
+    {
+        reasons_by_state[reason.pc_sample_state_uuid].push_back(&reason);
+    }
+
     std::vector<PcInstructionSamples>    ranked;
     std::unordered_map<uint64_t, size_t> index_by_instruction;
     for(const PcSampleState& state : data.pc_sample_states)
@@ -1489,11 +1561,37 @@ RankPcSamples(const PcSamplingData& data)
         }
         PcInstructionSamples& entry = ranked[found->second];
         entry.total += state.total_count;
-        entry.issued += state.issue_count;
-        entry.stalled += state.stall_count;
-        for(const PcSampleState::Reason& reason : state.reasons)
+        // As in the ISA View, a state without measured progress gives no
+        // reasons: without its issue count, its OTHER_WAIT rows cannot be told
+        // apart from real stalls.
+        if(!state.issue_count || !state.stall_count)
         {
-            entry.reasons[reason.name] += reason.count;
+            entry.progress_known = false;
+            entry.issued         = 0;
+            entry.stalled        = 0;
+            continue;
+        }
+        if(entry.progress_known)
+        {
+            entry.issued += *state.issue_count;
+            entry.stalled += *state.stall_count;
+        }
+
+        std::map<std::string, uint64_t> state_reasons;
+        auto reasons = reasons_by_state.find(state.pc_sample_state_uuid);
+        if(reasons != reasons_by_state.end())
+        {
+            for(const PcSampleStallReason* reason : reasons->second)
+            {
+                state_reasons[StallReasonName(
+                    reason_names, reason->pc_sample_stall_reason_lookup_uuid)] +=
+                    reason->count;
+            }
+        }
+        DropIssuedOtherWait(state, state_reasons);
+        for(const std::pair<const std::string, uint64_t>& reason : state_reasons)
+        {
+            entry.reasons[reason.first] += reason.second;
         }
     }
     std::stable_sort(ranked.begin(), ranked.end(),
@@ -1606,15 +1704,27 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
         }
     }
 
-    uint64_t                        total   = 0;
-    uint64_t                        issued  = 0;
-    uint64_t                        stalled = 0;
+    uint64_t                        total            = 0;
+    uint64_t                        issued           = 0;
+    uint64_t                        stalled          = 0;
+    uint64_t                        progress_samples = 0;
+    bool                            any_progress     = false;
+    bool                            all_progress     = true;
     std::map<std::string, uint64_t> reasons;
     for(const PcInstructionSamples& entry : ranked)
     {
         total += entry.total;
-        issued += entry.issued;
-        stalled += entry.stalled;
+        if(entry.progress_known)
+        {
+            any_progress = true;
+            issued += entry.issued;
+            stalled += entry.stalled;
+            progress_samples += entry.total;
+        }
+        else
+        {
+            all_progress = false;
+        }
         for(const std::pair<const std::string, uint64_t>& reason : entry.reasons)
         {
             reasons[reason.first] += reason.second;
@@ -1626,10 +1736,27 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
     out << "kernel_id: " << kernel.id << "\n";
     out << "kernel_name: " << kernel.name << "\n";
     out << "samples_total: " << total << "\n";
-    out << "samples_issued: " << issued << " (" << FormatPercentOf(issued, total)
-        << "%)\n";
-    out << "samples_stalled: " << stalled << " (" << FormatPercentOf(stalled, total)
-        << "%)\n";
+    if(all_progress)
+    {
+        out << "samples_issued: " << issued << " (" << FormatPercentOf(issued, total)
+            << "%)\n";
+        out << "samples_stalled: " << stalled << " (" << FormatPercentOf(stalled, total)
+            << "%)\n";
+    }
+    else if(!any_progress)
+    {
+        out << "samples_issued: n/a\n";
+        out << "samples_stalled: n/a\n";
+    }
+    else
+    {
+        out << "samples_issued: " << issued << " ("
+            << FormatPercentOf(issued, progress_samples)
+            << "% of samples that recorded progress)\n";
+        out << "samples_stalled: " << stalled << " ("
+            << FormatPercentOf(stalled, progress_samples)
+            << "% of samples that recorded progress)\n";
+    }
     out << "sampled_instructions: " << ranked.size() << "\n";
     if(!reasons.empty())
     {
@@ -1679,8 +1806,11 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
         auto isa = isa_by_instruction.find(entry.instruction_uuid);
 
         out << "  " << (i + 1) << ". samples=" << entry.total << " ("
-            << FormatPercentOf(entry.total, total) << "%) issued=" << entry.issued
-            << " stalled=" << entry.stalled << " at=" << at << " isa=\""
+            << FormatPercentOf(entry.total, total) << "%) issued="
+            << (entry.progress_known ? std::to_string(entry.issued) : "n/a")
+            << " stalled="
+            << (entry.progress_known ? std::to_string(entry.stalled) : "n/a")
+            << " at=" << at << " isa=\""
             << (isa != isa_by_instruction.end() ? *isa->second : std::string("?"))
             << "\"";
         const std::vector<std::pair<std::string, uint64_t>> own =
@@ -1707,6 +1837,13 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
         {
             out << "  " << FileName(file->file_path) << " = " << file->file_path << "\n";
         }
+    }
+    if(!all_progress)
+    {
+        out << "note: issued and stalled counts were not recorded for every sampled "
+               "instruction. Lines that lack them say n/a"
+            << (any_progress ? ", and the totals above leave those instructions out.\n"
+                             : ", so those totals are omitted.\n");
     }
     if(data.isa_state != PcSamplingLayerState::kRead)
     {

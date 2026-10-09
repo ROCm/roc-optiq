@@ -80,9 +80,10 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
 - **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`, a submodule
-  pinned to v0.53.1) with vendored mbedTLS. Targets the OpenAI
-  chat-completions API. Built only under
-  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
+  pinned to v0.53.1). TLS follows `CRYPTO_BACKEND`: vendored mbedTLS by
+  default, or a system OpenSSL when `-DCRYPTO_BACKEND=OpenSSL` (the same
+  choice as remote/SSH). Targets the OpenAI chat-completions API. Built
+  only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -115,8 +116,9 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
-- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
-  comparison UI (default off).
+- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development systems
+  trace comparison UI (`File > Compare`, default off). Guarded with
+  `#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE` in code.
 - `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
   support (default off).
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
@@ -131,7 +133,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- src/                  # All first-party code
 |   +-- app/              # Entry point: window, GLFW, ImGui backend, CLI
 |   |   +-- inc/          # rocprofvis_imgui_backend.h, rocprofvis_version.h
-|   |   +-- src/          # main.cpp, glfw_util, imgui_(opengl|vulkan), cli_parser
+|   |   +-- src/          # main.cpp, app_shell, rocprofvis_glfw_util, imgui_(opengl|vulkan), cli_parser, platform_helpers
 |   +-- core/             # Tiny core lib: assert macros, profile markers
 |   |   +-- inc/          # rocprofvis_core.h, rocprofvis_core_assert.h
 |   |   +-- src/
@@ -243,23 +245,46 @@ Key invariants:
 
 ### `src/app/`
 
-Owns the OS-level shell. Specifically:
+Owns the OS-level shell. Code declared here lives in
+`namespace RocProfVis::App`, except the GLFW window helpers and OS
+workarounds in `RocProfVis::Platform`. Platform code talks only to GLFW and
+the OS and never calls into the View; the app shell reports window changes
+to the View. Specifically:
 
-- `main.cpp` - GLFW window, fullscreen state, drag-and-drop callback, and
-  the lazy frame loop that calls `rocprofvis_view_render()` and sleeps
-  unless `rocprofvis_view_wants_continuous_render()` or an input/event
-  wake requires more frames.
-- `glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
-  `sync_fullscreen_state`. Use these instead of touching GLFW directly.
+- `main.cpp` - GLFW window and the lazy frame loop that calls
+  `rocprofvis_view_render()` and sleeps unless
+  `rocprofvis_view_wants_continuous_render()` or an input/event wake
+  requires more frames. `test/test_main.cpp` is the UI test harness's
+  counterpart with its own frame loop.
+- `rocprofvis_app_shell.{h,cpp}` - startup code shared by both
+  executables: log setup, common CLI options with `--help`/`--version`
+  handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
+  callbacks, and fullscreen toggles, including telling the View about
+  fullscreen changes. Put code both executables need here instead of
+  copying it.
+- `rocprofvis_glfw_util.{h,cpp}` - cross-platform GLFW window helpers in
+  `RocProfVis::Platform`: `FullscreenState`, `toggle_fullscreen`,
+  `sync_fullscreen_state`, `get_current_monitor`. Use these instead of
+  touching GLFW directly.
+- `rocprofvis_platform_helpers.{h,cpp}` /
+  `rocprofvis_platform_helpers_macos.mm` - per-OS workarounds such as the
+  Linux content-scale fallback and floating-viewport fixes. Each is only
+  implemented for its platform, so guard calls with the matching macro.
 - `rocprofvis_imgui_backend.{h,cpp}` plus `rocprofvis_imgui_opengl.cpp` /
   `rocprofvis_imgui_vulkan.cpp` - selects renderer at runtime, sets up
   ImGui's backend, and exposes the texture-creation callback that
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
-  (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
-  `-v/--version`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Add new flags by
-  calling `AddOption` in `main.cpp::parse_command_line_args`.
+  (`CLIParser::AddOption`). Flags both executables take are registered in
+  `add_common_cli_options` (`rocprofvis_app_shell.cpp`):
+  `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Each executable's
+  `parse_command_line_args` adds its own flags (`-r/--drag-repair` in Linux
+  multi-window builds, `-t/--run-tests` in the test harness). `-v` prints the
+  version. `-v hash` also prints the
+  git commit. Official builds print the hash alone. An unofficial build
+  prints `unknown` and a line that the commit hash is not recorded. About
+  shows the same text.
 
 ### `src/core/`
 
@@ -302,7 +327,7 @@ The bridge between model and view. **Public** API in `inc/`:
 - `rocprofvis_controller.h` - the full C function set. Highlights:
   - `rocprofvis_controller_alloc(filename)` / `rocprofvis_controller_load_async`.
   - `rocprofvis_controller_alloc_compare(filenames, count)` for
-    multi-source compare projects.
+    multi-source compare projects (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
   - `rocprofvis_controller_future_alloc/free` for async fences.
   - `rocprofvis_controller_array_alloc` and `_arguments_alloc` for batched
     calls.
@@ -314,6 +339,12 @@ The bridge between model and view. **Public** API in `inc/`:
   (`rocprofvis_handle_t`, `rocprofvis_controller_t`, ...) and result codes.
 - `rocprofvis_profiler.h` - profiler config/session C API used by the
   optional launcher, including local and remote async launch.
+- `rocprofvis_controller_analysis.h` - `rocprofvis_analysis_*` C API
+  (queue utilization, counter statistics, top-events tables).
+
+Only `inc/` is exported to consumers; `src/` is a `PRIVATE` include
+directory of `roc-optiq-controller`, so a View include of a controller
+`src/` header fails to compile.
 
 Internal source layout under `src/controller/src/`:
 
@@ -334,7 +365,8 @@ Internal source layout under `src/controller/src/`:
 - `rocprofvis_controller_string_table.{h,cpp}` - intern-style table.
 - `rocprofvis_controller_table.{h,cpp}` - generic table support.
 - `rocprofvis_controller_trace.{h,cpp}` - trace-file lifecycle.
-- `rocprofvis_controller_analysis.{h,cpp}` - cross-cutting analytics
+- `rocprofvis_controller_analysis.cpp` /
+  `rocprofvis_controller_analysis_internal.h` - cross-cutting analytics
   (e.g. queue utilization).
 - `system/` - per-domain modules covering events, ext_data, flow
   control, graphs, memory management, samples (and sample LOD),
@@ -416,7 +448,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- (ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
-+-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
++-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
 +-- m_settings_panel        : SettingsPanel (modal, opened via menu)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
@@ -441,12 +473,12 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   project. Routes via `Project::Open()` and adds a tab. A duplicate
   open (`OpenResult::Duplicate`) focuses the existing tab and shows a
   "Trace Already Open" message rather than opening a second tab. While
-  the Compare dialog is open, dropped/opened files fill its slots
-  instead of opening standalone tabs.
+  the Compare dialog is open (`ROCPROFVIS_ENABLE_TRACE_COMPARE`),
+  dropped/opened files fill its slots instead of opening standalone tabs.
 - `void OpenCompare(base_path, target_path)` / `MakeCompareId(files)` -
   creates a synthetic compare project containing two trace sources. The
-  `File > Compare` entry point is currently gated behind
-  `ROCPROFVIS_DEVELOPER_MODE`, though the dialog object is always built.
+  `File > Compare` entry point, the dialog, and these methods are gated
+  behind `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
 - `void ShowConfirmationDialog(title, message, on_confirm)` /
   `ShowMessageDialog` - centralized modal dialogs. Always go through
   these, do not create your own popups for ok/cancel flows.
@@ -512,6 +544,8 @@ trace file:
   trace project through
   `rocprofvis_controller_alloc_compare(file_ptrs.data(), count)`,
   then attaches compare-source metadata and the supplied synthetic ID.
+  Compiled only under `ROCPROFVIS_ENABLE_TRACE_COMPARE`; opening a
+  compare `.rpv` without that flag fails with a rebuild message.
 - `void Save()` / `void SaveAs(file_path)` - serializes registered
   `ProjectSetting`s into a `.rpv`.
 - `void RegisterSetting(ProjectSetting*)` - any per-project state that
@@ -564,8 +598,8 @@ from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
   identifies the two drop targets; while the dialog `IsOpen()`,
   `AppWindow::OpenFile()` routes files into it via `AddDroppedFile()`,
   and `Validate()` rejects picking the same file twice. The
-  `File > Compare` menu item is currently behind
-  `ROCPROFVIS_DEVELOPER_MODE`.
+  `File > Compare` menu item, the dialog, and `OpenCompare` are behind
+  `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
 
 ## 7. Widget Library Reference (`src/view/src/widgets/`)
 
@@ -599,7 +633,8 @@ reusable types they expose.
   optional "don't ask again" checkbox bound to a `bool&` setting.
   Instantiate inside the owning widget; call `Show(...)` to request
   open and `Render()` from inside the owner's `Render()`.
-- `class MessageDialog` - one-button info popup.
+- `class MessageDialog` - one-button info popup. Requests are queued while a
+  message is already pending or open, so callers do not overwrite one another.
 
 ### 7.3 `rocprofvis_split_containers.{h,cpp}` - layout
 
@@ -629,7 +664,11 @@ splitter dragging.
   `kTabClosed` / `kTabSelected` `RocEvent`s. Set the event source name
   with `SetEventSourceName(...)`. Toggle close/change events via
   `EnableSendCloseEvent` / `EnableSendChangeEvent`. Used in `AppWindow`
-  for the project tabs and in `ComputeView` for sub-tabs.
+  for the project tabs and in `ComputeView` for sub-tabs. `TabItem::m_enabled`
+  controls whether a tab is dimmed and selectable; disabled tabs may provide
+  `m_disabled_tooltip`. `SetTabEnabled(id, enabled, disabled_tooltip)` updates
+  both properties at runtime. Programmatic selection ignores disabled tabs, and
+  disabling the active tab selects the first enabled tab.
 
 ### 7.6 `rocprofvis_gui_helpers.{h,cpp}` - low-level UI helpers
 
@@ -653,11 +692,16 @@ Use these instead of inlining their logic anywhere new.
   canonical glyph button. Must use the icon font from `FontManager`.
 - `CopyableTextUnformatted(text, unique_id, ...)` - clickable copy-to-
   clipboard text with optional one-click copy, context menu, and custom
-  menu callback. Use this for values users may need to copy.
+  menu callback. It renders content literally through `TextUnformatted`,
+  including `##`, while a separate identified interaction target handles clicks
+  and popups. Its popup restores the themed selectable colors even when a parent
+  table makes row headers transparent. Use this for values users may need to copy.
 - `CellMenuTarget`, `PositionCell`, `RenderRowHitbox`,
   `CaptureCellRightClick`, `BeginCellContextMenu`,
   `EndCellContextMenu`, `AddCopyRowCellMenuItems` - shared table
-  right-click/copy scaffolding. Reuse it so cell and row hitboxes agree.
+  right-click/copy scaffolding. Shared cell popups restore themed selectable
+  colors even under parent style overrides. Reuse it so cell and row hitboxes
+  agree.
 - `IconMenuItem(icon, label, enabled)` / `IconBeginMenu(icon, label)` -
   menu entries with a leading icon-font glyph. Use inside
   `BeginPopup`/`BeginPopupContextItem` blocks instead of plain
@@ -971,6 +1015,12 @@ Composition (members):
   controls.
 - `m_bookmarks` - 10 saved view positions; `RenderBookmarkControls()`,
   `HandleHotKeys()` keyed via `HotkeyManager`.
+
+When a system database fails to load, `TraceView` queues the shared application
+message dialog from its provider callback. Closing that dialog removes the
+failed project tab by database-path ID through `AppWindow::CloseProjectTab`,
+which preserves the normal tab-close event and provider-cleanup flow. Save and
+database-cleanup messages do not close the project tab.
 - `SystemTraceProjectSettings` - persists bookmarks via `Project`.
 
 Public surface:
@@ -1324,13 +1374,32 @@ The compute analogue of `TraceView`. Owns:
     workload SOL, workload roofline).
   - `ComputeKernelDetailsView` - per-kernel deep-dive.
   - `ComputeTableView` - hierarchical metric tables.
-  - `ComputeWorkloadView` - system info + profiling config tables.
+  - `ComputeWorkloadView` - "Profile Details" tab: analysis metadata,
+    system info, and profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
   - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
   `ComputeModel()` accessor exposes the compute data model.
+
+Each fixed compute sub-view owns its `TAB_ID` as a public static constant.
+Views that can be disabled also own their `DISABLED_TOOLTIP`; use these
+constants when adding, selecting, disabling, or testing their tabs.
+
+`Update()` waits until the provider reaches `kReady` or `kError` before
+creating the content. `CreateView()` validates the loaded model before it
+constructs any selection state or tabs. A provider load error, an empty
+workload list, or a model in which no workload has a kernel queues the shared
+application message dialog, matching `TraceView` load-error handling, instead
+of creating the tab container. The dialog distinguishes the failed condition
+and includes the database path. Closing this dialog removes the failed
+project's tab through the normal `TabContainer` close-event path so provider
+cleanup still runs. Pending load-error dialogs are forwarded from `Update()`,
+which runs for every project tab, so an invalid background project does not
+have to become the active tab before its error is shown. A per-load terminal
+error latch prevents `CreateView()` from retrying every frame and queuing
+duplicate dialogs while the first dialog remains open.
 
 `LoadTrace`, `CreateView`, `DestroyView`, `GetToolbar`,
 `DetachProviderCleanup` mirror `TraceView`.
@@ -1344,9 +1413,19 @@ sentinel.
 
 ### `ComputeWorkloadView` (`rocprofvis_compute_workload_view.{h,cpp}`)
 
-Shows the two static tables for a workload:
-`RenderSystemInfo(WorkloadInfo)` and
-`RenderProfilingConfig(WorkloadInfo)`. Layout uses an `HSplitContainer`.
+Backs the **Profile Details** tab (class and `TAB_ID` keep their older
+"workload" names). Two bordered panels, top to bottom:
+
+- **Analysis Information** - `RenderAnalysisInfo(AnalysisInfo)` renders the
+  trace-level `compute_metadata` row (ROCm Compute Profiler version, Git
+  revision, database schema version) from
+  `ComputeDataModel::GetAnalysisInfo()`. It does not depend on the selected
+  workload, so it renders even when workload info is unavailable.
+- **Workload Information** - `RenderSystemInfo(WorkloadInfo)` and
+  `RenderProfilingConfig(WorkloadInfo)` side by side in an
+  `HSplitContainer`.
+
+All three tables draw rows through `RenderInfoRow` (two copyable cells).
 
 ### `ComputeKernelDetailsView` (`rocprofvis_compute_kernel_details.{h,cpp}`)
 
@@ -1381,20 +1460,67 @@ ImPlot-based roofline chart. Two modes:
 
 ### `ComputeMemoryChartView` (`rocprofvis_compute_memory_chart.{h,cpp}`)
 
-Hand-laid block diagram of the GPU memory hierarchy. Each block
-(LDS, VL1, SL1D, IL1, L2, Fabric, HBM, ...) is a `ChartBlock` with
-`x/y/w/h` and helpers `Right/Bottom/MidX/MidY`. Renders metric values
-inline via `DrawMetricRow`. The catalog of supported chart-only
-metrics is `enum MemChartMetric` (maps 1:1 to entries in compute
-metric table 3.1).
+Data-driven block diagram of the GPU memory hierarchy, built from a
+**relational** layout ("nodes + edges") rather than hardcoded C++. The
+layout model and its parser live in
+`model/compute/rocprofvis_memory_chart_model.{h,cpp}`:
 
-Metric values bind data-driven: `METRIC_NAME_MAP` maps a compute
-metric `entry->name` to a `MemChartMetric` slot, and
-`FetchMemChartMetrics()` fills `m_metric_ptrs[]` from the fetched
-metrics. To surface a new metric on an existing block, add its name to
-`METRIC_NAME_MAP` (and make sure the controller returns that metric).
-Only add a new `MemChartMetric` value + `Draw*` method +
-`ComputeLayout()`/`Render()` wiring when you need a brand-new block.
+- `MemChartBlock` - one node: a string `id`, `column`, optional `order`,
+  `title`, `content` (a list of `MemChartContentItem`, each a metric ref
+  plus an optional label override and semantic `category`), and optional
+  `children` (nested blocks, making the block a container box).
+- `MemChartArrow` - one edge: `from`/`to` block ids, `direction`
+  (`MemChartArrowDir::kForward|kBackward|kBoth`), a metric ref, an
+  optional title override, and a semantic `category`.
+  `OnLayoutLoaded()` resolves `from`/`to` to `from_block`/`to_block`
+  pointers once, so layout and routing never look ids up.
+
+Block ids are readable strings (`"l2"`, `"data_fabric"`), unique across
+the whole layout including nested children, so an arrow reads as
+`{ "from": "l2", "to": "data_fabric" }`. `ParseFromString()` rejects a
+layout with a missing, numeric, or duplicate block id, or an arrow whose
+`from`/`to` names no block; the caller then falls back to the next layout
+source instead of drawing disconnected arrows.
+- `MemChartMetricRef` - references a metric by its full dotted id
+  `category.table.entry` (e.g. "3.1.0").
+- `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
+  No ImGui is pulled into the model file.
+
+This shape mirrors what the data team stores in the `compute_workload`
+table (block rows + arrow rows keyed by block id). `LoadWorkloadLayout()`
+resolves a layout in priority order: an optional dev override at
+`<config-dir>/memory_chart.json` -> the per-workload JSON blob in
+`compute_workload.memory_chart_extdata` -> an **architecture-specific
+embedded layout** (picked from the workload's `gpu_arch`, e.g. gfx950 or
+the gfx94x family) -> an embedded `default`. The embedded layouts are the
+per-arch JSON files under `resources/memory_chart/` (`gfx950.json`,
+`gfx94x.json`, `default.json`); at build time
+`cmake/embed_memory_chart_layouts.cmake` compiles them into
+`rocprofvis_memory_chart_layouts_generated.h` (registry
+`kMemChartEmbeddedLayouts`), so they ship inside the binary rather than as
+runtime assets. To change the chart, edit the JSON and rebuild.
+
+Each frame `Render()`:
+1. `ComputeLayout()` measures every block (`MeasureBlock`, auto width/
+   height from content; containers stack their children) and stacks
+   blocks by column.
+2. `BuildArrowRoutes()` classifies each arrow by column distance and
+   routes it: **adjacent** columns get horizontal arrows fanned per
+   block-pair; **same-column** arrows use stacked side lanes;
+   **skipping** arrows run along packed "highway" lanes below the blocks
+   (disjoint arrows share a lane, shorter spans nest inside) with their
+   block-bottom connectors spread symmetrically. `ResolveLabelOverlaps()`
+   then nudges overlapping labels.
+3. All arrow lines are drawn first, then blocks, then labels on top;
+   metric refs are resolved via `m_ptr_by_metric_id`, filled in
+   `UpdateMetrics()`. `FetchMemChartMetrics()` fetches every metric
+   category the layout references (a layout may span categories/tables,
+   e.g. `3.x` Memory Chart, `17.x` L2 Cache) for the selected kernel;
+   unresolved refs render as `N/A`.
+
+To change the chart: edit the per-arch JSON under `resources/memory_chart/`
+(or the DB blob). C++ only needs to change for new routing behavior, not
+new blocks.
 
 ### `KernelMetricTable` (`rocprofvis_compute_kernel_metric_table.{h,cpp}`)
 
@@ -1414,11 +1540,20 @@ bar-chart columns. Public:
 
 The hierarchical category-tab view. `RebuildTabs()` fills sub-tabs
 from `AvailableMetrics::Category`/`Table`/`Entry`. Pinning is
-delegated to `PinnedMetricTable`. Persistent via nested `Preset`.
+delegated to `PinnedMetricTable`. If a workload has no available metric
+tables, `FetchAllMetrics()` leaves the view empty without submitting an
+invalid zero-selector request. After trace metadata loads, `ComputeView`
+disables the top-level Table View tab when the database has no available
+metric tables and shows the no-metrics tooltip. Persistent via nested `Preset`.
 
 ### `ComputeComparisonView` (`rocprofvis_compute_comparison.{h,cpp}`)
 
 Cross-workload / cross-kernel diff view. Notable nested types:
+- `FetchMetrics()` skips baseline or target requests when the corresponding
+  workload has no available metric tables, avoiding invalid zero-selector
+  requests. After trace metadata loads, `ComputeView` disables the top-level
+  Baseline Comparison tab when no workload in the database has an available
+  metric table. This state is initialized once rather than recomputed per frame.
 - `Table` - bespoke comparison table (`Row { id, entry, values_map,
   cells, display_props, tags, selected }`, `Column { Selection |
   MetricID | MetricName | Unit | Value }`, freeze rows/columns,
@@ -1443,31 +1578,43 @@ display modes, several `KernelInfo::DispatchMetric`s
 Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
+Dynamic text uses `ImGui::TextUnformatted` so names, descriptions,
+and units containing percent signs are displayed literally.
 
 ### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa). The ISA pane is the always-visible primary pane;
-the optional source-code pane is shown on the right through the
-`Show Source Code` / `Hide Source Code` control.
-`RenderControlPanel()` hosts the source-file dropdown and the `Show Source
-Code` / `Show Stalls` controls. PC-sampling data is fetched through
-`PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
+ISA (and vice versa). The ISA pane is the always-visible primary pane. The
+source-code pane is visible on the right by default and can be hidden or shown
+through the `Hide Source Code` / `Show Source Code` control.
+After trace metadata loads, `ComputeView` disables the ISA View tab and
+shows a tooltip without constructing its widget when no kernel in the database
+has ISA lines. The availability flag is initialized once with the other
+data-dependent tab states.
+`RenderControlPanel()` hosts the source-file dropdown and the source-code and
+sampling-detail visibility controls. A failed sampling-detail request changes
+the latter control to `Retry Sampling Details`. PC-sampling data is fetched
+through `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
 independent layers:
 
 - `kIsa` runs when the view opens or its kernel changes and loads only the
-  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+  code-object, kernel-symbol, ISA instruction, and code-object-offset data
+  needed by the primary pane.
 - `kSource` runs when the source pane is shown or a different source file is
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
-- `kStalls` runs when the user selects `Show Stalls`. The controller loads PC
-  sample states, stall-reason rows and lookups, instruction types, and
-  instruction-sample rows and lookups. The view projection keeps each state's
-  instruction UUID, its total, issue, and stall counts, and its stall reasons
-  by name (`PcSampleState::reasons`).
+- `kStalls` runs initially because sampling details are visible by default, and
+  runs again when the user selects `Show Sampling Details` or retries a failed
+  request. The View asks the controller for PC sample states plus stall-reason
+  rows and lookups, explicitly excluding instruction-sample metadata that this
+  view does not consume. The projection uses each state's UUID, instruction
+  UUID and total count, plus nullable issued and stall counts, together with
+  the stall-reason rows and lookup text. A controller getter returns
+  `kRocProfVisResultNotLoaded` for a nullable count that was not measured, and
+  `DataProvider` preserves that distinction with `std::optional`.
 
 `FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
 use distinct `DataProvider` request IDs and may be in flight together. A newer
@@ -1478,14 +1625,51 @@ the completed layer. `ComputeIsaView` accepts the callback only when its layer,
 kernel, selection generation, request token, and (for source) selected file
 still match. Do not query the controller or model directly from this view.
 
-The ISA table is always present. `Show Stalls` adds Total Count, Issue Count,
-and Stall Count columns, aggregated by instruction UUID across returned sample
-states. The source table is optional; its Stalls column is
-`100 * sum(stall_count) / sum(total_count)` for instructions mapped to the
-source line at `frame_index == 0`. Instruction-sample metadata, active-thread
-percentage, wave-occupancy percentage, and dispatch UUID are available on the
-controller handle but are not represented in `PcSamplingData`. Stall reasons
-are, but only Ask Optiq reads them; `ComputeIsaView` does not render them.
+The ISA table is always present. Its Offset column shows each instruction's
+byte offset inside the selected code object as uppercase hexadecimal; it is not
+an absolute runtime address. Right-clicking an offset, ISA instruction, or
+source-code line opens its copy context menu. `Show Sampling Details` adds
+Samples, aggregated by instruction UUID across returned sample states, and the
+Stall % column when at least one displayed instruction has progress data.
+For each instruction, Stall % shows the measured percentage only when every
+sample state for that instruction has non-NULL issued and stall counts.
+In mixed captures, instructions with missing progress counts display disabled
+`N/A` cells with explanatory tooltips; other instructions retain their measured
+percentages. Entirely host-trap captures have no progress counts, so Stall % is
+omitted. Unsampled instructions also have unavailable progress counts. A
+stochastic capture's real zero counts remain available and are not confused
+with NULL. Samples shows a right-aligned
+raw count over a heat bar normalized to the hottest displayed instruction. Its
+tooltip reports both kernel share and relative hotness. Cell tooltips use
+`IsItemHovered()` over the full cell so covering windows and popups suppress
+them. Counts from one through
+ten carry a low-confidence marker for the derived percentages, while zero-count
+lines remain unmarked and the exact count remains prominent. The Samples column starts
+at the wider of its header and largest formatted count. Samples, Offset, and `#`
+use the public ImGui `NoResize` column flag so their calculated widths follow
+kernel/workload data and font changes, including sampling-detail data that arrives
+later. The `#` width is measured with the active code font during rendering.
+ISA and Stall % remain user-resizable; Samples, Offset, and Stall % are
+user-hideable through the ImGui header context menu. The source table supports
+the same per-column visibility menu. Both native
+column menus use the application's default window padding, matching the event
+table menus. Each heat bar uses the live cell width so it follows automatic
+Samples sizing or manual Stall % resizing. Hovering a data column header shows a user-facing
+explanation; the `#` line-number headers do not show tooltips. When
+`ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column tooltip also shows the
+database fields, grouping or filtering keys, and formulas used by the column.
+Hovering a `Stall %` cell shows every recorded stall reason
+for that instruction, aggregated across sample states and sorted by descending
+sample count. Stochastic profiles encode the irrelevant stall-reason field of
+issued samples as `OTHER_WAIT`; the view removes that issued contribution per
+sample state when raw reason totals include all samples. Each remaining reason
+includes its count and share of the instruction's stalled samples. The tooltip
+shows issued samples separately and warns when the normalized reason total
+differs from the instruction's stalled-sample count.
+The source table contains only the source line number and source text.
+Instruction-sample metadata, active-thread percentage, wave-occupancy
+percentage, and dispatch UUID are available on the controller handle but are
+not currently represented in `PcSamplingData` or rendered by `ComputeIsaView`.
 
 `PcSamplingData` also records how far each layer has got -
 `PcSamplingLayerState` (`kNotRead`, `kRead`, `kFailed`, and `kUnsupported`
@@ -1503,13 +1687,24 @@ under two rules. It never submits while a slot is pending: a same-layer
 submit cancels the request in flight, and the view would then wait forever
 for a reply it goes on to drop. And its requests carry generation
 `UINT32_MAX`, which `OnPcSamplingReady` never matches, so the view ignores
-their completions while the model data they load stays shared.
+their completions while the model data they load stays shared. The tool
+counts stall reasons the way the Stall % tooltip does: a sample state without
+measured issued and stall counts contributes none, the `OTHER_WAIT`
+contribution of issued samples is dropped, and a lookup with no text is named
+`Unknown stall reason (lookup ID n)`. An instruction with any unmeasured
+sample state reports its issued and stalled counts as `n/a`, and the
+kernel-wide totals leave it out.
 
 PC-sampling queries require compute schema 2.2 or newer. A failed source or
-stall request is isolated from an already-loaded ISA pane.
+sampling-detail request is isolated from an already-loaded ISA pane; failed
+sampling details can be retried from the control panel.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.
+The row selectable allows overlap so text cells can receive their copy-menu
+interactions. Both widgets combine the selectable's click with the
+`CopyableTextUnformatted` return value, so clicking instruction text, offsets,
+or source text selects the row as well as clicking its empty space.
 Clicking a correlated ISA or source row scrolls the opposite code pane so its
 first corresponding row is the top visible line. If an ISA row maps to a
 different source file, the view selects that file and fetches its lines before
@@ -1524,10 +1719,11 @@ performing the scroll.
   `SetFetchMetricsCallback`).
 - `ComputeDataModel` (`model/compute/rocprofvis_compute_data_model.{h,cpp}`)
   holds `WorkloadInfo`, `KernelInfo`, `MetricValue` per
-  `(store_id, kernel_id|workload_id)`.
+  `(store_id, kernel_id|workload_id)`, plus the single trace-level
+  `AnalysisInfo` filled by `DataProvider::LoadAnalysisInfo()`.
 - `compute_model_types.h` is the core type vocabulary:
   `AvailableMetrics::Entry/Table/Category`, `KernelInfo`,
-  `WorkloadInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
+  `WorkloadInfo`, `AnalysisInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
   `ComputeTableInfo`, `Point`. Reuse these types whenever you handle
   metric IDs or roofline geometry - **do not reinvent metric
   identifiers**; use `MetricId::ToString()` etc.
@@ -1673,7 +1869,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
 `kGoToTimelineSpot`, `kTimeFormatChanged`,
-`kRequestProgressUpdate`, `kProfilerStatusChanged`,
+`kThemeChanged`, `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
@@ -1712,6 +1908,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 
 - `GetUserSettings()` -> `UserSettings` (display, units, "don't ask"
   flags). `ApplyUserSettings(old, save_json)` writes JSON to disk.
+  A change of `use_dark_mode` emits `kThemeChanged` (no payload / no
+  source ID) so widgets that cache palette colors can rebuild. Live
+  `GetColor()` callers do not need to subscribe.
 - `DisplaySettings::show_node_colors` /
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
@@ -1943,10 +2142,12 @@ scripting (`optiq.table` positively requires a system controller).
 **Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
 same way remote and profiler launch are gated. Everything in
 `src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
-option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
-unless remote asks for them - which is why a default clone needs
-neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
-submodule. Every call site outside the folder is
+option is off, and so are `cpp-httplib`, its TLS backend, and
+`SecretStore` unless remote asks for them. The default backend is
+vendored mbedTLS; `-DCRYPTO_BACKEND=OpenSSL` links a system OpenSSL
+instead and does not build mbedTLS. A default clone needs neither the
+`thirdparty/cpp-httplib` nor the `thirdparty/mbedtls` submodule. Every
+call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
 View-menu item), the `TraceView` toolbar, and `SettingsPanel` (the
@@ -1977,11 +2178,14 @@ Layered, transport at the bottom and the panel at the top:
   lookup searches both, since a tool name means the same thing whichever
   trace is in front.
 - `rocprofvis_ai_tool_query.{h,cpp}` - turns query-shaped tool
-  arguments into the SQL fragments `DataProvider` takes. The one place
-  a bad argument could become bad SQL, so it treats model input as
-  hostile: column and operator whitelists rather than escaping, quoted
-  string literals, and escaped `LIKE` wildcards paired with an explicit
-  `ESCAPE` clause.
+  arguments into the table filter and grouping `DataProvider` takes. The
+  filter is written in the table filter-row language and applied to each
+  row before grouping and paging. The one place a bad argument could
+  become a bad filter, so it treats model input as hostile: column and
+  operator whitelists rather than escaping, quoted string literals, and
+  escaped `LIKE` wildcards paired with an explicit `ESCAPE` clause. Its
+  columns must be names the returned rows carry (`node`, not the SQL
+  `nodeId`), since a filter on any other name matches nothing.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
   `StartAssistantTool`, which parses the arguments, refuses everything
   but `offer_next_steps` when no trace is ready, parks while a trace is
@@ -2352,8 +2556,10 @@ focus, and it is already false by the frame after a checkbox toggles,
 since `ButtonBehavior` clears `ActiveId` in the same frame it reports
 the press), `Validate` (empty string = OK), `FlattenToExecution`
 (curated settings -> env + the **complete** argv after `argv[0]`,
-including `extra_argv`, the output flag in this profiler's spelling, and
-the target plus its arguments; caller then merges `extra_env`),
+including `extra_argv`, any output-path flag this profiler uses, and
+the target plus its arguments; some tools put the output path only in
+env, or nowhere - do not assume `--output`. Caller then merges
+`extra_env`),
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
@@ -2363,13 +2569,35 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
 Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
-Tabs: Quick, Sampling, ROCm,
+Tabs: General, Sampling, ROCm,
 Process Sampling, Parallelism, Advanced, plus Instrument (only when the
 tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
 Perfetto options are nested inside Advanced, not a top-level tab.
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
+
+`FlattenToExecution` is per-tool, not one run-shaped argv for every
+binary. Shared `EmitCuratedEnv` writes `ROCPROFSYS_*` (including
+`ROCPROFSYS_OUTPUT_PATH` from the Output folder field). Then:
+
+- **Run and Sample** share `FlattenRunOrSample`: `--preset=`, `--trace=`
+  (to override preset precedence), `--output <dir>`, `--`, target plus
+  `SplitArguments` of its args. `rocprof-sys-sample` registers the same
+  common argv as run; it forces sampling inside the binary, so Flatten
+  does not special-case Sample.
+- **Instrument** is one-shot **runtime** instrumentation
+  (`FlattenInstrumentRuntime`): `-I` / `-E` / `--min-instructions` when
+  set, then `--` plus the full target command. It does **not** emit
+  `--preset`, `--trace`, or `--output`. `-o`/`--output` is a rewritten-
+  binary filename on this tool and switches Dyninst into rewrite-and-
+  stop, which is a later two-stage mode, not the Output folder. Perfetto
+  enablement is `ROCPROFSYS_TRACE` in env. A leftover `--preset` selection
+  is ignored and `GetWarnings` says so; choose Custom or switch tool.
+
+`extra_argv` stays the override hatch on every tool (last profiler flags,
+still ahead of `--`). Putting `-o <file>` there is how a power user would
+opt into rewrite on Instrument; do not strip it.
 
 **`LaunchConfig` (`rocprofvis_launch_config.h`)** is the serializable
 payload: `profiler_id`, `tool`, `connection` (`ConnectionType
@@ -2429,7 +2657,13 @@ connection-mode selector and SSH UI live in the dialog
 an `ExecutionCache` (lazy `FlattenToExecution` result + command
 preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
 lazily creates it; the only entry point is `File > Launch Profiler...`
-(`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
+(`#ifdef ROCPROFVIS_ENABLE_PROFILER`). Closing the window **hides** it:
+the orchestrator and last-run console stay, `Update()` is still pumped
+every frame from `AppWindow`, and reopen lands on the configure screen
+so **View Last Run** / **View Run** still bind to that session. A new
+`Launch` replaces the session; destroying the dialog (app shutdown)
+tears it down. Remote download-progress popups still render while the
+launcher is hidden; SSH auth modals are already owned by `AppWindow`.
 
 There is deliberately **no** selected-tool index beside `m_config.tool` -
 the enum is the only copy. An earlier version kept an `m_tool_index` in
@@ -2458,8 +2692,9 @@ list from `FlattenToExecution`, one entry per argv entry - the controller
 never re-splits it), `env_vars`, `working_directory` (applied to the child
 process only), and `output_directory`, which deliberately does **not**
 reach the command line and currently has no reader in the controller at
-all - the backend emits the output flag itself, because profilers spell it
-differently and some take none. A struct rather than a parameter list
+all - the backend emits any output flag itself, because profilers spell it
+differently and some take none (rocprof-sys-instrument one-shot uses
+`ROCPROFSYS_OUTPUT_PATH` only). A struct rather than a parameter list
 because a transposed pair of the string fields would compile cleanly and
 launch the wrong command.
 
@@ -2865,7 +3100,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Track selection state (system trace)          | `TimelineSelection` (call its setters, listen for the events it emits)                         |
 | Track selection state (compute)               | `ComputeSelection`                                                                             |
 | Measure between timeline points/events        | Shared `MeasurementController`                                                                 |
-| Open a two-trace compare project (dev mode)   | `CompareFilesDialog` -> `AppWindow::OpenCompare`                                               |
+| Open a two-trace compare project (`ROCPROFVIS_ENABLE_TRACE_COMPARE`) | `CompareFilesDialog` -> `AppWindow::OpenCompare`                                               |
 | Find / scroll to a track                      | `TimelineView::ScrollToTrack(track_id)` or emit `ScrollToTrackEvent`                           |
 | Move/zoom the timeline                        | `TimelineView::MoveToPosition(start, end, y, center)` or `SetViewableRangeNS`                  |
 | Navigate to and highlight an event            | `TimelineSelection::NavigateToEvent(track_id, event_uuid, start_ns, dur_ns)`                   |
@@ -2963,6 +3198,11 @@ for nearly every common pattern.
 - **Confusing remote display detection with remote I/O.**
   `is_remote_display_session()` selects a file-dialog backend; it does
   not represent an `SshSession`.
+- **Assuming every rocprof-sys tool accepts `--output` / `--preset`.**
+  Those flags are run/sample only. On instrument, `--output` is a
+  rewritten-binary filename and `--preset` is a parse error. One-shot
+  instrument uses `ROCPROFSYS_OUTPUT_PATH` (and `ROCPROFSYS_TRACE`) in
+  env. Do not restore a single run-shaped argv for every tool.
 
 ## 19. Quick Reference Index of Every UI Class
 
@@ -2982,7 +3222,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
   landing page.
 - `CompareFilesDialog` -> `rocprofvis_compare_files_dialog.h` ->
   Selects base/target traces for a compare project (`File > Compare`
-  entry point is dev-mode-only).
+  entry point is behind `ROCPROFVIS_ENABLE_TRACE_COMPARE`).
 - `AppMonitor`, `MonitorOperation`, `MonitorOperationType` ->
   `rocprofvis_appmonitor.h` -> Background controller-operation polling
   and deferred teardown.
@@ -3210,8 +3450,13 @@ All under `agenticprofiling/`, compiled only with
 - `ComputeWorkloadView` -> `compute/rocprofvis_compute_workload_view.h`.
 - `ComputeKernelDetailsView` -> `compute/rocprofvis_compute_kernel_details.h`.
 - `Roofline` -> `compute/rocprofvis_compute_roofline.h`.
-- `ComputeMemoryChartView`, `ChartBlock`, `MemChartMetric` ->
-  `compute/rocprofvis_compute_memory_chart.h`.
+- `ComputeMemoryChartView` ->
+  `compute/rocprofvis_compute_memory_chart.h`. Data-driven; relational
+  layout model (`MemChartLayout`, `MemChartBlock`, `MemChartArrow`,
+  `MemChartMetricRef`) -> `model/compute/rocprofvis_memory_chart_model.h`;
+  per-arch layout JSON + schema -> `resources/memory_chart/`, embedded at
+  build time into `rocprofvis_memory_chart_layouts_generated.h` via
+  `cmake/embed_memory_chart_layouts.cmake`.
 - `KernelMetricTable` (+ nested `Preset`, `MetricInfo`,
   `ColumnFilter`) -> `compute/rocprofvis_compute_kernel_metric_table.h`.
 - `ComputeTableView` (+ nested `Preset`) ->
@@ -3230,7 +3475,8 @@ All under `agenticprofiling/`, compiled only with
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
 - `ComputeDataModel`, `ComputeKernelSelectionTable` ->
   `model/compute/rocprofvis_compute_data_model.h`.
-- `AvailableMetrics`, `PcSampleState`, `InstructionSourceLine`,
+- `AvailableMetrics`, `PcSampleState`, `PcSampleStallReason`,
+  `PcSampleStallReasonLookup`, `PcSamplingLayerState`, `InstructionSourceLine`,
   `InstructionLine`, `KernelSymbol`, `CodeObjectStore`, `SourceLine`,
   `SourceFile`, `PcSamplingData`, `KernelInfo`, `WorkloadInfo`,
   `MetricValue`, `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->

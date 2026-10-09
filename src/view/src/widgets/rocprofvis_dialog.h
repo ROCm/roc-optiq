@@ -4,9 +4,11 @@
 #pragma once
 
 #include "imgui.h"
-#include <string>
+
+#include <deque>
 #include <functional>
 #include <optional>
+#include <string>
 
 namespace RocProfVis
 {
@@ -36,12 +38,24 @@ private:
 
 class MessageDialog {
 public:
-    void Show(const std::string& title, const std::string& message);
+    void Show(const std::string& title, const std::string& message,
+              std::function<void()> on_close_callback = nullptr);
     void Render();
+
 private:
-    std::string m_title;
-    std::string m_message;
-    bool m_should_open = false;
+    struct message_info_t
+    {
+        std::string           title;
+        std::string           message;
+        std::function<void()> on_close;
+    };
+
+    std::string                m_title;
+    std::string                m_message;
+    std::function<void()>      m_on_close;
+    std::deque<message_info_t> m_pending_messages;
+    bool                       m_should_open = false;
+    bool                       m_is_open     = false;
 };
 
 }  // namespace View

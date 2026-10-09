@@ -54,6 +54,16 @@ PushPlotChrome(SettingsManager& settings)
 
 }  // namespace
 
+TabItem
+ComputeSummaryView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Summary View", TAB_ID,
+        std::make_shared<ComputeSummaryView>(data_provider, compute_selection));
+}
+
 ComputeSummaryView::ComputeSummaryView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()

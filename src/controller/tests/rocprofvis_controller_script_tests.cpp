@@ -17,6 +17,8 @@
 #include <string>
 #include <thread>
 
+#include "rocprofvis_python.h"
+
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
 
 namespace
@@ -42,10 +44,15 @@ get_handle_string(rocprofvis_handle_t* object, rocprofvis_property_t property)
     return text;
 }
 
+// Longer than a script in this suite takes when the deadline works, and short
+// enough that a wedged interpreter fails the case instead of holding the
+// process until the CI step is killed.
+float const SCRIPT_WAIT_SECONDS = 15.0f;
+
 rocprofvis_result_t
 wait_for_script(rocprofvis_controller_future_t* future)
 {
-    return rocprofvis_controller_future_wait(future, FLT_MAX);
+    return rocprofvis_controller_future_wait(future, SCRIPT_WAIT_SECONDS);
 }
 
 rocprofvis_controller_t*
@@ -250,6 +257,13 @@ TEST_CASE("Script execute stops a script that never ends")
 
 TEST_CASE("Script execute stops a script that swallows the interrupt")
 {
+#if PY_VERSION_HEX >= 0x030A0000 && PY_VERSION_HEX < 0x030B0000
+    // Python 3.10 defers GIL handoff and async exceptions when the next
+    // instruction starts a `try:`, and every backward jump in this loop lands
+    // there. The watchdog never gets the GIL to raise, and the interpreter
+    // stays stuck in this loop, so every later case would time out too.
+    SKIP("Python 3.10 cannot interrupt a while-True loop whose body starts with try:");
+#endif
     // A bare except catches the first KeyboardInterrupt and keeps going, which
     // model-written code does. The interrupt has to be re-sent for the deadline
     // to mean anything.
@@ -374,18 +388,29 @@ run_script_text_on(rocprofvis_controller_t* controller, char const* source)
     {
         return "no future";
     }
-    std::string out;
+    std::string         out;
+    rocprofvis_result_t waited = kRocProfVisResultUnknownError;
     if(rocprofvis_script_execute_async(controller, source, nullptr, future, &result) ==
-           kRocProfVisResultSuccess &&
-       wait_for_script(future) == kRocProfVisResultSuccess)
+       kRocProfVisResultSuccess)
     {
-        out = get_handle_string(result, kRPVControllerScriptResultText);
-        const std::string error =
-            get_handle_string(result, kRPVControllerScriptResultErrorMessage);
-        if(!error.empty())
+        waited = wait_for_script(future);
+        if(waited == kRocProfVisResultSuccess)
         {
-            out += "|ERROR:" + error;
+            out = get_handle_string(result, kRPVControllerScriptResultText);
+            const std::string error =
+                get_handle_string(result, kRPVControllerScriptResultErrorMessage);
+            if(!error.empty())
+            {
+                out += "|ERROR:" + error;
+            }
         }
+    }
+    // The interpreter still owns a script that has not finished and writes into
+    // the future and result when it does, so leak them rather than free them
+    // out from under it.
+    if(waited == kRocProfVisResultTimeout)
+    {
+        return "timed out";
     }
     if(result)
     {

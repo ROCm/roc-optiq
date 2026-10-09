@@ -1106,11 +1106,16 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
     m_kernel_name = kernel_name;
     if(node_id)
     {
-        m_where = "nodeId = " + std::to_string(*node_id);
+        m_source_filter = rocprofvis_dm_query_criteria_t{};
+        m_source_filter->node_id = *node_id;
         if(device_id)
         {
-            m_where += " AND agentId = " + std::to_string(*device_id & TOPOLOGY_ID_MASK);
+            m_source_filter->agent_id = *device_id & TOPOLOGY_ID_MASK;
         }
+    }
+    else
+    {
+        m_source_filter = std::nullopt;
     }
     RequestFetch();
     m_fetched = true;
@@ -1150,7 +1155,7 @@ KernelInstanceTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& para
         search_params->m_partial_matching     = false;
         params->m_start_ts                    = timeline.GetStartTime();
         params->m_end_ts                      = timeline.GetEndTime();
-        params->m_where                       = m_where;
+        params->m_source_filter               = m_source_filter;
     }
 }
 

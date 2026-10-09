@@ -1,13 +1,12 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "glfw_util.h"
-#include "rocprofvis_view_module.h"
+#include "rocprofvis_glfw_util.h"
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
-namespace View
+namespace Platform
 {
 
 // Upper bound on the corrective resizes issued after leaving fullscreen. The
@@ -116,12 +115,12 @@ get_current_monitor(GLFWwindow* window)
     return best_monitor ? best_monitor : glfwGetPrimaryMonitor();
 }
 
-void
+bool
 toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
 {
     if(!window)
     {
-        return;
+        return false;
     }
 
     if(state.is_fullscreen)
@@ -149,7 +148,7 @@ toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
         {
             spdlog::warn(
                 "Cannot switch to fullscreen mode: Failed to get video mode for monitor");
-            return;
+            return false;
         }
         // Switch to fullscreen mode on the current monitor
         glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height,
@@ -157,8 +156,7 @@ toggle_fullscreen(GLFWwindow* window, FullscreenState& state)
         state.is_fullscreen = true;
     }
 
-    // Update the view layer with the new fullscreen state
-    rocprofvis_view_set_fullscreen_state(state.is_fullscreen);
+    return true;
 }
 
 // Leaving fullscreen with glfwSetWindowMonitor() asks for the saved windowed
@@ -216,12 +214,12 @@ settle_windowed_geometry(GLFWwindow* window, FullscreenState& state)
     state.restore_attempts--;
 }
 
-void
+bool
 sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState& state)
 {
     if(!window)
     {
-        return;
+        return false;
     }
 
     // This runs from the GLFW window-size callback and must only reconcile
@@ -233,7 +231,7 @@ sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState
 
     if(state.is_fullscreen == is_actually_fullscreen)
     {
-        return;
+        return false;
     }
 
     spdlog::debug("Detected OS-initiated fullscreen change: {} -> {}",
@@ -250,7 +248,7 @@ sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState
         state.windowed_height = height;
     }
 
-    rocprofvis_view_set_fullscreen_state(state.is_fullscreen);
+    return true;
 }
 
 bool
@@ -274,5 +272,5 @@ is_fullscreen_active(GLFWwindow* window)
     return glfwGetWindowMonitor(window) != nullptr;
 }
 
-}  // namespace View
+}  // namespace Platform
 }  // namespace RocProfVis

@@ -188,6 +188,8 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
     src/view/src/compute/rocprofvis_compute_comparison.cpp
     src/view/src/compute/rocprofvis_compute_isa_view.cpp
+    src/view/src/compute/rocprofvis_compute_code_widgets.cpp
+    src/view/src/compute/rocprofvis_compute_isa_data.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -442,6 +444,17 @@ if(BUILD_TESTING)
     target_include_directories(${MEMCHART_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
     target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
     add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
+
+    # ISA sampling interpretation is independent of ImGui, a database, and a GPU.
+    set(ISA_DATA_TEST_NAME ${TARGET_NAME}-isa-data-tests)
+    add_executable(${ISA_DATA_TEST_NAME}
+        src/view/test/rocprofvis_compute_isa_data_tests.cpp
+        src/view/src/compute/rocprofvis_compute_isa_data.cpp)
+    target_include_directories(${ISA_DATA_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+    target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+    add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)

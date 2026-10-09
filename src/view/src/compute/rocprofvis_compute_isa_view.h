@@ -3,41 +3,24 @@
 
 #pragma once
 
-#include "widgets/rocprofvis_widget.h"
-#include "rocprofvis_settings_manager.h"
-#include "rocprofvis_event_manager.h"
-#include "rocprofvis_compute_selection.h"
-#include "widgets/rocprofvis_split_containers.h"
-#include "model/compute/rocprofvis_compute_model_types.h"
-
 #include <map>
 #include <memory>
-#include <optional>
 #include <set>
 #include <string>
-#include <vector>
+
+#include "rocprofvis_compute_code_widgets.h"
+#include "rocprofvis_compute_selection.h"
+#include "rocprofvis_event_manager.h"
+#include "widgets/rocprofvis_split_containers.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
-class SourceCodeWidget;
-class IsaCodeWidget;
 class DataProvider;
 struct TabItem;
 enum class PcSamplingLayer : uint32_t;
-
-struct LineSelection
-{
-    static constexpr uint64_t UNSELECTED = 0;
-    uint64_t hovered_line       = UNSELECTED;
-    uint64_t selected_line      = UNSELECTED;
-    uint64_t source_scroll_line = UNSELECTED;
-    uint64_t source_scroll_file = UNSELECTED;
-    uint64_t isa_scroll_line    = UNSELECTED;
-    bool     hovered_this_frame = false;
-};
 
 struct FetchStateType
 {
@@ -108,7 +91,9 @@ private:
     bool TryTakeNextPendingPcSamplingFetch(PcSamplingLayer& layer);
     void SubmitPcSamplingFetch(PcSamplingLayer layer);
     void FetchPendingPcSampling();
-    void RefreshCodeWidgets();
+    void RefreshCodeWidgets(PcSamplingLayer layer);
+    void RefreshSourceWidget();
+    void UpdateSamplingVisibility();
     void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                            uint64_t source_file_uuid, uint32_t generation,
                            uint64_t request_token, rocprofvis_result_t result);
@@ -133,182 +118,7 @@ private:
 
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_workload_selection_changed_token;
-    bool m_show_metadata_enabled;
-};
-
-class BaseCodeWidget : public RocWidget
-{
-public:
-    BaseCodeWidget(LineSelection& selection);
-    ~BaseCodeWidget() = default;
-
-    virtual void Render() override = 0;
-
-    bool IsStallShown() const { return m_show_stall; };
-    void ChangeStallVisibility(bool show) { m_show_stall = show; };
-
-protected:
-    void CalculateLineNumberWidth(size_t count);
-    void PushStyles();
-
-    bool m_show_stall = false;
-
-    LineSelection& m_line_selection;
-    float          m_line_num_width  = 0.0f;
-    uint32_t       m_line_num_digits = 1;
-
-    SettingsManager& m_settings;
-    ImGuiTableFlags  m_table_flags;
-
-    ImVec4 m_line_num_color;
-};
-
-class SourceCodeWidget : public BaseCodeWidget
-{
-public:
-    SourceCodeWidget(LineSelection& selection);
-    void Render() override;
-
-    void Load(const PcSamplingData& data, uint64_t source_file_uuid);
-
-    uint64_t GetSelectedLine() const { return m_line_selection.selected_line; }
-    uint64_t GetHoveredLine()  const { return m_line_selection.hovered_line; }
-
-private:
-    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void RenderLine(uint32_t index);
-
-    struct SourceRow
-    {
-        std::string content;
-        uint64_t    id          = 0;
-        uint64_t    line_number = 0;
-    };
-
-    std::vector<SourceRow> m_lines;
-};
-
-class IsaCodeWidget : public BaseCodeWidget
-{
-public:
-    IsaCodeWidget(LineSelection& selection);
-    void Render() override;
-
-    void Load(const PcSamplingData& data, uint64_t code_object_uuid);
-
-private:
-    struct StallReason
-    {
-        std::string text;
-        uint64_t    count = 0;
-    };
-
-    struct SampleCounts
-    {
-        uint64_t                total_count = 0;
-        std::optional<uint64_t> issue_count;
-        std::optional<uint64_t> stall_count;
-    };
-
-    struct IsaRow
-    {
-        std::string              instruction;
-        uint64_t                 id                         = 0;
-        uint64_t                 code_object_offset         = 0;
-        uint64_t                 source_line_id             = 0;
-        uint64_t                 source_file_id             = 0;
-        SampleCounts             sample_counts;
-        uint64_t                 stall_reason_sample_count  = 0;
-        std::vector<StallReason> stall_reasons;
-    };
-
-    // Intermediate lookup tables built once per Load and consumed while assembling rows.
-    struct SourceLocation
-    {
-        uint64_t source_line_id = 0;
-        uint64_t source_file_id = 0;
-    };
-
-    struct SampleAggregation
-    {
-        std::unordered_map<uint64_t, SampleCounts>         counts_by_instruction;
-        std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
-        uint64_t                                           kernel_total_samples = 0;
-    };
-
-    using StallReasonCounts = std::unordered_map<uint64_t, uint64_t>;
-    using GroupedStallReasonCounts =
-        std::unordered_map<uint64_t, StallReasonCounts>;
-
-    static const CodeObjectStore* FindCodeObject(const PcSamplingData& data,
-                                                 uint64_t code_object_uuid);
-    static std::unordered_map<uint64_t, SourceLocation>
-        BuildSourceLocations(const PcSamplingData& data);
-    static SampleAggregation AggregateSampleCounts(const PcSamplingData& data);
-    static std::unordered_map<uint64_t, std::string>
-        BuildStallReasonText(const PcSamplingData& data);
-    static GroupedStallReasonCounts
-        BuildStallReasonCounts(const PcSamplingData&            data,
-                               const SampleAggregation&         sample_aggregation,
-                               const std::unordered_map<uint64_t, std::string>&
-                                   reason_text);
-    static GroupedStallReasonCounts
-        GroupStallReasonCountsBySampleState(const PcSamplingData& data);
-    static std::optional<uint64_t>
-        FindOtherWaitLookupUuid(
-            const std::unordered_map<uint64_t, std::string>& reason_text);
-    static uint64_t SumStallReasonCounts(const StallReasonCounts& reason_counts);
-    static void RemoveIssuedSamplesFromOtherWait(
-        const PcSampleState& state, std::optional<uint64_t> other_wait_lookup_uuid,
-        StallReasonCounts& reason_counts);
-    static GroupedStallReasonCounts AggregateStallReasonCountsByInstruction(
-        GroupedStallReasonCounts counts_by_sample_state,
-        const SampleAggregation& sample_aggregation,
-        std::optional<uint64_t>   other_wait_lookup_uuid);
-    static std::vector<StallReason>
-        BuildStallReasons(const StallReasonCounts&                         reason_counts,
-                          const std::unordered_map<uint64_t, std::string>& reason_text,
-                          uint64_t&                                        classified_sample_count);
-    static IsaRow
-        BuildRow(const InstructionLine&                              instruction_line,
-                 const std::unordered_map<uint64_t, SourceLocation>& source_locations,
-                 const SampleAggregation&                            sample_aggregation,
-                 const GroupedStallReasonCounts&                      stall_reason_counts,
-                 const std::unordered_map<uint64_t, std::string>&    stall_reason_text);
-    static std::string
-        ResolveStallReasonText(const std::unordered_map<uint64_t, std::string>& reason_text,
-                               uint64_t                                         lookup_uuid);
-
-    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void RenderLine(uint32_t index);
-
-    static double      CalculatePercentage(uint64_t value, uint64_t total);
-    static ImU32       HeatmapColor(double percent);
-    static std::string FormatSampleCount(uint64_t value);
-    static bool        HasValidSamplingStateCounts(const SampleCounts& counts);
-    bool               RenderPercentBarCell(double percent, bool& row_clicked);
-    void               RenderSamplesCell(uint64_t sample_count);
-    void               RenderSampleSummary(uint64_t sample_count);
-    void               RenderSamplingStateCell(const SampleCounts& counts);
-    void               RenderSamplingStateTooltip(const SampleCounts& counts);
-    void               RenderUnavailableStallCell(const char* tooltip);
-    void               RenderStallReasonBarCell(const IsaRow& row, bool& row_clicked);
-    void               RenderStallReasonsTooltip(const IsaRow& row);
-    struct StallReasonTableLayout
-    {
-        ImVec2 size;
-        float  description_width;
-    };
-
-    StallReasonTableLayout CalculateStallReasonTableLayout(const IsaRow& row);
-    void RenderStallReasonTable(const IsaRow& row, const StallReasonTableLayout& layout,
-                                float mouse_wheel);
-
-    std::vector<IsaRow> m_entries;
-    uint64_t            m_kernel_total_samples        = 0;
-    uint64_t            m_hottest_instruction_samples = 0;
-    uint64_t            m_largest_code_object_offset  = 0;
-    bool                m_stall_data_available        = false;
+    bool m_show_sampling_details;
 };
 
 }  // namespace View

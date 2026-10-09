@@ -1563,6 +1563,33 @@ and units containing percent signs are displayed literally.
 
 ### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
+The ISA implementation has three boundaries:
+
+- `rocprofvis_compute_isa_view.{h,cpp}` owns layer requests, selection,
+  source-file controls, and pane visibility. Existing generation and request-token
+  checks protect callbacks from stale selections.
+- `rocprofvis_compute_code_widgets.{h,cpp}` owns `BaseCodeWidget`,
+  `SourceCodeWidget`, `IsaCodeWidget`, and their shared `LineSelection`.
+  `BeginCodeRow` shares the source/ISA selection and hover behavior; local cell
+  helpers share bounds, fill clipping, and hover/click targets.
+- `rocprofvis_compute_isa_data.{h,cpp}` owns `IsaDataBuilder`, a View-layer
+  projection with no ImGui or settings dependency. It builds instruction rows,
+  updates source mappings and sampling independently, and prepares count validity,
+  percentages, reason identities, formatted legend counts, and reason/bar shares.
+  `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
+  without a database or GPU.
+
+Layer completions refresh only their owned data: ISA completion builds instruction
+rows from the available layers, source completion updates correlations and the
+selected source text, and stalls completion updates sampling. If source or stalls
+arrives before ISA, the later ISA load incorporates it. Cached source-file changes
+refresh source text, and sampling visibility changes update column flags without
+reaggregating rows. Instruction storage survives source and sampling updates.
+The ISA widget addresses columns through its named `IsaColumn` logical indices;
+`SetupColumns` and `RenderHeaders` keep registration and header rendering separate
+from the clipped row loop. Tooltip summary, table, footer, and size measurement
+are separate methods consuming the same prepared row/reason data.
+
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
@@ -1630,7 +1657,9 @@ and order rather than recreating columns with defaults.
 For each instruction, Stall % shows the measured percentage only when every
 sample state for that instruction has non-NULL issued and stall counts and their
 aggregated issued-plus-stalled total does not exceed the total samples. Stall %,
-Stall Categories, and the shared reason tooltip use `HasValidSamplingStateCounts`.
+Stall Categories, and the shared reason tooltip consume the prepared
+`SamplingSummary` from `IsaDataBuilder::SummarizeSampling`, which distinguishes
+valid, missing, and invalid progress counts once per instruction.
 Malformed counts produce disabled `N/A` stall cells and an invalid-counts warning
 instead of a percentage or category breakdown. Sampling State uses the same
 warning, including for nonzero progress counts with zero total samples. A genuine
@@ -1680,7 +1709,10 @@ Hovering a `Stall %` cell shows every recorded stall reason
 for that instruction, aggregated across sample states and sorted by descending
 sample count. Stochastic profiles encode the irrelevant stall-reason field of
 issued samples as `OTHER_WAIT`; the view removes that issued contribution per
-sample state when raw reason totals include all samples. Each remaining reason
+sample state when raw reason totals include all samples. The same reason identity
+resolver recognizes `OTHER_WAIT`, `OTHER`, and SDK-prefixed spellings for both
+normalization and presentation. Multiple equivalent lookup entries are normalized
+in lookup-ID order. Each remaining reason
 includes its count and share of the instruction's stalled samples. The tooltip
 shows issued samples separately and warns when the normalized reason total
 differs from the instruction's stalled-sample count.
@@ -1695,7 +1727,8 @@ samples or zero total samples have no bar. Invalid progress counts display `N/A`
 in both stall columns instead of being clamped into an apparently valid bar.
 Host-trap and incomplete progress data display disabled `N/A` cells with an
 explanation. Both stall columns reuse the same tooltip, which includes color
-swatches, raw database reason names, wrapped plain-language meanings, counts,
+swatches, raw database reason names, wrapped plain-language meanings, consistently
+formatted sample counts (including separators in the legend),
 shares, and an Unclassified row for missing classifications. The reason list
 uses measured wrapped-row heights and switches to a scrollable table capped at
 half the current viewport height when needed. Its headers stay frozen and the
@@ -2451,7 +2484,7 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
-Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
+Tools: `kRPVProfilerToolRocprofSysRun`, `â€¦SysSample`, `â€¦SysInstrument`.
 Tabs: General, Sampling, ROCm,
 Process Sampling, Parallelism, Advanced, plus Instrument (only when the
 tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
@@ -3333,8 +3366,10 @@ All under `agenticprofiling/`, compiled only with
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeIsaView`, `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget` ->
-  `compute/rocprofvis_compute_isa_view.h`.
+- `ComputeIsaView` -> `compute/rocprofvis_compute_isa_view.h`.
+- `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget`, `LineSelection` ->
+  `compute/rocprofvis_compute_code_widgets.h`.
+- `IsaDataBuilder` -> `compute/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.

@@ -1621,8 +1621,23 @@ override these defaults; subsequent visibility choices use normal ImGui persiste
 The ISA table enables `Reorderable`, so users can drag any visible column header
 to change its display order. Order is saved through the same ImGui table settings;
 headers and cells still address logical column indices after reordering.
+All seven ISA columns remain registered, including while sampling details are
+hidden or still loading. Sampling columns receive the temporary `Disabled` flag
+in those states, which also removes them from the column menu without changing
+their user visibility preferences. Headers and rows always advance through the
+same logical column indices. Showing details restores the saved visibility, widths,
+and order rather than recreating columns with defaults.
 For each instruction, Stall % shows the measured percentage only when every
-sample state for that instruction has non-NULL issued and stall counts.
+sample state for that instruction has non-NULL issued and stall counts and their
+aggregated issued-plus-stalled total does not exceed the total samples. Stall %,
+Stall Categories, and the shared reason tooltip use `HasValidSamplingStateCounts`.
+Malformed counts produce disabled `N/A` stall cells and an invalid-counts warning
+instead of a percentage or category breakdown. Sampling State uses the same
+warning, including for nonzero progress counts with zero total samples. A genuine
+zero total with zero issued/stalled counts remains valid. Stall headers are dimmed
+when no instruction has valid progress counts. Mismatched reason classifications
+are reported separately and retain the existing normalization behavior when the
+progress counts themselves are valid.
 In mixed captures, instructions with missing progress counts display disabled
 `N/A` cells with explanatory tooltips; other instructions retain their measured
 percentages. Entirely host-trap captures have no progress counts, so Stall % stays
@@ -1676,12 +1691,21 @@ stalled portion, and missing classifications occupy a gray remainder within that
 portion. If recorded reasons exceed the stalled count, segment shares use the
 recorded reason total to fit inside the same stalled portion; the tooltip explains
 the mismatch and reported shares still use the stalled-sample count. Zero stalled
-samples or zero total samples have no bar. Counts above the total sample count
-are clamped to full width, matching Stall % bar rendering.
+samples or zero total samples have no bar. Invalid progress counts display `N/A`
+in both stall columns instead of being clamped into an apparently valid bar.
 Host-trap and incomplete progress data display disabled `N/A` cells with an
 explanation. Both stall columns reuse the same tooltip, which includes color
 swatches, raw database reason names, wrapped plain-language meanings, counts,
-shares, and an Unclassified row for missing classifications. Known reason colors
+shares, and an Unclassified row for missing classifications. The reason list
+uses measured wrapped-row heights and switches to a scrollable table capped at
+half the current viewport height when needed. Its headers stay frozen and the
+summary and footer remain outside the scroll area. Hovering either stall cell
+and using the mouse wheel scrolls the list; `SetItemKeyOwner(MouseWheelY)` keeps
+that wheel input from scrolling the ISA pane. Small lists retain their natural
+height and do not claim wheel input. The stall cells use identified invisible
+buttons and pass clicks through to row selection. Tooltip tables are scoped by
+instruction ID so scrolling one instruction does not scroll another's details.
+Known reason colors
 are stable across instructions and kernels and come from the centralized
 `kPcSampling*` dark/light theme palette. ALU dependencies use green and scheduler
 arbitration uses the native accent blue; other waits use coral so these categories

@@ -286,15 +286,23 @@ private:
     static ImU32       HeatmapColor(double percent);
     static std::string FormatSampleCount(uint64_t value);
     static bool        HasValidSamplingStateCounts(const SampleCounts& counts);
-    bool               RenderPercentBarCell(double percent);
+    bool               RenderPercentBarCell(double percent, bool& row_clicked);
     void               RenderSamplesCell(uint64_t sample_count);
     void               RenderSampleSummary(uint64_t sample_count);
     void               RenderSamplingStateCell(const SampleCounts& counts);
     void               RenderSamplingStateTooltip(const SampleCounts& counts);
     void               RenderUnavailableStallCell(const char* tooltip);
-    void               RenderStallReasonBarCell(const IsaRow& row);
+    void               RenderStallReasonBarCell(const IsaRow& row, bool& row_clicked);
     void               RenderStallReasonsTooltip(const IsaRow& row);
-    void               RenderStallReasonTable(const IsaRow& row);
+    struct StallReasonTableLayout
+    {
+        ImVec2 size;
+        float  description_width;
+    };
+
+    StallReasonTableLayout CalculateStallReasonTableLayout(const IsaRow& row);
+    void RenderStallReasonTable(const IsaRow& row, const StallReasonTableLayout& layout,
+                                float mouse_wheel);
 
     std::vector<IsaRow> m_entries;
     uint64_t            m_kernel_total_samples        = 0;

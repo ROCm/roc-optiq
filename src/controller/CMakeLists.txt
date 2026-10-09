@@ -205,7 +205,7 @@ if(BUILD_TESTING)
         endif()
         # The tests find the standard library the way the app does, beside
         # the executable.
-        if(ROCPROFVIS_VENDOR_PYTHON)
+        if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
             rocprofvis_python_vendor_deploy(${SCRIPT_TEST_NAME})
         endif()
     endif()

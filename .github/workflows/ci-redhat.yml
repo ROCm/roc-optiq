@@ -62,8 +62,8 @@ on:
         description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
         type: boolean
         default: false
-      vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_VENDOR_PYTHON). Off links the build machine Python.'
+      enable_vendor_python:
+        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
         type: boolean
         default: false
       enable_trace_compare:
@@ -104,8 +104,8 @@ on:
         description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
         type: boolean
         default: false
-      vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_VENDOR_PYTHON). Off links the build machine Python.'
+      enable_vendor_python:
+        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
         type: boolean
         default: false
       enable_trace_compare:
@@ -158,7 +158,7 @@ env:
   ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
   ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
   ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
-  VENDOR_PYTHON: ${{ (inputs.vendor_python == true || inputs.vendor_python == 'true') && 'ON' || 'OFF' }}
+  VENDOR_PYTHON: ${{ (inputs.enable_vendor_python == true || inputs.enable_vendor_python == 'true') && 'ON' || 'OFF' }}
   ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
   ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
@@ -242,7 +242,7 @@ jobs:
             -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
             -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
             -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
-            -DROCPROFVIS_VENDOR_PYTHON=${{ env.VENDOR_PYTHON }} \
+            -DROCPROFVIS_ENABLE_VENDOR_PYTHON=${{ env.VENDOR_PYTHON }} \
             -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
             -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DGLFW_LINK_STATIC=ON \

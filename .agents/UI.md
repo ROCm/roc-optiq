@@ -1609,16 +1609,28 @@ The ISA table is always present. Its Offset column shows each instruction's
 byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset, ISA instruction, or
 source-code line opens its copy context menu. `Show Sampling Details` adds
-Samples, aggregated by instruction UUID across returned sample states, and the
-Stall % column when at least one displayed instruction has progress data.
+Samples and Sampling State, aggregated by instruction UUID across returned sample
+states, and the Stall % column regardless of progress-data availability.
 For each instruction, Stall % shows the measured percentage only when every
 sample state for that instruction has non-NULL issued and stall counts.
 In mixed captures, instructions with missing progress counts display disabled
 `N/A` cells with explanatory tooltips; other instructions retain their measured
-percentages. Entirely host-trap captures have no progress counts, so Stall % is
-omitted. Unsampled instructions also have unavailable progress counts. A
+percentages. Entirely host-trap captures have no progress counts, so Stall % stays
+visible with a dimmed header and disabled `N/A` cells. Unsampled instructions also
+have unavailable progress counts. A
 stochastic capture's real zero counts remain available and are not confused
-with NULL. Samples shows a right-aligned
+with NULL. Sampling State draws a thin stacked bar before Samples: red for
+stalled observations, green for issued observations, and gray for unavailable or
+unclassified progress data. Total bar length is normalized to the hottest displayed
+instruction; each colored segment uses its measured count over that same maximum.
+Host-trap and incomplete mixed-capture counts render a neutral total-sample bar,
+with a tooltip explaining the missing breakdown. Counts whose issued-plus-stalled
+total exceeds the sample count also render a neutral bar with an explanation.
+Zero-sample instructions have no bar. Tooltips reuse the Samples summary and its
+low-confidence warning, then show issued/stalled counts and percentages, plus any
+unclassified remainder. Bar and tooltip colors come from the theme's error, success,
+and dim-text palette. These are sample observations, not cycle latency.
+Samples shows a right-aligned
 raw count over a heat bar normalized to the hottest displayed instruction. Its
 tooltip reports both kernel share and relative hotness. Cell tooltips use
 `IsItemHovered()` over the full cell so covering windows and popups suppress
@@ -1629,7 +1641,8 @@ at the wider of its header and largest formatted count. Samples, Offset, and `#`
 use the public ImGui `NoResize` column flag so their calculated widths follow
 kernel/workload data and font changes, including sampling-detail data that arrives
 later. The `#` width is measured with the active code font during rendering.
-ISA and Stall % remain user-resizable; Samples, Offset, and Stall % are
+ISA, Sampling State, and Stall % remain user-resizable; Sampling State, Samples,
+Offset, and Stall % are
 user-hideable through the ImGui header context menu. The source table supports
 the same per-column visibility menu. Both native
 column menus use the application's default window padding, matching the event

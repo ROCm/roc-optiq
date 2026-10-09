@@ -285,8 +285,12 @@ private:
     static double      CalculatePercentage(uint64_t value, uint64_t total);
     static ImU32       HeatmapColor(double percent);
     static std::string FormatSampleCount(uint64_t value);
+    static bool        HasValidSamplingStateCounts(const SampleCounts& counts);
     bool               RenderPercentBarCell(double percent);
     void               RenderSamplesCell(uint64_t sample_count);
+    void               RenderSampleSummary(uint64_t sample_count);
+    void               RenderSamplingStateCell(const SampleCounts& counts);
+    void               RenderSamplingStateTooltip(const SampleCounts& counts);
     void               RenderUnavailableStallCell();
     void               RenderStallReasonsTooltip(const IsaRow& row);
     void               RenderStallReasonTable(const IsaRow& row);

@@ -1561,7 +1561,12 @@ production code from depending on it.
 Dynamic text uses `ImGui::TextUnformatted` so names, descriptions,
 and units containing percent signs are displayed literally.
 
-### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
+### `ComputeIsaView` (`compute/isa/rocprofvis_compute_isa_view.{h,cpp}`)
+
+All ISA implementation sources and headers live in `src/view/src/compute/isa/`.
+The related data tests live in its `tests/` subfolder. CMake lists these files
+explicitly; generated Visual Studio projects use their standard source/header
+filters rather than a custom ISA group.
 
 The ISA implementation has three boundaries:
 
@@ -3366,10 +3371,10 @@ All under `agenticprofiling/`, compiled only with
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeIsaView` -> `compute/rocprofvis_compute_isa_view.h`.
+- `ComputeIsaView` -> `compute/isa/rocprofvis_compute_isa_view.h`.
 - `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget`, `LineSelection` ->
-  `compute/rocprofvis_compute_code_widgets.h`.
-- `IsaDataBuilder` -> `compute/rocprofvis_compute_isa_data.h`.
+  `compute/isa/rocprofvis_compute_code_widgets.h`.
+- `IsaDataBuilder` -> `compute/isa/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.

@@ -107,6 +107,19 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
 find_package(Vulkan REQUIRED)
 
+# ISA implementation files live together in the compute/isa directory.
+set(ISA_VIEW_FILES
+    src/view/src/compute/isa/rocprofvis_compute_isa_view.cpp
+    src/view/src/compute/isa/rocprofvis_compute_isa_view.h
+    src/view/src/compute/isa/rocprofvis_compute_code_widgets.cpp
+    src/view/src/compute/isa/rocprofvis_compute_code_widgets.h
+    src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
+    src/view/src/compute/isa/rocprofvis_compute_isa_data.h
+)
+set(ISA_VIEW_TEST_FILES
+    src/view/src/compute/isa/tests/rocprofvis_compute_isa_data_tests.cpp
+)
+
 # View related src files
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp
@@ -187,9 +200,7 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
     src/view/src/compute/rocprofvis_compute_comparison.cpp
-    src/view/src/compute/rocprofvis_compute_isa_view.cpp
-    src/view/src/compute/rocprofvis_compute_code_widgets.cpp
-    src/view/src/compute/rocprofvis_compute_isa_data.cpp
+    ${ISA_VIEW_FILES}
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -448,8 +459,9 @@ if(BUILD_TESTING)
     # ISA sampling interpretation is independent of ImGui, a database, and a GPU.
     set(ISA_DATA_TEST_NAME ${TARGET_NAME}-isa-data-tests)
     add_executable(${ISA_DATA_TEST_NAME}
-        src/view/test/rocprofvis_compute_isa_data_tests.cpp
-        src/view/src/compute/rocprofvis_compute_isa_data.cpp)
+        ${ISA_VIEW_TEST_FILES}
+        src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
+        src/view/src/compute/isa/rocprofvis_compute_isa_data.h)
     target_include_directories(${ISA_DATA_TEST_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)

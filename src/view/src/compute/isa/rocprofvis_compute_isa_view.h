@@ -9,7 +9,7 @@
 #include <string>
 
 #include "rocprofvis_compute_code_widgets.h"
-#include "rocprofvis_compute_selection.h"
+#include "compute/rocprofvis_compute_selection.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_split_containers.h"
 

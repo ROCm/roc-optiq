@@ -4679,6 +4679,13 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
 }
 
 bool
+DataProvider::LastMetricsFetchSucceeded(uint64_t client_id) const
+{
+    auto it = m_metrics_fetch_succeeded.find(client_id);
+    return it != m_metrics_fetch_succeeded.end() && it->second;
+}
+
+bool
 DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
 {
     if (m_state != ProviderState::kReady)
@@ -5165,23 +5172,19 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMin, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMin] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMin] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMax, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMax] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMax] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMean, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMean] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMean] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMedian, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMedian] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMedian] = uint64_data;
         workload.kernels[kernel.id] = std::move(kernel);
     }
 }
@@ -5728,6 +5731,12 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
     }
     std::shared_ptr<MetricsRequestParams> request_params =
         std::dynamic_pointer_cast<MetricsRequestParams>(req.custom_params);
+    if(request_params)
+    {
+        m_metrics_fetch_succeeded[request_params->m_client_id] =
+            req.request_obj_handle != nullptr &&
+            req.response_code == kRocProfVisResultSuccess;
+    }
     if(req.request_obj_handle && request_params)
     {
         rocprofvis_controller_metrics_container_t* container = req.request_obj_handle;
@@ -5947,11 +5956,11 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
+    KernelInfo*          kernel =
+        m_compute_model.GetKernelInfoMutable(params->m_workload_id, params->m_kernel_id);
 
     if(success && pc_handle)
     {
-        KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
-            params->m_workload_id, params->m_kernel_id);
         if(kernel)
         {
             switch(params->m_layer)
@@ -5982,6 +5991,65 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     else if(!success)
     {
         spdlog::warn("PC sampling request failed with code {}", req.response_code);
+    }
+
+    // A cancelled read is left unmarked, so whoever still wants the layer reads
+    // it again. A source file is recorded as read only when its lines landed;
+    // a failure is recorded apart from that, and does not take back a file
+    // whose lines already did.
+    if(kernel && req.response_code != kRocProfVisResultCancelled)
+    {
+        PcSamplingLayerState outcome = PcSamplingLayerState::kFailed;
+        if(success && pc_handle)
+        {
+            outcome = PcSamplingLayerState::kRead;
+        }
+        else if(req.response_code == kRocProfVisResultNotSupported)
+        {
+            outcome = PcSamplingLayerState::kUnsupported;
+        }
+        PcSamplingData&            data    = kernel->pc_sampling_data;
+        switch(params->m_layer)
+        {
+            case PcSamplingLayer::kIsa:
+                data.isa_state = outcome;
+                break;
+            case PcSamplingLayer::kSource:
+                if(data.source_state != PcSamplingLayerState::kRead)
+                {
+                    data.source_state = outcome;
+                }
+                if(completed_source_file_uuid != 0)
+                {
+                    const std::vector<uint64_t>::iterator read = std::find(
+                        data.source_files_read.begin(), data.source_files_read.end(),
+                        completed_source_file_uuid);
+                    const std::vector<uint64_t>::iterator failed = std::find(
+                        data.source_files_failed.begin(), data.source_files_failed.end(),
+                        completed_source_file_uuid);
+                    if(outcome == PcSamplingLayerState::kRead)
+                    {
+                        if(read == data.source_files_read.end())
+                        {
+                            data.source_files_read.push_back(completed_source_file_uuid);
+                        }
+                        if(failed != data.source_files_failed.end())
+                        {
+                            data.source_files_failed.erase(failed);
+                        }
+                    }
+                    else if(outcome == PcSamplingLayerState::kFailed &&
+                            read == data.source_files_read.end() &&
+                            failed == data.source_files_failed.end())
+                    {
+                        data.source_files_failed.push_back(completed_source_file_uuid);
+                    }
+                }
+                break;
+            case PcSamplingLayer::kStalls:
+                data.stalls_state = outcome;
+                break;
+        }
     }
 
     req.request_obj_handle = nullptr;

@@ -428,8 +428,13 @@ fetch), not a parallel-only event channel.
   selection or the full trace.
 - **Compute traces have no Script tab.** They have no `AnalysisView`,
   and `Track.events()` / `optiq.table()` are system-oriented anyway -
-  `run_analysis_script` already refuses a compute trace. Give
-  `ComputeView` its own tab when the compute bindings land, not before.
+  `optiq.table` tests positively for a system controller and refuses
+  anything else. Ask Optiq now reads compute traces, but
+  `run_analysis_script` is registered only in its system tool set and
+  the scripting paragraph is appended only to the system prompt, so a
+  compute turn is never told the tool exists rather than being allowed
+  to call it and fail. Give `ComputeView` its own tab when the compute
+  bindings land, not before.
 - Phase 2: page a script-owned table handle with `InfiniteScrollTable`
   using a **unique** request id (not `EVENT_TABLE_REQUEST_ID`).
 

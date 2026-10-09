@@ -126,14 +126,37 @@ struct SourceFile
     std::vector<SourceLine> source_lines;
 };
 
+// How far one layer of a kernel's PC samples has got. A layer can come back
+// empty, so emptiness alone cannot say whether it was ever read.
+enum class PcSamplingLayerState : uint32_t
+{
+    kNotRead,
+    kRead,
+    kFailed,
+    // The trace's compute schema predates PC sampling, so there is nothing to
+    // read and no point reading again.
+    kUnsupported
+};
+
 struct PcSamplingData
 {
-    std::vector<CodeObjectStore>            code_objects;
-    std::vector<SourceFile>                 source_files;
-    std::vector<InstructionSourceLine>      instruction_source_lines;
-    std::vector<PcSampleState>              pc_sample_states;
-    std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
-    std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
+    std::vector<CodeObjectStore>           code_objects;
+    std::vector<SourceFile>                source_files;
+    std::vector<InstructionSourceLine>     instruction_source_lines;
+    std::vector<PcSampleState>             pc_sample_states;
+    std::vector<PcSampleStallReason>       pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonLookup> pc_sample_stall_reason_lookups;
+    PcSamplingLayerState isa_state    = PcSamplingLayerState::kNotRead;
+    PcSamplingLayerState source_state = PcSamplingLayerState::kNotRead;
+    PcSamplingLayerState stalls_state = PcSamplingLayerState::kNotRead;
+    // Files whose line text a read brought back. The source layer brings one
+    // file's lines per read. A failure is not recorded here: that would make a
+    // later call skip the file and then print its instructions with no line.
+    std::vector<uint64_t> source_files_read;
+    // Files a source read tried and did not bring back. kernel_pc_samples
+    // clears this at the start of a call, so a failure is retried then rather
+    // than on every re-entry of the same call.
+    std::vector<uint64_t> source_files_failed;
 };
 
 struct KernelInfo

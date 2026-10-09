@@ -617,6 +617,24 @@ const AssistantToolEntry k_ui_tool_handlers[] = {
     { "goto", ToolGoto },
 };
 
+/*
+ * The two above that mean the same thing whatever kind of trace is in front.
+ *
+ * offer_next_steps only writes buttons under the chat. switch_tab reads
+ * AppWindow's tab container, and the details-panel half of it already
+ * null-guards the TraceView, so on a compute trace it lists the open traces and
+ * switches between them without mentioning tabs that are not there.
+ *
+ * show_panel is deliberately absent. Six of its eight panels are persisted in
+ * AppWindowSettings and apply to system traces, so on a compute tab it would
+ * report having opened a panel the user cannot see - a false success is worse
+ * to the model than an unknown tool, because it answers as though it worked.
+ */
+const AssistantToolEntry k_shared_ui_tool_handlers[] = {
+    { "offer_next_steps", ToolOfferNextSteps },
+    { "switch_tab", ToolSwitchTab },
+};
+
 }  // namespace
 
 // The UI half of the tool set, for StartAssistantTool to search.
@@ -626,6 +644,16 @@ GetAssistantUiToolHandlers()
     AssistantToolTable table;
     table.entries = k_ui_tool_handlers;
     table.count   = sizeof(k_ui_tool_handlers) / sizeof(k_ui_tool_handlers[0]);
+    return table;
+}
+
+// The trace-kind-agnostic subset, searched on a compute trace.
+AssistantToolTable
+GetAssistantSharedUiToolHandlers()
+{
+    AssistantToolTable table;
+    table.entries = k_shared_ui_tool_handlers;
+    table.count = sizeof(k_shared_ui_tool_handlers) / sizeof(k_shared_ui_tool_handlers[0]);
     return table;
 }
 

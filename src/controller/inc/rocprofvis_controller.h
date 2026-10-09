@@ -297,7 +297,8 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controll
 
 /*
  * Fetch the PC sampling code objects, kernel symbols, and ISA lines needed to show
- * the ISA pane for a specific kernel asynchronously.
+ * the ISA pane for a specific kernel asynchronously. The future's result is
+ * kRocProfVisResultNotSupported when the trace's compute schema predates PC sampling.
  * @param controller The controller
  * @param args Input arguments (kernel id)
  * @param result The future to wait on
@@ -308,7 +309,8 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_isa_lines_async(rocp
 
 /*
  * Fetch PC sampling source-file metadata, instruction/source mappings, and source
- * lines for a specific kernel and source file asynchronously.
+ * lines for a specific kernel and source file asynchronously. The future's result is
+ * kRocProfVisResultNotSupported when the trace's compute schema predates PC sampling.
  * @param controller The controller
  * @param args Input arguments (kernel id, source file id; 0 selects the first file)
  * @param result The future to wait on
@@ -323,6 +325,8 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
  * Fetch PC sample states and stall reasons for a specific kernel asynchronously.
  * Instruction sample metadata is also fetched unless the optional
  * kRPVControllerPcSamplingArgsIncludeInstructionSamples argument is zero.
+ * The future's result is kRocProfVisResultNotSupported when the trace's compute
+ * schema predates PC sampling.
  * @param controller The controller
  * @param args Input arguments (kernel id and optional instruction-sample flag)
  * @param result The future to wait on

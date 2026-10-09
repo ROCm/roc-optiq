@@ -36,6 +36,17 @@ public:
     std::shared_ptr<RocWidget> GetToolbar() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
 
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Which workload and kernel the user is looking at, which is what the
+    // assistant reads instead of a time range - a compute trace has no
+    // timeline. Read-only: selecting a kernel on the user's behalf would be a
+    // UI action and belongs in OptiqActions, not here.
+    const ComputeSelection* GetComputeSelection() const
+    {
+        return m_compute_selection.get();
+    }
+#endif
+
     friend struct ComputeViewTestPeer;
 
 private:

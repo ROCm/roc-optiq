@@ -75,9 +75,19 @@ protected:
         std::string filter;
     };
 
+    // Header names of the id columns the controller adds to event and sample rows.
+    static constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
+    static constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
+    static constexpr const char* ID_COLUMN_NAME        = "__uuid";
+    static constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
+
     virtual void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const;
+    // Default formats the start/end/duration columns found by IndexColumns.
     virtual void FormatData() const;
+    // Default locates the time columns and the track, stream and uuid columns.
+    // Overrides call it first, then index their own columns.
     virtual void IndexColumns();
+    // Default opens the row context menu on right-click.
     virtual void RowSelected(const ImGuiMouseButton mouse_button);
 
     uint64_t                      SelectedRowToTrackID(size_t track_id_column_index,
@@ -93,8 +103,11 @@ protected:
     void RequestFetch();
     void RequestFilter();
 
-    void FormatTimeColumns() const;
-    void ExportToFile() const;
+    // Clears the formatted-cell cache and sizes it to the current header, so a
+    // FormatData override only fills the columns it formats.
+    std::vector<FormattedColumnInfo>& ResetFormattedData() const;
+    void                              FormatTimeColumns() const;
+    void                              ExportToFile() const;
     /* Whether this table is waiting on data: either a request is out with the
      * controller, or one is held until the controller table frees up.
      */

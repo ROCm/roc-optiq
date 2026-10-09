@@ -406,10 +406,7 @@ TopEventsView::TopEventsTable::FormatData() const
 {
     const std::vector<std::vector<std::string>>& table_data =
         m_table_model().GetTableData(m_table_type);
-    std::vector<FormattedColumnInfo>& formatted_column_data =
-        m_table_model_mutable().GetMutableFormattedTableData(m_table_type);
-    formatted_column_data.clear();
-    formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
+    std::vector<FormattedColumnInfo>& formatted_column_data = ResetFormattedData();
     auto time_format = m_settings.GetUserSettings().unit_settings.time_format;
     for(size_t i : m_duration_column_indices)
     {

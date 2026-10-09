@@ -1610,7 +1610,7 @@ byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset, ISA instruction, or
 source-code line opens its copy context menu. `Show Sampling Details` adds
 Samples and Sampling State, aggregated by instruction UUID across returned sample
-states, and the Stall % column regardless of progress-data availability.
+states, plus Stall % and Stall Reasons regardless of progress-data availability.
 For each instruction, Stall % shows the measured percentage only when every
 sample state for that instruction has non-NULL issued and stall counts.
 In mixed captures, instructions with missing progress counts display disabled
@@ -1641,8 +1641,8 @@ at the wider of its header and largest formatted count. Samples, Offset, and `#`
 use the public ImGui `NoResize` column flag so their calculated widths follow
 kernel/workload data and font changes, including sampling-detail data that arrives
 later. The `#` width is measured with the active code font during rendering.
-ISA, Sampling State, and Stall % remain user-resizable; Sampling State, Samples,
-Offset, and Stall % are
+ISA, Sampling State, Stall %, and Stall Reasons remain user-resizable; Sampling
+State, Samples, Offset, Stall %, and Stall Reasons are
 user-hideable through the ImGui header context menu. The source table supports
 the same per-column visibility menu. Both native
 column menus use the application's default window padding, matching the event
@@ -1659,6 +1659,22 @@ sample state when raw reason totals include all samples. Each remaining reason
 includes its count and share of the instruction's stalled samples. The tooltip
 shows issued samples separately and warns when the normalized reason total
 differs from the instruction's stalled-sample count.
+Stall Reasons follows Stall % and draws a stacked distribution of those same
+normalized reason counts over the instruction's stalled-sample total. Missing
+classifications occupy a gray remainder. If recorded reasons exceed the stalled
+count, the bar uses the recorded reason total to fit all segments and the tooltip
+explains the mismatch; reported shares still use the stalled-sample count.
+Zero stalled samples have no bar unless inconsistent reason records exist.
+Host-trap and incomplete progress data display disabled `N/A` cells with an
+explanation. Both stall columns reuse the same tooltip, which includes color
+swatches, raw database reason names, wrapped plain-language meanings, counts,
+shares, and an Unclassified row for missing classifications. Known reason colors
+are stable across instructions and kernels and come from the centralized
+`kPcSampling*` dark/light theme palette. ALU dependencies use green and scheduler
+arbitration uses the native accent blue; other waits use coral so these categories
+remain visually distinct. SDK-prefixed names and OTHER are also
+recognized; unknown names are preserved with a neutral color and explanation.
+Reason meanings follow ROCprofiler-SDK's CDNA3/CDNA4 PC-sampling documentation.
 The source table contains only the source line number and source text.
 Instruction-sample metadata, active-thread percentage, wave-occupancy
 percentage, and dispatch UUID are available on the controller handle but are

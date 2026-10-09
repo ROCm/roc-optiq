@@ -291,7 +291,8 @@ private:
     void               RenderSampleSummary(uint64_t sample_count);
     void               RenderSamplingStateCell(const SampleCounts& counts);
     void               RenderSamplingStateTooltip(const SampleCounts& counts);
-    void               RenderUnavailableStallCell();
+    void               RenderUnavailableStallCell(const char* tooltip);
+    void               RenderStallReasonBarCell(const IsaRow& row);
     void               RenderStallReasonsTooltip(const IsaRow& row);
     void               RenderStallReasonTable(const IsaRow& row);
 

@@ -147,6 +147,15 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(235, 195, 90, 255),   // Colors::kLogWarning
     IM_COL32(235, 110, 110, 255),  // Colors::kLogError
     IM_COL32(255, 80, 80, 255),    // Colors::kLogCritical
+    IM_COL32(231, 196, 65, 255),   // Colors::kPcSamplingInstructionFetch
+    IM_COL32(80, 180, 125, 255),   // Colors::kPcSamplingAluDependency
+    IM_COL32(184, 139, 226, 255),  // Colors::kPcSamplingWaitcnt
+    IM_COL32(190, 160, 130, 255),  // Colors::kPcSamplingInternalInstruction
+    IM_COL32(215, 95, 165, 255),   // Colors::kPcSamplingBarrier
+    IM_COL32(106, 164, 232, 255),  // Colors::kPcSamplingArbiter
+    IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
+    IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
+    IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
     // This must follow the ordering of Colors enum.
 };
 
@@ -270,6 +279,15 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(170, 120, 0, 255),    // Colors::kLogWarning
     IM_COL32(190, 40, 40, 255),    // Colors::kLogError
     IM_COL32(200, 0, 0, 255),      // Colors::kLogCritical
+    IM_COL32(177, 130, 0, 255),    // Colors::kPcSamplingInstructionFetch
+    IM_COL32(40, 135, 85, 255),    // Colors::kPcSamplingAluDependency
+    IM_COL32(124, 78, 190, 255),   // Colors::kPcSamplingWaitcnt
+    IM_COL32(130, 100, 70, 255),   // Colors::kPcSamplingInternalInstruction
+    IM_COL32(175, 45, 120, 255),   // Colors::kPcSamplingBarrier
+    IM_COL32(54, 132, 214, 255),   // Colors::kPcSamplingArbiter
+    IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
+    IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
+    IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
     // This must follow the ordering of Colors enum.
 };
 // Same hue order as origin/main, desaturated for the redesign.

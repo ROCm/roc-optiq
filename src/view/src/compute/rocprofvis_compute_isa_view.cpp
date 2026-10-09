@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 
@@ -29,6 +30,57 @@ constexpr uint64_t LOW_CONFIDENCE_SAMPLE_COUNT = 10;
 constexpr float       SAMPLING_STATE_BAR_HEIGHT_FRACTION        = 0.5f;
 constexpr float       SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS = 14.0f;
 constexpr const char* SAMPLING_STATE_COLUMN_LABEL               = "Sampling State";
+constexpr const char* STALL_REASONS_COLUMN_LABEL                = "Stall Reasons";
+constexpr float       STALL_REASON_TOOLTIP_DESCRIPTION_WIDTH_IN_CHARACTERS = 42.0f;
+
+struct StallReasonPresentation
+{
+    const char* text;
+    const char* description;
+    Colors      color;
+};
+
+// Meanings follow ROCprofiler-SDK's CDNA3/CDNA4 PC-sampling stall reasons.
+constexpr StallReasonPresentation STALL_REASON_PRESENTATIONS[] = {
+    { "NO_INSTRUCTION_AVAILABLE",
+      "Instruction fetch is not ready, for example after a branch or instruction-cache "
+      "miss.",
+      Colors::kPcSamplingInstructionFetch },
+    { "ALU_DEPENDENCY",
+      "A hardware or data dependency prevents issue, including dependencies between "
+      "pipelines.",
+      Colors::kPcSamplingAluDependency },
+    { "WAITCNT",
+      "The wave is waiting for memory operations required by a wait-count instruction.",
+      Colors::kPcSamplingWaitcnt },
+    { "INTERNAL_INSTRUCTION",
+      "The wave is processing an internal instruction, such as a NOP.",
+      Colors::kPcSamplingInternalInstruction },
+    { "BARRIER_WAIT",
+      "The wave is waiting for other waves in its workgroup to reach a synchronization "
+      "barrier.",
+      Colors::kPcSamplingBarrier },
+    { "ARBITER_NOT_WIN",
+      "The scheduler did not select this wave to issue to the requested execution "
+      "pipeline.",
+      Colors::kPcSamplingArbiter },
+    { "ARBITER_WIN_EX_STALL",
+      "The scheduler selected this wave, but the execution pipeline could not accept its "
+      "instruction.",
+      Colors::kPcSamplingPipelineStall },
+    { "OTHER_WAIT",
+      "Another wait condition was recorded; the sample does not identify a more specific "
+      "cause.",
+      Colors::kPcSamplingOtherWait },
+    { "SLEEP", "The sample reports that the wave is sleeping.",
+      Colors::kPcSamplingSleeping }
+};
+constexpr StallReasonPresentation UNKNOWN_STALL_REASON_PRESENTATION{
+    "Unknown reason",
+    "This version does not recognize the recorded reason. Its database name is preserved "
+    "above.",
+    Colors::kTextDim
+};
 
 constexpr ImVec4 HEATMAP_LOW_COLOR {0.24f, 0.70f, 0.28f, 0.5f};
 constexpr ImVec4 HEATMAP_MID_COLOR {0.90f, 0.78f, 0.18f, 0.5f};
@@ -122,6 +174,21 @@ constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP{
     "Order: reason count descending, then reason text ascending."
 };
 
+constexpr HeaderTooltipText STALL_REASONS_HEADER_TOOLTIP{
+    "Distribution of the reasons this instruction was stalled when sampled.\n"
+    "Each color identifies the same reason across instructions and kernels.\n"
+    "Hover for a color legend, reason explanations, counts, and shares of stalled "
+    "samples.\n"
+    "Gray represents stalled samples without a recorded reason. Host-trap data displays "
+    "N/A.",
+    "DB fields: compute_pc_sample_stall_reason.count and pc_sample_state_uuid\n"
+    "Reason names: compute_pc_sample_stall_reason_lookup.text\n"
+    "Grouping and issued-sample normalization match the Stall % tooltip.\n"
+    "Segment width: normalized reason count / SUM(stall_count).\n"
+    "If reason counts exceed stall_count, bar widths use the recorded reason total; "
+    "tooltip shares still use stall_count and report the mismatch."
+};
+
 constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
     "%.1f%% relative to the hottest instruction\n\n"
@@ -153,12 +220,67 @@ constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
     "Shares use all %s stalled samples as the denominator.";
 constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
     "Reason data classifies %s samples; expected %s stalled samples.";
-constexpr const char* STALL_REASON_TOOLTIP_COLUMN_HEADERS[] = { "Reason", "Samples", "Share" };
+constexpr const char* STALL_REASON_BAR_NORMALIZED_TOOLTIP =
+    "Bar colors are normalized to the recorded reason total because it exceeds the "
+    "stalled count.";
+constexpr const char* STALL_REASON_DATA_UNAVAILABLE_TOOLTIP =
+    "Stall reasons are unavailable because progress data is missing for this "
+    "instruction.\n"
+    "This is expected for host-trap PC sampling.";
+constexpr const char* STALL_REASON_UNCLASSIFIED_TEXT = "Unclassified";
+constexpr const char* STALL_REASON_UNCLASSIFIED_DESCRIPTION =
+    "These stalled samples have no recorded stall-reason classification.";
+constexpr const char*     STALL_REASON_TOOLTIP_COLUMN_HEADERS[] = { "Color",
+                                                                    "Reason / Meaning",
+                                                                    "Samples", "Share" };
 constexpr ImGuiTableFlags STALL_REASON_TOOLTIP_TABLE_FLAGS =
     ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV;
 
 namespace
 {
+const StallReasonPresentation&
+GetStallReasonPresentation(const std::string& text)
+{
+    constexpr std::string_view SDK_PREFIX =
+        "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_";
+    std::string_view name(text);
+    if(name.substr(0, SDK_PREFIX.size()) == SDK_PREFIX)
+    {
+        name.remove_prefix(SDK_PREFIX.size());
+    }
+    for(const StallReasonPresentation& presentation : STALL_REASON_PRESENTATIONS)
+    {
+        if(name == presentation.text ||
+           (name == "OTHER" && presentation.color == Colors::kPcSamplingOtherWait))
+        {
+            return presentation;
+        }
+    }
+    return UNKNOWN_STALL_REASON_PRESENTATION;
+}
+
+void
+RenderStallReasonLegendRow(const char* text, const char* description, ImU32 color,
+                           uint64_t count, double share)
+{
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::PushID(text);
+    const float swatch_size = ImGui::GetTextLineHeight();
+    ImGui::ColorButton("##reason_color", ImGui::ColorConvertU32ToFloat4(color),
+                       ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoInputs |
+                           ImGuiColorEditFlags_NoDragDrop,
+                       ImVec2(swatch_size, swatch_size));
+    ImGui::PopID();
+    ImGui::TableSetColumnIndex(1);
+    ImGui::TextWrapped("%s", text);
+    ImGui::TextWrapped("%s", description);
+    ImGui::TableSetColumnIndex(2);
+    ImGui::TextUnformatted(std::to_string(count).c_str());
+    ImGui::TableSetColumnIndex(3);
+    ImGui::Text("%.1f%%", share);
+}
+
 void
 RenderCenteredTableHeaderLabel(int column, const char* label)
 {
@@ -1301,7 +1423,7 @@ IsaCodeWidget::Render()
     }
 
     const bool show_sampling_details = IsStallShown();
-    const int  sampling_detail_columns = show_sampling_details ? 3 : 0;
+    const int  sampling_detail_columns = show_sampling_details ? 4 : 0;
     const int columns_count = 3 + sampling_detail_columns;
     CalculateLineNumberWidth(m_entries.size());
 
@@ -1360,6 +1482,11 @@ IsaCodeWidget::Render()
         const float stall_column_width = ImGui::CalcTextSize("Stall %").x;
         ImGui::TableSetupColumn("Stall %", ImGuiTableColumnFlags_WidthFixed,
                                 stall_column_width);
+        const float reasons_column_width = std::max(
+            ImGui::CalcTextSize(STALL_REASONS_COLUMN_LABEL).x,
+            ImGui::CalcTextSize("0").x * SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS);
+        ImGui::TableSetupColumn(STALL_REASONS_COLUMN_LABEL,
+                                ImGuiTableColumnFlags_WidthFixed, reasons_column_width);
     }
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
@@ -1376,8 +1503,11 @@ IsaCodeWidget::Render()
     RenderTableHeaderWithTooltip(header_column++, "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
     if(show_sampling_details)
     {
-        RenderTableHeaderWithTooltip(header_column, "Stall %",
+        RenderTableHeaderWithTooltip(header_column++, "Stall %",
                                      STALL_PERCENT_HEADER_TOOLTIP,
+                                     !m_stall_data_available);
+        RenderTableHeaderWithTooltip(header_column, STALL_REASONS_COLUMN_LABEL,
+                                     STALL_REASONS_HEADER_TOOLTIP,
                                      !m_stall_data_available);
     }
     PushStyles();
@@ -1667,7 +1797,7 @@ IsaCodeWidget::RenderPercentBarCell(double percent)
 }
 
 void
-IsaCodeWidget::RenderUnavailableStallCell()
+IsaCodeWidget::RenderUnavailableStallCell(const char* tooltip)
 {
     const ImVec2 cell_start = ImGui::GetCursorScreenPos();
     const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
@@ -1681,7 +1811,56 @@ IsaCodeWidget::RenderUnavailableStallCell()
 
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("%s", STALL_DATA_UNAVAILABLE_CELL_TOOLTIP);
+        SetTooltipStyled("%s", tooltip);
+    }
+}
+
+void
+IsaCodeWidget::RenderStallReasonBarCell(const IsaRow& row)
+{
+    if(!row.sample_counts.issue_count || !row.sample_counts.stall_count)
+    {
+        RenderUnavailableStallCell(STALL_REASON_DATA_UNAVAILABLE_TOOLTIP);
+        return;
+    }
+
+    const ImVec2   cell_start  = ImGui::GetCursorScreenPos();
+    const float    cell_width  = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    const float    cell_height = ImGui::GetTextLineHeight();
+    const float    bar_height  = cell_height * SAMPLING_STATE_BAR_HEIGHT_FRACTION;
+    const ImVec2   bar_start(cell_start.x,
+                             cell_start.y + (cell_height - bar_height) * 0.5f);
+    const ImVec2   bar_end(bar_start.x + cell_width, bar_start.y + bar_height);
+    const uint64_t bar_total =
+        std::max(*row.sample_counts.stall_count, row.stall_reason_sample_count);
+    if(bar_total > 0 && cell_width > 0.0f)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->PushClipRect(
+            cell_start, ImVec2(cell_start.x + cell_width, cell_start.y + cell_height),
+            true);
+        draw_list->AddRectFilled(bar_start, bar_end,
+                                 m_settings.GetColor(Colors::kTextDim));
+        double accumulated_share = 0.0;
+        for(const StallReason& reason : row.stall_reasons)
+        {
+            const float segment_start_x =
+                bar_start.x + cell_width * static_cast<float>(accumulated_share);
+            accumulated_share += CalculatePercentage(reason.count, bar_total) / 100.0;
+            const float segment_end_x =
+                bar_start.x +
+                cell_width * static_cast<float>(std::min(accumulated_share, 1.0));
+            draw_list->AddRectFilled(
+                ImVec2(segment_start_x, bar_start.y), ImVec2(segment_end_x, bar_end.y),
+                m_settings.GetColor(GetStallReasonPresentation(reason.text).color));
+        }
+        draw_list->AddRect(bar_start, bar_end, m_settings.GetColor(Colors::kBorderGray));
+        draw_list->PopClipRect();
+    }
+    ImGui::Dummy(ImVec2(cell_width, cell_height));
+    if(ImGui::IsItemHovered())
+    {
+        RenderStallReasonsTooltip(row);
     }
 }
 
@@ -1709,7 +1888,7 @@ IsaCodeWidget::RenderStallReasonsTooltip(const IsaRow& row)
         ImGui::TextDisabled(stall_count_value == 0 ? STALL_REASON_TOOLTIP_NO_STALLS
                                                    : STALL_REASON_TOOLTIP_UNAVAILABLE);
     }
-    else
+    if(!row.stall_reasons.empty() || stall_count_value > 0)
     {
         RenderStallReasonTable(row);
     }
@@ -1724,26 +1903,36 @@ IsaCodeWidget::RenderStallReasonTable(const IsaRow& row)
 
     const uint64_t stall_count_value = *row.sample_counts.stall_count;
     ImGui::Spacing();
-    if(ImGui::BeginTable("##StallReasonDistribution", 3, STALL_REASON_TOOLTIP_TABLE_FLAGS))
+    if(ImGui::BeginTable("##StallReasonDistribution", 4,
+                         STALL_REASON_TOOLTIP_TABLE_FLAGS))
     {
-        for(const char* header : STALL_REASON_TOOLTIP_COLUMN_HEADERS)
-        {
-            ImGui::TableSetupColumn(header);
-        }
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[0]);
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[1],
+                                ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::CalcTextSize("0").x *
+                                    STALL_REASON_TOOLTIP_DESCRIPTION_WIDTH_IN_CHARACTERS);
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[2]);
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[3]);
         ImGui::TableHeadersRow();
 
         for(const StallReason& reason : row.stall_reasons)
         {
-            const std::string reason_count = FormatSampleCount(reason.count);
             const double      reason_share =
                 CalculatePercentage(reason.count, stall_count_value);
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(reason.text.c_str());
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(reason_count.c_str());
-            ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.1f%%", reason_share);
+            const StallReasonPresentation& presentation =
+                GetStallReasonPresentation(reason.text);
+            RenderStallReasonLegendRow(reason.text.c_str(), presentation.description,
+                                       m_settings.GetColor(presentation.color),
+                                       reason.count, reason_share);
+        }
+        if(row.stall_reason_sample_count < stall_count_value)
+        {
+            const uint64_t unclassified =
+                stall_count_value - row.stall_reason_sample_count;
+            RenderStallReasonLegendRow(
+                STALL_REASON_UNCLASSIFIED_TEXT, STALL_REASON_UNCLASSIFIED_DESCRIPTION,
+                m_settings.GetColor(Colors::kTextDim), unclassified,
+                CalculatePercentage(unclassified, stall_count_value));
         }
         ImGui::EndTable();
     }
@@ -1755,6 +1944,10 @@ IsaCodeWidget::RenderStallReasonTable(const IsaRow& row)
         const std::string classified_count = FormatSampleCount(row.stall_reason_sample_count);
         ImGui::TextDisabled(STALL_REASON_TOOLTIP_COUNT_MISMATCH,
                             classified_count.c_str(), stall_count.c_str());
+    }
+    if(row.stall_reason_sample_count > stall_count_value)
+    {
+        ImGui::TextDisabled("%s", STALL_REASON_BAR_NORMALIZED_TOOLTIP);
     }
 }
 
@@ -1827,13 +2020,17 @@ IsaCodeWidget::RenderLine(uint32_t index)
         ImGui::TableSetColumnIndex(++column);
         if(!isa_row.sample_counts.issue_count || !isa_row.sample_counts.stall_count)
         {
-            RenderUnavailableStallCell();
+            RenderUnavailableStallCell(STALL_DATA_UNAVAILABLE_CELL_TOOLTIP);
         }
         else if(RenderPercentBarCell(
                     CalculatePercentage(*isa_row.sample_counts.stall_count,
                                         isa_row.sample_counts.total_count)))
         {
             RenderStallReasonsTooltip(isa_row);
+        }
+        if(ImGui::TableSetColumnIndex(++column))
+        {
+            RenderStallReasonBarCell(isa_row);
         }
     }
 

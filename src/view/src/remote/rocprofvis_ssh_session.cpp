@@ -51,14 +51,16 @@ namespace View
         {
             s_active_sessions.erase(it);
         }
-        // If a phase is still in flight, the worker may still be using the
-        // connection. Hand the connection-free to the monitor so it runs only
-        // after the bound future resolves (deferred, non-blocking). The closure
-        // captures the connection BY VALUE so it stays valid after this session
-        // is gone. If AppendTeardown reports the op was already reaped, the
-        // worker is done and we can free the connection directly.
+        // The last phase's worker may still be using the connection: while the
+        // phase is in flight, and also after a failure, which is reported before
+        // the worker lets go of the connection. Hand the connection-free to the
+        // monitor so it runs only after the bound future resolves (deferred,
+        // non-blocking). The closure captures the connection BY VALUE so it
+        // stays valid after this session is gone. If AppendTeardown reports the
+        // op was already reaped, the worker is done and we can free the
+        // connection directly.
         bool connection_owned_by_monitor = false;
-        if (m_active_operation != SshOperation::None && m_active_operation_id != 0 && m_connection)
+        if (m_active_operation_id != 0 && m_connection)
         {
             rocprofvis_handle_t* connection = m_connection;
             connection_owned_by_monitor = AppMonitor::GetInstance()->AppendTeardown(
@@ -76,7 +78,7 @@ namespace View
         CancelActiveOperation();
 
         // Free the connection directly only when the monitor did not take
-        // ownership of it (no op in flight, or the op was already reaped).
+        // ownership of it (no phase has run, or its op was already reaped).
         if (m_connection)
         {
             rocprofvis_controller_ssh_connection_free(m_connection);
@@ -806,6 +808,14 @@ namespace View
     bool SshSession::IsConnected()
     {
         return m_connection != nullptr;
+    }
+
+    bool SshSession::IsIdle() const
+    {
+        // The monitor reaps an operation only once its future has resolved.
+        return m_active_operation == SshOperation::None &&
+               (m_active_operation_id == 0 ||
+                !AppMonitor::GetInstance()->HasOperation(m_active_operation_id));
     }
 
     rocprofvis_result_t SshSession::SubmitPromptResponses(std::vector<std::string>& responses)

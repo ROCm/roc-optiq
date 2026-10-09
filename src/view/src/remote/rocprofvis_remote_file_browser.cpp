@@ -3,6 +3,7 @@
 
 #include "rocprofvis_remote_file_browser.h"
 #include "rocprofvis_core_string_utils.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_ssh_auth_modal.h"
 #include "rocprofvis_ssh_session.h"
@@ -29,6 +30,8 @@ namespace View
 namespace
 {
     constexpr int DEFAULT_SSH_PORT = 22;
+    // Relative remote paths resolve against the home folder, so this lists it.
+    constexpr const char* REMOTE_HOME_DIR = ".";
 
     // Formats a Unix epoch (seconds) as local "YYYY-MM-DD HH:MM"; "-" if zero.
     std::string format_file_time(uint64_t epoch_seconds)
@@ -117,6 +120,8 @@ RemoteFileBrowser::RemoteFileBrowser(std::shared_ptr<RemoteUri> uri)
 , m_browser_busy(false)
 , m_browser_error()
 , m_browser_dir()
+, m_start_dir()
+, m_fallback_dir()
 , m_last_directory_state()
 , m_history_back()
 , m_history_forward()
@@ -180,15 +185,17 @@ RemoteFileBrowser::Open(const std::string& seed_path, PickMode mode,
     m_remote_file_filter.clear();
     m_selected_name.clear();
     m_browser_error.clear();
+    m_fallback_dir.clear();
     m_last_directory_state = RemoteDir::Snapshot();
 
     m_uri->InitRemoteBrowsingPathString(seed_path.c_str());
-    const std::string seed = m_uri->GetRemoteBrowsingPathString();
+    // Normalized like m_browser_dir, so the two compare.
+    m_start_dir = normalize_posix_path(m_uri->GetRemoteBrowsingPathString());
 
     m_show_remote_filesystem_popup = true;
     m_should_open_browser_popup    = true;  // opened at render scope (matches BeginPopupModal)
 
-    NavigateBrowserTo(seed.empty() ? std::string(".") : seed, false);
+    NavigateBrowserTo(m_start_dir, false);
 }
 
 void
@@ -210,6 +217,46 @@ RemoteFileBrowser::NavigateBrowserTo(const std::string& path, bool record_histor
 
     m_uri->SetRemoteBrowsingPath(target.c_str());
     BrowseRemotePath();
+}
+
+void
+RemoteFileBrowser::HandleBrowseFailure()
+{
+    const bool listed = !m_last_directory_state.path.empty();
+    if (!listed && m_orchestrator->IsAuthenticated() && m_browser_dir != REMOTE_HOME_DIR)
+    {
+        // The connection works, so the start folder is missing or unreadable.
+        // Try its nearest parent below the root, then the remote home, rather
+        // than stopping on an error the user cannot navigate away from.
+        const std::string parent = posix_parent_path(m_browser_dir);
+        m_fallback_dir = is_posix_root_path(parent) ? std::string(REMOTE_HOME_DIR) : parent;
+    }
+    else if (listed)
+    {
+        m_browser_busy  = false;
+        m_browser_error = m_orchestrator->IsAuthenticated()
+                              ? "Couldn't open " + m_browser_dir + "."
+                              : m_orchestrator->GetStatusMessage();
+        // Keep the last folder that listed, so the path bar matches the table
+        // and entries opened from it resolve against the right folder.
+        m_browser_dir  = m_last_directory_state.path;
+        m_address_edit = m_browser_dir;
+        // The failed folder was never shown, so history entries that would only
+        // return to the folder still shown are dropped.
+        if (!m_history_back.empty() && m_history_back.back() == m_browser_dir)
+        {
+            m_history_back.pop_back();
+        }
+        if (!m_history_forward.empty() && m_history_forward.back() == m_browser_dir)
+        {
+            m_history_forward.pop_back();
+        }
+    }
+    else
+    {
+        m_browser_busy  = false;
+        m_browser_error = m_orchestrator->GetStatusMessage();
+    }
 }
 
 void
@@ -292,6 +339,10 @@ void RemoteFileBrowser::Render()
         {
             if (auto fetch = ssh_session->GetRemoteDir()->ConsumeIfUpdated())
             {
+                // Until something has listed, only the start folder and its
+                // fallbacks are requested, so landing elsewhere means a fallback.
+                const bool fell_back =
+                    m_last_directory_state.path.empty() && m_browser_dir != m_start_dir;
                 m_last_directory_state = *fetch;
                 m_browser_busy         = false;
                 m_selected_name.clear();
@@ -301,22 +352,28 @@ void RemoteFileBrowser::Render()
                     m_address_edit = m_browser_dir;
                     m_uri->SetCurrentDirectoryPath(m_browser_dir.c_str());
                 }
+                if (fell_back)
+                {
+                    m_browser_error = "Couldn't open " + m_start_dir + ", showing " +
+                                      m_browser_dir + " instead.";
+                }
             }
         }
 
-        // Surface a browse/search failure. Fail() clears IsRunning() and leaves a
-        // descriptive status (not "Done." and not a transient progress message).
-        if (m_browser_busy && !m_orchestrator->IsRunning())
+        if (m_browser_busy && m_fallback_dir.empty() && m_orchestrator->HasFailed())
         {
-            const std::string& status = m_orchestrator->GetStatusMessage();
-            const bool transient = status.empty() || status == "Done." ||
-                                   status.rfind("Connecting", 0) == 0 ||
-                                   status.rfind("Authenticating", 0) == 0 ||
-                                   status.rfind("Browsing", 0) == 0;
-            if (!transient)
+            HandleBrowseFailure();
+        }
+        if (!m_fallback_dir.empty())
+        {
+            // Keeps frames coming while the failed job lets go of the connection;
+            // the lazy render loop would otherwise sleep through it.
+            RenderScheduler::GetInstance().RequestRender();
+            if (m_orchestrator->IsSessionIdle())
             {
-                m_browser_error = status;
-                m_browser_busy  = false;
+                const std::string fallback = m_fallback_dir;
+                m_fallback_dir.clear();
+                NavigateBrowserTo(fallback, false);
             }
         }
     }
@@ -522,11 +579,17 @@ void RemoteFileBrowser::Render()
             }
             if (nav_button(ICON_ARROWS_CYCLE, "Refresh", !busy))
             {
+                // A failed listing keeps the connection, so refresh over a new
+                // one in case the connection is what failed.
+                if (m_orchestrator && m_orchestrator->HasFailed())
+                {
+                    m_orchestrator.reset();
+                }
                 NavigateBrowserTo(m_browser_dir, false);
             }
             if (nav_button(ICON_HOME, "Home", !busy))
             {
-                NavigateBrowserTo(".", true);
+                NavigateBrowserTo(REMOTE_HOME_DIR, true);
             }
             if (IconButton(ICON_EDIT, icon_font, ImVec2(0, 0),
                            m_address_editing ? "Show breadcrumbs" : "Edit path", false,
@@ -750,6 +813,12 @@ void RemoteFileBrowser::Render()
                 title  = "Connecting to " + endpoint + "...";
                 detail = "Any password or host key prompt will appear on top of this window.";
             }
+            else if (m_orchestrator && m_orchestrator->IsAuthenticated())
+            {
+                // Signed in, but not even the remote home folder would list.
+                title  = "Couldn't list folders on " + endpoint;
+                detail = m_browser_error;
+            }
             else
             {
                 title  = "Couldn't connect to " + endpoint;
@@ -801,8 +870,10 @@ void RemoteFileBrowser::Render()
                     }
                     if (show_retry && ImGui::Button("Retry", ImVec2(button_w, 0.0f)))
                     {
-                        NavigateBrowserTo(m_browser_dir.empty() ? std::string(".") : m_browser_dir,
-                                          false);
+                        // Start over on a new connection, in case the old one is
+                        // what failed.
+                        m_orchestrator.reset();
+                        NavigateBrowserTo(m_start_dir, false);
                     }
                 }
             }

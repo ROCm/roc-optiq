@@ -2268,7 +2268,10 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
 - `RemoteTraceOrchestrator` - connect -> authenticate -> optional
   execute -> optional download state machine. It filters
   `kRemoteStatusChanged` by active operation ID and reuses an
-  authenticated session for browsing and `DownloadPath()`.
+  authenticated, idle session for browsing and `DownloadPath()`. A
+  failed listing keeps the session authenticated (it is usually a
+  missing or unreadable folder); any other failure drops it, so the
+  next call reconnects.
 - `RenderSshAuthModal(session)` - renders keyboard-interactive and
   host-key requests. The owning dialog must call it every frame while
   the session exists; it is not rendered globally by `AppWindow`.
@@ -2277,15 +2280,24 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
   `AppWindow`: it opens `RemoteFileBrowser` (or `SshSettingsDialog` when
   no connection is saved) and downloads the picked file over the
   browser's session (`RemoteFileBrowser::TakeSession`).
+- `RemoteFileBrowser` - the modal remote file/folder picker used by
+  `SshTestDialog` and the launcher's remote Browse buttons. When the
+  start folder does not list, it opens the nearest parent below `/`,
+  then the remote home, and says so in the footer; a failed navigation
+  keeps the last listed folder. Retry, and Refresh after a failure,
+  reconnect.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`, and
   `RemoteDir` in `rocprofvis_ssh_fetch.*` are mutex-protected snapshots;
   consume updates without holding locks across ImGui calls.
 
 `SshSession::IsConnected()` means a connection handle is allocated,
 not that transport and authentication succeeded. Do not start a second
-phase while one is in flight. In-flight destruction must follow
-`SshSession`'s `AppMonitor::AppendTeardown` path so a worker never sees
-a freed connection.
+phase while one is in flight. A failure is reported before its job
+lets go of the connection, so after one wait for
+`SshSession::IsIdle()` before starting another phase on it. Destruction
+while a phase's job may still run (in flight, or failed but not yet
+resolved) must follow `SshSession`'s `AppMonitor::AppendTeardown` path
+so a worker never sees a freed connection.
 
 Downloaded traces are cached under
 `{config}/remote_cache/<connection-and-path-hash>/<filename>`.
@@ -2950,7 +2962,9 @@ for nearly every common pattern.
 - **Handling monitor events without filtering operation ID.** Multiple
   SSH/profiler phases can emit the same event type.
 - **Starting overlapping SSH phases.** One `SshSession` supports one
-  operation at a time; advance through its orchestrator.
+  operation at a time; advance through its orchestrator. After a
+  failure, wait for `SshSession::IsIdle()`: the failed job may still be
+  using the connection.
 - **Rendering SSH authentication once.** `RenderSshAuthModal()` must
   run every frame while requests may be pending.
 - **Freeing an SSH/profiler handle before its future resolves.** Use
@@ -3245,6 +3259,8 @@ All under `agenticprofiling/`, compiled only with
   Keyboard-interactive and host-key UI.
 - `SshSettingsDialog`, `SshTestDialog` -> matching `remote/` headers ->
   Profile editor and the `File > Open Remote...` flow.
+- `RemoteFileBrowser` -> `remote/rocprofvis_remote_file_browser.h` ->
+  Modal remote file/folder picker over its own `SshSession`.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`,
   `RemoteDir` -> `remote/rocprofvis_ssh_fetch.h` -> Thread-safe UI
   snapshots.

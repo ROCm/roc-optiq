@@ -69,6 +69,15 @@ public:
     // True once the workflow ended in failure; GetStatusMessage() says why.
     bool HasFailed() const { return m_phase == Phase::Failed; }
 
+    // True once the session has authenticated, until a failure other than a
+    // directory listing drops it.
+    bool IsAuthenticated() const { return m_authenticated; }
+
+    // True once the session's last phase is done with the connection. A failed
+    // phase reports before then, so the next BrowsePath() after a failure only
+    // reuses the session once this holds.
+    bool IsSessionIdle() const { return !m_session || m_session->IsIdle(); }
+
     // Human-readable status for the open dialog.
     const std::string& GetStatusMessage() const { return m_status_message; }
 
@@ -96,6 +105,8 @@ private:
     void AdvanceAfterBrowsing();
     void Browse();
     void Fail(const std::string& message);
+    // An authenticated session whose last phase is done with the connection.
+    bool CanReuseSession();
 
     std::shared_ptr<RemoteUri>               m_uri;
     std::function<void(const std::string&)>  m_on_open_file;
@@ -106,7 +117,8 @@ private:
     bool                                     m_running;
     // True once the owned session has completed its authenticate phase, so a
     // subsequent BrowsePath() can reuse the live connection without redoing
-    // connect + authenticate. Reset whenever a fresh session is started.
+    // connect + authenticate. Reset whenever a fresh session is started, and by
+    // any failure other than a directory listing.
     bool                                     m_authenticated;
     std::string                              m_status_message;
 };

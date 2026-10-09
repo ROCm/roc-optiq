@@ -52,7 +52,9 @@ public:
     ~RemoteFileBrowser();
 
     // Pops the modal. Seeds the starting directory from seed_path's parent (or
-    // the remote home when empty). on_pick receives the chosen absolute path.
+    // the remote home when empty); if that folder cannot be listed, the browser
+    // opens its nearest parent below the root, or else the remote home.
+    // on_pick receives the chosen absolute path.
     void Open(const std::string& seed_path, PickMode mode,
               std::function<void(const std::string&)> on_pick);
 
@@ -88,6 +90,9 @@ private:
     void EnsureBrowseOrchestrator();
     void BrowseRemotePath();
     void NavigateBrowserTo(const std::string& path, bool record_history);
+    // Reacts to a failed listing: falls back from a start folder that does not
+    // list, otherwise reports the error and keeps the last folder listed.
+    void HandleBrowseFailure();
     void ActivateBrowserEntry(const RemoteDir::FileEntry& entry);
     void CommitPath(const std::string& path);
     // Closes the browser and runs the owner's connection action.
@@ -105,6 +110,8 @@ private:
     bool                     m_browser_busy;                // a listing is in flight
     std::string              m_browser_error;               // last listing failure
     std::string              m_browser_dir;                 // resolved current directory
+    std::string              m_start_dir;                   // folder Open() asked for
+    std::string              m_fallback_dir;                // next try once the session is idle
     RemoteDir::Snapshot      m_last_directory_state;        // entries for m_browser_dir
     std::vector<std::string> m_history_back;
     std::vector<std::string> m_history_forward;

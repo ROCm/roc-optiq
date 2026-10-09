@@ -24,16 +24,55 @@ on:
         description: 'Run macOS CI?'
         type: boolean
         default: true
-      enable_ci_experimental:
-        description: 'Run Experimental CI?'
+      enable_ci_manylinux:
+        description: 'Run ManyLinux CI?'
         type: boolean
-        default: false
+        default: true
       enable_ci_asan:
         description: 'Run Ubuntu ASAN?'
         type: boolean
+        default: true        
+      enable_ci_experimental:
+        description: 'Allow Experimental CI?'
+        type: boolean
+        default: false
+      exp_crypto_backend:
+        description: 'Experimental: crypto backend for libssh2'
+        type: choice
+        options:
+          - 'OpenSSL'
+          - 'mbedTLS'
+        default: 'OpenSSL'
+      exp_enable_internal_banner:
+        description: 'Experimental: show the internal build banner'
+        type: boolean
         default: true
-      enable_ci_manylinux:
-        description: 'Run ManyLinux CI?'
+      exp_enable_profiler:
+        description: 'Experimental: in-app profiler launch'
+        type: boolean
+        default: true
+      exp_enable_remote:
+        description: 'Experimental: remote/SSH support'
+        type: boolean
+        default: true
+      exp_enable_agentic_profiling:
+        description: 'Experimental: Ask Optiq assistant'
+        type: boolean
+        default: true
+      exp_enable_scripting:
+        description: 'Experimental: embedded Python analysis scripts'
+        type: boolean
+        default: true
+      exp_enable_vendor_python:
+        description: 'Experimental: bundle a pinned CPython with scripting builds'
+        type: boolean
+        default: true
+      exp_enable_trace_compare:
+        description: 'Experimental: trace comparison'
+        type: boolean
+        default: true
+      exp_enable_multi_window:
+        description: 'Experimental: multi-window / floating windows'
         type: boolean
         default: true
       upload_to_github:
@@ -81,6 +120,17 @@ jobs:
       redhat-os-versions: ${{ steps.setup-os-versions.outputs.redhat-os-versions }}
       windows-os-versions: ${{ steps.setup-os-versions.outputs.windows-os-versions }}
       mac-os-versions: ${{ steps.setup-os-versions.outputs.mac-os-versions }}
+      # Experimental feature flags. Scheduled runs get no inputs and build
+      # everything. Outputs are strings: read the booleans through fromJSON.
+      exp-crypto-backend: ${{ github.event_name == 'schedule' && 'OpenSSL' || inputs.exp_crypto_backend }}
+      exp-enable-internal-banner: ${{ github.event_name == 'schedule' || inputs.exp_enable_internal_banner }}
+      exp-enable-profiler: ${{ github.event_name == 'schedule' || inputs.exp_enable_profiler }}
+      exp-enable-remote: ${{ github.event_name == 'schedule' || inputs.exp_enable_remote }}
+      exp-enable-agentic-profiling: ${{ github.event_name == 'schedule' || inputs.exp_enable_agentic_profiling }}
+      exp-enable-scripting: ${{ github.event_name == 'schedule' || inputs.exp_enable_scripting }}
+      exp-enable-vendor-python: ${{ github.event_name == 'schedule' || inputs.exp_enable_vendor_python }}
+      exp-enable-trace-compare: ${{ github.event_name == 'schedule' || inputs.exp_enable_trace_compare }}
+      exp-enable-multi-window: ${{ github.event_name == 'schedule' || inputs.exp_enable_multi_window }}
     steps:
       - name: Set OS versions
         id: setup-os-versions
@@ -122,14 +172,15 @@ jobs:
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
-      crypto_backend: 'OpenSSL'
-      enable_internal_banner: true
-      enable_profiler: true
-      enable_remote: true
-      enable_agentic_profiling: true
-      enable_scripting: true
-      enable_trace_compare: true
-      enable_multi_window: true
+      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
+      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
+      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
+      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
+      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
+      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
+      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
+      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -158,14 +209,15 @@ jobs:
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
-      crypto_backend: 'OpenSSL'
-      enable_internal_banner: true
-      enable_profiler: true
-      enable_remote: true
-      enable_agentic_profiling: true
-      enable_scripting: true
-      enable_trace_compare: true
-      enable_multi_window: true
+      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
+      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
+      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
+      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
+      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
+      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
+      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
+      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
   ci-windows:
     name: Windows CI
@@ -192,14 +244,15 @@ jobs:
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
-      crypto_backend: 'OpenSSL'
-      enable_internal_banner: true
-      enable_profiler: true
-      enable_remote: true
-      enable_agentic_profiling: true
-      enable_scripting: true
-      enable_trace_compare: true
-      enable_multi_window: true
+      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
+      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
+      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
+      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
+      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
+      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
+      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
+      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
   ci-mac:
     name: macOS CI
@@ -226,14 +279,15 @@ jobs:
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
-      crypto_backend: 'OpenSSL'
-      enable_internal_banner: true
-      enable_profiler: true
-      enable_remote: true
-      enable_agentic_profiling: true
-      enable_scripting: true
-      enable_trace_compare: true
-      enable_multi_window: true
+      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
+      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
+      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
+      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
+      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
+      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
+      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
+      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
 
   ci-asan:
     name: Ubuntu ASAN
@@ -269,11 +323,12 @@ jobs:
       s3_root_directory: 'nightly-experimental'
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
-      crypto_backend: 'OpenSSL'
-      enable_internal_banner: true
-      enable_profiler: true
-      enable_remote: true
-      enable_agentic_profiling: true
-      enable_scripting: true
-      enable_trace_compare: true
-      enable_multi_window: true
+      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
+      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
+      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
+      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
+      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
+      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
+      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
+      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
+      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}

@@ -37,6 +37,12 @@ option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
 option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
 option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
+# Only meaningful with scripting: downloads a pinned CPython and ships it with
+# the app. OFF builds against this machine's Python, which then only runs here.
+include(CMakeDependentOption)
+cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
+    "Vendor a pinned CPython for embedded Python analysis scripts" ON
+    "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -81,6 +87,17 @@ if(GLFW_LINK_STATIC)
     set(GLFW_LIBRARY_TYPE "STATIC" CACHE STRING "GLFW library type" FORCE)
 else()
     set(GLFW_LIBRARY_TYPE "SHARED" CACHE STRING "GLFW library type" FORCE)
+endif()
+
+# Where an install puts the executable and its notices. Windows installs flat,
+# the layout the MSI and the CI zip ship as is; elsewhere GNUInstallDirs.
+include(GNUInstallDirs)
+if(WIN32)
+    set(ROCPROFVIS_INSTALL_BINDIR ".")
+    set(ROCPROFVIS_INSTALL_DOCDIR ".")
+else()
+    set(ROCPROFVIS_INSTALL_BINDIR "${CMAKE_INSTALL_BINDIR}")
+    set(ROCPROFVIS_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
 endif()
 
 # Enable testing if BUILD_TESTING is ON
@@ -364,6 +381,11 @@ endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
 add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
+
+# Before the macOS codesign step below, which has to see the staged runtime.
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    rocprofvis_python_vendor_deploy(${TARGET_NAME})
+endif()
 
 if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -860,7 +882,7 @@ set(CPACK_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 # License file
 install(FILES ${LICENSE_FILE}
-       DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
+       DESTINATION ${ROCPROFVIS_INSTALL_DOCDIR} RENAME LICENSE.txt
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
@@ -868,10 +890,23 @@ if(APPLE)
     install(TARGETS ${TARGET_NAME}
             BUNDLE DESTINATION .
             COMPONENT ${RUNTIME_COMP_TYPE})
+elseif(WIN32)
+    # The target, not a path: Visual Studio puts the .exe in a per-config
+    # directory. The DLLs it loads at startup go beside it; OpenSSL's are
+    # installed where they are found, below.
+    install(TARGETS ${TARGET_NAME}
+            RUNTIME DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE})
+    install(FILES $<TARGET_RUNTIME_DLLS:${TARGET_NAME}>
+            DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE})
 else()
     install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             COMPONENT ${RUNTIME_COMP_TYPE} )
+endif()
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    rocprofvis_python_vendor_install(${TARGET_NAME} ${RUNTIME_COMP_TYPE})
 endif()
 
 # Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
@@ -906,8 +941,22 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
 # RPM package specific variables
-if(NOT APPLE)
+# A vendored Python needs a runpath, so roc-optiq gets only $ORIGIN-relative
+# entries instead (rocprofvis_python_vendor_install).
+if(NOT APPLE AND NOT ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     set(CMAKE_SKIP_RPATH TRUE)
+endif()
+# The vendored interpreter is private to roc-optiq. Left alone, RPM would
+# advertise its libpython to the whole system, require it from the system,
+# and byte-compile or rewrite its standard library with the host's Python.
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    set(CPACK_RPM_SPEC_MORE_DEFINE
+"%global __provides_exclude_from ^.*/roc-optiq/python/.*$
+%global __requires_exclude_from ^.*/roc-optiq/python/.*$
+%global __requires_exclude ^libpython3[.][0-9]+[.]so.*$
+%global __brp_mangle_shebangs_exclude_from ^.*/roc-optiq/python/.*$
+%global __brp_python_bytecompile %{nil}
+%global _python_bytecompile_extra 0")
 endif()
 set(CPACK_RPM_COMPONENT_INSTALL ON)
 set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
@@ -953,11 +1002,23 @@ if(WIN32)
     set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
     set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
     set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+    set(_wix_payload "${CMAKE_BINARY_DIR}/roc-optiq-payload.wxs")
+    # The MSI ships the install tree of the runtime component, so it holds
+    # exactly what cmake --install and CPack put in a package.
+    set(_wix_stage "${CMAKE_BINARY_DIR}/wix_stage")
     add_custom_target(PACKAGE_WIX
+      COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_wix_stage}"
+      COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --config $<CONFIG>
+        --component ${RUNTIME_COMP_TYPE} --prefix "${_wix_stage}"
+      COMMAND "${CMAKE_COMMAND}"
+        "-DSTAGE_DIR=${_wix_stage}"
+        "-DEXE_NAME=$<TARGET_FILE_NAME:${TARGET_NAME}>"
+        "-DOUTPUT=${_wix_payload}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/rocprofvis_wix_payload.cmake"
       COMMAND "${WIX_EXECUTABLE}" build
         -arch x64
         -d "Version=${_wix_version}"
-        -d "ExeFile=$<TARGET_FILE:${TARGET_NAME}>"
+        -d "ExeFile=${_wix_stage}/$<TARGET_FILE_NAME:${TARGET_NAME}>"
         -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
         -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
         -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
@@ -965,6 +1026,7 @@ if(WIN32)
         -ext WixToolset.UI.wixext
         -out "${_wix_out}"
         "${_wix_src}"
+        "${_wix_payload}"
       DEPENDS ${TARGET_NAME}
       COMMENT "Building WiX MSI installer: ${_wix_out}"
       VERBATIM
@@ -1053,6 +1115,9 @@ if(WIN32)
                     COMMENT "Copying OpenSSL runtime DLL ${_ossl_dll} to executable directory"
                 )
             endforeach()
+            install(FILES ${_ossl_dlls}
+                    DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+                    COMPONENT ${RUNTIME_COMP_TYPE})
         else()
             message(WARNING
                 "CRYPTO_BACKEND=OpenSSL: could not locate libssl/libcrypto DLLs to "

@@ -18,6 +18,12 @@
       BannerBmp  = absolute path to the 493x58 banner bitmap
       DialogBmp  = absolute path to the 493x312 background bitmap
       IconFile   = absolute path to ROCm_Optiq.ico
+
+  The RuntimePayload component group (every other file of the runtime
+  component's install tree: the DLLs, the license notices, and the vendored
+  python\ runtime in a scripting build) comes from roc-optiq-payload.wxs,
+  which PACKAGE_WIX generates with cmake/rocprofvis_wix_payload.cmake after
+  installing that component into a staging directory.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
@@ -161,6 +167,7 @@
          ═══════════════════════════════════════════════════════════════════ -->
     <Feature Id="ProductFeature" Title="ROCm™ Optiq" Level="1">
       <ComponentRef Id="MainExecutable" />
+      <ComponentGroupRef Id="RuntimePayload" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
     </Feature>

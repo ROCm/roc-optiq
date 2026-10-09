@@ -45,7 +45,7 @@ on:
         type: boolean
         default: false
       enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_VENDOR_PYTHON). Off links the build machine Python.'
+        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
         type: boolean
         default: false
       enable_trace_compare:
@@ -121,7 +121,7 @@ on:
         type: boolean
         default: false
       enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_VENDOR_PYTHON). Off links the build machine Python.'
+        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
         type: boolean
         default: false
       enable_trace_compare:
@@ -236,7 +236,7 @@ jobs:
             -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
             -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
             -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
-            -DROCPROFVIS_VENDOR_PYTHON=${{ env.ENABLE_VENDOR_PYTHON }} \
+            -DROCPROFVIS_ENABLE_VENDOR_PYTHON=${{ env.ENABLE_VENDOR_PYTHON }} \
             -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
             -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DGLFW_LINK_STATIC=ON \

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 # Vendored CPython for ROCPROFVIS_ENABLE_SCRIPTING. Included from src/python
-# only when ROCPROFVIS_VENDOR_PYTHON is on, so a build without scripting never
+# only when ROCPROFVIS_ENABLE_VENDOR_PYTHON is on, so a build without scripting never
 # downloads an interpreter.
 #
 # Defines RocProfVis::Python (headers, import library, shared runtime) and:
@@ -75,7 +75,7 @@ else()
         "No vendored CPython is pinned for this platform. Point "
         "ROCPROFVIS_PYTHON_VENDOR_URL and ROCPROFVIS_PYTHON_VENDOR_SHA256 at a "
         "python-build-standalone ${ROCPROFVIS_PYTHON_VENDOR_MINOR} install_only "
-        "archive, or set ROCPROFVIS_VENDOR_PYTHON=OFF to build against this "
+        "archive, or set ROCPROFVIS_ENABLE_VENDOR_PYTHON=OFF to build against this "
         "machine's Python.")
 endif()
 

@@ -508,7 +508,7 @@ length of the allowlist:
 Do not describe the allowlist as containment in user-facing text.
 [`PYTHON.md`](../PYTHON.md) says the same thing to script authors.
 
-**No system Python at runtime.** `ROCPROFVIS_VENDOR_PYTHON` (ON by
+**No system Python at runtime.** `ROCPROFVIS_ENABLE_VENDOR_PYTHON` (ON by
 default, and only available with `ROCPROFVIS_ENABLE_SCRIPTING`) has
 `cmake/rocprofvis_python_vendor.cmake` download a pinned
 python-build-standalone CPython 3.12 `install_only_stripped` archive
@@ -541,7 +541,7 @@ passed to `rocprofvis_python_init` wins over both. Nothing about the
 path is compiled in. The script tests get the same copy beside their
 own executable, so they exercise this lookup.
 
-`ROCPROFVIS_VENDOR_PYTHON=OFF` links the build machine's Python
+`ROCPROFVIS_ENABLE_VENDOR_PYTHON=OFF` links the build machine's Python
 through `find_package(Python3)` and bakes its stdlib paths in as the
 last fallback. That build only runs where it was built.
 `ROCPROFVIS_PYTHON_VENDOR_URL` / `_SHA256` point vendoring at a mirror
@@ -699,7 +699,7 @@ and a release build does not require a system Python.
 - ~~Editor shows the source before or as it runs.~~ In tree via
   `ShowGeneratedScript`.
 - ~~Vendor embeddable CPython into the package; CI builds against it.~~
-  In tree as `ROCPROFVIS_VENDOR_PYTHON` (§7). The MSI and the Windows
+  In tree as `ROCPROFVIS_ENABLE_VENDOR_PYTHON` (§7). The MSI and the Windows
   CI artifact carry it. In CI the per-platform workflows take an `enable_vendor_python`
   input (default off); the controller's experimental jobs turn it on.
   With scripting on and `enable_vendor_python` off, each workflow installs

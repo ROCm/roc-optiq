@@ -9,7 +9,7 @@ project(${TARGET_NAME} VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(ROCPROFVIS_VENDOR_PYTHON)
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     include(${CMAKE_SOURCE_DIR}/cmake/rocprofvis_python_vendor.cmake)
     set(ROCPROFVIS_PYTHON_LIBRARY RocProfVis::Python)
 else()
@@ -28,7 +28,7 @@ target_include_directories(${TARGET_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc
 )
 
-if(ROCPROFVIS_VENDOR_PYTHON)
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     get_target_property(ROCPROFVIS_PYTHON_RELDIR_VALUE RocProfVis::Python ROCPROFVIS_PYTHON_RELDIR)
     target_compile_definitions(${TARGET_NAME}
         PRIVATE

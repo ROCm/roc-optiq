@@ -40,7 +40,7 @@ option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts 
 # Only meaningful with scripting: downloads a pinned CPython and ships it with
 # the app. OFF builds against this machine's Python, which then only runs here.
 include(CMakeDependentOption)
-cmake_dependent_option(ROCPROFVIS_VENDOR_PYTHON
+cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
     "Vendor a pinned CPython for embedded Python analysis scripts" ON
     "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
 
@@ -382,7 +382,7 @@ add_dependencies(${TARGET_NAME} generate_icon_header)
 add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
 
 # Before the macOS codesign step below, which has to see the staged runtime.
-if(ROCPROFVIS_VENDOR_PYTHON)
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     rocprofvis_python_vendor_deploy(${TARGET_NAME})
 endif()
 
@@ -904,7 +904,7 @@ else()
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
-if(ROCPROFVIS_VENDOR_PYTHON)
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     rocprofvis_python_vendor_install(${TARGET_NAME} ${RUNTIME_COMP_TYPE})
 endif()
 
@@ -942,13 +942,13 @@ set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 # RPM package specific variables
 # A vendored Python needs a runpath, so roc-optiq gets only $ORIGIN-relative
 # entries instead (rocprofvis_python_vendor_install).
-if(NOT APPLE AND NOT ROCPROFVIS_VENDOR_PYTHON)
+if(NOT APPLE AND NOT ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     set(CMAKE_SKIP_RPATH TRUE)
 endif()
 # The vendored interpreter is private to roc-optiq. Left alone, RPM would
 # advertise its libpython to the whole system, require it from the system,
 # and byte-compile or rewrite its standard library with the host's Python.
-if(ROCPROFVIS_VENDOR_PYTHON)
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     set(CPACK_RPM_SPEC_MORE_DEFINE
 "%global __provides_exclude_from ^.*/roc-optiq/python/.*$
 %global __requires_exclude_from ^.*/roc-optiq/python/.*$

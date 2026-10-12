@@ -190,9 +190,18 @@ constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
 constexpr const char* SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
     "%.1f%% relative to the hottest instruction";
-constexpr const char* SAMPLING_STATE_UNAVAILABLE_TOOLTIP =
-    "Issue/stall breakdown is unavailable because progress data is missing for this "
-    "instruction.\nThis is expected for host-trap PC sampling.";
+constexpr const char* SAMPLING_STATE_NO_SAMPLES_TOOLTIP =
+    "No PC samples were recorded for this instruction.\n"
+    "There are no sampled observations to classify by stall reason.";
+constexpr const char* SAMPLING_STATE_MISSING_ISSUED_COUNTS_TOOLTIP =
+    "PC samples were recorded for this instruction, but their issued counts were not "
+    "fully recorded.\nStall percentage and stall categories are unavailable.";
+constexpr const char* SAMPLING_STATE_MISSING_STALLED_COUNTS_TOOLTIP =
+    "PC samples were recorded for this instruction, but their stalled counts were not "
+    "fully recorded.\nStall percentage and stall categories are unavailable.";
+constexpr const char* SAMPLING_STATE_MISSING_PROGRESS_COUNTS_TOOLTIP =
+    "PC samples were recorded for this instruction, but their issued and stalled counts "
+    "were not fully recorded.\nStall percentage and stall categories are unavailable.";
 constexpr const char* SAMPLING_STATE_INVALID_COUNTS_TOOLTIP =
     "Issue/stall breakdown is unavailable because the recorded counts exceed the total "
     "sample count.";
@@ -206,10 +215,6 @@ constexpr const char* STALL_REASON_TOOLTIP_NO_STALLS =
 constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
     "No stall-reason details were recorded for this instruction.";
 constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TEXT = "N/A";
-constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TOOLTIP =
-    "Stall percentage is unavailable because progress data is missing for this "
-    "instruction.\n"
-    "This is expected for host-trap PC sampling.";
 constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
     "Shares use all %s stalled samples as the denominator.";
 constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
@@ -217,10 +222,6 @@ constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
 constexpr const char* STALL_REASON_BAR_NORMALIZED_TOOLTIP =
     "Colors are scaled to fit the stalled portion because the recorded reason total "
     "exceeds the stalled count.";
-constexpr const char* STALL_REASON_DATA_UNAVAILABLE_TOOLTIP =
-    "Stall reasons are unavailable because progress data is missing for this "
-    "instruction.\n"
-    "This is expected for host-trap PC sampling.";
 constexpr const char* STALL_REASON_UNCLASSIFIED_TEXT = "Unclassified";
 constexpr const char* STALL_REASON_UNCLASSIFIED_DESCRIPTION =
     "These stalled samples have no recorded stall-reason classification.";
@@ -888,6 +889,28 @@ IsaCodeWidget::RenderSamplingStateCell(const IsaRow& row)
     }
 }
 
+const char*
+IsaCodeWidget::GetUnavailableSamplingTooltip(const IsaRow& row)
+{
+    if(row.sampling.availability == SamplingAvailability::kInvalid)
+    {
+        return SAMPLING_STATE_INVALID_COUNTS_TOOLTIP;
+    }
+    if(row.sample_counts.total_count == 0)
+    {
+        return SAMPLING_STATE_NO_SAMPLES_TOOLTIP;
+    }
+    if(!row.sample_counts.issue_count && row.sample_counts.stall_count)
+    {
+        return SAMPLING_STATE_MISSING_ISSUED_COUNTS_TOOLTIP;
+    }
+    if(row.sample_counts.issue_count && !row.sample_counts.stall_count)
+    {
+        return SAMPLING_STATE_MISSING_STALLED_COUNTS_TOOLTIP;
+    }
+    return SAMPLING_STATE_MISSING_PROGRESS_COUNTS_TOOLTIP;
+}
+
 void
 IsaCodeWidget::RenderSamplingStateTooltip(const IsaRow& row)
 {
@@ -897,17 +920,10 @@ IsaCodeWidget::RenderSamplingStateTooltip(const IsaRow& row)
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
-    if(row.sampling.availability == SamplingAvailability::kInvalid)
+    if(row.sampling.availability != SamplingAvailability::kValid ||
+       counts.total_count == 0)
     {
-        ImGui::TextUnformatted(SAMPLING_STATE_INVALID_COUNTS_TOOLTIP);
-    }
-    else if(counts.total_count == 0)
-    {
-        ImGui::TextDisabled("No PC samples were recorded for this instruction.");
-    }
-    else if(row.sampling.availability == SamplingAvailability::kMissing)
-    {
-        ImGui::TextUnformatted(SAMPLING_STATE_UNAVAILABLE_TOOLTIP);
+        ImGui::TextUnformatted(GetUnavailableSamplingTooltip(row));
     }
     else
     {
@@ -938,10 +954,7 @@ IsaCodeWidget::RenderStallPercentCell(const IsaRow& row, bool& row_clicked)
 {
     if(row.sampling.availability != SamplingAvailability::kValid)
     {
-        RenderUnavailableStallCell(row.sampling.availability ==
-                                           SamplingAvailability::kInvalid
-                                       ? SAMPLING_STATE_INVALID_COUNTS_TOOLTIP
-                                       : STALL_DATA_UNAVAILABLE_CELL_TOOLTIP);
+        RenderUnavailableStallCell(GetUnavailableSamplingTooltip(row));
         return;
     }
     const CodeCellBounds cell = get_code_cell_bounds();
@@ -974,14 +987,9 @@ IsaCodeWidget::RenderUnavailableStallCell(const char* tooltip)
 void
 IsaCodeWidget::RenderStallReasonBarCell(const IsaRow& row, bool& row_clicked)
 {
-    if(row.sampling.availability == SamplingAvailability::kMissing)
+    if(row.sampling.availability != SamplingAvailability::kValid)
     {
-        RenderUnavailableStallCell(STALL_REASON_DATA_UNAVAILABLE_TOOLTIP);
-        return;
-    }
-    if(row.sampling.availability == SamplingAvailability::kInvalid)
-    {
-        RenderUnavailableStallCell(SAMPLING_STATE_INVALID_COUNTS_TOOLTIP);
+        RenderUnavailableStallCell(GetUnavailableSamplingTooltip(row));
         return;
     }
 

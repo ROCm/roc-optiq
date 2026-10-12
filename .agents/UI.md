@@ -1676,7 +1676,11 @@ In mixed captures, instructions with missing progress counts display disabled
 `N/A` cells with explanatory tooltips; other instructions retain their measured
 percentages. Entirely host-trap captures have no progress counts, so Stall % stays
 visible with a dimmed header and disabled `N/A` cells. Unsampled instructions also
-have unavailable progress counts. A
+have unavailable progress counts. Unavailable-cell tooltips inspect the row rather
+than assuming a sampling method: zero total samples explain that no PC samples
+were recorded, while sampled rows identify missing issued counts, stalled counts,
+or both. Invalid counts retain their own warning. Sampling State uses the same
+explanations; host-trap information remains general guidance in column headers. A
 stochastic capture's real zero counts remain available and are not confused
 with NULL. Sampling State draws an optional thin stacked bar before Samples: red for
 stalled observations, green for issued observations, and gray for unavailable or

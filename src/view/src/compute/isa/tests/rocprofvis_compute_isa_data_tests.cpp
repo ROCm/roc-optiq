@@ -94,7 +94,10 @@ TEST_CASE("Issued observations are removed from OTHER_WAIT only when totals prov
     data.pc_sample_stall_reason_lookups = { { 1, "OTHER_WAIT" },
                                             { 2, "ALU_DEPENDENCY" } };
     data.pc_sample_stall_reasons        = { { 1, 1, 85 }, { 1, 2, 15 } };
-    SECTION("Canonical OTHER_WAIT") {}
+    SECTION("Canonical OTHER_WAIT")
+    {
+        // Use the canonical data prepared above.
+    }
     SECTION("SDK-prefixed OTHER alias")
     {
         data.pc_sample_stall_reason_lookups[0].text =

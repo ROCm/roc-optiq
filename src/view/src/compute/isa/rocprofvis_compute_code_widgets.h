@@ -115,17 +115,18 @@ private:
     uint32_t GetScrollTarget(ImGuiListClipper& clipper);
     void     RenderLine(uint32_t index);
 
-    static ImU32 HeatmapColor(double percent);
-    void         RenderStallPercentCell(const IsaRow& row, bool& row_clicked);
-    void         RenderSamplesCell(uint64_t sample_count);
-    void         RenderSampleSummary(uint64_t sample_count);
-    void         RenderSamplingStateCell(const IsaRow& row);
-    void         RenderSamplingStateTooltip(const IsaRow& row);
-    void         RenderUnavailableStallCell(const char* tooltip);
-    void         RenderStallReasonBarCell(const IsaRow& row, bool& row_clicked);
-    void         RenderStallReasonsTooltip(const IsaRow& row);
-    void         RenderStallReasonSummary(const IsaRow& row);
-    void         RenderStallReasonFooter(const IsaRow& row);
+    static ImU32       HeatmapColor(double percent);
+    static const char* GetUnavailableSamplingTooltip(const IsaRow& row);
+    void RenderStallPercentCell(const IsaRow& row, bool& row_clicked);
+    void RenderSamplesCell(uint64_t sample_count);
+    void RenderSampleSummary(uint64_t sample_count);
+    void RenderSamplingStateCell(const IsaRow& row);
+    void RenderSamplingStateTooltip(const IsaRow& row);
+    void RenderUnavailableStallCell(const char* tooltip);
+    void RenderStallReasonBarCell(const IsaRow& row, bool& row_clicked);
+    void RenderStallReasonsTooltip(const IsaRow& row);
+    void RenderStallReasonSummary(const IsaRow& row);
+    void RenderStallReasonFooter(const IsaRow& row);
     struct StallReasonTableLayout
     {
         ImVec2 size;

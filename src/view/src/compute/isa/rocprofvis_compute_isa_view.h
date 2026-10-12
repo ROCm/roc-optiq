@@ -84,9 +84,8 @@ private:
     void SelectSourceFile(uint64_t source_file_uuid);
     void SelectSourceFileForScroll();
     void QueuePcSamplingFetch(PcSamplingLayer layer);
-    void            ClearPendingPcSamplingFetches();
-    void            CancelInFlightFetches();
-    FetchStateType& FetchStateFor(PcSamplingLayer layer);
+    void ClearPendingPcSamplingFetches();
+    void CancelInFlightFetches();    
     bool HasValidPcSamplingSelection() const;
     bool TryTakeNextPendingPcSamplingFetch(PcSamplingLayer& layer);
     void SubmitPcSamplingFetch(PcSamplingLayer layer);
@@ -97,6 +96,8 @@ private:
     void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                            uint64_t source_file_uuid, uint32_t generation,
                            uint64_t request_token, rocprofvis_result_t result);
+
+    FetchStateType& FetchStateFor(PcSamplingLayer layer);
 
     SettingsManager&                  m_settings;
     DataProvider&                     m_data_provider;

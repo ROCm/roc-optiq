@@ -9,6 +9,7 @@
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
+#include "system/rocprofvis_controller_sample_lod.h"
 #include "system/rocprofvis_controller_segment.h"
 #include <algorithm>
 #include <atomic>
@@ -181,6 +182,153 @@ TEST_CASE("Event LOD Name Aggregation")
     REQUIRE((combined_name == "2|30|kernel-a\n1|5|kernel-b" ||
              combined_name == "1|5|kernel-b\n2|30|kernel-a"));
     REQUIRE(max_duration_index == first.GetNameStringIndex());
+}
+
+TEST_CASE("Sample Property API")
+{
+    RocProfVis::Controller::Sample sample(kRPVControllerPrimitiveTypeDouble, 99, 1.5);
+    rocprofvis_handle_t* handle = reinterpret_cast<rocprofvis_handle_t*>(&sample);
+    sample.SetValue(4.0);
+    sample.SetEndTimestamp(3.0);
+    uint64_t integer = 0;
+    double   value   = 0.0;
+    REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerSampleId, 0,
+                                             &integer) == kRocProfVisResultSuccess);
+    REQUIRE(integer == 1);
+    REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerSampleType, 0,
+                                             &integer) == kRocProfVisResultSuccess);
+    REQUIRE(integer == kRPVControllerPrimitiveTypeDouble);
+    REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerSampleTimestamp, 0,
+                                             &value) == kRocProfVisResultSuccess);
+    REQUIRE(value == 1.5);
+    REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerSampleValue, 0,
+                                             &value) == kRocProfVisResultSuccess);
+    REQUIRE(value == 4.0);
+    REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerSampleValue, 0, 7.0) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(sample.GetValue() == 7.0);
+    REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerSampleEndTimestamp, 0,
+                                             5.0) == kRocProfVisResultSuccess);
+    REQUIRE(sample.GetEndTimestamp() == 5.0);
+    REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerSampleNumChildren, 0,
+                                             &integer) == kRocProfVisResultSuccess);
+    REQUIRE(integer == 0);
+    REQUIRE(rocprofvis_controller_get_uint64(handle,
+                                             kRPVControllerCommonMemoryUsageInclusive, 0,
+                                             &integer) == kRocProfVisResultSuccess);
+    REQUIRE(integer == sizeof(sample));
+    REQUIRE(
+        rocprofvis_controller_get_double(handle, kRPVControllerSampleValue, 0, nullptr) ==
+        kRocProfVisResultInvalidArgument);
+    REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerSampleTimestamp, 0,
+                                             10.0) == kRocProfVisResultInvalidType);
+    REQUIRE(sample.GetTimestamp() == 1.5);
+    REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerSampleChildMean, 0,
+                                             &value) == kRocProfVisResultNotSupported);
+    REQUIRE(value == 0.0);
+    rocprofvis_handle_t* child = handle;
+    REQUIRE(rocprofvis_controller_get_object(handle, kRPVControllerSampleChildIndex, 0,
+                                             &child) == kRocProfVisResultNotSupported);
+    REQUIRE(child == nullptr);
+}
+
+TEST_CASE("Sample LOD Property API")
+{
+    RocProfVis::Controller::Sample first(kRPVControllerPrimitiveTypeDouble, 1, 1.0);
+    RocProfVis::Controller::Sample second(kRPVControllerPrimitiveTypeDouble, 2, 11.0);
+    first.SetValue(2.0);
+    first.SetEndTimestamp(11.0);
+    second.SetValue(8.0);
+    second.SetEndTimestamp(31.0);
+    std::vector<RocProfVis::Controller::Sample*> children = { &first, &second };
+    RocProfVis::Controller::SampleLOD lod(kRPVControllerPrimitiveTypeDouble, 99, 1.0,
+                                          children);
+    RocProfVis::Controller::Sample&   base = lod;
+    rocprofvis_handle_t* handle            = reinterpret_cast<rocprofvis_handle_t*>(&lod);
+    uint64_t             integer           = 0;
+    double               value             = 0.0;
+
+    SECTION("Statistics and base properties dispatch through the C API")
+    {
+        REQUIRE(base.GetNumberOfChildren() == 2);
+        REQUIRE(lod.GetChildMin() == 2.0);
+        REQUIRE(lod.GetChildMean() == 6.0);
+        REQUIRE(lod.GetChildMedian() == 5.0);
+        REQUIRE(lod.GetChildMax() == 8.0);
+        REQUIRE(lod.GetChildMinTimestamp() == 1.0);
+        REQUIRE(lod.GetChildMaxTimestamp() == 11.0);
+        REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerSampleChildMean, 0,
+                                                 &value) == kRocProfVisResultSuccess);
+        REQUIRE(value == 6.0);
+        REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerSampleValue, 0,
+                                                 &value) == kRocProfVisResultSuccess);
+        REQUIRE(value == 6.0);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerSampleId, 0,
+                                                 &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 1);
+        REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerSampleEndTimestamp,
+                                                 0, 31.0) == kRocProfVisResultSuccess);
+        REQUIRE(base.GetEndTimestamp() == 31.0);
+        REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerSampleChildMin, 0,
+                                                 0.5) == kRocProfVisResultSuccess);
+        REQUIRE(lod.GetChildMin() == 0.5);
+        REQUIRE(rocprofvis_controller_get_uint64(
+                    handle, kRPVControllerCommonMemoryUsageInclusive, 0, &integer) ==
+                kRocProfVisResultInvalidEnum);
+        REQUIRE(base.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultInvalidEnum);
+    }
+
+    SECTION("Child access preserves bounds and rejects other object types")
+    {
+        RocProfVis::Controller::Sample* child = nullptr;
+        REQUIRE(lod.GetChild(0, &child) == kRocProfVisResultSuccess);
+        REQUIRE(child == &first);
+        rocprofvis_handle_t* child_handle = nullptr;
+        REQUIRE(rocprofvis_controller_get_object(handle, kRPVControllerSampleChildIndex,
+                                                 1, &child_handle) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(child_handle == reinterpret_cast<rocprofvis_handle_t*>(&second));
+        REQUIRE(lod.GetChild(2, &child) == kRocProfVisResultOutOfRange);
+        REQUIRE(lod.GetChild(0, nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(lod.SetChild(2, &first) == kRocProfVisResultOutOfRange);
+        REQUIRE(lod.SetChild(0, nullptr) == kRocProfVisResultInvalidArgument);
+        RocProfVis::Controller::Event event(1, 0.0, 1.0);
+        REQUIRE(rocprofvis_controller_set_object(
+                    handle, kRPVControllerSampleChildIndex, 0,
+                    reinterpret_cast<rocprofvis_handle_t*>(&event)) ==
+                kRocProfVisResultInvalidArgument);
+        REQUIRE(lod.GetChild(0, &child) == kRocProfVisResultSuccess);
+        REQUIRE(child == &first);
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerSampleNumChildren,
+                                                 0, 1) == kRocProfVisResultSuccess);
+        REQUIRE(lod.GetChildMean() == 2.0);
+        REQUIRE(lod.GetChildMedian() == 2.0);
+    }
+
+    SECTION("Zero-duration children have a finite weighted mean")
+    {
+        first.SetEndTimestamp(first.GetTimestamp());
+        second.SetEndTimestamp(second.GetTimestamp());
+        REQUIRE(lod.SetNumberOfChildren(2) == kRocProfVisResultSuccess);
+        REQUIRE(lod.GetChildMean() == 0.0);
+        REQUIRE(lod.GetValue() == 0.0);
+    }
+
+    SECTION("Empty and unpopulated child collections are safe")
+    {
+        REQUIRE(lod.SetNumberOfChildren(0) == kRocProfVisResultSuccess);
+        REQUIRE(lod.GetChildMean() == 0.0);
+        REQUIRE(lod.GetValue() == 0.0);
+        REQUIRE(lod.SetNumberOfChildren(2) == kRocProfVisResultSuccess);
+        REQUIRE(lod.GetChildMedian() == 0.0);
+        RocProfVis::Controller::Sample* child = &first;
+        REQUIRE(lod.GetChild(0, &child) == kRocProfVisResultSuccess);
+        REQUIRE(child == nullptr);
+        REQUIRE(lod.SetChild(0, &second) == kRocProfVisResultSuccess);
+        REQUIRE(lod.SetNumberOfChildren(2) == kRocProfVisResultSuccess);
+        REQUIRE(lod.GetChildMean() == 8.0);
+        REQUIRE(lod.GetChildMedian() == 8.0);
+    }
 }
 
 // Creates two standalone MemoryManager instances and a SegmentTimeline, fills

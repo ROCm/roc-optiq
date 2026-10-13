@@ -138,7 +138,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
                 else
                 {
-                    it->second->GetDouble(kRPVControllerSampleEndTimestamp, 0, &max_ts);
+                    max_ts = static_cast<Sample*>(it->second)->GetEndTimestamp();
                 }
                 if(min_ts <= end && max_ts >= start)
                 {
@@ -168,8 +168,7 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
                 }
                 else
                 {
-                    lower->second->GetDouble(kRPVControllerSampleEndTimestamp, 0,
-                                             &max_ts);
+                    max_ts = static_cast<Sample*>(lower->second)->GetEndTimestamp();
                 }
 
                 if(event_id_set && m_type == kRPVControllerTrackTypeEvents)
@@ -222,6 +221,11 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
                         if(entry.second->GetType() == kRPVControllerObjectTypeEvent)
                         {
                             result = static_cast<Event*>(entry.second)
+                                         ->GetInclusiveMemoryUsage(&entry_size);
+                        }
+                        else if(entry.second->GetType() == kRPVControllerObjectTypeSample)
+                        {
+                            result = static_cast<Sample*>(entry.second)
                                          ->GetInclusiveMemoryUsage(&entry_size);
                         }
                         else

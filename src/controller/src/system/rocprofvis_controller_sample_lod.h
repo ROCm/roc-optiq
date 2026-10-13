@@ -26,11 +26,37 @@ public:
 
     virtual ~SampleLOD();
 
-    rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeSample;
+    }
 
-    size_t GetNumChildren();
+    uint64_t            GetNumberOfChildren() const override { return m_children.size(); }
+    size_t              GetNumChildren() const { return m_children.size(); }
+    rocprofvis_result_t GetChild(uint64_t index, Sample** value) const;
+    rocprofvis_result_t SetChild(uint64_t index, Sample* child);
+    rocprofvis_result_t SetNumberOfChildren(uint64_t count);
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const override
+    {
+        // LOD memory queries retain the existing C API error.
+        return value ? kRocProfVisResultInvalidEnum : kRocProfVisResultInvalidArgument;
+    }
 
-    // Handlers for getters.
+    double GetChildMin() const { return m_child_min; }
+    double GetChildMean() const { return m_child_mean; }
+    double GetChildMedian() const { return m_child_median; }
+    double GetChildMax() const { return m_child_max; }
+    double GetChildMinTimestamp() const { return m_child_min_timestamp; }
+    double GetChildMaxTimestamp() const { return m_child_max_timestamp; }
+
+    void SetChildMin(double value) { m_child_min = value; }
+    void SetChildMean(double value) { m_child_mean = value; }
+    void SetChildMedian(double value) { m_child_median = value; }
+    void SetChildMax(double value) { m_child_max = value; }
+    void SetChildMinTimestamp(double timestamp) { m_child_min_timestamp = timestamp; }
+    void SetChildMaxTimestamp(double timestamp) { m_child_max_timestamp = timestamp; }
+
+private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t* value) final;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,

@@ -570,8 +570,8 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
             kRPVControllerPrimitiveTypeDouble, sample_id++, last_timestamp, GetSegments());
         if(new_sample)
         {
-            new_sample->SetDouble(kRPVControllerSampleValue, 0, last_value);
-            new_sample->SetDouble(kRPVControllerSampleEndTimestamp, 0, timestamp);
+            new_sample->SetValue(last_value);
+            new_sample->SetEndTimestamp(timestamp);
             SetObject(
                 kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)new_sample);
         }
@@ -1018,15 +1018,11 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                     }
                     else
                     {
-                        result = object->GetDouble(kRPVControllerSampleTimestamp, 0, &timestamp.first);
-                        if (result == kRocProfVisResultSuccess)
-                        {
-                            result = object->GetDouble(kRPVControllerSampleEndTimestamp, 0, &timestamp.second);
-                            if (result == kRocProfVisResultSuccess)
-                            {
-                                result = object->GetDouble(kRPVControllerSampleValue, 0, &sample_value);
-                            }
-                        }
+                        const Sample* sample = static_cast<Sample*>(object);
+                        timestamp.first      = sample->GetTimestamp();
+                        timestamp.second     = sample->GetEndTimestamp();
+                        sample_value         = sample->GetValue();
+                        result               = kRocProfVisResultSuccess;
                     }
 
                     if (result == kRocProfVisResultSuccess)

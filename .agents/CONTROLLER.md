@@ -391,8 +391,9 @@ Derived classes should keep their generic property overrides private
 and expose dedicated typed accessors for controller-internal C++ callers;
 the public virtual methods remain available through `Handle` for C ABI
 dispatch.
-Trivial member accessors on `Event`, `Track`, `Trace`, and `SystemTrace`
-are defined inline in their class headers. Accessors requiring complete
+Trivial member accessors on `Event`, `Sample`, `SampleLOD`, `Track`,
+`Trace`, and `SystemTrace` are defined inline in their class headers.
+Accessors requiring complete
 forward-declared types, model queries, locking, or validation remain in
 the implementation files.
 
@@ -725,6 +726,12 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
 
 - A primitive value sample with a timestamp. Bound by
   `rocprofvis_controller_sample_properties_t` (`0x40000000`).
+- Property overrides are private C ABI handlers; `SampleLOD` is a friend
+  solely to delegate its base-property handlers. Internal code uses inline
+  `GetId`, `GetValueType`, `GetTimestamp`, `GetEndTimestamp`, `GetValue`,
+  `SetValue`, and `SetEndTimestamp`. The ID remains the integer timestamp.
+  `GetNumberOfChildren` and `GetInclusiveMemoryUsage` dispatch virtually
+  for raw samples and LOD samples despite their shared runtime type tag.
 
 `SampleLOD : Sample` (`kRPVControllerObjectTypeSample` reused):
 
@@ -732,6 +739,12 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
   child statistics (`min`, `mean`, `median`, `max`,
   `min_timestamp`, `max_timestamp`) via the
   `kRPVControllerSampleChild*` family of properties.
+- Its property overrides are also private. Typed statistic accessors are
+  inline; `GetChild` / `SetChild` validate indexes and `SetNumberOfChildren`
+  resizes borrowed child pointers and recalculates statistics. Empty/null
+  collections produce zero statistics; zero-duration collections produce
+  a zero weighted mean. Child replacement alone does not recalculate.
+  The existing unsupported LOD memory query still returns `InvalidEnum`.
 
 ### 5.3 `Graph` (`rocprofvis_controller_graph.{h,cpp}`)
 

@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
 #include "system/rocprofvis_controller_event.h"
+#include "system/rocprofvis_controller_sample.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -435,6 +436,11 @@ rocprofvis_result_t Data::GetMemoryUsage(uint64_t* value, rocprofvis_common_prop
                     {
                         result =
                             static_cast<Event*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else if(object->GetType() == kRPVControllerObjectTypeSample)
+                    {
+                        result =
+                            static_cast<Sample*>(object)->GetInclusiveMemoryUsage(value);
                     }
                     else
                     {

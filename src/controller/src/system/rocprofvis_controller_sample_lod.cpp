@@ -5,8 +5,10 @@
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <exception>
 
 namespace RocProfVis
 {
@@ -17,42 +19,39 @@ typedef Reference<rocprofvis_controller_sample_t, Sample, kRPVControllerObjectTy
 
 void SampleLOD::CalculateChildValues(void)
 {
-    ROCPROFVIS_ASSERT(m_children.size() > 0);
     m_child_min                 = DBL_MAX;
     m_child_max                 = DBL_MIN;
     m_child_mean                = 0;
     m_child_median              = 0;
     m_child_min_timestamp       = DBL_MAX;
     m_child_max_timestamp       = DBL_MIN;
-    uint64_t            entries = 0;
     std::vector<double> values;
     double total_duration = 0;
     for(Sample* sample : m_children)
     {
         if(sample)
         {
-            double timestamp = 0;
-            double end_timestamp = 0;
-            double value     = 0;
-            double duration = 0;
-            rocprofvis_result_t result = sample->GetDouble( kRPVControllerSampleTimestamp, 0, &timestamp);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            result = sample->GetDouble( kRPVControllerSampleEndTimestamp, 0, &end_timestamp);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            result = sample->GetDouble(kRPVControllerSampleValue, 0, &value);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            {
-                m_child_min_timestamp = std::min(m_child_min_timestamp, timestamp);
-                m_child_max_timestamp = std::max(m_child_max_timestamp, timestamp);
-                m_child_min           = std::min(m_child_min, value);
-                m_child_max           = std::max(m_child_max, value);
-                duration = end_timestamp - timestamp;
-                m_child_mean += value*duration;
-                total_duration += duration;
-                entries++;
-                values.push_back(value);
-            }
+            const double timestamp     = sample->GetTimestamp();
+            const double end_timestamp = sample->GetEndTimestamp();
+            const double value         = sample->GetValue();
+            const double duration      = end_timestamp - timestamp;
+            m_child_min_timestamp      = std::min(m_child_min_timestamp, timestamp);
+            m_child_max_timestamp      = std::max(m_child_max_timestamp, timestamp);
+            m_child_min                = std::min(m_child_min, value);
+            m_child_max                = std::max(m_child_max, value);
+            m_child_mean += value * duration;
+            total_duration += duration;
+            values.push_back(value);
         }
+    }
+    if(values.empty())
+    {
+        m_child_min           = 0;
+        m_child_max           = 0;
+        m_child_min_timestamp = 0;
+        m_child_max_timestamp = 0;
+        SetValue(0);
+        return;
     }
     size_t num_children = values.size();
     if(num_children & 0x1)
@@ -66,9 +65,8 @@ void SampleLOD::CalculateChildValues(void)
 
         m_child_median = (values[lower] + values[upper]) / 2;
     }
-    m_child_mean /= total_duration;
-    auto result = SetDouble(kRPVControllerSampleValue, 0, m_child_mean);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    m_child_mean = total_duration != 0 ? m_child_mean / total_duration : 0;
+    SetValue(m_child_mean);
 }
 
 SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
@@ -115,15 +113,58 @@ SampleLOD::~SampleLOD()
 {
 }
 
-rocprofvis_controller_object_type_t SampleLOD::GetType(void) 
+rocprofvis_result_t
+SampleLOD::GetChild(uint64_t index, Sample** value) const
 {
-    return kRPVControllerObjectTypeSample;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        if(index < m_children.size())
+        {
+            *value = m_children[index];
+            result = kRocProfVisResultSuccess;
+        }
+        else
+        {
+            result = kRocProfVisResultOutOfRange;
+        }
+    }
+    return result;
 }
 
-size_t
-SampleLOD::GetNumChildren()
+rocprofvis_result_t
+SampleLOD::SetChild(uint64_t index, Sample* child)
 {
-    return m_children.size();
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(child)
+    {
+        if(index < m_children.size())
+        {
+            m_children[index] = child;
+            result            = kRocProfVisResultSuccess;
+        }
+        else
+        {
+            result = kRocProfVisResultOutOfRange;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t
+SampleLOD::SetNumberOfChildren(uint64_t count)
+{
+    rocprofvis_result_t result = kRocProfVisResultMemoryAllocError;
+    try
+    {
+        m_children.resize(count);
+        CalculateChildValues();
+        result = kRocProfVisResultSuccess;
+    } catch(std::exception const&)
+    {
+        result = kRocProfVisResultMemoryAllocError;
+    }
+    return result;
 }
 
 rocprofvis_result_t SampleLOD::GetUInt64(rocprofvis_property_t property, uint64_t index,
@@ -136,7 +177,7 @@ rocprofvis_result_t SampleLOD::GetUInt64(rocprofvis_property_t property, uint64_
         {
             case kRPVControllerSampleNumChildren:
             {
-                *value = m_children.size();
+                *value = GetNumberOfChildren();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -175,37 +216,37 @@ rocprofvis_result_t SampleLOD::GetDouble(rocprofvis_property_t property, uint64_
         {
             case kRPVControllerSampleChildMin:
             {
-                *value = m_child_min;
+                *value = GetChildMin();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleChildMean:
             {
-                *value = m_child_mean;
+                *value = GetChildMean();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleChildMedian:
             {
-                *value = m_child_median;
+                *value = GetChildMedian();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleChildMax:
             {
-                *value = m_child_max;
+                *value = GetChildMax();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleChildMinTimestamp:
             {
-                *value = m_child_min_timestamp;
+                *value = GetChildMinTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleChildMaxTimestamp:
             {
-                *value = m_child_max_timestamp;
+                *value = GetChildMaxTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -239,14 +280,11 @@ rocprofvis_result_t SampleLOD::GetObject(rocprofvis_property_t property, uint64_
         {
             case kRPVControllerSampleChildIndex:
             {
-                if(index < m_children.size())
+                Sample* child = nullptr;
+                result        = GetChild(index, &child);
+                if(result == kRocProfVisResultSuccess)
                 {
-                    *value = (rocprofvis_handle_t*) m_children[index];
-                    result = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
+                    *value = reinterpret_cast<rocprofvis_handle_t*>(child);
                 }
                 break;
             }
@@ -289,12 +327,7 @@ rocprofvis_result_t SampleLOD::SetUInt64(rocprofvis_property_t property, uint64_
     {
         case kRPVControllerSampleNumChildren:
         {
-            if(value != m_children.size())
-            {
-                m_children.resize(value);
-            }
-            CalculateChildValues();
-            result = kRocProfVisResultSuccess;
+            result = SetNumberOfChildren(value);
             break;
         }
         case kRPVControllerSampleChildIndex:
@@ -333,37 +366,37 @@ rocprofvis_result_t SampleLOD::SetDouble(rocprofvis_property_t property, uint64_
     {
         case kRPVControllerSampleChildMin:
         {
-            m_child_min = value;
+            SetChildMin(value);
             result      = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerSampleChildMean:
         {
-            m_child_mean = value;
+            SetChildMean(value);
             result       = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerSampleChildMedian:
         {
-            m_child_median = value;
+            SetChildMedian(value);
             result         = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerSampleChildMax:
         {
-            m_child_max = value;
+            SetChildMax(value);
             result      = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerSampleChildMinTimestamp:
         {
-            m_child_min_timestamp = value;
+            SetChildMinTimestamp(value);
             result                = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerSampleChildMaxTimestamp:
         {
-            m_child_max_timestamp = value;
+            SetChildMaxTimestamp(value);
             result                = kRocProfVisResultSuccess;
             break;
         }
@@ -397,18 +430,17 @@ rocprofvis_result_t SampleLOD::SetObject(rocprofvis_property_t property, uint64_
         {
             case kRPVControllerSampleChildIndex:
             {
-                if(index < m_children.size())
+                if(index >= GetNumberOfChildren())
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                else
                 {
                     SampleRef sample_ref(value);
                     if(sample_ref.IsValid())
                     {
-                        m_children[index] = sample_ref.Get();
-                        result            = kRocProfVisResultSuccess;
+                        result = SetChild(index, sample_ref.Get());
                     }
-                }
-                else
-                {
-                    result = kRocProfVisResultOutOfRange;
                 }
                 break;
             }

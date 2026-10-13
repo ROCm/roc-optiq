@@ -59,6 +59,7 @@ SshSettingsDialog::~SshSettingsDialog() = default;
 void
 SshSettingsDialog::SelectConnection(const std::string& id)
 {
+    ClearConnectionTest();
     const SshConnectionConfig* cfg = m_store.Get(id);
     if(cfg)
     {
@@ -73,9 +74,20 @@ SshSettingsDialog::SelectConnection(const std::string& id)
 void
 SshSettingsDialog::BeginNewConnection()
 {
+    ClearConnectionTest();
     // Left unnamed so the profile is labelled by its endpoint (user@host:port).
     m_working    = SshConnectionConfig();
     m_working.id = SshConnectionConfig::GenerateId();
+}
+
+void
+SshSettingsDialog::ClearConnectionTest()
+{
+    // Dropping the orchestrator cancels an in-flight test. The auth modal
+    // closes on its own once this dialog stops beginning it.
+    m_test.reset();
+    m_test_result.clear();
+    m_test_ok = false;
 }
 
 void
@@ -83,8 +95,8 @@ SshSettingsDialog::StartConnectionTest()
 {
     // With no command or result path on the URI, Start() stops after a
     // successful authentication.
+    ClearConnectionTest();
     m_test_uri->SetConnection(m_working);
-    m_test_result.clear();
     m_test = std::make_unique<RemoteTraceOrchestrator>(m_test_uri, nullptr);
     m_test->Start();
 }
@@ -165,17 +177,18 @@ SshSettingsDialog::Render()
         // Compact reveal toggle that lives inside the field cell, so it can never
         // overflow past the card like a trailing "Show" checkbox column would.
         auto reveal_toggle = [&](const char* id, std::string& value, const char* hint,
-                                 bool& show) {
+                                 bool& show) -> bool {
             const float eye_w = ImGui::GetFrameHeight();
             ImGui::SetNextItemWidth(-(eye_w + style.ItemInnerSpacing.x));
             ImGuiInputTextFlags flags = show ? 0 : ImGuiInputTextFlags_Password;
+            bool changed = false;
             if(hint)
             {
-                InputTextStringWithHint(id, hint, value, flags);
+                changed = InputTextStringWithHint(id, hint, value, flags);
             }
             else
             {
-                InputTextString(id, value, flags);
+                changed = InputTextString(id, value, flags);
             }
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
             // Scope by the field id: both toggles render the same eye glyph, and
@@ -188,6 +201,7 @@ SshSettingsDialog::Render()
                 show = !show;
             }
             ImGui::PopID();
+            return changed;
         };
 
         // Delegate to the shared panel-card helper; restore default item spacing
@@ -332,20 +346,31 @@ SshSettingsDialog::Render()
                     const float port_w = ImGui::CalcTextSize("65535").x + style.FramePadding.x * 4.0f;
                     ImGui::SetNextItemWidth(
                         -(port_w + ImGui::CalcTextSize("Port").x + style.ItemSpacing.x * 2.0f));
-                    InputTextStringWithHint("##rhost", "Hostname or IP address", m_working.host);
+                    if(InputTextStringWithHint("##rhost", "Hostname or IP address",
+                                               m_working.host))
+                    {
+                        ClearConnectionTest();
+                    }
                     ImGui::SameLine();
                     label("Port");
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextString("##rport", m_working.port);
+                    if(InputTextString("##rport", m_working.port))
+                    {
+                        ClearConnectionTest();
+                    }
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("User");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextStringWithHint("##ruser", "Username on the remote machine",
-                                            m_working.user);
+                    if(InputTextStringWithHint("##ruser",
+                                               "Username on the remote machine",
+                                               m_working.user))
+                    {
+                        ClearConnectionTest();
+                    }
 
                     ImGui::EndTable();
                 }
@@ -379,24 +404,35 @@ SshSettingsDialog::Render()
                     ImGui::TableSetColumnIndex(0);
                     label("Password");
                     ImGui::TableSetColumnIndex(1);
-                    reveal_toggle("##rpass", m_working.password,
-                                  "Leave blank to use keys or be asked when connecting",
-                                  m_show_password);
+                    if(reveal_toggle("##rpass", m_working.password,
+                                     "Leave blank to use keys or be asked "
+                                     "when connecting",
+                                     m_show_password))
+                    {
+                        ClearConnectionTest();
+                    }
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("SSH key");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextStringWithHint("##rkey", "Private key path, e.g. ~/.ssh/id_ed25519",
-                                            m_working.identity_file);
+                    if(InputTextStringWithHint("##rkey",
+                                               "Private key path, e.g. ~/.ssh/id_ed25519",
+                                               m_working.identity_file))
+                    {
+                        ClearConnectionTest();
+                    }
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("Passphrase");
                     ImGui::TableSetColumnIndex(1);
-                    reveal_toggle("##rkeypass", m_working.passphrase,
-                                  "Only if the key is encrypted", m_show_passphrase);
+                    if(reveal_toggle("##rkeypass", m_working.passphrase,
+                                     "Only if the key is encrypted", m_show_passphrase))
+                    {
+                        ClearConnectionTest();
+                    }
 
                     ImGui::EndTable();
                 }

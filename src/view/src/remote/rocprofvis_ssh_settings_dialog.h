@@ -22,7 +22,9 @@ class RemoteUri;
 // working copy of the selected connection (host, port, user, password, key,
 // passphrase, plus an editable display name) and supports selecting, creating,
 // saving, and deleting profiles against a SshConnectionStore. "Test" connects
-// and authenticates with the working copy, unsaved edits included.
+// and authenticates with the working copy, unsaved edits included. Its verdict
+// is dropped when the profile changes or when any field other than the display
+// name changes, so a result is never shown for a different connection.
 //
 // On OK the working copy is saved into the store and the selected connection's
 // id is reported back via the on_commit callback so the owner can bind it to
@@ -51,6 +53,8 @@ private:
     void SelectConnection(const std::string& id);
     void BeginNewConnection();
     void StartConnectionTest();
+    // Drops an in-flight test and any finished verdict.
+    void ClearConnectionTest();
 
     SshConnectionStore&                     m_store;
     SshConnectionConfig                     m_working;

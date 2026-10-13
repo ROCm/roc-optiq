@@ -4,9 +4,10 @@
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_job_system.h"
-#include "rocprofvis_core.h"
 #include "rocprofvis_controller_string_table.h"
+#include "rocprofvis_core.h"
 #include "system/rocprofvis_controller_event.h"
+#include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_segment.h"
 #include <algorithm>
@@ -14,8 +15,8 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
-#include <cstring>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <thread>
@@ -47,6 +48,139 @@ main(int argc, char** argv)
     rocprofvis_core_enable_log(log_file.c_str(), spdlog::level::trace);
 
     return session.run();
+}
+
+TEST_CASE("Event Property API")
+{
+    RocProfVis::Controller::Event event(42, 10.0, 25.0);
+    rocprofvis_handle_t*          handle = reinterpret_cast<rocprofvis_handle_t*>(&event);
+    uint64_t                      integer   = 0;
+    double                        timestamp = 0.0;
+
+    SECTION("Typed state remains accessible through the C API")
+    {
+        event.SetLevel(7);
+        REQUIRE(event.SetName("kernel") == kRocProfVisResultSuccess);
+        REQUIRE(event.SetCategory("dispatch") == kRocProfVisResultSuccess);
+        event.SetTopCombinedNameStringIndex(event.GetNameStringIndex());
+
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerEventId, 0,
+                                                 &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 42);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerEventLevel, 0,
+                                                 &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 7);
+        REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerEventDuration, 0,
+                                                 &timestamp) == kRocProfVisResultSuccess);
+        REQUIRE(timestamp == 15.0);
+
+        uint32_t length = 0;
+        REQUIRE(rocprofvis_controller_get_string(handle, kRPVControllerEventName, 0,
+                                                 nullptr,
+                                                 &length) == kRocProfVisResultSuccess);
+        REQUIRE(length == 6);
+        char name[6];
+        REQUIRE(rocprofvis_controller_get_string(handle, kRPVControllerEventName, 0, name,
+                                                 &length) == kRocProfVisResultSuccess);
+        REQUIRE(std::string(name, length) == "kernel");
+        REQUIRE(std::string(event.GetCategory()) == "dispatch");
+        REQUIRE(std::string(event.GetTopCombinedName()) == "kernel");
+
+        REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerEventEndTimestamp,
+                                                 0, 30.0) == kRocProfVisResultSuccess);
+        REQUIRE(event.GetEndTimestamp() == 30.0);
+        REQUIRE(event.GetDuration() == 20.0);
+        REQUIRE(rocprofvis_controller_set_string(handle, kRPVControllerEventName, 0,
+                                                 "renamed") == kRocProfVisResultSuccess);
+        REQUIRE(std::string(event.GetName()) == "renamed");
+        REQUIRE(std::string(event.GetTopCombinedName()) == "kernel");
+    }
+
+    SECTION("Read-only and invalid property requests retain their errors")
+    {
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerEventId, 0, 99) ==
+                kRocProfVisResultReadOnlyError);
+        REQUIRE(event.GetId() == 42);
+        REQUIRE(
+            rocprofvis_controller_get_uint64(handle, kRPVControllerEventId, 0, nullptr) ==
+            kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerEventId, 0,
+                                                 &timestamp) ==
+                kRocProfVisResultInvalidType);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerTrackId, 0,
+                                                 &integer) ==
+                kRocProfVisResultInvalidEnum);
+        REQUIRE(rocprofvis_controller_set_string(handle, kRPVControllerEventName, 0,
+                                                 nullptr) ==
+                kRocProfVisResultInvalidArgument);
+    }
+
+    SECTION("LOD children preserve bounds and memory accounting")
+    {
+        REQUIRE(event.GetNumberOfChildren() == 0);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerEventChildIndexed,
+                                                 0, &integer) ==
+                kRocProfVisResultInvalidArgument);
+        REQUIRE(event.SetChildId(0, 100) == kRocProfVisResultInvalidArgument);
+        REQUIRE(event.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == sizeof(event));
+
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerEventNumChildren,
+                                                 0, 2) == kRocProfVisResultSuccess);
+        REQUIRE(event.SetChildId(0, 100) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerEventChildIndexed,
+                                                 1, 101) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerEventChildIndexed,
+                                                 0,
+                                                 &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 100);
+        REQUIRE(event.GetChildId(1, &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 101);
+        REQUIRE(event.GetChildId(2, &integer) == kRocProfVisResultOutOfRange);
+        REQUIRE(event.GetChildId(0, nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(event.SetChildId(2, 102) == kRocProfVisResultOutOfRange);
+        REQUIRE(rocprofvis_controller_get_uint64(
+                    handle, kRPVControllerCommonMemoryUsageInclusive, 0, &integer) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(integer > sizeof(event));
+
+        REQUIRE(event.SetNumberOfChildren(1) == kRocProfVisResultSuccess);
+        REQUIRE(event.GetChildId(0, &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 100);
+        REQUIRE(event.GetChildId(1, &integer) == kRocProfVisResultOutOfRange);
+        REQUIRE(event.SetNumberOfChildren(0) == kRocProfVisResultSuccess);
+        REQUIRE(event.GetChildId(0, &integer) == kRocProfVisResultOutOfRange);
+    }
+}
+
+TEST_CASE("Event LOD Name Aggregation")
+{
+    RocProfVis::Controller::Graph graph(nullptr, kRPVControllerGraphTypeFlame, 0);
+    RocProfVis::Controller::Event first(1, 0.0, 10.0);
+    RocProfVis::Controller::Event second(2, 10.0, 30.0);
+    RocProfVis::Controller::Event third(3, 30.0, 35.0);
+    REQUIRE(first.SetName("kernel-a") == kRocProfVisResultSuccess);
+    REQUIRE(second.SetName("kernel-a") == kRocProfVisResultSuccess);
+    REQUIRE(third.SetName("kernel-b") == kRocProfVisResultSuccess);
+
+    std::vector<RocProfVis::Controller::Event*> events;
+    std::string                                 combined_name;
+    uint64_t                                    max_duration_index = UINT64_MAX;
+    REQUIRE(graph.CombineEventInfo(events, combined_name, max_duration_index) ==
+            kRocProfVisResultInvalidArgument);
+    events.push_back(&first);
+    REQUIRE(graph.CombineEventInfo(events, combined_name, max_duration_index) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(combined_name == "kernel-a");
+    REQUIRE(max_duration_index == first.GetNameStringIndex());
+    events.push_back(&second);
+    events.push_back(&third);
+    combined_name.clear();
+    REQUIRE(graph.CombineEventInfo(events, combined_name, max_duration_index) ==
+            kRocProfVisResultSuccess);
+    REQUIRE((combined_name == "2|30|kernel-a\n1|5|kernel-b" ||
+             combined_name == "1|5|kernel-b\n2|30|kernel-a"));
+    REQUIRE(max_duration_index == first.GetNameStringIndex());
 }
 
 // Creates two standalone MemoryManager instances and a SegmentTimeline, fills

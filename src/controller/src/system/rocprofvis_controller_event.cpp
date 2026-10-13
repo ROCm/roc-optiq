@@ -52,21 +52,119 @@ Event::~Event()
     }
 }
 
-bool
-Event::IsDeletable()
+const char*
+Event::GetName() const
 {
-    return (m_retain_counter == 0) ? true : --m_retain_counter == 0;
+    return StringTable::Get().GetString(GetNameStringIndex());
+}
+
+const char*
+Event::GetCategory() const
+{
+    return StringTable::Get().GetString(GetCategoryStringIndex());
+}
+
+const char*
+Event::GetTopCombinedName() const
+{
+    return StringTable::Get().GetString(GetTopCombinedNameStringIndex());
+}
+
+uint64_t
+Event::GetNumberOfChildren() const
+{
+    return m_children ? m_children->GetVector().size() : 0;
+}
+
+rocprofvis_result_t
+Event::GetChildId(uint64_t index, uint64_t* value) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value && m_children)
+    {
+        result = index < GetNumberOfChildren()
+                     ? m_children->GetVector()[index].GetUInt64(value)
+                     : kRocProfVisResultOutOfRange;
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Event::GetInclusiveMemoryUsage(uint64_t* value) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        uint64_t size = 0;
+        result        = m_children ? m_children->GetUInt64(
+                                  kRPVControllerCommonMemoryUsageInclusive, 0, &size)
+                                   : kRocProfVisResultSuccess;
+        *value        = size + sizeof(Event);
+    }
+    return result;
 }
 
 void
-Event::IncreaseRetainCounter()
+Event::SetLevel(uint64_t level)
 {
-    m_retain_counter++;
+    // Levels are stored as an 8-bit unsigned integer.
+    ROCPROFVIS_ASSERT(level < 256);
+    m_level = std::min(static_cast<uint8_t>(level), static_cast<uint8_t>(255));
 }
 
-rocprofvis_controller_object_type_t Event::GetType(void) 
+rocprofvis_result_t
+Event::SetName(const char* name)
 {
-    return kRPVControllerObjectTypeEvent;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(name)
+    {
+        m_name = StringTable::Get().AddString(name);
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Event::SetCategory(const char* category)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(category)
+    {
+        m_category = StringTable::Get().AddString(category);
+        result     = kRocProfVisResultSuccess;
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Event::SetNumberOfChildren(uint64_t count)
+{
+    rocprofvis_result_t result = kRocProfVisResultMemoryAllocError;
+    try
+    {
+        if(!m_children)
+        {
+            m_children = new Array;
+        }
+        result = m_children->SetUInt64(kRPVControllerArrayNumEntries, 0, count);
+    } catch(std::exception const&)
+    {
+        result = kRocProfVisResultMemoryAllocError;
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Event::SetChildId(uint64_t index, uint64_t id)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(m_children)
+    {
+        result = index < GetNumberOfChildren()
+                     ? m_children->GetVector()[index].SetUInt64(id)
+                     : kRocProfVisResultOutOfRange;
+    }
+    return result;
 }
 
 rocprofvis_result_t
@@ -502,17 +600,7 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerCommonMemoryUsageInclusive:
             {
-                uint64_t size = 0;
-                if (m_children)
-                {
-                    result = m_children->GetUInt64(property, index, &size);
-                }
-                else
-                {
-                    result = kRocProfVisResultSuccess;
-                }
-                size += sizeof(Event);
-                *value = size;
+                result = GetInclusiveMemoryUsage(value);
                 break;
             }
             case kRPVControllerCommonMemoryUsageExclusive:
@@ -523,54 +611,42 @@ rocprofvis_result_t Event::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerEventId:
             {
-                *value = m_id;
+                *value = GetId();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventNumChildren:
             {
-                *value = 0;
-                result = m_children ? m_children->GetUInt64(kRPVControllerArrayNumEntries, 0, value) : kRocProfVisResultSuccess;
+                *value = GetNumberOfChildren();
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventChildIndexed:
             {
-                uint64_t num_children = 0;
-                if (m_children 
-                    && (m_children->GetUInt64(kRPVControllerArrayNumEntries, 0, &num_children) == kRocProfVisResultSuccess))
-                {
-                    if(index < num_children)
-                    {
-                        result = m_children->GetUInt64(kRPVControllerArrayEntryIndexed, index, value);
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultOutOfRange;
-                    }
-                }
+                result = GetChildId(index, value);
                 break;
             }
             case kRPVControllerEventLevel:
             {
-                *value = m_level;
+                *value = GetLevel();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventNameStrIndex:
             {
-                *value = m_name;
+                *value = GetNameStringIndex();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventCategoryStrIndex:
             {
-                *value = m_category;
+                *value = GetCategoryStringIndex();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventTopCombinedNameStrIndex:
             {
-                *value = m_combined_top_name;
+                *value = GetTopCombinedNameStringIndex();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -594,19 +670,19 @@ rocprofvis_result_t Event::GetDouble(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventStartTimestamp:
             {
-                *value = m_start_timestamp;
+                *value = GetStartTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventEndTimestamp:
             {
-                *value = m_end_timestamp;
+                *value = GetEndTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventDuration:
             {
-                *value = m_end_timestamp - m_start_timestamp;
+                *value = GetDuration();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -628,17 +704,17 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerEventName:
         {
-            result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_name));
+            result = GetStdStringImpl(value, length, GetName());
             break;
         }
         case kRPVControllerEventCategory:
         {
-            result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_category));
+            result = GetStdStringImpl(value, length, GetCategory());
             break;
         }
         case kRPVControllerEventTopCombinedName:
         {
-            result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_combined_top_name));
+            result = GetStdStringImpl(value, length, GetTopCombinedName());
             break;
         }
         default:
@@ -662,42 +738,23 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventNumChildren:
         {
-            try
-            {
-                if(!m_children)
-                {
-                    m_children = new Array;
-                }
-                result = m_children->SetUInt64(kRPVControllerArrayNumEntries, 0, value);
-            }
-            catch(std::exception const&)
-            {
-                result = kRocProfVisResultMemoryAllocError;
-            }
+            result = SetNumberOfChildren(value);
             break;
         }
         case kRPVControllerEventChildIndexed:
         {
-            if(m_children)
-            {
-                result = m_children->SetUInt64(kRPVControllerArrayEntryIndexed, index, value);
-            }
+            result = SetChildId(index, value);
             break;
         }
         case kRPVControllerEventLevel:
         {
-            // Currently the level should be an 8bit unsigned integer
-            // Anything beyond 255 will probably not display well.
-            // TODO: review this
-            ROCPROFVIS_ASSERT(value < 256);
-            m_level = std::min( static_cast<uint8_t>(value), static_cast<uint8_t>(255));
+            SetLevel(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerEventTopCombinedNameStrIndex:
         {
-            // Set string index for top combined name
-            m_combined_top_name = static_cast<size_t>(value);
+            SetTopCombinedNameStringIndex(static_cast<size_t>(value));
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -718,13 +775,13 @@ rocprofvis_result_t Event::SetDouble(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerEventStartTimestamp:
         {
-            m_start_timestamp = value;
+            SetStartTimestamp(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerEventEndTimestamp:
         {
-            m_end_timestamp = value;
+            SetEndTimestamp(value);
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -747,14 +804,12 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-                m_name = StringTable::Get().AddString(value);
-                result = kRocProfVisResultSuccess;
+                result = SetName(value);
                 break;
             }
             case kRPVControllerEventCategory:
             {
-                m_category = StringTable::Get().AddString(value);
-                result = kRocProfVisResultSuccess;
+                result = SetCategory(value);
                 break;
             }
             default:

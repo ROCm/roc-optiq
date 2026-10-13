@@ -127,18 +127,19 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
         for(auto& level : m_entries)
         {
             auto&                              entries = level.second;
-            rocprofvis_controller_system_properties_t property =
-                (rocprofvis_controller_system_properties_t) ((m_type ==
-                                                        kRPVControllerTrackTypeEvents)
-                                                            ? kRPVControllerEventEndTimestamp
-                                                            : kRPVControllerSampleEndTimestamp);
-
             std::map<double, Handle*>::iterator lower = entries.end();
             for(auto it = entries.begin(); it != entries.end(); ++it)
             {
                 double min_ts = it->first;
                 double max_ts = it->first;
-                it->second->GetDouble(property, 0, &max_ts);
+                if(m_type == kRPVControllerTrackTypeEvents)
+                {
+                    max_ts = static_cast<Event*>(it->second)->GetEndTimestamp();
+                }
+                else
+                {
+                    it->second->GetDouble(kRPVControllerSampleEndTimestamp, 0, &max_ts);
+                }
                 if(min_ts <= end && max_ts >= start)
                 {
                     lower = it;
@@ -161,12 +162,19 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             {
                 double min_ts = lower->first;
                 double max_ts = lower->first;
-                lower->second->GetDouble(property, 0, &max_ts);
+                if(m_type == kRPVControllerTrackTypeEvents)
+                {
+                    max_ts = static_cast<Event*>(lower->second)->GetEndTimestamp();
+                }
+                else
+                {
+                    lower->second->GetDouble(kRPVControllerSampleEndTimestamp, 0,
+                                             &max_ts);
+                }
 
                 if(event_id_set && m_type == kRPVControllerTrackTypeEvents)
                 {
-                    uint64_t event_id;
-                    lower->second->GetUInt64(kRPVControllerEventId, 0, &event_id);
+                    const uint64_t event_id = static_cast<Event*>(lower->second)->GetId();
                     auto it = event_id_set->find(event_id);
                     if(it != event_id_set->end())
                     {
@@ -211,7 +219,15 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
                     {
                         *value += sizeof(entry);
                         uint64_t entry_size = 0;
-                        result = entry.second->GetUInt64(property, 0, &entry_size);
+                        if(entry.second->GetType() == kRPVControllerObjectTypeEvent)
+                        {
+                            result = static_cast<Event*>(entry.second)
+                                         ->GetInclusiveMemoryUsage(&entry_size);
+                        }
+                        else
+                        {
+                            result = entry.second->GetUInt64(property, 0, &entry_size);
+                        }
                         if(result == kRocProfVisResultSuccess)
                         {
                             *value += entry_size;

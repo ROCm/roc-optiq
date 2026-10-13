@@ -118,21 +118,6 @@ rocprofvis_result_t SystemTrace::Init()
     return result;
 }
 
-MemoryManager* SystemTrace::GetMemoryManager(){
-    return m_mem_mgmt;
-}
-
-void
-SystemTrace::SetMemoryManager(MemoryManager* memory_manager)
-{
-    m_mem_mgmt = memory_manager;
-}
-
-std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
-{
-    return m_table_mutex[use_case];
-}
-
 void SystemTrace::DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level)
 {
     std::string line;
@@ -752,11 +737,6 @@ rocprofvis_result_t SystemTrace::AsyncFetch(Summary& summary, Arguments& args, F
     }
 
     return error;
-}
-
-rocprofvis_controller_object_type_t SystemTrace::GetType(void) 
-{
-    return kRPVControllerObjectTypeControllerSystem;
 }
 
 rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) 

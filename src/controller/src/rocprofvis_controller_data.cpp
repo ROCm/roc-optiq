@@ -4,6 +4,7 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
+#include "system/rocprofvis_controller_event.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -429,7 +430,17 @@ rocprofvis_result_t Data::GetMemoryUsage(uint64_t* value, rocprofvis_common_prop
                 result = kRocProfVisResultSuccess;
                 if(m_type == kRPVControllerPrimitiveTypeObject)
                 {
-                    result = ((Handle*)m_object)->GetUInt64((rocprofvis_property_t)property, 0, value);
+                    Handle* object = reinterpret_cast<Handle*>(m_object);
+                    if(object->GetType() == kRPVControllerObjectTypeEvent)
+                    {
+                        result =
+                            static_cast<Event*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else
+                    {
+                        result = object->GetUInt64(
+                            static_cast<rocprofvis_property_t>(property), 0, value);
+                    }
                 }
                 if(result == kRocProfVisResultSuccess)
                 {

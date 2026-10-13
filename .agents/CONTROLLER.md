@@ -391,6 +391,10 @@ Derived classes should keep their generic property overrides private
 and expose dedicated typed accessors for controller-internal C++ callers;
 the public virtual methods remain available through `Handle` for C ABI
 dispatch.
+Trivial member accessors on `Event`, `Track`, `Trace`, and `SystemTrace`
+are defined inline in their class headers. Accessors requiring complete
+forward-declared types, model queries, locking, or validation remain in
+the implementation files.
 
 ### 4.2 `Reference<>` template
 File: `rocprofvis_controller_reference.h`.
@@ -700,6 +704,13 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
   into `StringTable`), `m_level`, `m_retain_counter`.
 - `m_children` (`Array*`) holds synthetic LOD children; only populated
   on summary events emitted by `Graph::GenerateLODEvent`.
+- Generic property getters and setters are private overrides for C ABI
+  dispatch through `Handle`. Internal callers use typed accessors for
+  IDs, levels, timestamps, duration, names and string-table indexes.
+  `GetChildId` / `SetChildId` and `SetNumberOfChildren` preserve indexed
+  child bounds and allocation errors; `GetInclusiveMemoryUsage` includes
+  the child array. Names returned by the typed getters are borrowed from
+  `StringTable` and remain valid for its lifetime.
 - Static helpers `FetchDataModelFlowTraceProperty`,
   `FetchDataModelStackTraceProperty`,
   `FetchDataModelExtendedDataProperty` populate an output `Array` from

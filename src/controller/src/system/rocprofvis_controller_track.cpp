@@ -39,142 +39,11 @@ Track::~Track()
 {
 }
 
-rocprofvis_dm_track_t Track::GetDmHandle(void) const
-{
-    return m_dm_handle;
-}
-
-uint64_t
-Track::GetId() const
-{
-    return m_id;
-}
-
-rocprofvis_controller_track_type_t
-Track::GetTrackType() const
-{
-    return m_type;
-}
-
-uint64_t
-Track::GetNumberOfEntries() const
-{
-    return m_bounds.num_entries;
-}
-
-uint64_t
-Track::GetNodeId() const
-{
-    return m_topology_ids.node_id;
-}
-
-uint64_t
-Track::GetAgentIdOrPid() const
-{
-    return m_topology_ids.agent_id_or_pid;
-}
-
-uint64_t
-Track::GetQueueIdOrTid() const
-{
-    return m_topology_ids.queue_id_or_tid;
-}
-
-uint64_t
-Track::GetNumberOfOperationTypes() const
-{
-    return m_metadata.operation_types.size();
-}
-
 rocprofvis_dm_event_operation_t
 Track::GetOperationType(uint64_t index) const
 {
     ROCPROFVIS_ASSERT(index < m_metadata.operation_types.size());
     return m_metadata.operation_types[index];
-}
-
-double
-Track::GetStartTimestamp() const
-{
-    return m_bounds.start_timestamp;
-}
-
-double
-Track::GetEndTimestamp() const
-{
-    return m_bounds.end_timestamp;
-}
-
-double
-Track::GetMinValue() const
-{
-    return m_bounds.min_value;
-}
-
-double
-Track::GetMaxValue() const
-{
-    return m_bounds.max_value;
-}
-
-const std::string&
-Track::GetCategory() const
-{
-    return m_metadata.category;
-}
-
-const std::string&
-Track::GetMainName() const
-{
-    return m_metadata.main_name;
-}
-
-const std::string&
-Track::GetSubName() const
-{
-    return m_metadata.sub_name;
-}
-
-void
-Track::SetTrackType(rocprofvis_controller_track_type_t type)
-{
-    m_type = type;
-}
-
-void
-Track::SetDmHandle(rocprofvis_dm_track_t dm_handle)
-{
-    m_dm_handle = dm_handle;
-}
-
-void
-Track::SetId(uint64_t id)
-{
-    m_id = id;
-}
-
-void
-Track::SetNumberOfEntries(uint64_t number_of_entries)
-{
-    m_bounds.num_entries = number_of_entries;
-}
-
-void
-Track::SetNodeId(uint64_t node_id)
-{
-    m_topology_ids.node_id = node_id;
-}
-
-void
-Track::SetAgentIdOrPid(uint64_t agent_id_or_pid)
-{
-    m_topology_ids.agent_id_or_pid = agent_id_or_pid;
-}
-
-void
-Track::SetQueueIdOrTid(uint64_t queue_id_or_tid)
-{
-    m_topology_ids.queue_id_or_tid = queue_id_or_tid;
 }
 
 void
@@ -189,48 +58,6 @@ Track::SetOperationType(uint64_t index,
 {
     ROCPROFVIS_ASSERT(index < m_metadata.operation_types.size());
     m_metadata.operation_types[index] = operation_type;
-}
-
-void
-Track::SetStartTimestamp(double start_timestamp)
-{
-    m_bounds.start_timestamp = start_timestamp;
-}
-
-void
-Track::SetEndTimestamp(double end_timestamp)
-{
-    m_bounds.end_timestamp = end_timestamp;
-}
-
-void
-Track::SetMinValue(double min_value)
-{
-    m_bounds.min_value = min_value;
-}
-
-void
-Track::SetMaxValue(double max_value)
-{
-    m_bounds.max_value = max_value;
-}
-
-void
-Track::SetCategory(const std::string& category)
-{
-    m_metadata.category = category;
-}
-
-void
-Track::SetMainName(const std::string& main_name)
-{
-    m_metadata.main_name = main_name;
-}
-
-void
-Track::SetSubName(const std::string& sub_name)
-{
-    m_metadata.sub_name = sub_name;
 }
 
 uint64_t
@@ -264,60 +91,6 @@ Track::GetExtDataValue(uint64_t index) const
 Handle* Track::GetContext(void)
 {
     return m_ctx;
-}
-
-SegmentTimeline*
-Track::GetSegments()
-{
-    return &m_segments;
-}
-
-Thread*
-Track::GetThread() const
-{
-    return m_topology_links.thread;
-}
-
-Queue*
-Track::GetQueue() const
-{
-    return m_topology_links.queue;
-}
-
-Stream*
-Track::GetStream() const
-{
-    return m_topology_links.stream;
-}
-
-Counter*
-Track::GetCounter() const
-{
-    return m_topology_links.counter;
-}
-
-void
-Track::SetThread(Thread* thread)
-{
-    m_topology_links.thread = thread;
-}
-
-void
-Track::SetQueue(Queue* queue)
-{
-    m_topology_links.queue = queue;
-}
-
-void
-Track::SetStream(Stream* stream)
-{
-    m_topology_links.stream = stream;
-}
-
-void
-Track::SetCounter(Counter* counter)
-{
-    m_topology_links.counter = counter;
 }
 
 rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
@@ -717,23 +490,14 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
             event_id, timestamp, timestamp + duration, GetSegments());
         if(new_event)
         {
-            result = new_event->SetUInt64(
-                kRPVControllerEventLevel, 0,
-                rocprofvis_dm_get_property_as_uint64(
-                    data, kRPVDMEventLevelUInt64Indexed, record_index));
+            new_event->SetLevel(rocprofvis_dm_get_property_as_uint64(
+                data, kRPVDMEventLevelUInt64Indexed, record_index));
+            result = new_event->SetCategory(rocprofvis_dm_get_property_as_charptr(
+                data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
             if(result == kRocProfVisResultSuccess)
             {
-                result = new_event->SetString(
-                    kRPVControllerEventCategory, 0,
-                    rocprofvis_dm_get_property_as_charptr(
-                        data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
-            }
-            if(result == kRocProfVisResultSuccess)
-            {
-                result = new_event->SetString(
-                    kRPVControllerEventName, 0,
-                    rocprofvis_dm_get_property_as_charptr(
-                        data, kRPVDMEventSymbolStringCharPtrIndexed, record_index));
+                result = new_event->SetName(rocprofvis_dm_get_property_as_charptr(
+                    data, kRPVDMEventSymbolStringCharPtrIndexed, record_index));
             }
             if(result == kRocProfVisResultSuccess)
             {
@@ -821,11 +585,6 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
     }
 
     return result;
-}
-
-rocprofvis_controller_object_type_t Track::GetType(void)
-{
-    return kRPVControllerObjectTypeTrack;
 }
 
 rocprofvis_result_t
@@ -1249,14 +1008,13 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                     std::pair<double, double> timestamp = { 0,0 };
                     double sample_value = 0.0;
                     if (object_type == kRPVControllerObjectTypeEvent)
-                    {  
-                        result = object->GetUInt64(kRPVControllerEventLevel, 0, &level);
-                        result = object->GetUInt64(kRPVControllerEventId, 0, &event_id);
-                        result = object->GetDouble(kRPVControllerEventStartTimestamp, 0, &timestamp.first);
-                        if (result == kRocProfVisResultSuccess)
-                        {
-                            result = object->GetDouble(kRPVControllerEventEndTimestamp, 0, &timestamp.second);
-                        }
+                    {
+                        const Event* event = static_cast<Event*>(object);
+                        level              = event->GetLevel();
+                        event_id           = event->GetId();
+                        timestamp.first    = event->GetStartTimestamp();
+                        timestamp.second   = event->GetEndTimestamp();
+                        result             = kRocProfVisResultSuccess;
                     }
                     else
                     {

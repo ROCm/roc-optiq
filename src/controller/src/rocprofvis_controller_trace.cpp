@@ -25,17 +25,5 @@ Trace::~Trace()
         rocprofvis_dm_delete_trace(m_dm_handle);
 }
 
-rocprofvis_dm_handle_t
-Trace::GetDMHandle() const
-{
-    return m_dm_handle;
-}
-
-void
-Trace::SetDMHandle(rocprofvis_dm_handle_t dm_handle)
-{
-    m_dm_handle = dm_handle;
-}
-
 }
 }

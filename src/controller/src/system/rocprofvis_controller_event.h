@@ -34,22 +34,59 @@ public:
 
     virtual ~Event();
 
-    rocprofvis_controller_object_type_t GetType(void) override;
+    rocprofvis_controller_object_type_t GetType(void) override
+    {
+        return kRPVControllerObjectTypeEvent;
+    }
 
     rocprofvis_result_t Fetch(rocprofvis_property_t property,  Array& array, rocprofvis_dm_trace_t dm_handle);
 
-    // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override;
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override;
+    uint64_t GetId() const { return m_id; }
+    uint8_t  GetLevel() const { return m_level; }
+    double   GetStartTimestamp() const { return m_start_timestamp; }
+    double   GetEndTimestamp() const { return m_end_timestamp; }
+    double   GetDuration() const { return GetEndTimestamp() - GetStartTimestamp(); }
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override;
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override;
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) override;
-    bool                IsDeletable() override;
-    void                IncreaseRetainCounter()  override;
+    const char* GetName() const;
+    const char* GetCategory() const;
+    const char* GetTopCombinedName() const;
+    size_t      GetNameStringIndex() const { return m_name; }
+    size_t      GetCategoryStringIndex() const { return m_category; }
+    size_t      GetTopCombinedNameStringIndex() const { return m_combined_top_name; }
+
+    uint64_t            GetNumberOfChildren() const;
+    rocprofvis_result_t GetChildId(uint64_t index, uint64_t* value) const;
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
+
+    void                SetLevel(uint64_t level);
+    void SetStartTimestamp(double timestamp) { m_start_timestamp = timestamp; }
+    void SetEndTimestamp(double timestamp) { m_end_timestamp = timestamp; }
+    void SetTopCombinedNameStringIndex(size_t index) { m_combined_top_name = index; }
+    rocprofvis_result_t SetName(const char* name);
+    rocprofvis_result_t SetCategory(const char* category);
+    rocprofvis_result_t SetNumberOfChildren(uint64_t count);
+    rocprofvis_result_t SetChildId(uint64_t index, uint64_t id);
+
+    bool IsDeletable() override
+    {
+        return (m_retain_counter == 0) ? true : --m_retain_counter == 0;
+    }
+    void IncreaseRetainCounter() override { m_retain_counter++; }
 
 private:
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
+                                  uint64_t* value) override;
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,
+                                  double* value) override;
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index,
+                                  char* value, uint32_t* length) override;
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index,
+                                  uint64_t value) override;
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index,
+                                  double value) override;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
+                                  char const* value) override;
+
     Array* m_children;
     uint64_t m_id;
     double m_start_timestamp;

@@ -21,57 +21,32 @@ constexpr float       SAMPLING_STATE_BAR_HEIGHT_FRACTION        = 0.5f;
 constexpr float       SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS = 14.0f;
 constexpr const char* SAMPLING_STATE_COLUMN_LABEL               = "Sampling State";
 constexpr const char* STALL_REASONS_COLUMN_LABEL                = "Stall Categories";
-constexpr float       STALL_REASON_TOOLTIP_DESCRIPTION_WIDTH_IN_CHARACTERS = 42.0f;
-constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION             = 0.5f;
-constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES                    = 3.0f;
+constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
+constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
+constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES               = 3.0f;
+constexpr size_t      STALL_REASON_SHARE_TEXT_CAPACITY                = 32;
 
 struct StallReasonPresentation
 {
     IsaDataBuilder::StallReasonKind kind;
-    const char*                     description;
     Colors                          color;
 };
 
-// Meanings follow ROCprofiler-SDK's CDNA3/CDNA4 PC-sampling stall reasons.
 constexpr StallReasonPresentation STALL_REASON_PRESENTATIONS[] = {
     { IsaDataBuilder::StallReasonKind::kInstructionFetch,
-      "Instruction fetch is not ready, for example after a branch or instruction-cache "
-      "miss.",
       Colors::kPcSamplingInstructionFetch },
-    { IsaDataBuilder::StallReasonKind::kAluDependency,
-      "A hardware or data dependency prevents issue, including dependencies between "
-      "pipelines.",
-      Colors::kPcSamplingAluDependency },
-    { IsaDataBuilder::StallReasonKind::kWaitcnt,
-      "The wave is waiting for memory operations required by a wait-count instruction.",
-      Colors::kPcSamplingWaitcnt },
+    { IsaDataBuilder::StallReasonKind::kAluDependency, Colors::kPcSamplingAluDependency },
+    { IsaDataBuilder::StallReasonKind::kWaitcnt, Colors::kPcSamplingWaitcnt },
     { IsaDataBuilder::StallReasonKind::kInternalInstruction,
-      "The wave is processing an internal instruction, such as a NOP.",
       Colors::kPcSamplingInternalInstruction },
-    { IsaDataBuilder::StallReasonKind::kBarrier,
-      "The wave is waiting for other waves in its workgroup to reach a synchronization "
-      "barrier.",
-      Colors::kPcSamplingBarrier },
-    { IsaDataBuilder::StallReasonKind::kArbiter,
-      "The scheduler did not select this wave to issue to the requested execution "
-      "pipeline.",
-      Colors::kPcSamplingArbiter },
-    { IsaDataBuilder::StallReasonKind::kPipelineStall,
-      "The scheduler selected this wave, but the execution pipeline could not accept its "
-      "instruction.",
-      Colors::kPcSamplingPipelineStall },
-    { IsaDataBuilder::StallReasonKind::kOtherWait,
-      "Another wait condition was recorded; the sample does not identify a more specific "
-      "cause.",
-      Colors::kPcSamplingOtherWait },
-    { IsaDataBuilder::StallReasonKind::kSleeping,
-      "The sample reports that the wave is sleeping.", Colors::kPcSamplingSleeping }
+    { IsaDataBuilder::StallReasonKind::kBarrier, Colors::kPcSamplingBarrier },
+    { IsaDataBuilder::StallReasonKind::kArbiter, Colors::kPcSamplingArbiter },
+    { IsaDataBuilder::StallReasonKind::kPipelineStall, Colors::kPcSamplingPipelineStall },
+    { IsaDataBuilder::StallReasonKind::kOtherWait, Colors::kPcSamplingOtherWait },
+    { IsaDataBuilder::StallReasonKind::kSleeping, Colors::kPcSamplingSleeping }
 };
 constexpr StallReasonPresentation UNKNOWN_STALL_REASON_PRESENTATION{
-    IsaDataBuilder::StallReasonKind::kUnknown,
-    "This version does not recognize the recorded reason. Its database name is preserved "
-    "above.",
-    Colors::kTextDim
+    IsaDataBuilder::StallReasonKind::kUnknown, Colors::kTextDim
 };
 
 // get_stall_reason_presentation indexes STALL_REASON_PRESENTATIONS by enum value, so the
@@ -188,7 +163,7 @@ constexpr HeaderTooltipText STALL_REASONS_HEADER_TOOLTIP{
     "Full width represents 100% of this instruction's samples; bar length matches "
     "Stall %.\n"
     "Each color identifies the same reason across instructions and kernels.\n"
-    "Hover for a color legend, reason explanations, counts, and shares of stalled "
+    "Hover for a color legend, reason names, counts, and shares of stalled "
     "samples.\n"
     "Gray represents stalled samples without a recorded reason. Host-trap data displays "
     "N/A. Inconsistent issued/stalled counts also display N/A.",
@@ -204,8 +179,7 @@ constexpr HeaderTooltipText STALL_REASONS_HEADER_TOOLTIP{
 constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
     "%.1f%% relative to the hottest instruction\n\n"
-    "Low-confidence estimate: percentages based on %llu or fewer samples may be "
-    "unstable.";
+    "* Low confidence (≤%llu samples)";
 constexpr const char* SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
     "%.1f%% relative to the hottest instruction";
@@ -225,28 +199,23 @@ constexpr const char* SAMPLING_STATE_INVALID_COUNTS_TOOLTIP =
     "Issue/stall breakdown is unavailable because the recorded counts exceed the total "
     "sample count.";
 
-constexpr const char* STALL_REASON_TOOLTIP_TITLE = "Stall-reason distribution";
 constexpr const char* STALL_REASON_TOOLTIP_SUMMARY =
-    "%s of %s samples were stalled (%.1f%%).";
-constexpr const char* STALL_REASON_TOOLTIP_ISSUED = "%s samples issued the instruction.";
+    "Stalled: %s/%s (%.1f%%)";
+constexpr const char* STALL_REASON_TOOLTIP_ISSUED = "Issued: %s";
 constexpr const char* STALL_REASON_TOOLTIP_NO_STALLS =
     "No stalled samples were recorded for this instruction.";
 constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
     "No stall-reason details were recorded for this instruction.";
 constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TEXT = "N/A";
-constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
-    "Shares use all %s stalled samples as the denominator.";
 constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
     "Reason data classifies %s samples; expected %s stalled samples.";
 constexpr const char* STALL_REASON_BAR_NORMALIZED_TOOLTIP =
     "Colors are scaled to fit the stalled portion because the recorded reason total "
     "exceeds the stalled count.";
-constexpr const char* STALL_REASON_UNCLASSIFIED_TEXT = "Unclassified";
-constexpr const char* STALL_REASON_UNCLASSIFIED_DESCRIPTION =
-    "These stalled samples have no recorded stall-reason classification.";
-constexpr const char*     STALL_REASON_TOOLTIP_COLUMN_HEADERS[] = { "Color",
-                                                                    "Reason / Meaning",
-                                                                    "Samples", "Share" };
+constexpr const char*     STALL_REASON_UNCLASSIFIED_TEXT        = "Unclassified";
+constexpr const char*     STALL_REASON_TOOLTIP_COLUMN_HEADERS[] = { "Color", "Reason",
+                                                                    "Samples",
+                                                                    "% of Stalls" };
 constexpr ImGuiTableFlags STALL_REASON_TOOLTIP_TABLE_FLAGS =
     ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg |
     ImGuiTableFlags_BordersInnerV;
@@ -316,8 +285,8 @@ get_stall_reason_presentation(IsaDataBuilder::StallReasonKind kind)
 }
 
 static void
-render_stall_reason_legend_row(const char* text, const char* description, ImU32 color,
-                               const char* count_text, double share)
+render_stall_reason_legend_row(const char* text, ImU32 color, const char* count_text,
+                               double share)
 {
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
@@ -330,7 +299,6 @@ render_stall_reason_legend_row(const char* text, const char* description, ImU32 
     ImGui::PopID();
     ImGui::TableSetColumnIndex(1);
     ImGui::TextWrapped("%s", text);
-    ImGui::TextWrapped("%s", description);
     ImGui::TableSetColumnIndex(2);
     ImGui::TextUnformatted(count_text);
     ImGui::TableSetColumnIndex(3);
@@ -1072,7 +1040,6 @@ IsaCodeWidget::RenderStallReasonSummary(const IsaRow& row)
     const std::string total_count =
         IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
 
-    ImGui::TextUnformatted(STALL_REASON_TOOLTIP_TITLE);
     ImGui::Text(STALL_REASON_TOOLTIP_SUMMARY, stall_count.c_str(), total_count.c_str(),
                 stall_percent);
     ImGui::Text(STALL_REASON_TOOLTIP_ISSUED, issue_count.c_str());
@@ -1088,10 +1055,9 @@ void
 IsaCodeWidget::RenderStallReasonFooter(const IsaRow& row)
 {
     const uint64_t    stall_count_value = *row.sample_counts.stall_count;
-    const std::string stall_count = IsaDataBuilder::FormatSampleCount(stall_count_value);
-    ImGui::TextDisabled(STALL_REASON_TOOLTIP_SHARE_DESCRIPTION, stall_count.c_str());
     if(row.stall_reason_sample_count != stall_count_value)
     {
+        const std::string stall_count = IsaDataBuilder::FormatSampleCount(stall_count_value);
         const std::string classified_count =
             IsaDataBuilder::FormatSampleCount(row.stall_reason_sample_count);
         ImGui::TextDisabled(STALL_REASON_TOOLTIP_COUNT_MISMATCH, classified_count.c_str(),
@@ -1106,49 +1072,62 @@ IsaCodeWidget::RenderStallReasonFooter(const IsaRow& row)
 IsaCodeWidget::StallReasonTableLayout
 IsaCodeWidget::CalculateStallReasonTableLayout(const IsaRow& row)
 {
-    const ImGuiStyle& style         = ImGui::GetStyle();
-    const ImVec2      viewport_size = ImGui::GetWindowViewport()->WorkSize;
-    float             count_width   = ImGui::CalcTextSize("Samples").x;
+    const ImGuiStyle& style             = ImGui::GetStyle();
+    const ImVec2      viewport_size     = ImGui::GetWindowViewport()->WorkSize;
+    float             count_width       = ImGui::CalcTextSize("Samples").x;
+    float             reason_text_width = ImGui::CalcTextSize("Reason").x;
+    float             share_width =
+        std::max(ImGui::CalcTextSize(STALL_REASON_TOOLTIP_COLUMN_HEADERS[3]).x,
+                 ImGui::CalcTextSize("100.0%").x);
     for(const StallReason& reason : row.stall_reasons)
     {
         count_width =
             std::max(count_width, ImGui::CalcTextSize(reason.count_text.c_str()).x);
+        reason_text_width =
+            std::max(reason_text_width, ImGui::CalcTextSize(reason.text.c_str()).x);
+        char share_text[STALL_REASON_SHARE_TEXT_CAPACITY] = {};
+        std::snprintf(share_text, sizeof(share_text), "%.1f%%", reason.share);
+        share_width = std::max(share_width, ImGui::CalcTextSize(share_text).x);
     }
     if(row.unclassified_stall_count > 0)
     {
         count_width =
             std::max(count_width,
                      ImGui::CalcTextSize(row.unclassified_stall_count_text.c_str()).x);
+        reason_text_width = std::max(
+            reason_text_width, ImGui::CalcTextSize(STALL_REASON_UNCLASSIFIED_TEXT).x);
     }
-    const float other_columns_width = ImGui::CalcTextSize("Color").x + count_width +
-                                      ImGui::CalcTextSize("100.0%").x +
-                                      style.CellPadding.x * 8.0f + style.ScrollbarSize;
-    const float description_width = std::min(
-        ImGui::CalcTextSize("0").x * STALL_REASON_TOOLTIP_DESCRIPTION_WIDTH_IN_CHARACTERS,
-        std::max(ImGui::GetTextLineHeight(),
-                 viewport_size.x - style.WindowPadding.x * 2.0f -
-                     style.DisplaySafeAreaPadding.x * 2.0f - other_columns_width));
-    const auto row_height = [description_width, &style](const char* name,
-                                                        const char* description) {
-        return ImGui::CalcTextSize(name, nullptr, false, description_width).y +
-               ImGui::CalcTextSize(description, nullptr, false, description_width).y +
-               style.ItemSpacing.y + style.CellPadding.y * 2.0f;
+    const float color_width =
+        std::max(ImGui::CalcTextSize("Color").x, ImGui::GetTextLineHeight());
+    const float other_columns_width =
+        color_width + count_width + share_width + style.CellPadding.x * 8.0f;
+    const float reason_width = std::min(
+        { reason_text_width,
+          ImGui::CalcTextSize("0").x * STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS,
+          std::max(ImGui::GetTextLineHeight(),
+                   viewport_size.x - style.WindowPadding.x * 2.0f -
+                       style.DisplaySafeAreaPadding.x * 2.0f - other_columns_width -
+                       style.ScrollbarSize) });
+    const auto row_height = [reason_width, &style](const char* name) {
+        return std::max(ImGui::GetTextLineHeight(),
+                        ImGui::CalcTextSize(name, nullptr, false, reason_width).y) +
+               style.CellPadding.y * 2.0f;
     };
     float height = ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
     for(const StallReason& reason : row.stall_reasons)
     {
-        height += row_height(reason.text.c_str(),
-                             get_stall_reason_presentation(reason.kind).description);
+        height += row_height(reason.text.c_str());
     }
     if(row.unclassified_stall_count > 0)
     {
-        height += row_height(STALL_REASON_UNCLASSIFIED_TEXT,
-                             STALL_REASON_UNCLASSIFIED_DESCRIPTION);
+        height += row_height(STALL_REASON_UNCLASSIFIED_TEXT);
     }
     const float max_height = viewport_size.y * STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION;
-    return { ImVec2(description_width + other_columns_width,
-                    height > max_height ? max_height : 0.0f),
-             description_width };
+    const bool  scrollable = height > max_height;
+    return { ImVec2(reason_width + other_columns_width +
+                        (scrollable ? style.ScrollbarSize : 0.0f),
+                    scrollable ? max_height : 0.0f),
+             reason_width, color_width, count_width, share_width };
 }
 
 void
@@ -1163,8 +1142,9 @@ IsaCodeWidget::RenderStallReasonTable(const IsaRow&                 row,
 
     const uint64_t stall_count_value = *row.sample_counts.stall_count;
     ImGui::Spacing();
-    const ImGuiTableFlags flags = STALL_REASON_TOOLTIP_TABLE_FLAGS |
-                                  (layout.size.y > 0.0f ? ImGuiTableFlags_ScrollY : 0);
+    const ImGuiTableFlags flags =
+        STALL_REASON_TOOLTIP_TABLE_FLAGS |
+        (layout.size.y > 0.0f ? ImGuiTableFlags_ScrollY : ImGuiTableFlags_NoHostExtendX);
     if(ImGui::BeginTable("##StallReasonDistribution", 4, flags, layout.size))
     {
         if(layout.size.y > 0.0f)
@@ -1177,19 +1157,24 @@ IsaCodeWidget::RenderStallReasonTable(const IsaRow&                 row,
                                       STALL_REASON_TOOLTIP_SCROLL_LINES);
             }
         }
-        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[0]);
-        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[1],
-                                ImGuiTableColumnFlags_WidthFixed,
-                                layout.description_width);
-        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[2]);
-        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[3]);
+        // Reapply content widths so no column retains spare space from an earlier layout.
+        const ImGuiTableColumnFlags column_flags =
+            ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize;
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[0], column_flags,
+                                layout.color_width);
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[1], column_flags,
+                                layout.reason_width);
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[2], column_flags,
+                                layout.count_width);
+        ImGui::TableSetupColumn(STALL_REASON_TOOLTIP_COLUMN_HEADERS[3], column_flags,
+                                layout.share_width);
         ImGui::TableHeadersRow();
 
         for(const StallReason& reason : row.stall_reasons)
         {
             const StallReasonPresentation& presentation =
                 get_stall_reason_presentation(reason.kind);
-            render_stall_reason_legend_row(reason.text.c_str(), presentation.description,
+            render_stall_reason_legend_row(reason.text.c_str(),
                                            m_settings.GetColor(presentation.color),
                                            reason.count_text.c_str(), reason.share);
         }
@@ -1197,8 +1182,7 @@ IsaCodeWidget::RenderStallReasonTable(const IsaRow&                 row,
         {
             const uint64_t unclassified = row.unclassified_stall_count;
             render_stall_reason_legend_row(
-                STALL_REASON_UNCLASSIFIED_TEXT, STALL_REASON_UNCLASSIFIED_DESCRIPTION,
-                m_settings.GetColor(Colors::kTextDim),
+                STALL_REASON_UNCLASSIFIED_TEXT, m_settings.GetColor(Colors::kTextDim),
                 row.unclassified_stall_count_text.c_str(),
                 IsaDataBuilder::CalculatePercentage(unclassified, stall_count_value));
         }

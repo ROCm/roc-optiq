@@ -138,7 +138,10 @@ private:
     struct StallReasonTableLayout
     {
         ImVec2 size;
-        float  description_width;
+        float  reason_width;
+        float  color_width;
+        float  count_width;
+        float  share_width;
     };
 
     StallReasonTableLayout CalculateStallReasonTableLayout(const IsaRow& row);

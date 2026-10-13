@@ -1736,12 +1736,19 @@ samples or zero total samples have no bar. Invalid progress counts display `N/A`
 in both stall columns instead of being clamped into an apparently valid bar.
 Host-trap and incomplete progress data display disabled `N/A` cells with an
 explanation. Both stall columns reuse the same tooltip, which includes color
-swatches, raw database reason names, wrapped plain-language meanings, consistently
-formatted sample counts (including separators in the legend),
-shares, and an Unclassified row for missing classifications. The reason list
-uses measured wrapped-row heights and switches to a scrollable table capped at
+swatches, raw database reason names, consistently formatted sample counts
+(including separators in the legend), `% of Stalls` (reason count divided by
+stalled samples), and an Unclassified row for missing
+classifications. Cell tooltips start directly with their data or explanation,
+without a title. The summary uses short `Stalled: count/total (percent)` and
+`Issued: count` labels. Detailed reason descriptions are omitted. The Reason
+column fits the widest displayed name, capped by the character limit and viewport
+width. All legend columns receive explicit fixed widths with `NoResize`, reapplied
+each frame. Small tables use `NoHostExtendX` to fit their columns; scrollbar
+space is reserved only when scrolling is needed. Long names wrap; measured
+row heights switch to a scrollable table capped at
 half the current viewport height when needed. Its headers stay frozen and the
-summary and footer remain outside the scroll area. Hovering either stall cell
+summary and mismatch warnings remain outside the scroll area. Hovering either stall cell
 and using the mouse wheel scrolls the list; `SetItemKeyOwner(MouseWheelY)` keeps
 that wheel input from scrolling the ISA pane. Small lists retain their natural
 height and do not claim wheel input. The stall cells use identified invisible
@@ -1752,8 +1759,7 @@ are stable across instructions and kernels and come from the centralized
 `kPcSampling*` dark/light theme palette. ALU dependencies use green and scheduler
 arbitration uses the native accent blue; other waits use coral so these categories
 remain visually distinct. SDK-prefixed names and OTHER are also
-recognized; unknown names are preserved with a neutral color and explanation.
-Reason meanings follow ROCprofiler-SDK's CDNA3/CDNA4 PC-sampling documentation.
+recognized; unknown names are preserved with a neutral color.
 The source table contains only the source line number and source text.
 Instruction-sample metadata, active-thread percentage, wave-occupancy
 percentage, and dispatch UUID are available on the controller handle but are

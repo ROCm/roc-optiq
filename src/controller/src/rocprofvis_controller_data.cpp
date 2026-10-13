@@ -5,7 +5,9 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
 #include "system/rocprofvis_controller_event.h"
+#include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_sample.h"
+#include "system/rocprofvis_controller_timeline.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -441,6 +443,16 @@ rocprofvis_result_t Data::GetMemoryUsage(uint64_t* value, rocprofvis_common_prop
                     {
                         result =
                             static_cast<Sample*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else if(object->GetType() == kRPVControllerObjectTypeGraph)
+                    {
+                        result =
+                            static_cast<Graph*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else if(object->GetType() == kRPVControllerObjectTypeTimeline)
+                    {
+                        result = static_cast<Timeline*>(object)->GetInclusiveMemoryUsage(
+                            value);
                     }
                     else
                     {

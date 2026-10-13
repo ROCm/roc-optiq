@@ -48,10 +48,9 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
     double              end_timestamp   = 0;
     bool                stored_in_segment = false;
 
-    result = GetDouble(kRPVControllerGraphStartTimestamp, 0, &start_timestamp);
-    result = (result == kRocProfVisResultSuccess)
-                 ? GetDouble(kRPVControllerGraphEndTimestamp, 0, &end_timestamp)
-                 : result;
+    result = GetStartTimestamp(&start_timestamp);
+    result =
+        (result == kRocProfVisResultSuccess) ? GetEndTimestamp(&end_timestamp) : result;
 
     if(result == kRocProfVisResultSuccess && timestamp >= start_timestamp &&
        timestamp <= end_timestamp)
@@ -668,11 +667,70 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
     return result;
 }
 
-
-rocprofvis_controller_object_type_t
-Graph::GetType(void)
+rocprofvis_result_t
+Graph::GetNumberOfEntries(uint64_t* value) const
 {
-    return kRPVControllerObjectTypeGraph;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        *value = m_track ? m_track->GetNumberOfEntries() : 0;
+        result = m_track ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Graph::GetStartTimestamp(double* value) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        result = kRocProfVisResultUnknownError;
+        if(m_track)
+        {
+            *value = m_track->GetStartTimestamp();
+            result = kRocProfVisResultSuccess;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Graph::GetEndTimestamp(double* value) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        result = kRocProfVisResultUnknownError;
+        if(m_track)
+        {
+            *value = m_track->GetEndTimestamp();
+            result = kRocProfVisResultSuccess;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Graph::GetInclusiveMemoryUsage(uint64_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        *value = 0;
+        for(auto& lod : m_lods)
+        {
+            for(auto& segment : lod.second.GetSegments())
+            {
+                uint64_t memory_usage = 0;
+                segment.second->GetMemoryUsage(&memory_usage,
+                                               kRPVControllerCommonMemoryUsageInclusive);
+                *value += memory_usage;
+            }
+        }
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
 }
 
 rocprofvis_result_t
@@ -686,51 +744,30 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
         {
             case kRPVControllerCommonMemoryUsageInclusive:
             {
-                *value = 0;
-                for(auto it_lods = m_lods.begin(); it_lods != m_lods.end(); ++it_lods)
-                {
-                    for(auto it = it_lods->second.GetSegments().begin();
-                        it != it_lods->second.GetSegments().end(); ++it)
-                    {
-                        uint64_t mem_usage;
-                        it->second.get()->GetMemoryUsage(
-                            &mem_usage, kRPVControllerCommonMemoryUsageInclusive);
-                        *value += mem_usage;
-                    }
-                }
-                result = kRocProfVisResultSuccess;
+                result = GetInclusiveMemoryUsage(value);
                 break;
             }
             case kRPVControllerCommonMemoryUsageExclusive:
             {
-                *value = sizeof(Graph);
+                *value = GetExclusiveMemoryUsage();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerGraphId:
             {
-                *value = m_id;
+                *value = GetId();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerGraphType:
             {
-                *value = m_type;
+                *value = GetGraphType();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerGraphNumEntries:
             {
-                if(m_track)
-                {
-                    *value = m_track->GetNumberOfEntries();
-                    result = kRocProfVisResultSuccess;
-                }
-                else
-                {
-                    *value = 0;
-                    result = kRocProfVisResultUnknownError;
-                }
+                result = GetNumberOfEntries(value);
                 break;
             }
             default:
@@ -754,13 +791,11 @@ Graph::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
     {
         case kRPVControllerGraphStartTimestamp:
         {
-            *value = m_track->GetStartTimestamp();
-            return kRocProfVisResultSuccess;
+            return GetStartTimestamp(value);
         }
         case kRPVControllerGraphEndTimestamp:
         {
-            *value = m_track->GetEndTimestamp();
-            return kRocProfVisResultSuccess;
+            return GetEndTimestamp(value);
         }
         default:
         {
@@ -780,7 +815,7 @@ Graph::GetObject(rocprofvis_property_t property, uint64_t index,
         {
             case kRPVControllerGraphTrack:
             {
-                *value = (rocprofvis_handle_t*) m_track;
+                *value = reinterpret_cast<rocprofvis_handle_t*>(GetTrack());
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -803,7 +838,7 @@ Graph::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
     {
         case kRPVControllerGraphType:
         {
-            m_type = (rocprofvis_controller_graph_type_t) value;
+            SetGraphType(static_cast<rocprofvis_controller_graph_type_t>(value));
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -858,7 +893,7 @@ Graph::SetObject(rocprofvis_property_t property, uint64_t index,
                 TrackRef track_ref(value);
                 if(track_ref.IsValid())
                 {
-                    m_track = track_ref.Get();
+                    SetTrack(track_ref.Get());
                     result  = kRocProfVisResultSuccess;
                 }
                 break;

@@ -30,9 +30,26 @@ public:
     rocprofvis_result_t AsyncFetch(Graph& track, Future& future, Array& array,
                                    double start, double end, uint32_t pixels);
 
-    rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeTimeline;
+    }
+    uint64_t GetId() const { return m_id; }
+    uint64_t GetNumberOfGraphs() const { return m_graphs.size(); }
+    uint64_t GetExclusiveMemoryUsage() const
+    {
+        return sizeof(Timeline) + m_graphs.size() * sizeof(Graph*);
+    }
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
+    rocprofvis_result_t GetMinTimestamp(double* value) const;
+    rocprofvis_result_t GetMaxTimestamp(double* value) const;
+    rocprofvis_result_t GetGraph(uint64_t index, Graph** value) const;
+    rocprofvis_result_t GetGraphById(uint64_t id, Graph** value) const;
+    rocprofvis_result_t SetNumberOfGraphs(uint64_t count);
+    // Ownership transfers on success; an existing graph is moved to the index.
+    rocprofvis_result_t SetGraph(uint64_t index, Graph* graph);
 
-    // Handlers for getters.
+private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t* value) final;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,

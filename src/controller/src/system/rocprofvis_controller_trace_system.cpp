@@ -256,24 +256,18 @@ SystemTrace::AddRocpdGraph(Track* track, uint64_t dm_track_type, uint64_t track_
         dm_track_type == kRocProfVisDmPmcTrack ? kRPVControllerGraphTypeLine
                                                : kRPVControllerGraphTypeFlame,
         track_id);
-    rocprofvis_result_t result = graph->SetObject(
-        kRPVControllerGraphTrack, 0,
-        reinterpret_cast<rocprofvis_handle_t*>(track));
+    if(!track)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    graph->SetTrack(track);
+    rocprofvis_result_t result = m_timeline->SetNumberOfGraphs(++graph_index);
     if(result != kRocProfVisResultSuccess)
     {
         return result;
     }
 
-    result = m_timeline->SetUInt64(
-        kRPVControllerTimelineNumGraphs, 0, ++graph_index);
-    if(result != kRocProfVisResultSuccess)
-    {
-        return result;
-    }
-
-    result = m_timeline->SetObject(
-        kRPVControllerTimelineGraphIndexed, graph_index - 1,
-        reinterpret_cast<rocprofvis_handle_t*>(graph.get()));
+    result = m_timeline->SetGraph(graph_index - 1, graph.get());
     if(result != kRocProfVisResultSuccess)
     {
         return result;
@@ -768,7 +762,7 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
                 if (result == kRocProfVisResultSuccess)
                 {
                     uint64_t timeline_size = 0;
-                    result = m_timeline->GetUInt64(property, 0, &timeline_size);
+                    result = m_timeline->GetInclusiveMemoryUsage(&timeline_size);
                     *value += timeline_size;
                 }
                 break;

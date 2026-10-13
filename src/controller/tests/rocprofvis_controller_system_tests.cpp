@@ -11,6 +11,8 @@
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_sample_lod.h"
 #include "system/rocprofvis_controller_segment.h"
+#include "system/rocprofvis_controller_timeline.h"
+#include "system/rocprofvis_controller_track.h"
 #include <algorithm>
 #include <atomic>
 #include <catch2/catch_session.hpp>
@@ -328,6 +330,124 @@ TEST_CASE("Sample LOD Property API")
         REQUIRE(lod.SetNumberOfChildren(2) == kRocProfVisResultSuccess);
         REQUIRE(lod.GetChildMean() == 8.0);
         REQUIRE(lod.GetChildMedian() == 8.0);
+    }
+}
+
+TEST_CASE("Graph and Timeline Property API")
+{
+    RocProfVis::Controller::Track first_track(kRPVControllerTrackTypeEvents, 1, nullptr,
+                                              nullptr);
+    RocProfVis::Controller::Track second_track(kRPVControllerTrackTypeEvents, 2, nullptr,
+                                               nullptr);
+    first_track.SetStartTimestamp(10.0);
+    first_track.SetEndTimestamp(20.0);
+    first_track.SetNumberOfEntries(4);
+    second_track.SetStartTimestamp(5.0);
+    second_track.SetEndTimestamp(30.0);
+    uint64_t integer   = 0;
+    double   timestamp = 99.0;
+
+    SECTION("Graph accessors preserve track validation and C API dispatch")
+    {
+        RocProfVis::Controller::Graph graph(nullptr, kRPVControllerGraphTypeFlame, 10);
+        rocprofvis_handle_t* handle = reinterpret_cast<rocprofvis_handle_t*>(&graph);
+        REQUIRE(graph.GetNumberOfEntries(&integer) == kRocProfVisResultUnknownError);
+        REQUIRE(integer == 0);
+        REQUIRE(graph.GetStartTimestamp(&timestamp) == kRocProfVisResultUnknownError);
+        REQUIRE(timestamp == 99.0);
+        REQUIRE(graph.GetEndTimestamp(nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_set_object(
+                    handle, kRPVControllerGraphTrack, 0,
+                    reinterpret_cast<rocprofvis_handle_t*>(&first_track)) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(graph.GetTrack() == &first_track);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerGraphNumEntries, 0,
+                                                 &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 4);
+        REQUIRE(rocprofvis_controller_get_double(handle,
+                                                 kRPVControllerGraphStartTimestamp, 0,
+                                                 &timestamp) == kRocProfVisResultSuccess);
+        REQUIRE(timestamp == 10.0);
+        REQUIRE(graph.GetEndTimestamp(&timestamp) == kRocProfVisResultSuccess);
+        REQUIRE(timestamp == 20.0);
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerGraphType, 0,
+                                                 kRPVControllerGraphTypeLine) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(graph.GetGraphType() == kRPVControllerGraphTypeLine);
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerGraphId, 0, 99) ==
+                kRocProfVisResultReadOnlyError);
+        REQUIRE(graph.GetId() == 10);
+        REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerGraphEndTimestamp,
+                                                 0, 100.0) ==
+                kRocProfVisResultReadOnlyError);
+        REQUIRE(graph.GetNumberOfEntries(nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(graph.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == 0);
+        REQUIRE(graph.GetExclusiveMemoryUsage() == sizeof(graph));
+        REQUIRE(rocprofvis_controller_set_object(handle, kRPVControllerGraphTrack, 0,
+                                                 nullptr) ==
+                kRocProfVisResultInvalidArgument);
+        REQUIRE(graph.GetTrack() == &first_track);
+    }
+
+    SECTION("Timeline lookup and reordering preserve graph ownership")
+    {
+        RocProfVis::Controller::Timeline timeline(7);
+        rocprofvis_handle_t* handle = reinterpret_cast<rocprofvis_handle_t*>(&timeline);
+        REQUIRE(timeline.GetMinTimestamp(&timestamp) == kRocProfVisResultOutOfRange);
+        REQUIRE(timestamp == 99.0);
+        REQUIRE(timeline.GetMaxTimestamp(nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(timeline.SetNumberOfGraphs(2) == kRocProfVisResultSuccess);
+        RocProfVis::Controller::Graph* graph = nullptr;
+        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == nullptr);
+        REQUIRE(timeline.GetGraphById(10, &graph) == kRocProfVisResultOutOfRange);
+        REQUIRE(timeline.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == timeline.GetExclusiveMemoryUsage());
+        auto first = std::make_unique<RocProfVis::Controller::Graph>(
+            nullptr, kRPVControllerGraphTypeFlame, 10);
+        auto second = std::make_unique<RocProfVis::Controller::Graph>(
+            nullptr, kRPVControllerGraphTypeFlame, 20);
+        first->SetTrack(&first_track);
+        second->SetTrack(&second_track);
+        REQUIRE(timeline.SetGraph(0, first.get()) == kRocProfVisResultSuccess);
+        RocProfVis::Controller::Graph* first_graph = first.release();
+        REQUIRE(rocprofvis_controller_set_object(
+                    handle, kRPVControllerTimelineGraphIndexed, 1,
+                    reinterpret_cast<rocprofvis_handle_t*>(second.get())) ==
+                kRocProfVisResultSuccess);
+        RocProfVis::Controller::Graph* second_graph = second.release();
+        REQUIRE(rocprofvis_controller_get_double(handle,
+                                                 kRPVControllerTimelineMinTimestamp, 0,
+                                                 &timestamp) == kRocProfVisResultSuccess);
+        REQUIRE(timestamp == 5.0);
+        REQUIRE(timeline.GetMaxTimestamp(&timestamp) == kRocProfVisResultSuccess);
+        REQUIRE(timestamp == 30.0);
+        rocprofvis_handle_t* found = nullptr;
+        REQUIRE(rocprofvis_controller_get_object(handle, kRPVControllerTimelineGraphById,
+                                                 20, &found) == kRocProfVisResultSuccess);
+        REQUIRE(found == reinterpret_cast<rocprofvis_handle_t*>(second_graph));
+        first_graph->SetTrack(nullptr);
+        REQUIRE(timeline.SetGraph(1, first_graph) == kRocProfVisResultInvalidArgument);
+        REQUIRE(timeline.GetNumberOfGraphs() == 2);
+        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == first_graph);
+        first_graph->SetTrack(&first_track);
+        REQUIRE(timeline.SetGraph(0, second_graph) == kRocProfVisResultSuccess);
+        REQUIRE(timeline.GetGraph(1, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == first_graph);
+        REQUIRE(timeline.GetGraph(2, &graph) == kRocProfVisResultOutOfRange);
+        REQUIRE(timeline.GetGraph(0, nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(timeline.SetGraph(2, first_graph) == kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerTimelineId, 0,
+                                                 8) == kRocProfVisResultReadOnlyError);
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerTimelineNumGraphs,
+                                                 0, 1) == kRocProfVisResultSuccess);
+        REQUIRE(timeline.GetGraphById(10, &graph) == kRocProfVisResultOutOfRange);
+        REQUIRE(timeline.GetGraphById(20, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == second_graph);
+        REQUIRE(timeline.SetNumberOfGraphs(0) == kRocProfVisResultSuccess);
+        REQUIRE(timeline.GetMaxTimestamp(&timestamp) == kRocProfVisResultOutOfRange);
     }
 }
 

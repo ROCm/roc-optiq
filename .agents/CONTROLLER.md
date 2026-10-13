@@ -391,8 +391,9 @@ Derived classes should keep their generic property overrides private
 and expose dedicated typed accessors for controller-internal C++ callers;
 the public virtual methods remain available through `Handle` for C ABI
 dispatch.
-Trivial member accessors on `Event`, `Sample`, `SampleLOD`, `Track`,
-`Trace`, and `SystemTrace` are defined inline in their class headers.
+Trivial member accessors on `Event`, `Sample`, `SampleLOD`, `Graph`,
+`Timeline`, `Track`, `Trace`, and `SystemTrace` are defined inline in their
+class headers.
 Accessors requiring complete
 forward-declared types, model queries, locking, or validation remain in
 the implementation files.
@@ -762,6 +763,12 @@ the `max_duration_str_index`. Controller-internal graph logic reads
 track type, bounds, and entry count through `Track`'s typed getters.
 LOD generation propagates invalid data/reference failures instead of
 depending on assertions alone.
+Graph's property overrides are private C ABI handlers. Internal callers
+use `GetId`, `GetGraphType`, `GetTrack`, `SetGraphType`, and `SetTrack`.
+Typed bounds and entry-count getters retain `UnknownError` for a graph
+without a track, while rejecting null output pointers. Memory accounting
+uses `GetInclusiveMemoryUsage` and `GetExclusiveMemoryUsage`; the existing
+inclusive count covers cached segments rather than `sizeof(Graph)`.
 
 ### 5.4 `Timeline` (`rocprofvis_controller_timeline.{h,cpp}`)
 
@@ -769,6 +776,13 @@ Wrapper around the trace-wide collection of `Graph*`s plus the global
 `min_ts` / `max_ts`. Property bank:
 `rocprofvis_controller_timeline_properties_t` (`0x10000000`). Fetch
 delegates to `SystemTrace::AsyncFetch(Graph& ...)`.
+Property overrides are private. Typed graph lookup uses `GetGraph` and
+`GetGraphById`; `SetNumberOfGraphs` owns graph lifetimes on shrink, and
+`SetGraph` transfers ownership on success or reorders an existing graph.
+Graph bounds are validated before modifying the list, so a failed
+assignment leaves the list intact. Lookup and memory accounting skip
+unpopulated slots. Typed timestamp getters retain `OutOfRange` for an
+empty timeline, and memory getters preserve the existing accounting.
 
 ### 5.5 `Summary` and `SummaryMetrics`
 Files: `rocprofvis_controller_summary.{h,cpp}`,

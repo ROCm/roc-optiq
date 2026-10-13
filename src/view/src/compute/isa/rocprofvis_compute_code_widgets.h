@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -36,9 +37,18 @@ public:
     virtual void Render() override = 0;
 
 protected:
+    static constexpr uint32_t NO_SCROLL_TARGET = 0;
+
     void CalculateLineNumberWidth(size_t count);
     void PushStyles();
     bool BeginCodeRow(uint64_t row_id, uint64_t source_line_id);
+
+    // Drives the shared clipper loop: finds the row whose id matches scroll_line (clearing
+    // it once consumed), renders visible rows via render_line, and scrolls to the target.
+    // id_of(index) returns a row's id; render_line(index) draws it.
+    void RenderClippedRows(size_t row_count, uint64_t& scroll_line,
+                           const std::function<uint64_t(uint32_t)>& id_of,
+                           const std::function<void(uint32_t)>&     render_line);
 
     LineSelection& m_line_selection;
     float          m_line_num_width  = 0.0f;
@@ -62,8 +72,7 @@ public:
     uint64_t GetHoveredLine() const { return m_line_selection.hovered_line; }
 
 private:
-    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void     RenderLine(uint32_t index);
+    void RenderLine(uint32_t index);
 
     struct SourceRow
     {
@@ -112,8 +121,7 @@ private:
     void SetupColumns();
     void RenderHeaders();
 
-    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void     RenderLine(uint32_t index);
+    void RenderLine(uint32_t index);
 
     static ImU32       HeatmapColor(double percent);
     static const char* GetUnavailableSamplingTooltip(const IsaRow& row);

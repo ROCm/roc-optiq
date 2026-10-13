@@ -485,13 +485,13 @@ ComputeIsaView::RenderControlPanel()
     constexpr const char* hide_sampling_details_str  = "Hide Sampling Details";
     constexpr const char* retry_sampling_details_str = "Retry Sampling Details";
 
-    const float fallbackHeight =
+    const float fallback_height =
         ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
 
-    float topHeight =
-        m_control_panel_height > 0.0f ? m_control_panel_height : fallbackHeight;
+    float top_height =
+        m_control_panel_height > 0.0f ? m_control_panel_height : fallback_height;
 
-    ImGui::BeginChild("ControlPanel", ImVec2(0.0f, topHeight), true);
+    ImGui::BeginChild("ControlPanel", ImVec2(0.0f, top_height), true);
 
     ImVec2 start = ImGui::GetCursorPos();
 
@@ -567,9 +567,9 @@ ComputeIsaView::RenderControlPanel()
 
     ImVec2 end = ImGui::GetCursorPos();
 
-    float contentHeight = end.y - start.y;
+    float content_height = end.y - start.y;
     m_control_panel_height =
-        contentHeight +
+        content_height +
         ImGui::GetStyle().WindowPadding.y * 2.0f;
 
     ImGui::EndChild();

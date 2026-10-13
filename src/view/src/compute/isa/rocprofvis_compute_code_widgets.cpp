@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <iterator>
 
 #include "widgets/rocprofvis_gui_helpers.h"
 
@@ -14,7 +15,6 @@ namespace View
 {
 
 constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
-constexpr uint32_t NO_SCROLL_TARGET           = 0;
 
 constexpr uint64_t    LOW_CONFIDENCE_SAMPLE_COUNT               = 10;
 constexpr float       SAMPLING_STATE_BAR_HEIGHT_FRACTION        = 0.5f;
@@ -73,6 +73,25 @@ constexpr StallReasonPresentation UNKNOWN_STALL_REASON_PRESENTATION{
     "above.",
     Colors::kTextDim
 };
+
+// get_stall_reason_presentation indexes STALL_REASON_PRESENTATIONS by enum value, so the
+// array must stay in StallReasonKind order and cover every reason before kUnknown.
+static_assert(std::size(STALL_REASON_PRESENTATIONS) ==
+              static_cast<size_t>(IsaDataBuilder::StallReasonKind::kUnknown));
+
+constexpr bool
+stall_reason_presentations_in_enum_order()
+{
+    for(size_t i = 0; i < std::size(STALL_REASON_PRESENTATIONS); ++i)
+    {
+        if(static_cast<size_t>(STALL_REASON_PRESENTATIONS[i].kind) != i)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(stall_reason_presentations_in_enum_order());
 
 constexpr ImVec4 HEATMAP_LOW_COLOR{ 0.24f, 0.70f, 0.28f, 0.5f };
 constexpr ImVec4 HEATMAP_MID_COLOR{ 0.90f, 0.78f, 0.18f, 0.5f };
@@ -288,12 +307,10 @@ draw_code_cell_fill(const CodeCellBounds& cell, double percent, ImU32 color)
 static const StallReasonPresentation&
 get_stall_reason_presentation(IsaDataBuilder::StallReasonKind kind)
 {
-    for(const StallReasonPresentation& presentation : STALL_REASON_PRESENTATIONS)
+    const uint32_t index = static_cast<uint32_t>(kind);
+    if(index < std::size(STALL_REASON_PRESENTATIONS))
     {
-        if(kind == presentation.kind)
-        {
-            return presentation;
-        }
+        return STALL_REASON_PRESENTATIONS[index];
     }
     return UNKNOWN_STALL_REASON_PRESENTATION;
 }
@@ -442,6 +459,43 @@ BaseCodeWidget::BeginCodeRow(uint64_t row_id, uint64_t source_line_id)
     return row_clicked;
 }
 
+void
+BaseCodeWidget::RenderClippedRows(size_t row_count, uint64_t& scroll_line,
+                                  const std::function<uint64_t(uint32_t)>& id_of,
+                                  const std::function<void(uint32_t)>&     render_line)
+{
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(row_count));
+
+    uint32_t scroll_target = NO_SCROLL_TARGET;
+    if(scroll_line != LineSelection::UNSELECTED)
+    {
+        for(uint32_t i = 0; i < row_count; ++i)
+        {
+            if(id_of(i) == scroll_line)
+            {
+                scroll_target = i + 1;
+                scroll_line   = LineSelection::UNSELECTED;
+                clipper.IncludeItemByIndex(static_cast<int>(i));
+                break;
+            }
+        }
+    }
+
+    while(clipper.Step())
+    {
+        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+        {
+            render_line(static_cast<uint32_t>(i));
+            if(scroll_target != NO_SCROLL_TARGET &&
+               static_cast<uint32_t>(i) + 1 == scroll_target)
+            {
+                ImGui::SetScrollHereY(0.0f);
+            }
+        }
+    }
+}
+
 SourceCodeWidget::SourceCodeWidget(LineSelection& selection)
 : BaseCodeWidget(selection)
 {}
@@ -516,48 +570,16 @@ SourceCodeWidget::Render()
     render_table_header_with_tooltip(1, "Source code", SOURCE_CODE_HEADER_TOOLTIP);
     PushStyles();
 
-    ImGuiListClipper clipper;
-    clipper.Begin(static_cast<int>(m_lines.size()));
-    const uint32_t scroll_target = GetScrollTarget(clipper);
-
-    while(clipper.Step())
-    {
-        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-        {
-            RenderLine(static_cast<uint32_t>(i));
-            if(scroll_target != NO_SCROLL_TARGET &&
-               static_cast<uint32_t>(i) + 1 == scroll_target)
-            {
-                ImGui::SetScrollHereY(0.0f);
-            }
-        }
-    }
+    RenderClippedRows(
+        m_lines.size(), m_line_selection.source_scroll_line,
+        [this](uint32_t i) { return m_lines[i].id; },
+        [this](uint32_t i) { RenderLine(i); });
 
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
 
     ImGui::EndTable();
     ImGui::PopStyleVar();
-}
-
-uint32_t
-SourceCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
-{
-    uint32_t scroll_target = NO_SCROLL_TARGET;
-    if(m_line_selection.source_scroll_line != LineSelection::UNSELECTED)
-    {
-        for(uint32_t i = 0; i < m_lines.size(); ++i)
-        {
-            if(m_lines[i].id == m_line_selection.source_scroll_line)
-            {
-                scroll_target                       = i + 1;
-                m_line_selection.source_scroll_line = LineSelection::UNSELECTED;
-                clipper.IncludeItemByIndex(static_cast<int>(i));
-                break;
-            }
-        }
-    }
-    return scroll_target;
 }
 
 void
@@ -646,21 +668,10 @@ IsaCodeWidget::Render()
     RenderHeaders();
     PushStyles();
 
-    ImGuiListClipper clipper;
-    clipper.Begin(static_cast<int>(m_entries.size()));
-    const uint32_t scroll_target = GetScrollTarget(clipper);
-    while(clipper.Step())
-    {
-        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-        {
-            RenderLine(static_cast<uint32_t>(i));
-            if(scroll_target != NO_SCROLL_TARGET &&
-               static_cast<uint32_t>(i) + 1 == scroll_target)
-            {
-                ImGui::SetScrollHereY(0.0f);
-            }
-        }
-    }
+    RenderClippedRows(
+        m_entries.size(), m_line_selection.isa_scroll_line,
+        [this](uint32_t i) { return m_entries[i].source_line_id; },
+        [this](uint32_t i) { RenderLine(i); });
 
     ImGui::PopStyleColor(3);
     ImGui::PopStyleVar();
@@ -747,26 +758,6 @@ IsaCodeWidget::RenderHeaders()
                                      CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     render_table_header_with_tooltip(ColumnIndex(IsaColumn::kInstruction), "ISA",
                                      ISA_INSTRUCTION_HEADER_TOOLTIP);
-}
-
-uint32_t
-IsaCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
-{
-    uint32_t scroll_target = NO_SCROLL_TARGET;
-    if(m_line_selection.isa_scroll_line != LineSelection::UNSELECTED)
-    {
-        for(uint32_t i = 0; i < m_entries.size(); ++i)
-        {
-            if(m_entries[i].source_line_id == m_line_selection.isa_scroll_line)
-            {
-                scroll_target                    = i + 1;
-                m_line_selection.isa_scroll_line = LineSelection::UNSELECTED;
-                clipper.IncludeItemByIndex(static_cast<int>(i));
-                break;
-            }
-        }
-    }
-    return scroll_target;
 }
 
 ImU32

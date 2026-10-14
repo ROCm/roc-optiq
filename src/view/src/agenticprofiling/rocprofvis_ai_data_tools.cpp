@@ -830,16 +830,18 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
             out << "counter_min: " << profile.min_value << "\n";
             out << "counter_max: " << profile.max_value << "\n";
         }
-        else
+        else if(track != nullptr)
         {
-            out << "event_count: " << profile.total << "\n";
+            out << "event_count: " << track->num_entries << "\n";
         }
         return TrimResult(out.str());
     }
 
-    std::vector<std::pair<uint64_t, OverviewProfile>> event_tracks;
-    size_t                                            counter_count = 0;
-    double                                            event_total   = 0.0;
+    std::vector<const TrackInfo*> event_tracks;
+    size_t                        counter_count = 0;
+    size_t                        stream_count  = 0;
+    uint64_t                      stream_events = 0;
+    uint64_t                      event_total   = 0;
     for(const std::pair<const uint64_t, std::vector<double>>& row : minimap)
     {
         const TrackInfo* track = timeline.GetTrack(row.first);
@@ -853,9 +855,18 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
             continue;
         }
 
-        const OverviewProfile profile = Downsample(row.second, bin_count);
-        event_tracks.emplace_back(row.first, profile);
-        event_total += profile.total;
+        event_tracks.push_back(track);
+        // A stream track re-lists kernels and copies that already sit on a queue
+        // track, so adding it would count that GPU work twice.
+        if(track->topology.type == TrackInfo::TrackType::Stream)
+        {
+            ++stream_count;
+            stream_events += track->num_entries;
+        }
+        else
+        {
+            event_total += track->num_entries;
+        }
     }
 
     const OverviewProfile overall = Downsample(CombinedEventRow(context), bin_count);
@@ -880,29 +891,34 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     AppendBinWindow(out, "quietest_window_ns", quietest, overall.bins.size(), start_ns,
                     span_ns);
     out << "total_events: " << event_total << "\n";
+    if(stream_count > 0)
+    {
+        out << "stream_tracks: " << stream_count << " tracks, " << stream_events
+            << " events. These are the same kernels and copies as the queue tracks, "
+               "grouped by HIP stream, so total_events leaves them out.\n";
+    }
 
     std::sort(event_tracks.begin(), event_tracks.end(),
-              [](const std::pair<uint64_t, OverviewProfile>& a,
-                 const std::pair<uint64_t, OverviewProfile>& b) {
-                  return a.second.total > b.second.total;
+              [](const TrackInfo* a, const TrackInfo* b) {
+                  return a->num_entries > b->num_entries;
               });
 
     out << "busiest_tracks:\n";
     const size_t shown = std::min(event_tracks.size(), ASSISTANT_OVERVIEW_TRACKS);
     for(size_t i = 0; i < shown; ++i)
     {
-        const uint64_t         track_id = event_tracks[i].first;
-        const OverviewProfile& profile  = event_tracks[i].second;
-        out << "  " << (i + 1) << ". track_id=" << track_id << " events="
-            << profile.total;
-        if(event_total > 0.0)
+        const TrackInfo* track = event_tracks[i];
+        out << "  " << (i + 1) << ". track_id=" << track->id
+            << " events=" << track->num_entries;
+        if(event_total > 0)
         {
             out << " share_pct="
-                << FormatPercent(
-                       static_cast<float>(profile.total / event_total * 100.0));
+                << FormatPercent(static_cast<float>(
+                       static_cast<double>(track->num_entries) /
+                       static_cast<double>(event_total) * 100.0));
         }
         out << " name=\""
-            << context.data_provider->DataModel().BuildTrackName(track_id) << "\"\n";
+            << context.data_provider->DataModel().BuildTrackName(track->id) << "\"\n";
     }
     if(event_tracks.size() > shown)
     {

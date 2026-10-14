@@ -833,6 +833,12 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
         else if(track != nullptr)
         {
             out << "event_count: " << track->num_entries << "\n";
+            if(track->topology.type == TrackInfo::TrackType::Stream)
+            {
+                out << "note: a stream track lists the same kernels and copies as the "
+                       "queue tracks, grouped by HIP stream, so do not add this count to "
+                       "theirs.\n";
+            }
         }
         return TrimResult(out.str());
     }

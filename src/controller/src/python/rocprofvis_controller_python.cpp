@@ -3,7 +3,9 @@
 
 #include "python/rocprofvis_controller_python.h"
 
+#include <cerrno>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -225,6 +227,35 @@ py_handle_double(rocprofvis_handle_t* object, rocprofvis_property_t property)
     double value = 0.0;
     rocprofvis_controller_get_double(object, property, 0, &value);
     return PyFloat_FromDouble(value);
+}
+
+// A table cell held as text, as a number when its column is numeric and the
+// whole text reads as one; anything else stays a string.
+PyObject*
+py_table_text_cell(std::string const& text, uint64_t column_type)
+{
+    char const* begin = text.c_str();
+    if(*begin != '\0' && (column_type == kRPVControllerPrimitiveTypeUInt64 ||
+                          column_type == kRPVControllerPrimitiveTypeDouble))
+    {
+        char* end = nullptr;
+        if(column_type == kRPVControllerPrimitiveTypeUInt64 && *begin != '-')
+        {
+            errno                   = 0;
+            unsigned long long value = std::strtoull(begin, &end, 10);
+            if(errno == 0 && *end == '\0')
+            {
+                return PyLong_FromUnsignedLongLong(value);
+            }
+        }
+        errno        = 0;
+        double value = std::strtod(begin, &end);
+        if(errno == 0 && *end == '\0')
+        {
+            return PyFloat_FromDouble(value);
+        }
+    }
+    return PyUnicode_FromStringAndSize(text.data(), static_cast<Py_ssize_t>(text.size()));
 }
 
 struct uint64_arg_t
@@ -618,8 +649,13 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
             uint64_t column_type = kRPVControllerPrimitiveTypeString;
             rocprofvis_controller_get_uint64(table, kRPVControllerTableColumnTypeIndexed,
                                              j, &column_type);
+            // Rows hold text even in columns the table declares numeric, so the
+            // cell's own type decides how it is read.
+            uint64_t cell_type = kRPVControllerPrimitiveTypeString;
+            rocprofvis_controller_get_uint64(row_array, kRPVControllerArrayEntryTypeIndexed,
+                                             j, &cell_type);
             PyObject* cell = nullptr;
-            switch(column_type)
+            switch(cell_type)
             {
                 case kRPVControllerPrimitiveTypeUInt64:
                 {
@@ -659,8 +695,7 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
                                 row_array, kRPVControllerArrayEntryIndexed, j, text.data(),
                                 &length);
                         }
-                        cell = PyUnicode_FromStringAndSize(
-                            text.data(), static_cast<Py_ssize_t>(text.size()));
+                        cell = py_table_text_cell(text, column_type);
                     }
                     break;
                 }

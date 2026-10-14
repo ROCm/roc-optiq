@@ -3,6 +3,7 @@
 
 #include "python/rocprofvis_controller_python.h"
 
+#include <cctype>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -239,13 +240,26 @@ py_table_text_cell(std::string const& text, uint64_t column_type)
                           column_type == kRPVControllerPrimitiveTypeDouble))
     {
         char* end = nullptr;
-        if(column_type == kRPVControllerPrimitiveTypeUInt64 && *begin != '-')
+        if(column_type == kRPVControllerPrimitiveTypeUInt64)
         {
-            errno                   = 0;
-            unsigned long long value = std::strtoull(begin, &end, 10);
-            if(errno == 0 && *end == '\0')
+            // Integer columns can hold negative SQLite values, so a leading minus
+            // sign still reads as an int.
+            errno = 0;
+            if(*begin == '-')
             {
-                return PyLong_FromUnsignedLongLong(value);
+                long long value = std::strtoll(begin, &end, 10);
+                if(errno == 0 && *end == '\0')
+                {
+                    return PyLong_FromLongLong(value);
+                }
+            }
+            else if(std::isdigit(static_cast<unsigned char>(*begin)))
+            {
+                unsigned long long value = std::strtoull(begin, &end, 10);
+                if(errno == 0 && *end == '\0')
+                {
+                    return PyLong_FromUnsignedLongLong(value);
+                }
             }
         }
         errno        = 0;

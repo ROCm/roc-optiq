@@ -36,14 +36,18 @@ namespace RocProfVis
 namespace View
 {
 
-// Filename of an optional runtime override dropped at <config-dir>/.
+// Embedded architecture templates were authored against one profiler version.
+// Remap their metric_name entries onto this file's category-3 ids. Database
+// layouts already carry dotted ids for the file that stored them, so they are
+// not remapped. Later this may key off schema version rather than layout source.
+static constexpr bool kRemapFallbackMemoryChartMetricIds = true;
+
+// Temporary. A file at <config-dir>/memory_chart.json forces the layout so a
+// template can be tuned without a rebuild. Remove once template selection is stable.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
-// When true, every loaded template replaces its dotted metric ids with the
-// category-3 id whose database name matches metric_name. A miss or an
-// ambiguous name invalidates that ref. An empty metric_name keeps the authored
-// id. Failures are logged. On until profiler metric ids stop moving.
-static constexpr bool kRemapMemoryChartMetricIds = true;
+static constexpr const char* CHART_UNAVAILABLE_TEXT =
+    "Memory chart is N/A for this workload.";
 
 static void
 LogRemapFailure(const MemChartRemapFailure& failure)
@@ -509,7 +513,6 @@ ComputeMemoryChartView::ComputeMemoryChartView(
             RefreshPalette();
             RefreshCachedColors();
         });
-    LoadLayout();
 }
 
 ComputeMemoryChartView::~ComputeMemoryChartView()
@@ -529,30 +532,22 @@ FindEmbeddedLayout(const char* key)
     return nullptr;
 }
 
-static const char*
-DefaultEmbeddedLayout()
-{
-    const char* def = FindEmbeddedLayout("default");
-    return def ? def : kMemChartEmbeddedLayouts[0].json;
-}
-
-// Exact arch key first, then family (gfx94x/gfx950), then default.
+// Exact arch key first, then family (gfx94x/gfx950). No generic fallback: an
+// unknown architecture leaves the chart N/A.
 static const char*
 EmbeddedLayoutForArch(const std::string& arch)
 {
-    if(!arch.empty())
+    if(arch.empty()) return nullptr;
+    if(const char* exact = FindEmbeddedLayout(arch.c_str())) return exact;
+    if(arch.rfind("gfx94", 0) == 0)
     {
-        if(const char* exact = FindEmbeddedLayout(arch.c_str())) return exact;
-        if(arch.rfind("gfx94", 0) == 0)
-        {
-            if(const char* fam = FindEmbeddedLayout("gfx94x")) return fam;
-        }
-        else if(arch.rfind("gfx95", 0) == 0)
-        {
-            if(const char* fam = FindEmbeddedLayout("gfx950")) return fam;
-        }
+        if(const char* fam = FindEmbeddedLayout("gfx94x")) return fam;
     }
-    return DefaultEmbeddedLayout();
+    else if(arch.rfind("gfx95", 0) == 0)
+    {
+        if(const char* fam = FindEmbeddedLayout("gfx950")) return fam;
+    }
+    return nullptr;
 }
 
 // GPU arch (e.g. "gfx950") from the workload's system info. The controller
@@ -599,61 +594,59 @@ ComputeMemoryChartView::TryLoadOverrideFile()
 }
 
 void
-ComputeMemoryChartView::LoadLayout()
-{
-    // Dev override wins if present; otherwise the embedded default layout.
-    if(!TryLoadOverrideFile())
-    {
-        std::string error;
-        if(!MemChartLayout::ParseFromString(DefaultEmbeddedLayout(), m_layout, &error))
-        {
-            spdlog::error("Memory chart: failed to parse embedded default layout: {}", error);
-        }
-    }
-    OnLayoutLoaded(ComputeSelection::INVALID_SELECTION_ID);
-}
-
-void
 ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 {
-    // Priority: dev override file -> per-workload DB layout (parsed once by the
-    // data provider) -> architecture-specific embedded layout -> embedded default.
+    // Temporary testing override wins over the database and the architecture
+    // template. It is remapped like an embedded template. Remove with
+    // TryLoadOverrideFile once template selection is stable.
     if(TryLoadOverrideFile())
     {
-        OnLayoutLoaded(workload_id);
+        OnLayoutLoaded(workload_id, true);
         return;
     }
 
+    // Database blob: its dotted ids already belong to this file. Otherwise the
+    // embedded template for the detected architecture, with metric-id remap.
+    // No architecture template means the chart is N/A. default.json is not used.
     const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
     if(workload && !workload->memory_chart_layout.blocks.empty())
     {
         m_layout = workload->memory_chart_layout;
         spdlog::info("Memory chart: using layout from workload {} database blob", workload_id);
-        OnLayoutLoaded(workload_id);
+        OnLayoutLoaded(workload_id, false);
         return;
     }
 
     const std::string arch   = WorkloadArch(workload);
     const char*       layout = EmbeddedLayoutForArch(arch);
-    std::string       error;
-    if(MemChartLayout::ParseFromString(layout, m_layout, &error))
+    if(layout)
     {
-        spdlog::info("Memory chart: using embedded layout for arch '{}' (workload {})",
-                     arch.empty() ? "default" : arch, workload_id);
-    }
-    else
-    {
+        std::string error;
+        if(MemChartLayout::ParseFromString(layout, m_layout, &error))
+        {
+            spdlog::info("Memory chart: using embedded layout for arch '{}' (workload {})",
+                         arch, workload_id);
+            OnLayoutLoaded(workload_id, true);
+            return;
+        }
         spdlog::error("Memory chart: failed to parse embedded layout for arch '{}': {}", arch,
                       error);
     }
-    OnLayoutLoaded(workload_id);
+    else
+    {
+        spdlog::info("Memory chart: no layout for arch '{}' (workload {}); chart is N/A",
+                     arch.empty() ? "unknown" : arch, workload_id);
+    }
+
+    m_layout       = MemChartLayout{};
+    m_layout_dirty = true;
 }
 
 void
 ComputeMemoryChartView::RemapMetricIds(uint32_t workload_id)
 {
-    if(!kRemapMemoryChartMetricIds)
+    if(!kRemapFallbackMemoryChartMetricIds)
     {
         return;
     }
@@ -685,9 +678,12 @@ ComputeMemoryChartView::RemapMetricIds(uint32_t workload_id)
 }
 
 void
-ComputeMemoryChartView::OnLayoutLoaded(uint32_t workload_id)
+ComputeMemoryChartView::OnLayoutLoaded(uint32_t workload_id, bool remap_metric_ids)
 {
-    RemapMetricIds(workload_id);
+    if(remap_metric_ids)
+    {
+        RemapMetricIds(workload_id);
+    }
 
     // Sort by column/order before resolving: ComputeLayout and PositionBlock must
     // not move these objects, or the arrows' endpoint pointers would dangle.
@@ -1754,6 +1750,12 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
 void
 ComputeMemoryChartView::Render()
 {
+    if(m_layout.blocks.empty())
+    {
+        ImGui::TextDisabled("%s", CHART_UNAVAILABLE_TEXT);
+        return;
+    }
+
     float available_width = ImGui::GetContentRegionAvail().x;
     float font_size       = ImGui::GetFontSize();
 

@@ -3,6 +3,7 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_controller_string_table.h"
 #include "rocprofvis_core.h"
@@ -24,6 +25,7 @@
 #include <memory>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
@@ -274,10 +276,52 @@ TEST_CASE("Sample LOD Property API")
         REQUIRE(rocprofvis_controller_set_double(handle, kRPVControllerSampleChildMin, 0,
                                                  0.5) == kRocProfVisResultSuccess);
         REQUIRE(lod.GetChildMin() == 0.5);
+    }
+
+    SECTION("Memory queries count the LOD and its borrowed child-pointer storage")
+    {
+        const uint64_t expected =
+            sizeof(lod) + children.size() * sizeof(RocProfVis::Controller::Sample*);
+        REQUIRE(base.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == expected);
         REQUIRE(rocprofvis_controller_get_uint64(
                     handle, kRPVControllerCommonMemoryUsageInclusive, 0, &integer) ==
-                kRocProfVisResultInvalidEnum);
-        REQUIRE(base.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultInvalidEnum);
+                kRocProfVisResultSuccess);
+        REQUIRE(integer == expected);
+        REQUIRE(rocprofvis_controller_get_uint64(
+                    handle, kRPVControllerCommonMemoryUsageExclusive, 0, &integer) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(integer == expected);
+        REQUIRE(base.GetInclusiveMemoryUsage(nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_get_uint64(
+                    handle, kRPVControllerCommonMemoryUsageInclusive, 0, nullptr) ==
+                kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_get_uint64(
+                    handle, kRPVControllerCommonMemoryUsageExclusive, 0, nullptr) ==
+                kRocProfVisResultInvalidArgument);
+
+        REQUIRE(lod.SetNumberOfChildren(0) == kRocProfVisResultSuccess);
+        REQUIRE(base.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == expected);
+
+        RocProfVis::Controller::SampleLOD empty(kRPVControllerPrimitiveTypeDouble, 0, 0.0);
+        REQUIRE(empty.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == sizeof(empty));
+    }
+
+    SECTION("Array accounting includes LOD entries and continues to subsequent entries")
+    {
+        uint64_t lod_size = 0;
+        REQUIRE(base.GetInclusiveMemoryUsage(&lod_size) == kRocProfVisResultSuccess);
+        RocProfVis::Controller::Array array;
+        array.GetVector().emplace_back(handle);
+        array.GetVector().emplace_back(reinterpret_cast<rocprofvis_handle_t*>(&first));
+        REQUIRE(rocprofvis_controller_get_uint64(
+                    reinterpret_cast<rocprofvis_handle_t*>(&array),
+                    kRPVControllerCommonMemoryUsageInclusive, 0, &integer) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(integer == sizeof(array) + 2 * sizeof(RocProfVis::Controller::Data) +
+                               lod_size + sizeof(first));
     }
 
     SECTION("Child access preserves bounds and rejects other object types")
@@ -335,15 +379,16 @@ TEST_CASE("Sample LOD Property API")
 
 TEST_CASE("Graph and Timeline Property API")
 {
-    RocProfVis::Controller::Track first_track(kRPVControllerTrackTypeEvents, 1, nullptr,
-                                              nullptr);
-    RocProfVis::Controller::Track second_track(kRPVControllerTrackTypeEvents, 2, nullptr,
-                                               nullptr);
-    first_track.SetStartTimestamp(10.0);
-    first_track.SetEndTimestamp(20.0);
-    first_track.SetNumberOfEntries(4);
-    second_track.SetStartTimestamp(5.0);
-    second_track.SetEndTimestamp(30.0);
+    // Graphs borrow these heap-owned tracks; the test owns them past each section.
+    auto first_track = std::make_unique<RocProfVis::Controller::Track>(
+        kRPVControllerTrackTypeEvents, 1, nullptr, nullptr);
+    auto second_track = std::make_unique<RocProfVis::Controller::Track>(
+        kRPVControllerTrackTypeEvents, 2, nullptr, nullptr);
+    first_track->SetStartTimestamp(10.0);
+    first_track->SetEndTimestamp(20.0);
+    first_track->SetNumberOfEntries(4);
+    second_track->SetStartTimestamp(5.0);
+    second_track->SetEndTimestamp(30.0);
     uint64_t integer   = 0;
     double   timestamp = 99.0;
 
@@ -358,9 +403,9 @@ TEST_CASE("Graph and Timeline Property API")
         REQUIRE(graph.GetEndTimestamp(nullptr) == kRocProfVisResultInvalidArgument);
         REQUIRE(rocprofvis_controller_set_object(
                     handle, kRPVControllerGraphTrack, 0,
-                    reinterpret_cast<rocprofvis_handle_t*>(&first_track)) ==
+                    reinterpret_cast<rocprofvis_handle_t*>(first_track.get())) ==
                 kRocProfVisResultSuccess);
-        REQUIRE(graph.GetTrack() == &first_track);
+        REQUIRE(graph.GetTrack() == first_track.get());
         REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerGraphNumEntries, 0,
                                                  &integer) == kRocProfVisResultSuccess);
         REQUIRE(integer == 4);
@@ -381,13 +426,14 @@ TEST_CASE("Graph and Timeline Property API")
                                                  0, 100.0) ==
                 kRocProfVisResultReadOnlyError);
         REQUIRE(graph.GetNumberOfEntries(nullptr) == kRocProfVisResultInvalidArgument);
-        REQUIRE(graph.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        const RocProfVis::Controller::Graph& const_graph = graph;
+        REQUIRE(const_graph.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
         REQUIRE(integer == 0);
         REQUIRE(graph.GetExclusiveMemoryUsage() == sizeof(graph));
         REQUIRE(rocprofvis_controller_set_object(handle, kRPVControllerGraphTrack, 0,
                                                  nullptr) ==
                 kRocProfVisResultInvalidArgument);
-        REQUIRE(graph.GetTrack() == &first_track);
+        REQUIRE(graph.GetTrack() == first_track.get());
     }
 
     SECTION("Timeline lookup and reordering preserve graph ownership")
@@ -402,14 +448,25 @@ TEST_CASE("Graph and Timeline Property API")
         REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
         REQUIRE(graph == nullptr);
         REQUIRE(timeline.GetGraphById(10, &graph) == kRocProfVisResultOutOfRange);
-        REQUIRE(timeline.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
+        const RocProfVis::Controller::Timeline& const_timeline = timeline;
+        REQUIRE(const_timeline.GetInclusiveMemoryUsage(&integer) ==
+                kRocProfVisResultSuccess);
         REQUIRE(integer == timeline.GetExclusiveMemoryUsage());
         auto first = std::make_unique<RocProfVis::Controller::Graph>(
             nullptr, kRPVControllerGraphTypeFlame, 10);
         auto second = std::make_unique<RocProfVis::Controller::Graph>(
             nullptr, kRPVControllerGraphTypeFlame, 20);
-        first->SetTrack(&first_track);
-        second->SetTrack(&second_track);
+        first->SetTrack(first_track.get());
+        second->SetTrack(second_track.get());
+        REQUIRE(timeline.SetGraph(0, nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(timeline.SetGraph(2, nullptr) == kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_set_object(
+                    handle, kRPVControllerTimelineGraphIndexed, 0, nullptr) ==
+                kRocProfVisResultInvalidArgument);
+        REQUIRE(rocprofvis_controller_set_object(
+                    handle, kRPVControllerTimelineGraphIndexed, 0,
+                    reinterpret_cast<rocprofvis_handle_t*>(first_track.get())) ==
+                kRocProfVisResultInvalidArgument);
         REQUIRE(timeline.SetGraph(0, first.get()) == kRocProfVisResultSuccess);
         RocProfVis::Controller::Graph* first_graph = first.release();
         REQUIRE(rocprofvis_controller_set_object(
@@ -432,13 +489,17 @@ TEST_CASE("Graph and Timeline Property API")
         REQUIRE(timeline.GetNumberOfGraphs() == 2);
         REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
         REQUIRE(graph == first_graph);
-        first_graph->SetTrack(&first_track);
+        first_graph->SetTrack(first_track.get());
         REQUIRE(timeline.SetGraph(0, second_graph) == kRocProfVisResultSuccess);
         REQUIRE(timeline.GetGraph(1, &graph) == kRocProfVisResultSuccess);
         REQUIRE(graph == first_graph);
         REQUIRE(timeline.GetGraph(2, &graph) == kRocProfVisResultOutOfRange);
         REQUIRE(timeline.GetGraph(0, nullptr) == kRocProfVisResultInvalidArgument);
-        REQUIRE(timeline.SetGraph(2, first_graph) == kRocProfVisResultInvalidArgument);
+        REQUIRE(timeline.SetGraph(2, first_graph) == kRocProfVisResultOutOfRange);
+        REQUIRE(rocprofvis_controller_set_object(
+                    handle, kRPVControllerTimelineGraphIndexed, 2,
+                    reinterpret_cast<rocprofvis_handle_t*>(first_graph)) ==
+                kRocProfVisResultOutOfRange);
         REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerTimelineId, 0,
                                                  8) == kRocProfVisResultReadOnlyError);
         REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerTimelineNumGraphs,
@@ -449,6 +510,147 @@ TEST_CASE("Graph and Timeline Property API")
         REQUIRE(timeline.SetNumberOfGraphs(0) == kRocProfVisResultSuccess);
         REQUIRE(timeline.GetMaxTimestamp(&timestamp) == kRocProfVisResultOutOfRange);
     }
+}
+
+TEST_CASE("Timeline Graph Replacement Ownership")
+{
+    class DestructionTrackedGraph : public RocProfVis::Controller::Graph
+    {
+    public:
+        DestructionTrackedGraph(uint64_t id, std::shared_ptr<uint64_t> destruction_count)
+        : Graph(nullptr, kRPVControllerGraphTypeFlame, id)
+        , m_destruction_count(std::move(destruction_count))
+        {}
+
+        ~DestructionTrackedGraph() override { ++*m_destruction_count; }
+
+    private:
+        std::shared_ptr<uint64_t> m_destruction_count;
+    };
+
+    auto track = std::make_unique<RocProfVis::Controller::Track>(
+        kRPVControllerTrackTypeEvents, 1, nullptr, nullptr);
+    track->SetStartTimestamp(0.0);
+    track->SetEndTimestamp(10.0);
+    auto destruction_count = std::make_shared<uint64_t>(0);
+    {
+        RocProfVis::Controller::Timeline timeline(1);
+        REQUIRE(timeline.SetNumberOfGraphs(2) == kRocProfVisResultSuccess);
+        auto first = std::make_unique<DestructionTrackedGraph>(1, destruction_count);
+        auto second = std::make_unique<DestructionTrackedGraph>(2, destruction_count);
+        first->SetTrack(track.get());
+        second->SetTrack(track.get());
+        REQUIRE(timeline.SetGraph(0, first.get()) == kRocProfVisResultSuccess);
+        RocProfVis::Controller::Graph* first_graph = first.release();
+        REQUIRE(timeline.SetGraph(1, second.get()) == kRocProfVisResultSuccess);
+        RocProfVis::Controller::Graph* second_graph = second.release();
+
+        REQUIRE(timeline.SetGraph(1, first_graph) == kRocProfVisResultSuccess);
+        REQUIRE(*destruction_count == 0);
+        RocProfVis::Controller::Graph* graph = nullptr;
+        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == second_graph);
+        REQUIRE(timeline.GetGraph(1, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == first_graph);
+
+        auto replacement = std::make_unique<DestructionTrackedGraph>(3, destruction_count);
+        REQUIRE(timeline.SetGraph(0, replacement.get()) == kRocProfVisResultInvalidArgument);
+        REQUIRE(*destruction_count == 0);
+        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == second_graph);
+        replacement->SetTrack(track.get());
+        REQUIRE(timeline.SetGraph(0, replacement.get()) == kRocProfVisResultSuccess);
+        RocProfVis::Controller::Graph* replacement_graph = replacement.release();
+        REQUIRE(*destruction_count == 1);
+        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == replacement_graph);
+
+        REQUIRE(timeline.SetGraph(0, first_graph) == kRocProfVisResultSuccess);
+        REQUIRE(*destruction_count == 1);
+        REQUIRE(timeline.GetGraph(1, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(graph == replacement_graph);
+    }
+    REQUIRE(*destruction_count == 3);
+}
+
+TEST_CASE("Data Memory Accounting")
+{
+    RocProfVis::Controller::Data integer(uint64_t{7});
+    RocProfVis::Controller::Data number(2.5);
+    RocProfVis::Controller::Data string("abc");
+    RocProfVis::Controller::Data empty("");
+    RocProfVis::Controller::Data unset(kRPVControllerPrimitiveTypeString);
+    uint64_t bytes = 0;
+    REQUIRE(integer.GetMemoryUsage(&bytes, kRPVControllerCommonMemoryUsageInclusive) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(integer));
+    REQUIRE(number.GetMemoryUsage(&bytes, kRPVControllerCommonMemoryUsageInclusive) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(number));
+    REQUIRE(string.GetMemoryUsage(&bytes, kRPVControllerCommonMemoryUsageInclusive) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(string) + 4);
+    REQUIRE(string.GetMemoryUsage(&bytes, kRPVControllerCommonMemoryUsageExclusive) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(string));
+    REQUIRE(empty.GetMemoryUsage(&bytes, kRPVControllerCommonMemoryUsageInclusive) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(empty) + 1);
+    REQUIRE(unset.GetMemoryUsage(&bytes, kRPVControllerCommonMemoryUsageInclusive) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(unset));
+    REQUIRE(string.GetMemoryUsage(nullptr, kRPVControllerCommonMemoryUsageInclusive) ==
+            kRocProfVisResultInvalidArgument);
+
+    RocProfVis::Controller::Array array;
+    array.GetVector().push_back(integer);
+    array.GetVector().push_back(number);
+    array.GetVector().push_back(string);
+    array.GetVector().push_back(empty);
+    REQUIRE(array.GetUInt64(kRPVControllerCommonMemoryUsageInclusive, 0, &bytes) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(bytes == sizeof(array) + 4 * sizeof(RocProfVis::Controller::Data) + 5);
+}
+
+TEST_CASE("Segment Entry Type Validation")
+{
+    RocProfVis::Controller::SegmentTimeline timeline;
+    timeline.SetContext(nullptr);
+    RocProfVis::Controller::Event event(1, 0.0, 1.0);
+    RocProfVis::Controller::Sample sample(kRPVControllerPrimitiveTypeDouble, 2, 0.0);
+    RocProfVis::Controller::SampleLOD lod(kRPVControllerPrimitiveTypeDouble, 3, 2.0);
+    sample.SetEndTimestamp(1.0);
+    lod.SetEndTimestamp(3.0);
+    RocProfVis::Controller::Array wrong_type;
+    RocProfVis::Controller::Segment events(kRPVControllerTrackTypeEvents, &timeline);
+    RocProfVis::Controller::Segment samples(kRPVControllerTrackTypeSamples, &timeline);
+    events.SetStartEndTimestamps(0.0, 4.0);
+    samples.SetStartEndTimestamps(0.0, 4.0);
+
+    REQUIRE_FALSE(events.Insert(0.0, 0, nullptr));
+    REQUIRE_FALSE(events.Insert(0.0, 0, &sample));
+    REQUIRE_FALSE(events.Insert(0.0, 0, &lod));
+    REQUIRE_FALSE(events.Insert(0.0, 0, &wrong_type));
+    REQUIRE(events.GetNumEntries() == 0);
+    REQUIRE_FALSE(samples.Insert(0.0, 0, nullptr));
+    REQUIRE_FALSE(samples.Insert(0.0, 0, &event));
+    REQUIRE_FALSE(samples.Insert(0.0, 0, &wrong_type));
+    REQUIRE(samples.GetNumEntries() == 0);
+    REQUIRE(events.Insert(0.0, 0, &event));
+    REQUIRE_FALSE(events.Insert(0.0, 0, &event));
+    REQUIRE(samples.Insert(0.0, 0, &sample));
+    REQUIRE(samples.Insert(2.0, 0, &lod));
+
+    std::vector<RocProfVis::Controller::Data> entries;
+    uint64_t index = 0;
+    REQUIRE(samples.Fetch(0.0, 4.0, entries, index, nullptr, nullptr) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(index == 2);
+    rocprofvis_handle_t* handle = nullptr;
+    REQUIRE(entries[0].GetObject(&handle) == kRocProfVisResultSuccess);
+    REQUIRE(handle == reinterpret_cast<rocprofvis_handle_t*>(&sample));
+    REQUIRE(entries[1].GetObject(&handle) == kRocProfVisResultSuccess);
+    REQUIRE(handle == reinterpret_cast<rocprofvis_handle_t*>(&lod));
 }
 
 // Creates two standalone MemoryManager instances and a SegmentTimeline, fills

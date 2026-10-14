@@ -82,14 +82,14 @@ rocprofvis_result_t Timeline::AsyncFetch(Track& track, Future& future, Array& ar
 }
 
 rocprofvis_result_t
-Timeline::GetInclusiveMemoryUsage(uint64_t* value)
+Timeline::GetInclusiveMemoryUsage(uint64_t* value) const
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         *value = GetExclusiveMemoryUsage();
         result = kRocProfVisResultSuccess;
-        for(Graph* graph : m_graphs)
+        for(const Graph* graph : m_graphs)
         {
             if(graph)
             {
@@ -198,11 +198,11 @@ rocprofvis_result_t
 Timeline::SetGraph(uint64_t index, Graph* graph)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(!graph)
+    if(graph && index >= m_graphs.size())
     {
         result = kRocProfVisResultOutOfRange;
     }
-    else if(index < m_graphs.size())
+    else if(graph)
     {
         double min_ts = 0;
         double max_ts = 0;
@@ -227,6 +227,7 @@ Timeline::SetGraph(uint64_t index, Graph* graph)
             }
             else
             {
+                delete m_graphs[index];
                 m_graphs[index] = graph;
             }
             result = kRocProfVisResultSuccess;
@@ -377,7 +378,7 @@ Timeline::SetObject(rocprofvis_property_t property, uint64_t index,
         {
             GraphRef graph(value);
             result = graph.IsValid() ? SetGraph(index, graph.Get())
-                                     : kRocProfVisResultOutOfRange;
+                                     : kRocProfVisResultInvalidArgument;
             break;
         }
         default:

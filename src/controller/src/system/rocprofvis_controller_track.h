@@ -32,7 +32,7 @@ class Track : public Handle
 public:
     Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm_track_t dm_handle, SystemTrace* ctx);
 
-    virtual ~Track();
+    virtual ~Track() {}
 
     rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
     rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index, Future* future);

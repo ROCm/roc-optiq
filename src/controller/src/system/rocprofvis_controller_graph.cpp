@@ -596,8 +596,6 @@ Graph::Graph(Handle* ctx, rocprofvis_controller_graph_type_t type, uint64_t id)
 {
 }
 
-Graph::~Graph() {}
-
 Handle* Graph::GetContext() {
     return m_ctx;
 }
@@ -712,15 +710,15 @@ Graph::GetEndTimestamp(double* value) const
 }
 
 rocprofvis_result_t
-Graph::GetInclusiveMemoryUsage(uint64_t* value)
+Graph::GetInclusiveMemoryUsage(uint64_t* value) const
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
         *value = 0;
-        for(auto& lod : m_lods)
+        for(const auto& lod : m_lods)
         {
-            for(auto& segment : lod.second.GetSegments())
+            for(const auto& segment : lod.second.GetSegments())
             {
                 uint64_t memory_usage = 0;
                 segment.second->GetMemoryUsage(&memory_usage,

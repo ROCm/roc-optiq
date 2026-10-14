@@ -391,9 +391,10 @@ Derived classes should keep their generic property overrides private
 and expose dedicated typed accessors for controller-internal C++ callers;
 the public virtual methods remain available through `Handle` for C ABI
 dispatch.
-Trivial member accessors on `Event`, `Sample`, `SampleLOD`, `Graph`,
-`Timeline`, `Track`, `Trace`, and `SystemTrace` are defined inline in their
-class headers.
+Trivial member accessors on `Data`, `Event`, `Sample`, `SampleLOD`, `Graph`,
+`Timeline`, `Track`, `Trace`, `SystemTrace`, `Segment`, and `SegmentTimeline`
+are defined inline in their class headers. Empty destructors and simple
+property delegations are inline as well.
 Accessors requiring complete
 forward-declared types, model queries, locking, or validation remain in
 the implementation files.
@@ -491,6 +492,8 @@ File: `rocprofvis_controller_data.{h,cpp}`.
 properly frees its owned string in the destructor / on
 reassignment. It is the single primitive that flows through `Array`,
 `Arguments`, and `Table::m_rows`.
+Inclusive memory usage counts the cell plus its owned string buffer (including
+the terminator), or the referenced object. Exclusive usage counts only the cell.
 
 ### 4.6 `Array`
 File: `rocprofvis_controller_array.{h,cpp}`.
@@ -745,7 +748,10 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
   resizes borrowed child pointers and recalculates statistics. Empty/null
   collections produce zero statistics; zero-duration collections produce
   a zero weighted mean. Child replacement alone does not recalculate.
-  The existing unsupported LOD memory query still returns `InvalidEnum`.
+  Typed and C ABI memory queries count `sizeof(SampleLOD)` plus the allocated
+  child-pointer vector capacity, including capacity retained after shrinking.
+  Both common memory properties count this owned storage; borrowed child samples
+  are accounted for by their raw cache and are not counted recursively.
 
 ### 5.3 `Graph` (`rocprofvis_controller_graph.{h,cpp}`)
 
@@ -769,6 +775,8 @@ Typed bounds and entry-count getters retain `UnknownError` for a graph
 without a track, while rejecting null output pointers. Memory accounting
 uses `GetInclusiveMemoryUsage` and `GetExclusiveMemoryUsage`; the existing
 inclusive count covers cached segments rather than `sizeof(Graph)`.
+Both typed memory getters are const; `SegmentTimeline::GetSegments` provides
+a const overload for traversing cached segments.
 
 ### 5.4 `Timeline` (`rocprofvis_controller_timeline.{h,cpp}`)
 
@@ -778,7 +786,10 @@ Wrapper around the trace-wide collection of `Graph*`s plus the global
 delegates to `SystemTrace::AsyncFetch(Graph& ...)`.
 Property overrides are private. Typed graph lookup uses `GetGraph` and
 `GetGraphById`; `SetNumberOfGraphs` owns graph lifetimes on shrink, and
-`SetGraph` transfers ownership on success or reorders an existing graph.
+`SetGraph` transfers ownership on success, deleting a replaced graph, or moves
+an existing graph to the requested final index without deleting it. Null or
+wrong-type graph arguments return `InvalidArgument`; invalid indexes return
+`OutOfRange`. Its typed memory getters are const.
 Graph bounds are validated before modifying the list, so a failed
 assignment leaves the list intact. Lookup and memory accounting skip
 unpopulated slots. Typed timestamp getters retain `OutOfRange` for an
@@ -1139,7 +1150,9 @@ unique_ptr<Segment>>` with two parallel `BitSet`s:
 A `Segment` is a fixed time slice (`kSegmentDuration` ns by default
 `1e9`, scalable to `kScalableSegmentDuration = 1e4` for high-density
 tracks) holding `map<level, map<timestamp, Handle*>>`. `Insert(...)`
-adds an event/sample, `Fetch(start, end, array, ...)` emits the
+rejects null handles and handles whose object tag does not match the segment
+track type before storing an event/sample. `SampleLOD` shares the Sample tag.
+`Fetch(start, end, array, ...)` emits the
 matching items into the caller's array.
 
 `SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`

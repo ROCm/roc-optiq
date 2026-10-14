@@ -66,49 +66,25 @@ Segment::~Segment()
 }
 
 
-double Segment::GetStartTimestamp()
-{
-    return m_start_timestamp;
-}
-double Segment::GetEndTimestamp()
-{
-    return m_end_timestamp;
-}
-double Segment::GetMinTimestamp()
-{
-    return m_min_timestamp;
-}
-double Segment::GetMaxTimestamp()
-{
-    return m_max_timestamp;
-}
-
-void Segment::SetStartEndTimestamps(double start, double end)
-{
-    m_start_timestamp = start;
-    m_end_timestamp = end;
-}
-
-void Segment::SetMinTimestamp(double value)
-{
-    m_min_timestamp = value;
-}
-
-void Segment::SetMaxTimestamp(double value)
-{
-    m_max_timestamp = value;
-}
-
 bool Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    std::pair<std::map<double, Handle*>::iterator, bool> insert_result =
-        m_entries[level].insert(std::make_pair(timestamp, event));
-    if(insert_result.second)
+    bool stored = false;
+    if(event &&
+       ((m_type == kRPVControllerTrackTypeEvents &&
+         event->GetType() == kRPVControllerObjectTypeEvent) ||
+        (m_type == kRPVControllerTrackTypeSamples &&
+         event->GetType() == kRPVControllerObjectTypeSample)))
     {
-        event->IncreaseRetainCounter();
+        std::pair<std::map<double, Handle*>::iterator, bool> insert_result =
+            m_entries[level].insert(std::make_pair(timestamp, event));
+        stored = insert_result.second;
+        if(stored)
+        {
+            event->IncreaseRetainCounter();
+        }
     }
-    return insert_result.second;
+    return stored;
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
@@ -262,18 +238,6 @@ rocprofvis_result_t Segment::GetMemoryUsage(uint64_t* value, rocprofvis_common_p
 }
 
 
-void
-Segment::SetTimelineIterator(rocprofvis_timeline_iterator_t timeline_iterator)
-{
-    m_timeline_iterator = timeline_iterator;
-}
-
-
-Segment::rocprofvis_timeline_iterator_t&
-Segment::GetTimelineIterator(void)
-{
-    return m_timeline_iterator;
-}
 
 size_t Segment::GetNumEntries()
 {
@@ -292,10 +256,6 @@ SegmentTimeline::SegmentTimeline()
 , m_num_segments(0)
 , m_max_num_items(0)
 , m_ctx(nullptr)
-{
-}
-
-SegmentTimeline::~SegmentTimeline()
 {
 }
 
@@ -336,15 +296,6 @@ void SegmentTimeline::Init(double segment_start_time, double segment_duration, u
     m_max_num_items          = num_items;
     m_valid_segments.Init(num_segments);
     m_processed_segments.Init(num_segments);
-}
-
-void SegmentTimeline::SetContext(Handle* ctx) {
-    m_ctx = ctx;
-}
-
-Handle*
-SegmentTimeline::GetContext() {
-    return m_ctx;
 }
 
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
@@ -429,11 +380,6 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
     return result;
 }
 
-std::map<double, std::unique_ptr<Segment>>& SegmentTimeline::GetSegments()
-{
-    return m_segments;
-}
-
 bool
 SegmentTimeline::IsValid(uint32_t segment_index) const
 {
@@ -486,21 +432,6 @@ void SegmentTimeline::SetProcessed(uint32_t segment_index, bool state)
             m_processed_segments.Clear(segment_index);
         }
     }
-}
-
-double SegmentTimeline::GetSegmentDuration() const
-{
-    return m_segment_duration;
-}
-
-size_t
-SegmentTimeline::GetMaxNumItems() const
-{
-    return m_max_num_items;
-}
-
-std::shared_mutex* SegmentTimeline::GetMutex() {
-    return &m_mutex;
 }
 
 void SegmentTimeline::AddActiveArray(uint64_t array_id)

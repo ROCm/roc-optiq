@@ -222,16 +222,6 @@ Data::~Data()
     }
 }
 
-rocprofvis_controller_primitive_type_t Data::GetType(void) const
-{
-    return m_type;
-}
-
-void Data::SetType(rocprofvis_controller_primitive_type_t type)
-{
-    m_type = type;
-}
-
 rocprofvis_result_t Data::GetObject(rocprofvis_handle_t** object)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -459,6 +449,10 @@ rocprofvis_result_t Data::GetMemoryUsage(uint64_t* value, rocprofvis_common_prop
                         result = object->GetUInt64(
                             static_cast<rocprofvis_property_t>(property), 0, value);
                     }
+                }
+                else if(m_type == kRPVControllerPrimitiveTypeString && m_string)
+                {
+                    *value = std::strlen(m_string) + 1;
                 }
                 if(result == kRocProfVisResultSuccess)
                 {

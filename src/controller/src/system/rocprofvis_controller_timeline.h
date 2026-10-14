@@ -40,13 +40,14 @@ public:
     {
         return sizeof(Timeline) + m_graphs.size() * sizeof(Graph*);
     }
-    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
     rocprofvis_result_t GetMinTimestamp(double* value) const;
     rocprofvis_result_t GetMaxTimestamp(double* value) const;
     rocprofvis_result_t GetGraph(uint64_t index, Graph** value) const;
     rocprofvis_result_t GetGraphById(uint64_t id, Graph** value) const;
     rocprofvis_result_t SetNumberOfGraphs(uint64_t count);
-    // Ownership transfers on success; an existing graph is moved to the index.
+    // Ownership transfers on success; replacement deletes the previous graph.
+    // An existing graph is moved to the requested final index.
     rocprofvis_result_t SetGraph(uint64_t index, Graph* graph);
 
 private:

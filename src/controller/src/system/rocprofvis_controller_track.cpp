@@ -35,10 +35,6 @@ Track::Track(rocprofvis_controller_track_type_t type, uint64_t id, rocprofvis_dm
 { 
 }
 
-Track::~Track()
-{
-}
-
 rocprofvis_dm_event_operation_t
 Track::GetOperationType(uint64_t index) const
 {

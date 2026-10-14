@@ -26,8 +26,6 @@ Sample& Sample::operator=(Sample&& other)
     return *this;
 }
 
-Sample::~Sample() {}
-
 rocprofvis_result_t
 Sample::GetInclusiveMemoryUsage(uint64_t* value) const
 {

@@ -109,8 +109,17 @@ SampleLOD& SampleLOD::operator=(SampleLOD&& other)
     return *this;
 }
 
-SampleLOD::~SampleLOD()
+rocprofvis_result_t
+SampleLOD::GetInclusiveMemoryUsage(uint64_t* value) const
 {
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        // Child samples are borrowed; only the pointer buffer belongs to this LOD.
+        *value = sizeof(SampleLOD) + m_children.capacity() * sizeof(Sample*);
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
 }
 
 rocprofvis_result_t
@@ -181,6 +190,8 @@ rocprofvis_result_t SampleLOD::GetUInt64(rocprofvis_property_t property, uint64_
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerCommonMemoryUsageInclusive:
+            case kRPVControllerCommonMemoryUsageExclusive:
             case kRPVControllerSampleId:
             case kRPVControllerSampleType:
             case kRPVControllerSampleValue:
@@ -313,12 +324,6 @@ rocprofvis_result_t SampleLOD::GetObject(rocprofvis_property_t property, uint64_
     }
     return result;
 }
-rocprofvis_result_t SampleLOD::GetString(rocprofvis_property_t property, uint64_t index,
-                                char* value, uint32_t* length) 
-{
-    return Sample::GetString(property, index, value, length);
-}
-
 rocprofvis_result_t SampleLOD::SetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t value) 
 {

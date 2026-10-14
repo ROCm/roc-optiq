@@ -24,7 +24,7 @@ public:
 
     SampleLOD& operator=(SampleLOD&& other);
 
-    virtual ~SampleLOD();
+    virtual ~SampleLOD() {}
 
     rocprofvis_controller_object_type_t GetType(void) final
     {
@@ -36,11 +36,7 @@ public:
     rocprofvis_result_t GetChild(uint64_t index, Sample** value) const;
     rocprofvis_result_t SetChild(uint64_t index, Sample* child);
     rocprofvis_result_t SetNumberOfChildren(uint64_t count);
-    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const override
-    {
-        // LOD memory queries retain the existing C API error.
-        return value ? kRocProfVisResultInvalidEnum : kRocProfVisResultInvalidArgument;
-    }
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const override;
 
     double GetChildMin() const { return m_child_min; }
     double GetChildMean() const { return m_child_mean; }
@@ -64,7 +60,10 @@ private:
     rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t** value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index,
-                                  char* value, uint32_t* length) final;
+                                  char* value, uint32_t* length) final
+    {
+        return Sample::GetString(property, index, value, length);
+    }
 
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t value) final;

@@ -28,7 +28,7 @@ public:
 
     Handle* GetContext() override;
 
-    virtual ~Graph();
+    virtual ~Graph() {}
 
     rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
 
@@ -45,7 +45,7 @@ public:
     rocprofvis_result_t GetNumberOfEntries(uint64_t* value) const;
     rocprofvis_result_t GetStartTimestamp(double* value) const;
     rocprofvis_result_t GetEndTimestamp(double* value) const;
-    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
     uint64_t            GetExclusiveMemoryUsage() const { return sizeof(Graph); }
     rocprofvis_result_t                 CombineEventInfo(std::vector<Event*>& events,
                                                          std::string&         combined_name,

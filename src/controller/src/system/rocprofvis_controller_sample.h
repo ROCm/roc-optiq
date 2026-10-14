@@ -19,7 +19,7 @@ public:
 
     Sample& operator=(Sample&& other);
 
-    virtual ~Sample();
+    virtual ~Sample() {}
 
     rocprofvis_controller_object_type_t GetType(void) override
     {

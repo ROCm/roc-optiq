@@ -191,11 +191,17 @@ TEST_CASE("Remap replaces category-3 ids by metric name", "[memory_chart]")
     std::vector<MemChartRemapFailure> failures;
     layout.RemapMetricIds(index, failures);
 
+    CHECK(layout.blocks[0].content[0].metric.valid);
     CHECK(layout.blocks[0].content[0].metric.name == "3.1.52");
+    CHECK(layout.blocks[0].content[1].metric.valid);
     CHECK(layout.blocks[0].content[1].metric.name == "3.1.99");
+    CHECK(layout.blocks[0].content[2].metric.valid);
     CHECK(layout.blocks[0].content[2].metric.name == "3.1.5");
+    CHECK_FALSE(layout.blocks[0].content[3].metric.valid);
     CHECK(layout.blocks[0].content[3].metric.name == "3.1.6");
+    CHECK_FALSE(layout.blocks[0].children[0].content[0].metric.valid);
     CHECK(layout.blocks[0].children[0].content[0].metric.name == "3.1.7");
+    CHECK(layout.arrows[0].metric.valid);
     CHECK(layout.arrows[0].metric.name == "3.1.52");
 
     REQUIRE(failures.size() == 3);

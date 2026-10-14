@@ -63,8 +63,10 @@ enum class MemChartRemapStatus : uint8_t
     kAmbiguous,     // More than one category-3 metric has that name.
 };
 
-// A template metric whose id was left unchanged. `template_id` is the dotted id
-// read from the template. `match_ids` lists the category-3 ids when ambiguous.
+// A template metric that was not remapped. `template_id` is the dotted id read
+// from the template. A miss or an ambiguous name also clears the ref's `valid`
+// flag; an empty metric_name leaves that id valid. `match_ids` lists the
+// category-3 ids when ambiguous.
 struct MemChartRemapFailure
 {
     std::string              template_id;
@@ -185,8 +187,10 @@ struct MemChartLayout
     const MemChartBlock* FindBlock(const std::string& id) const;
 
     // Replace each metric's dotted id with the category-3 id for its
-    // metric_name. Refs with no metric are skipped. Failures are appended to
-    // `failures` and those template ids are left unchanged.
+    // metric_name. Refs with no metric are skipped. A miss or an ambiguous name
+    // invalidates the ref so a reused template id cannot resolve. An empty
+    // metric_name keeps the authored id. Every unsuccessful lookup is appended
+    // to `failures`.
     void RemapMetricIds(const MemChartMetricNameIndex&     index,
                         std::vector<MemChartRemapFailure>& failures);
 };

@@ -106,8 +106,9 @@ private:
     // ComputeSelection::INVALID_SELECTION_ID when no workload is open.
     void OnLayoutLoaded(uint32_t workload_id);
     // When metric-id remap is enabled, replace template ids in m_layout with
-    // the category-3 id for each metric_name. Failures are written to the log
-    // and those template ids are left unchanged.
+    // the category-3 id for each metric_name. A miss or an ambiguous name
+    // invalidates that ref. An empty metric_name keeps the authored id.
+    // Failures are written to the log.
     void RemapMetricIds(uint32_t workload_id);
     // Recompute the cached label/value strings for every content item and arrow
     // from the currently-resolved metrics (on layout load and on metric fetch).

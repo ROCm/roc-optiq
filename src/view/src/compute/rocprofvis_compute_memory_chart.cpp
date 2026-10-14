@@ -40,8 +40,9 @@ namespace View
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
 // When true, every loaded template replaces its dotted metric ids with the
-// category-3 id whose database name matches metric_name. Failures are logged
-// and the template id is kept. On until profiler metric ids stop moving.
+// category-3 id whose database name matches metric_name. A miss or an
+// ambiguous name invalidates that ref. An empty metric_name keeps the authored
+// id. Failures are logged. On until profiler metric ids stop moving.
 static constexpr bool kRemapMemoryChartMetricIds = true;
 
 static void

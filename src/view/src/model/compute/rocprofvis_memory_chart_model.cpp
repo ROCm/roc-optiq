@@ -377,6 +377,11 @@ RemapRef(MemChartMetricRef& ref, const MemChartMetricNameIndex& index,
         ref.name = std::move(dotted_id);
         return;
     }
+
+    // The template id may now belong to a different metric. Drop the ref so the
+    // row renders N/A instead of that metric's value. `name` stays so the
+    // failure log can still name the template id.
+    ref.valid = false;
     failures.push_back(
         { ref.name, ref.metric_name, status, std::move(match_ids) });
 }

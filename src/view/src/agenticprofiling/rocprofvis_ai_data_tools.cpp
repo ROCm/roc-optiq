@@ -855,9 +855,8 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
             continue;
         }
 
-        event_tracks.push_back(track);
         // A stream track re-lists kernels and copies that already sit on a queue
-        // track, so adding it would count that GPU work twice.
+        // track, so totalling or ranking it would count that GPU work twice.
         if(track->topology.type == TrackInfo::TrackType::Stream)
         {
             ++stream_count;
@@ -865,6 +864,7 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
         }
         else
         {
+            event_tracks.push_back(track);
             event_total += track->num_entries;
         }
     }
@@ -895,7 +895,8 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     {
         out << "stream_tracks: " << stream_count << " tracks, " << stream_events
             << " events. These are the same kernels and copies as the queue tracks, "
-               "grouped by HIP stream, so total_events leaves them out.\n";
+               "grouped by HIP stream, so total_events and busiest_tracks leave them "
+               "out.\n";
     }
 
     std::sort(event_tracks.begin(), event_tracks.end(),

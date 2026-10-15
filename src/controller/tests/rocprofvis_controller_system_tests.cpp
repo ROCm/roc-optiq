@@ -222,6 +222,33 @@ TEST_CASE("Event LOD Name Aggregation")
     REQUIRE(max_duration_index == first.GetNameStringIndex());
 }
 
+TEST_CASE("Event LOD Zero Duration Name Aggregation")
+{
+    RocProfVis::Controller::Graph graph(nullptr, kRPVControllerGraphTypeFlame, 0);
+    RocProfVis::Controller::Event first(1, 5.0, 5.0);
+    RocProfVis::Controller::Event second(2, 10.0, 10.0);
+    REQUIRE(first.SetName("kernel-a") == kRocProfVisResultSuccess);
+    REQUIRE(second.SetName("kernel-a") == kRocProfVisResultSuccess);
+
+    SECTION("Events share a name")
+    {}
+    SECTION("Events have different names")
+    {
+        REQUIRE(second.SetName("kernel-b") == kRocProfVisResultSuccess);
+    }
+
+    std::vector<RocProfVis::Controller::Event*> events{&first, &second};
+    std::string combined_name;
+    uint64_t max_duration_index = UINT64_MAX;
+    REQUIRE(graph.CombineEventInfo(events, combined_name, max_duration_index) ==
+            kRocProfVisResultSuccess);
+    REQUIRE((max_duration_index == first.GetNameStringIndex() ||
+             max_duration_index == second.GetNameStringIndex()));
+    const std::string top_name =
+        RocProfVis::Controller::StringTable::Get().GetString(max_duration_index);
+    REQUIRE((top_name == "kernel-a" || top_name == "kernel-b"));
+}
+
 TEST_CASE("Sample Property API")
 {
     RocProfVis::Controller::Sample sample(99, 1.5);

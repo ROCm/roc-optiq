@@ -26,8 +26,6 @@ Timeline::Timeline(uint64_t id)
 , m_id(id)
 {}
 
-Timeline::~Timeline() = default;
-
 rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& array,
                                 double start, double end, uint32_t pixels)
 {

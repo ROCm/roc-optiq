@@ -773,9 +773,10 @@ yet built, and emits the resulting `Event*` / `Sample*` into the
 caller's `Array`.
 
 `GenerateLODEvent` coalesces a vector of `Event*` into a single
-synthetic event whose `m_combined_top_name` is the longest contained
-event name. `CombineEventInfo` produces the shared display label and
-the `max_duration_str_index`. Controller-internal graph logic reads
+synthetic event whose `m_combined_top_name` identifies the name with the
+greatest total duration. `CombineEventInfo` produces the shared display label
+and the `max_duration_str_index`, selecting a valid name even when all event
+durations are zero. Controller-internal graph logic reads
 track type, bounds, and entry count through `Track`'s typed getters.
 LOD generation propagates invalid data/reference failures instead of
 depending on assertions alone.

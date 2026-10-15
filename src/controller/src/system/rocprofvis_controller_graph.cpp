@@ -166,8 +166,9 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
     // Build the combined name string and find max duration.
     // Reset combined_name so callers cannot accidentally pass in a non-empty string.
     combined_name.clear();
-    double   max_duration       = 0.0;
-    uint64_t max_duration_index = UINT64_MAX;
+    const auto& initial_entry = *info_accumulator.begin();
+    double   max_duration       = initial_entry.second.total_duration;
+    uint64_t max_duration_index = initial_entry.first;
     bool     first_entry        = true;
     for(const auto& [name_index, info] : info_accumulator)
     {
@@ -283,7 +284,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
         double   max_ts = start_ts + scale;
         uint64_t level  = 0;
         double event_min = DBL_MAX;
-        double event_max = -DBL_MAX;
+        double event_max = DBL_MIN;
         std::vector<Event*> events;
 
         for(auto& data : entries)

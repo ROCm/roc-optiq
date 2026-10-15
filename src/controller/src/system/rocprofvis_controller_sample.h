@@ -32,7 +32,7 @@ public:
         return kRPVControllerPrimitiveTypeDouble;
     }
     double                      GetTimestamp() const { return m_timestamp; }
-    double                      GetEndTimestamp() const { return m_end_timestamp; }
+    virtual double              GetEndTimestamp() const { return m_end_timestamp; }
     double                      GetValue() const { return m_data; }
     virtual uint64_t            GetNumberOfChildren() const { return 0; }
     virtual rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;

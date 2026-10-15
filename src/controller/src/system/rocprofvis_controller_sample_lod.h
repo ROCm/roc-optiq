@@ -31,7 +31,6 @@ public:
     }
 
     uint64_t            GetNumberOfChildren() const override { return m_children.size(); }
-    size_t              GetNumChildren() const { return m_children.size(); }
     rocprofvis_result_t GetChild(uint64_t index, Sample** value) const;
     rocprofvis_result_t SetChild(uint64_t index, Sample* child);
     rocprofvis_result_t SetNumberOfChildren(uint64_t count);

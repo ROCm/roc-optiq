@@ -194,6 +194,24 @@ Timeline::SetNumberOfGraphs(uint64_t count)
     return result;
 }
 
+void
+Timeline::RecomputeBounds()
+{
+    m_min_ts = DBL_MAX;
+    m_max_ts = DBL_MIN;
+    for(const Graph* graph : m_graphs)
+    {
+        if(!graph) continue;
+        if(double lo = 0, hi = 0;
+           graph->GetStartTimestamp(&lo) == kRocProfVisResultSuccess &&
+           graph->GetEndTimestamp(&hi)   == kRocProfVisResultSuccess)
+        {
+            m_min_ts = std::min(lo, m_min_ts);
+            m_max_ts = std::max(hi, m_max_ts);
+        }
+    }
+}
+
 rocprofvis_result_t
 Timeline::SetGraph(uint64_t index, Graph* graph)
 {
@@ -207,7 +225,7 @@ Timeline::SetGraph(uint64_t index, Graph* graph)
         double min_ts = 0;
         double max_ts = 0;
         if(graph->GetStartTimestamp(&min_ts) == kRocProfVisResultSuccess &&
-           graph->GetEndTimestamp(&max_ts) == kRocProfVisResultSuccess)
+           graph->GetEndTimestamp(&max_ts)   == kRocProfVisResultSuccess)
         {
             bool is_replace = false;
             for(auto it = m_graphs.begin(); it != m_graphs.end(); ++it)
@@ -219,17 +237,14 @@ Timeline::SetGraph(uint64_t index, Graph* graph)
                     break;
                 }
             }
-            m_min_ts = std::min(min_ts, m_min_ts);
-            m_max_ts = std::max(max_ts, m_max_ts);
             if(is_replace)
-            {
                 m_graphs.insert(m_graphs.begin() + index, graph);
-            }
             else
             {
                 delete m_graphs[index];
                 m_graphs[index] = graph;
             }
+            RecomputeBounds();
             result = kRocProfVisResultSuccess;
         }
     }

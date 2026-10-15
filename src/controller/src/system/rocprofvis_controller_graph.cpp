@@ -13,6 +13,7 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
 #include <cfloat>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -162,12 +163,15 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
         }
     }
 
-    // Build the combined name string and find max duration
+    // Build the combined name string and find max duration.
+    // Reset combined_name so callers cannot accidentally pass in a non-empty string.
+    combined_name.clear();
     double   max_duration       = 0.0;
     uint64_t max_duration_index = UINT64_MAX;
+    bool     first_entry        = true;
     for(const auto& [name_index, info] : info_accumulator)
     {
-        if(combined_name.size() > 0)
+        if(!std::exchange(first_entry, false))
         {
             combined_name += "\n";
         }
@@ -201,32 +205,34 @@ Graph::CombineEventInfo(std::vector<Event*>& events, std::string& combined_name,
 }
 
 rocprofvis_result_t
-Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, uint32_t level, double event_min, double event_max)
+Graph::GenerateLODEvent(std::vector<Event*>& events, uint32_t lod_to_generate,
+                        uint32_t level, double event_min, double event_max)
 {
-    if(events.size())
+    if(events.empty())
+        return kRocProfVisResultSuccess;
+
+    if(level > UINT8_MAX)
+        return kRocProfVisResultOutOfRange;
+
+    if(auto* mgr = m_ctx ? m_ctx->GetMemoryManager() : nullptr; !mgr)
+        return kRocProfVisResultInvalidArgument;
+    else
     {
-        if(level > UINT8_MAX)
-        {
-            return kRocProfVisResultOutOfRange;
-        }
-        std::string combined_name = "";
-        uint64_t max_duration_str_index = UINT64_MAX;
-        rocprofvis_result_t result = CombineEventInfo(events, combined_name, max_duration_str_index);
+        std::string combined_name;
+        uint64_t    max_duration_str_index = UINT64_MAX;
+        rocprofvis_result_t result =
+            CombineEventInfo(events, combined_name, max_duration_str_index);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         const uint64_t event_id = events[0]->GetId();
-        Event* event = m_ctx->GetMemoryManager()->NewEvent(
-            event_id, event_min, event_max,
-            &m_lods[lod_to_generate]);
+        Event*         event    = mgr->NewEvent(event_id, event_min, event_max,
+                                                &m_lods[lod_to_generate]);
         if(!event)
-        {
             return kRocProfVisResultMemoryAllocError;
-        }
+
         result = event->SetLevel(level);
         if(result == kRocProfVisResultSuccess)
-        {
             result = event->SetName(combined_name.c_str());
-        }
         if(result == kRocProfVisResultSuccess)
         {
             event->SetTopCombinedNameStringIndex(
@@ -240,7 +246,7 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
         }
         if(result != kRocProfVisResultSuccess)
         {
-            m_ctx->GetMemoryManager()->Delete(event, &m_lods[lod_to_generate]);
+            mgr->Delete(event, &m_lods[lod_to_generate]);
             return result;
         }
 

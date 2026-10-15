@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <memory>
 #include <set>
 
 namespace RocProfVis
@@ -370,22 +371,27 @@ Track::ScheduleTraceReadRequests(rocprofvis_dm_database_t database,
 
 rocprofvis_result_t
 Track::WaitForAndProcessTraceReadRequests(
-    rocprofvis_dm_trace_t trace,
-    uint64_t dm_track_type,
+    rocprofvis_dm_trace_t                    trace,
+    uint64_t                                 dm_track_type,
     const std::vector<trace_read_request_t>& requests,
-    Future* future)
+    Future*                                  future)
 {
-    rocprofvis_result_t result = requests.empty() ? kRocProfVisResultOutOfRange
-                                                 : kRocProfVisResultSuccess;
+    rocprofvis_result_t result =
+        requests.empty() ? kRocProfVisResultOutOfRange : kRocProfVisResultSuccess;
+
+    // Cancelled (db abort) supersedes any prior data error; all other errors keep first-wins.
+    constexpr auto accumulate = [](rocprofvis_result_t accumulated,
+                                   rocprofvis_result_t next) noexcept {
+        if(next == kRocProfVisResultCancelled)
+            return next;
+        return accumulated == kRocProfVisResultSuccess ? next : accumulated;
+    };
 
     for(const trace_read_request_t& request : requests)
     {
         const rocprofvis_result_t request_result =
             ProcessTraceReadRequest(trace, dm_track_type, request, future);
-        if(result == kRocProfVisResultSuccess)
-        {
-            result = request_result;
-        }
+        result = accumulate(result, request_result);
         future->RemoveDependentFuture(request.future);
         rocprofvis_db_future_free(request.future);
     }
@@ -485,37 +491,41 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
 
         uint64_t event_id = rocprofvis_dm_get_property_as_uint64(
             data, kRPVDMEventIdUInt64Indexed, record_index);
-        Event* new_event = static_cast<SystemTrace*>(GetContext())
+        Event* raw_event = static_cast<SystemTrace*>(GetContext())
                                ->GetMemoryManager()->NewEvent(
             event_id, timestamp, timestamp + duration, GetSegments());
-        if(new_event)
+        if(raw_event)
         {
+            auto event_deleter = [this](Event* e) {
+                static_cast<SystemTrace*>(GetContext())
+                    ->GetMemoryManager()->Delete(e, GetSegments());
+            };
+            auto event_guard =
+                std::unique_ptr<Event, decltype(event_deleter)>(raw_event, event_deleter);
+
             const uint64_t level = rocprofvis_dm_get_property_as_uint64(
                 data, kRPVDMEventLevelUInt64Indexed, record_index);
-            result = new_event->SetLevel(level);
+            result = raw_event->SetLevel(level);
             if(result != kRocProfVisResultSuccess)
             {
                 spdlog::warn(
                     "Track::FetchFromDataModel: Event id {} on track id {} has "
                     "invalid level {} (maximum {})",
                     event_id, GetId(), level, UINT8_MAX);
-                static_cast<SystemTrace*>(GetContext())->GetMemoryManager()->Delete(
-                    new_event, GetSegments());
                 break;
             }
-            result = new_event->SetCategory(rocprofvis_dm_get_property_as_charptr(
+            result = raw_event->SetCategory(rocprofvis_dm_get_property_as_charptr(
                 data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
             if(result == kRocProfVisResultSuccess)
             {
-                result = new_event->SetName(rocprofvis_dm_get_property_as_charptr(
+                result = raw_event->SetName(rocprofvis_dm_get_property_as_charptr(
                     data, kRPVDMEventSymbolStringCharPtrIndexed, record_index));
             }
-            if(result == kRocProfVisResultSuccess)
-            {
-                result = SetObject(
-                    kRPVControllerTrackEntry, index++,
-                    (rocprofvis_handle_t*)new_event);
-            }
+            if(result != kRocProfVisResultSuccess)
+                break;
+
+            result = SetObject(
+                kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)raw_event);
             if(result == kRocProfVisResultOutOfRange)
             {
                 spdlog::warn(
@@ -527,9 +537,8 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
             {
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 if(result != kRocProfVisResultSuccess)
-                {
                     break;
-                }
+                event_guard.release();
             }
         }
         else

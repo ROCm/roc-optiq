@@ -153,12 +153,12 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
                         }
                         else
                         {
-                            fetch_ranges.push_back(std::make_pair(i, i));
+                            fetch_ranges.emplace_back(i, i);
                         }
                     }
                     else
                     {
-                        fetch_ranges.push_back(std::make_pair(i, i));
+                        fetch_ranges.emplace_back(i, i);
                     }
                 }
             }
@@ -806,9 +806,8 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value)
+rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, rocprofvis_handle_t** value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -897,9 +896,8 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
+rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, uint64_t value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -967,9 +965,8 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
+rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, double value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -1006,9 +1003,8 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value)
+rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, rocprofvis_handle_t* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if (value)
     {
@@ -1190,29 +1186,29 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
     return result;
 }
 
-rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
+rocprofvis_result_t Track::SetString(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, char const* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if (value)
+    if(value)
     {
+        const std::string_view sv{value};
         switch(property)
         {
             case kRPVControllerTrackCategory:
             {
-                SetCategory(value);
+                SetCategory(sv);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackMainName:
             {
-                SetMainName(value);
+                SetMainName(sv);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackSubName:
             {
-                SetSubName(value);
+                SetSubName(sv);
                 result = kRocProfVisResultSuccess;
                 break;
             }

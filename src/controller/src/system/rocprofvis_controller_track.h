@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <map>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <vector>
 
@@ -34,36 +35,36 @@ public:
 
     virtual ~Track() {}
 
-    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
-    rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index, Future* future);
+    [[nodiscard]] rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
+    [[nodiscard]] rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index, Future* future);
 
     rocprofvis_controller_object_type_t GetType(void) final
     {
         return kRPVControllerObjectTypeTrack;
     }
-    rocprofvis_controller_track_type_t GetTrackType() const { return m_type; }
-    rocprofvis_dm_track_t              GetDmHandle(void) const { return m_dm_handle; }
+    rocprofvis_controller_track_type_t GetTrackType() const noexcept { return m_type; }
+    rocprofvis_dm_track_t              GetDmHandle(void) const noexcept { return m_dm_handle; }
 
-    uint64_t GetId() const { return m_id; }
-    uint64_t GetNumberOfEntries() const { return m_bounds.num_entries; }
+    uint64_t GetId() const noexcept { return m_id; }
+    uint64_t GetNumberOfEntries() const noexcept { return m_bounds.num_entries; }
     uint64_t GetExtDataNumberOfEntries() const;
-    uint64_t GetNodeId() const { return m_topology_ids.node_id; }
-    uint64_t GetAgentIdOrPid() const { return m_topology_ids.agent_id_or_pid; }
-    uint64_t GetQueueIdOrTid() const { return m_topology_ids.queue_id_or_tid; }
-    uint64_t GetNumberOfOperationTypes() const
+    uint64_t GetNodeId() const noexcept { return m_topology_ids.node_id; }
+    uint64_t GetAgentIdOrPid() const noexcept { return m_topology_ids.agent_id_or_pid; }
+    uint64_t GetQueueIdOrTid() const noexcept { return m_topology_ids.queue_id_or_tid; }
+    uint64_t GetNumberOfOperationTypes() const noexcept
     {
         return m_metadata.operation_types.size();
     }
     rocprofvis_dm_event_operation_t GetOperationType(uint64_t index) const;
 
-    double GetStartTimestamp() const { return m_bounds.start_timestamp; }
-    double GetEndTimestamp() const { return m_bounds.end_timestamp; }
-    double GetMinValue() const { return m_bounds.min_value; }
-    double GetMaxValue() const { return m_bounds.max_value; }
+    double GetStartTimestamp() const noexcept { return m_bounds.start_timestamp; }
+    double GetEndTimestamp() const noexcept { return m_bounds.end_timestamp; }
+    double GetMinValue() const noexcept { return m_bounds.min_value; }
+    double GetMaxValue() const noexcept { return m_bounds.max_value; }
 
-    const std::string& GetCategory() const { return m_metadata.category; }
-    const std::string& GetMainName() const { return m_metadata.main_name; }
-    const std::string& GetSubName() const { return m_metadata.sub_name; }
+    const std::string& GetCategory() const noexcept { return m_metadata.category; }
+    const std::string& GetMainName() const noexcept { return m_metadata.main_name; }
+    const std::string& GetSubName() const noexcept { return m_metadata.sub_name; }
 
     void SetTrackType(rocprofvis_controller_track_type_t type) { m_type = type; }
     void SetDmHandle(rocprofvis_dm_track_t dm_handle) { m_dm_handle = dm_handle; }
@@ -94,33 +95,33 @@ public:
     void SetMinValue(double min_value) { m_bounds.min_value = min_value; }
     void SetMaxValue(double max_value) { m_bounds.max_value = max_value; }
 
-    void SetCategory(const std::string& category) { m_metadata.category = category; }
-    void SetMainName(const std::string& main_name) { m_metadata.main_name = main_name; }
-    void SetSubName(const std::string& sub_name) { m_metadata.sub_name = sub_name; }
+    void SetCategory(std::string_view category) { m_metadata.category = category; }
+    void SetMainName(std::string_view main_name) { m_metadata.main_name = main_name; }
+    void SetSubName(std::string_view sub_name) { m_metadata.sub_name = sub_name; }
 
     std::string GetExtDataCategory(uint64_t index) const;
     std::string GetExtDataName(uint64_t index) const;
     std::string GetExtDataValue(uint64_t index) const;
 
-    Thread*  GetThread() const { return m_topology_links.thread; }
-    Queue*   GetQueue() const { return m_topology_links.queue; }
-    Stream*  GetStream() const { return m_topology_links.stream; }
-    Counter* GetCounter() const { return m_topology_links.counter; }
+    Thread*  GetThread() const noexcept { return m_topology_links.thread; }
+    Queue*   GetQueue() const noexcept { return m_topology_links.queue; }
+    Stream*  GetStream() const noexcept { return m_topology_links.stream; }
+    Counter* GetCounter() const noexcept { return m_topology_links.counter; }
 
     void SetThread(Thread* thread) { m_topology_links.thread = thread; }
     void SetQueue(Queue* queue) { m_topology_links.queue = queue; }
     void SetStream(Stream* stream) { m_topology_links.stream = stream; }
     void SetCounter(Counter* counter) { m_topology_links.counter = counter; }
 
-    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
+    [[nodiscard]] rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
 
     Handle* GetContext(void) override;
-    SegmentTimeline*    GetSegments() { return &m_segments; }
-    rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
+    SegmentTimeline*    GetSegments() noexcept { return &m_segments; }
+    [[nodiscard]] rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
 
-    rocprofvis_result_t FillBounds();
-    rocprofvis_result_t FillMetadata();
-    rocprofvis_result_t FillTopologyIds();
+    [[nodiscard]] rocprofvis_result_t FillBounds();
+    [[nodiscard]] rocprofvis_result_t FillMetadata();
+    [[nodiscard]] rocprofvis_result_t FillTopologyIds();
 
 private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override final;

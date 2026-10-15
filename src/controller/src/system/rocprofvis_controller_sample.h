@@ -26,19 +26,19 @@ public:
         return kRPVControllerObjectTypeSample;
     }
 
-    uint64_t GetId() const { return static_cast<uint64_t>(m_timestamp); }
-    rocprofvis_controller_primitive_type_t GetValueType() const
+    uint64_t GetId() const noexcept { return static_cast<uint64_t>(m_timestamp); }
+    rocprofvis_controller_primitive_type_t GetValueType() const noexcept
     {
         return kRPVControllerPrimitiveTypeDouble;
     }
-    double                      GetTimestamp() const { return m_timestamp; }
-    virtual double              GetEndTimestamp() const { return m_end_timestamp; }
-    double                      GetValue() const { return m_data; }
-    virtual uint64_t            GetNumberOfChildren() const { return 0; }
-    virtual rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
+    double                               GetTimestamp() const noexcept { return m_timestamp; }
+    virtual double                       GetEndTimestamp() const noexcept { return m_end_timestamp; }
+    double                               GetValue() const noexcept { return m_data; }
+    virtual uint64_t                     GetNumberOfChildren() const noexcept { return 0; }
+    [[nodiscard]] virtual rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
 
-    void SetValue(double value) { m_data = value; }
-    void SetEndTimestamp(double timestamp) { m_end_timestamp = timestamp; }
+    void SetValue(double value) noexcept { m_data = value; }
+    void SetEndTimestamp(double timestamp) noexcept { m_end_timestamp = timestamp; }
 
 private:
     // SampleLOD's C ABI overrides delegate base properties to these handlers.

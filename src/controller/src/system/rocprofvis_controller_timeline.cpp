@@ -252,9 +252,8 @@ Timeline::SetGraph(uint64_t index, Graph* graph)
 }
 
 rocprofvis_result_t
-Timeline::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
+Timeline::GetUInt64(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, uint64_t* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -294,9 +293,8 @@ Timeline::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* va
 }
 
 rocprofvis_result_t
-Timeline::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
+Timeline::GetDouble(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, double* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -357,9 +355,8 @@ Timeline::GetObject(rocprofvis_property_t property, uint64_t index,
 }
 
 rocprofvis_result_t
-Timeline::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
+Timeline::SetUInt64(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, uint64_t value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {

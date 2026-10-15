@@ -381,7 +381,7 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
 }
 
 bool
-SegmentTimeline::IsValid(uint32_t segment_index) const
+SegmentTimeline::IsValid(uint32_t segment_index) const noexcept
 {
     //std::shared_lock<std::shared_mutex> lock(m_mutex);
     bool is_set = false;
@@ -409,7 +409,7 @@ SegmentTimeline::SetValid(uint32_t segment_index, bool state)
     }
 }
 
-bool SegmentTimeline::IsProcessed(uint32_t segment_index) const 
+bool SegmentTimeline::IsProcessed(uint32_t segment_index) const noexcept
 {
     bool is_set = false;
     if(segment_index < m_num_segments)

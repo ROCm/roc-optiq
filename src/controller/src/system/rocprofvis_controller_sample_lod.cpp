@@ -165,7 +165,7 @@ SampleLOD::SetNumberOfChildren(uint64_t count)
     rocprofvis_result_t result = kRocProfVisResultMemoryAllocError;
     try
     {
-        if(const bool size_changed = (count != m_children.size()); size_changed)
+        if(count != m_children.size())
             m_children.resize(count);
 
         CalculateChildValues();

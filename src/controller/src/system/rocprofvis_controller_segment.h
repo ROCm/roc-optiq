@@ -83,9 +83,9 @@ public:
     // On failure, the object was not stored and the caller still owns it.
     bool Insert(double timestamp, uint8_t level, Handle* event);
 
-    rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params);
+    [[nodiscard]] rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params);
 
-    rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
+    [[nodiscard]] rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
 
     size_t              GetNumEntries();
     void SetTimelineIterator(rocprofvis_timeline_iterator_t timeline_iterator)
@@ -127,17 +127,17 @@ public:
     void SetContext(Handle* ctx) { m_ctx = ctx; }
     Handle* GetContext() { return m_ctx; }
 
-    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
-    rocprofvis_result_t Remove(Segment* segment);
-    rocprofvis_result_t Insert(double segment_start, std::unique_ptr<Segment>&& segment);
+    [[nodiscard]] rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
+    [[nodiscard]] rocprofvis_result_t Remove(Segment* segment);
+    [[nodiscard]] rocprofvis_result_t Insert(double segment_start, std::unique_ptr<Segment>&& segment);
     std::map<double, std::unique_ptr<Segment>>& GetSegments() { return m_segments; }
     const std::map<double, std::unique_ptr<Segment>>& GetSegments() const
     {
         return m_segments;
     }
-    bool IsValid(uint32_t segment_index) const;
+    bool IsValid(uint32_t segment_index) const noexcept;
     void SetValid(uint32_t segment_index, bool state);
-    bool IsProcessed(uint32_t segment_index) const;
+    bool IsProcessed(uint32_t segment_index) const noexcept;
     void SetProcessed(uint32_t segment_index, bool state);
     std::shared_mutex* GetMutex() { return &m_mutex; }
     double GetSegmentDuration() const { return m_segment_duration; }

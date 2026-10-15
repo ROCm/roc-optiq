@@ -30,25 +30,25 @@ public:
         return kRPVControllerObjectTypeSample;
     }
 
-    uint64_t            GetNumberOfChildren() const override { return m_children.size(); }
-    rocprofvis_result_t GetChild(uint64_t index, Sample** value) const;
-    rocprofvis_result_t SetChild(uint64_t index, Sample* child);
-    rocprofvis_result_t SetNumberOfChildren(uint64_t count);
-    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const override;
+    uint64_t                          GetNumberOfChildren() const noexcept override { return m_children.size(); }
+    [[nodiscard]] rocprofvis_result_t GetChild(uint64_t index, Sample** value) const;
+    [[nodiscard]] rocprofvis_result_t SetChild(uint64_t index, Sample* child);
+    [[nodiscard]] rocprofvis_result_t SetNumberOfChildren(uint64_t count);
+    [[nodiscard]] rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const override;
 
-    double GetChildMin() const { return m_child_min; }
-    double GetChildMean() const { return m_child_mean; }
-    double GetChildMedian() const { return m_child_median; }
-    double GetChildMax() const { return m_child_max; }
-    double GetChildMinTimestamp() const { return m_child_min_timestamp; }
-    double GetChildMaxTimestamp() const { return m_child_max_timestamp; }
+    double GetChildMin() const noexcept { return m_child_min; }
+    double GetChildMean() const noexcept { return m_child_mean; }
+    double GetChildMedian() const noexcept { return m_child_median; }
+    double GetChildMax() const noexcept { return m_child_max; }
+    double GetChildMinTimestamp() const noexcept { return m_child_min_timestamp; }
+    double GetChildMaxTimestamp() const noexcept { return m_child_max_timestamp; }
 
-    void SetChildMin(double value) { m_child_min = value; }
-    void SetChildMean(double value) { m_child_mean = value; }
-    void SetChildMedian(double value) { m_child_median = value; }
-    void SetChildMax(double value) { m_child_max = value; }
-    void SetChildMinTimestamp(double timestamp) { m_child_min_timestamp = timestamp; }
-    void SetChildMaxTimestamp(double timestamp) { m_child_max_timestamp = timestamp; }
+    void SetChildMin(double value) noexcept { m_child_min = value; }
+    void SetChildMean(double value) noexcept { m_child_mean = value; }
+    void SetChildMedian(double value) noexcept { m_child_median = value; }
+    void SetChildMax(double value) noexcept { m_child_max = value; }
+    void SetChildMinTimestamp(double timestamp) noexcept { m_child_min_timestamp = timestamp; }
+    void SetChildMaxTimestamp(double timestamp) noexcept { m_child_max_timestamp = timestamp; }
 
 private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,

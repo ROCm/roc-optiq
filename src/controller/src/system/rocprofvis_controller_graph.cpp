@@ -257,9 +257,8 @@ Graph::GenerateLODEvent(std::vector<Event*>& events, uint32_t lod_to_generate,
 
 rocprofvis_result_t
 Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
-                   std::vector<Data>& entries, Future* future)
+                   std::vector<Data>& entries, [[maybe_unused]] Future* future)
 {
-    (void) future;
     double scale = 1.0;
     for(uint32_t i = 0; i < lod_to_generate; i++)
     {
@@ -528,12 +527,12 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                                 }
                                 else
                                 {
-                                    fetch_ranges.push_back(std::make_pair(i, i));
+                                    fetch_ranges.emplace_back(i, i);
                                 }
                             }
                             else
                             {
-                                fetch_ranges.push_back(std::make_pair(i, i));
+                                fetch_ranges.emplace_back(i, i);
                             }
                         }
                     }
@@ -775,9 +774,8 @@ Graph::GetInclusiveMemoryUsage(uint64_t* value) const
 }
 
 rocprofvis_result_t
-Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
+Graph::GetUInt64(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, uint64_t* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -845,10 +843,9 @@ Graph::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
     }
 }
 rocprofvis_result_t
-Graph::GetObject(rocprofvis_property_t property, uint64_t index,
+Graph::GetObject(rocprofvis_property_t property, [[maybe_unused]] uint64_t index,
                  rocprofvis_handle_t** value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -871,9 +868,8 @@ Graph::GetObject(rocprofvis_property_t property, uint64_t index,
 }
 
 rocprofvis_result_t
-Graph::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
+Graph::SetUInt64(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, uint64_t value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -898,10 +894,8 @@ Graph::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
     return result;
 }
 rocprofvis_result_t
-Graph::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
+Graph::SetDouble(rocprofvis_property_t property, [[maybe_unused]] uint64_t index, [[maybe_unused]] double value)
 {
-    (void) index;
-    (void) value;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -920,10 +914,9 @@ Graph::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
     return result;
 }
 rocprofvis_result_t
-Graph::SetObject(rocprofvis_property_t property, uint64_t index,
+Graph::SetObject(rocprofvis_property_t property, [[maybe_unused]] uint64_t index,
                  rocprofvis_handle_t* value)
 {
-    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {

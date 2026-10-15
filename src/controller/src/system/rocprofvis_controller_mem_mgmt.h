@@ -128,7 +128,7 @@ namespace RocProfVis
 
             MemoryManager(uint64_t id);
             void Init(size_t num_objects);
-            bool IsShuttingDown();
+            [[nodiscard]] bool IsShuttingDown();
 
             virtual ~MemoryManager();
 
@@ -142,16 +142,16 @@ namespace RocProfVis
             // Call before destroying a registered owner, after its fetches have finished.
             void                RemoveLRUOwner(SegmentTimeline* owner);
 
-            rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
-                                                   rocprofvis_owner_type_t type);
-            rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
-                                                    rocprofvis_owner_type_t type);
+            [[nodiscard]] rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
+                                                                  rocprofvis_owner_type_t type);
+            [[nodiscard]] rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
+                                                                   rocprofvis_owner_type_t type);
             void                Configure(double weight);
 
-            void                Delete(Handle* handle, SegmentTimeline* owner);
-            Event*              NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTimeline* owner);
-            Sample*             NewSample(uint64_t id, double timestamp, SegmentTimeline* owner);
-            SampleLOD*          NewSampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
+            void                        Delete(Handle* handle, SegmentTimeline* owner);
+            [[nodiscard]] Event*        NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTimeline* owner);
+            [[nodiscard]] Sample*       NewSample(uint64_t id, double timestamp, SegmentTimeline* owner);
+            [[nodiscard]] SampleLOD*    NewSampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
             
             
 

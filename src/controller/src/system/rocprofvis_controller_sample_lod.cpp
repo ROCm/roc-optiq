@@ -96,9 +96,10 @@ SampleLOD::SampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& childr
 
 SampleLOD& SampleLOD::operator=(SampleLOD&& other)
 {
-    m_children    = std::move(other.m_children);
-    m_data        = other.m_data;
-    m_timestamp   = other.m_timestamp;
+    m_children      = std::move(other.m_children);
+    m_data          = other.m_data;
+    m_timestamp     = other.m_timestamp;
+    m_end_timestamp = other.m_end_timestamp;
     CalculateChildValues();
     return *this;
 }

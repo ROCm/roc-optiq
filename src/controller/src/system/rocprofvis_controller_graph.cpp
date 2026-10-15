@@ -315,7 +315,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                     max_ts = start_ts + scale;
                     level  = event_level;
                     event_min = DBL_MAX;
-                    event_max = DBL_MIN;
+                    event_max = -DBL_MAX;
                 }
 
                 const double event_start = event->GetStartTimestamp();

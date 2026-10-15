@@ -5,6 +5,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -23,7 +24,7 @@ class Timeline : public Handle
 public:
     Timeline(uint64_t id);
 
-    ~Timeline();
+    ~Timeline() = default;
 
     [[nodiscard]] rocprofvis_result_t AsyncFetch(Track& track, Future& future, Array& array,
                                                  double start, double end);
@@ -39,7 +40,7 @@ public:
     uint64_t GetNumberOfGraphs() const noexcept { return m_graphs.size(); }
     uint64_t GetExclusiveMemoryUsage() const noexcept
     {
-        return sizeof(Timeline) + m_graphs.size() * sizeof(Graph*);
+        return sizeof(Timeline) + m_graphs.size() * sizeof(std::unique_ptr<Graph>);
     }
     [[nodiscard]] rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
     [[nodiscard]] rocprofvis_result_t GetMinTimestamp(double* value) const;
@@ -64,13 +65,13 @@ private:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t* value) final;
 
-    void RecomputeBounds();
+    void                RecomputeBounds();
 
 private:
-    uint64_t                m_id;
-    std::vector<Graph*>     m_graphs;
-    std::optional<double>   m_min_ts;
-    std::optional<double>   m_max_ts;
+    uint64_t                                m_id;
+    std::vector<std::unique_ptr<Graph>>     m_graphs;
+    std::optional<double>                   m_min_ts;
+    std::optional<double>                   m_max_ts;
 };
 
 }

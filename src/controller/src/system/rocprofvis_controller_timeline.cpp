@@ -26,13 +26,7 @@ Timeline::Timeline(uint64_t id)
 , m_id(id)
 {}
 
-Timeline::~Timeline()
-{
-    for(Graph* graph : m_graphs)
-    {
-        delete graph;
-    }
-}
+Timeline::~Timeline() = default;
 
 rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& array,
                                 double start, double end, uint32_t pixels)
@@ -86,7 +80,7 @@ Timeline::GetInclusiveMemoryUsage(uint64_t* value) const
     {
         *value = GetExclusiveMemoryUsage();
         result = kRocProfVisResultSuccess;
-        for(const Graph* graph : m_graphs)
+        for(const auto& graph : m_graphs)
         {
             if(graph)
             {
@@ -144,7 +138,7 @@ Timeline::GetGraph(uint64_t index, Graph** value) const
         result = kRocProfVisResultOutOfRange;
         if(index < m_graphs.size() && m_graphs[index])
         {
-            *value = m_graphs[index];
+            *value = m_graphs[index].get();
             result = kRocProfVisResultSuccess;
         }
     }
@@ -158,11 +152,11 @@ Timeline::GetGraphById(uint64_t id, Graph** value) const
     if(value)
     {
         result = kRocProfVisResultOutOfRange;
-        for(Graph* graph : m_graphs)
+        for(const auto& graph : m_graphs)
         {
             if(graph && graph->GetId() == id)
             {
-                *value = graph;
+                *value = graph.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -177,11 +171,6 @@ Timeline::SetNumberOfGraphs(uint64_t count)
     rocprofvis_result_t result = kRocProfVisResultMemoryAllocError;
     try
     {
-        for(uint64_t index = count; index < m_graphs.size(); index++)
-        {
-            delete m_graphs[index];
-            m_graphs[index] = nullptr;
-        }
         m_graphs.resize(count);
         result = kRocProfVisResultSuccess;
     } catch(std::exception const&)
@@ -196,7 +185,7 @@ Timeline::RecomputeBounds()
 {
     m_min_ts = std::nullopt;
     m_max_ts = std::nullopt;
-    for(const Graph* graph : m_graphs)
+    for(const auto& graph : m_graphs)
     {
         if(!graph) continue;
         if(double lo = 0, hi = 0;
@@ -224,22 +213,17 @@ Timeline::SetGraph(uint64_t index, Graph* graph)
         if(graph->GetStartTimestamp(&min_ts) == kRocProfVisResultSuccess &&
            graph->GetEndTimestamp(&max_ts)   == kRocProfVisResultSuccess)
         {
-            bool is_replace = false;
-            for(auto it = m_graphs.begin(); it != m_graphs.end(); ++it)
+            auto existing = std::find_if(m_graphs.begin(), m_graphs.end(),
+                                         [graph](const auto& p) { return p.get() == graph; });
+            if(existing != m_graphs.end())
             {
-                if(*it == graph)
-                {
-                    m_graphs.erase(it);
-                    is_replace = true;
-                    break;
-                }
+                auto node = std::move(*existing);
+                m_graphs.erase(existing);
+                m_graphs.insert(m_graphs.begin() + index, std::move(node));
             }
-            if(is_replace)
-                m_graphs.insert(m_graphs.begin() + index, graph);
             else
             {
-                delete m_graphs[index];
-                m_graphs[index] = graph;
+                m_graphs[index].reset(graph);
             }
             RecomputeBounds();
             result = kRocProfVisResultSuccess;

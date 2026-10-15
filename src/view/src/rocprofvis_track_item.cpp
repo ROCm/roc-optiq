@@ -21,13 +21,16 @@ namespace View
 {
 
 inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT       = 10.0f;
-// Phosphor's vertical-dot gripper is narrower than the former 3x3 glyph.
-inline constexpr float    DEFAULT_GRIP_WIDTH             = 12.0f;
+// Phosphor's vertical-dot gripper is narrower than the former 3x3 glyph, while
+// retaining enough separation from the track label.
+inline constexpr float    DEFAULT_GRIP_WIDTH             = 16.0f;
 inline constexpr uint64_t DEFAULT_CHUNK_DURATION         = TimeConstants::ns_per_s * 30;
 inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
 inline constexpr float    NAME_LABEL_HITBOX_PADDING_X    = 4.0f;
 inline constexpr float    NAME_LABEL_HITBOX_PADDING_Y    = 3.0f;
+inline constexpr float    GRIP_ICON_LEFT_SHIFT           = 2.0f;
+inline constexpr float    META_CONTENT_PADDING_X         = 12.0f;
 inline constexpr float    META_WINDOW_PADDING_Y          = 2.0f;
 inline constexpr float    META_FRAME_PADDING_Y           = 4.0f;
 inline constexpr float    META_ITEM_SPACING_Y            = 3.0f;
@@ -119,7 +122,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
 , m_track_height_changed(false)
 , m_is_in_view_vertical(false)
 , m_distance_to_view_y(0.0f)
-, m_metadata_padding(ImVec2(8.0f, 4.0f))
+, m_metadata_padding(ImVec2(META_CONTENT_PADDING_X, 4.0f))
 , m_resize_grip_thickness(4.0f)
 , m_data_provider(dp)
 , m_request_state(TrackDataRequestState::kIdle)
@@ -422,7 +425,8 @@ TrackItem::RenderMetaArea()
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
 
         ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
+            ImVec2(std::max(0.0f, (m_reorder_grip_width - grid_icon_width) / 2 -
+                                      GRIP_ICON_LEFT_SHIFT),
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
@@ -1140,7 +1144,7 @@ TrackItem::RenderPills(ImVec2 region)
     if(!m_pills.empty() &&
        region.y - ImGui::GetFrameHeightWithSpacing() >= m_pills[0]->Size().y)
     {
-        float   pill_x_pos     = 0;
+        float   pill_x_pos     = m_reorder_grip_width + m_metadata_padding.x;
         uint8_t pills_visible  = 0;
         uint8_t pills_extended = 0;
         for(size_t i = 0; i < m_pills.size(); i++)
@@ -1148,7 +1152,8 @@ TrackItem::RenderPills(ImVec2 region)
             if(m_pills[i]->Visible())
             {
                 pills_visible++;
-                if(pill_x_pos + m_pills[i]->ExtSize().x < region.x)
+                if(pill_x_pos + m_pills[i]->ExtSize().x <
+                   region.x + m_reorder_grip_width + m_metadata_padding.x)
                 {
                     pills_extended++;
                     pill_x_pos += m_pills[i]->ExtSize().x +
@@ -1156,7 +1161,7 @@ TrackItem::RenderPills(ImVec2 region)
                 }
             }
         }
-        pill_x_pos = m_reorder_grip_width;
+        pill_x_pos = m_reorder_grip_width + m_metadata_padding.x;
         for(size_t i = 0; i < m_pills.size(); i++)
         {
             if(m_pills[i]->Visible())
@@ -1170,7 +1175,7 @@ TrackItem::RenderPills(ImVec2 region)
                         m_pills[i]->Size().x + m_settings.GetDefaultStyle().ItemSpacing.x;
                 }
                 else if(pill_x_pos + m_pills[i]->CompactSize().x <
-                        region.x + m_reorder_grip_width)
+                        region.x + m_reorder_grip_width + m_metadata_padding.x)
                 {
                     m_pills[i]->Render(
                         ImVec2(pill_x_pos, region.y - m_pills[i]->Size().y), m_settings,
@@ -1179,7 +1184,7 @@ TrackItem::RenderPills(ImVec2 region)
                         m_pills[i]->Size().x + m_settings.GetDefaultStyle().ItemSpacing.x;
                 }
                 else if(pill_x_pos + m_pills[i]->ElidedSize().x <
-                        region.x + m_reorder_grip_width)
+                        region.x + m_reorder_grip_width + m_metadata_padding.x)
                 {
                     m_pills[i]->Render(
                         ImVec2(pill_x_pos, region.y - m_pills[i]->Size().y), m_settings,

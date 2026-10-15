@@ -895,7 +895,7 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
 inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
-static void
+void
 PushContextMenuStyles()
 {
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -910,7 +910,7 @@ PushContextMenuStyles()
                           settings.GetColor(Colors::kAccent));
 }
 
-static void
+void
 PopContextMenuStyles()
 {
     ImGui::PopStyleColor(3);
@@ -953,13 +953,15 @@ DrawMenuItemIcon(ImDrawList* draw_list, const char* icon, const ImVec2& row_star
 }
 
 bool
-IconMenuItem(const char* icon, const char* label, bool enabled, bool selected)
+IconMenuItem(const char* icon, const char* label, bool enabled, bool selected,
+             const char* shortcut)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
     std::string  padded_label = MenuLabelWithIconPadding(label);
 
-    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, selected, enabled);
+    bool clicked =
+        ImGui::MenuItem(padded_label.c_str(), shortcut, selected, enabled);
     DrawMenuItemIcon(draw_list, icon, row_start, enabled);
 
     if(clicked)

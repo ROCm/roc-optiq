@@ -13,9 +13,11 @@
 #include <cmath>
 #include <fstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "imgui.h"
+#include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
@@ -51,6 +53,10 @@ constexpr float  ASSISTANT_DOT_RADIUS     = 2.5f;
 constexpr int    ASSISTANT_DOT_COUNT      = 3;
 constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
 constexpr float  ASSISTANT_DOT_SPEED      = 5.0f;
+constexpr float  ASSISTANT_CURSOR_MIN_HEIGHT   = 12.0f;
+constexpr float  ASSISTANT_CURSOR_HEIGHT_SCALE = 0.9f;
+constexpr float  ASSISTANT_CURSOR_CAP_SCALE    = 0.13f;
+constexpr float  ASSISTANT_CURSOR_THICKNESS    = 1.0f;
 
 constexpr size_t   ASSISTANT_CHART_MAX_BINS        = 64;
 constexpr size_t   ASSISTANT_CHART_MIN_BINS        = 16;
@@ -107,6 +113,50 @@ WrapButtonLabel(const std::string& text, float wrap_width)
         out += line;
     }
     return out.empty() ? text : out;
+}
+
+std::vector<std::string>
+SplitMessageLines(const std::string& text)
+{
+    std::vector<std::string> lines;
+    size_t                   start = 0;
+    do
+    {
+        const size_t end = text.find('\n', start);
+        if(end == std::string::npos)
+        {
+            lines.emplace_back(text, start, text.size() - start);
+            break;
+        }
+        lines.emplace_back(text, start, end - start);
+        start = end + 1;
+    } while(start <= text.size());
+    return lines;
+}
+
+void
+RenderAssistantTextCursor()
+{
+    ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+
+    const ImVec2 mouse       = ImGui::GetMousePos();
+    const float  height      = std::max(ASSISTANT_CURSOR_MIN_HEIGHT,
+                                  ImGui::GetFontSize() * ASSISTANT_CURSOR_HEIGHT_SCALE);
+    const float  half_height = height * 0.5f;
+    const float  half_cap    = height * ASSISTANT_CURSOR_CAP_SCALE;
+    const ImVec2 vertical_min(mouse.x, mouse.y - half_height);
+    const ImVec2 vertical_max(mouse.x, mouse.y + half_height);
+    const ImVec2 top_min(mouse.x - half_cap, vertical_min.y);
+    const ImVec2 top_max(mouse.x + half_cap, vertical_min.y);
+    const ImVec2 bottom_min(mouse.x - half_cap, vertical_max.y);
+    const ImVec2 bottom_max(mouse.x + half_cap, vertical_max.y);
+
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+    draw->AddLine(vertical_min, vertical_max, IM_COL32_BLACK,
+                  ASSISTANT_CURSOR_THICKNESS);
+    draw->AddLine(top_min, top_max, IM_COL32_BLACK, ASSISTANT_CURSOR_THICKNESS);
+    draw->AddLine(bottom_min, bottom_max, IM_COL32_BLACK,
+                  ASSISTANT_CURSOR_THICKNESS);
 }
 
 }  // namespace
@@ -536,11 +586,118 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         PanelFieldLabel("Optiq", false, &settings);
     }
     ImGui::Spacing();
-    ImGui::PushTextWrapPos(0.0f);
-    ImGui::TextWrapped("%s", line.text.c_str());
-    ImGui::PopTextWrapPos();
+    RenderSelectableMessage(index, line.text);
     EndPanelCard();
     ImGui::PopID();
+}
+
+TextSelect*
+AssistantPanel::MessageSelect(size_t index)
+{
+    if(index >= m_lines.size())
+    {
+        return nullptr;
+    }
+    if(m_message_select.size() < m_lines.size())
+    {
+        m_message_select.resize(m_lines.size());
+    }
+    if(m_message_lines.size() < m_lines.size())
+    {
+        m_message_lines.resize(m_lines.size());
+    }
+    if(m_message_select[index] == nullptr)
+    {
+        m_message_select[index] = std::make_unique<TextSelect>(
+            [this, index](size_t line_index) {
+                if(index >= m_message_lines.size() ||
+                   line_index >= m_message_lines[index].size())
+                {
+                    return std::string_view();
+                }
+                return std::string_view(m_message_lines[index][line_index]);
+            },
+            [this, index]() {
+                return index < m_message_lines.size() ? m_message_lines[index].size()
+                                                      : size_t{0};
+            },
+            true);
+    }
+    return m_message_select[index].get();
+}
+
+void
+AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
+{
+    TextSelect* select = MessageSelect(index);
+    if(select == nullptr)
+    {
+        ImGui::TextWrapped("%s", text.c_str());
+        return;
+    }
+    if(m_message_lines[index].empty())
+    {
+        m_message_lines[index] = SplitMessageLines(text);
+    }
+
+    // TextSelect expects a text-only window whose first glyph is at its origin.
+    // Splitting on explicit newlines preserves blank paragraphs while its word
+    // wrapping handles each visual line.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    const ImVec2 message_spacing = ImGui::GetStyle().ItemSpacing;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(message_spacing.x, 0.0f));
+    ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                          ImGuiWindowFlags_NoScrollWithMouse);
+    for(const std::string& line : m_message_lines[index])
+    {
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(line.data(), line.data() + line.size());
+        ImGui::PopTextWrapPos();
+    }
+    select->update();
+    if(ImGui::IsWindowHovered())
+    {
+        RenderAssistantTextCursor();
+    }
+
+    SettingsManager&  settings   = SettingsManager::GetInstance();
+    const ImGuiStyle& menu_style = settings.GetDefaultStyle();
+    PushContextMenuStyles();
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_FramePadding,
+        ImVec2(menu_style.FramePadding.x * 0.65f,
+               menu_style.FramePadding.y * 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+    if(ImGui::BeginPopupContextWindow("##message_copy"))
+    {
+        if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection(), false,
+                        "Ctrl+C"))
+        {
+            select->copy();
+        }
+        if(IconMenuItem(ICON_LIST, "Select all", true, false, "Ctrl+A"))
+        {
+            select->selectAll();
+        }
+        ImGui::Separator();
+        if(IconMenuItem(ICON_DOCUMENT, "Copy message"))
+        {
+            ImGui::SetClipboardText(text.c_str());
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    PopContextMenuStyles();
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
 }
 
 // Stacked follow-ups under the transcript: Explain this view on an empty chat,
@@ -803,6 +960,8 @@ AssistantPanel::RenderComposer()
     {
         ResetTurn();
         m_lines.clear();
+        m_message_select.clear();
+        m_message_lines.clear();
         m_input.clear();
         m_conversation.clear();
         m_next_steps.clear();

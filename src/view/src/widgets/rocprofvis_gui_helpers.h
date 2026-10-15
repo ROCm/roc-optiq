@@ -240,12 +240,19 @@ CopyableTextUnformatted(
 // Pass selected = true to show a trailing check mark (e.g. radio-style option groups).
 bool
 IconMenuItem(const char* icon, const char* label, bool enabled = true,
-             bool selected = false);
+             bool selected = false, const char* shortcut = nullptr);
 
 // Opens a submenu entry with a leading icon (from the icon font) before the label.
 // Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.
 bool
 IconBeginMenu(const char* icon, const char* label);
+
+// Applies the standard padding and row colors around an arbitrary context popup.
+void
+PushContextMenuStyles();
+
+void
+PopContextMenuStyles();
 
 // Identifies the row/column of the cell whose right-click opened a table's copy
 // context menu. Reusable by any table that wants the shared full-row right-click

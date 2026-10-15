@@ -99,17 +99,24 @@ Event::GetInclusiveMemoryUsage(uint64_t* value) const
         result        = m_children ? m_children->GetUInt64(
                                   kRPVControllerCommonMemoryUsageInclusive, 0, &size)
                                    : kRocProfVisResultSuccess;
-        *value        = size + sizeof(Event);
+        if(result == kRocProfVisResultSuccess)
+        {
+            *value = size + sizeof(Event);
+        }
     }
     return result;
 }
 
-void
+rocprofvis_result_t
 Event::SetLevel(uint64_t level)
 {
-    // Levels are stored as an 8-bit unsigned integer.
-    ROCPROFVIS_ASSERT(level < 256);
-    m_level = std::min(static_cast<uint8_t>(level), static_cast<uint8_t>(255));
+    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    if(level <= UINT8_MAX)
+    {
+        m_level = static_cast<uint8_t>(level);
+        result  = kRocProfVisResultSuccess;
+    }
+    return result;
 }
 
 rocprofvis_result_t
@@ -748,8 +755,7 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventLevel:
         {
-            SetLevel(value);
-            result = kRocProfVisResultSuccess;
+            result = SetLevel(value);
             break;
         }
         case kRPVControllerEventTopCombinedNameStrIndex:

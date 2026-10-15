@@ -64,7 +64,7 @@ TEST_CASE("Event Property API")
 
     SECTION("Typed state remains accessible through the C API")
     {
-        event.SetLevel(7);
+        REQUIRE(event.SetLevel(7) == kRocProfVisResultSuccess);
         REQUIRE(event.SetName("kernel") == kRocProfVisResultSuccess);
         REQUIRE(event.SetCategory("dispatch") == kRocProfVisResultSuccess);
         event.SetTopCombinedNameStringIndex(event.GetNameStringIndex());
@@ -118,6 +118,34 @@ TEST_CASE("Event Property API")
         REQUIRE(rocprofvis_controller_set_string(handle, kRPVControllerEventName, 0,
                                                  nullptr) ==
                 kRocProfVisResultInvalidArgument);
+    }
+
+    SECTION("Levels reject overflow without changing the previous value")
+    {
+        REQUIRE(event.SetLevel(0) == kRocProfVisResultSuccess);
+        REQUIRE(event.GetLevel() == 0);
+        REQUIRE(event.SetLevel(UINT8_MAX) == kRocProfVisResultSuccess);
+        REQUIRE(event.GetLevel() == UINT8_MAX);
+        const uint64_t invalid_levels[] = { 256, 257, 511, UINT64_MAX };
+        for(uint64_t level : invalid_levels)
+        {
+            REQUIRE(event.SetLevel(level) == kRocProfVisResultOutOfRange);
+            REQUIRE(event.GetLevel() == UINT8_MAX);
+            REQUIRE(rocprofvis_controller_set_uint64(
+                        handle, kRPVControllerEventLevel, 0, level) ==
+                    kRocProfVisResultOutOfRange);
+            REQUIRE(rocprofvis_controller_get_uint64(
+                        handle, kRPVControllerEventLevel, 0, &integer) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(integer == UINT8_MAX);
+        }
+        REQUIRE(rocprofvis_controller_set_uint64(handle, kRPVControllerEventLevel, 0, 0) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(event.GetLevel() == 0);
+        REQUIRE(rocprofvis_controller_set_uint64(
+                    handle, kRPVControllerEventLevel, 0, UINT8_MAX) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(event.GetLevel() == UINT8_MAX);
     }
 
     SECTION("LOD children preserve bounds and memory accounting")
@@ -174,6 +202,10 @@ TEST_CASE("Event LOD Name Aggregation")
     REQUIRE(graph.CombineEventInfo(events, combined_name, max_duration_index) ==
             kRocProfVisResultInvalidArgument);
     events.push_back(&first);
+    REQUIRE(graph.GenerateLODEvent(events, 1, 256, 0.0, 10.0) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(graph.GenerateLODEvent(events, 1, UINT32_MAX, 0.0, 10.0) ==
+            kRocProfVisResultOutOfRange);
     REQUIRE(graph.CombineEventInfo(events, combined_name, max_duration_index) ==
             kRocProfVisResultSuccess);
     REQUIRE(combined_name == "kernel-a");
@@ -190,7 +222,7 @@ TEST_CASE("Event LOD Name Aggregation")
 
 TEST_CASE("Sample Property API")
 {
-    RocProfVis::Controller::Sample sample(kRPVControllerPrimitiveTypeDouble, 99, 1.5);
+    RocProfVis::Controller::Sample sample(99, 1.5);
     rocprofvis_handle_t* handle = reinterpret_cast<rocprofvis_handle_t*>(&sample);
     sample.SetValue(4.0);
     sample.SetEndTimestamp(3.0);
@@ -202,6 +234,7 @@ TEST_CASE("Sample Property API")
     REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerSampleType, 0,
                                              &integer) == kRocProfVisResultSuccess);
     REQUIRE(integer == kRPVControllerPrimitiveTypeDouble);
+    REQUIRE(sample.GetValueType() == kRPVControllerPrimitiveTypeDouble);
     REQUIRE(rocprofvis_controller_get_double(handle, kRPVControllerSampleTimestamp, 0,
                                              &value) == kRocProfVisResultSuccess);
     REQUIRE(value == 1.5);
@@ -238,15 +271,14 @@ TEST_CASE("Sample Property API")
 
 TEST_CASE("Sample LOD Property API")
 {
-    RocProfVis::Controller::Sample first(kRPVControllerPrimitiveTypeDouble, 1, 1.0);
-    RocProfVis::Controller::Sample second(kRPVControllerPrimitiveTypeDouble, 2, 11.0);
+    RocProfVis::Controller::Sample first(1, 1.0);
+    RocProfVis::Controller::Sample second(2, 11.0);
     first.SetValue(2.0);
     first.SetEndTimestamp(11.0);
     second.SetValue(8.0);
     second.SetEndTimestamp(31.0);
     std::vector<RocProfVis::Controller::Sample*> children = { &first, &second };
-    RocProfVis::Controller::SampleLOD lod(kRPVControllerPrimitiveTypeDouble, 99, 1.0,
-                                          children);
+    RocProfVis::Controller::SampleLOD lod(99, 1.0, children);
     RocProfVis::Controller::Sample&   base = lod;
     rocprofvis_handle_t* handle            = reinterpret_cast<rocprofvis_handle_t*>(&lod);
     uint64_t             integer           = 0;
@@ -255,6 +287,10 @@ TEST_CASE("Sample LOD Property API")
     SECTION("Statistics and base properties dispatch through the C API")
     {
         REQUIRE(base.GetNumberOfChildren() == 2);
+        REQUIRE(base.GetValueType() == kRPVControllerPrimitiveTypeDouble);
+        REQUIRE(rocprofvis_controller_get_uint64(handle, kRPVControllerSampleType, 0,
+                                                 &integer) == kRocProfVisResultSuccess);
+        REQUIRE(integer == kRPVControllerPrimitiveTypeDouble);
         REQUIRE(lod.GetChildMin() == 2.0);
         REQUIRE(lod.GetChildMean() == 6.0);
         REQUIRE(lod.GetChildMedian() == 5.0);
@@ -304,7 +340,7 @@ TEST_CASE("Sample LOD Property API")
         REQUIRE(base.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
         REQUIRE(integer == expected);
 
-        RocProfVis::Controller::SampleLOD empty(kRPVControllerPrimitiveTypeDouble, 0, 0.0);
+        RocProfVis::Controller::SampleLOD empty(0, 0.0);
         REQUIRE(empty.GetInclusiveMemoryUsage(&integer) == kRocProfVisResultSuccess);
         REQUIRE(integer == sizeof(empty));
     }
@@ -445,7 +481,7 @@ TEST_CASE("Graph and Timeline Property API")
         REQUIRE(timeline.GetMaxTimestamp(nullptr) == kRocProfVisResultInvalidArgument);
         REQUIRE(timeline.SetNumberOfGraphs(2) == kRocProfVisResultSuccess);
         RocProfVis::Controller::Graph* graph = nullptr;
-        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultSuccess);
+        REQUIRE(timeline.GetGraph(0, &graph) == kRocProfVisResultOutOfRange);
         REQUIRE(graph == nullptr);
         REQUIRE(timeline.GetGraphById(10, &graph) == kRocProfVisResultOutOfRange);
         const RocProfVis::Controller::Timeline& const_timeline = timeline;
@@ -469,6 +505,14 @@ TEST_CASE("Graph and Timeline Property API")
                 kRocProfVisResultInvalidArgument);
         REQUIRE(timeline.SetGraph(0, first.get()) == kRocProfVisResultSuccess);
         RocProfVis::Controller::Graph* first_graph = first.release();
+        graph = first_graph;
+        REQUIRE(timeline.GetGraph(1, &graph) == kRocProfVisResultOutOfRange);
+        REQUIRE(graph == first_graph);
+        rocprofvis_handle_t* empty_slot = reinterpret_cast<rocprofvis_handle_t*>(first_graph);
+        REQUIRE(rocprofvis_controller_get_object(
+                    handle, kRPVControllerTimelineGraphIndexed, 1, &empty_slot) ==
+                kRocProfVisResultOutOfRange);
+        REQUIRE(empty_slot == reinterpret_cast<rocprofvis_handle_t*>(first_graph));
         REQUIRE(rocprofvis_controller_set_object(
                     handle, kRPVControllerTimelineGraphIndexed, 1,
                     reinterpret_cast<rocprofvis_handle_t*>(second.get())) ==
@@ -617,8 +661,8 @@ TEST_CASE("Segment Entry Type Validation")
     RocProfVis::Controller::SegmentTimeline timeline;
     timeline.SetContext(nullptr);
     RocProfVis::Controller::Event event(1, 0.0, 1.0);
-    RocProfVis::Controller::Sample sample(kRPVControllerPrimitiveTypeDouble, 2, 0.0);
-    RocProfVis::Controller::SampleLOD lod(kRPVControllerPrimitiveTypeDouble, 3, 2.0);
+    RocProfVis::Controller::Sample sample(2, 0.0);
+    RocProfVis::Controller::SampleLOD lod(3, 2.0);
     sample.SetEndTimestamp(1.0);
     lod.SetEndTimestamp(3.0);
     RocProfVis::Controller::Array wrong_type;

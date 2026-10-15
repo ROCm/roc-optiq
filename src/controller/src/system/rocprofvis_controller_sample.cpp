@@ -8,13 +8,12 @@ namespace RocProfVis
 namespace Controller
 {
 
-Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
+Sample::Sample(uint64_t id, double timestamp)
 : Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
 , m_data(0)
 , m_end_timestamp(0)
 , m_timestamp(timestamp)
 {
-    (void) type;
     (void) id;
 }
 

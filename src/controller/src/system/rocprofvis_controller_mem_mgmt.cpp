@@ -567,22 +567,20 @@ MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTime
 }
 
 Sample*
-MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id,
-                         double timestamp, SegmentTimeline* owner)
+MemoryManager::NewSample(uint64_t id, double timestamp, SegmentTimeline* owner)
 {
     std::lock_guard<std::mutex> lock(m_pool_mutex);
     Sample* sample = nullptr;
     void*   ptr    = Allocate(sizeof(Sample), kRocProfVisObjectTypeSample, owner);
     if(ptr)
     {
-        sample = new(ptr) Sample(type, id, timestamp);
+        sample = new(ptr) Sample(id, timestamp);
     }
     return sample;
 }
 
 SampleLOD*
-MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id,
-                            double timestamp, std::vector<Sample*>& children,
+MemoryManager::NewSampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children,
                             SegmentTimeline* owner)
 {
     std::lock_guard<std::mutex> lock(m_pool_mutex);
@@ -590,7 +588,7 @@ MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_
     void*      ptr    = Allocate(sizeof(SampleLOD), kRocProfVisObjectTypeSampleLOD, owner);
     if(ptr)
     {
-        sample = new(ptr) SampleLOD(type, id, timestamp, children);
+        sample = new(ptr) SampleLOD(id, timestamp, children);
     }
     return sample;
 

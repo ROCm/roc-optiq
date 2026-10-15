@@ -69,8 +69,8 @@ void SampleLOD::CalculateChildValues(void)
     SetValue(m_child_mean);
 }
 
-SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
-: Sample(type, id, timestamp)
+SampleLOD::SampleLOD(uint64_t id, double timestamp)
+: Sample(id, timestamp)
 , m_child_min(0)
 , m_child_mean(0)
 , m_child_median(0)
@@ -79,9 +79,8 @@ SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, d
 , m_child_max_timestamp(0)
 {}
 
-SampleLOD::SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp,
-            std::vector<Sample*>& children)
-: Sample(type, id, timestamp)
+SampleLOD::SampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children)
+: Sample(id, timestamp)
 , m_children(children)
 , m_child_min(0)
 , m_child_mean(0)

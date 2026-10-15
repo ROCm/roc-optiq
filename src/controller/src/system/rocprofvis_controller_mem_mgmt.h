@@ -147,8 +147,8 @@ namespace RocProfVis
 
             void                Delete(Handle* handle, SegmentTimeline* owner);
             Event*              NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTimeline* owner);
-            Sample*             NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, SegmentTimeline* owner);
-            SampleLOD*          NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
+            Sample*             NewSample(uint64_t id, double timestamp, SegmentTimeline* owner);
+            SampleLOD*          NewSampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
             
             
 

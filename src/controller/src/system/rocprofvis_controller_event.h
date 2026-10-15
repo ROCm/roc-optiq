@@ -58,7 +58,7 @@ public:
     rocprofvis_result_t GetChildId(uint64_t index, uint64_t* value) const;
     rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
 
-    void                SetLevel(uint64_t level);
+    rocprofvis_result_t SetLevel(uint64_t level);
     void SetStartTimestamp(double timestamp) { m_start_timestamp = timestamp; }
     void SetEndTimestamp(double timestamp) { m_end_timestamp = timestamp; }
     void SetTopCombinedNameStringIndex(size_t index) { m_combined_top_name = index; }

@@ -17,10 +17,9 @@ class SampleLOD : public Sample
     void CalculateChildValues(void);
 
 public:
-    SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
+    SampleLOD(uint64_t id, double timestamp);
 
-    SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp,
-              std::vector<Sample*>& children);
+    SampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children);
 
     SampleLOD& operator=(SampleLOD&& other);
 

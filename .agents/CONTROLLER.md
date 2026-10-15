@@ -686,6 +686,9 @@ then waits and dispatches each returned slice through
 `ProcessPmcSampleRecords` allocate pooled controller objects and insert
 them into the segment timeline. Model slices and dependent futures are
 released after processing, including cancellation/error paths.
+Read-request and segment-range loops preserve the first failure while releasing
+pending resources and processed flags. Cache traversal does not overwrite a
+failed model read with a successful partial result.
 
 Track properties are exposed under
 `rocprofvis_controller_track_properties_t` (start at `0x30000000`):
@@ -712,9 +715,14 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
 - Generic property getters and setters are private overrides for C ABI
   dispatch through `Handle`. Internal callers use typed accessors for
   IDs, levels, timestamps, duration, names and string-table indexes.
+  `SetLevel` accepts only 0..255 and returns `OutOfRange` without changing the
+  level for larger inputs. The C ABI setter propagates this result. Track loads
+  log the rejected level with event/track IDs, release the rejected event, and
+  propagate the failure; LOD generation also checks level-setting results.
   `GetChildId` / `SetChildId` and `SetNumberOfChildren` preserve indexed
   child bounds and allocation errors; `GetInclusiveMemoryUsage` includes
-  the child array. Names returned by the typed getters are borrowed from
+  the child array and only writes the output on success. Names returned by
+  the typed getters are borrowed from
   `StringTable` and remain valid for its lifetime.
 - Static helpers `FetchDataModelFlowTraceProperty`,
   `FetchDataModelStackTraceProperty`,
@@ -728,7 +736,9 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
 
 `Sample` (`kRPVControllerObjectTypeSample`):
 
-- A primitive value sample with a timestamp. Bound by
+- A double-valued sample with a timestamp. Constructors and MemoryManager
+  allocation helpers accept no value-type argument; `GetValueType` and the C ABI
+  sample-type property always report `Double`. Bound by
   `rocprofvis_controller_sample_properties_t` (`0x40000000`).
 - Property overrides are private C ABI handlers; `SampleLOD` is a friend
   solely to delegate its base-property handlers. Internal code uses inline
@@ -791,7 +801,9 @@ an existing graph to the requested final index without deleting it. Null or
 wrong-type graph arguments return `InvalidArgument`; invalid indexes return
 `OutOfRange`. Its typed memory getters are const.
 Graph bounds are validated before modifying the list, so a failed
-assignment leaves the list intact. Lookup and memory accounting skip
+assignment leaves the list intact. Indexed lookups return `OutOfRange` for
+empty slots as well as invalid indexes, leaving the output unchanged. Lookup
+and memory accounting skip
 unpopulated slots. Typed timestamp getters retain `OutOfRange` for an
 empty timeline, and memory getters preserve the existing accounting.
 
@@ -1181,10 +1193,8 @@ rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
                                          rocprofvis_owner_type_t type);
 void Delete(Handle* handle, SegmentTimeline* owner);
 Event*     NewEvent(uint64_t id, double s, double e, SegmentTimeline*);
-Sample*    NewSample(rocprofvis_controller_primitive_type_t,
-                     uint64_t id, double ts, SegmentTimeline*);
-SampleLOD* NewSampleLOD(rocprofvis_controller_primitive_type_t,
-                        uint64_t id, double ts,
+Sample*    NewSample(uint64_t id, double ts, SegmentTimeline*);
+SampleLOD* NewSampleLOD(uint64_t id, double ts,
                         std::vector<Sample*>& children, SegmentTimeline*);
 ```
 

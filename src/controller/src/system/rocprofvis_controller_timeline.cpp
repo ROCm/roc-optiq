@@ -145,7 +145,7 @@ Timeline::GetGraph(uint64_t index, Graph** value) const
     if(value)
     {
         result = kRocProfVisResultOutOfRange;
-        if(index < m_graphs.size())
+        if(index < m_graphs.size() && m_graphs[index])
         {
             *value = m_graphs[index];
             result = kRocProfVisResultSuccess;

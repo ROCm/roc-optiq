@@ -165,13 +165,14 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
 
         if(fetch_ranges.size())
         {
+            result = kRocProfVisResultSuccess;
             for(auto& range : fetch_ranges)
             {
                 if(future->IsCancelled())
                 {
                     result = kRocProfVisResultCancelled;
                 }
-                else
+                else if(result == kRocProfVisResultSuccess)
                 {
                     double fetch_start =
                         GetStartTimestamp() + (range.first * kSegmentDuration);
@@ -195,7 +196,7 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         }
         else
         {
-            result = kRocProfVisResultOutOfRange;
+            result = kRocProfVisResultSuccess;
         }
 
         {
@@ -212,11 +213,8 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             });
         }
 
-        // Walking the segments would report kRocProfVisResultOutOfRange for a
-        // cancelled fetch, because the segments it needs were never populated.
-        // The cancellation has to survive so the view knows the data is missing
-        // and must be re-requested when the track comes back into view.
-        if(result != kRocProfVisResultCancelled)
+        // Preserve fetch failures instead of reporting success from partial cache data.
+        if(result == kRocProfVisResultSuccess)
         {
             result = GetSegments()->FetchSegments(start, end, user_ptr, future, func);
         }
@@ -377,11 +375,17 @@ Track::WaitForAndProcessTraceReadRequests(
     const std::vector<trace_read_request_t>& requests,
     Future* future)
 {
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result = requests.empty() ? kRocProfVisResultOutOfRange
+                                                 : kRocProfVisResultSuccess;
 
     for(const trace_read_request_t& request : requests)
     {
-        result = ProcessTraceReadRequest(trace, dm_track_type, request, future);
+        const rocprofvis_result_t request_result =
+            ProcessTraceReadRequest(trace, dm_track_type, request, future);
+        if(result == kRocProfVisResultSuccess)
+        {
+            result = request_result;
+        }
         future->RemoveDependentFuture(request.future);
         rocprofvis_db_future_free(request.future);
     }
@@ -486,8 +490,19 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
             event_id, timestamp, timestamp + duration, GetSegments());
         if(new_event)
         {
-            new_event->SetLevel(rocprofvis_dm_get_property_as_uint64(
-                data, kRPVDMEventLevelUInt64Indexed, record_index));
+            const uint64_t level = rocprofvis_dm_get_property_as_uint64(
+                data, kRPVDMEventLevelUInt64Indexed, record_index);
+            result = new_event->SetLevel(level);
+            if(result != kRocProfVisResultSuccess)
+            {
+                spdlog::warn(
+                    "Track::FetchFromDataModel: Event id {} on track id {} has "
+                    "invalid level {} (maximum {})",
+                    event_id, GetId(), level, UINT8_MAX);
+                static_cast<SystemTrace*>(GetContext())->GetMemoryManager()->Delete(
+                    new_event, GetSegments());
+                break;
+            }
             result = new_event->SetCategory(rocprofvis_dm_get_property_as_charptr(
                 data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
             if(result == kRocProfVisResultSuccess)
@@ -563,7 +578,7 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
 
         Sample* new_sample = static_cast<SystemTrace*>(GetContext())
                                  ->GetMemoryManager()->NewSample(
-            kRPVControllerPrimitiveTypeDouble, sample_id++, last_timestamp, GetSegments());
+            sample_id++, last_timestamp, GetSegments());
         if(new_sample)
         {
             new_sample->SetValue(last_value);

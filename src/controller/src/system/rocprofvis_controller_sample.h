@@ -15,7 +15,7 @@ namespace Controller
 class Sample : public Handle
 {
 public:
-    Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
+    Sample(uint64_t id, double timestamp);
 
     Sample& operator=(Sample&& other);
 

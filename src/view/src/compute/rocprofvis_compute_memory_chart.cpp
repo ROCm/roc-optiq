@@ -607,7 +607,7 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 
     // Database blob: its dotted ids already belong to this file. Otherwise the
     // embedded template for the detected architecture, with metric-id remap.
-    // No architecture template means the chart is N/A. default.json is not used.
+    // No architecture template means the chart is N/A.
     const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
     if(workload && !workload->memory_chart_layout.blocks.empty())

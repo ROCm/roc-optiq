@@ -21,7 +21,8 @@ namespace View
 {
 
 inline constexpr float    DEFAULT_MIN_TRACK_HEIGHT       = 10.0f;
-inline constexpr float    DEFAULT_GRIP_WIDTH             = 20.0f;
+// Phosphor's vertical-dot gripper is narrower than the former 3x3 glyph.
+inline constexpr float    DEFAULT_GRIP_WIDTH             = 12.0f;
 inline constexpr uint64_t DEFAULT_CHUNK_DURATION         = TimeConstants::ns_per_s * 30;
 inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;

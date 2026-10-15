@@ -2051,15 +2051,20 @@ Use these instead of writing your own.
 - `rocprovfis_icon_defines.h` (note the typo - kept for stability)
   - `ICON_CHEVRON_DOWN/LEFT/RIGHT`, `ICON_X_CIRCLED`, `ICON_EYE`,
     `ICON_EYE_SLASH`, `ICON_EYE_THIN`, `ICON_GEAR`, `ICON_CHAIN`,
-    `ICON_ADD_NOTE`, `ICON_ARROWS_SHRINK`, `ICON_COMPASS`,
-    `ICON_CHART_BAR`, `ICON_CHART_PIE`, `ICON_ARCHIVE`,
-    `ICON_DELETE`, `ICON_TREE`, `ICON_GRID`, `ICON_ARROW_UP/DOWN`,
-    `ICON_EDIT`, `ICON_TRASH_CAN`, `ICON_OPEN`,
-    `ICON_ARROWS_CYCLE`, `ICON_LIST`, `ICON_STICKY_NOTE`,
-    `ICON_LOCKED/UNLOCKED`, `ICON_COPY`, `ICON_CROP`,
-    `ICON_ARROW_FORWARD`, `ICON_EXPAND`.
-  - `icon_ranges[]` - the codepoint ranges added to the icon font
-    glyph set.
+    `ICON_ADD_NOTE`, `ICON_PLUS`, `ICON_BOOKMARK_ADD`, `ICON_FLOW_FAN`,
+    `ICON_PIN`, `ICON_PLUGS_CONNECTED`, `ICON_ARROWS_SHRINK`,
+    `ICON_COMPASS`, `ICON_MINIMAP`, `ICON_SPARKLE`, `ICON_CHART_BAR`,
+    `ICON_CHART_PIE`, `ICON_ARCHIVE`, `ICON_SAVE`, `ICON_EXPORT`,
+    `ICON_DOCUMENT`, `ICON_DELETE`, `ICON_TREE`, `ICON_GRID`,
+    `ICON_ARROW_UP/DOWN`, `ICON_EDIT`, `ICON_TRASH_CAN`, `ICON_OPEN`,
+    `ICON_OPEN_FILE`, `ICON_TERMINAL`, `ICON_FILE`, `ICON_MEASURE`,
+    `ICON_ARROWS_EXPAND`, `ICON_ARROWS_CYCLE`, `ICON_LIST`,
+    `ICON_STICKY_NOTE`, `ICON_LOCKED/UNLOCKED`, `ICON_COPY`, `ICON_CROP`,
+    `ICON_ARROW_IN_BOX`, `ICON_ARROW_FORWARD`, `ICON_EXPAND`, `ICON_FUNNEL`,
+    `ICON_ELLIPSIS`.
+  - The font is the pinned Phosphor Icons regular TTF in
+    `thirdparty/phosphor/`, distributed under its MIT license. `icon_ranges[]`
+    contains the exact Phosphor codepoints included in the atlas.
 - `rocprofvis_icon_data.h` - the embedded icon font binary blob.
 - **Always reuse an existing icon constant** before adding a new
   glyph. Adding a new icon requires updating both files and the

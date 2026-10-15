@@ -794,7 +794,7 @@ void RemoteFileBrowser::Render()
                 if (ImGui::BeginPopupContextItem((std::string("##ctx") + std::to_string(vi)).c_str()))
                 {
                     m_selected_name = f.name;
-                    if (!inert && IconMenuItem(ICON_OPEN, f.is_dir ? "Open folder" : "Open"))
+                    if (!inert && IconMenuItem(ICON_OPEN_FILE, f.is_dir ? "Open folder" : "Open"))
                     {
                         ActivateBrowserEntry(f);
                     }
@@ -817,7 +817,7 @@ void RemoteFileBrowser::Render()
                 const ImU32 name_color =
                     row_selected ? text_on_accent : (f.is_dir ? accent : text_main);
                 ImGui::SameLine(0, 0);
-                row_icon(f.is_dir ? ICON_FOLDER : ICON_DOCUMENT, icon_color);
+                row_icon(f.is_dir ? ICON_FOLDER : ICON_FILE, icon_color);
                 // Directory rows show the name (folders with a trailing slash).
                 // The Name column clips long text; the full path is on hover.
                 const std::string display = f.is_dir ? f.name + "/" : f.name;

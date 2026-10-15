@@ -894,14 +894,14 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         MeasurementController& fm = *m_measurement;
         if(fm.IsMeasurementMode())
         {
-            if(IconMenuItem(ICON_CROP, "Exit Measurement Mode"))
+            if(IconMenuItem(ICON_MEASURE, "Exit Measurement Mode"))
             {
                 fm.ExitMeasurementMode();
             }
         }
         else
         {
-            if(IconMenuItem(ICON_CROP, "Enter Measurement Mode"))
+            if(IconMenuItem(ICON_MEASURE, "Enter Measurement Mode"))
             {
                 fm.EnterMeasurementMode();
             }

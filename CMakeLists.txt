@@ -12,7 +12,7 @@ set(PROJECT_VERSION_MINOR 1)
 set(PROJECT_VERSION_PATCH 0)
 set(PROJECT_VERSION_BUILD 0)
 
-# Name and path of the icon font header
+# Name and path of the generated Phosphor icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
 
 set(CMAKE_CXX_STANDARD 17)

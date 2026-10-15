@@ -193,7 +193,7 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
     (void) value_to_copy;
     if(ImGui::BeginPopupContextItem())
     {
-        if(IconMenuItem(ICON_CHAIN, "Pin metric"))
+        if(IconMenuItem(ICON_PIN, "Pin metric"))
         {
             row.second.pinned = !row.second.pinned;
             m_pin_metric_clicked(

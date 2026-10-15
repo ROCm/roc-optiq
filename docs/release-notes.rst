@@ -35,5 +35,5 @@ Resolved issues
 * Fixed a crash opening a compute `.db` when a roofline ceiling category is empty (uncaught `std::out_of_range`); the **Roofline** tab now shows "No data available."
 * Fixed a crash in **Baseline Comparison** when a kernel with a non-finite (Inf) metric is compared to itself.
 * Fixed the version number reported by the Windows installer.
-* Fixed topology node order that are inconsistent between target environments.
+* Fixed topology node order that is inconsistent between target environments.
 * Fixed memory chart layout and metrics for the gfx950 and gfx940 series.

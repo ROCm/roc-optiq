@@ -224,11 +224,18 @@ Graph::GenerateLODEvent(std::vector<Event*>& events, uint32_t lod_to_generate,
             CombineEventInfo(events, combined_name, max_duration_str_index);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+        auto [lod_it, lod_inserted] = m_lods.try_emplace(lod_to_generate);
+        SegmentTimeline& lod_timeline = lod_it->second;
+
         const uint64_t event_id = events[0]->GetId();
         Event*         event    = mgr->NewEvent(event_id, event_min, event_max,
-                                                &m_lods[lod_to_generate]);
+                                                &lod_timeline);
         if(!event)
+        {
+            if(lod_inserted)
+                m_lods.erase(lod_it);
             return kRocProfVisResultMemoryAllocError;
+        }
 
         result = event->SetLevel(level);
         if(result == kRocProfVisResultSuccess)
@@ -246,7 +253,7 @@ Graph::GenerateLODEvent(std::vector<Event*>& events, uint32_t lod_to_generate,
         }
         if(result != kRocProfVisResultSuccess)
         {
-            mgr->Delete(event, &m_lods[lod_to_generate]);
+            mgr->Delete(event, &lod_timeline);
             return result;
         }
 

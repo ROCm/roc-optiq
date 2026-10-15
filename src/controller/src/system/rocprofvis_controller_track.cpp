@@ -214,10 +214,12 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             });
         }
 
-        // Preserve fetch failures instead of reporting success from partial cache data.
-        if(result == kRocProfVisResultSuccess)
+        if(result != kRocProfVisResultCancelled)
         {
-            result = GetSegments()->FetchSegments(start, end, user_ptr, future, func);
+            const rocprofvis_result_t cache_result =
+                GetSegments()->FetchSegments(start, end, user_ptr, future, func);
+            if(result == kRocProfVisResultSuccess)
+                result = cache_result;
         }
     }
 
@@ -508,11 +510,14 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
             result = raw_event->SetLevel(level);
             if(result != kRocProfVisResultSuccess)
             {
+                // A single corrupt level field is not fatal — skip this event and
+                // continue so the rest of the slice is still processed.
                 spdlog::warn(
                     "Track::FetchFromDataModel: Event id {} on track id {} has "
-                    "invalid level {} (maximum {})",
+                    "invalid level {} (maximum {}); skipping",
                     event_id, GetId(), level, UINT8_MAX);
-                break;
+                result = kRocProfVisResultSuccess;
+                continue;
             }
             result = raw_event->SetCategory(rocprofvis_dm_get_property_as_charptr(
                 data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
@@ -526,7 +531,9 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
 
             // Transfer ownership to SetObject: it either stores the event in a segment
             // or calls Delete itself (including on OutOfRange). Disarm the guard first
-            // so it never double-deletes.
+            // so it never double-deletes. GetContext() must be non-null — SetObject's
+            // Delete fallback is unreachable without it.
+            ROCPROFVIS_ASSERT(GetContext());
             event_guard.release();
             result = SetObject(
                 kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)raw_event);

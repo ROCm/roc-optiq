@@ -12,7 +12,6 @@
 #include "rocprofvis_core_assert.h"
 
 #include <algorithm>
-#include <cfloat>
 #include <exception>
 
 namespace RocProfVis
@@ -25,8 +24,6 @@ typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectType
 Timeline::Timeline(uint64_t id)
 : Handle(__kRPVControllerTimelinePropertiesFirst, __kRPVControllerTimelinePropertiesLast)
 , m_id(id)
-, m_min_ts(DBL_MAX)
-, m_max_ts(DBL_MIN)
 {}
 
 Timeline::~Timeline()
@@ -113,9 +110,9 @@ Timeline::GetMinTimestamp(double* value) const
     if(value)
     {
         result = kRocProfVisResultOutOfRange;
-        if(!m_graphs.empty())
+        if(m_min_ts)
         {
-            *value = m_min_ts;
+            *value = *m_min_ts;
             result = kRocProfVisResultSuccess;
         }
     }
@@ -129,9 +126,9 @@ Timeline::GetMaxTimestamp(double* value) const
     if(value)
     {
         result = kRocProfVisResultOutOfRange;
-        if(!m_graphs.empty())
+        if(m_max_ts)
         {
-            *value = m_max_ts;
+            *value = *m_max_ts;
             result = kRocProfVisResultSuccess;
         }
     }
@@ -197,8 +194,8 @@ Timeline::SetNumberOfGraphs(uint64_t count)
 void
 Timeline::RecomputeBounds()
 {
-    m_min_ts = DBL_MAX;
-    m_max_ts = DBL_MIN;
+    m_min_ts = std::nullopt;
+    m_max_ts = std::nullopt;
     for(const Graph* graph : m_graphs)
     {
         if(!graph) continue;
@@ -206,8 +203,8 @@ Timeline::RecomputeBounds()
            graph->GetStartTimestamp(&lo) == kRocProfVisResultSuccess &&
            graph->GetEndTimestamp(&hi)   == kRocProfVisResultSuccess)
         {
-            m_min_ts = std::min(lo, m_min_ts);
-            m_max_ts = std::max(hi, m_max_ts);
+            m_min_ts = m_min_ts ? std::min(lo, *m_min_ts) : lo;
+            m_max_ts = m_max_ts ? std::max(hi, *m_max_ts) : hi;
         }
     }
 }

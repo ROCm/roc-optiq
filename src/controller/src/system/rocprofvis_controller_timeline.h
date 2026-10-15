@@ -5,6 +5,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
+#include <optional>
 #include <vector>
 
 namespace RocProfVis
@@ -66,10 +67,10 @@ private:
     void RecomputeBounds();
 
 private:
-    uint64_t            m_id;
-    std::vector<Graph*> m_graphs;
-    double m_min_ts;
-    double m_max_ts;
+    uint64_t                m_id;
+    std::vector<Graph*>     m_graphs;
+    std::optional<double>   m_min_ts;
+    std::optional<double>   m_max_ts;
 };
 
 }

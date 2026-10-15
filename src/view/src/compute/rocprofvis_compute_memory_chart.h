@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include "model/compute/rocprofvis_memory_chart_model.h"
 #include "rocprofvis_event_manager.h"
 
@@ -171,6 +172,10 @@ private:
 
     // Metric resolution (by id or name) against the fetched table.
     const MetricValue* ResolveMetric(const MemChartMetricRef& ref) const;
+    // Definition for a valid dotted id, or nullptr when that id is not in the
+    // open workload. Does not consult fetched values.
+    const AvailableMetrics::Entry*
+    FindMetricDefinition(const MemChartMetricRef& ref) const;
     std::string        MetricLabel(const MemChartMetricRef& ref,
                                    const std::string&       title_override) const;
     std::string        MetricValueText(const MemChartMetricRef& ref,

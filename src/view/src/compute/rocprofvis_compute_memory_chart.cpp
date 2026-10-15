@@ -927,28 +927,15 @@ ComputeMemoryChartView::ColorFromKind(MemChartColorKind kind) const
     }
 }
 
-// Category and table ids (leading segments) of a dotted metric id
-// "category.table.entry".
+// Category and table ids of a dotted metric id "category.table.entry".
 static bool
-MetricCategoryTable(const MemChartMetricRef& ref, uint32_t& category, uint32_t& table)
+FindCategoryAndTable(const MemChartMetricRef& ref, uint32_t& category, uint32_t& table)
 {
-    if(!ref.valid) return false;
-    size_t d1 = ref.name.find('.');
-    if(d1 == 0 || d1 == std::string::npos) return false;
-    size_t d2 = ref.name.find('.', d1 + 1);
-    if(d2 == d1 + 1 || d2 == std::string::npos) return false;
-
-    auto parse = [](const std::string& s, size_t begin, size_t end, uint32_t& out) -> bool {
-        out = 0;
-        for(size_t i = begin; i < end; ++i)
-        {
-            char c = s[i];
-            if(c < '0' || c > '9') return false;
-            out = out * 10 + static_cast<uint32_t>(c - '0');
-        }
-        return end > begin;
-    };
-    return parse(ref.name, 0, d1, category) && parse(ref.name, d1 + 1, d2, table);
+    MetricId id;
+    if(!ref.valid || !ComputeDataModel::FromString(ref.metric_id, id)) return false;
+    category = id.category_id;
+    table    = id.table_id;
+    return true;
 }
 
 static void
@@ -960,7 +947,8 @@ CollectTables(const std::vector<MemChartBlock>&        blocks,
         uint32_t category = 0, table = 0;
         for(const MemChartContentItem& item : block.content)
         {
-            if(MetricCategoryTable(item.metric, category, table)) out.insert({category, table});
+            if(FindCategoryAndTable(item.metric, category, table))
+                out.insert({category, table});
         }
         CollectTables(block.children, out);
     }
@@ -986,7 +974,8 @@ ComputeMemoryChartView::FetchMemChartMetrics()
     for(const MemChartArrow& arrow : m_layout.arrows)
     {
         uint32_t category = 0, table = 0;
-        if(MetricCategoryTable(arrow.metric, category, table)) tables.insert({category, table});
+        if(FindCategoryAndTable(arrow.metric, category, table))
+            tables.insert({category, table});
     }
     if(tables.empty()) return;
 
@@ -1039,8 +1028,21 @@ ComputeMemoryChartView::ResolveMetric(const MemChartMetricRef& ref) const
     if(!ref.valid) return nullptr;
     // Layouts address metrics by their full dotted id ("category.table.entry").
     std::unordered_map<std::string, const MetricValue*>::const_iterator it =
-        m_ptr_by_metric_id.find(ref.name);
+        m_ptr_by_metric_id.find(ref.metric_id);
     return it != m_ptr_by_metric_id.end() ? it->second : nullptr;
+}
+
+const AvailableMetrics::Entry*
+ComputeMemoryChartView::FindMetricDefinition(const MemChartMetricRef& ref) const
+{
+    if(!ref.valid || !m_compute_selection) return nullptr;
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID) return nullptr;
+
+    MetricId id;
+    if(!ComputeDataModel::FromString(ref.metric_id, id)) return nullptr;
+    return m_data_provider.ComputeModel().GetMetricInfo(workload_id, id);
 }
 
 std::string
@@ -1050,7 +1052,7 @@ ComputeMemoryChartView::MetricLabel(const MemChartMetricRef& ref,
     if(!title_override.empty()) return title_override;
     const MetricValue* metric = ResolveMetric(ref);
     if(metric && metric->entry) return metric->entry->name;
-    if(!ref.name.empty()) return ref.name;
+    if(!ref.metric_id.empty()) return ref.metric_id;
     return "";
 }
 
@@ -2590,31 +2592,32 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                                ImGuiHoveredFlags_NoPopupHierarchy))
         return;
 
-    const MetricValue* metric    = ResolveMetric(ref);
-    bool               resolved  = metric && metric->entry;
-    bool               has_value = resolved && !metric->values.empty();
+    const AvailableMetrics::Entry* definition = FindMetricDefinition(ref);
+    const MetricValue*             metric     = ResolveMetric(ref);
+    bool                           has_value  = metric && !metric->values.empty();
 
     if(show_description)
     {
-        bool has_desc = resolved && !metric->entry->description.empty();
+        bool has_desc = definition && !definition->description.empty();
         bool show_val = show_raw_value && has_value;
         // Nothing to show (e.g. a title-only arrow with no metric): skip the
         // tooltip entirely instead of drawing an empty box.
         if(!ref.valid && !has_desc && !show_val) return;
 
         BeginTooltipStyled();
-        // The id is shown even when unresolved: that is when a layout author
-        // needs to know which metric a row showing N/A asked for.
+        // The id is shown even when the definition is missing: that is when a
+        // layout author needs to know which metric a row showing N/A asked for.
         if(ref.valid)
         {
-            ImGui::TextDisabled("Metric %s%s", ref.name.c_str(), resolved ? "" : " (not found)");
+            ImGui::TextDisabled("Metric %s%s", ref.metric_id.c_str(),
+                                definition ? "" : " (not found)");
         }
         if(has_desc)
         {
             if(ref.valid) ImGui::Spacing();
             // Wrap and auto-size; a window max-width below the wrap pos clips text.
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
-            ImGui::TextUnformatted(metric->entry->description.c_str());
+            ImGui::TextUnformatted(definition->description.c_str());
             ImGui::PopTextWrapPos();
         }
         if(show_val)

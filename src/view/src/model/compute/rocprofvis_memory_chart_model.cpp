@@ -50,8 +50,8 @@ ParseMetricRef(jt::Json& value)
     MemChartMetricRef ref;
     if(value.isString())
     {
-        ref.name  = value.getString();
-        ref.valid = !ref.name.empty();
+        ref.metric_id = value.getString();
+        ref.valid     = !ref.metric_id.empty();
     }
     return ref;
 }
@@ -365,7 +365,8 @@ RemapRef(MemChartMetricRef& ref, const MemChartMetricNameIndex& index,
     }
     if(ref.metric_name.empty())
     {
-        failures.push_back({ ref.name, ref.metric_name, MemChartRemapStatus::kEmptyName, {} });
+        failures.push_back(
+            { ref.metric_id, ref.metric_name, MemChartRemapStatus::kEmptyName, {} });
         return;
     }
 
@@ -374,16 +375,16 @@ RemapRef(MemChartMetricRef& ref, const MemChartMetricNameIndex& index,
     MemChartRemapStatus      status = index.Lookup(ref.metric_name, dotted_id, match_ids);
     if(status == MemChartRemapStatus::kReplaced)
     {
-        ref.name = std::move(dotted_id);
+        ref.metric_id = std::move(dotted_id);
         return;
     }
 
     // The template id may now belong to a different metric. Drop the ref so the
-    // row renders N/A instead of that metric's value. `name` stays so the
+    // row renders N/A instead of that metric's value. `metric_id` stays so the
     // failure log can still name the template id.
     ref.valid = false;
     failures.push_back(
-        { ref.name, ref.metric_name, status, std::move(match_ids) });
+        { ref.metric_id, ref.metric_name, status, std::move(match_ids) });
 }
 
 void

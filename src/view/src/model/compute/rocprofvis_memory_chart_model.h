@@ -45,19 +45,19 @@ enum class MemChartColorKind : uint8_t
 constexpr uint32_t kMemChartMetricCategoryId = 3;
 
 // A reference to a metric by its full dotted id ("category.table.entry", e.g.
-// "3.1.0"), held in `name` when `valid` is true. `metric_name` is the database
-// name used to find the real category-3 id when remapping is enabled.
+// "3.1.0"), held in `metric_id` when `valid` is true. `metric_name` is the
+// database name used to find the real category-3 id when remapping is enabled.
 struct MemChartMetricRef
 {
     bool        valid = false;
-    std::string name;
+    std::string metric_id;
     std::string metric_name;
 };
 
 // Result of looking up one template metric by name.
 enum class MemChartRemapStatus : uint8_t
 {
-    kReplaced = 0,  // `name` was replaced with the category-3 id.
+    kReplaced = 0,  // `metric_id` was replaced with the category-3 id.
     kEmptyName,     // The template metric has no metric_name.
     kNoMatch,       // No category-3 metric has that name.
     kAmbiguous,     // More than one category-3 metric has that name.

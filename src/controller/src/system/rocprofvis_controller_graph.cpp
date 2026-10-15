@@ -254,6 +254,8 @@ Graph::GenerateLODEvent(std::vector<Event*>& events, uint32_t lod_to_generate,
         if(result != kRocProfVisResultSuccess)
         {
             mgr->Delete(event, &lod_timeline);
+            if(lod_inserted)
+                m_lods.erase(lod_it);
             return result;
         }
 
@@ -281,7 +283,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
         double   max_ts = start_ts + scale;
         uint64_t level  = 0;
         double event_min = DBL_MAX;
-        double event_max = DBL_MIN;
+        double event_max = -DBL_MAX;
         std::vector<Event*> events;
 
         for(auto& data : entries)

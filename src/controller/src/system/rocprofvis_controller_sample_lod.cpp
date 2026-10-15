@@ -53,6 +53,7 @@ void SampleLOD::CalculateChildValues(void)
         SetValue(0);
         return;
     }
+    std::sort(values.begin(), values.end());
     size_t num_children = values.size();
     if(num_children & 0x1)
     {
@@ -95,16 +96,10 @@ SampleLOD::SampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& childr
 
 SampleLOD& SampleLOD::operator=(SampleLOD&& other)
 {
-    m_children  = std::move(other.m_children);
-    m_data = other.m_data;
-    m_timestamp = other.m_timestamp;
-    m_child_min = 0;
-    m_child_mean = 0; 
-    m_child_median = 0;
-    m_child_max    = 0;
-    m_child_min_timestamp = 0;
-    m_child_max_timestamp = 0;
-
+    m_children    = std::move(other.m_children);
+    m_data        = other.m_data;
+    m_timestamp   = other.m_timestamp;
+    CalculateChildValues();
     return *this;
 }
 

@@ -584,12 +584,10 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
             break;
         }
 
-        timestamp = (record_index == num_records) ? last_timestamp :
-            (double)rocprofvis_dm_get_property_as_uint64(
-                data, kRPVDMTimestampUInt64Indexed, record_index);
-        value = (record_index == num_records) ? last_value :
-            rocprofvis_dm_get_property_as_double(
-                data, kRPVDMPmcValueDoubleIndexed, record_index);
+        timestamp = (double)rocprofvis_dm_get_property_as_uint64(
+            data, kRPVDMTimestampUInt64Indexed, record_index);
+        value = rocprofvis_dm_get_property_as_double(
+            data, kRPVDMPmcValueDoubleIndexed, record_index);
         if(timestamp <= last_timestamp)
         {
             continue;

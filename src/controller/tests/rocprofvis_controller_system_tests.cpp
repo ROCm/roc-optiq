@@ -13,6 +13,7 @@
 #include "system/rocprofvis_controller_sample_lod.h"
 #include "system/rocprofvis_controller_segment.h"
 #include "system/rocprofvis_controller_timeline.h"
+#include "system/rocprofvis_controller_trace_system.h"
 #include "system/rocprofvis_controller_track.h"
 #include <algorithm>
 #include <atomic>
@@ -22,6 +23,7 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <thread>
 #include <unordered_map>
@@ -786,6 +788,105 @@ TEST_CASE("Memory Manager LRU Eviction")
     {
         REQUIRE_FALSE(timeline.IsValid(i));
     }
+}
+
+TEST_CASE("Memory Manager Owner Removal During Eviction")
+{
+    // A borrowed event pauses the real worker while it retains its owner/member
+    // snapshot. No private test hooks or timing-dependent eviction polling are needed.
+    class EvictionBlockedEvent : public RocProfVis::Controller::Event
+    {
+    public:
+        EvictionBlockedEvent(std::promise<void>& entered, std::shared_future<void> resume)
+        : Event(1, 0.0, 0.5)
+        , m_entered(entered)
+        , m_resume(std::move(resume))
+        {}
+
+        void PauseNextDeletion() { m_pause = true; }
+
+        bool IsDeletable() override
+        {
+            if(m_pause.exchange(false))
+            {
+                m_entered.set_value();
+                m_resume.wait();
+            }
+            return false;
+        }
+
+    private:
+        std::promise<void>&      m_entered;
+        std::shared_future<void> m_resume;
+        std::atomic<bool>        m_pause{false};
+    };
+
+    constexpr size_t trace_size = 12800000;
+    constexpr uint64_t array_id = 1;
+    constexpr uint32_t num_segments = 2;
+    constexpr double segment_duration = 1000.0;
+    const auto timeout = std::chrono::seconds(10);
+
+    RocProfVis::Controller::SystemTrace trace("owner-removal-test", "");
+    auto manager = std::make_unique<RocProfVis::Controller::MemoryManager>(1);
+    manager->Init(trace_size);
+    trace.SetMemoryManager(manager.release());
+
+    std::promise<void> entered;
+    std::future<void> eviction_started = entered.get_future();
+    std::promise<void> resume;
+    EvictionBlockedEvent event(entered, resume.get_future().share());
+    RocProfVis::Controller::Track track(kRPVControllerTrackTypeEvents, 1, nullptr, &trace);
+    auto owner = std::make_unique<RocProfVis::Controller::SegmentTimeline>();
+    owner->SetContext(&track);
+    owner->Init(0.0, segment_duration, num_segments, 100000);
+    owner->AddActiveArray(array_id);
+
+    RocProfVis::Controller::MemoryManager* memory_manager = trace.GetMemoryManager();
+    // Keep pooled memory resident so reducing the budget starts eviction.
+    RocProfVis::Controller::Event* resident =
+        memory_manager->NewEvent(2, 0.0, 0.5, owner.get());
+    REQUIRE(resident != nullptr);
+    for(uint32_t i = 0; i < num_segments; ++i)
+    {
+        const double start = i * segment_duration;
+        auto segment = std::make_unique<RocProfVis::Controller::Segment>(
+            kRPVControllerTrackTypeEvents, owner.get());
+        segment->SetStartEndTimestamps(start, start + segment_duration);
+        REQUIRE(segment->Insert(start, 0, &event));
+        REQUIRE(owner->Insert(start, std::move(segment)) == kRocProfVisResultSuccess);
+    }
+    owner->RemoveActiveArray(array_id);
+
+    RocProfVis::Controller::MemoryManager competitor(2);
+    competitor.Init(trace_size);
+    event.PauseNextDeletion();
+    competitor.Configure(DBL_MAX);
+    const std::future_status eviction_status = eviction_started.wait_for(timeout);
+    if(eviction_status != std::future_status::ready)
+    {
+        resume.set_value();
+        memory_manager->RemoveLRUOwner(owner.get());
+        memory_manager->Delete(resident, owner.get());
+        REQUIRE(eviction_status == std::future_status::ready);
+    }
+
+    std::promise<void> removal_started;
+    std::future<void> removal_entered = removal_started.get_future();
+    std::future<void> removal = std::async(std::launch::async, [&] {
+        removal_started.set_value();
+        memory_manager->RemoveLRUOwner(owner.get());
+    });
+    removal_entered.wait();
+    const std::future_status removal_status =
+        removal.wait_for(std::chrono::milliseconds(100));
+    // Always release the worker before reporting a failure or destroying futures.
+    resume.set_value();
+    removal.get();
+    CHECK(removal_status == std::future_status::timeout);
+    CHECK(owner->GetSegments().empty());
+    memory_manager->Delete(resident, owner.get());
+    owner.reset();
 }
 
 struct RocProfVisControllerFixture

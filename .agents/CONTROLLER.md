@@ -787,6 +787,8 @@ uses `GetInclusiveMemoryUsage` and `GetExclusiveMemoryUsage`; the existing
 inclusive count covers cached segments rather than `sizeof(Graph)`.
 Both typed memory getters are const; `SegmentTimeline::GetSegments` provides
 a const overload for traversing cached segments.
+Graph destruction unregisters each cached LOD timeline from the memory manager
+before destroying its segments, waiting for any active eviction pass to finish.
 
 ### 5.4 `Timeline` (`rocprofvis_controller_timeline.{h,cpp}`)
 
@@ -1186,10 +1188,11 @@ process-wide LRU eviction policy. Constructor:
 void Init(size_t num_objects);
 void Configure(double weight);
 void AddLRUReference(SegmentTimeline* owner, Segment* reference,
-                     uint32_t lod, void* array_ptr);
-rocprofvis_result_t EnterArrayOwnership(void* array_ptr,
+                     uint64_t array_id);
+void RemoveLRUOwner(SegmentTimeline* owner);
+rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
                                         rocprofvis_owner_type_t type);
-rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
+rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
                                          rocprofvis_owner_type_t type);
 void Delete(Handle* handle, SegmentTimeline* owner);
 Event*     NewEvent(uint64_t id, double s, double e, SegmentTimeline*);
@@ -1212,6 +1215,12 @@ Internals worth knowing:
   through the pools, and clearing the `valid` bit on the segment.
 - Static `s_memory_manager_instances` and `Configure(weight)` let
   multiple traces share the global memory budget proportionally.
+- `ManageLRU` holds a shared `m_eviction_pass_mutex` lock from before
+  collecting owner/member pointers through the final timeline unlock.
+  `RemoveLRUOwner` takes the exclusive pass lock before `m_lru_mutex`
+  and erases the owner's entry while holding both. This keeps cached owner
+  and metadata pointers alive for active passes. Finish the owner's fetches
+  before unregistering it, and unregister before destroying it.
 - `kShortTracksMemoryPoolIdentifier = 1` partitions short, dense
   tracks into a separate pool so they are not evicted as easily as
   large sparse tracks.

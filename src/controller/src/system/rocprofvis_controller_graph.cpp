@@ -631,6 +631,18 @@ Handle* Graph::GetContext() {
     return m_ctx;
 }
 
+void
+Graph::UnregisterFromMemoryManager()
+{
+    if(auto* mgr = m_ctx ? m_ctx->GetMemoryManager() : nullptr; mgr)
+    {
+        for(auto& [lod, segment_timeline] : m_lods)
+        {
+            mgr->RemoveLRUOwner(&segment_timeline);
+        }
+    }
+}
+
 struct GraphFetchLODArgs
 {
     Array*    m_array;

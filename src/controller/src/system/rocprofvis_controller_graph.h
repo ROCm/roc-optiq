@@ -28,7 +28,7 @@ public:
 
     Handle* GetContext() override;
 
-    virtual ~Graph() {}
+    virtual ~Graph() { UnregisterFromMemoryManager(); }
 
     rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
 
@@ -62,6 +62,8 @@ private:
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
+
+    void UnregisterFromMemoryManager();
 
 private:
     std::map<uint32_t, SegmentTimeline> m_lods;

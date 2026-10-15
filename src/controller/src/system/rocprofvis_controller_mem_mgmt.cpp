@@ -301,6 +301,16 @@ MemoryManager::CheckInUse(LRUMember* lru)
 //}
 
 void
+MemoryManager::RemoveLRUOwner(SegmentTimeline* owner)
+{
+    // Match the worker's lock order. Its snapshots borrow both the owner and
+    // LRU metadata, so wait for the whole pass before erasing either reference.
+    std::unique_lock eviction_lock(m_eviction_pass_mutex);
+    std::scoped_lock lock(m_lru_mutex);
+    m_lru_array.erase(owner);
+}
+
+void
 MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint64_t array_id)
 {
     std::unique_lock lock(m_lru_mutex);
@@ -376,6 +386,9 @@ MemoryManager::ManageLRU()
         {
             std::vector<SegmentTimeline*> locked;
             std::vector<SegmentTimeline*> couldnt_take_lock;
+            // Hold a shared lock for the entire pass so RemoveLRUOwner's unique_lock
+            // blocks until we are done using any SegmentTimeline* we collected.
+            std::shared_lock eviction_lock(m_eviction_pass_mutex);
             LockTimelines(locked, couldnt_take_lock);
 
             if(m_lru_mgmt_shutdown)

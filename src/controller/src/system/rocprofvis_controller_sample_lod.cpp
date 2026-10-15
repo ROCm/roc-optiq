@@ -166,10 +166,9 @@ SampleLOD::SetNumberOfChildren(uint64_t count)
     try
     {
         if(const bool size_changed = (count != m_children.size()); size_changed)
-        {
             m_children.resize(count);
-            CalculateChildValues();
-        }
+
+        CalculateChildValues();
         result = kRocProfVisResultSuccess;
     } catch(std::exception const&)
     {

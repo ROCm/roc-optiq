@@ -524,6 +524,10 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
             if(result != kRocProfVisResultSuccess)
                 break;
 
+            // Transfer ownership to SetObject: it either stores the event in a segment
+            // or calls Delete itself (including on OutOfRange). Disarm the guard first
+            // so it never double-deletes.
+            event_guard.release();
             result = SetObject(
                 kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)raw_event);
             if(result == kRocProfVisResultOutOfRange)
@@ -538,7 +542,6 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 if(result != kRocProfVisResultSuccess)
                     break;
-                event_guard.release();
             }
         }
         else

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_arguments.h"
-#include "rocprofvis_controller_analysis.h"
+#include "rocprofvis_controller_analysis_internal.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_reference.h"
@@ -65,6 +65,12 @@ rocprofvis_result_t rocprofvis_analysis_get_instrumented_events_table(rocprofvis
     return error;
 }
 
+rocprofvis_result_t rocprofvis_analysis_events_table_alloc(uint64_t op, rocprofvis_handle_t** table)
+{
+    return RocProfVis::Controller::Analysis::GetInstance().AllocEventsTable(
+        static_cast<rocprofvis_dm_event_operation_t>(op), table);
+}
+
 rocprofvis_result_t rocprofvis_analysis_get_dispatch_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
@@ -94,6 +100,17 @@ rocprofvis_result_t rocprofvis_analysis_get_memory_copy_events_table(rocprofvis_
     if(trace.IsValid() && table)
     {
         error = RocProfVis::Controller::Analysis::GetInstance().GetMemoryCopyEventsTable(trace.Get(), table);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_analysis_get_hip_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::SystemTraceRef trace(controller);
+    if(trace.IsValid() && table)
+    {
+        error = RocProfVis::Controller::Analysis::GetInstance().GetHipEventsTable(trace.Get(), table);
     }
     return error;
 }
@@ -418,6 +435,12 @@ Analysis::GetMemoryCopyEventsTable(SystemTrace* trace, rocprofvis_handle_t** tab
 }
 
 rocprofvis_result_t
+Analysis::GetHipEventsTable(SystemTrace* trace, rocprofvis_handle_t** table)
+{
+    return GetOrAllocateEventsTable(m_data[trace].hip_events_table, kRocProfVisDmOperationHipEvent, table);
+}
+
+rocprofvis_result_t
 Analysis::GetLaunchSampleEventsTable(SystemTrace* trace, rocprofvis_handle_t** table)
 {
     return GetOrAllocateEventsTable(m_data[trace].launch_sample_events_table, kRocProfVisDmOperationLaunchSample, table);
@@ -433,6 +456,7 @@ void Analysis::FreeTraceData(Trace* trace)
         delete data.memory_allocation_events_table;
         delete data.memory_copy_events_table;
         delete data.launch_sample_events_table;
+        delete data.hip_events_table;
         m_data.erase(trace);
     }
 }
@@ -457,6 +481,8 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     uint64_t sort_column_index = 2;
     uint64_t sort_order = (uint64_t)kRPVControllerSortOrderDescending;
     rocprofvis_dm_table_use_case_enum_t use_case;
+    c_optional_uint64_t node_id;
+    c_optional_uint64_t agent_id;
     result = UnpackUseCase(args, use_case);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetDouble(kRPVControllerTableArgsStartTime, 0, &start_ts);
@@ -494,8 +520,28 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
     sys_out->m_sort_column = sort_column_index;
     sys_out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
-    sys_out->m_where = "";
+    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
+    {
+        node_id.has_value = true;
+    }
+    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
+    {
+        agent_id.has_value = true;
+    }
+    sys_out->m_source_filter = node_id.has_value || agent_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id }) : std::nullopt;
     sys_out->m_filter = "__op = " + std::to_string(m_op);
+    uint32_t filter_length = 0;
+    if(kRocProfVisResultSuccess ==
+           args.GetString(kRPVControllerTableArgsFilter, 0, nullptr, &filter_length) &&
+       filter_length > 0)
+    {
+        std::string filter(filter_length, '\0');
+        if(kRocProfVisResultSuccess ==
+           args.GetString(kRPVControllerTableArgsFilter, 0, filter.data(), &filter_length))
+        {
+            sys_out->m_filter += " AND (" + filter + ")";
+        }
+    }
     sys_out->m_group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
         "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
     sys_out->m_group_cols = "name";
@@ -524,6 +570,16 @@ Analysis::~Analysis()
         FreeTraceData(trace.first);
     }
     m_data.clear();
+}
+
+rocprofvis_result_t Analysis::AllocEventsTable(rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table)
+{
+    if(!table)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    *table = (rocprofvis_handle_t*)new EventsTable(0, op);
+    return kRocProfVisResultSuccess;
 }
 
 rocprofvis_result_t Analysis::GetOrAllocateEventsTable(EventsTable*& slot, rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table)

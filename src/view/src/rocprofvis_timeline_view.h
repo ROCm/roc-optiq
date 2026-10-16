@@ -127,6 +127,7 @@ public:
 
     void           AutoScrollForAnnotationDrag(ImVec2 content_origin);
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
+    void           HandleMeasurementLabelInput();
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
 
@@ -136,10 +137,6 @@ public:
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
-
-    // Points at the sidebar-tree (topology) order owned by TrackTopology. Wired by
-    // the owning TraceView; the pointee stays valid for the view's lifetime.
-    void          SetTopologyOrder(const std::vector<uint64_t>* order);
 
 private:
     // How the timeline track order is derived. Persisted as an int, so keep the
@@ -153,8 +150,15 @@ private:
 
     // Reorder the tracks according to the given sort mode. If topology order isn't
     // available yet (the tree is still building at load), the sort is deferred and
-    // applied once SetTopologyOrder() provides it.
+    // retried from Update().
     void          SortTracksBy(TrackSortMode mode);
+    /*
+     * Full permutation of the current tracks in topology order. The topology
+     * tree only knows the tracks it owns, so anything it does not cover (the
+     * sidebar's "Uncategorized" rows) is appended in current index order to
+     * keep the result a valid permutation. Empty until the topology is loaded.
+     */
+    std::vector<uint64_t> BuildTopologyOrder() const;
     bool          HasCustomOrder() const { return !m_custom_order.empty(); }
 
     // Reindexes each TrackInfo and rebuilds m_tracks to match order, which must be
@@ -306,6 +310,10 @@ private:
     MeasurementLabelRect       m_measure_label_duration;
     MeasurementCopyTarget      m_measure_copy_target;
 
+    // Session-only vertical drag offset for the floating measurement duration
+    // label; its rect is captured each frame for the hit-test.
+    float                      m_measure_label_offset_y = 0.0f;
+
     ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
 
     TimelineViewProjectSettings m_project_settings;
@@ -313,14 +321,13 @@ private:
     TrackTypeCounts             m_track_counts;
 
     // Track sort state. m_default_order is captured once when the trace loads;
-    // m_custom_order is the single remembered manual ordering. m_topology_order
-    // points at TrackTopology's cached order; m_topology_sort_pending is set when a
-    // topology sort is requested before that order is available.
+    // m_custom_order is the single remembered manual ordering. Topology order is
+    // derived from the topology tree on demand; m_topology_sort_pending is set
+    // when a topology sort is requested before that tree is available.
     TrackSortMode                m_sort_mode;
     std::vector<uint64_t>        m_default_order;
     std::vector<uint64_t>        m_custom_order;
     bool                         m_topology_sort_pending;
-    const std::vector<uint64_t>* m_topology_order = nullptr;
     // Menu-requested sort, applied in Update() (not mid-render). Empty if none.
     std::optional<TrackSortMode> m_pending_sort_mode;
 };

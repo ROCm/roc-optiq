@@ -6,6 +6,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -740,6 +741,33 @@ RocProfVis::View::join_posix_path(const std::string& dir, const std::string& nam
     return normalize_posix_path(joined);
 }
 
+std::string
+RocProfVis::View::format_byte_size(uint64_t bytes)
+{
+    constexpr const char* UNITS[]    = { "B", "KiB", "MiB", "GiB", "TiB" };
+    constexpr int         LAST_UNIT  = 4;
+    constexpr double      UNIT_RATIO = 1024.0;
+
+    double size = static_cast<double>(bytes);
+    int    unit = 0;
+    while(size >= UNIT_RATIO && unit < LAST_UNIT)
+    {
+        size /= UNIT_RATIO;
+        unit++;
+    }
+
+    char buf[32];
+    if(unit == 0)
+    {
+        std::snprintf(buf, sizeof(buf), "%llu B", static_cast<unsigned long long>(bytes));
+    }
+    else
+    {
+        std::snprintf(buf, sizeof(buf), "%.1f %s", size, UNITS[unit]);
+    }
+    return std::string(buf);
+}
+
 namespace
 {
 // Returns true if DISPLAY looks like an SSH X11-forwarded display, e.g.
@@ -844,4 +872,10 @@ RocProfVis::View::strip_ansi_for_display(std::string const& text)
         ++i;
     }
     return out;
+}
+
+bool
+RocProfVis::View::is_usable_time_range(double start_ns, double end_ns)
+{
+    return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
 }

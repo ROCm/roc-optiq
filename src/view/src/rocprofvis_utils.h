@@ -283,6 +283,10 @@ posix_parent_path(const std::string& path);
 std::string
 join_posix_path(const std::string& dir, const std::string& name);
 
+// Formats a byte count with a binary unit, e.g. "512 B" or "19.4 MiB".
+std::string
+format_byte_size(uint64_t bytes);
+
 /**
  * @brief Detects whether the current process appears to be running in a remote
  *        session where xdg-desktop-portal file dialogs cannot reach the user.
@@ -303,6 +307,16 @@ is_remote_display_session();
  */
 std::string
 strip_ansi_for_display(std::string const& text);
+
+/**
+ * @brief True when a time range is one the view can be driven to.
+ *
+ * Non-finite values have to be rejected explicitly: every comparison against
+ * NaN is false, so an `end <= start` guard on its own lets NaN and infinity
+ * through into the view transform.
+ */
+bool
+is_usable_time_range(double start_ns, double end_ns);
 
 }  // namespace View
 }  // namespace RocProfVis

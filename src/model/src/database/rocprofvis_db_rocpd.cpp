@@ -174,7 +174,7 @@ int RocpdDatabase::CallBackAgentToProcess(void *data, int argc, sqlite3_stmt* st
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void* func = (void*)&CallBackAgentToProcess;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     rocprofvis_dm_process_id pid = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
@@ -188,7 +188,7 @@ int RocpdDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, c
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==2, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void* func = (void*)&CallBackAddString;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     RocpdDatabase* db = (RocpdDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     std::stringstream ids((char*)db->Sqlite3ColumnText(func, stmt, azColName, 1));
@@ -225,6 +225,19 @@ std::string RocpdDatabase::GetLevelSchemaHashStr()
         hash_str += param.type;
     }
     return hash_str;
+}
+
+std::string RocpdDatabase::GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
+{
+    std::string where_str;
+    if(source_filter)
+    {
+        if(source_filter->agent_id.has_value)
+        {
+            where_str += " gpuId = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
+        }
+    }
+    return where_str;
 }
 
 rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)

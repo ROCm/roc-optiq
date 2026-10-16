@@ -25,13 +25,13 @@ constexpr ImWchar icon_ranges[] = {
     0xF2C9, 0xF2C9,
     0xF2D7, 0xF2D7,
     0xF306, 0xF306,
-    0xF31B, 0xF31B,
     0xF33F, 0xF33F,
     0xF35C, 0xF35D,
     0xF366, 0xF366,
     0xF37E, 0xF37F,
     0xF385, 0xF385,
     0xF386, 0xF386,
+    0xF38B, 0xF38B,
     0xF39C, 0xF39C,
     0xF3A8, 0xF3A8,
     0xF424, 0xF424,
@@ -65,7 +65,6 @@ inline constexpr const char* ICON_CHART_BAR     = u8"\uF2B5";
 inline constexpr const char* ICON_ARCHIVE       = u8"\uF2C9";
 inline constexpr const char* ICON_DELETE        = u8"\uF2D7";
 inline constexpr const char* ICON_EYE_SLASH     = u8"\uF306";
-inline constexpr const char* ICON_FUNNEL        = u8"\uF31B";
 inline constexpr const char* ICON_TREE          = u8"\uF33F";
 inline constexpr const char* ICON_GRID          = u8"\uF35C";
 inline constexpr const char* ICON_ARROW_DOWN    = u8"\uF35D";
@@ -74,6 +73,7 @@ inline constexpr const char* ICON_EDIT          = u8"\uF37E";
 inline constexpr const char* ICON_TRASH_CAN     = u8"\uF37F";
 inline constexpr const char* ICON_ARROW_IN_BOX  = u8"\uF385";
 inline constexpr const char* ICON_EXPAND        = u8"\uF386";
+inline constexpr const char* ICON_FUNNEL        = u8"\uF38B";
 inline constexpr const char* ICON_OPEN          = u8"\uF39C";
 inline constexpr const char* ICON_ARROWS_CYCLE  = u8"\uF3A8";
 inline constexpr const char* ICON_EYE_THIN      = u8"\uF424";

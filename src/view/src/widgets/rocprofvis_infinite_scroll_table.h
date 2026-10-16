@@ -11,6 +11,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace RocProfVis
@@ -93,6 +95,39 @@ protected:
 
     void FormatTimeColumns() const;
     void ExportToFile() const;
+    /* Whether this table is waiting on data: either a request is out with the
+     * controller, or one is held until the controller table frees up.
+     */
+    bool TableRequestInFlight() const;
+    /* Cancels the request this table has with the controller, so a late response
+     * cannot refill a table whose selection has already moved on. Cancellation is
+     * asynchronous and only issued once, so calling this every frame is safe.
+     *
+     * A fetch that is queued but not yet sent is left alone by default, which is
+     * what FetchData wants when it retires the outstanding request to make room for
+     * the one it is about to send. Pass clear_pending when nothing will replace it -
+     * the selection emptied - so the queued fetch is dropped as well.
+     */
+    void CancelFetch(bool clear_pending = false);
+    /* When false the body draws without its own frame, so a parent that already
+     * draws one around the title and the table supplies the only border.
+     */
+    void SetDrawBorder(bool draw);
+    /* Applies an externally chosen sort on the next render. Named rather than
+     * indexed because the caller may be looking at a table with a different
+     * schema; the name is resolved against this table's own header, and a sort on
+     * a column this table does not have is dropped.
+     */
+    void SetPendingSort(const std::string&                 column_name,
+                        rocprofvis_controller_sort_order_t order);
+    // The header cell this table sorts by, empty until the header arrives.
+    const std::string& SortColumnName() const;
+    // Position of a header cell in this table, INVALID_UINT64_INDEX if absent.
+    size_t ColumnIndexOf(const std::string& column_name) const;
+    virtual void OnSortChanged() {}
+    // Drops or rewrites filter fields that this table cannot send. Default is
+    // a no-op so non-compare tables keep the values the user applied.
+    virtual void AdjustFilterForRequest(FilterOptions&) const {}
 
     // Filter row...
     const std::string& ActiveFilterRowClause() const;
@@ -121,6 +156,9 @@ protected:
     uint64_t m_fetch_chunk_size;
 
     bool m_data_changed;
+    // True when the last request sent included a group_by. Grouped results
+    // must not rebuild the eligible column cache from the aggregate header.
+    bool m_last_fetch_grouped;
 
     // Track the selected row for context menu actions
     int m_selected_row;
@@ -128,6 +166,7 @@ protected:
     int m_hovered_row;
 
     bool m_horizontal_scroll;
+    bool m_draw_border;
 
 private:
     struct FilterInput
@@ -135,13 +174,27 @@ private:
         std::string                            column_name;
         rocprofvis_controller_primitive_type_t column_type;
         std::string                            input;
-        const char*                            tooltip;
+        bool                                   is_time;  // Value is a timestamp (ns).
     };
 
     void FetchData();
-    void RenderCell(const std::string* cell_text, int row, int column);
+    // Draws a table cell, eliding to the column width. tooltip_extra (e.g. a time
+    // column's raw ns value) is appended to the same hover tooltip as elided text.
+    void RenderCell(const std::string* cell_text, int row, int column,
+                    const std::string* tooltip_extra = nullptr);
     void RenderContextMenu();
     void ProcessSortOrFilterRequest(uint64_t frame_count);
+
+    // Hover tooltip explaining how to filter a column, with an example.
+    void RenderFilterHelpTooltip(const FilterInput& input) const;
+
+    // Sizes non-user-resized columns to their widest loaded value, clamped to
+    // [MIN_COLUMN_WIDTH_EM, MAX_COLUMN_FIT_WIDTH_EM]. With grow_only, columns only
+    // grow (scroll page-in); otherwise they fit fresh. Call while the table is active.
+    void FitColumnsToContent(bool grow_only);
+
+    // Flags columns the user manually resized so FitColumnsToContent skips them.
+    void DetectUserColumnResizes();
 
     int      m_fetch_pad_items;
     int      m_fetch_threshold_items;
@@ -152,10 +205,20 @@ private:
     bool m_filter_requested;
 
     // Internal state flags below
-    bool     m_open_context_menu;
-    bool     m_skip_data_fetch;
-    uint64_t m_last_total_row_count;
-    ImVec2   m_last_table_size;
+    bool                                   m_open_context_menu;
+    bool                                   m_skip_data_fetch;
+    bool                                   m_pending_sort;
+    std::string                            m_pending_sort_column;
+    rocprofvis_controller_sort_order_t     m_pending_sort_order;
+    bool     m_refit_pending;    // Fresh content-change data is loaded; re-fit columns.
+    bool     m_refit_requested;  // A content change (filter/selection) is in flight.
+    bool     m_grow_pending;     // A scroll page loaded; grow columns to fit it.
+    bool     m_columns_emptied;  // Table went empty; the next fit forgets manual sizes.
+    // Keyed by column name so adding/removing columns never disturbs existing sizing.
+    std::unordered_set<std::string>        m_user_sized_columns;  // User-resized columns.
+    std::unordered_map<std::string, float> m_column_fit_widths;   // Last auto-fit width.
+    uint64_t                               m_last_total_row_count;
+    ImVec2                                 m_last_table_size;
 
     // Filter row...
     bool                                         m_display_filter_row;

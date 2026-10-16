@@ -75,7 +75,11 @@ public:
     virtual std::string                 GetOutput();
     void                                ClearOutput();
     int32_t                             GetExitCode() const;
-    virtual bool                        Cancel();
+
+    // kRocProfVisResultSuccess when a running profiler was stopped,
+    // kRocProfVisResultNotSupported when there was nothing to stop because the
+    // run had already finished. Anything else is a genuine failure to stop it.
+    virtual rocprofvis_result_t         Cancel();
 
     // Stops the status poller and frees all profiler objects (deferred,
     // non-blocking, if a worker is still using them). The session is reusable

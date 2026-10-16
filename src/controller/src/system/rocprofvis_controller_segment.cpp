@@ -99,11 +99,16 @@ void Segment::SetMaxTimestamp(double value)
     m_max_timestamp = value;
 }
 
-void Segment::Insert(double timestamp, uint8_t level, Handle* event)
+bool Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    event->IncreaseRetainCounter();
-    m_entries[level].insert(std::make_pair(timestamp, event));
+    std::pair<std::map<double, Handle*>::iterator, bool> insert_result =
+        m_entries[level].insert(std::make_pair(timestamp, event));
+    if(insert_result.second)
+    {
+        event->IncreaseRetainCounter();
+    }
+    return insert_result.second;
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
@@ -113,10 +118,10 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
     if(m_start_timestamp <= end && last_timestamp >= start)
     {
-        if(lru_params)
+        if(lru_params && lru_params->m_ctx && lru_params->m_ctx->GetMemoryManager())
         {
             lru_params->m_ctx->GetMemoryManager()->AddLRUReference(
-                lru_params->m_owner, this, lru_params->m_lod, &array);
+                lru_params->m_owner, this, lru_params->m_array_id);
         }
         result = kRocProfVisResultSuccess;
         for(auto& level : m_entries)
@@ -262,10 +267,11 @@ size_t Segment::GetNumEntries()
 
 
 SegmentTimeline::SegmentTimeline()
-: m_segment_duration(0)
+: m_segment_start_time(0)
+, m_segment_duration(0)
 , m_num_segments(0)
 , m_max_num_items(0)
-, m_segment_start_time(0)
+, m_ctx(nullptr)
 {
 }
 
@@ -277,10 +283,12 @@ SegmentTimeline::SegmentTimeline(SegmentTimeline&& other)
 : m_segments(std::move(other.m_segments))
 , m_valid_segments(std::move(other.m_valid_segments))
 , m_processed_segments(std::move(other.m_processed_segments))
+, m_segment_start_time(other.m_segment_start_time)
 , m_segment_duration(other.m_segment_duration)
 , m_num_segments(other.m_num_segments)
 , m_max_num_items(other.m_max_num_items)
-, m_segment_start_time(other.m_segment_start_time)
+, m_ctx(other.m_ctx)
+, m_active_array_ids(std::move(other.m_active_array_ids))
 {
 
 }
@@ -294,6 +302,8 @@ SegmentTimeline& SegmentTimeline::operator=(SegmentTimeline&& other)
     m_valid_segments = std::move(other.m_valid_segments);
     m_processed_segments     = std::move(other.m_processed_segments);
     m_segment_start_time = other.m_segment_start_time;
+    m_ctx                = other.m_ctx;
+    m_active_array_ids   = std::move(other.m_active_array_ids);
     return *this;
 }
 
@@ -377,6 +387,19 @@ SegmentTimeline::Insert(double segment_start, std::unique_ptr<Segment>&& segment
     if(pair.second)
     {
         pair.first->second.get()->SetTimelineIterator(pair.first);
+        if(m_ctx && m_ctx->GetContext())
+        {
+            SystemTrace* trace = (SystemTrace*) m_ctx->GetContext();
+            if(trace->GetMemoryManager())
+            {
+                ROCPROFVIS_ASSERT(!m_active_array_ids.empty());
+                for(uint64_t array_id : m_active_array_ids)
+                {
+                    trace->GetMemoryManager()->AddLRUReference(
+                        this, pair.first->second.get(), array_id);
+                }
+            }
+        }
         result = kRocProfVisResultSuccess;
     }
     else
@@ -458,6 +481,18 @@ SegmentTimeline::GetMaxNumItems() const
 
 std::shared_mutex* SegmentTimeline::GetMutex() {
     return &m_mutex;
+}
+
+void SegmentTimeline::AddActiveArray(uint64_t array_id)
+{
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_active_array_ids.insert(array_id);
+}
+
+void SegmentTimeline::RemoveActiveArray(uint64_t array_id)
+{
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_active_array_ids.erase(array_id);
 }
 
 rocprofvis_result_t SegmentTimeline::Remove(Segment* target)

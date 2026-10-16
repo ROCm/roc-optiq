@@ -76,7 +76,8 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
            const char* tooltip = nullptr, bool frameless = true,
            ImVec2 frame_padding = ImVec2(0, 0), ImU32 bg_color = IM_COL32(0, 0, 0, 0),
            ImU32 bg_color_hover  = IM_COL32(0, 0, 0, 0),
-           ImU32 bg_color_active = IM_COL32(0, 0, 0, 0), const char* id = nullptr);
+           ImU32 bg_color_active = IM_COL32(0, 0, 0, 0), const char* id = nullptr,
+           float font_size = 0.0f);
 
 bool
 IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold = 5.0f);
@@ -94,6 +95,10 @@ InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags = 0)
 bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags = 0);
+
+bool
+InputTextMultilineString(const char* id, std::string& str, const ImVec2& size,
+                         ImGuiInputTextFlags flags = 0);
 
 void
 SetTooltipStyled(const char* fmt, ...);
@@ -114,15 +119,19 @@ enum Alignment
     Alignment_Right,
 };
 
+// Ellipsis appended to shortened text, so every caller renders the same marker.
+inline constexpr const char* TEXT_ELLIPSIS = "...";
+
 bool
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
-// Trims text to a single line fitting max_width (and max_chars), appending "..."
-// when shortened. Uses the current font for measurement.
+// Trims text to fit max_width (current font), appending TEXT_ELLIPSIS when
+// shortened. max_chars optionally caps the character count.
 std::string
-ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars);
+ElideWithEllipsis(const std::string& text, float max_width,
+                  size_t max_chars = std::string::npos);
 
 void
 CenterNextTextItem(const char* text);
@@ -183,7 +192,8 @@ PanelFieldLabel(const char* text, bool align_to_frame = true,
 // Renders an icon-font glyph tinted with a theme color; advances the cursor
 // like TextUnformatted.
 void
-PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr,
+          float font_size = 0.0f);
 
 // Accent-colored primary action button (accent fill + on-accent text). Returns
 // true when clicked.
@@ -217,6 +227,8 @@ inline constexpr std::string_view COPY_ROW_DATA_NOTIFICATION = "Row data copied 
 // If multiple instances with the same text can appear within the same frame,
 // the caller must provide a unique, stable identifier to avoid ID collisions.
 // For items created in loops, the loop index or iterator is typically sufficient.
+// A custom menu callback runs while the identified interaction item is current;
+// it remains responsible for beginning and ending its context popup.
 bool
 CopyableTextUnformatted(
     const char* text, std::string_view unique_id = "", std::string_view notification = "",
@@ -259,7 +271,7 @@ RenderRowHitbox(const char* hitbox_id, int row, int column_count,
                 CellMenuTarget& target, bool& open);
 
 // Records a right-click that landed on the cell content just submitted (the
-// copyable text/button steals hover from the row hit-box over its own area).
+// copyable text interaction target steals hover from the row hit-box over its area).
 // Call immediately after rendering a cell's content.
 void
 CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open);

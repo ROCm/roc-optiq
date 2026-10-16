@@ -6,9 +6,12 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "model/rocprofvis_tables_model.h"
 #include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
@@ -42,10 +45,12 @@ enum class RequestType
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
+    kFetchAnalysisTopHipEventsTable,
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
     kFetchPcSampling,
+    kExecuteScript,
 };
 
 enum class RequestState
@@ -157,6 +162,8 @@ public:
 class TableRequestParams : public RequestParamsBase
 {
 public:
+    static constexpr uint64_t INFER_REQUEST_ID = 0;
+
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
     double   m_start_ts;           // starting time stamp of the data in the table
     double   m_end_ts;             // ending time stamp of the data in the table
@@ -164,11 +171,21 @@ public:
     uint64_t m_req_row_count;      // number of rows requested
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
-    std::string                        m_where;       // SQL where clause
+    std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
     std::string                        m_filter;      // CMD filter
     std::string                        m_group;
     std::string                        m_group_columns;
     std::string                        m_export_to_file_path;
+    // TablesModel slot; __kTableTypeCount means infer.
+    TableType m_view_table_type;
+    // Packed client request ID; zero means infer.
+    uint64_t m_request_id;
+
+    // Who asked. 0 is the UI, which owns the shared request ids, the shared
+    // controller tables, and the model slots the tabs render from. A non-zero
+    // client is routed to its own of each, so a background reader cannot
+    // overwrite what the user is looking at. See DataProvider::ASSISTANT_CLIENT_ID.
+    uint64_t                           m_client_id = 0;
 
 protected:
     // Constructed only via derives...
@@ -177,11 +194,13 @@ protected:
 
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type, double start_ts, double end_ts,
-        const char* where, char const* filter, char const* group, char const* group_cols,
+        rocprofvis_dm_query_criteria_ptr source_filter, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string                        export_to_file_path = "")
+        std::string export_to_file_path = "",
+        TableType   view_table_type     = TableType::__kTableTypeCount,
+        uint64_t    request_id          = INFER_REQUEST_ID)
     : m_table_type(table_type)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
@@ -189,11 +208,13 @@ protected:
     , m_req_row_count(req_row_count)
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
-    , m_where(where)
+    , m_source_filter(source_filter ? std::make_optional(*source_filter) : std::nullopt)
     , m_filter(filter)
     , m_group(group)
     , m_group_columns(group_cols)
     , m_export_to_file_path(export_to_file_path)
+    , m_view_table_type(view_table_type)
+    , m_request_id(request_id)
     {}
     TableRequestParams() = default;
 };
@@ -210,14 +231,16 @@ public:
     TrackTableRequestParams(
         rocprofvis_controller_table_type_t table_type,
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
-        const char* where, char const* filter, char const* group, char const* group_cols,
+        rocprofvis_dm_query_criteria_ptr source_filter, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string                        export_to_file_path = "")
-    : TableRequestParams(table_type, start_ts, end_ts, where, filter, group, group_cols, start_row,
+        std::string                        export_to_file_path = "",
+        TableType view_table_type = TableType::__kTableTypeCount,
+        uint64_t  request_id      = INFER_REQUEST_ID)
+    : TableRequestParams(table_type, start_ts, end_ts, source_filter, filter, group, group_cols, start_row,
                          req_row_count, sort_column_index, sort_order,
-                         export_to_file_path)
+                         export_to_file_path, view_table_type, request_id)
     , m_track_ids(track_ids)
     {}
     TrackTableRequestParams() = default;
@@ -241,13 +264,13 @@ public:
     EventSearchRequestParams(
         rocprofvis_controller_table_type_t                  table_type,
         const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, const char* where, bool include_substrings, bool include_category,
+        double end_ts, rocprofvis_dm_query_criteria_ptr source_filter, bool include_substrings, bool include_category,
         bool partial_matching, const std::vector<std::string> string_table_filters = {},
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
         std::string                        export_to_file_path = "")
-    : TableRequestParams(table_type, start_ts, end_ts, where, "", "", "", start_row,
+    : TableRequestParams(table_type, start_ts, end_ts, source_filter, "", "", "", start_row,
                          req_row_count, sort_column_index, sort_order,
                          export_to_file_path)
     , m_op_types(op_types)
@@ -327,25 +350,37 @@ public:
     {}
 };
 
+enum class PcSamplingLayer : uint32_t
+{
+    kIsa,
+    kSource,
+    kStalls
+};
+
 class PcSamplingRequestParams : public RequestParamsBase
 {
 public:
+    PcSamplingLayer m_layer;
     uint32_t m_workload_id;
     uint32_t m_kernel_id;
-    uint32_t m_source_file_id;
+    uint64_t m_source_file_uuid;
     // Code View selection generation captured at submission.
-    // ProcessPcSamplingRequest discards results from superseded selections.
-    uint32_t m_generation = 0;
+    uint32_t m_generation    = 0;
+    // Identifies the latest request for a layer within the selection generation.
+    uint64_t m_request_token = 0;
 
     PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
     PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
 
-    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
-                            uint32_t source_file_id, uint32_t generation)
-    : m_workload_id(workload_id)
+    PcSamplingRequestParams(PcSamplingLayer layer, uint32_t workload_id,
+                            uint32_t kernel_id, uint64_t source_file_uuid,
+                            uint32_t generation, uint64_t request_token)
+    : m_layer(layer)
+    , m_workload_id(workload_id)
     , m_kernel_id(kernel_id)
-    , m_source_file_id(source_file_id)
+    , m_source_file_uuid(source_file_uuid)
     , m_generation(generation)
+    , m_request_token(request_token)
     {}
 };
 

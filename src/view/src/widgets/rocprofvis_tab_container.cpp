@@ -5,6 +5,7 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_core_string_utils.h"
 #include <algorithm>
 
 namespace RocProfVis
@@ -82,7 +83,7 @@ TabContainer::Update()
     // Update logic for each tab
     for(auto& tab : m_tabs)
     {
-        if(tab.m_widget)
+        if(tab.m_enabled && tab.m_widget)
         {
             tab.m_widget->Update();
         }
@@ -109,6 +110,29 @@ TabContainer::Render()
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {
+        auto is_enabled_index = [this](int index) {
+            return index >= 0 && index < static_cast<int>(m_tabs.size()) &&
+                   m_tabs[index].m_enabled;
+        };
+        if(!is_enabled_index(m_set_active_tab_index))
+        {
+            m_set_active_tab_index = s_invalid_index;
+        }
+        if(!is_enabled_index(m_active_tab_index))
+        {
+            if(!is_enabled_index(m_set_active_tab_index))
+            {
+                const auto first_enabled =
+                    std::find_if(m_tabs.begin(), m_tabs.end(),
+                                 [](const TabItem& tab) { return tab.m_enabled; });
+                m_set_active_tab_index =
+                    first_enabled == m_tabs.end()
+                        ? s_invalid_index
+                        : static_cast<int>(std::distance(m_tabs.begin(), first_enabled));
+            }
+            new_selected_tab = m_set_active_tab_index;
+        }
+
         int index_to_remove = s_invalid_index;
         // Distinguish unselected tabs from the surrounding panel.
         ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kButton));
@@ -132,7 +156,8 @@ TabContainer::Render()
                         : 0;
 
                 // Prevent truncated tab names from showing tooltips.
-                if(!m_allow_tool_tips)
+                if(!m_allow_tool_tips ||
+                   (!tab.m_enabled && !tab.m_disabled_tooltip.empty()))
                     flags |= ImGuiTabItemFlags_NoTooltip;
 
                 bool  is_open = true;
@@ -149,7 +174,17 @@ TabContainer::Render()
 
                 bool tab_visible = false;
                 ImGui::PushID(tab.m_id.c_str());
+                ImGui::BeginDisabled(!tab.m_enabled);
                 bool tab_selected = ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags);
+                ImGui::EndDisabled();
+
+                const bool tab_header_hovered = ImGui::IsItemHovered(
+                    ImGuiHoveredFlags_AllowWhenDisabled);
+                if(!tab.m_enabled && tab_header_hovered &&
+                   !tab.m_disabled_tooltip.empty())
+                {
+                    SetTooltipStyled("%s", tab.m_disabled_tooltip.c_str());
+                }
 
                 ImGui::PopStyleColor();
 
@@ -157,25 +192,27 @@ TabContainer::Render()
                 {
                     tab_visible = true;
                     // Show tooltip for the active tab if header is hovered
-                    if(m_allow_tool_tips && ImGui::IsItemHovered())
+                    if(tab.m_enabled && m_allow_tool_tips && tab_header_hovered)
                     {
                         SetTooltipStyled("%s", tab.m_id.c_str());
                     }
 
-                    new_selected_tab = static_cast<int>(i);
-                    if(tab.m_widget)
+                    if(tab.m_enabled)
                     {
-                       
-                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
-                                             ImGui::GetStyle().ItemSpacing.y);
-                        tab.m_widget->Render();
+                        new_selected_tab = static_cast<int>(i);
+                        if(tab.m_widget)
+                        {
+                            ImGui::SetCursorPosY(ImGui::GetCursorPosY() -
+                                                 ImGui::GetStyle().ItemSpacing.y);
+                            tab.m_widget->Render();
+                        }
                     }
                     ImGui::EndTabItem();
                 }
                 ImGui::PopID();
 
                 // Show tooltip for inactive tabs if header is hovered
-                if(!tab_visible && ImGui::IsItemHovered())
+                if(!tab_visible && tab.m_enabled && tab_header_hovered)
                 {
                     if(m_allow_tool_tips)
                     {
@@ -203,7 +240,7 @@ TabContainer::Render()
         if(m_active_tab_index != new_selected_tab)
         {
             m_active_tab_index = new_selected_tab;
-            if(new_selected_tab < m_tabs.size() && m_enable_send_change_event)
+            if(new_selected_tab >= 0 && new_selected_tab < static_cast<int>(m_tabs.size()) && m_enable_send_change_event)
             {
                 SendEvent(RocEvents::kTabSelected, m_tabs[new_selected_tab].m_id);
             }
@@ -305,7 +342,8 @@ TabContainer::RemoveTab(int index)
 void
 TabContainer::SetActiveTab(int index)
 {
-    if(index >= 0 && index < static_cast<int>(m_tabs.size()))
+    if(index >= 0 && index < static_cast<int>(m_tabs.size()) &&
+       m_tabs[index].m_enabled)
     {
         m_set_active_tab_index = index;
     }
@@ -317,7 +355,7 @@ TabContainer::SetActiveTab(const std::string& id)
 {
     auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
                            [&id](const TabItem& tab) { return tab.m_id == id; });
-    if(it != m_tabs.end())
+    if(it != m_tabs.end() && it->m_enabled)
     {
         m_set_active_tab_index = static_cast<int>(std::distance(m_tabs.begin(), it));
     }
@@ -331,6 +369,19 @@ TabContainer::SetTabLabel(const std::string& label, const std::string& id)
     if(it != m_tabs.end())
     {
         it->m_label = label;
+    }
+}
+
+void
+TabContainer::SetTabEnabled(const std::string& id, bool enabled,
+                            const std::string& disabled_tooltip)
+{
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
+                           [&id](const TabItem& tab) { return tab.m_id == id; });
+    if(it != m_tabs.end())
+    {
+        it->m_enabled          = enabled;
+        it->m_disabled_tooltip = disabled_tooltip;
     }
 }
 
@@ -367,6 +418,44 @@ TabContainer::GetTabs()
         tabs.push_back(t);
     }
     return tabs;
+}
+
+const TabItem*
+TabContainer::FindTabByLabel(const std::string& label) const
+{
+    if(label.empty())
+    {
+        return nullptr;
+    }
+
+    const std::string needle = Core::String::to_lower_copy(label);
+    for(const TabItem& tab : m_tabs)
+    {
+        if(Core::String::to_lower_copy(tab.m_label) == needle)
+        {
+            return &tab;
+        }
+    }
+
+    if(needle.size() < MIN_SUBSTRING_LABEL_MATCH)
+    {
+        return nullptr;
+    }
+
+    const TabItem* single_match = nullptr;
+    for(const TabItem& tab : m_tabs)
+    {
+        if(Core::String::to_lower_copy(tab.m_label).find(needle) == std::string::npos)
+        {
+            continue;
+        }
+        if(single_match != nullptr)
+        {
+            return nullptr;
+        }
+        single_match = &tab;
+    }
+    return single_match;
 }
 
 }  // namespace View

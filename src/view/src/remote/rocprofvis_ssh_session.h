@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_enums.h"
+#include "rocprofvis_controller_types.h"
 #include "rocprofvis_ssh_uri.h"
 #include "rocprofvis_ssh_fetch.h"
 #include "rocprofvis_appmonitor.h"
@@ -69,6 +70,10 @@ namespace View
         void CancelActiveOperation();
 
         bool IsConnected();
+        // True once the last phase's job is done with the connection. A failure
+        // is reported before its job lets go of the connection, so wait for this
+        // before starting another phase after one.
+        bool IsIdle() const;
         SshOperation GetActiveOperation() const { return m_active_operation; }
         uint64_t GetActiveOperationId() const { return m_active_operation_id; }
 

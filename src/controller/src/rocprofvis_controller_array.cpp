@@ -11,6 +11,7 @@ namespace Controller
 
 Array::Array()
 : Handle(__kRPVControllerArrayPropertiesFirst, __kRPVControllerArrayPropertiesLast)
+, m_array_id(s_next_array_id++)
 {
     m_ctx = nullptr;
 }
@@ -20,6 +21,11 @@ Array::~Array() {}
 std::vector<Data>& Array::GetVector(void)
 {
     return m_array;
+}
+
+uint64_t Array::GetArrayId(void) const
+{
+    return m_array_id;
 }
 
 rocprofvis_controller_object_type_t Array::GetType(void) 

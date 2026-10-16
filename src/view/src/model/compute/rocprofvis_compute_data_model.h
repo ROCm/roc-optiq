@@ -44,6 +44,9 @@ public:
     const std::vector<const WorkloadInfo*>& GetWorkloadList() const;
     const WorkloadInfo* GetWorkload(uint32_t workload_id) const;
 
+    const AnalysisInfo& GetAnalysisInfo() const;
+    void                SetAnalysisInfo(AnalysisInfo& analysis_info);
+
     const std::vector<std::shared_ptr<MetricValue>>* GetKernelMetricsData(
         uint64_t store_id, uint32_t kernel_id) const;
 
@@ -122,6 +125,7 @@ private:
 
     std::unordered_map<uint32_t, WorkloadInfo> m_workloads;
     std::vector<const WorkloadInfo*>           m_ordered_workloads;  // built from map values; never null
+    AnalysisInfo                               m_analysis_info;
 
     struct MetricStore
     {

@@ -428,4 +428,42 @@ rocprofvis_dm_handle_t  rocprofvis_dm_get_property_as_handle(
 ```  
 
 ---
-       
+
+PC-sampling compute queries
+---
+
+PC-sampling data is part of a ROCm Compute Profiler analysis database, not the
+system-trace timeline data model. The supported query set requires compute
+schema 2.2 or newer and is built by `ComputeQueryFactory` in
+`src/database/rocprofvis_db_compute.cpp`.
+
+The query use cases cover three groups:
+
+| Group | Tables |
+|-------|--------|
+| ISA | `compute_code_object_store`, `compute_kernel_symbol`, `compute_instruction_line` |
+| Source | `compute_source_file`, `compute_source_line`, `compute_instruction_source_line` |
+| Sampling metadata | `compute_pc_sample_state`, `compute_pc_sample_stall_reason`, `compute_pc_sample_stall_reason_lookup`, `compute_instruction_type_lookup`, `compute_instruction_sample`, `compute_instruction_sample_lookup` |
+
+Call `rocprofvis_db_build_compute_query()` with the matching
+`rocprofvis_db_compute_use_case_enum_t`, then execute the returned SQL with
+`rocprofvis_db_execute_compute_query_async()`. Kernel-scoped queries take
+`kRPVComputeParamKernelId`; source-line retrieval takes
+`kRPVComputeParamSourceFileUuid`.
+
+`CallbackGetComputeGeneric` maps SQL aliases through `ColumnNameToEnum` and
+writes a temporary data-model `Table`. Each column carries its
+`rocprofvis_db_compute_column_enum_t`, and each cell is exposed as a raw string
+through the universal table property API. The controller is responsible for
+converting those strings into its typed PC-sampling handle and deleting the
+temporary table.
+
+Source-file discovery follows instruction/source correlations for the selected
+kernel. Source-line and correlation queries exclude NULL or zero line numbers;
+correlation rows include the owning source-file UUID for cross-file UI
+navigation.
+
+The authoritative model-layer reference is
+[`.agents/DATABASE.md`](../../.agents/DATABASE.md). Controller and UI behavior
+is documented in [`.agents/CONTROLLER.md`](../../.agents/CONTROLLER.md) and
+[`.agents/UI.md`](../../.agents/UI.md).

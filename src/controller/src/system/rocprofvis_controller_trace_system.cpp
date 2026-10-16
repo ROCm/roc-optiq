@@ -367,6 +367,7 @@ SystemTrace::LoadRocpdTracks(size_t& trace_size)
             dm_track_type == kRocProfVisDmKernelDispatchTrack ||
             dm_track_type == kRocProfVisDmMemoryAllocationTrack ||
             dm_track_type == kRocProfVisDmMemoryCopyTrack ||
+            dm_track_type == kRocProfVisDmHipEventTrack ||
             dm_track_type == kRocProfVisDmStreamTrack ||
             dm_track_type == kRocProfVisDmPmcTrack;
         if(!supported_track)
@@ -429,6 +430,7 @@ SystemTrace::ValidateRocpdTrackTopology() const
             case kRocProfVisDmKernelDispatchTrack:
             case kRocProfVisDmMemoryAllocationTrack:
             case kRocProfVisDmMemoryCopyTrack:
+            case kRocProfVisDmHipEventTrack:
             {
                 linked        = track->GetQueue() != nullptr;
                 expected_link = "queue";

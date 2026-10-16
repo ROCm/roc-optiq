@@ -88,6 +88,9 @@ rocprofvis_dm_result_t EventTrackSlice::GetRecordOperationStringAt(const rocprof
         case kRocProfVisDmOperationMemoryCopy: 
             op = "MemCopy";
             break;
+        case kRocProfVisDmOperationHipEvent: 
+            op = "HipEvent";
+            break;
     }
     return kRocProfVisDmResultSuccess;
 }

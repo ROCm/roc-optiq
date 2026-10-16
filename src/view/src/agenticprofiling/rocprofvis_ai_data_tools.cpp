@@ -207,7 +207,8 @@ AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
     {
         out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
     }
-    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
+    out << "kernel_exec_time_total_ns: "
+        << nanosecond_to_str(gpu.kernel_exec_time_total) << "\n";
     out << "top_kernels:\n";
     const size_t count = std::min(gpu.top_kernels.size(), ASSISTANT_TOP_KERNEL_LIMIT);
     if(count == 0)
@@ -219,8 +220,8 @@ AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
     {
         const SummaryInfo::KernelMetrics& kernel = gpu.top_kernels[i];
         out << "  " << (i + 1) << ". " << kernel.name << "  pct=" << kernel.exec_time_pct
-            << "  calls=" << kernel.invocations << "  sum_ns=" << kernel.exec_time_sum
-            << "\n";
+            << "  calls=" << kernel.invocations
+            << "  sum_ns=" << nanosecond_to_str(kernel.exec_time_sum) << "\n";
     }
 }
 
@@ -585,8 +586,8 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
     if(!event->basic_info.name.empty())
     {
         out << "name: " << event->basic_info.name << "\n";
-        out << "start_ns: " << event->basic_info.start_ts << "\n";
-        out << "duration_ns: " << event->basic_info.duration << "\n";
+        out << "start_ns: " << nanosecond_to_str(event->basic_info.start_ts) << "\n";
+        out << "duration_ns: " << nanosecond_to_str(event->basic_info.duration) << "\n";
     }
     if(event->track_id != INVALID_UINT64_INDEX)
     {
@@ -753,8 +754,9 @@ AppendBinWindow(std::ostringstream& out, const char* label, size_t bin, size_t b
         return;
     }
     const double width = span_ns / static_cast<double>(bin_count);
-    out << label << ": " << (start_ns + width * static_cast<double>(bin)) << " .. "
-        << (start_ns + width * static_cast<double>(bin + 1)) << "\n";
+    out << label << ": "
+        << nanosecond_to_str(start_ns + width * static_cast<double>(bin)) << " .. "
+        << nanosecond_to_str(start_ns + width * static_cast<double>(bin + 1)) << "\n";
 }
 
 // Sums the event rows of the minimap. This is exactly what the histogram strip
@@ -801,9 +803,9 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     const double span_ns  = end_ns - start_ns;
 
     std::ostringstream out;
-    out << "trace_start_ns: " << start_ns << "\n";
-    out << "trace_end_ns: " << end_ns << "\n";
-    out << "trace_duration_ns: " << span_ns << "\n";
+    out << "trace_start_ns: " << nanosecond_to_str(start_ns) << "\n";
+    out << "trace_end_ns: " << nanosecond_to_str(end_ns) << "\n";
+    out << "trace_duration_ns: " << nanosecond_to_str(span_ns) << "\n";
 
     if(single_track != INVALID_UINT64_INDEX)
     {
@@ -862,7 +864,8 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     out << "bins: " << overall.bins.size() << "\n";
     if(!overall.bins.empty())
     {
-        out << "bin_width_ns: " << (span_ns / static_cast<double>(overall.bins.size()))
+        out << "bin_width_ns: "
+            << nanosecond_to_str(span_ns / static_cast<double>(overall.bins.size()))
             << "\n";
     }
     AppendBinRow(out, overall);
@@ -1104,7 +1107,8 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     {
         out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
     }
-    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
+    out << "kernel_exec_time_total_ns: "
+        << nanosecond_to_str(gpu.kernel_exec_time_total) << "\n";
     out << "named_kernels_available: " << gpu.top_kernels.size() << "\n";
     out << "note: kernel names, per-kernel times, and event rows are NOT in this "
            "briefing. Call get_summary, top_events, or track_events to see them.\n";
@@ -1488,9 +1492,9 @@ ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
            Core::String::to_lower_copy(kernel.name).find(needle) != std::string::npos)
         {
             out << "name=" << kernel.name << " calls=" << kernel.invocations
-                << " sum_ns=" << kernel.exec_time_sum
-                << " min_ns=" << kernel.exec_time_min
-                << " max_ns=" << kernel.exec_time_max
+                << " sum_ns=" << nanosecond_to_str(kernel.exec_time_sum)
+                << " min_ns=" << nanosecond_to_str(kernel.exec_time_min)
+                << " max_ns=" << nanosecond_to_str(kernel.exec_time_max)
                 << " pct=" << kernel.exec_time_pct << "\n";
             found = true;
             if(!kernel_name.empty())

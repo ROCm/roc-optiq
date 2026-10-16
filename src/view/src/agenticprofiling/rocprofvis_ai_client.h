@@ -45,6 +45,9 @@ struct AssistantChatRequest
     // False on the round that writes the answer, which goes out without the
     // tool schema.
     bool enable_tools = true;
+    // Which of the two disjoint tool sets to send. Carried here so the client
+    // chooses a schema without knowing anything about traces.
+    bool compute_tools = false;
 };
 
 // What came back, or why nothing did.

@@ -23,9 +23,9 @@ struct AssistantToolLabel
     const char* status;
 };
 
-// Every tool the model can call, with the line the panel shows while it runs.
-// One list keeps the status text and the "unknown tool" reply in step with what
-// BuildAssistantToolsJson registers.
+// Every system-trace tool the model can call, with the line the panel shows
+// while it runs. One list keeps the status text and the "unknown tool" reply in
+// step with what BuildAssistantToolsJson registers.
 const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "trace_overview", "Reading the timeline overview..." },
     { "get_summary", "Loading summary..." },
@@ -50,6 +50,23 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     { "run_analysis_script", "Running an analysis script..." },
 #endif
+};
+
+// The compute-trace set. Only the two UI tools that mean the same thing on
+// either kind of trace are repeated from the list above; everything else here
+// reads a workload rather than a timeline. Scripting is absent on purpose -
+// optiq.table requires a system trace, so the tool would always fail.
+const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
+    { "compute_overview", "Reading the workload overview..." },
+    { "list_kernels", "Listing kernels..." },
+    { "kernel_summary", "Reading the kernel summary..." },
+    { "list_metrics", "Listing available metrics..." },
+    { "kernel_roofline", "Reading the roofline..." },
+    { "kernel_triage", "Reading the triage panel..." },
+    { "get_metrics", "Reading metric values..." },
+    { "kernel_pc_samples", "Reading PC samples..." },
+    { "switch_tab", "Switching tabs..." },
+    { "offer_next_steps", "Offering next steps..." },
 };
 
 // Builds a JSON string array, for the enum of a tool parameter.
@@ -144,10 +161,23 @@ AddQueryParams(jt::Json& params)
 
 // Every registered tool name, for telling the model when it invents one.
 std::string
-AssistantToolNameList()
+AssistantToolNameList(bool is_compute)
 {
     std::ostringstream out;
     bool               first = true;
+    if(is_compute)
+    {
+        for(const AssistantToolLabel& label : ASSISTANT_COMPUTE_TOOL_LABELS)
+        {
+            if(!first)
+            {
+                out << ", ";
+            }
+            first = false;
+            out << label.name;
+        }
+        return out.str();
+    }
     for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
     {
         if(!first)
@@ -558,24 +588,259 @@ MakeAssistantToolsJson()
     return tools;
 }
 
+// Which workload and kernel a compute tool is talking about. Every one of them
+// takes these and defaults to what the user has selected, so the model can
+// start asking without an id in hand.
+void
+AddComputeScopeParams(jt::Json& params, bool with_kernel)
+{
+    AddParam(params, "workload_id", "integer",
+             "Workload from compute_overview. Defaults to the one the user has "
+             "selected, and most traces only have one.");
+    if(!with_kernel)
+    {
+        return;
+    }
+    AddParam(params, "kernel_id", "integer",
+             "Kernel id from list_kernels. Defaults to the kernel the user has "
+             "selected in the toolbar.");
+    AddParam(params, "kernel_name", "string",
+             "Alternative to kernel_id. An exact name, or a fragment that picks out "
+             "exactly one kernel - an ambiguous fragment is refused rather than "
+             "resolved, so prefer kernel_id when you have it.");
+}
+
+// Assembles the compute-trace schema. A compute trace is a set of workloads,
+// each holding kernels with aggregate dispatch statistics and a catalogue of
+// hardware metrics - there is no timeline, so none of these tools takes a time
+// range and none returns an event.
+jt::Json
+MakeAssistantComputeToolsJson()
+{
+    jt::Json tools;
+
+    jt::Json overview_params = ObjectParams();
+    AddComputeScopeParams(overview_params, false);
+    AddTool(tools, 0, "compute_overview",
+            "Preliminary analysis, and the first thing to call. Reads what Optiq "
+            "already loaded: the GPU and architecture from the workload's system "
+            "info, how it was profiled, the kernel count, total kernel time, and "
+            "the top kernels by total duration with their share of that time. "
+            "Costs no database query.\n"
+            "Hardware counters are NOT here. This tells you which kernel is worth "
+            "looking at; kernel_triage then tells you why it is slow.",
+            overview_params);
+
+    jt::Json kernels_params = ObjectParams();
+    AddComputeScopeParams(kernels_params, false);
+    AddParam(kernels_params, "name_contains", "string",
+             "Only kernels whose name contains this, case-insensitive.");
+    AddParam(kernels_params, "sort_by", "string",
+             "name, invocations, duration_total (default), duration_mean, "
+             "duration_median, duration_min, or duration_max.");
+    kernels_params["properties"]["sort_by"]["enum"] = MakeStringEnum(
+        { "name", "invocations", "duration_total", "duration_mean", "duration_median",
+          "duration_min", "duration_max" });
+    AddParam(kernels_params, "sort_order", "string", "asc or desc (default desc).");
+    kernels_params["properties"]["sort_order"]["enum"] = MakeStringEnum({ "asc", "desc" });
+    AddParam(kernels_params, "limit", "integer", "Rows to return (default 20, max 200).");
+    AddParam(kernels_params, "offset", "integer", "Rows to skip, for paging.");
+    AddTool(tools, 1, "list_kernels",
+            "Every kernel in the workload with its aggregate dispatch statistics: "
+            "kernel_id, invocation count, and total, mean, median, min and max "
+            "duration in nanoseconds. Costs no database query.\n"
+            "These are aggregates over every dispatch of that kernel, not "
+            "individual dispatches - a compute trace does not record them "
+            "separately, so there is no 'when did this one run'. A max far above "
+            "the mean still tells you the kernel is unstable.",
+            kernels_params);
+
+    jt::Json kernel_params = ObjectParams();
+    AddComputeScopeParams(kernel_params, true);
+    AddTool(tools, 2, "kernel_summary",
+            "One kernel's dispatch statistics, its share of total kernel time, and "
+            "its roofline intensity points if the trace recorded them. Use it after "
+            "compute_overview names a kernel worth chasing.",
+            kernel_params);
+
+    jt::Json metrics_list_params = ObjectParams();
+    AddComputeScopeParams(metrics_list_params, false);
+    AddParam(metrics_list_params, "search", "string",
+             "Find metrics by word, case-insensitive against name and "
+             "description. For example \"cache\", \"occupancy\", \"MFMA\", "
+             "\"bandwidth\". Returns ids, names and units.");
+    AddParam(metrics_list_params, "describe", "array",
+             "Dotted ids to explain rather than values to read. Returns each "
+             "one's full description. Use it only when a name is not enough.");
+    metrics_list_params["properties"]["describe"]["items"]["type"] = "string";
+    AddTool(tools, 3, "list_metrics",
+            "What this workload actually recorded, and where to find it. Costs no "
+            "database query. Three ways to call it, cheapest first:\n"
+            "1. No arguments: the tables. Each line is a table id, its category "
+            "and table name, how many metrics it holds, and the value names (Avg, "
+            "Min, Max, Peak and so on) it reports each one under. Start here - it "
+            "is a couple of dozen lines and it is usually enough to pick the table "
+            "you want.\n"
+            "2. search=\"word\": the individual metrics matching that word, with "
+            "their ids and units.\n"
+            "3. describe=[ids]: what those metrics measure, in the profiler's own "
+            "words.\n"
+            "Call this before get_metrics, because the ids are the only thing you "
+            "cannot know without it: they come from this trace's own definitions "
+            "and vary with the GPU and the profiling mode. The names, by contrast, "
+            "are the standard ones, so you can usually read a metric without "
+            "describing it. A metric absent from this catalogue does not exist in "
+            "this trace, whatever the architecture normally records.",
+            metrics_list_params);
+
+    jt::Json roofline_params = ObjectParams();
+    AddComputeScopeParams(roofline_params, true);
+    AddTool(tools, 4, "kernel_roofline",
+            "The workload's roofline ceilings - peak bandwidth per memory level "
+            "(HBM, L2, L1, LDS) and peak compute per instruction type (MFMA and "
+            "VALU at each precision) - and, when a kernel is named, that kernel's "
+            "arithmetic intensity and achieved performance at each memory level.\n"
+            "This is how you settle memory-bound versus compute-bound: a kernel "
+            "sitting under the sloped bandwidth roof is limited by data movement, "
+            "one near the flat compute ceiling by arithmetic. Costs no database "
+            "query. Some traces record no roofline at all.",
+            roofline_params);
+
+    jt::Json triage_params = ObjectParams();
+    AddComputeScopeParams(triage_params, true);
+    AddTool(tools, 5, "kernel_triage",
+            "The standard diagnostic panel for one kernel, in a single query. Call "
+            "it once on the kernel that owns the time, before any get_metrics.\n"
+            "It returns the launch geometry and resource allocation (grid and "
+            "workgroup size, VGPRs, SGPRs, LDS and scratch), the speed-of-light "
+            "summary (CU utilization, occupancy, per-pipe utilization, active "
+            "threads per wavefront, cache hit rates), the arithmetic rates split "
+            "by precision, the instruction mix, vL1D coalescing and the LDS bank "
+            "conflict rate.\n"
+            "This is one database query instead of the dozen searches and fetches "
+            "it would take to assemble the same picture, and it is the difference "
+            "between finding the defect that is there and confirming the one you "
+            "already suspected: scratch, coalescing and the precision split all "
+            "arrive whether or not you thought to ask for them. Follow up with "
+            "get_metrics only for what the panel leaves open.",
+            triage_params);
+
+    jt::Json get_metrics_params = ObjectParams();
+    AddComputeScopeParams(get_metrics_params, true);
+    AddParam(get_metrics_params, "metrics", "array",
+             "Dotted metric ids from list_metrics. \"2\" is a whole category, "
+             "\"2.1\" a whole table, \"2.1.4\" one entry. Prefer a table id over "
+             "listing its entries. Names are not accepted - pass the ids.");
+    get_metrics_params["properties"]["metrics"]["items"]["type"] = "string";
+    AddParam(get_metrics_params, "scope", "string",
+             "kernel (default) reads one kernel's values - the one named, else the "
+             "one the user has selected. workload reads the workload's own values "
+             "and takes no kernel_id or kernel_name.");
+    get_metrics_params["properties"]["scope"]["enum"] =
+        MakeStringEnum({ "kernel", "workload" });
+    get_metrics_params["required"][0] = "metrics";
+    AddTool(tools, 6, "get_metrics",
+            "Read hardware metric values. Like kernel_triage, this queries the "
+            "database, so scope it: name the table you want rather than a "
+            "category, and one kernel rather than the workload.\n"
+            "Pass scope=\"workload\" to read the workload's own values instead of "
+            "one kernel's. Older compute traces do not carry workload-scope values "
+            "at all, and come back empty rather than failing - that is a limitation "
+            "of the trace, not an error to retry.\n"
+            "Each value comes back under the value names its table defines, so a "
+            "single metric may return an average and a peak. Report the one you "
+            "actually mean.",
+            get_metrics_params);
+
+    jt::Json pc_params = ObjectParams();
+    AddComputeScopeParams(pc_params, true);
+    AddParam(pc_params, "limit", "integer",
+             "Instructions to list, most-sampled first (default 10, max 30).");
+    AddTool(tools, 7, "kernel_pc_samples",
+            "Where one kernel's waves were when the profiler sampled them: the "
+            "instructions holding the most PC samples, how many of those samples "
+            "were issuing or stalled, the reasons the profiler recorded, and the "
+            "source line each instruction maps to.\n"
+            "PC sampling is a capture of its own - rocprof-compute cannot record it "
+            "in the same pass as the hardware counters - so a trace usually has one "
+            "or the other. When this trace has none the tool says so; that is the "
+            "trace, not a failure, and not worth retrying. Call it when the workload "
+            "records no metrics, or when the question is where inside a kernel the "
+            "time goes. The first call on a kernel reads the database; later ones do "
+            "not.",
+            pc_params);
+
+    jt::Json tab_params = ObjectParams();
+    AddParam(tab_params, "name", "string",
+             "Tab to switch to. Part of the name is enough. Omit to list every "
+             "tab that is available.");
+    AddTool(tools, 8, "switch_tab",
+            "Switch between the open traces. Only call this when the user asked "
+            "you to change tabs. Call with no name to list what is open.",
+            tab_params);
+
+    jt::Json next_params = ObjectParams();
+    AddParam(next_params, "steps", "array",
+             "Two or three short follow-ups the user can click, most useful first. "
+             "Each is a complete thing they would type, under 80 characters.");
+    next_params["properties"]["steps"]["items"]["type"] = "string";
+    next_params["required"][0] = "steps";
+    AddTool(tools, 9, "offer_next_steps",
+            "Puts stacked buttons under the chat for what to look at next. Call it "
+            "as the last tool of an investigation, then write your answer in the "
+            "response after it. Do not list those same options in the prose.\n"
+            "Every step must be answerable from THIS profile with the tools you "
+            "have. You are looking at one workload and there is nothing to compare "
+            "it against: you cannot open a second trace, re-run the code, profile a "
+            "modified kernel, or read a system trace. So never offer to compare "
+            "against a fixed, tiled, padded, coalesced or otherwise improved "
+            "version, and never offer to measure what a change would do - clicking "
+            "it only produces an apology. Offer another metric table, another "
+            "kernel in this workload, or a different reading of what you already "
+            "have.\n"
+            "The best follow-ups are the questions your answer raised but could "
+            "not settle - which cache is missing, whether occupancy is the limit, "
+            "how another kernel in this same workload compares, what the "
+            "instruction mix says. A question you can already answer in one call "
+            "is a weak thing to offer.",
+            next_params);
+
+    return tools;
+}
+
 }  // namespace
 
-// The schema goes out with every tools-on round and never varies, so it is
-// assembled once instead of being rebuilt from several hundred literals on the
-// worker thread each time. Function-local static initialisation is thread-safe,
-// and the caller still gets its own copy to put in the request body.
+// The schema goes out with every tools-on round and never varies, so each kind
+// is assembled once instead of being rebuilt from several hundred literals on
+// the worker thread each time. Function-local static initialisation is
+// thread-safe, and the caller still gets its own copy to put in the request
+// body.
 jt::Json
-BuildAssistantToolsJson()
+BuildAssistantToolsJson(bool is_compute)
 {
+    if(is_compute)
+    {
+        static const jt::Json compute_tools = MakeAssistantComputeToolsJson();
+        return compute_tools;
+    }
     static const jt::Json tools = MakeAssistantToolsJson();
     return tools;
 }
 
-// The line the panel shows under the transcript while a tool runs.
+// The line the panel shows under the transcript while a tool runs. Searches
+// both sets: the panel labels whatever the model called, and a name means the
+// same thing whichever trace is in front.
 std::string
 AssistantToolStatusLabel(const std::string& tool_name)
 {
     for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
+    {
+        if(tool_name == label.name)
+        {
+            return label.status;
+        }
+    }
+    for(const AssistantToolLabel& label : ASSISTANT_COMPUTE_TOOL_LABELS)
     {
         if(tool_name == label.name)
         {

@@ -32,6 +32,31 @@
 // Frames left to render before the loop may sleep; see RENDER_FRAMES_AFTER_INPUT.
 static int g_frames_to_render = 1;
 
+// Whatever the ImGui backend installed, so normal keyboard input still reaches it.
+static GLFWkeyfun g_chained_key_callback = nullptr;
+
+// Pause/resume the soak drivers on F9.
+//
+// Read from the GLFW callback rather than ImGui's key state because the Test
+// Engine discards the backend's input events while a test is running, which is
+// precisely when a soak needs pausing - so this is the only path a real key
+// press has left. Chains to the backend's own callback so nothing else breaks.
+static void
+soak_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if(key == GLFW_KEY_F9 && action == GLFW_PRESS)
+    {
+        const bool paused = !g_soak_paused.load();
+        g_soak_paused.store(paused);
+        spdlog::info("Soak {} (F9)", paused ? "paused" : "resumed");
+    }
+
+    if(g_chained_key_callback != nullptr)
+    {
+        g_chained_key_callback(window, key, scancode, action, mods);
+    }
+}
+
 // Directory expansion only picks up rocpd trace databases, by filename prefix.
 // A trace directory typically also holds compute profiles and other formats,
 // which open into views a timeline soak cannot drive.
@@ -216,6 +241,11 @@ main(int argc, char** argv)
                     fd_pref);
 
                 backend.m_config(&backend, window);
+
+                // Installed after m_config so this sits in front of the ImGui
+                // GLFW backend's key callback (set during m_config) and can chain
+                // to it.
+                g_chained_key_callback = glfwSetKeyCallback(window, soak_key_callback);
 #ifdef __APPLE__
                 // Install after m_config so this overrides the ImGui GLFW
                 // backend's own mouse-button callback (set during m_config).

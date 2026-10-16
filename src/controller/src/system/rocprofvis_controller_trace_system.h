@@ -73,7 +73,10 @@ public:
     rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
                                           Array& array, uint64_t index, uint64_t count);
 
-    rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeControllerSystem;
+    }
 
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
@@ -82,10 +85,13 @@ public:
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
 
-    MemoryManager* GetMemoryManager();
-    void SetMemoryManager(MemoryManager* memory_manager);
+    MemoryManager* GetMemoryManager() { return m_mem_mgmt; }
+    void SetMemoryManager(MemoryManager* memory_manager) { m_mem_mgmt = memory_manager; }
 
-    std::mutex& GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case);
+    std::mutex& GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
+    {
+        return m_table_mutex[use_case];
+    }
 
 private:
     std::vector<std::string>                       m_files;  // >1 entry => combined/compare load

@@ -492,7 +492,7 @@ typedef enum rocprofvis_controller_event_properties_t : uint32_t
     kRPVControllerEventEndTimestamp,
     // Name for the event
     kRPVControllerEventName,
-    // Level in the stack of events
+    // Level in the stack of events (0..255); setting a larger value returns OutOfRange.
     kRPVControllerEventLevel,
 
     // // Reserved values retained for compatibility

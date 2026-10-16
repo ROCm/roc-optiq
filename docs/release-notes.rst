@@ -19,7 +19,7 @@ Changed
 -------
 
 * Search enhancements: Memory events are now included in search for supported formats, plus a new **Advanced** search mode for finer control.
-* Simplified table filter UI. Original filter options available via **Advanced mode**.
+* Simplified table filter UI. Original filter options are available via **Advanced mode**.
 * Clipped the macOS app icon to a squircle to match other icons in the Dock, while keeping the white-on-red design fully opaque.
 * CI: Linux targets now built as ManyLinux binaries.
 

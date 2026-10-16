@@ -159,9 +159,13 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 Select a track
 ^^^^^^^^^^^^^^
 
-Use the following actions to select tracks in the Timeline View.
+Use the following actions to select tracks in the Timeline View or the **System Topology View**. They work the same way as selecting files in File Explorer.
 
-- Clicking in the **Description** area selects or deselects the track. 
+- Click a track in the **Description** area to select only that track.
+- Press and hold **Ctrl** while clicking a track to add it to the selection or remove it.
+- Press and hold **Shift** while clicking a track to select every track between it and the track you last clicked. Hold **Ctrl** as well to add those tracks to the current selection.
+- Click the empty area below the last track, or empty space in the **System Topology View**, to unselect all tracks.
+- Right-click a track and choose **Select Tracks** to select all tracks, only flame chart tracks, or only line chart tracks. Choose **Unselect All Tracks** to clear the selection.
 - Right-click the track to select **Copy track name**, **Copy track ID**, or **Track Options**. 
 
 When a track is selected, the details display in the **Track Details** pane.

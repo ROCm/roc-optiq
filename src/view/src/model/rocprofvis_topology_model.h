@@ -286,6 +286,18 @@ public:
     static const char* GetProcessorTypeName(
         rocprofvis_controller_processor_type_t processor_type);
 
+    // Number of GPU / CPU processors in the trace.
+    uint32_t GetGPUCount() const;
+    uint32_t GetCPUCount() const;
+    /*
+     * The product name with the most processors of that type, and those
+     * processors. nullptr when the trace has none of that type.
+     */
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+    GetMostNumerousGPU() const;
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+    GetMostNumerousCPU() const;
+
     void Clear();
 
     // Debug. Walks the whole tree, so only call it when the output is wanted.
@@ -310,6 +322,11 @@ private:
      */
     void OrderNodes();
     void BuildTrackOrder();
+    /*
+     * Groups the GPUs and CPUs by product name and picks the most numerous of
+     * each. Walks the node rows in order, so a tie goes to the product seen first.
+     */
+    void CountProcessors();
 
     // The arena owns every node; all parent/child edges are non-owning.
     std::vector<std::unique_ptr<TopologyNode>>          m_storage;
@@ -324,6 +341,16 @@ private:
     std::unordered_map<uint64_t, ThreadInfo*>           m_sampled_thread_index;
     std::map<std::pair<uint64_t, uint64_t>, QueueInfo*> m_queue_index;
     std::unordered_map<uint64_t, TopologyNode*>         m_track_index;
+
+    // Processor counts...
+    std::unordered_map<std::string, std::vector<const ProcessorInfo*>> m_gpus;
+    uint32_t                                                           m_gpu_count;
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+        m_most_numerous_gpu;
+    std::unordered_map<std::string, std::vector<const ProcessorInfo*>> m_cpus;
+    uint32_t                                                           m_cpu_count;
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+        m_most_numerous_cpu;
 };
 
 }  // namespace View

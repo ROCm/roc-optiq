@@ -31,6 +31,8 @@ enum class RequestType
     kFetchTrackSampleTable,
     kFetchEventSearchTable,
     kFetchSummaryKernelInstanceTable,
+    kFetchSummaryMemoryInstanceTable,
+    kFetchSummaryThreadInstanceTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,

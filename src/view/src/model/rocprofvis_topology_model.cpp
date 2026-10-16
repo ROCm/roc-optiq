@@ -77,6 +77,10 @@ CounterInfo::GetProcessorId() const
 TopologyTree::TopologyTree()
 : m_root(nullptr)
 , m_revision(0)
+, m_gpu_count(0)
+, m_most_numerous_gpu(nullptr)
+, m_cpu_count(0)
+, m_most_numerous_cpu(nullptr)
 {
     Clear();
 }
@@ -106,7 +110,76 @@ TopologyTree::Finalize()
     // be settled first for the track order to match the rows.
     OrderNodes();
     BuildTrackOrder();
+    CountProcessors();
     m_revision++;
+}
+
+void
+TopologyTree::CountProcessors()
+{
+    m_gpus.clear();
+    m_gpu_count         = 0;
+    m_most_numerous_gpu = nullptr;
+    m_cpus.clear();
+    m_cpu_count         = 0;
+    m_most_numerous_cpu = nullptr;
+    for(const TopologyNode* node : GetNodes())
+    {
+        for(const TopologyNode* child : node->GetChildren(TopologyNodeType::kProcessor))
+        {
+            const ProcessorInfo* processor = static_cast<const ProcessorInfo*>(child);
+            if(processor->type == kRPVControllerProcessorTypeGPU)
+            {
+                std::unordered_map<std::string,
+                                   std::vector<const ProcessorInfo*>>::iterator it =
+                    m_gpus.try_emplace(processor->product_name).first;
+                it->second.push_back(processor);
+                m_gpu_count++;
+                if(!m_most_numerous_gpu ||
+                   it->second.size() > m_most_numerous_gpu->second.size())
+                {
+                    m_most_numerous_gpu = &(*it);
+                }
+            }
+            else if(processor->type == kRPVControllerProcessorTypeCPU)
+            {
+                std::unordered_map<std::string,
+                                   std::vector<const ProcessorInfo*>>::iterator it =
+                    m_cpus.try_emplace(processor->product_name).first;
+                it->second.push_back(processor);
+                m_cpu_count++;
+                if(!m_most_numerous_cpu ||
+                   it->second.size() > m_most_numerous_cpu->second.size())
+                {
+                    m_most_numerous_cpu = &(*it);
+                }
+            }
+        }
+    }
+}
+
+uint32_t
+TopologyTree::GetGPUCount() const
+{
+    return m_gpu_count;
+}
+
+uint32_t
+TopologyTree::GetCPUCount() const
+{
+    return m_cpu_count;
+}
+
+const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+TopologyTree::GetMostNumerousGPU() const
+{
+    return m_most_numerous_gpu;
+}
+
+const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+TopologyTree::GetMostNumerousCPU() const
+{
+    return m_most_numerous_cpu;
 }
 
 /*
@@ -444,6 +517,12 @@ TopologyTree::Clear()
     m_queue_index.clear();
     m_track_index.clear();
     m_track_order.clear();
+    m_gpus.clear();
+    m_gpu_count         = 0;
+    m_most_numerous_gpu = nullptr;
+    m_cpus.clear();
+    m_cpu_count         = 0;
+    m_most_numerous_cpu = nullptr;
     m_storage.clear();
 
     std::unique_ptr<TopologyNode> root =

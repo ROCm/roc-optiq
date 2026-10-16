@@ -5,14 +5,18 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "implot/implot.h"
 #include "model/rocprofvis_common_defs.h"
+#include "model/rocprofvis_model_types.h"
+#include "model/rocprofvis_topology_model.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
-#include "widgets/rocprofvis_infinite_scroll_table.h"
+#include "widgets/rocprofvis_split_containers.h"
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
-#include <sstream>
 
 namespace RocProfVis
 {
@@ -24,66 +28,89 @@ constexpr double      PIE_CHART_RADIUS                = 1.0;
 constexpr double      BAR_CHART_THICKNESS             = 0.67;
 constexpr ImVec2      CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
 constexpr float       FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
-constexpr ImVec2      INITIAL_RELATIVE_POS            = ImVec2(0.1f, 0.2f);
 constexpr float       INITIAL_RELATIVE_SIZE           = 0.8f;
-
-namespace
-{
-
-void
-PushPlotChrome(SettingsManager& settings)
-{
-    ImPlot::PushStyleColor(ImPlotCol_FrameBg, ThemeColor(settings, Colors::kTransparent));
-    ImPlot::PushStyleColor(ImPlotCol_PlotBg, ThemeColor(settings, Colors::kBgFrame));
-    ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
-                           ThemeColor(settings, Colors::kBorderColor, 0.85f));
-    ImPlot::PushStyleColor(ImPlotCol_AxisText, ThemeColor(settings, Colors::kTextMain));
-    ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
-                           ThemeColor(settings, Colors::kBorderColor, 0.7f));
-    ImPlot::PushStyleColor(ImPlotCol_AxisTick,
-                           ThemeColor(settings, Colors::kTextDim, 0.56f));
-}
-
-}  // namespace
+constexpr float       INITIAL_RELATIVE_SIZE_LOADING   = 0.2f;
+constexpr ImVec2      MIN_SIZE_RELATIVE               = ImVec2(34.0f, 12.0f);
+constexpr const char* SIGMA                           = u8"\u03C3";
+constexpr std::pair<const char*, size_t> DISPLAY_PROPS_EVENT_TYPES[] = {
+    { "Kernel Executions", 0 },
+    { "Memory Operations", 2 },
+    { "Thread Operations", 3 }
+};
+constexpr const char* DISPLAY_NAMES_TOP_EVENT_TYPES[] = {
+    "Top Kernels by Execution Time", "Top Memory Operations by Execution Time",
+    "Top Thread Operations by Execution Time"
+};
+constexpr const char* DISPLAY_NAMES_METRIC_TYPES[] = { "Trace", "Node", "Processor",
+                                                       "Process", "Thread" };
 
 SummaryView::SummaryView(DataProvider&                      dp,
                          std::shared_ptr<TimelineSelection> timeline_selection)
-: m_data_provider(dp)
+: m_tab_container(nullptr)
+, m_overview(nullptr)
+, m_top_events({})
+, m_fetched_revision(0)
+, m_data_changed(false)
+, m_init_window(true)
+, m_progress(0.0f)
+, m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
-, m_h_container(nullptr)
-, m_v_container(nullptr)
-, m_kernel_instance_table(nullptr)
-, m_top_kernels(nullptr)
-, m_hw_utilization(nullptr)
-, m_hw_utilization_item(nullptr)
-, m_top_kernels_item(nullptr)
-, m_kernel_instance_table_item(nullptr)
-, m_open(SettingsManager::GetInstance().GetAppWindowSettings().show_summary)
-, m_fetched(false)
+, m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
+, m_progress_token(EventManager::InvalidSubscriptionToken)
 {
-    m_kernel_instance_table =
-        std::make_shared<KernelInstanceTable>(m_data_provider, timeline_selection);
-    m_top_kernels = std::make_shared<TopKernels>(
-        m_data_provider,
-        [this](const char* kernel_name, const uint64_t* node_id,
-               const uint64_t* device_id) {
-            m_kernel_instance_table->ToggleSelectKernel(kernel_name, node_id, device_id);
-        },
-        [this]() { m_kernel_instance_table->Clear(); });
-    m_hw_utilization = std::make_shared<HWUtilization>(m_data_provider);
+    m_tab_container                                 = std::make_unique<TabContainer>();
+    m_top_events[kRPVAnalysisSummaryCategoryKernel] = std::make_shared<SummaryTopEvents>(
+        m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
+        TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
+        DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID);
+    m_top_events[kRPVAnalysisSummaryCategoryMemory] = std::make_shared<SummaryTopEvents>(
+        m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryMemory,
+        TableType::kSummaryMemoryTable, kRPVControllerTableTypeSummaryMemoryInstances,
+        DataProvider::SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID);
+    m_top_events[kRPVAnalysisSummaryCategoryThread] = std::make_shared<SummaryTopEvents>(
+        m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
+        TableType::kSummaryThreadTable, kRPVControllerTableTypeSummaryThreadInstances,
+        DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID);
+    m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_top_events,
+                                                   *m_tab_container.get());
+    m_data_provider.SetSummaryDataReadyCallback([this]() {
+        m_overview->Fetched();
+        for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
+        {
+            top_events->Fetched();
+        }
+        m_data_changed = true;
+    });
+    m_time_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            (void) e;
+            m_data_provider.DataModel().GetSummary().UpdateValueStrings();
+            m_overview->TimeFormatChanged();
+            for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
+            {
+                top_events->TimeFormatChanged();
+            }
+        });
+    m_progress_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        [this](std::shared_ptr<RocEvent> e) {
+            std::shared_ptr<RequestProgressUpdateEvent> event =
+                std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+            if(event && event->GetRequestType() == RequestType::kFetchSummary &&
+               event->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                m_progress = event->GetProgressPercent() / 100.0f;
+            }
+        });
+}
 
-    m_top_kernels_item           = LayoutItem::CreateFromWidget(m_top_kernels);
-    m_kernel_instance_table_item = LayoutItem::CreateFromWidget(m_kernel_instance_table);
-    m_hw_utilization_item        = LayoutItem::CreateFromWidget(m_hw_utilization);
-
-    m_v_container = std::make_shared<VSplitContainer>(m_top_kernels_item,
-                                                      m_kernel_instance_table_item);
-    m_v_container->SetSplit(0.5f);
-    m_h_container = std::make_unique<HSplitContainer>(
-        m_hw_utilization_item, LayoutItem::CreateFromWidget(m_v_container));
-    m_h_container->SetSplit(0.25f);
-    // Hide HW utilization for now as the data is not yet reliable
-    m_hw_utilization_item->m_visible = false;
+SummaryView::~SummaryView()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_time_format_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate), m_progress_token);
 }
 
 void
@@ -91,441 +118,1284 @@ SummaryView::Update()
 {
     if(m_data_provider.GetState() == ProviderState::kReady)
     {
-        if(m_kernel_instance_table)
-        {
-            m_kernel_instance_table->Update();
-        }
-        if(m_hw_utilization)
-        {
-            m_hw_utilization->Update();
-        }
-        if(m_top_kernels)
-        {
-            m_top_kernels->Update();
-        }
-        if(m_settings.GetAppWindowSettings().show_summary && !m_fetched &&
+        if(m_settings.GetAppWindowSettings().show_summary &&
+           m_fetched_revision < m_data_provider.DataModel().GetTopology().GetRevision() &&
            !m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
         {
-            m_fetched = m_data_provider.FetchSummary();
+            if(m_fetched_revision <
+               m_data_provider.DataModel().GetSummary().GetRevision())
+            {
+                m_fetched_revision =
+                    m_data_provider.DataModel().GetSummary().GetRevision();
+            }
+            else if(m_data_provider.FetchSummary())
+            {
+                m_fetched_revision =
+                    m_data_provider.DataModel().GetTopology().GetRevision();
+                m_progress = 0.0f;
+            }
         }
+    }
+    if(m_data_changed)
+    {
+        while(!m_tab_container->GetTabs().empty())
+        {
+            m_tab_container->RemoveTab(0);
+        }
+        for(size_t i = 0; i < m_top_events.size(); i++)
+        {
+            if(m_top_events[i] && !m_top_events[i]->Empty())
+            {
+                if(m_tab_container->GetTabs().empty() && m_overview)
+                {
+                    m_tab_container->AddTab(
+                        RocWidget::CreateTabItem("Overview", "overview", m_overview));
+                }
+                m_tab_container->AddTab(RocWidget::CreateTabItem(
+                    DISPLAY_PROPS_EVENT_TYPES[i].first,
+                    DISPLAY_PROPS_EVENT_TYPES[i].first, m_top_events[i]));
+            }
+        }
+        m_init_window  = true;
+        m_data_changed = false;
+    }
+    if(m_tab_container)
+    {
+        m_tab_container->Update();
     }
 }
 
 void
 SummaryView::Render()
 {
-    if(m_h_container && m_v_container && m_settings.GetAppWindowSettings().show_summary)
+    if(SettingsManager::GetInstance().GetAppWindowSettings().show_summary &&
+       m_tab_container)
     {
-        m_v_container->SetMinTopHeight(m_top_kernels->MinHeight());
-        m_v_container->SetMinBottomHeight(m_kernel_instance_table->MinHeight());
-        m_h_container->SetMinLeftWidth(m_hw_utilization->MinWidth());
-        m_h_container->SetMinRightWidth(m_top_kernels->MinWidth());
-        m_top_kernels_item->m_bg_color           = m_settings.GetColor(Colors::kBgPanel);
-        m_kernel_instance_table_item->m_bg_color = m_settings.GetColor(Colors::kBgPanel);
-        m_hw_utilization_item->m_bg_color        = m_settings.GetColor(Colors::kBgPanel);
-        ImGui::SetNextWindowPos(ImGui::GetWindowSize() * INITIAL_RELATIVE_POS,
-                                ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE,
-                                 ImGuiCond_FirstUseEver);
-        ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoScrollbar |
-                         ImGuiWindowFlags_NoScrollWithMouse);
-        if(m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID) ||
-           m_data_provider.GetState() == ProviderState::kLoading)
+        bool loading = m_fetched_revision <
+                           m_data_provider.DataModel().GetTopology().GetRevision() ||
+                       m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID);
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        if(m_init_window)
         {
-            RenderLoadingIndicator(m_settings.GetColor(Colors::kTextMain));
+            ImGui::SetNextWindowPos(ImGui::GetWindowSize() * 0.5f, ImGuiCond_Always,
+                                    ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(
+                loading ? ImVec2(ImGui::GetWindowWidth() * INITIAL_RELATIVE_SIZE_LOADING,
+                                 ImGui::GetFrameHeightWithSpacing() * 2.0f)
+                        : ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE);
+            m_init_window = false;
+        }
+        if(loading)
+        {
+            ImGui::Begin(
+                "Analyzing Trace...", &m_settings.GetAppWindowSettings().show_summary,
+                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                    ImGuiWindowFlags_NoResize);
+            ImGui::ProgressBar(m_progress, ImVec2(-FLT_MIN, -FLT_MIN), "");
+            ImGui::SetCursorScreenPos(
+                ImGui::GetItemRectMin() +
+                ImVec2(0.0f, ImGui::GetItemRectSize().y * 0.5f - 5.0f));
+            RenderLoadingIndicator(
+                SettingsManager::GetInstance().GetColor(Colors::kTextMain), nullptr,
+                kCenterHorizontal);
         }
         else
         {
-            ImGui::SetNextWindowSizeConstraints(
-                ImVec2(m_h_container->GetMinSize(), m_v_container->GetMinSize()),
-                ImVec2(FLT_MAX, FLT_MAX));
-            ImGui::BeginChild("summary_clamped_view", ImVec2(0, 0), ImGuiChildFlags_None,
-                              ImGuiWindowFlags_NoScrollbar |
-                                  ImGuiWindowFlags_NoScrollWithMouse);
-            m_h_container->Render();
+            ImGui::Begin("Summary", &m_settings.GetAppWindowSettings().show_summary,
+                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                             ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoScrollWithMouse);
+            ImGui::SetNextWindowSizeConstraints(MIN_SIZE_RELATIVE *
+                                                    ImGui::GetFrameHeightWithSpacing(),
+                                                ImVec2(FLT_MAX, FLT_MAX));
+            ImGui::BeginChild(
+                "summary_clamped_view", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            if(m_tab_container->GetTabs().empty() ||
+               m_data_provider.DataModel().GetSummary().GetRevision() <
+                   m_data_provider.DataModel().GetTopology().GetRevision())
+            {
+                ImGui::SetCursorPos((ImGui::GetContentRegionAvail() -
+                                     ImGui::CalcTextSize("No data available.")) *
+                                    0.5f);
+                ImGui::TextDisabled("No data available.");
+            }
+            else
+            {
+                m_tab_container->Render();
+            }
             ImGui::EndChild();
         }
         ImGui::End();
     }
 }
 
-HWUtilization::HWUtilization(DataProvider& dp)
-: m_data_provider(dp)
+SummaryOverview::SummaryOverview(
+    DataProvider&                                        dp,
+    const std::array<std::shared_ptr<SummaryTopEvents>,
+                     __kRPVAnalysisSummaryCategoryLast>& top_events,
+    TabContainer&                                        tab_container)
+: m_top_events(top_events)
+, m_tab_container(tab_container)
+, m_composition_table_headers({})
+, m_counters(nullptr)
+, m_data_changed(false)
+, m_timeformat_changed(true)
+, m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
-, m_aligned_bar_dirty(true)
-, m_aligned_bar_position(0.0f)
-, m_min_width(0.0f)
 {}
 
 void
-HWUtilization::Update()
+SummaryOverview::Update()
 {
-    if(m_aligned_bar_dirty)
+    if(m_data_changed)
     {
-        m_aligned_bar_position = 0.0f;
-        m_min_width            = 0.0f;
-        m_aligned_bar_dirty    = false;
+        m_counters     = m_data_provider.DataModel()
+                                     .GetSummary()
+                                     .GetSummaryData()
+                                     .gpu.counters.list.size() ||
+                                 m_data_provider.DataModel()
+                                     .GetSummary()
+                                     .GetSummaryData()
+                                     .cpu.counters.list.size()
+                             ? &m_data_provider.DataModel().GetSummary().GetSummaryData()
+                             : nullptr;
+        m_data_changed = false;
+    }
+    if(m_timeformat_changed)
+    {
+        TimeFormat timeformat = m_settings.GetUserSettings().unit_settings.time_format;
+        m_composition_table_headers = { "##label",
+                                        "Counters",
+                                        "Event Composition",
+                                        "Kernels (" + timeformat_sufix(timeformat) + ")",
+                                        "Memory (" + timeformat_sufix(timeformat) + ")",
+                                        "Launch (" + timeformat_sufix(timeformat) + ")" };
+        m_timeformat_changed        = false;
     }
 }
 
 void
-HWUtilization::Render()
+SummaryOverview::Render()
 {
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                        m_settings.GetDefaultIMGUIStyle().FramePadding);
+    const ImGuiStyle&                    style = m_settings.GetDefaultStyle();
+    const SummaryModel&                  model = m_data_provider.DataModel().GetSummary();
+    const SummaryInfo::AggregateMetrics& metrics = model.GetSummaryData();
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        m_settings.GetDefaultIMGUIStyle().ItemSpacing);
-    ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                          m_settings.GetColor(Colors::kTransparent));
-    const SummaryInfo::AggregateMetrics& metrics = m_data_provider.DataModel().GetSummary().GetSummaryData();
-    ImGui::TextUnformatted("Hardware Utilization");
-    ImGui::Separator();
-    ImGui::TextUnformatted("GPU");
-    if(ImGui::TreeNodeEx("Compute", ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf |
-                                        ImGuiTreeNodeFlags_Framed))
+                        m_settings.GetDefaultStyle().ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::Spacing();
+    const ImVec2        region   = ImGui::GetContentRegionAvail();
+    const TopologyTree& topology = m_data_provider.DataModel().GetTopology();
+    uint8_t             tile_count =
+        3 + (topology.GetGPUCount() ? 1 : 0) + (topology.GetCPUCount() ? 1 : 0);
+    ImVec2 tile_size =
+        ImVec2((region.x - (static_cast<float>(tile_count) - 1) * style.ItemSpacing.x) /
+                   static_cast<float>(tile_count),
+               2.0f * style.FramePadding.y);
+    ImGui::PushFont(nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    tile_size.y += 2.0f * ImGui::GetTextLineHeightWithSpacing();
+    ImGui::PopFont();
+    ImGui::PushFont(nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
+    tile_size.y += ImGui::GetTextLineHeightWithSpacing();
+    ImGui::PopFont();
+    Tile(1, tile_size, "Trace Span",
+         nanosecond_to_formatted_str(
+             m_data_provider.DataModel().GetTimeline().GetEndTime() -
+                 m_data_provider.DataModel().GetTimeline().GetStartTime(),
+             m_settings.GetUserSettings().unit_settings.time_format, true)
+             .c_str(),
+         nullptr);
+    ImGui::SameLine();
+    Tile(2, tile_size, "Tracked Events",
+         std::to_string(
+             model.GetSummaryData()
+                 .gpu.dispatch.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                 .numeric.uint +
+             model.GetSummaryData()
+                 .memory.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                 .numeric.uint +
+             model.GetSummaryData()
+                 .thread.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                 .numeric.uint)
+             .c_str(),
+         nullptr);
+    ImGui::SameLine();
+    Tile(3, tile_size, "Nodes", std::to_string(model.GetSummaryNodes().size()).c_str(),
+         [&model]() -> void {
+             if(model.GetSummaryNodes().size())
+             {
+                 ImGui::BeginDisabled();
+                 ElidedText(model.GetSummaryNodes()[0].info.node->host_name.c_str(),
+                            ImGui::GetContentRegionAvail().x,
+                            ImGui::GetContentRegionAvail().x);
+                 ImGui::EndDisabled();
+             }
+         });
+    if(topology.GetGPUCount())
     {
-        AlignedBar(metrics, metrics.gpu.gfx_utilization);
-        if(metrics.gpu.gfx_utilization &&
-           ImGui::TreeNodeEx("Node##gfx", ImGuiTreeNodeFlags_Framed))
+        ImGui::SameLine();
+        Tile(4, tile_size, "GPUs", std::to_string(topology.GetGPUCount()).c_str(),
+             [&topology]() -> void {
+                 if(topology.GetGPUCount() && topology.GetMostNumerousGPU()->first.size())
+                 {
+                     ImGui::BeginDisabled();
+                     ImGui::Text("%llu x ", topology.GetMostNumerousGPU()->second.size());
+                     ImGui::SameLine(0.0f, 0.0f);
+                     ElidedText(topology.GetMostNumerousGPU()->first.data(),
+                                ImGui::GetContentRegionAvail().x,
+                                ImGui::GetContentRegionAvail().x);
+                     ImGui::EndDisabled();
+                 }
+             });
+    }
+    if(topology.GetCPUCount())
+    {
+        ImGui::SameLine();
+        Tile(5, tile_size, "CPUs", std::to_string(topology.GetCPUCount()).c_str(),
+             [&topology]() -> void {
+                 if(topology.GetCPUCount() && topology.GetMostNumerousCPU()->first.size())
+                 {
+                     ImGui::BeginDisabled();
+                     ImGui::Text("%llu x ", topology.GetMostNumerousCPU()->second.size());
+                     ImGui::SameLine(0.0f, 0.0f);
+                     ElidedText(topology.GetMostNumerousCPU()->first.data(),
+                                ImGui::GetContentRegionAvail().x,
+                                ImGui::GetContentRegionAvail().x);
+                     ImGui::EndDisabled();
+                 }
+             });
+    }
+    tile_size.x = region.x;
+    tile_size.y = 4.0f * ImGui::GetFrameHeightWithSpacing();
+    Tile(6, tile_size, [this, &model]() -> void {
+        ImGui::TextUnformatted("Event Composition");
+        CompositionBar(ImGui::GetContentRegionAvail(), model.GetSummaryData(), true);
+    });
+    tile_count = 0 + (!m_top_events[kRPVAnalysisSummaryCategoryKernel]->Empty() ? 1 : 0) +
+                 (!m_top_events[kRPVAnalysisSummaryCategoryMemory]->Empty() ? 1 : 0) +
+                 (!m_top_events[kRPVAnalysisSummaryCategoryThread]->Empty() ? 1 : 0);
+    tile_size.x =
+        (region.x - (static_cast<float>(tile_count) - 1) * style.ItemSpacing.x) /
+        static_cast<float>(tile_count);
+    tile_size.y    = ImGui::GetContentRegionAvail().y * 0.5f;
+    bool same_line = false;
+    for(size_t i = 0; i < m_top_events.size(); i++)
+    {
+        if(m_top_events[i] && !m_top_events[i]->Empty())
         {
-            for(const SummaryInfo::AggregateMetrics& node : metrics.sub_metrics)
+            if(same_line)
             {
-                AlignedBar(node, node.gpu.gfx_utilization);
-                if(node.gpu.gfx_utilization &&
-                   ImGui::TreeNodeEx("Device##gfx", ImGuiTreeNodeFlags_Framed))
+                ImGui::SameLine();
+            }
+            Tile(static_cast<ImGuiID>(7 + i), tile_size, [this, i]() -> void {
+                if(m_top_events[i]->RenderPreview())
                 {
-                    for(const SummaryInfo::AggregateMetrics& device : node.sub_metrics)
-                    {
-                        if(device.device_type == kRPVControllerProcessorTypeGPU)
-                        {
-                            AlignedBar(device, device.gpu.gfx_utilization);
-                        }
-                    }
-                    ImGui::TreePop();
+                    m_tab_container.SetActiveTab(DISPLAY_PROPS_EVENT_TYPES[i].first);
                 }
-                if(ImGui::IsItemToggledOpen())
+            });
+            same_line = true;
+        }
+    }
+    tile_size.x =
+        (region.x - 2.0f * style.ItemSpacing.x) / 3.0f * 2.0f + style.ItemSpacing.x;
+    tile_size.y = ImGui::GetContentRegionAvail().y;
+    Tile(10, tile_size, [this, &model]() -> void {
+        ImGui::TextUnformatted("System Topology");
+        if(ImGui::BeginTable("topology", m_composition_table_headers.size(),
+                             ImGuiTableFlags_BordersInnerV |
+                                 ImGuiTableFlags_NoBordersInBody |
+                                 ImGuiTableFlags_SizingFixedFit |
+                                 ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY))
+        {
+            ImGui::TableSetupScrollFreeze(3, 1);
+            ImGui::TableSetupColumn(m_composition_table_headers[0].c_str());
+            ImGui::TableSetupColumn(
+                m_composition_table_headers[1].c_str(), ImGuiTableColumnFlags_WidthFixed,
+                ImGui::CalcTextSize(m_composition_table_headers[1].c_str()).x);
+            ImGui::TableSetupColumn(m_composition_table_headers[2].c_str());
+            ImGui::TableSetupColumn(
+                m_composition_table_headers[3].c_str(), ImGuiTableColumnFlags_WidthFixed,
+                std::max(ImGui::CalcTextSize(m_composition_table_headers[3].c_str()).x,
+                         ImGui::CalcTextSize(
+                             model.GetSummaryData()
+                                 .gpu.dispatch
+                                 .metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                                 .str.c_str())
+                             .x));
+            ImGui::TableSetupColumn(
+                m_composition_table_headers[4].c_str(), ImGuiTableColumnFlags_WidthFixed,
+                std::max(
+                    ImGui::CalcTextSize(m_composition_table_headers[4].c_str()).x,
+                    ImGui::CalcTextSize(
+                        model.GetSummaryData()
+                            .memory.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                            .str.c_str())
+                        .x));
+            ImGui::TableSetupColumn(
+                m_composition_table_headers[5].c_str(), ImGuiTableColumnFlags_WidthFixed,
+                std::max(
+                    ImGui::CalcTextSize(m_composition_table_headers[5].c_str()).x,
+                    ImGui::CalcTextSize(
+                        model.GetSummaryData()
+                            .thread.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                            .str.c_str())
+                        .x));
+            ImGui::TableHeadersRow();
+            CompositionTable(model.GetSummaryData());
+            ImGui::EndTable();
+        }
+    });
+    ImGui::SameLine();
+    tile_size.x = (region.x - 2.0f * style.ItemSpacing.x) / 3.0f;
+    Tile(11, tile_size, [this, &model]() -> void {
+        ImGui::TextUnformatted("Counters");
+        if(m_counters)
+        {
+            ImGui::BeginDisabled();
+            switch(m_counters->type)
+            {
+                case kRPVAnalysisSummaryAggregationLevelTrace:
                 {
-                    m_aligned_bar_dirty = true;
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                        m_counters->type - __kRPVAnalysisSummaryAggregationLevelFirst)]);
+                    break;
+                }
+                case kRPVAnalysisSummaryAggregationLevelNode:
+                {
+                    ImGui::SameLine();
+                    ImGui::Text("%s: ", DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                                            m_counters->type -
+                                            __kRPVAnalysisSummaryAggregationLevelFirst)]);
+                    ImGui::SameLine(0.0f, 0.0f);
+                    ElidedText(m_counters->info.node->GetName().c_str(),
+                               ImGui::GetContentRegionAvail().x,
+                               ImGui::GetContentRegionAvail().x);
+                    break;
+                }
+                case kRPVAnalysisSummaryAggregationLevelProcessor:
+                {
+                    ImGui::SameLine();
+                    ImGui::Text(
+                        "%s%llu: ",
+                        m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                            m_counters->info.processor->type),
+                        m_counters->info.processor->type_index);
+                    ImGui::SameLine(0.0f, 0.0f);
+                    ElidedText(m_counters->info.processor->GetName().c_str(),
+                               ImGui::GetContentRegionAvail().x,
+                               ImGui::GetContentRegionAvail().x);
+                    break;
+                }
+                default:
+                {
+                    break;
                 }
             }
-            ImGui::TreePop();
+            ImGui::EndDisabled();
         }
-        if(ImGui::IsItemToggledOpen())
-        {
-            m_aligned_bar_dirty = true;
-        }
-        ImGui::TreePop();
-    }
-    if(ImGui::IsItemToggledOpen())
-    {
-        m_aligned_bar_dirty = true;
-    }
-    if(ImGui::TreeNodeEx("Memory", ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf |
-                                       ImGuiTreeNodeFlags_Framed))
-    {
-        AlignedBar(metrics, 0.0f,
-                   metrics.gpu.mem_utilization
-                       ? MemoryString(metrics.gpu.mem_utilization.value()).c_str()
-                       : "N/A");
-        if(metrics.gpu.mem_utilization &&
-           ImGui::TreeNodeEx("Node##mem", ImGuiTreeNodeFlags_Framed))
-        {
-            for(const SummaryInfo::AggregateMetrics& node : metrics.sub_metrics)
-            {
-                AlignedBar(node, 0.0f,
-                           node.gpu.mem_utilization
-                               ? MemoryString(node.gpu.mem_utilization.value()).c_str()
-                               : "N/A");
-                if(node.gpu.mem_utilization &&
-                   ImGui::TreeNodeEx("Device##mem", ImGuiTreeNodeFlags_Framed))
-                {
-                    for(const SummaryInfo::AggregateMetrics& device : node.sub_metrics)
-                    {
-                        if(device.device_type == kRPVControllerProcessorTypeGPU)
-                        {
-                            AlignedBar(
-                                device, 0.0f,
-                                device.gpu.mem_utilization
-                                    ? MemoryString(device.gpu.mem_utilization.value())
-                                          .c_str()
-                                    : "N/A");
-                        }
-                    }
-                    ImGui::TreePop();
-                }
-                if(ImGui::IsItemToggledOpen())
-                {
-                    m_aligned_bar_dirty = true;
-                }
-            }
-            ImGui::TreePop();
-        }
-        if(ImGui::IsItemToggledOpen())
-        {
-            m_aligned_bar_dirty = true;
-        }
-        ImGui::TreePop();
-    }
-    if(ImGui::IsItemToggledOpen())
-    {
-        m_aligned_bar_dirty = true;
-    }
-    ImGui::Separator();
-    // CPU...
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar(2);
-}
-
-float
-HWUtilization::MinWidth() const
-{
-    return m_min_width;
-}
-
-std::string
-HWUtilization::MemoryString(float mb)
-{
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2);
-    if(mb >= 1000.0f * 1000.0f)
-    {
-        oss << (mb / (1000.0f * 1000.0f)) << " TB";
-    }
-    else if(mb >= 1000.0f)
-    {
-        oss << (mb / 1000.0f) << " GB";
-    }
-    else
-    {
-        oss << mb << " MB";
-    }
-    return oss.str();
+        ImGui::BeginChild("sv");
+        Counters();
+        ImGui::EndChild();
+    });
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 void
-HWUtilization::AlignedBar(const SummaryInfo::AggregateMetrics& info,
-                          const std::optional<float>& value, const char* overlay)
+SummaryOverview::TimeFormatChanged()
 {
-    if(info.type == kRPVControllerSummaryAggregationLevelNode)
-    {
-        if(info.name)
+    m_timeformat_changed = true;
+}
+
+void
+SummaryOverview::Fetched()
+{
+    m_data_changed = true;
+}
+
+void
+SummaryOverview::Tile(ImGuiID id, ImVec2 size, const char* header, const char* body,
+                      std::function<void()> footer) const
+{
+    Tile(id, size, [this, header, body, footer]() -> void {
+        ImGui::PushFont(nullptr,
+                        m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
+        if(header)
         {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(info.name.value().c_str());
+            ImGui::TextDisabled(header);
         }
-    }
-    else if(info.type == kRPVControllerSummaryAggregationLevelProcessor)
-    {
-        if(info.name)
+        ImGui::PushFont(nullptr,
+                        m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
+        if(body)
         {
-            ImGui::PushStyleVarX(ImGuiStyleVar_ItemSpacing, 0.0f);
-            ImGui::AlignTextToFramePadding();
-            if(info.device_type_index)
+            ImGui::TextUnformatted(body);
+        }
+        ImGui::PopFont();
+        if(footer)
+        {
+            footer();
+        }
+        ImGui::PopFont();
+    });
+}
+
+void
+SummaryOverview::Tile(ImGuiID id, ImVec2 size, std::function<void()> content) const
+{
+    ImGui::BeginChild(id, size,
+                      size.y == 0.0 ? ImGuiChildFlags_AlwaysUseWindowPadding |
+                                          ImGuiChildFlags_AutoResizeY
+                                    : ImGuiChildFlags_AlwaysUseWindowPadding,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    if(content)
+    {
+        content();
+    }
+    ImGui::EndChild();
+}
+
+void
+SummaryOverview::CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics& metrics,
+                                bool labels) const
+{
+    const ImGuiStyle&   style = m_settings.GetDefaultStyle();
+    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    uint64_t            total_duration =
+        model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+            ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+            .numeric.uint +
+        model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+            ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+            .numeric.uint +
+        model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+            ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+            .numeric.uint;
+    if(total_duration > 0)
+    {
+        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+        ImGui::PushFont(nullptr,
+                        m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
+        float label_band =
+            labels ? ImGui::GetTextLineHeight() + style.ItemSpacing.y : 0.0f;
+        ImGui::PopFont();
+        ImVec2 bar_pos   = ImVec2(cursor_pos.x, cursor_pos.y + label_band);
+        ImVec2 bar_size  = ImVec2(size.x, size.y - 2.0f * label_band);
+        float  segment_x = bar_pos.x;
+        CompositionBarSegment(
+            bar_pos, bar_size,
+            static_cast<float>(
+                model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+                    ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .numeric.uint) /
+                total_duration,
+            kRPVAnalysisSummaryCategoryKernel, labels, segment_x);
+        CompositionBarSegment(
+            bar_pos, bar_size,
+            static_cast<float>(
+                model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+                    ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .numeric.uint) /
+                total_duration,
+            kRPVAnalysisSummaryCategoryMemory, labels, segment_x);
+        CompositionBarSegment(
+            bar_pos, bar_size,
+            static_cast<float>(
+                model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+                    ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .numeric.uint) /
+                total_duration,
+            kRPVAnalysisSummaryCategoryThread, labels, segment_x);
+        ImGui::SetCursorScreenPos(cursor_pos);
+        ImGui::Dummy(size);
+    }
+}
+
+void
+SummaryOverview::CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float segment_pct,
+                                       rocprofvis_analysis_summary_category_t category,
+                                       bool labels, float& segment_x) const
+{
+    const ImGuiStyle& style         = m_settings.GetDefaultStyle();
+    float             segment_width = bar_size.x * segment_pct;
+    if(segment_width > 0.0f)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->AddRectFilled(
+            ImVec2(segment_x, bar_pos.y),
+            ImVec2(segment_x + segment_width, bar_pos.y + bar_size.y),
+            m_settings.GetColorWheel()[DISPLAY_PROPS_EVENT_TYPES[category].second],
+            style.FrameRounding);
+        if(labels)
+        {
+            float label_width =
+                ImGui::CalcTextSize(DISPLAY_PROPS_EVENT_TYPES[category].first).x +
+                ImGui::CalcTextSize(" 100.0%").x;
+            bool label_fits = label_width + 2.0f * style.FramePadding.x <= segment_width;
+            if(label_fits)
             {
-                ImGui::TextUnformatted(
-                    std::to_string(info.device_type_index.value()).c_str());
-                ImGui::SameLine();
-                ImGui::TextUnformatted(": ");
-                ImGui::SameLine();
+                ImGui::SetCursorScreenPos(
+                    ImVec2(segment_x + style.FramePadding.x,
+                           bar_pos.y + 0.5f * (bar_size.y - ImGui::GetTextLineHeight())));
             }
-            ImGui::TextUnformatted(info.name.value().c_str());
-            ImGui::PopStyleVar();
+            else
+            {
+                float edge_y   = category % 2 == 0 ? bar_pos.y + bar_size.y : bar_pos.y;
+                float center_x = segment_x + 0.5f * segment_width;
+                draw_list->AddLine(ImVec2(center_x, edge_y),
+                                   ImVec2(center_x, category % 2 == 0
+                                                        ? edge_y + style.ItemSpacing.y
+                                                        : edge_y - style.ItemSpacing.y),
+                                   ImGui::GetColorU32(ImGuiCol_Text));
+                ImGui::PushFont(
+                    nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
+                label_width =
+                    ImGui::CalcTextSize(DISPLAY_PROPS_EVENT_TYPES[category].first).x +
+                    ImGui::CalcTextSize(" 100.0%").x;
+                ImGui::SetCursorScreenPos(ImVec2(
+                    std::max(bar_pos.x,
+                             std::min(segment_x, bar_pos.x + bar_size.x - label_width)),
+                    category % 2 == 0
+                        ? edge_y + style.ItemSpacing.y
+                        : edge_y - style.ItemSpacing.y - ImGui::GetTextLineHeight()));
+            }
+            ImGui::Text("%s %.1f%%", DISPLAY_PROPS_EVENT_TYPES[category].first,
+                        100.0 * segment_pct);
+            if(!label_fits)
+            {
+                ImGui::PopFont();
+            }
         }
     }
-    ImGui::SameLine();
-    m_aligned_bar_position = std::max(m_aligned_bar_position, ImGui::GetCursorPosX());
-    ImGui::SameLine(m_aligned_bar_position);
-    if(value)
+    segment_x += segment_width;
+}
+
+void
+SummaryOverview::CompositionTable(const SummaryInfo::AggregateMetrics& metrics)
+{
+    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    if((model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+            ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+            .numeric.uint +
+        model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+            ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+            .numeric.uint +
+        model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+            ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+            .numeric.uint) ||
+       metrics.gpu.counters.list.size() || metrics.cpu.counters.list.size())
     {
-        ImGui::ProgressBar(value.value() / 100.0f, ImVec2(-1.0f, 0.0f), overlay);
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::PushID(&metrics);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                              ThemeColor(m_settings, Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              ThemeColor(m_settings, Colors::kBgPanel));
+        ImGui::SetNextItemAllowOverlap();
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns;
+        if(metrics.type == kRPVAnalysisSummaryAggregationLevelTrace)
+        {
+            flags |= ImGuiTreeNodeFlags_DefaultOpen;
+        }
+        if(metrics.sub_metrics.empty())
+        {
+            flags |= ImGuiTreeNodeFlags_Leaf;
+        }
+
+        bool open = ImGui::TreeNodeEx("", flags);
+        ImGui::PopStyleColor(2);
+        ImGui::SameLine(0.0f, 0.0f);
+        switch(metrics.type)
+        {
+            case kRPVAnalysisSummaryAggregationLevelTrace:
+            {
+                ImGui::TextUnformatted(DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                    kRPVAnalysisSummaryAggregationLevelTrace -
+                    __kRPVAnalysisSummaryAggregationLevelFirst)]);
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelNode:
+            {
+                ImGui::Text(
+                    "%s: %s",
+                    DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                        metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)],
+                    metrics.info.node->host_name.c_str());
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelProcessor:
+            {
+                ImGui::Text(
+                    "%s%llu: %s",
+                    m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                        metrics.info.processor->type),
+                    metrics.info.processor->type_index,
+                    metrics.info.processor->product_name.c_str());
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelProcess:
+            {
+                ImGui::Text(
+                    "%s %llu: %s",
+                    DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                        metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)],
+                    metrics.info.process->GetId(), metrics.info.process->command.c_str());
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelThread:
+            {
+                ImGui::TextUnformatted(metrics.info.thread->GetName().c_str());
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+        ImGui::TableNextColumn();
+        if(metrics.gpu.counters.list.size() || metrics.cpu.counters.list.size())
+        {
+            ImFont* icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
+            ImGui::PushFont(icons);
+            CenterNextTextItem(ICON_ARROW_IN_BOX);
+            if(IconButton(ICON_ARROW_IN_BOX, icons))
+            {
+                m_counters = &metrics;
+            }
+            ImGui::PopFont();
+        }
+        ImGui::TableNextColumn();
+        CompositionBar(
+            ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight()), metrics,
+            false);
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(
+            m_data_provider.DataModel()
+                .GetSummary()
+                .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                .str.c_str());
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(
+            m_data_provider.DataModel()
+                .GetSummary()
+                .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                .str.c_str());
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(
+            m_data_provider.DataModel()
+                .GetSummary()
+                .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                .str.c_str());
+        if(open)
+        {
+            for(const SummaryInfo::AggregateMetrics& sub : metrics.sub_metrics)
+            {
+                CompositionTable(sub);
+            }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+}
+
+void
+SummaryOverview::Counters() const
+{
+    if(m_counters)
+    {
+        size_t color = 0;
+        for(const SummaryInfo::Counters::Counter& counter : m_counters->gpu.counters.list)
+        {
+            ImGui::PushID(static_cast<int>(color));
+            Counter(
+                counter,
+                m_settings.GetColorWheel()[color++ % m_settings.GetColorWheel().size()]);
+            ImGui::PopID();
+        }
+        for(const SummaryInfo::Counters::Counter& counter : m_counters->cpu.counters.list)
+        {
+            ImGui::PushID(static_cast<int>(color));
+            Counter(
+                counter,
+                m_settings.GetColorWheel()[color++ % m_settings.GetColorWheel().size()]);
+            ImGui::PopID();
+        }
     }
     else
     {
-        ImGui::ProgressBar(0.0f, ImVec2(-1.0f, 0.0f), "N/A");
+        ImGui::SetCursorPos(
+            (ImGui::GetContentRegionAvail() - ImGui::CalcTextSize("No data available.")) *
+            0.5f);
+        ImGui::TextDisabled("No data available.");
     }
-    m_min_width = std::max(
-        m_min_width,
-        ImGui::GetScrollMaxY()
-            ? m_aligned_bar_position +
-                  ImGui::CalcTextSize(overlay ? overlay : (value ? "100%" : "N/A")).x +
-                  2 * ImGui::GetStyle().FramePadding.x
-            : m_aligned_bar_position +
-                  ImGui::CalcTextSize(overlay ? overlay : (value ? "100%" : "N/A")).x +
-                  2 * ImGui::GetStyle().FramePadding.x + ImGui::GetStyle().ScrollbarSize);
 }
 
-TopKernels::TopKernels(
-    DataProvider& dp,
-    std::function<void(const char* kernel_name, const uint64_t* node_id,
-                       const uint64_t* device_id)>
-                          selection_callback,
-    std::function<void()> unselection_callback)
-: m_data_provider(dp)
-, m_settings(SettingsManager::GetInstance())
-, m_selection_callback(selection_callback)
-, m_unselection_callback(unselection_callback)
-, m_data_dirty(false)
-, m_filter_dirty(false)
-, m_node_combo(NodeFilterComboModel{ {}, {}, 0 })
-, m_gpu_combo(GPUFilterComboModel{ {}, {}, {}, 0, nullptr })
-, m_kernel_pie(KernelPieModel{ {}, {}, {} })
-, m_kernels(nullptr)
+void
+SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 color) const
+{
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImGui::TextUnformatted(counter.info->GetName().c_str());
+    const ProcessorInfo* processor =
+        m_data_provider.DataModel().GetTopology().GetProcessor(
+            counter.info->GetProcessorId());
+    ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+    if(processor)
+    {
+        ImGui::SameLine();
+        ImGui::TextUnformatted(
+            m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                processor->type));
+    }
+    if(counter.info->description.size())
+    {
+        ImGui::SameLine();
+        IconButton(ICON_QUESTION_MARK,
+                   m_settings.GetFontManager().GetFont(FontType::kIcon));
+        if(ImGui::IsItemHovered())
+        {
+            ImGui::PushTextWrapPos(ImGui::GetWindowWidth());
+            BeginTooltipStyled();
+            ImGui::TextUnformatted(counter.info->description.c_str());
+            EndTooltipStyled();
+            ImGui::PopTextWrapPos();
+        }
+    }
+    ImGui::PopStyleColor();
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x -
+                    ImGui::CalcTextSize(counter.info->units.c_str()).x -
+                    style.ItemSpacing.x -
+                    ImGui::CalcTextSize(counter.info->value_type.c_str()).x);
+    ImGui::TextUnformatted(counter.info->units.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", counter.info->value_type.c_str());
+    ImGui::PushFont(nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
+    ImGui::Text("Min: %s",
+                counter.metrics[kRPVAnalysisSummaryCounterMetricMin].str.c_str());
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Max: ").x -
+                    ImGui::CalcTextSize(
+                        counter.metrics[kRPVAnalysisSummaryCounterMetricMax].str.c_str())
+                        .x);
+    ImGui::Text("Max: %s",
+                counter.metrics[kRPVAnalysisSummaryCounterMetricMax].str.c_str());
+    ImGui::PopFont();
+    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight()));
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+        m_settings.GetColor(Colors::kBorderGray), style.FrameRounding);
+    double min_value  = counter.metrics[kRPVAnalysisSummaryCounterMetricMin].numeric.dbl;
+    double max_value  = counter.metrics[kRPVAnalysisSummaryCounterMetricMax].numeric.dbl;
+    double mean_value = counter.metrics[kRPVAnalysisSummaryCounterMetricMean].numeric.dbl;
+    double std_dev_value =
+        counter.metrics[kRPVAnalysisSummaryCounterMetricStdDev].numeric.dbl;
+    double range     = max_value - min_value;
+    ImVec2 bar_min   = ImGui::GetItemRectMin();
+    ImVec2 bar_max   = ImGui::GetItemRectMax();
+    float  bar_width = bar_max.x - bar_min.x;
+    float  label_x   = bar_min.x + 0.5f * bar_width;
+    if(range > 0.0)
+    {
+        label_x =
+            bar_min.x + bar_width * static_cast<float>((mean_value - min_value) / range);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(bar_min.x +
+                       bar_width *
+                           static_cast<float>(
+                               (std::max(min_value, mean_value - std_dev_value * 0.5f) -
+                                min_value) /
+                               range),
+                   bar_min.y),
+            ImVec2(bar_min.x +
+                       bar_width *
+                           static_cast<float>(
+                               (std::min(max_value, mean_value + std_dev_value * 0.5f) -
+                                min_value) /
+                               range),
+                   bar_max.y),
+            color, style.FrameRounding);
+    }
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(label_x, bar_min.y),
+                                        ImVec2(label_x, bar_max.y),
+                                        ImGui::GetColorU32(ImGuiCol_Text));
+    ImGui::PushFont(nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
+    float label_width =
+        ImGui::CalcTextSize("Mean: ").x +
+        ImGui::CalcTextSize(
+            counter.metrics[kRPVAnalysisSummaryCounterMetricMean].str.c_str())
+            .x +
+        ImGui::CalcTextSize(" | ").x + ImGui::CalcTextSize(SIGMA).x +
+        ImGui::CalcTextSize(": ").x +
+        ImGui::CalcTextSize(
+            counter.metrics[kRPVAnalysisSummaryCounterMetricStdDev].str.c_str())
+            .x;
+    ImGui::SetCursorScreenPos(
+        ImVec2(std::max(bar_min.x,
+                        std::min(label_x - 0.5f * label_width, bar_max.x - label_width)),
+               bar_max.y + style.ItemSpacing.y));
+    ImGui::Text("Mean: %s | %s: %s",
+                counter.metrics[kRPVAnalysisSummaryCounterMetricMean].str.c_str(), SIGMA,
+                counter.metrics[kRPVAnalysisSummaryCounterMetricStdDev].str.c_str());
+    ImGui::PopFont();
+}
+
+SummaryTopEvents::SummaryTopEvents(DataProvider&                      dp,
+                                   std::shared_ptr<TimelineSelection> timeline_selection,
+                                   rocprofvis_analysis_summary_category_t type,
+                                   TableType                              table_type,
+                                   rocprofvis_controller_table_type_t request_table_type,
+                                   uint64_t                           request_id)
+: m_v_container(nullptr)
+, m_instance_table(std::make_unique<InstanceTable>(
+      dp, timeline_selection, type, table_type, request_table_type, request_id))
+, m_op_events(nullptr)
+, m_filters()
+, m_pie(PieModel{ {}, {}, {} })
+, m_table_headers({})
+, m_type(type)
 , m_display_mode(Pie)
 , m_show_legend(true)
 , m_hovered_idx(std::nullopt)
 , m_selected_idx(std::nullopt)
 , m_padded_idx(std::nullopt)
-, m_min_size(0.0f, 0.0f)
+, m_data_changed(false)
+, m_filter_changed(false)
+, m_timeformat_changed(true)
+, m_data_provider(dp)
+, m_settings(SettingsManager::GetInstance())
 {
-    m_data_provider.SetSummaryDataReadyCallback([this]() {
-        m_data_dirty   = true;
-        m_filter_dirty = true;
-    });
-}
-
-TopKernels::~TopKernels() { m_data_provider.SetSummaryDataReadyCallback(nullptr); }
-
-void
-TopKernels::Update()
-{
-    if(m_data_provider.GetState() == ProviderState::kReady)
+    LayoutItem::Ptr top_events = LayoutItem::CreateFromWidget(
+        std::make_shared<RocCustomWidget>([this]() { RenderTopEvents(); }));
+    top_events->m_child_flags       = ImGuiChildFlags_AlwaysUseWindowPadding;
+    top_events->m_window_padding    = m_settings.GetDefaultStyle().WindowPadding;
+    top_events->m_item_spacing      = m_settings.GetDefaultStyle().ItemSpacing;
+    top_events->m_inherit_bg_color  = true;
+    LayoutItem::Ptr event_instances = LayoutItem::CreateFromWidget(
+        std::make_shared<RocCustomWidget>([this]() { RenderEventInstances(); }));
+    event_instances->m_child_flags  = ImGuiChildFlags_None;
+    event_instances->m_item_spacing = m_settings.GetDefaultStyle().ItemSpacing;
+    m_v_container = std::make_unique<VSplitContainer>(top_events, event_instances);
+    m_v_container->SetSplit(0.5f);
+    m_filters.resize(2);
+    m_filters[0] = FilterModel{ DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                                    kRPVAnalysisSummaryAggregationLevelNode -
+                                    __kRPVAnalysisSummaryAggregationLevelFirst)],
+                                0,
+                                nullptr,
+                                { nullptr },
+                                { "-" },
+                                { std::nullopt } };
+    switch(m_type)
     {
-        if(m_data_dirty)
+        case kRPVAnalysisSummaryCategoryKernel:
         {
-            m_node_combo = NodeFilterComboModel{ { nullptr }, { "-" }, 0 };
-            for(const SummaryInfo::AggregateMetrics& node :
-                m_data_provider.DataModel().GetSummary().GetSummaryData().sub_metrics)
-            {
-                if(node.type == kRPVControllerSummaryAggregationLevelNode && node.id &&
-                   node.name)
-                {
-                    m_node_combo.info.push_back(&node);
-                    m_node_combo.labels.push_back(node.name.value().c_str());
-                }
-            }
-            m_data_dirty = false;
+            m_filters[1] =
+                FilterModel{ "GPU", 0, nullptr, { nullptr }, { "-" }, { std::nullopt } };
+            break;
         }
-        if(m_filter_dirty)
+        case kRPVAnalysisSummaryCategoryMemory:
         {
-            m_kernels      = nullptr;
-            m_kernel_pie   = KernelPieModel{};
-            m_selected_idx = std::nullopt;
-            m_padded_idx   = std::nullopt;
-            if(m_unselection_callback)
-            {
-                m_unselection_callback();
-            }
-            if(m_node_combo.selected_idx > 0 &&
-               m_node_combo.selected_idx < m_node_combo.info.size())
-            {
-                if(m_gpu_combo.parent_info !=
-                       m_node_combo.info[m_node_combo.selected_idx] &&
-                   m_node_combo.info[m_node_combo.selected_idx])
-                {
-                    m_gpu_combo = GPUFilterComboModel{
-                        { nullptr },
-                        { "-" },
-                        { "-" },
-                        0,
-                        m_node_combo.info[m_node_combo.selected_idx]
-                    };
-                    for(const SummaryInfo::AggregateMetrics& device :
-                        m_gpu_combo.parent_info->sub_metrics)
-                    {
-                        if(device.type ==
-                               kRPVControllerSummaryAggregationLevelProcessor &&
-                           device.id && device.name && device.device_type)
-                        {
-                            switch(device.device_type.value())
-                            {
-                                case kRPVControllerProcessorTypeGPU:
-                                {
-                                    m_gpu_combo.info.push_back(&device);
-                                    m_gpu_combo.labels.emplace_back(
-                                        std::to_string(device.device_type_index.value()) +
-                                        ": " + device.name.value());
-                                    m_gpu_combo.labels_ptr.push_back(
-                                        m_gpu_combo.labels.back().c_str());
-                                    break;
-                                }
-                                case kRPVControllerProcessorTypeCPU:
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                if(m_gpu_combo.selected_idx > 0 &&
-                   m_gpu_combo.selected_idx < m_gpu_combo.info.size())
-                {
-                    m_kernels =
-                        &m_gpu_combo.info[m_gpu_combo.selected_idx]->gpu.top_kernels;
-                }
-                else
-                {
-                    m_kernels =
-                        &m_node_combo.info[m_node_combo.selected_idx]->gpu.top_kernels;
-                }
-            }
-            else
-            {
-                m_gpu_combo =
-                    GPUFilterComboModel{ { nullptr }, { "-" }, { "-" }, 0, nullptr };
-                m_kernels = &m_data_provider.DataModel().GetSummary().GetSummaryData().gpu.top_kernels;
-            }
-            if(m_kernels && !m_kernels->empty())
-            {
-                for(const SummaryInfo::KernelMetrics& kernel : (*m_kernels))
-                {
-                    m_kernel_pie.labels.push_back(kernel.name.c_str());
-                    m_kernel_pie.exec_time_pct.push_back(kernel.exec_time_pct);
-                }
-                float angle_sum = 0.0f;
-                for(const float& exec_time_pct : m_kernel_pie.exec_time_pct)
-                {
-                    float angle = exec_time_pct * 360.0f;
-                    m_kernel_pie.slices.push_back({ angle_sum, angle });
-                    angle_sum += angle;
-                }
-                if((*m_kernels).back().name == "Others")
-                {
-                    m_padded_idx = (*m_kernels).size() - 1;
-                }
-            }
-            m_filter_dirty = false;
+            m_filters[1] = FilterModel{ DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                                            kRPVAnalysisSummaryAggregationLevelProcessor -
+                                            __kRPVAnalysisSummaryAggregationLevelFirst)],
+                                        0,
+                                        nullptr,
+                                        { nullptr },
+                                        { "-" },
+                                        { std::nullopt } };
+            break;
+        }
+        case kRPVAnalysisSummaryCategoryThread:
+        {
+            m_filters.resize(3);
+            m_filters[1] = FilterModel{ DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                                            kRPVAnalysisSummaryAggregationLevelProcess -
+                                            __kRPVAnalysisSummaryAggregationLevelFirst)],
+                                        0,
+                                        nullptr,
+                                        { nullptr },
+                                        { "-" },
+                                        { std::nullopt } };
+            m_filters[2] = FilterModel{ DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                                            kRPVAnalysisSummaryAggregationLevelThread -
+                                            __kRPVAnalysisSummaryAggregationLevelFirst)],
+                                        0,
+                                        nullptr,
+                                        { nullptr },
+                                        { "-" },
+                                        { std::nullopt } };
+            break;
+        }
+        default:
+        {
+            ROCPROFVIS_ASSERT(false);
+            break;
         }
     }
 }
 
 void
-TopKernels::Render()
+SummaryTopEvents::Update()
 {
-    if(!m_data_dirty && !m_filter_dirty && m_kernels)
+    if(m_data_provider.GetState() == ProviderState::kReady)
+    {
+        if(m_data_changed)
+        {
+            const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+            const SummaryInfo::AggregateMetrics& metrics = model.GetSummaryData();
+            m_op_events               = model.TopOpEvents(metrics, m_type);
+            m_filters[0].selected_idx = 0;
+            m_filters[0].parent_info  = nullptr;
+            m_filters[0].info         = { nullptr };
+            m_filters[0].labels       = { "-" };
+            m_filters[0].query        = { std::nullopt };
+            for(const SummaryInfo::AggregateMetrics& node : metrics.sub_metrics)
+            {
+                if(node.type == kRPVAnalysisSummaryAggregationLevelNode &&
+                   node.info.node &&
+                   model.TopOpEvents(node, m_type)
+                       ->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                       .numeric.uint)
+                {
+                    m_filters[0].info.push_back(&node);
+                    m_filters[0].labels.push_back(node.info.node->host_name);
+                    m_filters[0].query.push_back(
+                        rocprofvis_dm_query_criteria_t{ node.info.node->GetId() });
+                }
+            }
+            m_filter_changed = true;
+            m_data_changed   = false;
+        }
+        if(m_filter_changed)
+        {
+            const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+            const SummaryInfo::AggregateMetrics& metrics = model.GetSummaryData();
+            m_op_events    = model.TopOpEvents(metrics, m_type);
+            m_pie          = PieModel{};
+            m_hovered_idx  = std::nullopt;
+            m_selected_idx = std::nullopt;
+            m_padded_idx   = std::nullopt;
+            m_instance_table->Clear();
+            ImPlot::BustColorCache();
+            for(size_t i = 1; i < m_filters.size(); i++)
+            {
+                if(m_filters[i].parent_info !=
+                       m_filters[i - 1].info[m_filters[i - 1].selected_idx] ||
+                   !m_filters[i].parent_info)
+                {
+                    m_filters[i].selected_idx = 0;
+                    m_filters[i].parent_info =
+                        m_filters[i - 1].info[m_filters[i - 1].selected_idx];
+                    m_filters[i].info   = { nullptr };
+                    m_filters[i].labels = { "-" };
+                    m_filters[i].query  = {
+                        m_filters[i - 1].query[m_filters[i - 1].selected_idx]
+                    };
+                    if(m_filters[i].parent_info)
+                    {
+                        for(const SummaryInfo::AggregateMetrics& metric :
+                            m_filters[i].parent_info->sub_metrics)
+                        {
+                            if(metric.info.node &&
+                               model.TopOpEvents(metric, m_type)
+                                   ->metrics
+                                       [kRPVAnalysisSummaryTopEventsMetricInvocations]
+                                   .numeric.uint)
+                            {
+                                switch(m_type)
+                                {
+                                    case kRPVAnalysisSummaryCategoryKernel:
+                                    case kRPVAnalysisSummaryCategoryMemory:
+                                    {
+                                        if(metric.type ==
+                                               kRPVAnalysisSummaryAggregationLevelProcessor &&
+                                           ((m_type ==
+                                                 kRPVAnalysisSummaryCategoryKernel &&
+                                             metric.info.processor->type ==
+                                                 kRPVControllerProcessorTypeGPU) ||
+                                            (m_type ==
+                                                 kRPVAnalysisSummaryCategoryMemory &&
+                                             (metric.info.processor->type ==
+                                                  kRPVControllerProcessorTypeGPU ||
+                                              metric.info.processor->type ==
+                                                  kRPVControllerProcessorTypeCPU))))
+                                        {
+                                            m_filters[i].info.push_back(&metric);
+                                            m_filters[i].labels.push_back(std::string());
+                                            m_data_provider.DataModel()
+                                                .GetTopology()
+                                                .GetProcessorTypeLabel(
+                                                    *metric.info.processor,
+                                                    m_filters[i].labels.back());
+                                            m_filters[i].labels.back() +=
+                                                ": " +
+                                                metric.info.processor->product_name;
+                                            m_filters[i].query.push_back(
+                                                m_filters[i - 1].query
+                                                    [m_filters[i - 1].selected_idx]);
+                                            m_filters[i].query.back()->agent_id =
+                                                metric.info.processor->GetId();
+                                        }
+                                        break;
+                                    }
+                                    case kRPVAnalysisSummaryCategoryThread:
+                                    {
+                                        if(metric.type ==
+                                           kRPVAnalysisSummaryAggregationLevelProcess)
+                                        {
+                                            m_filters[i].info.push_back(&metric);
+                                            m_filters[i].labels.push_back(
+                                                std::string(DISPLAY_NAMES_METRIC_TYPES[static_cast<
+                                                    size_t>(
+                                                    kRPVAnalysisSummaryAggregationLevelProcess -
+                                                    __kRPVAnalysisSummaryAggregationLevelFirst)]) +
+                                                " " +
+                                                std::to_string(
+                                                    metric.info.process->GetId()) +
+                                                ": " + metric.info.process->command);
+                                            m_filters[i].query.push_back(
+                                                m_filters[i - 1].query
+                                                    [m_filters[i - 1].selected_idx]);
+                                            m_filters[i].query.back()->process_id =
+                                                metric.info.process->GetId();
+                                        }
+                                        else if(metric.type ==
+                                                kRPVAnalysisSummaryAggregationLevelThread)
+                                        {
+                                            m_filters[i].info.push_back(&metric);
+                                            m_filters[i].labels.push_back(
+                                                metric.info.thread->GetName());
+                                            m_filters[i].query.push_back(
+                                                m_filters[i - 1].query
+                                                    [m_filters[i - 1].selected_idx]);
+                                            m_filters[i].query.back()->thread_id =
+                                                metric.info.thread->GetId();
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for(const FilterModel& filter : m_filters)
+            {
+                if(filter.selected_idx > 0 &&
+                   static_cast<size_t>(filter.selected_idx) < filter.info.size() &&
+                   filter.info[filter.selected_idx])
+                {
+                    m_op_events =
+                        model.TopOpEvents(*filter.info[filter.selected_idx], m_type);
+                }
+                else
+                {
+                    break;
+                }
+            }
+            if(m_op_events && !m_op_events->top.empty())
+            {
+                for(const SummaryInfo::TopOpEvents::Event& event : m_op_events->top)
+                {
+                    m_pie.labels.push_back(event.name.c_str());
+                    m_pie.duration_pct_of_total.push_back(
+                        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                            .numeric.flt);
+                }
+                float angle_sum = 0.0f;
+                for(const float& duration_pct_of_total : m_pie.duration_pct_of_total)
+                {
+                    float angle = duration_pct_of_total * 360.0f;
+                    m_pie.slices.push_back({ angle_sum, angle });
+                    angle_sum += angle;
+                }
+                if(m_op_events->top.back().name == "Others")
+                {
+                    m_padded_idx = m_op_events->top.size() - 1;
+                }
+            }
+            m_filter_changed = false;
+        }
+    }
+    if(m_timeformat_changed)
+    {
+        TimeFormat timeformat = m_settings.GetUserSettings().unit_settings.time_format;
+        m_table_headers       = { "Name",
+                                  "Invocation(s)",
+                                  "Total Duration (" + timeformat_sufix(timeformat) + ")",
+                                  "Total Duration (%)",
+                                  "Avg Duration (" + timeformat_sufix(timeformat) + ")",
+                                  "Max Duration (" + timeformat_sufix(timeformat) + ")",
+                                  "Min Duration (" + timeformat_sufix(timeformat) + ")" };
+        m_timeformat_changed  = false;
+    }
+    m_instance_table->Update();
+}
+
+void
+SummaryTopEvents::Render()
+{
+    if(m_v_container)
+    {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                            m_settings.GetDefaultStyle().FramePadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            m_settings.GetDefaultStyle().ItemSpacing);
+        ImGui::Spacing();
+        m_v_container->Render();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
+    }
+}
+
+void
+SummaryTopEvents::TimeFormatChanged()
+{
+    m_timeformat_changed = true;
+}
+
+void
+SummaryTopEvents::Fetched()
+{
+    m_data_changed = true;
+}
+
+bool
+SummaryTopEvents::Empty() const
+{
+    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    return model.TopOpEvents(model.GetSummaryData(), m_type)
+               ->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+               .numeric.uint == 0;
+}
+
+bool
+SummaryTopEvents::RenderPreview() const
+{
+    const SummaryModel&                  model = m_data_provider.DataModel().GetSummary();
+    const SummaryInfo::AggregateMetrics& metrics   = model.GetSummaryData();
+    const SummaryInfo::TopOpEvents*      op_events = model.TopOpEvents(metrics, m_type);
+    const ImGuiStyle&                    style     = m_settings.GetDefaultStyle();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Dummy(ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetItemRectMin() + ImVec2(0.0f, style.FramePadding.y),
+        ImGui::GetItemRectMax() + ImVec2(0.0f, style.FramePadding.y),
+        m_settings.GetColorWheel()[DISPLAY_PROPS_EVENT_TYPES[m_type].second],
+        style.FrameRounding);
+    ImGui::SameLine();
+    ImGui::TextUnformatted(DISPLAY_PROPS_EVENT_TYPES[m_type].first);
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Details").x -
+                    2.0f * style.FramePadding.x);
+    bool clicked = ImGui::Button("Details");
+    if(op_events && op_events->top.size())
+    {
+        ImGui::PushFont(nullptr,
+                        m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
+        if(m_settings.GetUserSettings().unit_settings.time_format >
+           TimeFormat::kTimecodeCondensed)
+        {
+            ImGui::Text(
+                "%s %s",
+                op_events->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .str.c_str(),
+                timeformat_sufix(m_settings.GetUserSettings().unit_settings.time_format)
+                    .c_str());
+        }
+        else
+        {
+            ImGui::TextUnformatted(
+                op_events->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .str.c_str());
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled(
+            "%s invocations",
+            op_events->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                .str.c_str());
+        ImGui::PopFont();
+        ImGui::PushFont(nullptr,
+                        m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
+        ImGui::TextDisabled("Top by Duration");
+        ImGui::PopFont();
+        for(size_t i = 0;
+            i < op_events->top.size() &&
+            ImGui::GetContentRegionAvail().y > ImGui::GetTextLineHeightWithSpacing();
+            i++)
+        {
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::BeginGroup();
+            ElidedText(op_events->top[i].name.c_str(),
+                       ImGui::GetContentRegionAvail().x -
+                           ImGui::CalcTextSize("100.0%").x - style.ItemSpacing.x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x -
+                            ImGui::CalcTextSize("100.0%").x);
+            ImGui::Text("%0.1f",
+                        op_events->top[i]
+                                .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                                .numeric.flt *
+                            100.0f);
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x -
+                            ImGui::CalcTextSize("%").x);
+            ImGui::TextUnformatted("%");
+            ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.25f * style.ItemSpacing.y);
+            ImGui::EndGroup();
+            ImGui::PopID();
+            ImGui::Dummy(
+                ImVec2(ImGui::GetContentRegionAvail().x, style.ItemSpacing.y * 0.75f));
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                m_settings.GetColor(Colors::kBorderGray), style.FrameRounding);
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImGui::GetItemRectMin(),
+                ImVec2(ImGui::GetItemRectMin().x +
+                           ImGui::GetItemRectSize().x *
+                               op_events->top[i]
+                                   .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                                   .numeric.flt,
+                       ImGui::GetItemRectMax().y),
+                m_settings.GetColorWheel()[DISPLAY_PROPS_EVENT_TYPES[m_type].second],
+                style.FrameRounding);
+            ImGui::PopStyleVar();
+        }
+    }
+    return clicked;
+}
+
+void
+SummaryTopEvents::RenderTopEvents()
+{
+    if(!m_data_changed && !m_filter_changed && m_op_events)
     {
         const ImVec2       region     = ImGui::GetContentRegionAvail();
-        const ImGuiStyle&  style      = ImGui::GetStyle();
+        const ImGuiStyle&  style      = m_settings.GetDefaultStyle();
         const ImPlotStyle& plot_style = ImPlot::GetStyle();
-        ImGui::SetCursorPos(
-            ImVec2(region.x * 0.5f - plot_style.PlotBorderSize -
-                       ImGui::CalcTextSize("Top Kernels by Execution Time").x * 0.5f,
-                   plot_style.PlotPadding.y));
-        ImGui::TextUnformatted("Top Kernels by Execution Time");
-        if(m_kernels->empty())
+        ImGui::SetCursorPos(ImVec2(
+            ImGui::GetContentRegionAvail().x * 0.5f -
+                ImGui::CalcTextSize(DISPLAY_NAMES_TOP_EVENT_TYPES[m_type]).x * 0.5f,
+            ImGui::GetWindowContentRegionMin().y));
+        ImGui::TextUnformatted(DISPLAY_NAMES_TOP_EVENT_TYPES[m_type]);
+        if(m_op_events->top.empty())
         {
             ImGui::GetWindowDrawList()->AddRect(
-                ImGui::GetCursorScreenPos() +
-                    ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                           plot_style.PlotBorderSize + plot_style.PlotPadding.y),
-                ImGui::GetWindowPos() + region -
-                    ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                           2 * plot_style.PlotPadding.y + ImGui::GetFrameHeight()),
-                ImGui::GetColorU32(style.Colors[ImGuiCol_TableBorderStrong]));
+                ImGui::GetCursorScreenPos(),
+                ImGui::GetWindowPos() + ImGui::GetContentRegionMax() -
+                    ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing()),
+                ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]));
             ImGui::SetCursorPos(
                 (region -
                  ImGui::CalcTextSize("No data available for the selected filters.")) *
@@ -539,41 +1409,59 @@ TopKernels::Render()
             TimeFormat time_format =
                 m_settings.GetUserSettings().unit_settings.time_format;
             ImPlot::PushColormap(m_settings.GetFlameColormapName());
+            ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
+            ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0.0f, 0.0f));
+            ImPlot::PushStyleColor(ImPlotCol_FrameBg,
+                                   ThemeColor(m_settings, Colors::kTransparent));
+            ImPlot::PushStyleColor(ImPlotCol_PlotBg,
+                                   ThemeColor(m_settings, Colors::kBgFrame));
+            ImPlot::PushStyleColor(ImPlotCol_PlotBorder,
+                                   ThemeColor(m_settings, Colors::kBorderColor, 0.85f));
+            ImPlot::PushStyleColor(ImPlotCol_AxisText,
+                                   ThemeColor(m_settings, Colors::kTextMain));
+            ImPlot::PushStyleColor(ImPlotCol_AxisGrid,
+                                   ThemeColor(m_settings, Colors::kBorderColor, 0.7f));
+            ImPlot::PushStyleColor(ImPlotCol_AxisTick,
+                                   ThemeColor(m_settings, Colors::kTextDim, 0.56f));
             switch(m_display_mode)
             {
                 case Pie:
                 {
-                    RenderPieChart(region, plot_style, hovered_idx);
+                    RenderPieChart(region, style, plot_style, hovered_idx);
                     break;
                 }
                 case Bar:
                 {
-                    RenderBarChart(region, plot_style, time_format, hovered_idx);
+                    RenderBarChart(region, style, plot_style, time_format, hovered_idx);
                     break;
                 }
                 case Table:
                 {
-                    RenderTable(plot_style, time_format);
+                    RenderTable(plot_style);
                     break;
                 }
             }
             // Legend...
             if(m_display_mode == Pie || m_display_mode == Bar)
             {
+                ImGui::SameLine();
                 RenderLegend(region, style, plot_style, hovered_idx);
             }
+            ImPlot::PopStyleColor(6);
+            ImPlot::PopStyleVar(2);
             ImPlot::PopColormap();
+
             m_hovered_idx = hovered_idx == -1 ? std::nullopt
                                               : std::make_optional<size_t>(hovered_idx);
         }
         // Chart/table switcher
-        ImGui::SetCursorPos(ImVec2(plot_style.PlotPadding.x,
-                                   region.y - ImGui::GetFrameHeightWithSpacing() -
-                                       plot_style.PlotPadding.y));
+        ImGui::SetCursorPos(
+            ImVec2(ImGui::GetWindowContentRegionMin().x,
+                   ImGui::GetContentRegionMax().y - ImGui::GetFrameHeight()));
         ImGui::BeginGroup();
         if(IconButton(ICON_CHART_PIE,
-                      m_settings.GetFontManager().GetFont(FontType::kIcon),
-                      ImVec2(0, 0), nullptr, false, style.FramePadding,
+                      m_settings.GetFontManager().GetFont(FontType::kIcon), ImVec2(0, 0),
+                      nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Pie ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -581,10 +1469,10 @@ TopKernels::Render()
         {
             m_display_mode = Pie;
         }
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, 0.0f);
         if(IconButton(ICON_CHART_BAR,
-                      m_settings.GetFontManager().GetFont(FontType::kIcon),
-                      ImVec2(0, 0), nullptr, false, style.FramePadding,
+                      m_settings.GetFontManager().GetFont(FontType::kIcon), ImVec2(0, 0),
+                      nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Bar ? Colors::kButton
                                                                 : Colors::kTransparent),
                       m_settings.GetColor(Colors::kButtonHovered),
@@ -592,9 +1480,8 @@ TopKernels::Render()
         {
             m_display_mode = Bar;
         }
-        ImGui::SameLine();
-        if(IconButton(ICON_LIST,
-                      m_settings.GetFontManager().GetFont(FontType::kIcon),
+        ImGui::SameLine(0.0f, 0.0f);
+        if(IconButton(ICON_LIST, m_settings.GetFontManager().GetFont(FontType::kIcon),
                       ImVec2(0, 0), nullptr, false, style.FramePadding,
                       m_settings.GetColor(m_display_mode == Table ? Colors::kButton
                                                                   : Colors::kTransparent),
@@ -605,78 +1492,64 @@ TopKernels::Render()
         }
         ImGui::EndGroup();
         // Filter combos...
-        ImGui::SetCursorPos(ImVec2(region.x - ImGui::CalcTextSize("Node:GPU:").x -
-                                       region.x / 2.0f - 4.0f * plot_style.PlotPadding.x,
-                                   region.y - ImGui::GetFrameHeightWithSpacing() -
-                                       plot_style.PlotPadding.y));
-        // Split container pushes (0,0); restore defaults so combos aren't squished.
-        const ImGuiStyle& base_style = m_settings.GetDefaultStyle();
-        ImGui::PushStyleVar(
-            ImGuiStyleVar_ItemSpacing,
-            ImVec2(plot_style.PlotPadding.x, base_style.ItemSpacing.y));
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base_style.FramePadding);
-        ImGui::AlignTextToFramePadding();
-        ImGui::BeginDisabled(m_node_combo.info.size() < 2);
-        ImGui::TextUnformatted("Node:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(region.x * 0.25f);
-        PushComboStyles();
-        if(ImGui::Combo("##node_combo", &m_node_combo.selected_idx,
-                        m_node_combo.labels.data(),
-                        static_cast<int>(m_node_combo.labels.size())))
+        float pos = ImGui::GetContentRegionMax().x;
+        int   i   = 0;
+        for(auto it = m_filters.rbegin(); it != m_filters.rend(); it++)
         {
-            m_filter_dirty = true;
+            ImGui::SameLine();
+            pos -=
+                ImGui::CalcTextSize(it->name).x + region.x / 4.0f + style.ItemSpacing.x;
+            ImGui::SetCursorPosX(pos);
+            ImGui::AlignTextToFramePadding();
+            ImGui::BeginDisabled(it->info.size() < 2);
+            ImGui::TextUnformatted(it->name);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(region.x * 0.25f);
+            PushComboStyles();
+            ImGui::PushID(i++);
+            if(ImGui::BeginCombo("##combo",
+                                 it->selected_idx < static_cast<int>(it->labels.size())
+                                     ? it->labels[it->selected_idx].c_str()
+                                     : "-"))
+            {
+                for(size_t j = 0; j < it->labels.size(); j++)
+                {
+                    ImGui::PushID(static_cast<int>(j));
+                    if(ImGui::Selectable("", it->selected_idx == static_cast<int>(j)))
+                    {
+                        it->selected_idx = static_cast<int>(j);
+                        m_filter_changed = true;
+                    }
+                    ImGui::SameLine(ImGui::GetCursorPosX());
+                    ElidedText(it->labels[j].c_str(), ImGui::GetContentRegionAvail().x,
+                               ImGui::GetContentRegionAvail().x);
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopID();
+            PopComboStyles();
+            ImGui::EndDisabled();
+            pos -= style.ItemSpacing.x;
         }
-        PopComboStyles();
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-
-        ImGui::BeginDisabled(m_node_combo.selected_idx == 0);
-        ImGui::TextUnformatted("GPU:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(region.x * 0.25f);
-        PushComboStyles();
-        if(ImGui::Combo("##gpu_combo", &m_gpu_combo.selected_idx,
-                        m_gpu_combo.labels_ptr.data(),
-                        static_cast<int>(m_gpu_combo.labels.size())))
-        {
-            m_filter_dirty = true;
-        }
-        PopComboStyles();
-        ImGui::EndDisabled();
-        ImGui::PopStyleVar(2);
-        // Update size requirements...
-        m_min_size.x =
-            ImGui::GetFrameHeightWithSpacing() * FILTER_COMBO_RELATIVE_MIN_WIDTH;
-        m_min_size.y =
-            ImGui::CalcTextSize("Total Duration (timecode)").x +
-            2.0f * (ImGui::GetFrameHeightWithSpacing() + plot_style.PlotPadding.y);
     }
 }
 
-float
-TopKernels::MinWidth() const
+void
+SummaryTopEvents::RenderEventInstances()
 {
-    return m_min_size.x;
-}
-
-float
-TopKernels::MinHeight() const
-{
-    return m_min_size.y;
+    m_instance_table->Render();
 }
 
 void
-TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
-                           int& hovered_idx)
+SummaryTopEvents::RenderPieChart(const ImVec2 region, const ImGuiStyle& style,
+                                 const ImPlotStyle& plot_style, int& hovered_idx)
 {
-    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    PushPlotChrome(m_settings);
-    if(ImPlot::BeginPlot("##Pie",
-                         ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
-                                        plot_style.PlotPadding.y),
-                         ImPlotFlags_Equal | ImPlotFlags_NoFrame |
-                             ImPlotFlags_CanvasOnly))
+    if(ImPlot::BeginPlot(
+           "##Pie",
+           ImVec2(m_show_legend ? region.x * 0.75f - style.ItemSpacing.x : region.x,
+                  ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing()),
+           ImPlotFlags_Equal | ImPlotFlags_NoFrame | ImPlotFlags_CanvasOnly))
     {
         ImPlot::SetupAxes(nullptr, nullptr,
                           ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoDecorations |
@@ -685,9 +1558,9 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
                               ImPlotAxisFlags_NoHighlight);
         hovered_idx = PlotHoverIdx();
         ImPlot::PlotPieChart(
-            m_kernel_pie.labels.data(), m_kernel_pie.exec_time_pct.data(),
-            static_cast<int>(m_kernel_pie.exec_time_pct.size()),
-            0.0, 0.0, PIE_CHART_RADIUS,
+            m_pie.labels.data(), m_pie.duration_pct_of_total.data(),
+            static_cast<int>(m_pie.duration_pct_of_total.size()), 0.0, 0.0,
+            PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
                 (void) user_data;
                 if(value * 100.0 > 10.0)
@@ -705,8 +1578,8 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
             ImPlot::PushColormap(m_settings.GetContrastColormapName());
             ImGui::PushID(m_settings.GetContrastColormapName());
             ImPlot::PlotPieChart(
-                &m_kernel_pie.labels[m_hovered_idx.value()],
-                &m_kernel_pie.exec_time_pct[m_hovered_idx.value()], 1, 0.0, 0.0,
+                &m_pie.labels[m_hovered_idx.value()],
+                &m_pie.duration_pct_of_total[m_hovered_idx.value()], 1, 0.0, 0.0,
                 PIE_CHART_RADIUS,
                 [](double value, char* buff, int size, void* user_data) -> int {
                     (void) user_data;
@@ -720,28 +1593,25 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
                     }
                     return 0;
                 },
-                nullptr, m_kernel_pie.slices[m_hovered_idx.value()].angle + 90);
+                nullptr, m_pie.slices[m_hovered_idx.value()].angle + 90);
             ImGui::PopID();
             ImPlot::PopColormap();
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(6);
-    ImPlot::PopStyleVar();
     PlotInputHandler();
 }
 
 void
-TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
-                           TimeFormat time_format, int& hovered_idx)
+SummaryTopEvents::RenderBarChart(const ImVec2 region, const ImGuiStyle& style,
+                                 const ImPlotStyle& plot_style, TimeFormat time_format,
+                                 int& hovered_idx)
 {
-    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, CHART_FIT_PADDING);
-    PushPlotChrome(m_settings);
-    if(ImPlot::BeginPlot("##Bar",
-                         ImVec2(-1, region.y - 2 * ImGui::GetFrameHeightWithSpacing() -
-                                        plot_style.PlotPadding.y),
-                         ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
-                             ImPlotFlags_CanvasOnly))
+    if(ImPlot::BeginPlot(
+           "##Bar",
+           ImVec2(m_show_legend ? region.x * 0.75f - style.ItemSpacing.x : region.x,
+                  ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing()),
+           ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_CanvasOnly))
     {
         ImPlot::SetupAxes(
             nullptr,
@@ -769,15 +1639,19 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
             },
             &time_format);
         hovered_idx = PlotHoverIdx();
-        for(size_t i = 0; i < (*m_kernels).size(); i++)
+        for(size_t i = 0; i < m_op_events->top.size(); i++)
         {
             if(i == m_hovered_idx)
             {
                 ImPlot::PushColormap(m_settings.GetContrastColormapName());
             }
             ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
-            ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,
-                             1, BAR_CHART_THICKNESS, static_cast<double>(i));
+            ImU64 duration_sum = static_cast<ImU64>(
+                m_op_events->top[i]
+                    .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                    .numeric.uint);
+            ImPlot::PlotBars(m_op_events->top[i].name.c_str(), &duration_sum, 1,
+                             BAR_CHART_THICKNESS, static_cast<double>(i));
             if(i == m_hovered_idx)
             {
                 ImPlot::PopColormap();
@@ -785,27 +1659,18 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
         }
         ImPlot::EndPlot();
     }
-    ImPlot::PopStyleColor(6);
-    ImPlot::PopStyleVar();
     PlotInputHandler();
 }
 
 void
-TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
+SummaryTopEvents::RenderTable(const ImPlotStyle& plot_style)
 {
-    ImGui::SetCursorPos(ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                   plot_style.PlotPadding.y +
-                                   2 * plot_style.LabelPadding.y));
-    if(ImGui::BeginTable("Table", 5,
+    if(ImGui::BeginTable("Table", m_table_headers.size(),
                          ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
                              ImGuiTableFlags_Resizable,
                          ImGui::GetContentRegionAvail() -
-                             ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
-                                    ImGui::GetFrameHeightWithSpacing() +
-                                        2 * plot_style.PlotPadding.y +
-                                        plot_style.PlotBorderSize)))
+                             ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing())))
     {
         ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
@@ -813,46 +1678,83 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
         ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                               m_settings.GetColor(Colors::kHighlightChart));
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Name");
-        ImGui::TableSetupColumn("Invocations");
-        ImGui::TableSetupColumn(
-            std::string("Total Duration (" + timeformat_sufix(time_format) + ")")
-                .c_str());
-        ImGui::TableSetupColumn(
-            std::string("Max Duration (" + timeformat_sufix(time_format) + ")").c_str());
-        ImGui::TableSetupColumn(
-            std::string("Min Duration (" + timeformat_sufix(time_format) + ")").c_str());
+        for(const std::string& column : m_table_headers)
+        {
+            ImGui::TableSetupColumn(column.c_str());
+        }
         ImGui::TableHeadersRow();
-        for(size_t i = 0; i < m_kernels->size(); i++)
+        for(size_t i = 0; i < m_op_events->top.size(); i++)
         {
             ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            if(ImGui::Selectable((*m_kernels)[i].name.c_str(), m_selected_idx == i,
+            ImGui::TableNextColumn();
+            ImGui::PushID(static_cast<int>(i));
+            ImVec2 pos = ImGui::GetCursorPos();
+            if(ImGui::Selectable("", m_selected_idx == i,
                                  ImGuiSelectableFlags_SpanAllColumns |
                                      ImGuiSelectableFlags_AllowOverlap))
             {
-                ToggleSelectKernel(i);
+                ToggleSelectEvent(i);
             }
-            ImGui::TableSetColumnIndex(1);
+            ImGui::SetCursorPos(pos);
+            ImGui::BeginDisabled(i == m_padded_idx);
+            ElidedText(m_op_events->top[i].name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::EndDisabled();
+            ImGui::TableNextColumn();
             ImGui::TextUnformatted(
-                i == m_padded_idx ? "-"
-                                  : std::to_string((*m_kernels)[i].invocations).c_str());
-            ImGui::TableSetColumnIndex(2);
+                m_op_events->top[i]
+                    .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
+                    .str.c_str());
+            ImGui::TableNextColumn();
             ImGui::TextUnformatted(
-                nanosecond_to_formatted_str((*m_kernels)[i].exec_time_sum, time_format)
-                    .c_str());
-            ImGui::TableSetColumnIndex(3);
-            ImGui::TextUnformatted(i == m_padded_idx
-                                       ? "-"
-                                       : nanosecond_to_formatted_str(
-                                             (*m_kernels)[i].exec_time_max, time_format)
-                                             .c_str());
-            ImGui::TableSetColumnIndex(4);
-            ImGui::TextUnformatted(i == m_padded_idx
-                                       ? "-"
-                                       : nanosecond_to_formatted_str(
-                                             (*m_kernels)[i].exec_time_min, time_format)
-                                             .c_str());
+                m_op_events->top[i]
+                    .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                    .str.c_str());
+            ImGui::TableNextColumn();
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
+                                  ImPlot::GetColormapColor(static_cast<int>(i)));
+            ImGui::ProgressBar(m_op_events->top[i]
+                                   .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                                   .numeric.flt,
+                               ImVec2(ImGui::GetContentRegionAvail().x -
+                                          ImGui::CalcTextSize("100.0%").x -
+                                          ImGui::GetStyle().ItemSpacing.x,
+                                      0.0f),
+                               "");
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar();
+            ImGui::SameLine();
+            ImGui::Text("%0.1f",
+                        m_op_events->top[i]
+                                .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                                .numeric.flt *
+                            100.0f);
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x -
+                            ImGui::CalcTextSize("%").x);
+            ImGui::TextUnformatted("%");
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(
+                i == m_padded_idx
+                    ? "-"
+                    : m_op_events->top[i]
+                          .metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg]
+                          .str.c_str());
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(
+                i == m_padded_idx
+                    ? "-"
+                    : m_op_events->top[i]
+                          .metrics[kRPVAnalysisSummaryTopEventMetricDurationMax]
+                          .str.c_str());
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(
+                i == m_padded_idx
+                    ? "-"
+                    : m_op_events->top[i]
+                          .metrics[kRPVAnalysisSummaryTopEventMetricDurationMin]
+                          .str.c_str());
+            ImGui::PopID();
         }
         ImGui::PopStyleColor(3);
         ImGui::EndTable();
@@ -860,12 +1762,12 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
 }
 
 void
-TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
-                         const ImPlotStyle& plot_style, int& hovered_idx)
+SummaryTopEvents::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
+                               const ImPlotStyle& plot_style, int& hovered_idx)
 {
-    ImVec2 legend_pos = ImVec2(0.75f * region.x - 2 * plot_style.PlotPadding.x,
-                               ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                   3 * plot_style.PlotPadding.y);
+    ImVec2 legend_pos =
+        ImVec2(0.75f * region.x + 0.5f * style.ItemSpacing.x, ImGui::GetCursorPosY());
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     if(m_show_legend)
     {
         ImGui::SetCursorPos(legend_pos -
@@ -877,85 +1779,100 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
     }
     else
     {
-        ImGui::SetCursorPos(ImVec2(region.x - 2 * plot_style.PlotPadding.x -
-                                       ImGui::GetFrameHeightWithSpacing(),
-                                   ImGui::GetFontSize() + plot_style.PlotBorderSize +
-                                       3 * plot_style.PlotPadding.y));
+        ImGui::SetCursorPos(
+            ImVec2(ImGui::GetContentRegionMax().x - ImGui::GetFrameHeight(),
+                   ImGui::GetCursorPosY()));
         if(ImGui::ArrowButton("show_legend", ImGuiDir_Left))
         {
             m_show_legend = true;
         }
     }
+    ImGui::PopStyleVar();
     if(m_show_legend)
     {
         ImGui::SetCursorPos(legend_pos);
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(region.x * 0.25f, 0),
-            ImVec2(region.x * 0.25f,
-                   ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() -
-                       3 * plot_style.PlotPadding.y - plot_style.PlotBorderSize));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, plot_style.LegendInnerPadding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, style.Colors[ImGuiCol_WindowBg]);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, plot_style.Colors[ImPlotCol_PlotBg]);
+        ImGui::PushStyleColor(ImGuiCol_Border, plot_style.Colors[ImPlotCol_PlotBorder]);
         ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               m_settings.GetColor(Colors::kHighlightChart));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                               m_settings.GetColor(Colors::kHighlightChart));
-        ImGui::BeginChild("legend", ImVec2(region.x * 0.25f, 0),
-                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
-        float legend_width     = ImGui::GetWindowWidth() - 2 * style.WindowPadding.x;
+        ImGui::BeginChild("legend",
+                          ImVec2(0.0f, ImGui::GetContentRegionAvail().y -
+                                           ImGui::GetFrameHeightWithSpacing()),
+                          ImGuiChildFlags_Borders);
         float icon_width       = ImGui::GetFontSize();
         float scroll_bar_width = ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f;
-        ImGui::BeginChild(
-            "legend_scroll_view", ImVec2(legend_width - scroll_bar_width, 0),
-            ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollWithMouse);
-        for(size_t i = 0; i < m_kernels->size(); i++)
+        for(size_t i = 0; i < m_op_events->top.size(); i++)
         {
             ImGui::PushID(static_cast<int>(i));
             ImVec2 pos = ImGui::GetCursorPos();
-            bool   row_clicked =
+            ImGui::BeginGroup();
+            ImGui::Dummy(ImVec2(icon_width, icon_width));
+            ImGui::SameLine(0.0f, 0.0f);
+            ImGui::BeginGroup();
+            ImGui::BeginDisabled(i == m_padded_idx);
+            ElidedText(m_op_events->top[i].name.c_str(), ImGui::GetContentRegionAvail().x,
+                       region.x * 0.5f);
+            ImGui::EndDisabled();
+            ImGui::PushFont(nullptr,
+                            m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
+            ImGui::TextDisabled(
+                "%0.1f%% | %s invocation(s) | %s %s",
+                m_op_events->top[i]
+                        .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                        .numeric.flt *
+                    100.0f,
+                m_op_events->top[i]
+                    .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
+                    .str.c_str(),
+                m_op_events->top[i]
+                    .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                    .str.c_str(),
+                timeformat_sufix(m_settings.GetUserSettings().unit_settings.time_format)
+                    .c_str());
+            ImGui::PopFont();
+            ImGui::EndGroup();
+            ImGui::EndGroup();
+            ImGui::SetCursorPos(pos);
+            bool row_clicked =
                 ImGui::Selectable("", m_selected_idx == i,
                                   m_hovered_idx == i ? ImGuiSelectableFlags_Highlight
-                                                     : ImGuiSelectableFlags_None);
+                                                     : ImGuiSelectableFlags_None,
+                                  ImGui::GetItemRectSize());
             bool row_hovered = ImGui::IsItemHovered();
-            ImGui::SetCursorPos(pos);
             ImGui::GetWindowDrawList()->AddRectFilled(
-                ImGui::GetCursorScreenPos() +
-                    ImVec2(2 * IMPLOT_LEGEND_ICON_SHRINK, 2 * IMPLOT_LEGEND_ICON_SHRINK),
-                ImGui::GetCursorScreenPos() +
-                    ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
-                           icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
+                ImGui::GetItemRectMin() + ImVec2(2.0f * IMPLOT_LEGEND_ICON_SHRINK,
+                                                 2.0f * IMPLOT_LEGEND_ICON_SHRINK),
+                ImGui::GetItemRectMin() +
+                    ImVec2(icon_width - 2.0f * IMPLOT_LEGEND_ICON_SHRINK,
+                           ImGui::GetItemRectSize().y - 2.0f * IMPLOT_LEGEND_ICON_SHRINK),
                 ImGui::GetColorU32(
                     ImGui::GetColorU32(ImPlot::GetColormapColor(static_cast<int>(i))),
                     row_hovered ? 0.75f : 1.0f));
-            ImGui::BeginDisabled(i == m_padded_idx);
-            ImGui::SameLine(icon_width);
-            ElidedText((*m_kernels)[i].name.c_str(), ImGui::GetContentRegionAvail().x,
-                       region.x * 0.5f);
-            ImGui::EndDisabled();
             if(row_hovered)
             {
                 hovered_idx = static_cast<int>(i);
-                if(row_clicked && m_selection_callback)
+                if(row_clicked)
                 {
-                    ToggleSelectKernel(i);
+                    ToggleSelectEvent(i);
                 }
             }
             ImGui::PopID();
         }
         ImGui::EndChild();
-        ImGui::EndChild();
-        ImGui::PopStyleColor(4);
+        ImGui::PopStyleColor(5);
         ImGui::PopStyleVar();
-        ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelX);
     }
 }
 
 int
-TopKernels::PlotHoverIdx() const
+SummaryTopEvents::PlotHoverIdx() const
 {
     int idx = -1;
-    if(ImPlot::IsPlotHovered() && m_kernels)
+    if(ImPlot::IsPlotHovered() && m_op_events)
     {
         ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
         switch(m_display_mode)
@@ -967,11 +1884,10 @@ TopKernels::PlotHoverIdx() const
                 {
                     double angle = fmod(
                         -atan2(mouse_pos.x, mouse_pos.y) * 180.0 / PI + 360.0, 360.0);
-                    for(size_t i = 0; i < m_kernel_pie.slices.size(); i++)
+                    for(size_t i = 0; i < m_pie.slices.size(); i++)
                     {
-                        if(angle >= m_kernel_pie.slices[i].angle &&
-                           angle < m_kernel_pie.slices[i].angle +
-                                       m_kernel_pie.slices[i].size_angle)
+                        if(angle >= m_pie.slices[i].angle &&
+                           angle < m_pie.slices[i].angle + m_pie.slices[i].size_angle)
                         {
                             idx = static_cast<int>(i);
                             break;
@@ -982,11 +1898,17 @@ TopKernels::PlotHoverIdx() const
             }
             case Bar:
             {
-                for(size_t i = 0; i < m_kernels->size(); i++)
+                for(size_t i = 0; i < m_op_events->top.size(); i++)
                 {
-                    if(mouse_pos.x >= static_cast<double>(i) - BAR_CHART_THICKNESS / 2.0 &&
-                       mouse_pos.x <= static_cast<double>(i) + BAR_CHART_THICKNESS / 2.0 &&
-                       mouse_pos.y >= 0.0 && mouse_pos.y <= (*m_kernels)[i].exec_time_sum)
+                    if(mouse_pos.x >=
+                           static_cast<double>(i) - BAR_CHART_THICKNESS / 2.0 &&
+                       mouse_pos.x <=
+                           static_cast<double>(i) + BAR_CHART_THICKNESS / 2.0 &&
+                       mouse_pos.y >= 0.0 &&
+                       mouse_pos.y <=
+                           m_op_events->top[i]
+                               .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                               .numeric.uint)
                     {
                         idx = static_cast<int>(i);
                         break;
@@ -1000,140 +1922,123 @@ TopKernels::PlotHoverIdx() const
 }
 
 void
-TopKernels::PlotInputHandler()
+SummaryTopEvents::PlotInputHandler()
 {
-    if(m_hovered_idx && m_kernels && 0 <= m_hovered_idx &&
-       m_hovered_idx < m_kernels->size())
+    if(m_hovered_idx && m_op_events && m_hovered_idx < m_op_events->top.size())
     {
         if(ImGui::IsItemHovered())
         {
             if(BeginItemTooltipStyled())
             {
-                if(m_hovered_idx != m_padded_idx)
-                {
-                    ImGui::TextUnformatted("Dispatch(es):");
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(
-                        std::to_string((*m_kernels)[m_hovered_idx.value()].invocations)
-                            .c_str());
-                }
-                ImGui::TextUnformatted("Total Duration:");
-                ImGui::SameLine();
-                ImGui::TextUnformatted(
-                    nanosecond_to_formatted_str(
-                        (*m_kernels)[m_hovered_idx.value()].exec_time_sum,
-                        m_settings.GetUserSettings().unit_settings.time_format, true)
-                        .c_str());
+                ImGui::Text("Invocation(s): %s",
+                            m_op_events->top[m_hovered_idx.value()]
+                                .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
+                                .str.c_str());
+                ImGui::Text("Total Duration: %s %s",
+                            m_op_events->top[m_hovered_idx.value()]
+                                .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                                .str.c_str(),
+                            timeformat_sufix(
+                                m_settings.GetUserSettings().unit_settings.time_format)
+                                .c_str());
                 EndTooltipStyled();
             }
         }
-        if(ImGui::IsItemClicked() && m_selection_callback)
+        if(ImGui::IsItemClicked())
         {
-            ToggleSelectKernel(m_hovered_idx.value());
+            ToggleSelectEvent(m_hovered_idx.value());
         }
     }
 }
 
 void
-TopKernels::ToggleSelectKernel(const size_t& idx)
+SummaryTopEvents::ToggleSelectEvent(const size_t& idx)
 {
-    if(m_kernels && 0 <= idx && idx < m_kernels->size())
+    if(m_op_events && idx < m_op_events->top.size())
     {
         if(m_selected_idx == idx || m_padded_idx == idx)
         {
             m_selected_idx = std::nullopt;
-            m_unselection_callback();
+            m_instance_table->Clear();
         }
         else
         {
             m_selected_idx = idx;
-            m_selection_callback(
-                (*m_kernels)[m_selected_idx.value()].name.c_str(),
-                0 < m_node_combo.selected_idx &&
-                        m_node_combo.selected_idx < m_node_combo.info.size()
-                    ? &m_node_combo.info[m_node_combo.selected_idx]->id.value()
-                    : nullptr,
-                0 < m_gpu_combo.selected_idx &&
-                        m_gpu_combo.selected_idx < m_gpu_combo.info.size()
-                    ? &m_gpu_combo.info[m_gpu_combo.selected_idx]->id.value()
-                    : nullptr);
+            m_instance_table->SearchInstances(
+                m_op_events->top[idx].name,
+                m_filters.back().query[m_filters.back().selected_idx]);
         }
     }
 }
 
-KernelInstanceTable::KernelInstanceTable(
-    DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection)
+SummaryTopEvents::InstanceTable::InstanceTable(
+    DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
+    rocprofvis_analysis_summary_category_t type, TableType table_type,
+    rocprofvis_controller_table_type_t request_table_type, uint64_t request_id)
 : InfiniteScrollTable(
-      dp, TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
-      DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID,
-      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection)
+      dp, table_type, request_table_type, request_id,
+      [&dp]() -> const TablesModel& { return dp.DataModel().GetSummary().GetTables(); },
+      [&dp]() -> TablesModel& { return dp.DataModel().GetSummary().GetTables(); },
+      timeline_selection)
+, m_type(type)
+, m_source_filter(std::nullopt)
 , m_fetched(false)
 {
-    m_widget_name = GenUniqueName("summary_top_kernel_instances");
+    m_widget_name = GenUniqueName("summary_top_event_instances");
 }
 
 void
-KernelInstanceTable::Render()
+SummaryTopEvents::InstanceTable::Render()
 {
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     if(m_fetched)
     {
-        ImGui::SetNextWindowSize(ImGui::GetContentRegionAvail() -
-                                 ImVec2(0, ImGui::GetFrameHeightWithSpacing()));
-        InfiniteScrollTable::Render();
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Showing %llu dispatch(es)",
+        ImGui::BeginChild("##status", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+        ImGui::Text("Showing %llu invocation(s)",
                     m_table_model().GetTableTotalRowCount(m_table_type));
+        ImGui::EndChild();
+        InfiniteScrollTable::Render();
     }
     else
     {
+        ImGui::BeginChild("##status", ImGui::GetContentRegionAvail(),
+                          ImGuiChildFlags_Borders);
         ImGui::SetCursorPos(
             (ImGui::GetContentRegionAvail() -
-             ImGui::CalcTextSize("Select a kernel to view dispatch(es).")) *
+             ImGui::CalcTextSize("Select an event to view its invocation(s).")) *
             0.5f);
-        ImGui::TextDisabled("Select a kernel to view dispatch(es).");
+        ImGui::TextDisabled("Select an event to view its invocation(s).");
+        ImGui::EndChild();
     }
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
 }
 
 void
-KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
-                                        const uint64_t*    node_id,
-                                        const uint64_t*    device_id)
+SummaryTopEvents::InstanceTable::SearchInstances(
+    const std::string&                            event_name,
+    std::optional<rocprofvis_dm_query_criteria_t> source_filter)
 {
-    m_kernel_name = kernel_name;
-    if(node_id)
-    {
-        m_source_filter = rocprofvis_dm_query_criteria_t{};
-        m_source_filter->node_id = *node_id;
-        if(device_id)
-        {
-            m_source_filter->agent_id = *device_id & TOPOLOGY_ID_MASK;
-        }
-    }
-    else
-    {
-        m_source_filter = std::nullopt;
-    }
+    m_event_name    = event_name;
+    m_source_filter = source_filter;
     RequestFetch();
     m_fetched = true;
 }
 
 void
-KernelInstanceTable::Clear()
+SummaryTopEvents::InstanceTable::Clear()
 {
     m_data_provider.CancelRequest(m_request_id);
     m_table_model_mutable().ClearTable(m_table_type);
     m_fetched = false;
 }
 
-float
-KernelInstanceTable::MinHeight() const
-{
-    return 4.0f * ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ScrollbarSize;
-}
-
 void
-KernelInstanceTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const
+SummaryTopEvents::InstanceTable::UpdateFetchParams(
+    std::shared_ptr<TableRequestParams>& params) const
 {
     if(!params)
     {
@@ -1144,9 +2049,33 @@ KernelInstanceTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& para
     {
         std::shared_ptr<EventSearchRequestParams> search_params =
             std::static_pointer_cast<EventSearchRequestParams>(params);
-        const TimelineModel& timeline         = m_data_provider.DataModel().GetTimeline();
-        search_params->m_op_types             = { kRocProfVisDmOperationDispatch };
-        search_params->m_string_table_filters = { m_kernel_name };
+        const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
+        switch(m_type)
+        {
+            case kRPVAnalysisSummaryCategoryKernel:
+            {
+                search_params->m_op_types = { kRocProfVisDmOperationDispatch };
+                break;
+            }
+            case kRPVAnalysisSummaryCategoryMemory:
+            {
+                search_params->m_op_types = { kRocProfVisDmOperationMemoryAllocate,
+                                              kRocProfVisDmOperationMemoryCopy };
+                break;
+            }
+            case kRPVAnalysisSummaryCategoryThread:
+            {
+                search_params->m_op_types = { kRocProfVisDmOperationLaunch,
+                                              kRocProfVisDmOperationLaunchSample };
+                break;
+            }
+            default:
+            {
+                ROCPROFVIS_ASSERT(false);
+                break;
+            }
+        }
+        search_params->m_string_table_filters = { m_event_name };
         search_params->m_include_substrings   = false;
         search_params->m_include_category     = false;
         search_params->m_partial_matching     = false;

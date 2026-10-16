@@ -1019,9 +1019,9 @@ if(WIN32)
         -arch x64
         -d "Version=${_wix_version}"
         -d "ExeFile=${_wix_stage}/$<TARGET_FILE_NAME:${TARGET_NAME}>"
-        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
-        -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
-        -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
+        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/wix/License_Public.rtf"
+        -d "BannerBmp=${CMAKE_SOURCE_DIR}/wix/banner.bmp"
+        -d "DialogBmp=${CMAKE_SOURCE_DIR}/wix/main.bmp"
         -d "IconFile=${CMAKE_SOURCE_DIR}/resources/ROCm_Optiq.ico"
         -ext WixToolset.UI.wixext
         -out "${_wix_out}"

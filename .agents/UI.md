@@ -167,13 +167,11 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- resources/            # Icons, fonts, AMD logo, embedded assets
 +-- sample/               # Sample traces (.db, .rpd, .rpv)
 +-- docs/                 # ReadTheDocs sources, screenshots
-+-- Installer/            # Windows installer (NSIS) config
++-- wix/                  # WiX v4 MSI sources (PACKAGE_WIX)
 +-- docker/               # Container build helpers
 +-- .github/workflows/    # CI: ubuntu, oracle, rocky, windows, macos
 +-- CMakeLists.txt        # Root build
 +-- CMakePresets.json     # Build presets (preferred entrypoint)
-+-- build.cmd             # Windows convenience wrapper
-+-- pkgbuild.cmd          # Windows packaging
 +-- CODING.md             # Coding standards (HARD RULES)
 +-- BUILDING.md           # Per-platform build steps
 +-- README.md             # Public README + UI tour

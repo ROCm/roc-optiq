@@ -803,8 +803,11 @@ TEST_CASE("Script table.fetch returns numbers for numeric columns")
         "print(all(isinstance(rows[0][k], int) for k in ('start', 'end', 'duration')))\n"
         "grouped = t.fetch(tracks=[tr], start=tr.min_time, end=tr.max_time, group='name',\n"
         "                  count=8)\n"
-        "print(isinstance(grouped[0]['num_invocations'], int))\n";
-    REQUIRE(run_script_text_on(controller, source) == "True\nTrue");
+        "print(isinstance(grouped[0]['num_invocations'], int))\n"
+        "text_rows = t.fetch(tracks=[tr], start=tr.min_time, end=tr.max_time,\n"
+        "                    count=8, text=True)\n"
+        "print(all(isinstance(v, str) for v in text_rows[0].values()))\n";
+    REQUIRE(run_script_text_on(controller, source) == "True\nTrue\nTrue");
 
     rocprofvis_controller_free(controller);
 }

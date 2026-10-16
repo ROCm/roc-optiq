@@ -160,6 +160,7 @@ Keyword arguments:
 | `start_index` | `0` | First row to return. |
 | `count` | `10000` | Maximum rows to return. |
 | `type` | `"events"` | `"events"` / `"samples"`, or `TABLE_TYPE_EVENTS` / `TABLE_TYPE_SAMPLES`. |
+| `text` | `False` | Return every cell as `str`, including empty cells. Skips numeric conversion and `ValueError`. |
 
 At least one track of the matching type is required. Otherwise
 `RuntimeError` is raised.
@@ -181,7 +182,9 @@ Integer columns (`start`, `end`, `duration`, and `COUNT`) are `int`.
 Floating-point columns (`value`, and `AVG` / `MIN` / `MAX` / `SUM`) are
 `float`. An empty numeric cell is `None`. Text that is not a complete
 value of that type raises `ValueError` and stops the fetch: `"12.5"`
-in an integer column is an error, not `12`.
+in an integer column is an error, not `12`. Pass `text=True` to skip
+conversion and get every cell as `str`, which is how to inspect a file
+whose cells may not match the column type.
 
 ```python
 table = optiq.table()

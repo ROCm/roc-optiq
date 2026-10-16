@@ -524,7 +524,7 @@ ComputeDataModel::GetKernelSelectionTable()
 }
 
 bool
-ComputeDataModel::FromString(const std::string& text, MetricId& out)
+ComputeDataModel::MetricIdFromString(const std::string& text, MetricId& out)
 {
     auto parse = [](const std::string& s, size_t begin, size_t end,
                     uint32_t& value) -> bool {

@@ -105,7 +105,7 @@ public:
     // Create a MetricId from a string representation.
     // Parse "category.table.entry". Returns false when `text` is not three
     // numeric segments.
-    static bool FromString(const std::string& text, MetricId& out);
+    static bool MetricIdFromString(const std::string& text, MetricId& out);
 
     // Clear entire model (workloads, metrics, tables, etc)
     void Clear();

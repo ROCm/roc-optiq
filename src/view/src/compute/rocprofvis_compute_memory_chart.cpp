@@ -932,7 +932,7 @@ static bool
 FindCategoryAndTable(const MemChartMetricRef& ref, uint32_t& category, uint32_t& table)
 {
     MetricId id;
-    if(!ref.valid || !ComputeDataModel::FromString(ref.metric_id, id)) return false;
+    if(!ref.valid || !ComputeDataModel::MetricIdFromString(ref.metric_id, id)) return false;
     category = id.category_id;
     table    = id.table_id;
     return true;
@@ -1041,7 +1041,7 @@ ComputeMemoryChartView::FindMetricDefinition(const MemChartMetricRef& ref) const
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID) return nullptr;
 
     MetricId id;
-    if(!ComputeDataModel::FromString(ref.metric_id, id)) return nullptr;
+    if(!ComputeDataModel::MetricIdFromString(ref.metric_id, id)) return nullptr;
     return m_data_provider.ComputeModel().GetMetricInfo(workload_id, id);
 }
 

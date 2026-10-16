@@ -303,7 +303,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
-    # ImGuiTextSelect (MIT), used only by Ask Optiq message cards.
+    # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
     thirdparty/ImGuiTextSelect/textselect.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)

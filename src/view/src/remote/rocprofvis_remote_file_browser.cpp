@@ -454,8 +454,9 @@ void RemoteFileBrowser::Render()
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
 
+    const ImGuiStyle& def = settings.GetDefaultStyle();
     // Round to 12 px to match the app's other frameless pop-ups.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(640, 440), ImVec2(FLT_MAX, FLT_MAX));
@@ -484,7 +485,7 @@ void RemoteFileBrowser::Render()
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
 
         const float header_h = 10.0f * 2.0f + ImGui::GetTextLineHeightWithSpacing() +
                                ImGui::GetFrameHeightWithSpacing() +
@@ -894,14 +895,13 @@ void RemoteFileBrowser::Render()
             ImGui::PushStyleColor(ImGuiCol_Border,
                                   settings.GetColor(Colors::kPanelBorderSubtle));
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                ImVec2(kFileTableCardPadX, kFileTableCardPadY));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+
             ImGui::BeginChild("RemoteFilesCard", ImVec2(0.0f, -footer_reserve),
                               ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
-                                ImVec2(style.CellPadding.x, style.CellPadding.y + 1.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, def.CellPadding);
             if (ImGui::BeginTable("RemoteFiles", 4, table_flags, ImVec2(0, 0)))
             {
             // Sized from sample text so nothing truncates at any font scale.
@@ -1192,7 +1192,8 @@ void RemoteFileBrowser::Render()
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+
         ImGui::BeginChild("RemoteExplorerFooter", ImVec2(0.0f, footer_card_height), true,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         {

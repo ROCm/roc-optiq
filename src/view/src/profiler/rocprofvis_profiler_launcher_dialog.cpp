@@ -39,9 +39,6 @@ constexpr float kMinPreviewWidth     = 300.0f;
 constexpr float kMinFormWidth        = 320.0f;
 constexpr float kInitialPreviewRatio = 2.0f / 5.0f;
 
-// Inner padding for the advanced-window tab panels (matches the main cards).
-constexpr float kAdvancedTabPadX     = 14.0f;
-constexpr float kAdvancedTabPadY     = 10.0f;
 
 // In-body header (icon + title, trailing close "x", separator) that replaces the
 // native title bar on the frameless profiler windows. Returns true when closed.
@@ -100,9 +97,6 @@ bool RenderDialogHeader(const char* icon, const char* title)
     return close_clicked;
 }
 
-constexpr ImVec2 LAUNCHER_WINDOW_PADDING = ImVec2(16.0f, 12.0f);
-constexpr ImVec2 LAUNCHER_FRAME_PADDING  = ImVec2(8.0f, 4.0f);
-constexpr ImVec2 LAUNCHER_ITEM_SPACING   = ImVec2(8.0f, 10.0f);
 constexpr float  LAUNCHER_GROUP_GAP      = 16.0f;
 
 // Gap between the configuration form's cards and its scrollbar.
@@ -254,7 +248,7 @@ void ProfilerLauncherDialog::Render()
     // Restore the app's standard style so this dialog matches the rest of the
     // app (WindowPadding must be set before Begin() to take effect).
     const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_WINDOW_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool window_open = true;
@@ -263,8 +257,8 @@ void ProfilerLauncherDialog::Render()
                                         ImGuiWindowFlags_NoTitleBar);
     if (visible)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, LAUNCHER_FRAME_PADDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, LAUNCHER_ITEM_SPACING);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, def.FramePadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
 
         if (RenderDialogHeader(ICON_CHART_BAR, "Launch Profiler"))
         {
@@ -821,7 +815,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
     // Restore the app's standard style (AppWindow's scope zeroes window padding /
     // item spacing / rounding). WindowPadding must be set before Begin().
     const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_WINDOW_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool open    = true;
@@ -829,8 +823,8 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                                 ImGuiWindowFlags_NoTitleBar);
     if (visible)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, LAUNCHER_FRAME_PADDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, LAUNCHER_ITEM_SPACING);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, def.FramePadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
 
         if (RenderDialogHeader(ICON_GEAR, "Advanced Profiling Options"))
         {
@@ -878,7 +872,6 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                 }
                 if (ImGui::BeginTabItem(tab.display_name.c_str()))
                 {
-                    ImGui::Spacing();
                     // Wrap the tab body in a padded card, matching the main dialog.
                     SettingsManager& card_settings = SettingsManager::Get();
                     ImGui::PushStyleColor(ImGuiCol_ChildBg,
@@ -886,8 +879,6 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                     ImGui::PushStyleColor(ImGuiCol_Border,
                                           card_settings.GetColor(Colors::kPanelBorderSubtle));
                     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                        ImVec2(kAdvancedTabPadX, kAdvancedTabPadY));
                     PushSlimScrollbarStyle();
                     ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f),
                                       ImGuiChildFlags_Borders |
@@ -895,7 +886,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                     PopSlimScrollbarStyle();
                     m_execution_cache_dirty |= tab.render_fn();
                     ImGui::EndChild();
-                    ImGui::PopStyleVar(2);
+                    ImGui::PopStyleVar(1);
                     ImGui::PopStyleColor(2);
                     ImGui::EndTabItem();
                 }

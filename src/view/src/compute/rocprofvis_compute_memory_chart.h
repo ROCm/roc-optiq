@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include "model/compute/rocprofvis_memory_chart_model.h"
 #include "rocprofvis_event_manager.h"
 
@@ -38,8 +39,10 @@ public:
 
     void Render();
 
-    // Load the layout for a workload: prefer the JSON stored in the DB
-    // (WorkloadInfo::memory_chart_layout); fall back to the embedded default.
+    // Load the layout for a workload. A temporary config-folder override wins.
+    // Otherwise a database blob is used as authored (dotted metric ids, no
+    // remap), or the embedded template for the workload's GPU architecture is
+    // used and its metric ids are remapped. With neither, the chart is N/A.
     void LoadWorkloadLayout(uint32_t workload_id);
 
     // Fetch every metric in the layout's source category for the selected kernel.
@@ -94,15 +97,20 @@ private:
         int    lane;
     };
 
-    void LoadLayout();
-    // Load the dev override file (<config-dir>/memory_chart.json) into m_layout.
-    // Returns true if a valid override was found and applied.
+    // Temporary: load <config-dir>/memory_chart.json into m_layout. Returns true
+    // when a valid override was applied. Remove once template selection is stable.
     bool TryLoadOverrideFile();
 
-    // Called once whenever m_layout is (re)assigned (workload change): sorts
-    // blocks by column/`order`, resolves each arrow's endpoint ids to block
-    // pointers, and primes the per-item/arrow render strings.
-    void OnLayoutLoaded();
+    // Called once whenever m_layout is (re)assigned (workload change): remaps
+    // metric ids when `remap_metric_ids` is set, sorts blocks by column/`order`,
+    // resolves each arrow's endpoint ids to block pointers, and primes the
+    // per-item/arrow render strings. `workload_id` is
+    // ComputeSelection::INVALID_SELECTION_ID when no workload is open.
+    void OnLayoutLoaded(uint32_t workload_id, bool remap_metric_ids);
+    // Replace template ids in m_layout with the category-3 id for each
+    // metric_name. A miss or an ambiguous name invalidates that ref. An empty
+    // metric_name keeps the authored id. Failures are written to the log.
+    void RemapMetricIds(uint32_t workload_id);
     // Recompute the cached label/value strings for every content item and arrow
     // from the currently-resolved metrics (on layout load and on metric fetch).
     void RefreshMetricStrings();
@@ -164,6 +172,10 @@ private:
 
     // Metric resolution (by id or name) against the fetched table.
     const MetricValue* ResolveMetric(const MemChartMetricRef& ref) const;
+    // Definition for a valid dotted id, or nullptr when that id is not in the
+    // open workload. Does not consult fetched values.
+    const AvailableMetrics::Entry*
+    FindMetricDefinition(const MemChartMetricRef& ref) const;
     std::string        MetricLabel(const MemChartMetricRef& ref,
                                    const std::string&       title_override) const;
     std::string        MetricValueText(const MemChartMetricRef& ref,

@@ -3,7 +3,6 @@
 
 #include "python/rocprofvis_controller_python.h"
 
-#include <cctype>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -230,46 +229,65 @@ py_handle_double(rocprofvis_handle_t* object, rocprofvis_property_t property)
     return PyFloat_FromDouble(value);
 }
 
-// A table cell held as text, as a number when its column is numeric and the
-// whole text reads as one; anything else stays a string.
+// Cells are stored as text. The column schema decides the Python type, so a
+// caller can add a numeric column without checking each cell. An empty
+// numeric cell is a missing value: merged tables write "" when a column does
+// not apply to that row. Anything else must be the whole token for that type.
+// "12.5" in an integer column is not 12, and it is not a float either.
 PyObject*
-py_table_text_cell(std::string const& text, uint64_t column_type)
+py_table_text_cell(std::string const& text, uint64_t column_type, char const* column,
+                   uint64_t row)
 {
-    char const* begin = text.c_str();
-    if(*begin != '\0' && (column_type == kRPVControllerPrimitiveTypeUInt64 ||
-                          column_type == kRPVControllerPrimitiveTypeDouble))
+    bool const numeric = column_type == kRPVControllerPrimitiveTypeUInt64 ||
+                         column_type == kRPVControllerPrimitiveTypeDouble;
+    if(!numeric)
     {
-        char* end = nullptr;
-        if(column_type == kRPVControllerPrimitiveTypeUInt64)
-        {
-            // Integer columns can hold negative SQLite values, so a leading minus
-            // sign still reads as an int.
-            errno = 0;
-            if(*begin == '-')
-            {
-                long long value = std::strtoll(begin, &end, 10);
-                if(errno == 0 && *end == '\0')
-                {
-                    return PyLong_FromLongLong(value);
-                }
-            }
-            else if(std::isdigit(static_cast<unsigned char>(*begin)))
-            {
-                unsigned long long value = std::strtoull(begin, &end, 10);
-                if(errno == 0 && *end == '\0')
-                {
-                    return PyLong_FromUnsignedLongLong(value);
-                }
-            }
-        }
-        errno        = 0;
-        double value = std::strtod(begin, &end);
-        if(errno == 0 && *end == '\0')
-        {
-            return PyFloat_FromDouble(value);
-        }
+        return PyUnicode_FromStringAndSize(text.data(),
+                                           static_cast<Py_ssize_t>(text.size()));
     }
-    return PyUnicode_FromStringAndSize(text.data(), static_cast<Py_ssize_t>(text.size()));
+    if(text.empty())
+    {
+        Py_RETURN_NONE;
+    }
+
+    char const* begin = text.c_str();
+    char*       end   = nullptr;
+    errno             = 0;
+    char const* name  = column != nullptr ? column : "";
+    if(column_type == kRPVControllerPrimitiveTypeUInt64)
+    {
+        // A leading minus is a signed value. strtoull would accept it and wrap.
+        if(*begin == '-')
+        {
+            long long value = std::strtoll(begin, &end, 10);
+            if(errno == 0 && end != begin && *end == '\0')
+            {
+                return PyLong_FromLongLong(value);
+            }
+        }
+        else
+        {
+            unsigned long long value = std::strtoull(begin, &end, 10);
+            if(errno == 0 && end != begin && *end == '\0')
+            {
+                return PyLong_FromUnsignedLongLong(value);
+            }
+        }
+        return PyErr_Format(PyExc_ValueError,
+                            "could not convert table cell at row %llu, column '%s' "
+                            "to integer: '%s'",
+                            static_cast<unsigned long long>(row), name, text.c_str());
+    }
+
+    double value = std::strtod(begin, &end);
+    if(errno == 0 && end != begin && *end == '\0')
+    {
+        return PyFloat_FromDouble(value);
+    }
+    return PyErr_Format(PyExc_ValueError,
+                        "could not convert table cell at row %llu, column '%s' "
+                        "to float: '%s'",
+                        static_cast<unsigned long long>(row), name, text.c_str());
 }
 
 struct uint64_arg_t
@@ -709,7 +727,15 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
                                 row_array, kRPVControllerArrayEntryIndexed, j, text.data(),
                                 &length);
                         }
-                        cell = py_table_text_cell(text, column_type);
+                        cell = py_table_text_cell(text, column_type,
+                                                  headers[static_cast<size_t>(j)].c_str(),
+                                                  i);
+                        if(!cell)
+                        {
+                            Py_DECREF(row);
+                            Py_DECREF(rows);
+                            return nullptr;
+                        }
                     }
                     break;
                 }

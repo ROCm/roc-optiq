@@ -425,6 +425,7 @@ SideBar::DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const
 void
 SideBar::Render()
 {
+    m_rows_drawn.clear();
     if(m_sidebar_tree.root)
     {
         const SidebarTree& sidebar_tree = m_sidebar_tree;
@@ -520,6 +521,17 @@ SideBar::Render()
         {
             --m_reveal_scroll_frames;
         }
+    }
+    m_row_order.swap(m_rows_drawn);
+
+    // A plain click on the pane's empty space, not on a row, clears the track
+    // selection.
+    const ImGuiIO& io = ImGui::GetIO();
+    if(ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() &&
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyCtrl && !io.KeyShift &&
+       m_timeline_selection && m_timeline_selection->HasSelectedTracks())
+    {
+        m_timeline_selection->UnselectAllTracks();
     }
 }
 
@@ -688,6 +700,7 @@ SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
     }
 
     TrackItem& track = *item;
+    m_rows_drawn.push_back(track_id);
 
     // Compact mode drops the row buttons entirely; the context menu below still
     // toggles visibility and goes to the track.
@@ -748,7 +761,15 @@ SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
     }
     if(ImGui::Button(track.GetName().c_str()))
     {
-        m_timeline_selection->ToggleSelectTrack(track);
+        const ImGuiIO& io = ImGui::GetIO();
+        m_timeline_selection->ClickTrack(track, m_row_order, io.KeyCtrl, io.KeyShift);
+    }
+    // Match File Explorer context-click selection without disturbing an
+    // existing multi-selection that already contains this track.
+    if(ImGui::IsItemClicked(ImGuiMouseButton_Right) &&
+       !m_timeline_selection->IsTrackSelected(track))
+    {
+        m_timeline_selection->ClickTrack(track, m_row_order, false, false);
     }
     if(!display)
     {

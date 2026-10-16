@@ -829,10 +829,20 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
         {
             out << "counter_min: " << profile.min_value << "\n";
             out << "counter_max: " << profile.max_value << "\n";
+            out << "note: activity_0_100, busiest_window_ns, counter_min "
+                   "and counter_max come from per-bin averages, so short spikes "
+                   "and dips are smoothed away. Use them to choose where to look and "
+                   "do not report them as exact values; read the window with "
+                   "track_samples for those.\n";
         }
         else if(track != nullptr)
         {
             out << "event_count: " << track->num_entries << "\n";
+            out << "note: event_count is exact. activity_0_100 and busiest_window_ns "
+                   "are estimates from the timeline histogram, which counts an event "
+                   "in every bucket it overlaps. Use them to choose where to look and "
+                   "do not report them as exact numbers; for an exact count in one "
+                   "window, call track_events on that window and track.\n";
             if(track->topology.type == TrackInfo::TrackType::Stream)
             {
                 out << "note: a stream track lists the same kernels and copies as the "
@@ -896,13 +906,20 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     }
     AppendBinWindow(out, "quietest_window_ns", quietest, overall.bins.size(), start_ns,
                     span_ns);
+    out << "note: activity_0_100, busiest_window_ns and quietest_window_ns are "
+           "estimates from the timeline histogram, which counts an event in every "
+           "bucket it overlaps. Use them to choose where to look and do not report "
+           "them as exact numbers. total_events and busiest_tracks are exact; for "
+           "an exact count in one window, call track_events on that window with "
+           "the track_ids you need.\n";
     out << "total_events: " << event_total << "\n";
     if(stream_count > 0)
     {
         out << "stream_tracks: " << stream_count << " tracks, " << stream_events
             << " events. These are the same kernels and copies as the queue tracks, "
                "grouped by HIP stream, so total_events and busiest_tracks leave them "
-               "out.\n";
+               "out. The histogram still includes them, so GPU work counts twice in "
+               "activity_0_100 and both windows.\n";
     }
 
     std::sort(event_tracks.begin(), event_tracks.end(),

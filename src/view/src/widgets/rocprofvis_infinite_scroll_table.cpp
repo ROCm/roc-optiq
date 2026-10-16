@@ -1101,7 +1101,7 @@ InfiniteScrollTable::RenderContextMenu()
         }
         ImGui::Separator();
         if(IconMenuItem(
-               ICON_ARCHIVE, "Export To File",
+               ICON_EXPORT, "Export To File",
                !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID) &&
                    !m_data_provider.IsTableRequestPending(m_request_table_type)))
         {

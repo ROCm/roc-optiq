@@ -267,7 +267,7 @@ target_include_directories(json PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp)
 add_executable(imgui_binary_to_compressed_c
 	imgui/misc/fonts/binary_to_compressed_c.cpp
 )
-set(ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/ionicons/fonts/ionicons.ttf)
+set(ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/phosphor/Phosphor.ttf)
 add_custom_command(
     OUTPUT ${ICON_HEADER}
     COMMAND imgui_binary_to_compressed_c ${ICON_FILE} icon_font -u8 > ${ICON_HEADER}

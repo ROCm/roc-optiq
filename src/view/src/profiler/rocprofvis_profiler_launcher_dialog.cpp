@@ -514,13 +514,13 @@ void ProfilerLauncherDialog::RenderMainContent()
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Where to run first: pick the machine before the paths.
     BeginLaunchCard("card_connection");
-    LaunchCardHeader(ICON_CHAIN, "Where to run");
+    LaunchCardHeader(ICON_PLUGS_CONNECTED, "Where to run");
     RenderRemoteSection();
     EndLaunchCard();
 #endif
 
     BeginLaunchCard("card_target");
-    LaunchCardHeader(ICON_OPEN, "Target",
+    LaunchCardHeader(ICON_TERMINAL, "Target",
                      "The program to profile and where its results go");
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // In remote (SSH) mode the Target Browse buttons open the shared remote file

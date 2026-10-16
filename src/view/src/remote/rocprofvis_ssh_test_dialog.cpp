@@ -306,7 +306,7 @@ SshTestDialog::Render()
                     }
                     else
                     {
-                        render_icon(running ? ICON_ARROWS_CYCLE : ICON_CHAIN,
+                        render_icon(running ? ICON_ARROWS_CYCLE : ICON_PLUGS_CONNECTED,
                                     running ? accent : text_dim);
                         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
                         ImGui::PushID("footer_status");
@@ -506,7 +506,7 @@ SshTestDialog::RenderOutputPopup()
                            true, &settings);
             {
                 constexpr float BUTTON_WIDTH = 104.0f;
-                PanelIcon(finished ? ICON_CHAIN : ICON_ARROWS_CYCLE,
+                PanelIcon(finished ? ICON_PLUGS_CONNECTED : ICON_ARROWS_CYCLE,
                           finished ? Colors::kTextDim : Colors::kAccent, &settings);
                 ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
                 ImGui::AlignTextToFramePadding();

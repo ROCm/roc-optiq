@@ -765,7 +765,7 @@ TraceView::RenderToolbar()
             m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushFont(icon_font, 0.0f);
-        if(ImGui::Button(ICON_COMPASS))
+        if(ImGui::Button(ICON_MINIMAP))
         {
             m_show_minimap_popup = !m_show_minimap_popup;
         }
@@ -1013,7 +1013,7 @@ TraceView::RenderBookmarkControls()
                 }
                 else
                 {
-                    if(ImGui::Button(ICON_ADD_NOTE))
+                    if(ImGui::Button(ICON_BOOKMARK_ADD))
                     {
                         m_bookmarks[i] = m_timeline_view->GetViewCoords();
                         NotificationManager::GetInstance().Show(
@@ -1106,7 +1106,7 @@ TraceView::RenderFlowControls()
         ImGui::SameLine();
     }
 
-    const char* label = ICON_TREE;
+    const char* label = ICON_FLOW_FAN;
 
     if(arrow_layer.GetRenderStyle() == TimelineArrow::RenderStyle::kChain)
     {

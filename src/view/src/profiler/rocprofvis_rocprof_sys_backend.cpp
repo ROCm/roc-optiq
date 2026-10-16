@@ -240,7 +240,7 @@ void BeginPresetLockedSection(std::string const& preset)
     {
         ImGui::TextColored(kPresetLockColor,
                            "Preset \"%s\" controls these settings.", preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::TextDisabled("Clear the preset, or set values in the Overrides tab.");
         ImGui::Spacing();
     }
     ImGui::BeginDisabled(has_preset);
@@ -540,7 +540,7 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
         return const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }, true});
     tabs.push_back({"perfetto", "Perfetto", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }, true});
-    tabs.push_back({"process_sampling", "Process Sampling", [this]() {
+    tabs.push_back({"process_sampling", "Process", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); },
         true});
     tabs.push_back({"parallelism", "Parallelism", [this]() {
@@ -553,7 +553,7 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
             true});
     }
 
-    tabs.push_back({"advanced", "Config & Logging", [this]() {
+    tabs.push_back({"advanced", "Logging", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }, true});
 
     return tabs;

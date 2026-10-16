@@ -20,7 +20,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
+#if defined(__linux__)
+#include <unistd.h>
+#endif
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -360,6 +364,38 @@ void SoakWaitWhilePaused(ImGuiTestContext* ctx)
 
     ctx->RunFlags = saved_flags;
     std::cout << "[soak] resumed\n" << std::flush;
+}
+
+// How often the soak driver records the process size. Long enough to be free,
+// short enough to place a step change against the operation that caused it.
+constexpr double kSoakMemorySampleIntervalSeconds = 30.0;
+
+// Records resident set size, read straight from the kernel.
+//
+// Deliberately not routed through any controller, model or core API. The point
+// of a soak is to measure the code under test, so the measurement must not
+// require instrumentation compiled into it - this reads the same figure an
+// external monitor or the OOM killer would see, and costs one file read.
+void SoakLogResidentSetSize(double elapsed_s)
+{
+    long long rss_mb = 0;
+
+#if defined(__linux__)
+    // statm's second field is the resident set, in pages.
+    FILE* statm = fopen("/proc/self/statm", "r");
+    if(statm != nullptr)
+    {
+        long long total_pages = 0;
+        long long rss_pages   = 0;
+        if(fscanf(statm, "%lld %lld", &total_pages, &rss_pages) == 2)
+        {
+            rss_mb = (rss_pages * sysconf(_SC_PAGESIZE)) / (1024 * 1024);
+        }
+        fclose(statm);
+    }
+#endif
+
+    spdlog::info("[mem] t_s={:.0f} rss_mb={}", elapsed_s, rss_mb);
 }
 
 // A point inside the graph lane, addressed by fraction so the same call lands
@@ -3119,10 +3155,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Runs until the process is killed. IsError() is the only exit: once the
         // context is in an error state every ctx call short-circuits, so carrying
         // on would spin without driving anything.
+        // Sampled from the first iteration so the series starts before the traces
+        // have finished loading, which is where the largest steps happen.
+        double next_memory_sample_s = 0.0;
+
         for (uint64_t iteration = 0; !ctx->IsError() && !g_soak_exit_requested.load();
              iteration++)
         {
             SoakWaitWhilePaused(ctx);
+
+            const double now_s = elapsed_seconds();
+            if (now_s >= next_memory_sample_s)
+            {
+                SoakLogResidentSetSize(now_s);
+                next_memory_sample_s = now_s + kSoakMemorySampleIntervalSeconds;
+            }
 
             // Re-read the tab list every time: files opened from a directory
             // finish loading at different moments, so tabs keep appearing well

@@ -303,6 +303,8 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
+    # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
+    thirdparty/ImGuiTextSelect/textselect.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
@@ -425,6 +427,10 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+target_include_directories(${TARGET_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 # TEMPORARY (profiler launch): remove when the profiler feature graduates.
 if(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -523,6 +529,10 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
     )
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    target_include_directories(${TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
+    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     # TEMPORARY (profiler launch): remove when the profiler feature graduates.
     if(ROCPROFVIS_ENABLE_PROFILER)
     target_include_directories(${TEST_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)

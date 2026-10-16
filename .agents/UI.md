@@ -84,6 +84,10 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   default, or a system OpenSSL when `-DCRYPTO_BACKEND=OpenSSL` (the same
   choice as remote/SSH). Targets the OpenAI chat-completions API. Built
   only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
+- **Message selection (Ask Optiq):** ImGuiTextSelect
+  (`thirdparty/ImGuiTextSelect/`, a submodule pinned to v1.3.2). Compiled
+  as `textselect.cpp` into the app. Its CMakeLists is an example and is
+  not added. Built only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`.
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -2084,8 +2088,8 @@ same way remote and profiler launch are gated. Everything in
 option is off, and so are `cpp-httplib`, its TLS backend, and
 `SecretStore` unless remote asks for them. The default backend is
 vendored mbedTLS; `-DCRYPTO_BACKEND=OpenSSL` links a system OpenSSL
-instead and does not build mbedTLS. A default clone needs neither the
-`thirdparty/cpp-httplib` nor the `thirdparty/mbedtls` submodule. Every
+instead and does not build mbedTLS. A default clone needs neither the `thirdparty/cpp-httplib`,
+`thirdparty/ImGuiTextSelect`, nor the `thirdparty/mbedtls` submodule. Every
 call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the

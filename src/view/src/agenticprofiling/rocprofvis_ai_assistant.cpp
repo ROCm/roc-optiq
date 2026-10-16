@@ -15,6 +15,7 @@
 
 #include "imgui.h"
 #include "spdlog/spdlog.h"
+#include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"

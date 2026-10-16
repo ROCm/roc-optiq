@@ -412,6 +412,14 @@ main(int argc, char** argv)
                         --g_frames_to_render;
                     }
                 }
+
+                // Release any soak driver before stopping the engine. A driver
+                // still looping would sit inside ctx->Yield() waiting for a frame
+                // that is never going to be drawn, deadlocking against the join
+                // inside ImGuiTestEngine_Stop().
+                g_soak_exit_requested.store(true);
+                g_soak_paused.store(false);
+
                 ImGuiTestEngine_Stop(engine);
                 rocprofvis_view_destroy();
                 rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);

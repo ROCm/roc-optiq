@@ -246,6 +246,10 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_track_params_t* props,
             rocprofvis_db_query_type_t query_type) = 0;
 
+        virtual void BuildOpQueryMap(
+            slice_query_map_t& slice_query_map,
+            rocprofvis_dm_event_operation_t op);
+
         // Searches for strings matching the passed in list of filter strings and builds a WHERE IN clause for the table query.
         // @param num_string_table_filters - number of filter strings
         // @param string_table_filters - array of filter strings
@@ -349,7 +353,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
         virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
-        virtual std::string GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
+        virtual std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
 
         //--------------------------------------Table accessors-----------------------------------------------------------------
         std::string TableColumnText(void* func, void* handle, char** azColName, int index) override;

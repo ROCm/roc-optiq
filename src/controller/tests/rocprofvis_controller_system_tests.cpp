@@ -3,6 +3,7 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_controller_string_table.h"
@@ -2603,14 +2604,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     // Fixture Reads: m_controller
     SECTION("Summary Metrics")
     {
-        rocprofvis_handle_t* summary_handle = nullptr;
-        rocprofvis_result_t  result         = rocprofvis_controller_get_object(
-            m_controller, kRPVControllerSystemSummary, 0, &summary_handle);
-        REQUIRE(result == kRocProfVisResultSuccess);
-        REQUIRE(summary_handle != nullptr);
-
         rocprofvis_handle_t* timeline_handle = nullptr;
-        result                               = rocprofvis_controller_get_object(
+        rocprofvis_result_t  result          = rocprofvis_controller_get_object(
             m_controller, kRPVControllerSystemTimeline, 0, &timeline_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -2628,11 +2623,11 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(args != nullptr);
 
         result = rocprofvis_controller_set_double(
-            args, kRPVControllerSummaryArgsStartTimestamp, 0, start_ts);
+            args, kRPVAnalysisSummaryArgsStartTimestamp, 0, start_ts);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_double(
-            args, kRPVControllerSummaryArgsEndTimestamp, 0, end_ts);
+            args, kRPVAnalysisSummaryArgsEndTimestamp, 0, end_ts);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         rocprofvis_controller_summary_metrics_t* metrics =
@@ -2643,9 +2638,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(future != nullptr);
 
         spdlog::info("Fetching summary metrics for range {0}-{1}", start_ts, end_ts);
-        result = rocprofvis_controller_summary_fetch_async(
-            m_controller, (rocprofvis_controller_summary_t*) summary_handle, args, future,
-            metrics);
+        result = rocprofvis_analysis_fetch_summary(m_controller, args, future, metrics);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_future_wait(future, FLT_MAX);
@@ -2659,38 +2652,87 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         struct GpuFlags
         {
-            bool has_gpu_util    = false;
-            bool has_kernel_data = false;
+            bool has_gpu_counters = false;
+            bool has_kernel_data  = false;
         };
 
-        auto require_gpu_util = [&](rocprofvis_handle_t* metrics_handle,
-                                    const std::string&   indent) {
-            double gfx_util = 0;
-            result          = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyGpuGfxUtil, 0,
-                &gfx_util);
+        auto require_gpu_counters = [&](rocprofvis_handle_t* metrics_handle,
+                                        const std::string&   indent) {
+            uint64_t num_counters = 0;
+            result                = rocprofvis_controller_get_uint64(
+                metrics_handle, kRPVAnalysisSummaryGpuPropertyNumCounters, 0,
+                &num_counters);
             REQUIRE(result == kRocProfVisResultSuccess);
 
-            double mem_util = 0;
-            result          = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyGpuMemUtil, 0,
-                &mem_util);
-            REQUIRE(result == kRocProfVisResultSuccess);
+            spdlog::info("{0}Counters: {1}", indent, num_counters);
 
-            spdlog::info("{0}GfxUtil: {1} MemUtil: {2}", indent, gfx_util, mem_util);
+            for(uint64_t ci = 0; ci < num_counters; ci++)
+            {
+                rocprofvis_handle_t* counter_handle = nullptr;
+                result = rocprofvis_controller_get_object(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterIndexed, ci,
+                    &counter_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(counter_handle != nullptr);
+
+                uint64_t counter_id = 0;
+                result              = rocprofvis_controller_get_uint64(
+                    counter_handle, kRPVControllerCounterId, 0, &counter_id);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                uint32_t len = 0;
+                result       = rocprofvis_controller_get_string(
+                    counter_handle, kRPVControllerCounterName, 0, nullptr, &len);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                std::string counter_name;
+                counter_name.resize(len);
+                result = rocprofvis_controller_get_string(
+                    counter_handle, kRPVControllerCounterName, 0,
+                    const_cast<char*>(counter_name.c_str()), &len);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double min_value = 0;
+                result           = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterMinIndexed, ci,
+                    &min_value);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double max_value = 0;
+                result           = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed, ci,
+                    &max_value);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double mean_value = 0;
+                result            = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterMeanIndexed, ci,
+                    &mean_value);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double std_dev = 0;
+                result         = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterStdDevIndexed,
+                    ci, &std_dev);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                spdlog::info("{0}  Counter {1}/{2} id={3} name={4} min={5} max={6} "
+                             "mean={7} std_dev={8}",
+                             indent, ci + 1, num_counters, counter_id, counter_name,
+                             min_value, max_value, mean_value, std_dev);
+            }
         };
 
         auto require_kernel_data = [&](rocprofvis_handle_t* metrics_handle,
                                        const std::string&   indent) {
             uint64_t num_kernels = 0;
             result               = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyNumKernels, 0,
+                metrics_handle, kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents, 0,
                 &num_kernels);
             REQUIRE(result == kRocProfVisResultSuccess);
 
-            double exec_total = 0;
-            result            = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyKernelsExecTimeTotal,
+            uint64_t exec_total = 0;
+            result              = rocprofvis_controller_get_uint64(
+                metrics_handle, kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal,
                 0, &exec_total);
             REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -2701,48 +2743,48 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             {
                 uint32_t len = 0;
                 result       = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyKernelNameIndexed,
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed,
                     ki, nullptr, &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 std::string kernel_name;
                 kernel_name.resize(len);
                 result = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyKernelNameIndexed,
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed,
                     ki, const_cast<char*>(kernel_name.c_str()), &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 uint64_t invocations = 0;
                 result               = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelInvocationsIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventInvocationsIndexed, ki,
                     &invocations);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
-                double exec_sum = 0;
-                result          = rocprofvis_controller_get_double(
+                uint64_t exec_sum = 0;
+                result            = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeSumIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationSumIndexed, ki,
                     &exec_sum);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
-                double exec_min = 0;
-                result          = rocprofvis_controller_get_double(
+                uint64_t exec_min = 0;
+                result            = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeMinIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMinIndexed, ki,
                     &exec_min);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
-                double exec_max = 0;
-                result          = rocprofvis_controller_get_double(
+                uint64_t exec_max = 0;
+                result            = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeMaxIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMaxIndexed, ki,
                     &exec_max);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 double exec_pct = 0;
                 result          = rocprofvis_controller_get_double(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimePctIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationPctIndexed, ki,
                     &exec_pct);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -2760,33 +2802,44 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             uint64_t agg_level = 0;
             result             = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyAggregationLevel, 0,
+                metrics_handle, kRPVAnalysisSummaryMetricPropertyAggregationLevel, 0,
                 &agg_level);
             REQUIRE(result == kRocProfVisResultSuccess);
             spdlog::info("{0}Aggregation level: {1}", indent, agg_level);
 
             bool is_node_or_processor =
-                (agg_level == kRPVControllerSummaryAggregationLevelNode ||
-                 agg_level == kRPVControllerSummaryAggregationLevelProcessor);
+                (agg_level == kRPVAnalysisSummaryAggregationLevelNode ||
+                 agg_level == kRPVAnalysisSummaryAggregationLevelProcessor);
             bool is_processor =
-                (agg_level == kRPVControllerSummaryAggregationLevelProcessor);
+                (agg_level == kRPVAnalysisSummaryAggregationLevelProcessor);
 
+            rocprofvis_handle_t* metadata_handle = nullptr;
             if(is_node_or_processor)
             {
+                result = rocprofvis_controller_get_object(
+                    metrics_handle, kRPVAnalysisSummaryMetricPropertyMetadata, 0,
+                    &metadata_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(metadata_handle != nullptr);
+
                 uint64_t metric_id = 0;
                 result             = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyId, 0, &metric_id);
+                    metadata_handle,
+                    is_processor ? kRPVControllerProcessorId : kRPVControllerNodeId, 0,
+                    &metric_id);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
+                rocprofvis_property_t name_property =
+                    is_processor ? kRPVControllerProcessorProductName
+                                 : kRPVControllerNodeHostName;
                 uint32_t len = 0;
                 result       = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyName, 0, nullptr,
-                    &len);
+                    metadata_handle, name_property, 0, nullptr, &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 std::string metric_name;
                 metric_name.resize(len);
                 result = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyName, 0,
+                    metadata_handle, name_property, 0,
                     const_cast<char*>(metric_name.c_str()), &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 spdlog::info("{0}Metric id={1} name={2}", indent, metric_id, metric_name);
@@ -2796,14 +2849,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             if(is_processor)
             {
                 result = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyProcessorType, 0,
-                    &proc_type);
+                    metadata_handle, kRPVControllerProcessorType, 0, &proc_type);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 uint64_t proc_type_idx = 0;
                 result                 = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyProcessorTypeIndex,
-                    0, &proc_type_idx);
+                    metadata_handle, kRPVControllerProcessorTypeIndex, 0,
+                    &proc_type_idx);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 spdlog::info("{0}ProcType: {1} TypeIndex: {2}", indent, proc_type,
                              proc_type_idx);
@@ -2813,25 +2865,19 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             if(is_processor && proc_type == kRPVControllerProcessorTypeGPU)
             {
-                double gfx_util = 0;
-                result          = rocprofvis_controller_get_double(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyGpuGfxUtil, 0,
-                    &gfx_util);
-                if(result == kRocProfVisResultSuccess)
+                uint64_t num_counters = 0;
+                result                = rocprofvis_controller_get_uint64(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyNumCounters, 0,
+                    &num_counters);
+                if(result == kRocProfVisResultSuccess && num_counters > 0)
                 {
-                    flags.has_gpu_util = true;
-                    double mem_util    = 0;
-                    result             = rocprofvis_controller_get_double(
-                        metrics_handle, kRPVControllerSummaryMetricPropertyGpuMemUtil, 0,
-                        &mem_util);
-                    REQUIRE(result == kRocProfVisResultSuccess);
-                    spdlog::info("{0}GfxUtil: {1} MemUtil: {2}", indent, gfx_util,
-                                 mem_util);
+                    flags.has_gpu_counters = true;
+                    require_gpu_counters(metrics_handle, indent);
                 }
 
                 uint64_t num_kernels = 0;
                 result               = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyNumKernels, 0,
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents, 0,
                     &num_kernels);
                 if(result == kRocProfVisResultSuccess && num_kernels > 0)
                 {
@@ -2842,7 +2888,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             uint64_t num_sub = 0;
             result           = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyNumSubMetrics, 0,
+                metrics_handle, kRPVAnalysisSummaryMetricPropertyNumSubMetrics, 0,
                 &num_sub);
             REQUIRE(result == kRocProfVisResultSuccess);
             spdlog::info("{0}Sub-metrics: {1}", indent, num_sub);
@@ -2851,21 +2897,21 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             {
                 rocprofvis_handle_t* sub_metric = nullptr;
                 result                          = rocprofvis_controller_get_object(
-                    metrics_handle, kRPVControllerSummaryMetricPropertySubMetricsIndexed,
+                    metrics_handle, kRPVAnalysisSummaryMetricPropertySubMetricsIndexed,
                     si, &sub_metric);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(sub_metric != nullptr);
                 spdlog::info("{0}Processing sub-metric {1}/{2}", indent, si + 1, num_sub);
                 GpuFlags child = self(sub_metric, depth + 1, self);
-                if(child.has_gpu_util) flags.has_gpu_util = true;
+                if(child.has_gpu_counters) flags.has_gpu_counters = true;
                 if(child.has_kernel_data) flags.has_kernel_data = true;
             }
 
             if(!is_processor)
             {
-                if(flags.has_gpu_util)
+                if(flags.has_gpu_counters)
                 {
-                    require_gpu_util(metrics_handle, indent);
+                    require_gpu_counters(metrics_handle, indent);
                 }
                 if(flags.has_kernel_data)
                 {

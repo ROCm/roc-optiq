@@ -338,7 +338,10 @@ The bridge between model and view. **Public** API in `inc/`:
 - `rocprofvis_profiler.h` - profiler config/session C API used by the
   optional launcher, including local and remote async launch.
 - `rocprofvis_controller_analysis.h` - `rocprofvis_analysis_*` C API
-  (queue utilization, counter statistics, top-events tables).
+  (queue utilization, counter statistics, top-events tables, the
+  summary fetch and its per-category instance tables), plus every
+  summary enum: categories, aggregation levels, the property groups,
+  and the metric index enums `SummaryInfo` uses to index its arrays.
 
 Only `inc/` is exported to consumers; `src/` is a `PRIVATE` include
 directory of `roc-optiq-controller`, so a View include of a controller
@@ -648,6 +651,13 @@ reusable types they expose.
 When you need a resizable two-pane layout, use these. Don't reinvent
 splitter dragging.
 
+Dragging maps the mouse to a split ratio relative to the window
+position. `SplitContainerBase::Render` first subtracts the layout gap
+between the first pane and the splitter (`splitter_min - first_max`):
+a vertical split has no `SameLine(0, 0)`, so ImGui puts the first
+pane's item spacing there, and without the correction the splitter
+lands that far below the cursor.
+
 ### 7.4 `rocprofvis_flex_container.{h,cpp}` - flex layout
 
 - `struct FlexItem` - `{ id, widget, min_width, height, flex_grow,
@@ -774,7 +784,7 @@ Subclasses must override:
 - `void RowSelected(ImGuiMouseButton)` - what happens on row click.
 
 Concrete subclasses already in the tree: `MultiTrackTable`,
-`EventSearch`, `KernelInstanceTable`. **Add new event/sample tables by
+`EventSearch`, `SummaryTopEvents::InstanceTable`. **Add new event/sample tables by
 subclassing this; don't roll your own.**
 
 ### 7.10 `rocprofvis_query_builder.{h,cpp}` - 4-level metric picker
@@ -1006,7 +1016,8 @@ Composition (members):
 - `m_event_search` (`shared_ptr<EventSearch>`) - search popup for
   finding events by name/regex.
 - `m_summary_view` (`shared_ptr<SummaryView>`) - independent panel
-  that visualizes top-kernel summary metrics.
+  that visualizes the summary: top kernels, memory and thread
+  operations, and counters, per node / device / process / thread.
 - `m_minimap` (`shared_ptr<Minimap>`) - density mini-map below the
   timeline.
 - `m_tool_bar` (`RocCustomWidget`) - toolbar with bookmark/flow/search
@@ -1152,16 +1163,35 @@ A toolbar-attached `InfiniteScrollTable` subclass. `Show()` opens it;
 `DataProvider::EVENT_SEARCH_REQUEST_ID`. Right-click row -> "Go to
 event" routes through `TimelineSelection::NavigateToEvent`.
 
-### `SummaryView`, `HWUtilization`, `TopKernels`, `KernelInstanceTable` (`rocprofvis_summary_view.{h,cpp}`)
+### `SummaryView`, `SummaryOverview`, `SummaryTopEvents` (`rocprofvis_summary_view.{h,cpp}`)
 
-The top-bar Summary panel. `SummaryView` hosts an `HSplitContainer`
-with:
-- `HWUtilization` - aggregated GPU/CPU bars.
-- `TopKernels` - pie/bar/table view of top kernels with node/GPU
-  filter combos and a callback that notifies the rest of the UI when
-  a kernel is selected.
-- `KernelInstanceTable` (subclass of `InfiniteScrollTable`) - lists
-  kernel instances and supports `ToggleSelectKernel`.
+The top-bar Summary panel. `SummaryView` fetches the summary when the
+panel is shown (and again when the topology revision changes), shows a
+progress bar fed by `kRequestProgressUpdate` while it loads, and then
+hosts a `TabContainer`:
+
+- **Overview** (`SummaryOverview`) - tiles (trace span, tracked events,
+  nodes, GPUs, CPUs - the device counts come from `TopologyTree`), the
+  event-composition bar (`CompositionBar`, one `CompositionBarSegment`
+  per category), a preview tile per category whose Details button
+  switches to that tab, the system-topology composition table (one row
+  per node / processor / process / thread, with a button that loads its
+  counters), and the counters tile (mean tick, std-dev band, min/max).
+- **One `SummaryTopEvents` tab per category** (kernel executions, memory
+  operations, thread operations; `m_top_events` is indexed by
+  `rocprofvis_analysis_summary_category_t`). Each has pie / bar / table
+  modes plus a legend, cascading filter combos (node, then GPU /
+  processor / process and thread) that both pick which
+  `AggregateMetrics` to show and build the
+  `rocprofvis_dm_query_criteria_t` for instance lookups, and a nested
+  `InstanceTable` (an `InfiniteScrollTable`) that lists the selected
+  event's instances through the category's
+  `kRPVControllerTableTypeSummary*Instances` table, scoped by the
+  filters' criteria. The "Others" row / slice is the remainder bucket
+  and cannot be selected.
+
+Both classes take test-peer friendship (`SummaryViewTestPeer`,
+`SummaryTopEventsTestPeer` in `src/view/test/`).
 
 ### `AnalysisView` (`rocprofvis_analysis_view.{h,cpp}`)
 
@@ -1726,8 +1756,15 @@ controller results.
   - No topology types: `NodeInfo`, `ProcessorInfo`, `ProcessInfo`,
     `ThreadInfo`, `StreamInfo`, `QueueInfo` and `CounterInfo` live with
     the tree that owns them, in `rocprofvis_topology_model.h`.
-  - `struct SummaryInfo` with `KernelMetrics`, `GPUMetrics`,
-    `CPUMetrics`, `AggregateMetrics`.
+  - `struct SummaryInfo`: `Value` (typed number plus its display
+    string), `TopOpEvents` (top `Event`s plus category totals),
+    `Counters` (`list` plus a by-name `map`), `GPU`, `CPU`, and the
+    recursive `AggregateMetrics` (level, an info union pointing at
+    the `NodeInfo` / `ProcessorInfo` / `ProcessInfo` / `ThreadInfo`,
+    `gpu`, `cpu`, `thread`, `memory`, `sub_metrics`). The metric
+    arrays are indexed by the shared `kRPVAnalysisSummary*Metric*`
+    enums from `rocprofvis_controller_analysis.h`, not view-local
+    enums.
   - `struct TableInfo`, `FormattedColumnInfo`,
     `AnalysisTrackStatistics` with state machine `kStale -> kPending
     -> kRequested -> kReady`, queue utilization, and counter
@@ -1768,7 +1805,11 @@ controller results.
     builds `GetTrackOrder()` (drives the timeline's "sort by topology",
     and equals the sidebar's row order), and bumps `GetRevision()`,
     which is how the sidebar and Track Details know to rebuild what
-    they derive from the tree.
+    they derive from the tree. It also counts GPUs and CPUs and
+    groups them by product (`GetGPUCount` / `GetCPUCount`,
+    `GetMostNumerousGPU` / `GetMostNumerousCPU`), walking the node
+    rows in order so ties go to the product seen first. These count
+    every device in the trace, including idle ones.
 - `rocprofvis_timeline_model.{h,cpp}` - `TimelineModel`: track
   metadata + raw track data + histogram + minimap. Use the typed
   raw-data helpers (`GetTrackData`, `FreeTrackData`,
@@ -1776,13 +1817,26 @@ controller results.
 - `rocprofvis_event_model.{h,cpp}` - `EventModel`: per-event
   `EventInfo` cache.
 - `rocprofvis_summary_model.{h,cpp}` - `SummaryModel`: holds the
-  computed `SummaryInfo::AggregateMetrics`.
+  computed `SummaryInfo::AggregateMetrics`, the summary's own
+  `TablesModel` (the three instance tables), and the registered
+  `Value`s whose strings `UpdateValueStrings` rebuilds on a time
+  format change. `TopOpEvents(metrics, category)` picks the right list
+  for a level (GPU vs CPU vs unattributed memory) - use it rather than
+  reaching into `gpu` / `cpu` / `memory` directly. Device counts are
+  in `TopologyTree`, not here.
 - `rocprofvis_tables_model.{h,cpp}` - `TablesModel`: `enum class
   TableType { kSampleTable, kEventTable, kCompareEventTableA/B,
-  kCompareSampleTableA/B, kEventSearchTable, kSummaryKernelTable,
-  kAnalysisTop*, kAnalysisTop*TableB }` and the table cache addressed
+  kCompareSampleTableA/B, kEventSearchTable,
+  kSummary{Kernel,Memory,Thread}Table, kAnalysisTop*,
+  kAnalysisTop*TableB, kAssistant* }` and the table cache addressed
   by it. The `*A/B` and `*TableB` slots hold the two compare sources'
-  results so independent A/B tables never overwrite each other.
+  results so independent A/B tables never overwrite each other. The
+  `kSummary*Table` slots live in `SummaryModel`'s own `TablesModel`.
+  The `kAssistant*` slots are Ask Optiq's, so its reads never touch a
+  table a tab is showing; the summary instance tables get one
+  assistant slot per category because the assistant resolves sort
+  columns by name from the header already in the slot, and the three
+  layouts differ.
 - `rocprofvis_analysis_model.{h,cpp}` - `AnalysisModel`: per-track
   queue/counter statistic cache plus analysis tables, using the
   `AnalysisTrackStatistics` state machine.
@@ -2069,7 +2123,7 @@ An in-app LLM analyst that reads the open trace through the normal
 view APIs and drives the UI the way a user would.
 
 **System traces only.** Every tool reads the timeline, the tracks, or
-the GPU summary, so `StartAssistantTool` turns a compute trace away once
+the trace summary, so `StartAssistantTool` turns a compute trace away once
 - beside its "no trace open" check - rather than having each tool test
 for it. The panel is a singleton shared across tabs, which is what makes
 that guard necessary rather than cosmetic: the user can open it on a
@@ -2148,6 +2202,30 @@ Layered, transport at the bottom and the panel at the top:
   land. Those request ids are shared with the normal UI, which is why
   each body checks `IsRequestPending` before issuing its own query and
   reports whether it actually started the fetch.
+
+  The summary tools read `SummaryModel` and run no query:
+  - `get_summary` - one scope's top kernels, memory and thread
+    operations (share, calls, total), how many counters were
+    summarized, and a `sub_metrics` list giving each child's `level`
+    and `id`. Called with those, it shows that node / device /
+    process / thread; with neither it shows the trace-wide roll-up.
+    Its size does not depend on the trace, which is why counters are
+    only counted here.
+  - `get_summary_event_metrics` - one name's average, min and max at
+    a scope, for a `category` (kernel / memory / thread).
+  - `get_summary_counter_stats` - counters (mean / min / max /
+    std_dev, units, GPU or CPU) at trace, node or processor scope,
+    paged with `limit` / `offset`. Processes and threads have no
+    counters.
+  All three share `ResolveSummaryScope` for `level` / `id`.
+  `event_instances` is their query counterpart: it turns a name into
+  real events through the category's summary instance table, scoped
+  by the same `level` / `id` (`SummaryScopeCriteria` builds the
+  `rocprofvis_dm_query_criteria_t` the Summary view's filters
+  would). Every summary list is trimmed to the busiest names plus
+  "Others", so the tools point at `top_events` for a full ranking.
+  `AssistantSummaryLoaded` is the one "is the summary there" check,
+  shared with the panel's summary warmup.
 - `rocprofvis_ai_script_tools.cpp` - `run_analysis_script`, which is
   neither of the above: the model writes Python, the interpreter
   computes the answer, and what comes back is a conclusion rather than
@@ -2248,7 +2326,9 @@ Rules that are easy to get wrong here:
 - **A broad question gets an overview, not an investigation.** The
   `TWO PASSES` section stops the model at `trace_overview` plus
   `get_summary` - the histogram, minimap, and headline totals, none of
-  which cost a heavy query - and has it land on a one-line *suspicion*
+  which cost a heavy query - plus one `get_summary_counter_stats` call
+  when the summary reports counters, since a page of counters already
+  carries their statistics. It has it land on a one-line *suspicion*
   in the user's phrasing ("I suspect the same buffer is being copied
   back and forth"), then hand over through `offer_next_steps`. The
   counterweight is `IT IS FINE IF NOTHING IS WRONG`: a checklist plus a
@@ -3164,11 +3244,13 @@ For fast lookup. Each entry: class -> file -> one-line role.
 
 ### Summary surface
 
-- `SummaryView` -> `rocprofvis_summary_view.h` -> The "Summary" panel.
-- `HWUtilization` -> same -> GPU/CPU utilization bars.
-- `TopKernels` -> same -> Top-N kernels chart (pie/bar/table).
-- `KernelInstanceTable` -> same -> Specialized
-  `InfiniteScrollTable` for kernel instances.
+- `SummaryView` -> `rocprofvis_summary_view.h` -> The "Summary" panel:
+  loading progress, then the Overview tab plus one tab per category.
+- `SummaryOverview` -> same -> Tiles, composition bar and table,
+  category previews, counters.
+- `SummaryTopEvents` -> same -> One category's top events (pie / bar /
+  table), scope filters, and its nested `InstanceTable`
+  (`InfiniteScrollTable` for that category's instances).
 
 ### Settings, fonts, hotkeys, notifications
 
@@ -3275,7 +3357,7 @@ All under `agenticprofiling/`, compiled only with
 - `INVALID_UINT64_INDEX` -> `model/rocprofvis_common_defs.h`.
 - `TrackInfo`, `EventInfo`, `BasicEventData`, `EventArg`,
   `EventExtData`, `EventFlowData`, `CallStackData`,
-  `SummaryInfo` (with `KernelMetrics`/`GPUMetrics`/`CPUMetrics`/
+  `SummaryInfo` (with `Value`/`TopOpEvents`/`Counters`/`GPU`/`CPU`/
   `AggregateMetrics`), `TableInfo`, `FormattedColumnInfo`,
   `TraceEventId`, `TopologyId`, `CompareSourceInfo`,
   `AnalysisTrackStatistics` -> `model/rocprofvis_model_types.h`.

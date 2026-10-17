@@ -36,7 +36,6 @@ list(APPEND rocprofvis_controller_source_files
     src/system/rocprofvis_controller_call_stack.cpp
     src/system/rocprofvis_controller_ext_data.cpp
     src/system/rocprofvis_controller_mem_mgmt.cpp
-    src/system/rocprofvis_controller_summary.cpp
     src/system/rocprofvis_controller_summary_metrics.cpp
     src/system/rocprofvis_controller_topology.cpp
     src/compute/rocprofvis_controller_trace_compute.cpp

@@ -51,7 +51,9 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
         if(result == kRocProfVisResultSuccess &&
            (table_type == kRPVControllerTableTypeSearchResults ||
-            table_type == kRPVControllerTableTypeSummaryKernelInstances))
+            table_type == kRPVControllerTableTypeSummaryKernelInstances ||
+            table_type == kRPVControllerTableTypeSummaryMemoryInstances ||
+            table_type == kRPVControllerTableTypeSummaryThreadInstances))
         {
             result = args.GetUInt64(kRPVControllerTableArgsNumStringTableFilters, 0, &num_string_table_filters);
             if(result == kRocProfVisResultSuccess)

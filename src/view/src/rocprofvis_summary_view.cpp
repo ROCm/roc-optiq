@@ -179,12 +179,23 @@ SummaryView::Render()
         popup_style.PushTitlebarColors();
         if(m_init_window)
         {
-            ImGui::SetNextWindowPos(ImGui::GetWindowSize() * 0.5f, ImGuiCond_Always,
-                                    ImVec2(0.5f, 0.5f));
+            ImVec2 window_size = ImGui::GetWindowSize();
+            ImVec2 min_size =
+                MinSize() + ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing() * 2.0f);
+            ImVec2 pref_size = PreferredSize();
+            ImGui::SetNextWindowPos(ImGui::GetWindowPos() + window_size * 0.5f,
+                                    ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(
-                loading ? ImVec2(ImGui::GetWindowWidth() * INITIAL_RELATIVE_SIZE_LOADING,
+                loading ? ImVec2(ImGui::GetFrameHeightWithSpacing() * 8.0f,
                                  ImGui::GetFrameHeightWithSpacing() * 2.0f)
-                        : ImGui::GetWindowSize() * INITIAL_RELATIVE_SIZE);
+                        : ImVec2(window_size.x < min_size.x
+                                     ? window_size.x
+                                     : std::clamp(window_size.x * 0.8f, min_size.x,
+                                                  pref_size.x),
+                                 window_size.y < min_size.y
+                                     ? window_size.y
+                                     : std::clamp(window_size.y * 0.8f, min_size.y,
+                                                  pref_size.y)));
             m_init_window = false;
         }
         if(loading)
@@ -208,9 +219,7 @@ SummaryView::Render()
                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
                              ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoScrollWithMouse);
-            ImGui::SetNextWindowSizeConstraints(MIN_SIZE_RELATIVE *
-                                                    ImGui::GetFrameHeightWithSpacing(),
-                                                ImVec2(FLT_MAX, FLT_MAX));
+            ImGui::SetNextWindowSizeConstraints(MinSize(), ImVec2(FLT_MAX, FLT_MAX));
             ImGui::BeginChild(
                 "summary_clamped_view", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -231,6 +240,25 @@ SummaryView::Render()
         }
         ImGui::End();
     }
+}
+
+ImVec2
+SummaryView::MinSize() const
+{
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    return ImVec2(3.0f * (ImGui::GetTextLineHeight() +
+                          ImGui::CalcTextSize(DISPLAY_PROPS_EVENT_TYPES[1].first).x +
+                          ImGui::CalcTextSize("Details").x +
+                          2.0f * (style.FramePadding.x + style.WindowPadding.x +
+                                  style.ItemSpacing.x)) +
+                      2.0f * (style.WindowPadding.x + style.ItemSpacing.x),
+                  16.0f * ImGui::GetFrameHeightWithSpacing());
+}
+
+ImVec2
+SummaryView::PreferredSize() const
+{
+    return MinSize() * 2.0f;
 }
 
 SummaryOverview::SummaryOverview(
@@ -411,6 +439,8 @@ SummaryOverview::Render()
     tile_size.y = ImGui::GetContentRegionAvail().y;
     Tile(10, tile_size, [this, &model]() -> void {
         ImGui::TextUnformatted("System Topology");
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                              ThemeColor(m_settings, Colors::kTableHeaderBg));
         if(ImGui::BeginTable("topology", m_composition_table_headers.size(),
                              ImGuiTableFlags_BordersInnerV |
                                  ImGuiTableFlags_NoBordersInBody |
@@ -454,6 +484,7 @@ SummaryOverview::Render()
             CompositionTable(model.GetSummaryData());
             ImGui::EndTable();
         }
+        ImGui::PopStyleColor();
     });
     ImGui::SameLine();
     tile_size.x = (region.x - 2.0f * style.ItemSpacing.x) / 3.0f;
@@ -847,19 +878,41 @@ SummaryOverview::Counters() const
 void
 SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 color) const
 {
-    const ImGuiStyle& style = m_settings.GetDefaultStyle();
-    ImGui::TextUnformatted(counter.info->GetName().c_str());
+    const ImGuiStyle&    style = m_settings.GetDefaultStyle();
     const ProcessorInfo* processor =
         m_data_provider.DataModel().GetTopology().GetProcessor(
             counter.info->GetProcessorId());
-    ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
-    if(processor)
+    float metadata_width =
+        (processor ? ImGui::CalcTextSize(
+                         m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                             processor->type))
+                             .x +
+                         style.ItemSpacing.x
+                   : 0.0f) +
+        (counter.info->units.size()
+             ? ImGui::CalcTextSize(counter.info->units.c_str()).x +
+                   ImGui::CalcTextSize("()").x + style.ItemSpacing.x
+             : 0.0f) +
+        (counter.info->value_type.size()
+             ? ImGui::CalcTextSize(counter.info->value_type.c_str()).x +
+                   style.ItemSpacing.x
+             : 0.0f) -
+        style.ItemSpacing.x;
+    float name_width = ImGui::GetContentRegionAvail().x -
+                       (counter.info->description.size()
+                            ? ImGui::GetTextLineHeight() + style.ItemSpacing.x
+                            : 0.0f) -
+                       metadata_width;
+    if(name_width > ImGui::CalcTextSize(counter.info->GetName().c_str()).x)
     {
-        ImGui::SameLine();
-        ImGui::TextUnformatted(
-            m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
-                processor->type));
+        ImGui::TextUnformatted(counter.info->GetName().c_str());
     }
+    else
+    {
+        ElidedText(counter.info->GetName().c_str(), name_width,
+                   ImGui::GetContentRegionAvail().x);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
     if(counter.info->description.size())
     {
         ImGui::SameLine();
@@ -875,13 +928,26 @@ SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 co
         }
     }
     ImGui::PopStyleColor();
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x -
-                    ImGui::CalcTextSize(counter.info->units.c_str()).x -
-                    style.ItemSpacing.x -
-                    ImGui::CalcTextSize(counter.info->value_type.c_str()).x);
-    ImGui::TextUnformatted(counter.info->units.c_str());
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s", counter.info->value_type.c_str());
+    if(metadata_width > 0.0f)
+    {
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - metadata_width);
+        if(counter.info->units.size())
+        {
+            ImGui::Text("(%s)", counter.info->units.c_str());
+        }
+        if(counter.info->value_type.size())
+        {
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ImGui::TextDisabled("%s", counter.info->value_type.c_str());
+        }
+        if(processor)
+        {
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ImGui::TextDisabled(
+                m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                    processor->type));
+        }
+    }
     ImGui::PushFont(nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
     ImGui::Text("Min: %s",
                 counter.metrics[kRPVAnalysisSummaryCounterMetricMin].str.c_str());
@@ -995,14 +1061,14 @@ SummaryTopEvents::SummaryTopEvents(DataProvider&                      dp,
                                 0,
                                 nullptr,
                                 { nullptr },
-                                { "-" },
+                                { "All" },
                                 { std::nullopt } };
     switch(m_type)
     {
         case kRPVAnalysisSummaryCategoryKernel:
         {
-            m_filters[1] =
-                FilterModel{ "GPU", 0, nullptr, { nullptr }, { "-" }, { std::nullopt } };
+            m_filters[1] = FilterModel{ "GPU",       0,         nullptr,
+                                        { nullptr }, { "All" }, { std::nullopt } };
             break;
         }
         case kRPVAnalysisSummaryCategoryMemory:
@@ -1013,7 +1079,7 @@ SummaryTopEvents::SummaryTopEvents(DataProvider&                      dp,
                                         0,
                                         nullptr,
                                         { nullptr },
-                                        { "-" },
+                                        { "All" },
                                         { std::nullopt } };
             break;
         }
@@ -1026,7 +1092,7 @@ SummaryTopEvents::SummaryTopEvents(DataProvider&                      dp,
                                         0,
                                         nullptr,
                                         { nullptr },
-                                        { "-" },
+                                        { "All" },
                                         { std::nullopt } };
             m_filters[2] = FilterModel{ DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
                                             kRPVAnalysisSummaryAggregationLevelThread -
@@ -1034,7 +1100,7 @@ SummaryTopEvents::SummaryTopEvents(DataProvider&                      dp,
                                         0,
                                         nullptr,
                                         { nullptr },
-                                        { "-" },
+                                        { "All" },
                                         { std::nullopt } };
             break;
         }
@@ -1059,7 +1125,7 @@ SummaryTopEvents::Update()
             m_filters[0].selected_idx = 0;
             m_filters[0].parent_info  = nullptr;
             m_filters[0].info         = { nullptr };
-            m_filters[0].labels       = { "-" };
+            m_filters[0].labels       = { "All" };
             m_filters[0].query        = { std::nullopt };
             for(const SummaryInfo::AggregateMetrics& node : metrics.sub_metrics)
             {
@@ -1099,7 +1165,7 @@ SummaryTopEvents::Update()
                     m_filters[i].parent_info =
                         m_filters[i - 1].info[m_filters[i - 1].selected_idx];
                     m_filters[i].info   = { nullptr };
-                    m_filters[i].labels = { "-" };
+                    m_filters[i].labels = { "All" };
                     m_filters[i].query  = {
                         m_filters[i - 1].query[m_filters[i - 1].selected_idx]
                     };
@@ -1322,10 +1388,22 @@ SummaryTopEvents::RenderPreview() const
                     .str.c_str());
         }
         ImGui::SameLine();
-        ImGui::TextDisabled(
-            "%s invocations",
-            op_events->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
-                .str.c_str());
+        if(ImGui::GetContentRegionAvail().x >
+           ImGui::CalcTextSize(
+               op_events->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                   .str.c_str())
+                   .x +
+               ImGui::CalcTextSize(" invocations").x)
+        {
+            ImGui::TextDisabled(
+                "%s invocations",
+                op_events->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]
+                    .str.c_str());
+        }
+        else
+        {
+            ImGui::NewLine();
+        }
         ImGui::PopFont();
         ImGui::PushFont(nullptr,
                         m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
@@ -1492,36 +1570,43 @@ SummaryTopEvents::RenderTopEvents()
         }
         ImGui::EndGroup();
         // Filter combos...
-        float pos = ImGui::GetContentRegionMax().x;
-        int   i   = 0;
-        for(auto it = m_filters.rbegin(); it != m_filters.rend(); it++)
+        ImGui::SameLine();
+        float combo_width =
+            ImGui::GetContentRegionAvail().x -
+            (static_cast<float>(m_filters.size()) * 2.0f - 1.0f) * style.ItemSpacing.x;
+        for(const FilterModel& filter : m_filters)
+        {
+            combo_width -= ImGui::CalcTextSize(filter.name).x;
+        }
+        combo_width /= static_cast<float>(m_filters.size());
+        for(size_t i = 0; i < m_filters.size(); i++)
         {
             ImGui::SameLine();
-            pos -=
-                ImGui::CalcTextSize(it->name).x + region.x / 4.0f + style.ItemSpacing.x;
-            ImGui::SetCursorPosX(pos);
             ImGui::AlignTextToFramePadding();
-            ImGui::BeginDisabled(it->info.size() < 2);
-            ImGui::TextUnformatted(it->name);
+            ImGui::BeginDisabled(m_filters[i].info.size() < 2);
+            ImGui::TextUnformatted(m_filters[i].name);
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(region.x * 0.25f);
+            ImGui::SetNextItemWidth(combo_width);
             PushComboStyles();
-            ImGui::PushID(i++);
-            if(ImGui::BeginCombo("##combo",
-                                 it->selected_idx < static_cast<int>(it->labels.size())
-                                     ? it->labels[it->selected_idx].c_str()
-                                     : "-"))
+            ImGui::PushID(static_cast<int>(i));
+            if(ImGui::BeginCombo(
+                   "##combo", m_filters[i].selected_idx <
+                                      static_cast<int>(m_filters[i].labels.size())
+                                  ? m_filters[i].labels[m_filters[i].selected_idx].c_str()
+                                  : "-"))
             {
-                for(size_t j = 0; j < it->labels.size(); j++)
+                for(size_t j = 0; j < m_filters[i].labels.size(); j++)
                 {
                     ImGui::PushID(static_cast<int>(j));
-                    if(ImGui::Selectable("", it->selected_idx == static_cast<int>(j)))
+                    if(ImGui::Selectable("", m_filters[i].selected_idx ==
+                                                 static_cast<int>(j)))
                     {
-                        it->selected_idx = static_cast<int>(j);
-                        m_filter_changed = true;
+                        m_filters[i].selected_idx = static_cast<int>(j);
+                        m_filter_changed          = true;
                     }
                     ImGui::SameLine(ImGui::GetCursorPosX());
-                    ElidedText(it->labels[j].c_str(), ImGui::GetContentRegionAvail().x,
+                    ElidedText(m_filters[i].labels[j].c_str(),
+                               ImGui::GetContentRegionAvail().x,
                                ImGui::GetContentRegionAvail().x);
                     ImGui::PopID();
                 }
@@ -1530,7 +1615,6 @@ SummaryTopEvents::RenderTopEvents()
             ImGui::PopID();
             PopComboStyles();
             ImGui::EndDisabled();
-            pos -= style.ItemSpacing.x;
         }
     }
 }
@@ -1718,7 +1802,7 @@ SummaryTopEvents::RenderTable(const ImPlotStyle& plot_style)
                                    .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
                                    .numeric.flt,
                                ImVec2(ImGui::GetContentRegionAvail().x -
-                                          ImGui::CalcTextSize("100.0%").x -
+                                          ImGui::CalcTextSize("100.0").x -
                                           ImGui::GetStyle().ItemSpacing.x,
                                       0.0f),
                                "");
@@ -1730,9 +1814,6 @@ SummaryTopEvents::RenderTable(const ImPlotStyle& plot_style)
                                 .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
                                 .numeric.flt *
                             100.0f);
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x -
-                            ImGui::CalcTextSize("%").x);
-            ImGui::TextUnformatted("%");
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(
                 i == m_padded_idx

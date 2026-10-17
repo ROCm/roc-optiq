@@ -38,6 +38,9 @@ public:
     void Render() override;
 
 private:
+    ImVec2 MinSize() const;
+    ImVec2 PreferredSize() const;
+
     std::unique_ptr<TabContainer>    m_tab_container;
     std::shared_ptr<SummaryOverview> m_overview;
     std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>

@@ -77,18 +77,22 @@ InputTextStringWithHint(const char* id, const char* hint, std::string& str,
     // SameLine() and tooltips after this call line up against the field itself
     // rather than against a separate overlay.
     str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
-    bool input_changed = ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
-                                                  flags | ImGuiInputTextFlags_CallbackResize,
-                                                  StringResizeCallback, static_cast<void*>(&str));
+    bool input_changed = ImGui::InputTextWithHint(
+        id, hint ? hint : "", str.data(), str.capacity() + 1,
+        flags | ImGuiInputTextFlags_CallbackResize, StringResizeCallback,
+        static_cast<void*>(&str));
 
-    // A hint wider than the field is clipped, so offer it whole on hover.
-    if(str.empty() &&
-       ImGui::CalcTextSize(hint).x >
-           ImGui::GetItemRectSize().x - 2.0f * ImGui::GetStyle().FramePadding.x &&
-       BeginItemTooltipStyled())
+    // A hint wider than the field is clipped. Offer it whole on hover, but not
+    // while the field is focused, where the tooltip would cover the caret.
+    if(str.empty() && hint && hint[0] && !ImGui::IsItemActive())
     {
-        ImGui::TextUnformatted(hint);
-        EndTooltipStyled();
+        const float pad   = ImGui::GetStyle().FramePadding.x;
+        const float avail = ImGui::GetItemRectSize().x - 2.0f * pad;
+        if(ImGui::CalcTextSize(hint).x > avail && BeginItemTooltipStyled())
+        {
+            ImGui::TextUnformatted(hint);
+            EndTooltipStyled();
+        }
     }
     return input_changed;
 }

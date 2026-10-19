@@ -398,8 +398,17 @@ jobs:
               Write-Host "Release Version $env:RELEASE_VERSION provided, using $env:RELEASE_VERSION as S3_SECONDARY_DIRECTORY"
               $S3_SECONDARY_DIRECTORY = $env:RELEASE_VERSION
           }
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/windows/ `
-            --no-progress
+          $S3_DEST = "s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/windows/"
+
+          # Upload the distribution as a single zip instead of many loose files.
+          $zipPath = Join-Path $env:RUNNER_TEMP "${{ env.BUILD_FILE_NAME }}-windows-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}.zip"
+          Compress-Archive -Path "${{ env.DIST_DIR }}/*" -DestinationPath $zipPath -Force
+          aws s3 cp $zipPath $S3_DEST --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Upload the MSI installer(s) alongside the zip.
+          aws s3 cp ${{ env.INSTALLER_DIR }} $S3_DEST --recursive --exclude "*" --include "*.msi" --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       
       - name: Announce Test Failure
         if: steps.run_tests.outcome == 'failure'

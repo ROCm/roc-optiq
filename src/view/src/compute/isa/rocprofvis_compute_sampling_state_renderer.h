@@ -65,7 +65,7 @@ private:
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
                             float mouse_wheel);
-    void RenderTooltip(const SamplingRow& row);
+    void RenderTooltip(const SamplingRow& row, double bar_percent);
     void RenderSummary(const SamplingRow& row);
     void RenderFooter(const SamplingRow& row);
     void DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,

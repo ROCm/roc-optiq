@@ -102,20 +102,18 @@ constexpr ComputeCodeTable::HeaderTooltipText SOURCE_SAMPLING_STATE_HEADER_TOOLT
 };
 
 constexpr const char* SAMPLING_STATE_NO_SAMPLES_TOOLTIP =
-    "No PC samples were recorded for this line.\n"
-    "There are no sampled observations to classify by stall reason.";
+    "No PC samples recorded for this line.";
 constexpr const char* SAMPLING_STATE_MISSING_ISSUED_COUNTS_TOOLTIP =
-    "PC samples were recorded for this line, but their issued counts were not "
-    "fully recorded.\nThe sampling-state breakdown is unavailable.";
+    "Issued sample counts unavailable.";
 constexpr const char* SAMPLING_STATE_MISSING_STALLED_COUNTS_TOOLTIP =
-    "PC samples were recorded for this line, but their stalled counts were not "
-    "fully recorded.\nThe sampling-state breakdown is unavailable.";
+    "Stalled sample counts unavailable.";
 constexpr const char* SAMPLING_STATE_MISSING_PROGRESS_COUNTS_TOOLTIP =
-    "PC samples were recorded for this line, but their issued and stalled counts "
-    "were not fully recorded.\nThe sampling-state breakdown is unavailable.";
+    "No issued/stalled data recorded.\n"
+    "Host-trap sampling does not collect stall data (expected).";
 constexpr const char* SAMPLING_STATE_INVALID_COUNTS_TOOLTIP =
-    "Issue/stall breakdown is unavailable because some issued/stalled counts "
-    "are inconsistent with total samples.";
+    "Issued/stalled counts are inconsistent with total samples.";
+constexpr const char* SAMPLING_STATE_BAR_PERCENT_TOOLTIP =
+    "Bar: %.1f%% of maximum samples.";
 
 constexpr const char* SAMPLING_STATE_ISSUED_TEXT                = "Issued";
 constexpr const char* SAMPLING_STATE_UNCLASSIFIED_STALLS_TEXT   = "Unclassified stalls";
@@ -250,10 +248,9 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
     const float          bar_height = cell.size.y * SAMPLING_STATE_BAR_HEIGHT_FRACTION;
     const ImVec2         bar_start(cell.start.x,
                                    cell.start.y + (cell.size.y - bar_height) * 0.5f);
-    const float          bar_width =
-        cell.size.x * static_cast<float>(IsaDataBuilder::CalculatePercentage(
-                                             counts.total_count, hottest_samples) /
-                                         100.0);
+    const double         bar_percent =
+        IsaDataBuilder::CalculatePercentage(counts.total_count, hottest_samples);
+    const float  bar_width = cell.size.x * static_cast<float>(bar_percent / 100.0);
     const ImVec2 bar_end(bar_start.x + bar_width, bar_start.y + bar_height);
     if(bar_width > 0.0f)
     {
@@ -283,7 +280,7 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
         finish_code_cell(cell, "##sampling_state_cell");
     if(interaction.hovered)
     {
-        RenderTooltip(row);
+        RenderTooltip(row, bar_percent);
     }
     return interaction.clicked;
 }
@@ -335,11 +332,17 @@ SamplingStateRenderer::DrawStallReasonSegments(const SamplingRow& row,
 }
 
 void
-SamplingStateRenderer::RenderTooltip(const SamplingRow& row)
+SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
 {
     if(row.sampling.availability != SamplingAvailability::kValid)
     {
-        SetTooltipStyled("%s", GetUnavailableSamplingTooltip(row));
+        BeginTooltipStyled();
+        ImGui::TextUnformatted(GetUnavailableSamplingTooltip(row));
+        if(row.sample_counts.total_count > 0)
+        {
+            ImGui::Text(SAMPLING_STATE_BAR_PERCENT_TOOLTIP, bar_percent);
+        }
+        EndTooltipStyled();
         return;
     }
 
@@ -354,6 +357,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row)
     ImGui::PushID(static_cast<int>(row.id));
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + layout.size.x);
     RenderSummary(row);
+    ImGui::Text(SAMPLING_STATE_BAR_PERCENT_TOOLTIP, bar_percent);
     if(layout.size.y > 0.0f)
     {
         ImGui::TextDisabled("Hover the cell and scroll to see all sampling states.");

@@ -1717,10 +1717,19 @@ stalled count and the classified reason total. Missing stall classifications and
 unclassified progress remain gray. Mismatched reason totals cannot enlarge the
 bar or overwrite the issued portion. Zero-sample instructions have no bar.
 Host-trap, incomplete, and invalid progress data retain a neutral total-sample bar.
-Their tooltips inspect the row: zero total samples explain that no PC samples were
-recorded, sampled rows identify missing issued counts, stalled counts, or both,
-and invalid counts explain that the breakdown exceeds the total. No sampling
-method is assumed from an individual unavailable instruction.
+Bars have no inline numeric labels. Both valid and unavailable tooltips retain
+`Bar: value% of maximum samples.`, using the hottest row's sample count in the
+current pane as the denominator, just as the bar width does. This percentage is
+separate from stall percentages and the tooltip table's percentages of this row's
+samples. Zero-sample cells have no bar; unavailable rows retain a brief no-samples
+message.
+
+Unavailable tooltips identify missing issued counts, stalled counts, or invalid
+counts briefly. When both progress counts are missing, the text says no
+issued/stalled data was recorded and explains that host-trap sampling does not
+collect stall data, which is expected. This is an explanation of host-trap behavior,
+not an inference about the capture method from a missing row. The view model does
+not currently expose the capture method. This applies to both ISA and source cells.
 
 The Sampling State cell tooltip starts with `Stalled: count/total (percent)` and a
 compact table containing Color, Sampling State, Samples, and `% of Samples`. Issued is

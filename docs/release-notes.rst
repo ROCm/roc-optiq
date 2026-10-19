@@ -8,6 +8,11 @@ ROCm Optiq 1.1.0 release notes
 
 These release notes describe notable changes since the previous ROCm Optiq release.
 
+Release highlights
+------------------
+
+This release improves the ROCm Optiq user experience with enhanced timeline interactions, time-range analysis, search, and filtering. It also includes fixes for stability, display, and data presentation issues.
+
 Added
 -----
 

@@ -53,10 +53,6 @@ constexpr float  ASSISTANT_DOT_RADIUS     = 2.5f;
 constexpr int    ASSISTANT_DOT_COUNT      = 3;
 constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
 constexpr float  ASSISTANT_DOT_SPEED      = 5.0f;
-constexpr float  ASSISTANT_CURSOR_MIN_HEIGHT   = 12.0f;
-constexpr float  ASSISTANT_CURSOR_HEIGHT_SCALE = 0.9f;
-constexpr float  ASSISTANT_CURSOR_CAP_SCALE    = 0.13f;
-constexpr float  ASSISTANT_CURSOR_THICKNESS    = 1.0f;
 
 constexpr size_t   ASSISTANT_CHART_MAX_BINS        = 64;
 constexpr size_t   ASSISTANT_CHART_MIN_BINS        = 16;
@@ -132,31 +128,6 @@ SplitMessageLines(const std::string& text)
         start = end + 1;
     } while(start <= text.size());
     return lines;
-}
-
-void
-RenderAssistantTextCursor()
-{
-    ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-
-    const ImVec2 mouse       = ImGui::GetMousePos();
-    const float  height      = std::max(ASSISTANT_CURSOR_MIN_HEIGHT,
-                                  ImGui::GetFontSize() * ASSISTANT_CURSOR_HEIGHT_SCALE);
-    const float  half_height = height * 0.5f;
-    const float  half_cap    = height * ASSISTANT_CURSOR_CAP_SCALE;
-    const ImVec2 vertical_min(mouse.x, mouse.y - half_height);
-    const ImVec2 vertical_max(mouse.x, mouse.y + half_height);
-    const ImVec2 top_min(mouse.x - half_cap, vertical_min.y);
-    const ImVec2 top_max(mouse.x + half_cap, vertical_min.y);
-    const ImVec2 bottom_min(mouse.x - half_cap, vertical_max.y);
-    const ImVec2 bottom_max(mouse.x + half_cap, vertical_max.y);
-
-    ImDrawList* draw = ImGui::GetForegroundDrawList();
-    draw->AddLine(vertical_min, vertical_max, IM_COL32_BLACK,
-                  ASSISTANT_CURSOR_THICKNESS);
-    draw->AddLine(top_min, top_max, IM_COL32_BLACK, ASSISTANT_CURSOR_THICKNESS);
-    draw->AddLine(bottom_min, bottom_max, IM_COL32_BLACK,
-                  ASSISTANT_CURSOR_THICKNESS);
 }
 
 }  // namespace
@@ -657,23 +628,27 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
         ImGui::TextUnformatted(line.data(), line.data() + line.size());
         ImGui::PopTextWrapPos();
     }
-    select->update();
-    if(ImGui::IsWindowHovered())
-    {
-        RenderAssistantTextCursor();
-    }
 
-    SettingsManager&  settings   = SettingsManager::GetInstance();
-    const ImGuiStyle& menu_style = settings.GetDefaultStyle();
+    // Only one message keeps a highlight, so Ctrl+C copies what is on screen.
+    // Ctrl+C reaches only the focused window, and right-click does not focus
+    // on its own. The popup flag keeps this working when the click lands while
+    // another message's menu is still open.
+    if(ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+       (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+        ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
+    {
+        ImGui::SetWindowFocus();
+        for(const std::unique_ptr<TextSelect>& other : m_message_select)
+        {
+            if(other != nullptr && other.get() != select)
+            {
+                other->clearSelection();
+            }
+        }
+    }
+    select->update();
+
     PushContextMenuStyles();
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_FramePadding,
-        ImVec2(menu_style.FramePadding.x * 0.65f,
-               menu_style.FramePadding.y * 0.5f));
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, settings.GetColor(Colors::kBgFrame));
-    ImGui::PushStyleColor(ImGuiCol_Border,
-                          settings.GetColor(Colors::kPanelBorderSubtle));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     if(ImGui::BeginPopupContextWindow("##message_copy"))
     {
         if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection(), false,
@@ -692,8 +667,6 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
         }
         ImGui::EndPopup();
     }
-    ImGui::PopStyleColor(3);
-    ImGui::PopStyleVar();
     PopContextMenuStyles();
     ImGui::EndChild();
     ImGui::PopStyleVar(2);

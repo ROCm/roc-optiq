@@ -49,7 +49,6 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 , m_control_panel_height(0.0f)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_show_sampling_details(true)
 {
     m_isa.widget    = std::make_shared<IsaCodeWidget>(m_line_selection);
     m_source.widget = std::make_shared<SourceCodeWidget>(m_line_selection);
@@ -162,14 +161,14 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     QueuePcSamplingFetch(PcSamplingLayer::kIsa);
     if(m_source_layout_item->m_visible)
         QueuePcSamplingFetch(PcSamplingLayer::kSource);
-    if(m_show_sampling_details) QueuePcSamplingFetch(PcSamplingLayer::kStalls);
+    QueuePcSamplingFetch(PcSamplingLayer::kStalls);
 }
 
 void
 ComputeIsaView::ClearCodeData()
 {
-    m_source.widget->Load({}, 0);
-    m_isa.widget->Load({}, 0);
+    m_source.widget->Load({}, 0, m_sampling_data);
+    m_isa.widget->Load({}, 0, m_sampling_data);
 }
 
 void
@@ -178,8 +177,8 @@ ComputeIsaView::ClearSelectionData()
     m_isa.ResetFetch();
     m_source.ResetFetch();
     m_stalls = {};
+    m_sampling_data = {};
     m_line_selection = {};
-    m_isa.widget->ChangeSamplingVisibility(false);
     ClearCodeData();
 }
 
@@ -203,7 +202,6 @@ ComputeIsaView::QueuePcSamplingFetch(PcSamplingLayer layer)
 {
     FetchStateType& state = FetchStateFor(layer);
     state.queued           = true;
-    state.failed           = false;
     state.request_token    = ++m_next_request_token;
 }
 
@@ -263,14 +261,7 @@ ComputeIsaView::SubmitPcSamplingFetch(PcSamplingLayer layer)
     const PcSamplingRequestParams params(layer, m_current_workload_id,
                                           m_current_kernel_id, source_file_uuid,
                                           m_fetch_generation, state.request_token);
-    if(m_data_provider.FetchPcSampling(params))
-    {
-        state.in_flight = true;
-    }
-    else
-    {
-        state.failed = true;
-    }
+    state.in_flight = m_data_provider.FetchPcSampling(params);
 }
 
 void
@@ -306,22 +297,15 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
     if(!state.in_flight) return;
     state.in_flight = false;
 
-    if(result == kRocProfVisResultCancelled)
-        return;
-
     if(result != kRocProfVisResultSuccess)
     {
-        state.failed = true;
         return;
     }
-
-    state.failed = false;
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
     if(!kernel_info)
         return;
 
-    state.loaded = true;
     if(layer == PcSamplingLayer::kSource)
     {
         m_source.selected_uuid = source_file_uuid;
@@ -360,7 +344,7 @@ ComputeIsaView::SelectSourceFile(uint64_t source_file_uuid)
     if(source_file_uuid == m_source.selected_uuid) return;
 
     m_source.selected_uuid = source_file_uuid;
-    m_source.widget->Load({}, 0);
+    m_source.widget->Load({}, 0, m_sampling_data);
     if(m_source.loaded_uuids.count(source_file_uuid))
     {
         m_source.queued        = false;
@@ -413,7 +397,7 @@ ComputeIsaView::RefreshCodeWidgets(PcSamplingLayer layer)
             {
                 m_isa.code_object_uuid = data.code_objects[0].code_object_uuid;
             }
-            m_isa.widget->Load(data, m_isa.code_object_uuid);
+            m_isa.widget->Load(data, m_isa.code_object_uuid, m_sampling_data);
             break;
         }
         case PcSamplingLayer::kSource:
@@ -424,11 +408,12 @@ ComputeIsaView::RefreshCodeWidgets(PcSamplingLayer layer)
         }
         case PcSamplingLayer::kStalls:
         {
-            m_isa.widget->UpdateSampling(data);
+            m_sampling_data = IsaDataBuilder::PrepareSampling(data);
+            m_isa.widget->UpdateSampling(m_sampling_data);
+            m_source.widget->UpdateSampling(data, m_sampling_data);
             break;
         }
     }
-    UpdateSamplingVisibility();
 }
 
 void
@@ -443,15 +428,9 @@ ComputeIsaView::RefreshSourceWidget()
     if(m_source_layout_item->m_visible &&
        m_source.loaded_uuids.count(m_source.selected_uuid))
     {
-        m_source.widget->Load(kernel_info->pc_sampling_data, m_source.selected_uuid);
+        m_source.widget->Load(kernel_info->pc_sampling_data, m_source.selected_uuid,
+                              m_sampling_data);
     }
-}
-
-void
-ComputeIsaView::UpdateSamplingVisibility()
-{
-    m_isa.widget->ChangeSamplingVisibility(
-        m_show_sampling_details && m_stalls.loaded && m_isa.loaded);
 }
 
 void
@@ -479,11 +458,8 @@ ComputeIsaView::Render()
 void
 ComputeIsaView::RenderControlPanel()
 {
-    constexpr const char* hide_source_code_str       = "Hide Source Code";
-    constexpr const char* show_source_code_str       = "Show Source Code";
-    constexpr const char* show_sampling_details_str  = "Show Sampling Details";
-    constexpr const char* hide_sampling_details_str  = "Hide Sampling Details";
-    constexpr const char* retry_sampling_details_str = "Retry Sampling Details";
+    constexpr const char* hide_source_code_str = "Hide Source Code";
+    constexpr const char* show_source_code_str = "Show Source Code";
 
     const float fallback_height =
         ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
@@ -503,17 +479,8 @@ ComputeIsaView::RenderControlPanel()
         std::max(ImGui::CalcTextSize(show_source_code_str).x,
                  ImGui::CalcTextSize(hide_source_code_str).x) +
         ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float button_sampling_details_width =
-        std::max({ ImGui::CalcTextSize(show_sampling_details_str).x,
-                   ImGui::CalcTextSize(hide_sampling_details_str).x,
-                   ImGui::CalcTextSize(retry_sampling_details_str).x }) +
-        ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float buttons_width = button_source_code_width +
-                                button_sampling_details_width +
-                                ImGui::GetStyle().ItemSpacing.x;
-
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
-                    buttons_width);
+                    button_source_code_width);
 
     if(ImGui::Button(m_source_layout_item->m_visible ? hide_source_code_str
                                                      : show_source_code_str))
@@ -529,37 +496,6 @@ ComputeIsaView::RenderControlPanel()
         else
         {
             m_source.queued = false;
-        }
-    }
-
-    ImGui::SameLine();
-    const bool retry_sampling_details = m_show_sampling_details && m_stalls.failed;
-    const char* sampling_details_label =
-        retry_sampling_details
-            ? retry_sampling_details_str
-            : (m_show_sampling_details ? hide_sampling_details_str
-                                       : show_sampling_details_str);
-    if(ImGui::Button(sampling_details_label))
-    {
-        if(retry_sampling_details)
-        {
-            QueuePcSamplingFetch(PcSamplingLayer::kStalls);
-        }
-        else
-        {
-            m_show_sampling_details = !m_show_sampling_details;
-            if(m_show_sampling_details && !m_stalls.loaded)
-            {
-                QueuePcSamplingFetch(PcSamplingLayer::kStalls);
-            }
-            else
-            {
-                if(!m_show_sampling_details)
-                {
-                    m_stalls.queued = false;
-                }
-                UpdateSamplingVisibility();
-            }
         }
     }
 

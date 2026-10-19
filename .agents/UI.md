@@ -1575,21 +1575,34 @@ The ISA implementation has three boundaries:
   checks protect callbacks from stale selections.
 - `rocprofvis_compute_code_widgets.{h,cpp}` owns `BaseCodeWidget`,
   `SourceCodeWidget`, `IsaCodeWidget`, and their shared `LineSelection`.
+  `BaseCodeWidget` also owns the shared sampling column, bar, color legend, and
+  tooltip renderer, consuming `IsaDataBuilder::SamplingRow` for either pane.
   `BeginCodeRow` shares the source/ISA selection and hover behavior; local cell
   helpers share bounds, fill clipping, and hover/click targets.
 - `rocprofvis_compute_isa_data.{h,cpp}` owns `IsaDataBuilder`, a View-layer
   projection with no ImGui or settings dependency. It builds instruction rows,
   updates source mappings and sampling independently, and prepares count validity,
   percentages, reason identities, formatted legend counts, and reason/bar shares.
+  `PrepareSampling` builds one owned `PreparedSamplingData` with instruction counts,
+  normalized reason counts, and lookup names. It holds no pointers into controller
+  result vectors. ISA and source projections consume the same const prepared data.
+  `AccumulateSampleCounts` handles missing values, malformed contributors, and checked
+  addition for both sample-state-to-instruction and instruction-to-source grouping.
+  `SampleCounts::invalid_counts` preserves invalid contributors and saturated
+  overflow through every grouping stage; percentages and bar shares stay unavailable
+  when that flag is set. Known invalid counts take precedence over missing fields.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
   without a database or GPU.
 
 Layer completions refresh only their owned data: ISA completion builds instruction
-rows from the available layers, source completion updates correlations and the
-selected source text, and stalls completion updates sampling. If source or stalls
-arrives before ISA, the later ISA load incorporates it. Cached source-file changes
-refresh source text, and sampling visibility changes update column flags without
-reaggregating rows. Instruction storage survives source and sampling updates.
+rows, source completion updates correlations and selected source text, and stalls
+completion prepares sampling once and updates both panes from the same snapshot.
+`ComputeIsaView::m_sampling_data` owns that snapshot and is cleared on selection
+reset. Later source/ISA layer arrivals and cached source-file changes reuse it,
+without rebuilding sample counts or normalizing OTHER_WAIT again. Source mappings
+are taken from current source-layer data rather than frozen in the sampling
+snapshot, so correlations arriving after sampling remain correct. Column visibility
+does not reaggregate rows. Instruction storage survives source and sampling updates.
 The ISA widget addresses columns through its named `IsaColumn` logical indices;
 `SetupColumns` and `RenderHeaders` keep registration and header rendering separate
 from the clipped row loop. Tooltip summary, table, footer, and size measurement
@@ -1605,9 +1618,10 @@ After trace metadata loads, `ComputeView` disables the ISA View tab and
 shows a tooltip without constructing its widget when no kernel in the database
 has ISA lines. The availability flag is initialized once with the other
 data-dependent tab states.
-`RenderControlPanel()` hosts the source-file dropdown and the source-code and
-sampling-detail visibility controls. A failed sampling-detail request changes
-the latter control to `Retry Sampling Details`. PC-sampling data is fetched
+`RenderControlPanel()` hosts the source-file dropdown and source-code visibility
+control. Sampling State visibility is controlled only by each table's native
+header context menu; there is no sampling-details button or global visibility
+flag. PC-sampling data is fetched
 through `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
 independent layers:
 
@@ -1618,9 +1632,8 @@ independent layers:
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
-- `kStalls` runs initially because sampling details are visible by default, and
-  runs again when the user selects `Show Sampling Details` or retries a failed
-  request. The View asks the controller for PC sample states plus stall-reason
+- `kStalls` runs automatically whenever the view selects a kernel, independently
+  of column visibility. The View asks the controller for PC sample states plus stall-reason
   rows and lookups, explicitly excluding instruction-sample metadata that this
   view does not consume. The projection uses each state's UUID, instruction
   UUID and total count, plus nullable issued and stall counts, together with
@@ -1648,9 +1661,9 @@ instruction's total sample count, used to scale Sampling State bars.
 The table uses `IsaCodeSamplingState` as its ID so the previous seven-column layout
 does not override these defaults. Subsequent visibility, width, and order choices
 use normal ImGui persistence. All four columns remain registered while sampling
-details are hidden or loading. Sampling State receives the temporary `Disabled`
-flag in those states, removing it from the column menu without changing the user's
-visibility preference. Showing details restores that preference. The ISA table
+loads, and Sampling State stays available in the header menu. Hiding or showing
+columns does not start, cancel, or repeat data requests. No application-owned
+sampling visibility state overrides the saved ImGui preference. The ISA table
 enables `Reorderable`, so users can drag any visible column header to change its
 display order; headers and cells address logical indices after reordering.
 
@@ -1730,14 +1743,50 @@ Known reason colors are stable across instructions and kernels and come from the
 central `kPcSampling*` dark/light theme palette. Green is reserved for issued
 samples; ALU dependencies use indigo, scheduler arbitration uses the native accent
 blue, and other waits use coral. Unknown reason names are preserved in gray.
-The source table contains only the source line number and source text.
+The source table defaults to `# | Sampling State | Source code`, using table ID
+`SourceCodeSamplingState` so earlier two-column preferences do not override the new
+default. Sampling State is visible by default, hideable, resizable, and reorderable.
+Both panes use their own header context menus to hide or show Sampling State,
+including while data loads. The source text remains
+selectable and copyable when sampling is hidden or reordered.
+
+`IsaDataBuilder::BuildSourceLines` prepares source rows (excluding unknown line
+numbers). `UpdateSourceSampling` sums all sampled instructions with the same primary
+source line in the selected file, using the first `frame_index == 0` mapping per
+instruction, consistently with ISA correlation. Duplicate mappings and inline
+frames cannot double-count observations. Instructions without a primary mapping
+or belonging to other files do not contribute. Source aggregation operates on
+source correlations and sample states, so it also works when these layers arrive
+before the ISA instruction text. Issued-sample normalization occurs per sample
+state before reasons are combined. Source counts and reason counts are summed,
+then percentages and bounded reason shares are recomputed from the line totals.
+
+The source bar uses the same height, colors, issued-first segment order, compact
+tooltip, and header color legend as ISA. Its full length is relative to the hottest
+displayed source line, independent of the ISA pane's hottest instruction. Missing
+issued/stalled counts propagate across contributing instructions; an invalid
+sample-state contributor or overflow at either grouping stage invalidates the
+whole line, even when later sums would satisfy the count inequalities. Unsampled
+instructions do not invalidate a sampled line. Lines without observations have no
+bar and a no-samples tooltip; recorded zero counts remain distinguishable from
+missing counts. Source tooltips show Issued, stall reasons, and unclassified
+portions with percentages of the line's total samples. Developer header information
+describes source aggregation and its own hotness denominator.
+
+Source load/file switching builds rows and sampling together. Later sampling
+completion refreshes the existing source rows without rebuilding their text.
+Returning to a cached file recomputes source-line grouping from the prepared
+sampling snapshot and current source correlations.
+Source and ISA row sampling fields share `SamplingRow`; ISA keeps instruction,
+offset, and correlation fields, while source keeps text and line numbers.
 Instruction-sample metadata, active-thread percentage, wave-occupancy
 percentage, and dispatch UUID are available on the controller handle but are
 not currently represented in `PcSamplingData` or rendered by `ComputeIsaView`.
 
 PC-sampling queries require compute schema 2.2 or newer. A failed source or
-sampling-detail request is isolated from an already-loaded ISA pane; failed
-sampling details can be retried from the control panel.
+sampling request is isolated from an already-loaded ISA pane. Sampling is requested
+again on the next kernel selection; the removed sampling-details control and its
+retry-only fetch-status fields are not retained.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.

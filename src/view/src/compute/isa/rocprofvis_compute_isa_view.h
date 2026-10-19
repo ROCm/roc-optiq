@@ -26,8 +26,6 @@ struct FetchStateType
 {
     bool     queued        = false;
     bool     in_flight     = false;
-    bool     loaded        = false;
-    bool     failed        = false;
     uint64_t request_token = 0;
 };
 
@@ -92,7 +90,6 @@ private:
     void FetchPendingPcSampling();
     void RefreshCodeWidgets(PcSamplingLayer layer);
     void RefreshSourceWidget();
-    void UpdateSamplingVisibility();
     void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                            uint64_t source_file_uuid, uint32_t generation,
                            uint64_t request_token, rocprofvis_result_t result);
@@ -112,6 +109,7 @@ private:
     IsaPane                           m_isa;
     SourcePane                        m_source;
     FetchStateType                    m_stalls;
+    IsaDataBuilder::PreparedSamplingData m_sampling_data;
 
     LineSelection                     m_line_selection;
 
@@ -119,7 +117,6 @@ private:
 
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_workload_selection_changed_token;
-    bool m_show_sampling_details;
 };
 
 }  // namespace View

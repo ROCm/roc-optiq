@@ -65,15 +65,24 @@ public:
         uint64_t                total_count = 0;
         std::optional<uint64_t> issue_count;
         std::optional<uint64_t> stall_count;
+        // Carries malformed contributors and overflow through subsequent grouping.
+        bool invalid_counts = false;
     };
 
-    struct IsaRow
+    typedef std::unordered_map<uint64_t, uint64_t>          StallReasonCounts;
+    typedef std::unordered_map<uint64_t, StallReasonCounts> GroupedStallReasonCounts;
+
+    // Owns normalized instruction sampling independently of source/ISA layer arrival.
+    struct PreparedSamplingData
     {
-        std::string              instruction;
-        uint64_t                 id                 = 0;
-        uint64_t                 code_object_offset = 0;
-        uint64_t                 source_line_id     = 0;
-        uint64_t                 source_file_id     = 0;
+        std::unordered_map<uint64_t, SampleCounts> counts_by_instruction;
+        GroupedStallReasonCounts                   reasons_by_instruction;
+        std::unordered_map<uint64_t, std::string>  reason_text;
+    };
+
+    struct SamplingRow
+    {
+        uint64_t                 id = 0;
         SampleCounts             sample_counts;
         SamplingSummary          sampling;
         uint64_t                 unclassified_stall_count = 0;
@@ -82,12 +91,36 @@ public:
         std::vector<StallReason> stall_reasons;
     };
 
+    struct IsaRow : SamplingRow
+    {
+        std::string instruction;
+        uint64_t    code_object_offset = 0;
+        uint64_t    source_line_id     = 0;
+        uint64_t    source_file_id     = 0;
+    };
+
+    struct SourceRow : SamplingRow
+    {
+        std::string content;
+        uint64_t    line_number = 0;
+    };
+
     static std::vector<IsaRow> BuildInstructions(const PcSamplingData& data,
                                                  uint64_t              code_object_uuid);
     static void                UpdateSourceLocations(std::vector<IsaRow>&  rows,
                                                      const PcSamplingData& data);
+    // Prepares owned counts and normalized reasons once for both panes.
+    static PreparedSamplingData   PrepareSampling(const PcSamplingData& data);
     // Updates row sampling data and returns the hottest displayed instruction's count.
-    static uint64_t UpdateSampling(std::vector<IsaRow>& rows, const PcSamplingData& data);
+    static uint64_t               UpdateSampling(std::vector<IsaRow>&        rows,
+                                                 const PreparedSamplingData& sampling);
+    static std::vector<SourceRow> BuildSourceLines(const PcSamplingData& data,
+                                                   uint64_t source_file_uuid);
+    // Aggregates mapped instructions once per line; returns the hottest source count.
+    static uint64_t        UpdateSourceSampling(std::vector<SourceRow>&     rows,
+                                                const PcSamplingData&       data,
+                                                uint64_t                    source_file_uuid,
+                                                const PreparedSamplingData& sampling);
     static SamplingSummary SummarizeSampling(const SampleCounts& counts);
     static StallReasonKind ResolveStallReasonKind(std::string_view text);
     static double          CalculatePercentage(uint64_t value, uint64_t total);
@@ -107,8 +140,12 @@ private:
         std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
     };
 
-    typedef std::unordered_map<uint64_t, uint64_t>          StallReasonCounts;
-    typedef std::unordered_map<uint64_t, StallReasonCounts> GroupedStallReasonCounts;
+    static bool AddSampleCount(uint64_t& total, uint64_t count);
+    static void AccumulateSampleCounts(SampleCounts& total, const SampleCounts& counts);
+
+    static void UpdateSamplingRow(
+        SamplingRow& row, const SampleCounts& counts, const StallReasonCounts& reasons,
+        const std::unordered_map<uint64_t, std::string>& reason_text);
 
     static const CodeObjectStore* FindCodeObject(const PcSamplingData& data,
                                                  uint64_t              code_object_uuid);

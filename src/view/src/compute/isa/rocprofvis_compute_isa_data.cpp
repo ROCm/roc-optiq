@@ -45,55 +45,53 @@ IsaDataBuilder::BuildSourceLocations(const PcSamplingData& data)
 IsaDataBuilder::SampleAggregation
 IsaDataBuilder::AggregateSampleCounts(const PcSamplingData& data)
 {
-    struct SampleTotals
-    {
-        uint64_t total_count         = 0;
-        uint64_t issue_count         = 0;
-        uint64_t stall_count         = 0;
-        bool     missing_issue_count = false;
-        bool     missing_stall_count = false;
-    };
-
-    std::unordered_map<uint64_t, SampleTotals> totals_by_instruction;
-    totals_by_instruction.reserve(data.pc_sample_states.size());
     SampleAggregation aggregation;
     aggregation.counts_by_instruction.reserve(data.pc_sample_states.size());
     aggregation.sample_state_by_uuid.reserve(data.pc_sample_states.size());
     for(const PcSampleState& state : data.pc_sample_states)
     {
-        SampleTotals& counts = totals_by_instruction[state.instruction_uuid];
-        counts.total_count += state.total_count;
-        if(state.issue_count)
-        {
-            counts.issue_count += *state.issue_count;
-        }
-        else
-        {
-            counts.missing_issue_count = true;
-        }
-        if(state.stall_count)
-        {
-            counts.stall_count += *state.stall_count;
-        }
-        else
-        {
-            counts.missing_stall_count = true;
-        }
+        SampleCounts& counts =
+            aggregation.counts_by_instruction
+                .try_emplace(state.instruction_uuid, SampleCounts{ 0, 0, 0 })
+                .first->second;
+        AccumulateSampleCounts(
+            counts, { state.total_count, state.issue_count, state.stall_count });
         aggregation.sample_state_by_uuid.emplace(state.pc_sample_state_uuid, &state);
     }
-    for(const auto& [instruction_uuid, totals] : totals_by_instruction)
-    {
-        SampleCounts counts;
-        counts.total_count = totals.total_count;
-        counts.issue_count = totals.missing_issue_count
-                                 ? std::nullopt
-                                 : std::optional<uint64_t>(totals.issue_count);
-        counts.stall_count = totals.missing_stall_count
-                                 ? std::nullopt
-                                 : std::optional<uint64_t>(totals.stall_count);
-        aggregation.counts_by_instruction.emplace(instruction_uuid, counts);
-    }
     return aggregation;
+}
+
+bool
+IsaDataBuilder::AddSampleCount(uint64_t& total, uint64_t count)
+{
+    if(count > UINT64_MAX - total)
+    {
+        total = UINT64_MAX;
+        return false;
+    }
+    total += count;
+    return true;
+}
+
+void
+IsaDataBuilder::AccumulateSampleCounts(SampleCounts& total, const SampleCounts& counts)
+{
+    total.invalid_counts |=
+        SummarizeSampling(counts).availability == SamplingAvailability::kInvalid;
+    total.invalid_counts |= !AddSampleCount(total.total_count, counts.total_count);
+    const auto add_progress = [&total](std::optional<uint64_t>&       accumulated,
+                                       const std::optional<uint64_t>& value) {
+        if(accumulated && value)
+        {
+            total.invalid_counts |= !AddSampleCount(*accumulated, *value);
+        }
+        else
+        {
+            accumulated.reset();
+        }
+    };
+    add_progress(total.issue_count, counts.issue_count);
+    add_progress(total.stall_count, counts.stall_count);
 }
 
 std::unordered_map<uint64_t, std::string>
@@ -323,14 +321,17 @@ IsaDataBuilder::SamplingSummary
 IsaDataBuilder::SummarizeSampling(const SampleCounts& counts)
 {
     SamplingSummary summary;
-    if(!counts.issue_count || !counts.stall_count)
-    {
-        return summary;
-    }
-    if(*counts.issue_count > counts.total_count ||
-       *counts.stall_count > counts.total_count - *counts.issue_count)
+    if(counts.invalid_counts ||
+       (counts.issue_count && *counts.issue_count > counts.total_count) ||
+       (counts.stall_count && *counts.stall_count > counts.total_count) ||
+       (counts.issue_count && counts.stall_count &&
+        *counts.stall_count > counts.total_count - *counts.issue_count))
     {
         summary.availability = SamplingAvailability::kInvalid;
+        return summary;
+    }
+    if(!counts.issue_count || !counts.stall_count)
+    {
         return summary;
     }
     summary.availability  = SamplingAvailability::kValid;
@@ -412,51 +413,154 @@ IsaDataBuilder::UpdateSourceLocations(std::vector<IsaRow>&  rows,
     }
 }
 
-uint64_t
-IsaDataBuilder::UpdateSampling(std::vector<IsaRow>& rows, const PcSamplingData& data)
+IsaDataBuilder::PreparedSamplingData
+IsaDataBuilder::PrepareSampling(const PcSamplingData& data)
 {
-    const SampleAggregation        aggregation = AggregateSampleCounts(data);
-    const auto                     reason_text = BuildStallReasonText(data);
-    const GroupedStallReasonCounts reason_counts =
-        BuildStallReasonCounts(data, aggregation, reason_text);
-    uint64_t hottest_instruction_samples = 0;
+    SampleAggregation    aggregation = AggregateSampleCounts(data);
+    PreparedSamplingData sampling;
+    sampling.reason_text = BuildStallReasonText(data);
+    sampling.reasons_by_instruction =
+        BuildStallReasonCounts(data, aggregation, sampling.reason_text);
+    sampling.counts_by_instruction = std::move(aggregation.counts_by_instruction);
+    return sampling;
+}
+
+uint64_t
+IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
+                               const PreparedSamplingData& sampling)
+{
+    const StallReasonCounts empty_reasons;
+    uint64_t                hottest_instruction_samples = 0;
     for(IsaRow& row : rows)
     {
-        row.sample_counts = {};
-        row.stall_reasons.clear();
-        row.stall_reason_sample_count = 0;
-        row.unclassified_stall_count  = 0;
-        row.unclassified_stall_count_text.clear();
-        const auto counts_it = aggregation.counts_by_instruction.find(row.id);
-        if(counts_it != aggregation.counts_by_instruction.end())
-        {
-            row.sample_counts = counts_it->second;
-        }
-        row.sampling          = SummarizeSampling(row.sample_counts);
-        const auto reasons_it = reason_counts.find(row.id);
-        if(reasons_it != reason_counts.end())
-        {
-            row.stall_reasons = BuildStallReasons(reasons_it->second, reason_text,
-                                                  row.stall_reason_sample_count);
-        }
-        if(row.sampling.availability == SamplingAvailability::kValid)
-        {
-            const uint64_t stalled   = *row.sample_counts.stall_count;
-            const uint64_t bar_total = std::max(stalled, row.stall_reason_sample_count);
-            for(StallReason& reason : row.stall_reasons)
-            {
-                reason.bar_share = CalculatePercentage(reason.count, bar_total) / 100.0;
-            }
-            row.unclassified_stall_count = stalled > row.stall_reason_sample_count
-                                               ? stalled - row.stall_reason_sample_count
-                                               : 0;
-            row.unclassified_stall_count_text =
-                FormatSampleCount(row.unclassified_stall_count);
-        }
+        const auto counts_it  = sampling.counts_by_instruction.find(row.id);
+        const auto reasons_it = sampling.reasons_by_instruction.find(row.id);
+        UpdateSamplingRow(
+            row,
+            counts_it != sampling.counts_by_instruction.end() ? counts_it->second
+                                                              : SampleCounts{},
+            reasons_it != sampling.reasons_by_instruction.end() ? reasons_it->second
+                                                                : empty_reasons,
+            sampling.reason_text);
         hottest_instruction_samples =
             std::max(hottest_instruction_samples, row.sample_counts.total_count);
     }
     return hottest_instruction_samples;
+}
+
+void
+IsaDataBuilder::UpdateSamplingRow(
+    SamplingRow& row, const SampleCounts& counts, const StallReasonCounts& reasons,
+    const std::unordered_map<uint64_t, std::string>& reason_text)
+{
+    row.sample_counts             = counts;
+    row.sampling                  = SummarizeSampling(counts);
+    row.stall_reason_sample_count = 0;
+    row.unclassified_stall_count  = 0;
+    row.unclassified_stall_count_text.clear();
+    row.stall_reasons =
+        BuildStallReasons(reasons, reason_text, row.stall_reason_sample_count);
+    if(row.sampling.availability == SamplingAvailability::kValid)
+    {
+        const uint64_t stalled   = *counts.stall_count;
+        const uint64_t bar_total = std::max(stalled, row.stall_reason_sample_count);
+        for(StallReason& reason : row.stall_reasons)
+        {
+            reason.bar_share = CalculatePercentage(reason.count, bar_total) / 100.0;
+        }
+        row.unclassified_stall_count = stalled > row.stall_reason_sample_count
+                                           ? stalled - row.stall_reason_sample_count
+                                           : 0;
+        row.unclassified_stall_count_text =
+            FormatSampleCount(row.unclassified_stall_count);
+    }
+}
+
+std::vector<IsaDataBuilder::SourceRow>
+IsaDataBuilder::BuildSourceLines(const PcSamplingData& data, uint64_t source_file_uuid)
+{
+    std::vector<SourceRow> rows;
+    for(const SourceFile& file : data.source_files)
+    {
+        if(file.source_file_uuid != source_file_uuid)
+        {
+            continue;
+        }
+        rows.reserve(file.source_lines.size());
+        for(const SourceLine& line : file.source_lines)
+        {
+            if(line.line_number == 0)
+            {
+                continue;
+            }
+            SourceRow row;
+            row.id          = line.source_line_uuid;
+            row.line_number = line.line_number;
+            row.content     = line.content;
+            rows.push_back(std::move(row));
+        }
+        break;
+    }
+    return rows;
+}
+
+uint64_t
+IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
+                                     const PcSamplingData&       data,
+                                     uint64_t                    source_file_uuid,
+                                     const PreparedSamplingData& prepared)
+{
+    if(rows.empty())
+    {
+        return 0;
+    }
+    struct SourceSampling
+    {
+        SampleCounts      counts{ 0, 0, 0 };
+        StallReasonCounts reasons;
+        bool              has_samples = false;
+    };
+    const auto                                   locations = BuildSourceLocations(data);
+    std::unordered_map<uint64_t, SourceSampling> sampling_by_line;
+    for(const SourceRow& row : rows)
+    {
+        sampling_by_line.emplace(row.id, SourceSampling{});
+    }
+    for(const auto& [instruction_uuid, counts] : prepared.counts_by_instruction)
+    {
+        const auto location = locations.find(instruction_uuid);
+        if(location == locations.end() ||
+           location->second.source_file_id != source_file_uuid)
+        {
+            continue;
+        }
+        const auto line = sampling_by_line.find(location->second.source_line_id);
+        if(line == sampling_by_line.end())
+        {
+            continue;
+        }
+        SourceSampling& sampling = line->second;
+        sampling.has_samples     = true;
+        AccumulateSampleCounts(sampling.counts, counts);
+        const auto reasons = prepared.reasons_by_instruction.find(instruction_uuid);
+        if(reasons != prepared.reasons_by_instruction.end())
+        {
+            for(const auto& [lookup_uuid, count] : reasons->second)
+            {
+                sampling.reasons[lookup_uuid] += count;
+            }
+        }
+    }
+    uint64_t hottest_source_samples = 0;
+    for(SourceRow& row : rows)
+    {
+        const SourceSampling& sampling = sampling_by_line.at(row.id);
+        UpdateSamplingRow(row, sampling.has_samples ? sampling.counts : SampleCounts{},
+                          sampling.reasons, prepared.reason_text);
+        hottest_source_samples =
+            std::max(hottest_source_samples, row.sample_counts.total_count);
+    }
+    return hottest_source_samples;
 }
 
 }  // namespace View

@@ -105,9 +105,6 @@ private:
     {
         kLineNumber,
         kSamplingState,
-        kSamples,
-        kStallPercent,
-        kStallCategories,
         kOffset,
         kInstruction,
         kCount
@@ -123,18 +120,13 @@ private:
 
     void RenderLine(uint32_t index);
 
-    static ImU32       HeatmapColor(double percent);
     static const char* GetUnavailableSamplingTooltip(const IsaRow& row);
-    void RenderStallPercentCell(const IsaRow& row, bool& row_clicked);
-    void RenderSamplesCell(uint64_t sample_count);
-    void RenderSampleSummary(uint64_t sample_count);
-    void RenderSamplingStateCell(const IsaRow& row);
-    void RenderSamplingStateTooltip(const IsaRow& row);
-    void RenderUnavailableStallCell(const char* tooltip);
-    void RenderStallReasonBarCell(const IsaRow& row, bool& row_clicked);
-    void RenderStallReasonsTooltip(const IsaRow& row);
-    void RenderStallReasonSummary(const IsaRow& row);
-    void RenderStallReasonFooter(const IsaRow& row);
+    void               RenderSamplingStateCell(const IsaRow& row, bool& row_clicked);
+    void               DrawStallReasonSegments(const IsaRow& row, const ImVec2& start,
+                                               const ImVec2& end);
+    void               RenderSamplingStateTooltip(const IsaRow& row);
+    void               RenderSamplingSummary(const IsaRow& row);
+    void               RenderStallReasonFooter(const IsaRow& row);
     struct StallReasonTableLayout
     {
         ImVec2 size;
@@ -148,12 +140,10 @@ private:
     void RenderStallReasonTable(const IsaRow& row, const StallReasonTableLayout& layout,
                                 float mouse_wheel);
 
-    bool                m_show_sampling = false;
+    bool                m_show_sampling = true;
     std::vector<IsaRow> m_entries;
-    uint64_t            m_kernel_total_samples        = 0;
     uint64_t            m_hottest_instruction_samples = 0;
     uint64_t            m_largest_code_object_offset  = 0;
-    bool                m_stall_data_available        = false;
 };
 
 }  // namespace View

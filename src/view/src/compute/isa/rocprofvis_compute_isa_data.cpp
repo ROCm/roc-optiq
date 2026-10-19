@@ -79,7 +79,6 @@ IsaDataBuilder::AggregateSampleCounts(const PcSamplingData& data)
         {
             counts.missing_stall_count = true;
         }
-        aggregation.kernel_total_samples += state.total_count;
         aggregation.sample_state_by_uuid.emplace(state.pc_sample_state_uuid, &state);
     }
     for(const auto& [instruction_uuid, totals] : totals_by_instruction)
@@ -413,15 +412,14 @@ IsaDataBuilder::UpdateSourceLocations(std::vector<IsaRow>&  rows,
     }
 }
 
-IsaDataBuilder::SamplingTotals
+uint64_t
 IsaDataBuilder::UpdateSampling(std::vector<IsaRow>& rows, const PcSamplingData& data)
 {
     const SampleAggregation        aggregation = AggregateSampleCounts(data);
     const auto                     reason_text = BuildStallReasonText(data);
     const GroupedStallReasonCounts reason_counts =
         BuildStallReasonCounts(data, aggregation, reason_text);
-    SamplingTotals totals;
-    totals.kernel_total_samples = aggregation.kernel_total_samples;
+    uint64_t hottest_instruction_samples = 0;
     for(IsaRow& row : rows)
     {
         row.sample_counts = {};
@@ -447,7 +445,6 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>& rows, const PcSamplingData& 
             const uint64_t bar_total = std::max(stalled, row.stall_reason_sample_count);
             for(StallReason& reason : row.stall_reasons)
             {
-                reason.share     = CalculatePercentage(reason.count, stalled);
                 reason.bar_share = CalculatePercentage(reason.count, bar_total) / 100.0;
             }
             row.unclassified_stall_count = stalled > row.stall_reason_sample_count
@@ -455,12 +452,11 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>& rows, const PcSamplingData& 
                                                : 0;
             row.unclassified_stall_count_text =
                 FormatSampleCount(row.unclassified_stall_count);
-            totals.stall_data_available = true;
         }
-        totals.hottest_instruction_samples =
-            std::max(totals.hottest_instruction_samples, row.sample_counts.total_count);
+        hottest_instruction_samples =
+            std::max(hottest_instruction_samples, row.sample_counts.total_count);
     }
-    return totals;
+    return hottest_instruction_samples;
 }
 
 }  // namespace View

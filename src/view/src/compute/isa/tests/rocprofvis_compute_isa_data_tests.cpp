@@ -70,7 +70,7 @@ TEST_CASE("ISA aggregation preserves NULL progress across sample states", "[isa]
                                                  { 3, 20, 40, 0, 40 },
                                                  { 4, 99, 500, 500, 0 } };
     std::vector<IsaDataBuilder::IsaRow> rows = IsaDataBuilder::BuildInstructions(data, 1);
-    const IsaDataBuilder::SamplingTotals totals =
+    const uint64_t                      hottest_instruction_samples =
         IsaDataBuilder::UpdateSampling(rows, data);
     REQUIRE(rows.size() == 2);
     CHECK(rows[0].sample_counts.total_count == 150);
@@ -80,9 +80,7 @@ TEST_CASE("ISA aggregation preserves NULL progress across sample states", "[isa]
           IsaDataBuilder::SamplingAvailability::kMissing);
     CHECK(rows[1].sampling.availability == IsaDataBuilder::SamplingAvailability::kValid);
     CHECK(rows[1].sampling.stall_percent == 100.0);
-    CHECK(totals.kernel_total_samples == 690);
-    CHECK(totals.hottest_instruction_samples == 150);
-    CHECK(totals.stall_data_available);
+    CHECK(hottest_instruction_samples == 150);
     CHECK(IsaDataBuilder::BuildInstructions(data, 99).empty());
 }
 
@@ -119,7 +117,6 @@ TEST_CASE("Issued observations are removed from OTHER_WAIT only when totals prov
     CHECK(rows[0].stall_reason_sample_count == 20);
     CHECK(rows[0].stall_reasons[0].text == "ALU_DEPENDENCY");
     CHECK(rows[0].stall_reasons[0].count == 15);
-    CHECK(rows[0].stall_reasons[0].share == 75.0);
     CHECK(rows[0].stall_reasons[1].kind == IsaDataBuilder::StallReasonKind::kOtherWait);
     CHECK(rows[0].stall_reasons[1].count == 5);
     CHECK(rows[0].unclassified_stall_count == 0);
@@ -136,7 +133,6 @@ TEST_CASE("Reason mismatches preserve measured stall percentage and bound bar sh
     IsaDataBuilder::UpdateSampling(rows, data);
     CHECK(rows[0].sampling.stall_percent == 20.0);
     CHECK(rows[0].stall_reason_sample_count == 40);
-    CHECK(rows[0].stall_reasons[0].share == 150.0);
     CHECK(rows[0].stall_reasons[0].bar_share == Catch::Approx(0.75));
     CHECK(rows[0].stall_reasons[1].bar_share == Catch::Approx(0.25));
     CHECK(rows[0].unclassified_stall_count == 0);
@@ -206,12 +202,11 @@ TEST_CASE("Layer updates keep instruction storage and unrelated row data intact"
     CHECK(rows[0].source_line_id == 0);
     CHECK(rows[0].sampling.stall_percent == 20.0);
 
-    const IsaDataBuilder::SamplingTotals cleared =
-        IsaDataBuilder::UpdateSampling(rows, {});
+    const uint64_t hottest_instruction_samples = IsaDataBuilder::UpdateSampling(rows, {});
     CHECK(rows.data() == storage);
     CHECK(rows[0].sample_counts.total_count == 0);
     CHECK(rows[0].stall_reasons.empty());
-    CHECK_FALSE(cleared.stall_data_available);
+    CHECK(hottest_instruction_samples == 0);
 }
 
 }  // namespace View

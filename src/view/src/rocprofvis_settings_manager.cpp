@@ -148,7 +148,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(235, 110, 110, 255),  // Colors::kLogError
     IM_COL32(255, 80, 80, 255),    // Colors::kLogCritical
     IM_COL32(231, 196, 65, 255),   // Colors::kPcSamplingInstructionFetch
-    IM_COL32(80, 180, 125, 255),   // Colors::kPcSamplingAluDependency
+    IM_COL32(114, 123, 240, 255),  // Colors::kPcSamplingAluDependency
     IM_COL32(184, 139, 226, 255),  // Colors::kPcSamplingWaitcnt
     IM_COL32(190, 160, 130, 255),  // Colors::kPcSamplingInternalInstruction
     IM_COL32(215, 95, 165, 255),   // Colors::kPcSamplingBarrier
@@ -280,7 +280,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(190, 40, 40, 255),    // Colors::kLogError
     IM_COL32(200, 0, 0, 255),      // Colors::kLogCritical
     IM_COL32(177, 130, 0, 255),    // Colors::kPcSamplingInstructionFetch
-    IM_COL32(40, 135, 85, 255),    // Colors::kPcSamplingAluDependency
+    IM_COL32(75, 80, 188, 255),    // Colors::kPcSamplingAluDependency
     IM_COL32(124, 78, 190, 255),   // Colors::kPcSamplingWaitcnt
     IM_COL32(130, 100, 70, 255),   // Colors::kPcSamplingInternalInstruction
     IM_COL32(175, 45, 120, 255),   // Colors::kPcSamplingBarrier

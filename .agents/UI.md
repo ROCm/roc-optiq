@@ -1637,129 +1637,99 @@ the completed layer. `ComputeIsaView` accepts the callback only when its layer,
 kernel, selection generation, request token, and (for source) selected file
 still match. Do not query the controller or model directly from this view.
 
-The ISA table is always present. Its Offset column shows each instruction's
-byte offset inside the selected code object as uppercase hexadecimal; it is not
-an absolute runtime address. Right-clicking an offset, ISA instruction, or
-source-code line opens its copy context menu. `Show Sampling Details` adds
-Samples and Sampling State, aggregated by instruction UUID across returned sample
-states, plus Stall % and Stall Categories regardless of progress-data availability.
-The ISA table defaults to `# | Stall Categories | Offset | ISA`. Samples and Stall %
-are registered with `DefaultHide`; enabling them in the header context menu produces
-`# | Samples | Stall % | Stall Categories | Offset | ISA`. Sampling State is also
-hidden by default and appears between `#` and Samples when enabled through that
-menu. The table uses
-`IsaCodeStallCategories` as its ID so saved settings from the earlier layout do not
-override these defaults; subsequent visibility choices use normal ImGui persistence.
-The ISA table enables `Reorderable`, so users can drag any visible column header
-to change its display order. Order is saved through the same ImGui table settings;
-headers and cells still address logical column indices after reordering.
-All seven ISA columns remain registered, including while sampling details are
-hidden or still loading. Sampling columns receive the temporary `Disabled` flag
-in those states, which also removes them from the column menu without changing
-their user visibility preferences. Headers and rows always advance through the
-same logical column indices. Showing details restores the saved visibility, widths,
-and order rather than recreating columns with defaults.
-For each instruction, Stall % shows the measured percentage only when every
-sample state for that instruction has non-NULL issued and stall counts and their
-aggregated issued-plus-stalled total does not exceed the total samples. Stall %,
-Stall Categories, and the shared reason tooltip consume the prepared
-`SamplingSummary` from `IsaDataBuilder::SummarizeSampling`, which distinguishes
-valid, missing, and invalid progress counts once per instruction.
-Malformed counts produce disabled `N/A` stall cells and an invalid-counts warning
-instead of a percentage or category breakdown. Sampling State uses the same
-warning, including for nonzero progress counts with zero total samples. A genuine
-zero total with zero issued/stalled counts remains valid. Stall headers are dimmed
-when no instruction has valid progress counts. Mismatched reason classifications
-are reported separately and retain the existing normalization behavior when the
-progress counts themselves are valid.
-In mixed captures, instructions with missing progress counts display disabled
-`N/A` cells with explanatory tooltips; other instructions retain their measured
-percentages. Entirely host-trap captures have no progress counts, so Stall % stays
-visible with a dimmed header and disabled `N/A` cells. Unsampled instructions also
-have unavailable progress counts. Unavailable-cell tooltips inspect the row rather
-than assuming a sampling method: zero total samples explain that no PC samples
-were recorded, while sampled rows identify missing issued counts, stalled counts,
-or both. Invalid counts retain their own warning. Sampling State uses the same
-explanations; host-trap information remains general guidance in column headers. A
-stochastic capture's real zero counts remain available and are not confused
-with NULL. Sampling State draws an optional thin stacked bar before Samples: red for
-stalled observations, green for issued observations, and gray for unavailable or
-unclassified progress data. Total bar length is normalized to the hottest displayed
-instruction; each colored segment uses its measured count over that same maximum.
-Host-trap and incomplete mixed-capture counts render a neutral total-sample bar,
-with a tooltip explaining the missing breakdown. Counts whose issued-plus-stalled
-total exceeds the sample count also render a neutral bar with an explanation.
-Zero-sample instructions have no bar. Tooltips reuse the Samples summary and its
-low-confidence warning, then show issued/stalled counts and percentages, plus any
-unclassified remainder. Bar and tooltip colors come from the theme's error, success,
-and dim-text palette. These are sample observations, not cycle latency.
-Samples shows a right-aligned
-raw count over a heat bar normalized to the hottest displayed instruction. Its
-tooltip reports both kernel share and relative hotness. Cell tooltips use
-`IsItemHovered()` over the full cell so covering windows and popups suppress
-them. Counts from one through
-ten carry a low-confidence marker for the derived percentages, while zero-count
-lines remain unmarked and the exact count remains prominent. The Samples column starts
-at the wider of its header and largest formatted count. Samples, Offset, and `#`
-use the public ImGui `NoResize` column flag so their calculated widths follow
-kernel/workload data and font changes, including sampling-detail data that arrives
-later. The `#` width is measured with the active code font during rendering.
-ISA, Sampling State, Stall %, and Stall Categories remain user-resizable; Sampling
-State, Samples, Offset, Stall %, and Stall Categories are
-user-hideable through the ImGui header context menu. The source table supports
-the same per-column visibility menu. Both native
-column menus use the application's default window padding, matching the event
-table menus. Each heat bar uses the live cell width so it follows automatic
-Samples sizing or manual Stall % resizing. Hovering a data column header shows a user-facing
-explanation; the `#` line-number headers do not show tooltips. When
-`ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column tooltip also shows the
-database fields, grouping or filtering keys, and formulas used by the column.
-Hovering a `Stall %` cell shows every recorded stall reason
-for that instruction, aggregated across sample states and sorted by descending
-sample count. Stochastic profiles encode the irrelevant stall-reason field of
-issued samples as `OTHER_WAIT`; the view removes that issued contribution per
-sample state when raw reason totals include all samples. The same reason identity
-resolver recognizes `OTHER_WAIT`, `OTHER`, and SDK-prefixed spellings for both
-normalization and presentation. Multiple equivalent lookup entries are normalized
-in lookup-ID order. Each remaining reason
-includes its count and share of the instruction's stalled samples. The tooltip
-shows issued samples separately and warns when the normalized reason total
-differs from the instruction's stalled-sample count.
-Stall Categories follows Stall % in the default order and draws a stacked bar
-whose total length matches the instruction's Stall %: full cell width represents
-100% of that instruction's total samples. Each reason occupies its share of the
-stalled portion, and missing classifications occupy a gray remainder within that
-portion. If recorded reasons exceed the stalled count, segment shares use the
-recorded reason total to fit inside the same stalled portion; the tooltip explains
-the mismatch and reported shares still use the stalled-sample count. Zero stalled
-samples or zero total samples have no bar. Invalid progress counts display `N/A`
-in both stall columns instead of being clamped into an apparently valid bar.
-Host-trap and incomplete progress data display disabled `N/A` cells with an
-explanation. Both stall columns reuse the same tooltip, which includes color
-swatches, raw database reason names, consistently formatted sample counts
-(including separators in the legend), `% of Stalls` (reason count divided by
-stalled samples), and an Unclassified row for missing
-classifications. Cell tooltips start directly with their data or explanation,
-without a title. The summary uses short `Stalled: count/total (percent)` and
-`Issued: count` labels. Detailed reason descriptions are omitted. The Reason
-column fits the widest displayed name, capped by the character limit and viewport
-width. All legend columns receive explicit fixed widths with `NoResize`, reapplied
-each frame. Small tables use `NoHostExtendX` to fit their columns; scrollbar
-space is reserved only when scrolling is needed. Long names wrap; measured
-row heights switch to a scrollable table capped at
-half the current viewport height when needed. Its headers stay frozen and the
-summary and mismatch warnings remain outside the scroll area. Hovering either stall cell
-and using the mouse wheel scrolls the list; `SetItemKeyOwner(MouseWheelY)` keeps
-that wheel input from scrolling the ISA pane. Small lists retain their natural
-height and do not claim wheel input. The stall cells use identified invisible
-buttons and pass clicks through to row selection. Tooltip tables are scoped by
-instruction ID so scrolling one instruction does not scroll another's details.
-Known reason colors
-are stable across instructions and kernels and come from the centralized
-`kPcSampling*` dark/light theme palette. ALU dependencies use green and scheduler
-arbitration uses the native accent blue; other waits use coral so these categories
-remain visually distinct. SDK-prefixed names and OTHER are also
-recognized; unknown names are preserved with a neutral color.
+The ISA table defaults to `# | Sampling State | Offset | ISA`. Sampling State
+aggregates sample states and stall reasons by instruction UUID. The former Samples,
+Stall %, and Stall Categories columns have been removed, including their heatmap
+rendering, dedicated header tooltips, kernel-total bookkeeping, and stalled-only
+tooltip mode. The Samples count in the Sampling State tooltip is retained.
+`IsaDataBuilder::UpdateSampling` updates row data and returns the hottest displayed
+instruction's total sample count, used to scale Sampling State bars.
+
+The table uses `IsaCodeSamplingState` as its ID so the previous seven-column layout
+does not override these defaults. Subsequent visibility, width, and order choices
+use normal ImGui persistence. All four columns remain registered while sampling
+details are hidden or loading. Sampling State receives the temporary `Disabled`
+flag in those states, removing it from the column menu without changing the user's
+visibility preference. Showing details restores that preference. The ISA table
+enables `Reorderable`, so users can drag any visible column header to change its
+display order; headers and cells address logical indices after reordering.
+
+Offset shows each instruction's byte offset inside the selected code object as
+uppercase hexadecimal, not an absolute runtime address. Right-clicking an offset,
+ISA instruction, or source-code line opens its copy context menu. Offset and `#`
+use `NoResize` so their calculated widths follow data and font changes. The `#`
+width is measured with the active code font during rendering. ISA and Sampling
+State remain resizable; Sampling State and Offset are hideable through the header
+context menu. The source table supports the same native column menu. Both menus
+use the application's default window padding, matching event-table menus.
+
+Sampling State consumes the prepared `SamplingSummary` from
+`IsaDataBuilder::SummarizeSampling`, which distinguishes valid, missing, and invalid
+progress counts once per instruction. Counts are valid only when every sample
+state has non-NULL issued and stalled counts and the aggregate issued-plus-stalled
+count does not exceed total samples. Genuine zero total/issued/stalled counts
+remain valid. Mismatched reason classifications are reported separately and retain
+bounded normalization when the progress counts themselves are valid.
+
+Sampling State draws a thin stacked bar: issued observations come first in the
+success green, followed by every stall reason in descending count and then name
+order. Total bar length is normalized to the hottest displayed instruction.
+The issued portion uses issued samples over that maximum. Reason segments divide
+the measured stalled portion using their counts over the larger of the measured
+stalled count and the classified reason total. Missing stall classifications and
+unclassified progress remain gray. Mismatched reason totals cannot enlarge the
+bar or overwrite the issued portion. Zero-sample instructions have no bar.
+Host-trap, incomplete, and invalid progress data retain a neutral total-sample bar.
+Their tooltips inspect the row: zero total samples explain that no PC samples were
+recorded, sampled rows identify missing issued counts, stalled counts, or both,
+and invalid counts explain that the breakdown exceeds the total. No sampling
+method is assumed from an individual unavailable instruction.
+
+The Sampling State cell tooltip starts with `Stalled: count/total (percent)` and a
+compact table containing Color, Sampling State, Samples, and `% of Samples`. Issued is
+always the first row, followed by stall reasons; all percentages use the
+instruction's total sample count. Separate Unclassified stalls and Unclassified
+progress rows explain gray portions. The issued row remains available when no
+stalled samples exist, including genuine zero counts. Counts use separators.
+Cell tooltips have no title or verbose reason descriptions and retain mismatch
+warnings. These are sample observations, not cycle latency.
+
+The Sampling State column fits its header and the widest displayed name, capped by the character limit
+and viewport width. All legend columns receive explicit fixed widths with
+`NoResize`, reapplied each frame. Small tables use `NoHostExtendX`; scrollbar space
+is reserved only when needed. Long names wrap; measured row heights switch to a
+scrollable table capped at half the viewport height. Headers stay frozen while
+the summary and mismatch warnings remain outside the scroll area. Hovering the
+Sampling State cell and using the mouse wheel scrolls its list;
+`SetItemKeyOwner(MouseWheelY)` keeps that input from scrolling the ISA pane. Small
+lists retain their natural height and do not claim wheel input. The identified
+cell button forwards clicks to row selection. Tooltip scroll state is scoped by
+instruction ID. Full-cell `IsItemHovered()` checks suppress tooltips underneath
+covering windows and popups.
+
+Stochastic profiles encode the irrelevant stall-reason field of issued samples as
+`OTHER_WAIT`; the view removes that issued contribution per sample state when raw
+reason totals include all samples. The reason identity resolver recognizes
+`OTHER_WAIT`, `OTHER`, and SDK-prefixed spellings for normalization and presentation.
+Equivalent lookup entries are normalized in lookup-ID order. Reason counts are
+aggregated across sample states and sorted by descending count, then reason name.
+
+The Sampling State header's user-facing tooltip contains only a compact color
+legend with small swatches, tight spacing, and no prose, table headings, or grid.
+Issued uses the success green, every supported reason uses its live theme color,
+and gray is labeled `Unknown / unclassified / N/A`. Canonical names live with the
+reason-color mapping, so the header lists the full palette even when the capture
+does not contain every reason. This legend appears in both standard and developer
+builds. When `ROCPROFVIS_DEVELOPER_MODE` is enabled, the developer section documents
+T/I/S/H/R, bar fractions, bounded reason widths, gray remainders, issued-sample
+normalization, validity checks, ordering, and the tooltip's total-sample denominator.
+Other data-column headers describe their data and show database fields and grouping
+or filtering keys in developer mode; `#` headers have no tooltip.
+
+Known reason colors are stable across instructions and kernels and come from the
+central `kPcSampling*` dark/light theme palette. Green is reserved for issued
+samples; ALU dependencies use indigo, scheduler arbitration uses the native accent
+blue, and other waits use coral. Unknown reason names are preserved in gray.
 The source table contains only the source line number and source text.
 Instruction-sample metadata, active-thread percentage, wave-occupancy
 percentage, and dispatch UUID are available on the controller handle but are

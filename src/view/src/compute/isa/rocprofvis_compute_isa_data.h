@@ -57,7 +57,6 @@ public:
         uint64_t        count = 0;
         StallReasonKind kind  = StallReasonKind::kUnknown;
         std::string     count_text;
-        double          share     = 0.0;  // Percentage of measured stalled samples.
         double          bar_share = 0.0;  // Fraction of the bounded reason bar.
     };
 
@@ -83,23 +82,16 @@ public:
         std::vector<StallReason> stall_reasons;
     };
 
-    struct SamplingTotals
-    {
-        uint64_t kernel_total_samples        = 0;
-        uint64_t hottest_instruction_samples = 0;
-        bool     stall_data_available        = false;
-    };
-
     static std::vector<IsaRow> BuildInstructions(const PcSamplingData& data,
                                                  uint64_t              code_object_uuid);
     static void                UpdateSourceLocations(std::vector<IsaRow>&  rows,
                                                      const PcSamplingData& data);
-    static SamplingTotals      UpdateSampling(std::vector<IsaRow>&  rows,
-                                              const PcSamplingData& data);
-    static SamplingSummary     SummarizeSampling(const SampleCounts& counts);
-    static StallReasonKind     ResolveStallReasonKind(std::string_view text);
-    static double              CalculatePercentage(uint64_t value, uint64_t total);
-    static std::string         FormatSampleCount(uint64_t value);
+    // Updates row sampling data and returns the hottest displayed instruction's count.
+    static uint64_t UpdateSampling(std::vector<IsaRow>& rows, const PcSamplingData& data);
+    static SamplingSummary SummarizeSampling(const SampleCounts& counts);
+    static StallReasonKind ResolveStallReasonKind(std::string_view text);
+    static double          CalculatePercentage(uint64_t value, uint64_t total);
+    static std::string     FormatSampleCount(uint64_t value);
 
 private:
     // Temporary lookup tables used by the corresponding layer update.
@@ -113,7 +105,6 @@ private:
     {
         std::unordered_map<uint64_t, SampleCounts>         counts_by_instruction;
         std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
-        uint64_t                                           kernel_total_samples = 0;
     };
 
     typedef std::unordered_map<uint64_t, uint64_t>          StallReasonCounts;

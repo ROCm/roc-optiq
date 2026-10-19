@@ -242,7 +242,7 @@ std::string RocpdDatabase::GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr 
         }
         if(source_filter->thread_id.has_value)
         {
-            where_str += std::string(" AND ") + Builder::THREAD_ID_SERVICE_NAME + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
+            where_str += (where_str.size() ? std::string(" AND ") : std::string()) + Builder::THREAD_ID_SERVICE_NAME + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
         }
     }
     return where_str;

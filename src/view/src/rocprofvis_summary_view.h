@@ -9,7 +9,6 @@
 #include "widgets/rocprofvis_tab_container.h"
 #include "widgets/rocprofvis_widget.h"
 #include <functional>
-#include <list>
 #include <optional>
 
 struct ImPlotStyle;
@@ -20,11 +19,13 @@ namespace View
 {
 
 class DataProvider;
+class HSplitContainer;
 class SettingsManager;
 class SummaryOverview;
 class SummaryTopEvents;
-class VSplitContainer;
+class SummaryTopology;
 class TimelineSelection;
+class VSplitContainer;
 enum class TimeFormat;
 
 class SummaryView : public RocWidget
@@ -43,6 +44,7 @@ private:
 
     std::unique_ptr<TabContainer>    m_tab_container;
     std::shared_ptr<SummaryOverview> m_overview;
+    std::shared_ptr<SummaryTopology> m_topology;
     std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>
         m_top_events;
 
@@ -61,32 +63,53 @@ private:
 class SummaryOverview : public RocWidget
 {
 public:
-    SummaryOverview(DataProvider&                                        dp,
+    SummaryOverview(DataProvider& dp, std::shared_ptr<SummaryTopology> topology,
                     const std::array<std::shared_ptr<SummaryTopEvents>,
                                      __kRPVAnalysisSummaryCategoryLast>& top_events,
                     TabContainer&                                        tab_container);
+    void Render() override;
+
+private:
+    void Tile(ImGuiID id, ImVec2 size, const char* header, const char* body,
+              std::function<void()> footer) const;
+    void Tile(ImGuiID id, ImVec2 size, std::function<void()> content) const;
+
+    TabContainer&                    m_tab_container;
+    std::shared_ptr<SummaryTopology> m_topology;
+    std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>
+        m_top_events;
+
+    DataProvider&    m_data_provider;
+    SettingsManager& m_settings;
+};
+
+class SummaryTopology : public RocWidget
+{
+public:
+    SummaryTopology(DataProvider& dp);
     void Update() override;
     void Render() override;
 
     void TimeFormatChanged();
     void Fetched();
 
+    bool RenderPreview() const;
+
 private:
-    void Tile(ImGuiID id, ImVec2 size, const char* header, const char* body,
-              std::function<void()> footer) const;
-    void Tile(ImGuiID id, ImVec2 size, std::function<void()> content) const;
+    void RenderTopology();
+    void RenderCounters() const;
+
     void CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics& metrics,
                         bool labels) const;
     void CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float segment_pct,
                                rocprofvis_analysis_summary_category_t category,
                                bool labels, float& segment_x) const;
-    void CompositionTable(const SummaryInfo::AggregateMetrics& metrics);
+    void CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
+                          float                                max_name_width);
     void Counters() const;
     void Counter(const SummaryInfo::Counters::Counter& counter, ImU32 color) const;
 
-    std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>
-                  m_top_events;
-    TabContainer& m_tab_container;
+    std::unique_ptr<HSplitContainer> m_h_container;
 
     std::array<std::string, __kRPVAnalysisSummaryCategoryLast + 3>
                                          m_composition_table_headers;

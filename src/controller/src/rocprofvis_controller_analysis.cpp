@@ -366,7 +366,7 @@ rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Tr
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
-        return FetchCounterStatistics(trace->GetDMHandle(), track, start, end, kRocProfVisDmHashedTimestampTagAnalysis, output, future);
+        return FetchCounterStatistics(trace->GetDMHandle(), track, start, end, kRocProfVisDmHashedTimestampTagAnalysis, output, nullptr, future);
     }, future));
     if(future->IsValid())
     {
@@ -621,7 +621,7 @@ rocprofvis_result_t Analysis::GetOrAllocateEventsTable(EventsTable*& slot, rocpr
     return slot ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
 }
 
-rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_handle, Track* track, double start, double end, rocprofvis_dm_hashed_timestamp_tag_t tag, rocprofvis_analysis_counter_statistics_t* output, Future* future) const
+rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_handle, Track* track, double start, double end, rocprofvis_dm_hashed_timestamp_tag_t tag, rocprofvis_analysis_counter_statistics_t* output, uint64_t* active_duration, Future* future) const
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(track->GetCounter())
@@ -671,7 +671,7 @@ rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_ha
                     double duration = (double)(sample_end - sample_start);
                     sum += value * duration;
                     sum_sq += value * value * duration;
-                    total_duration += duration;
+                    total_duration += sample_end - sample_start;
                     if(range_empty)
                     {
                         min_value = value;
@@ -701,6 +701,10 @@ rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_ha
             output->max_value = max_value;
             output->mean_value = mean_value;
             output->std_dev = std_dev;
+            if(active_duration)
+            {
+                *active_duration = total_duration;
+            }
         }
         dm_result = rocprofvis_dm_delete_time_slice_handle(dm_handle, track_id, slice);
         if(!future->IsCancelled())
@@ -1115,8 +1119,10 @@ rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_ha
                         if(track->GetNumberOfEntries())
                         {
                             rocprofvis_analysis_counter_statistics_t stats = {};
-                            result = FetchCounterStatistics(dm_handle, track, start, end, kRocProfVisDmHashedTimestampTagSummary, &stats, future);
-                            if(result == kRocProfVisResultSuccess)
+                            uint64_t duration = 0;
+                            result = FetchCounterStatistics(dm_handle, track, start, end, kRocProfVisDmHashedTimestampTagSummary, &stats, &duration, future);
+                            // A counter with no active time in the range has nothing to weight its statistics by, so it is left out of the summary.
+                            if(result == kRocProfVisResultSuccess && duration > 0)
                             {
                                 bool is_cpu = processor_type == kRPVControllerProcessorTypeCPU;
                                 uint64_t num_counters = 0;
@@ -1127,6 +1133,7 @@ rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_ha
                                 output.SetDouble(is_cpu ? kRPVAnalysisSummaryCpuPropertyCounterMaxIndexed : kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed, num_counters, stats.max_value);
                                 output.SetDouble(is_cpu ? kRPVAnalysisSummaryCpuPropertyCounterMeanIndexed : kRPVAnalysisSummaryGpuPropertyCounterMeanIndexed, num_counters, stats.mean_value);
                                 output.SetDouble(is_cpu ? kRPVAnalysisSummaryCpuPropertyCounterStdDevIndexed : kRPVAnalysisSummaryGpuPropertyCounterStdDevIndexed, num_counters, stats.std_dev);
+                                output.SetUInt64(is_cpu ? kRPVAnalysisSummaryCpuPropertyCounterDurationIndexed : kRPVAnalysisSummaryGpuPropertyCounterDurationIndexed, num_counters, duration);
                             }
                         }
                         else

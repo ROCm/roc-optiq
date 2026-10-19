@@ -144,6 +144,7 @@ typedef enum rocprofvis_analysis_summary_gpu_property_t : uint32_t
     kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed,
     kRPVAnalysisSummaryGpuPropertyCounterMeanIndexed,
     kRPVAnalysisSummaryGpuPropertyCounterStdDevIndexed,
+    kRPVAnalysisSummaryGpuPropertyCounterDurationIndexed,
     __kRPVAnalysisSummaryGpuPropertiesLast
 } rocprofvis_analysis_summary_gpu_property_t;
 
@@ -169,6 +170,7 @@ typedef enum rocprofvis_analysis_summary_cpu_property_t : uint32_t
     kRPVAnalysisSummaryCpuPropertyCounterMaxIndexed,
     kRPVAnalysisSummaryCpuPropertyCounterMeanIndexed,
     kRPVAnalysisSummaryCpuPropertyCounterStdDevIndexed,
+    kRPVAnalysisSummaryCpuPropertyCounterDurationIndexed,
     __kRPVAnalysisSummaryCpuPropertiesLast
 } rocprofvis_analysis_summary_cpu_property_t;
 

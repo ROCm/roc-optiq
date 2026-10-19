@@ -63,7 +63,7 @@ private:
     {
         Controller::Counter* metadata;
         rocprofvis_analysis_counter_statistics_t stats;
-        uint64_t weight;
+        uint64_t duration;
     };
     struct GPU 
     {

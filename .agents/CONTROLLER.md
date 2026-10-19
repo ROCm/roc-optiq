@@ -828,9 +828,11 @@ through merging.
   itself last. Merging already-trimmed lists would drop names that are
   small per child but large overall.
 - Counters: merged by name / units / value type. Means and standard
-  deviations are pooled with `Counter::weight`, the number of counter
-  tracks each one stands for (1 at the leaf, set when the counter is
-  attached), so a node of three GPUs counts three times a node of one.
+  deviations are pooled with `Counter::duration`, the counter's active
+  time in the range (`FetchCounterStatistics`'s `active_duration`, set
+  through `kRPVAnalysisSummary{Gpu,Cpu}PropertyCounterDurationIndexed`
+  and summed up the levels). A counter with no active time is left out
+  at the processor level, so it never reaches aggregation.
 
 The Summary panel's instance tables are owned by `Analysis` as
 `summary_instance_tables`, one `EventSearchTable` per

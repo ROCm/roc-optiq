@@ -190,6 +190,15 @@ rocprofvis_result_t SummaryMetrics::GetUInt64(rocprofvis_property_t property, ui
                 }
                 break;
             }
+            case kRPVAnalysisSummaryGpuPropertyCounterDurationIndexed:
+            {
+                if(m_gpu && index < m_gpu.value().counters.size())
+                {
+                    *value = m_gpu.value().counters[index].duration;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
             case kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents:
             {
                 if(m_cpu)
@@ -258,6 +267,15 @@ rocprofvis_result_t SummaryMetrics::GetUInt64(rocprofvis_property_t property, ui
                 if(m_cpu)
                 {
                     *value = m_cpu.value().counters.size();
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVAnalysisSummaryCpuPropertyCounterDurationIndexed:
+            {
+                if(m_cpu && index < m_cpu.value().counters.size())
+                {
+                    *value = m_cpu.value().counters[index].duration;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -878,6 +896,15 @@ rocprofvis_result_t SummaryMetrics::SetUInt64(rocprofvis_property_t property, ui
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVAnalysisSummaryGpuPropertyCounterDurationIndexed:
+        {
+            if(m_gpu && index < m_gpu.value().counters.size())
+            {
+                m_gpu.value().counters[index].duration = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
         case kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents:
         {
             if(!m_cpu)
@@ -952,6 +979,15 @@ rocprofvis_result_t SummaryMetrics::SetUInt64(rocprofvis_property_t property, ui
             }
             m_cpu.value().counters.resize(value);
             result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVAnalysisSummaryCpuPropertyCounterDurationIndexed:
+        {
+            if(m_cpu && index < m_cpu.value().counters.size())
+            {
+                m_cpu.value().counters[index].duration = value;
+                result = kRocProfVisResultSuccess;
+            }
             break;
         }
         case kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents:
@@ -1288,7 +1324,6 @@ rocprofvis_result_t SummaryMetrics::SetObject(rocprofvis_property_t property, ui
                 if(m_gpu && index < m_gpu.value().counters.size())
                 {
                     m_gpu.value().counters[index].metadata = (Controller::Counter*)value;
-                    m_gpu.value().counters[index].weight = 1;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -1298,7 +1333,6 @@ rocprofvis_result_t SummaryMetrics::SetObject(rocprofvis_property_t property, ui
                 if(m_cpu && index < m_cpu.value().counters.size())
                 {
                     m_cpu.value().counters[index].metadata = (Controller::Counter*)value;
-                    m_cpu.value().counters[index].weight = 1;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -1636,16 +1670,16 @@ std::vector<SummaryMetrics::Counter> SummaryMetrics::AggregateCounters(const std
                         size_t i = merge_index[key];
                         aggregate[i].stats.min_value = std::min(aggregate[i].stats.min_value, counter.stats.min_value);
                         aggregate[i].stats.max_value = std::max(aggregate[i].stats.max_value, counter.stats.max_value);
-                        aggregate[i].stats.mean_value += counter.stats.mean_value * counter.weight;
-                        aggregate[i].weight += counter.weight;
-                        second_moment_sums[i] += second_moment * counter.weight;
+                        aggregate[i].stats.mean_value += counter.stats.mean_value * counter.duration;
+                        aggregate[i].duration += counter.duration;
+                        second_moment_sums[i] += second_moment * counter.duration;
                     }
                     else
                     {
                         merge_index[key] = aggregate.size();
                         aggregate.push_back(counter);
-                        aggregate.back().stats.mean_value = counter.stats.mean_value * counter.weight;
-                        second_moment_sums.push_back(second_moment * counter.weight);
+                        aggregate.back().stats.mean_value = counter.stats.mean_value * counter.duration;
+                        second_moment_sums.push_back(second_moment * counter.duration);
                     }
                 }
             }
@@ -1653,8 +1687,8 @@ std::vector<SummaryMetrics::Counter> SummaryMetrics::AggregateCounters(const std
     }
     for(size_t i = 0; i < aggregate.size(); i++)
     {
-        aggregate[i].stats.mean_value /= aggregate[i].weight;
-        aggregate[i].stats.std_dev = std::sqrt(std::max(0.0, second_moment_sums[i] / aggregate[i].weight - aggregate[i].stats.mean_value * aggregate[i].stats.mean_value));
+        aggregate[i].stats.mean_value /= aggregate[i].duration;
+        aggregate[i].stats.std_dev = std::sqrt(std::max(0.0, second_moment_sums[i] / aggregate[i].duration -aggregate[i].stats.mean_value * aggregate[i].stats.mean_value));
     }
     return aggregate;
 }

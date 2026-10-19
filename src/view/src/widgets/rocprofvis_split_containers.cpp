@@ -299,7 +299,7 @@ HSplitContainer::GetSplitterSize(const ImVec2& total_size)
 void
 HSplitContainer::AddSameLine()
 {
-    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::SameLine(0.0f, m_split_spacing);
 };
 
 float
@@ -397,6 +397,14 @@ ImVec2
 VSplitContainer::GetSplitterSize(const ImVec2& total_size)
 {
     return ImVec2(total_size.x, m_resize_grip_size);
+}
+
+void
+VSplitContainer::AddSameLine()
+{
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, m_split_spacing);
+    ImGui::Spacing();
+    ImGui::PopStyleVar();
 }
 
 float

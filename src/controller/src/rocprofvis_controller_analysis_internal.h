@@ -90,7 +90,7 @@ private:
 
     rocprofvis_result_t GetOrAllocateEventsTable(EventsTable*& slot, rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table);
 
-    rocprofvis_result_t FetchCounterStatistics(rocprofvis_dm_trace_t dm_handle, Track* track, double start, double end, rocprofvis_dm_hashed_timestamp_tag_t tag, rocprofvis_analysis_counter_statistics_t* output, Future* future) const;
+    rocprofvis_result_t FetchCounterStatistics(rocprofvis_dm_trace_t dm_handle, Track* track, double start, double end, rocprofvis_dm_hashed_timestamp_tag_t tag, rocprofvis_analysis_counter_statistics_t* output, uint64_t* active_duration, Future* future) const;
 
     rocprofvis_result_t FetchSummaryMetrics(SystemTrace* trace, double start, double end, SummaryMetrics& output, Future* future) const;
 

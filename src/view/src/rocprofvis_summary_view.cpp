@@ -48,6 +48,7 @@ SummaryView::SummaryView(DataProvider&                      dp,
                          std::shared_ptr<TimelineSelection> timeline_selection)
 : m_tab_container(nullptr)
 , m_overview(nullptr)
+, m_topology(nullptr)
 , m_top_events({})
 , m_fetched_revision(0)
 , m_data_changed(false)
@@ -58,7 +59,8 @@ SummaryView::SummaryView(DataProvider&                      dp,
 , m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
 , m_progress_token(EventManager::InvalidSubscriptionToken)
 {
-    m_tab_container                                 = std::make_unique<TabContainer>();
+    m_tab_container = std::make_unique<TabContainer>();
+    m_topology      = std::make_shared<SummaryTopology>(m_data_provider);
     m_top_events[kRPVAnalysisSummaryCategoryKernel] = std::make_shared<SummaryTopEvents>(
         m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
         TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
@@ -71,10 +73,10 @@ SummaryView::SummaryView(DataProvider&                      dp,
         m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
         TableType::kSummaryThreadTable, kRPVControllerTableTypeSummaryThreadInstances,
         DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID);
-    m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_top_events,
-                                                   *m_tab_container.get());
+    m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_topology,
+                                                   m_top_events, *m_tab_container.get());
     m_data_provider.SetSummaryDataReadyCallback([this]() {
-        m_overview->Fetched();
+        m_topology->Fetched();
         for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
         {
             top_events->Fetched();
@@ -86,7 +88,7 @@ SummaryView::SummaryView(DataProvider&                      dp,
         [this](std::shared_ptr<RocEvent> e) {
             (void) e;
             m_data_provider.DataModel().GetSummary().UpdateValueStrings();
-            m_overview->TimeFormatChanged();
+            m_topology->TimeFormatChanged();
             for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
             {
                 top_events->TimeFormatChanged();
@@ -146,10 +148,18 @@ SummaryView::Update()
         {
             if(m_top_events[i] && !m_top_events[i]->Empty())
             {
-                if(m_tab_container->GetTabs().empty() && m_overview)
+                if(m_tab_container->GetTabs().empty())
                 {
-                    m_tab_container->AddTab(
-                        RocWidget::CreateTabItem("Overview", "overview", m_overview));
+                    if(m_overview)
+                    {
+                        m_tab_container->AddTab(
+                            RocWidget::CreateTabItem("Overview", "overview", m_overview));
+                    }
+                    if(m_topology)
+                    {
+                        m_tab_container->AddTab(RocWidget::CreateTabItem(
+                            "System Topology", "topology", m_topology));
+                    }
                 }
                 m_tab_container->AddTab(RocWidget::CreateTabItem(
                     DISPLAY_PROPS_EVENT_TYPES[i].first,
@@ -252,7 +262,7 @@ SummaryView::MinSize() const
                           2.0f * (style.FramePadding.x + style.WindowPadding.x +
                                   style.ItemSpacing.x)) +
                       2.0f * (style.WindowPadding.x + style.ItemSpacing.x),
-                  16.0f * ImGui::GetFrameHeightWithSpacing());
+                  12.0f * ImGui::GetFrameHeightWithSpacing());
 }
 
 ImVec2
@@ -262,49 +272,16 @@ SummaryView::PreferredSize() const
 }
 
 SummaryOverview::SummaryOverview(
-    DataProvider&                                        dp,
+    DataProvider& dp, std::shared_ptr<SummaryTopology> topology,
     const std::array<std::shared_ptr<SummaryTopEvents>,
                      __kRPVAnalysisSummaryCategoryLast>& top_events,
     TabContainer&                                        tab_container)
-: m_top_events(top_events)
-, m_tab_container(tab_container)
-, m_composition_table_headers({})
-, m_counters(nullptr)
-, m_data_changed(false)
-, m_timeformat_changed(true)
+: m_tab_container(tab_container)
+, m_topology(topology)
+, m_top_events(top_events)
 , m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
 {}
-
-void
-SummaryOverview::Update()
-{
-    if(m_data_changed)
-    {
-        m_counters     = m_data_provider.DataModel()
-                                     .GetSummary()
-                                     .GetSummaryData()
-                                     .gpu.counters.list.size() ||
-                                 m_data_provider.DataModel()
-                                     .GetSummary()
-                                     .GetSummaryData()
-                                     .cpu.counters.list.size()
-                             ? &m_data_provider.DataModel().GetSummary().GetSummaryData()
-                             : nullptr;
-        m_data_changed = false;
-    }
-    if(m_timeformat_changed)
-    {
-        TimeFormat timeformat = m_settings.GetUserSettings().unit_settings.time_format;
-        m_composition_table_headers = { "##label",
-                                        "Counters",
-                                        "Event Composition",
-                                        "Kernels (" + timeformat_sufix(timeformat) + ")",
-                                        "Memory (" + timeformat_sufix(timeformat) + ")",
-                                        "Launch (" + timeformat_sufix(timeformat) + ")" };
-        m_timeformat_changed        = false;
-    }
-}
 
 void
 SummaryOverview::Render()
@@ -405,17 +382,14 @@ SummaryOverview::Render()
     }
     tile_size.x = region.x;
     tile_size.y = 4.0f * ImGui::GetFrameHeightWithSpacing();
-    Tile(6, tile_size, [this, &model]() -> void {
-        ImGui::TextUnformatted("Event Composition");
-        CompositionBar(ImGui::GetContentRegionAvail(), model.GetSummaryData(), true);
-    });
+    Tile(6, tile_size, [this, &model]() -> void { m_topology->RenderPreview(); });
     tile_count = 0 + (!m_top_events[kRPVAnalysisSummaryCategoryKernel]->Empty() ? 1 : 0) +
                  (!m_top_events[kRPVAnalysisSummaryCategoryMemory]->Empty() ? 1 : 0) +
                  (!m_top_events[kRPVAnalysisSummaryCategoryThread]->Empty() ? 1 : 0);
     tile_size.x =
         (region.x - (static_cast<float>(tile_count) - 1) * style.ItemSpacing.x) /
         static_cast<float>(tile_count);
-    tile_size.y    = ImGui::GetContentRegionAvail().y * 0.5f;
+    tile_size.y    = ImGui::GetContentRegionAvail().y;
     bool same_line = false;
     for(size_t i = 0; i < m_top_events.size(); i++)
     {
@@ -434,125 +408,8 @@ SummaryOverview::Render()
             same_line = true;
         }
     }
-    tile_size.x =
-        (region.x - 2.0f * style.ItemSpacing.x) / 3.0f * 2.0f + style.ItemSpacing.x;
-    tile_size.y = ImGui::GetContentRegionAvail().y;
-    Tile(10, tile_size, [this, &model]() -> void {
-        ImGui::TextUnformatted("System Topology");
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                              ThemeColor(m_settings, Colors::kTableHeaderBg));
-        if(ImGui::BeginTable("topology", m_composition_table_headers.size(),
-                             ImGuiTableFlags_BordersInnerV |
-                                 ImGuiTableFlags_NoBordersInBody |
-                                 ImGuiTableFlags_SizingFixedFit |
-                                 ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY))
-        {
-            ImGui::TableSetupScrollFreeze(3, 1);
-            ImGui::TableSetupColumn(m_composition_table_headers[0].c_str());
-            ImGui::TableSetupColumn(
-                m_composition_table_headers[1].c_str(), ImGuiTableColumnFlags_WidthFixed,
-                ImGui::CalcTextSize(m_composition_table_headers[1].c_str()).x);
-            ImGui::TableSetupColumn(m_composition_table_headers[2].c_str());
-            ImGui::TableSetupColumn(
-                m_composition_table_headers[3].c_str(), ImGuiTableColumnFlags_WidthFixed,
-                std::max(ImGui::CalcTextSize(m_composition_table_headers[3].c_str()).x,
-                         ImGui::CalcTextSize(
-                             model.GetSummaryData()
-                                 .gpu.dispatch
-                                 .metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
-                                 .str.c_str())
-                             .x));
-            ImGui::TableSetupColumn(
-                m_composition_table_headers[4].c_str(), ImGuiTableColumnFlags_WidthFixed,
-                std::max(
-                    ImGui::CalcTextSize(m_composition_table_headers[4].c_str()).x,
-                    ImGui::CalcTextSize(
-                        model.GetSummaryData()
-                            .memory.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
-                            .str.c_str())
-                        .x));
-            ImGui::TableSetupColumn(
-                m_composition_table_headers[5].c_str(), ImGuiTableColumnFlags_WidthFixed,
-                std::max(
-                    ImGui::CalcTextSize(m_composition_table_headers[5].c_str()).x,
-                    ImGui::CalcTextSize(
-                        model.GetSummaryData()
-                            .thread.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
-                            .str.c_str())
-                        .x));
-            ImGui::TableHeadersRow();
-            CompositionTable(model.GetSummaryData());
-            ImGui::EndTable();
-        }
-        ImGui::PopStyleColor();
-    });
-    ImGui::SameLine();
-    tile_size.x = (region.x - 2.0f * style.ItemSpacing.x) / 3.0f;
-    Tile(11, tile_size, [this, &model]() -> void {
-        ImGui::TextUnformatted("Counters");
-        if(m_counters)
-        {
-            ImGui::BeginDisabled();
-            switch(m_counters->type)
-            {
-                case kRPVAnalysisSummaryAggregationLevelTrace:
-                {
-                    ImGui::SameLine();
-                    ImGui::TextUnformatted(DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
-                        m_counters->type - __kRPVAnalysisSummaryAggregationLevelFirst)]);
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelNode:
-                {
-                    ImGui::SameLine();
-                    ImGui::Text("%s: ", DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
-                                            m_counters->type -
-                                            __kRPVAnalysisSummaryAggregationLevelFirst)]);
-                    ImGui::SameLine(0.0f, 0.0f);
-                    ElidedText(m_counters->info.node->GetName().c_str(),
-                               ImGui::GetContentRegionAvail().x,
-                               ImGui::GetContentRegionAvail().x);
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelProcessor:
-                {
-                    ImGui::SameLine();
-                    ImGui::Text(
-                        "%s%llu: ",
-                        m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
-                            m_counters->info.processor->type),
-                        m_counters->info.processor->type_index);
-                    ImGui::SameLine(0.0f, 0.0f);
-                    ElidedText(m_counters->info.processor->GetName().c_str(),
-                               ImGui::GetContentRegionAvail().x,
-                               ImGui::GetContentRegionAvail().x);
-                    break;
-                }
-                default:
-                {
-                    break;
-                }
-            }
-            ImGui::EndDisabled();
-        }
-        ImGui::BeginChild("sv");
-        Counters();
-        ImGui::EndChild();
-    });
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
-}
-
-void
-SummaryOverview::TimeFormatChanged()
-{
-    m_timeformat_changed = true;
-}
-
-void
-SummaryOverview::Fetched()
-{
-    m_data_changed = true;
 }
 
 void
@@ -596,8 +453,241 @@ SummaryOverview::Tile(ImGuiID id, ImVec2 size, std::function<void()> content) co
     ImGui::EndChild();
 }
 
+SummaryTopology::SummaryTopology(DataProvider& dp)
+: m_h_container(nullptr)
+, m_composition_table_headers({})
+, m_counters(nullptr)
+, m_data_changed(false)
+, m_timeformat_changed(true)
+, m_data_provider(dp)
+, m_settings(SettingsManager::GetInstance())
+{
+    LayoutItem::Ptr topology = LayoutItem::CreateFromWidget(
+        std::make_shared<RocCustomWidget>([this]() { RenderTopology(); }));
+    topology->m_child_flags      = ImGuiChildFlags_AlwaysUseWindowPadding;
+    topology->m_window_padding   = m_settings.GetDefaultStyle().WindowPadding;
+    topology->m_item_spacing     = m_settings.GetDefaultStyle().ItemSpacing;
+    topology->m_inherit_bg_color = true;
+    LayoutItem::Ptr counters     = LayoutItem::CreateFromWidget(
+        std::make_shared<RocCustomWidget>([this]() { RenderCounters(); }));
+    counters->m_child_flags      = ImGuiChildFlags_AlwaysUseWindowPadding;
+    counters->m_window_padding   = m_settings.GetDefaultStyle().WindowPadding;
+    counters->m_item_spacing     = m_settings.GetDefaultStyle().ItemSpacing;
+    counters->m_inherit_bg_color = true;
+    m_h_container                = std::make_unique<HSplitContainer>(topology, counters);
+    m_h_container->SetSplit(0.7f);
+    m_h_container->SetSplitterSize(6.0f);
+    m_h_container->SetSplitSpacing(m_settings.GetDefaultStyle().ItemSpacing.x);
+}
+
 void
-SummaryOverview::CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics& metrics,
+SummaryTopology::Update()
+{
+    if(m_data_changed)
+    {
+        m_counters     = m_data_provider.DataModel()
+                                     .GetSummary()
+                                     .GetSummaryData()
+                                     .gpu.counters.list.size() ||
+                                 m_data_provider.DataModel()
+                                     .GetSummary()
+                                     .GetSummaryData()
+                                     .cpu.counters.list.size()
+                             ? &m_data_provider.DataModel().GetSummary().GetSummaryData()
+                             : nullptr;
+        m_data_changed = false;
+    }
+    if(m_timeformat_changed)
+    {
+        TimeFormat timeformat = m_settings.GetUserSettings().unit_settings.time_format;
+        m_composition_table_headers = { "##label",
+                                        "Counters",
+                                        "Event Composition",
+                                        "Kernels (" + timeformat_sufix(timeformat) + ")",
+                                        "Memory (" + timeformat_sufix(timeformat) + ")",
+                                        "Launch (" + timeformat_sufix(timeformat) + ")" };
+        m_timeformat_changed        = false;
+    }
+}
+
+void
+SummaryTopology::Render()
+{
+    if(m_h_container)
+    {
+        const ImGuiStyle& style = m_settings.GetDefaultStyle();
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                            m_settings.GetDefaultStyle().FramePadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            m_settings.GetDefaultStyle().ItemSpacing);
+        ImGui::Spacing();
+        float min_split = ImGui::CalcTextSize("System Topology").x + style.ItemSpacing.x;
+        for(size_t i = 0; i < static_cast<size_t>(__kRPVAnalysisSummaryCategoryLast); i++)
+        {
+            min_split += 2.0f * style.ItemSpacing.x + ImGui::GetTextLineHeight() +
+                         ImGui::CalcTextSize(DISPLAY_PROPS_EVENT_TYPES[i].first).x;
+        }
+        m_h_container->SetMinLeftWidth(min_split);
+        m_h_container->SetMinRightWidth(2.0f * ImGui::CalcTextSize("Max: XXXXXXXX").x +
+                                        style.ItemSpacing.x);
+        m_h_container->Render();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
+    }
+}
+
+void
+SummaryTopology::TimeFormatChanged()
+{
+    m_timeformat_changed = true;
+}
+
+void
+SummaryTopology::Fetched()
+{
+    m_data_changed = true;
+}
+
+bool
+SummaryTopology::RenderPreview() const
+{
+    ImGui::TextUnformatted("Event Composition");
+    CompositionBar(ImGui::GetContentRegionAvail(),
+                   m_data_provider.DataModel().GetSummary().GetSummaryData(), true);
+    return false;
+}
+
+void
+SummaryTopology::RenderTopology()
+{
+    const ImGuiStyle&   style = m_settings.GetDefaultStyle();
+    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    ImGui::TextUnformatted("System Topology");
+    float legend_pos = ImGui::GetContentRegionMax().x;
+    for(size_t i = 0; i < static_cast<size_t>(__kRPVAnalysisSummaryCategoryLast); i++)
+    {
+        legend_pos -= ((i > 0) ? 2.0f : 1.0f) * style.ItemSpacing.x +
+                      ImGui::GetTextLineHeight() +
+                      ImGui::CalcTextSize(DISPLAY_PROPS_EVENT_TYPES[i].first).x;
+    }
+    ImGui::SameLine(legend_pos);
+    for(size_t i = 0; i < static_cast<size_t>(__kRPVAnalysisSummaryCategoryLast); i++)
+    {
+        if(i > 0)
+        {
+            ImGui::SameLine();
+        }
+        ImGui::Dummy(ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+            m_settings.GetColorWheel()[DISPLAY_PROPS_EVENT_TYPES[i].second],
+            style.FrameRounding);
+        ImGui::SameLine();
+        ImGui::TextUnformatted(DISPLAY_PROPS_EVENT_TYPES[i].first);
+    }
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          ThemeColor(m_settings, Colors::kTableHeaderBg));
+    if(ImGui::BeginTable("topology", m_composition_table_headers.size(),
+                         ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoBordersInBody |
+                             ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollX |
+                             ImGuiTableFlags_ScrollY))
+    {
+        ImGui::TableSetupScrollFreeze(3, 1);
+        ImGui::TableSetupColumn(m_composition_table_headers[0].c_str());
+        ImGui::TableSetupColumn(
+            m_composition_table_headers[1].c_str(), ImGuiTableColumnFlags_WidthFixed,
+            ImGui::CalcTextSize(m_composition_table_headers[1].c_str()).x);
+        ImGui::TableSetupColumn(m_composition_table_headers[2].c_str());
+        ImGui::TableSetupColumn(
+            m_composition_table_headers[3].c_str(), ImGuiTableColumnFlags_WidthFixed,
+            std::max(ImGui::CalcTextSize(m_composition_table_headers[3].c_str()).x,
+                     ImGui::CalcTextSize(
+                         model.GetSummaryData()
+                             .gpu.dispatch
+                             .metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                             .str.c_str())
+                         .x));
+        ImGui::TableSetupColumn(
+            m_composition_table_headers[4].c_str(), ImGuiTableColumnFlags_WidthFixed,
+            std::max(
+                ImGui::CalcTextSize(m_composition_table_headers[4].c_str()).x,
+                ImGui::CalcTextSize(
+                    model.GetSummaryData()
+                        .memory.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                        .str.c_str())
+                    .x));
+        ImGui::TableSetupColumn(
+            m_composition_table_headers[5].c_str(), ImGuiTableColumnFlags_WidthFixed,
+            std::max(
+                ImGui::CalcTextSize(m_composition_table_headers[5].c_str()).x,
+                ImGui::CalcTextSize(
+                    model.GetSummaryData()
+                        .thread.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                        .str.c_str())
+                    .x));
+        ImGui::TableHeadersRow();
+        CompositionTable(model.GetSummaryData(), ImGui::GetWindowWidth() * 0.4f);
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleColor();
+}
+
+void
+SummaryTopology::RenderCounters() const
+{
+    ImGui::TextUnformatted("Counters");
+    if(m_counters)
+    {
+        ImGui::BeginDisabled();
+        switch(m_counters->type)
+        {
+            case kRPVAnalysisSummaryAggregationLevelTrace:
+            {
+                ImGui::SameLine();
+                ImGui::TextUnformatted(DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                    m_counters->type - __kRPVAnalysisSummaryAggregationLevelFirst)]);
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelNode:
+            {
+                ImGui::SameLine();
+                ImGui::Text(
+                    "%s: ",
+                    DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
+                        m_counters->type - __kRPVAnalysisSummaryAggregationLevelFirst)]);
+                ImGui::SameLine(0.0f, 0.0f);
+                ElidedText(m_counters->info.node->GetName().c_str(),
+                           ImGui::GetContentRegionAvail().x, ImGui::GetWindowWidth());
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelProcessor:
+            {
+                ImGui::SameLine();
+                ImGui::Text(
+                    "%s%llu: ",
+                    m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                        m_counters->info.processor->type),
+                    m_counters->info.processor->type_index);
+                ImGui::SameLine(0.0f, 0.0f);
+                ElidedText(m_counters->info.processor->GetName().c_str(),
+                           ImGui::GetContentRegionAvail().x, ImGui::GetWindowWidth());
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+        ImGui::EndDisabled();
+    }
+    ImGui::BeginChild("sv");
+    Counters();
+    ImGui::EndChild();
+}
+
+void
+SummaryTopology::CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics& metrics,
                                 bool labels) const
 {
     const ImGuiStyle&   style = m_settings.GetDefaultStyle();
@@ -653,7 +743,7 @@ SummaryOverview::CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics
 }
 
 void
-SummaryOverview::CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float segment_pct,
+SummaryTopology::CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float segment_pct,
                                        rocprofvis_analysis_summary_category_t category,
                                        bool labels, float& segment_x) const
 {
@@ -712,7 +802,8 @@ SummaryOverview::CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float se
 }
 
 void
-SummaryOverview::CompositionTable(const SummaryInfo::AggregateMetrics& metrics)
+SummaryTopology::CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
+                                  float                                max_name_width)
 {
     const SummaryModel& model = m_data_provider.DataModel().GetSummary();
     if((model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
@@ -743,7 +834,6 @@ SummaryOverview::CompositionTable(const SummaryInfo::AggregateMetrics& metrics)
         {
             flags |= ImGuiTreeNodeFlags_Leaf;
         }
-
         bool open = ImGui::TreeNodeEx("", flags);
         ImGui::PopStyleColor(2);
         ImGui::SameLine(0.0f, 0.0f);
@@ -759,34 +849,74 @@ SummaryOverview::CompositionTable(const SummaryInfo::AggregateMetrics& metrics)
             case kRPVAnalysisSummaryAggregationLevelNode:
             {
                 ImGui::Text(
-                    "%s: %s",
+                    "%s: ",
                     DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
-                        metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)],
-                    metrics.info.node->host_name.c_str());
+                        metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)]);
+                if(metrics.info.node->host_name.size())
+                {
+                    ImGui::SameLine(0.0f, 0.0f);
+                    ElidedText(
+                        metrics.info.node->host_name.c_str(),
+                        std::min(
+                            max_name_width -
+                                (ImGui::GetCursorScreenPos().x - ImGui::GetWindowPos().x),
+                            ImGui::CalcTextSize(metrics.info.node->host_name.c_str()).x),
+                        max_name_width);
+                }
                 break;
             }
             case kRPVAnalysisSummaryAggregationLevelProcessor:
             {
                 ImGui::Text(
-                    "%s%llu: %s",
+                    "%s%llu: ",
                     m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
                         metrics.info.processor->type),
-                    metrics.info.processor->type_index,
-                    metrics.info.processor->product_name.c_str());
+                    metrics.info.processor->type_index);
+                if(metrics.info.processor->product_name.size())
+                {
+                    ImGui::SameLine(0.0f, 0.0f);
+                    ElidedText(metrics.info.processor->product_name.c_str(),
+                               std::min(max_name_width - (ImGui::GetCursorScreenPos().x -
+                                                          ImGui::GetWindowPos().x),
+                                        ImGui::CalcTextSize(
+                                            metrics.info.processor->product_name.c_str())
+                                            .x),
+                               max_name_width);
+                }
                 break;
             }
             case kRPVAnalysisSummaryAggregationLevelProcess:
             {
                 ImGui::Text(
-                    "%s %llu: %s",
+                    "%s %llu: ",
                     DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
                         metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)],
-                    metrics.info.process->GetId(), metrics.info.process->command.c_str());
+                    metrics.info.process->GetId());
+                if(metrics.info.process->command.size())
+                {
+                    ImGui::SameLine(0.0f, 0.0f);
+                    ElidedText(
+                        metrics.info.process->command.c_str(),
+                        std::min(
+                            max_name_width -
+                                (ImGui::GetCursorScreenPos().x - ImGui::GetWindowPos().x),
+                            ImGui::CalcTextSize(metrics.info.process->command.c_str()).x),
+                        max_name_width);
+                }
                 break;
             }
             case kRPVAnalysisSummaryAggregationLevelThread:
             {
-                ImGui::TextUnformatted(metrics.info.thread->GetName().c_str());
+                if(metrics.info.thread->GetName().size())
+                {
+                    ElidedText(metrics.info.thread->GetName().c_str(),
+                               std::min(max_name_width - (ImGui::GetCursorScreenPos().x -
+                                                          ImGui::GetWindowPos().x),
+                                        ImGui::CalcTextSize(
+                                            metrics.info.thread->GetName().c_str())
+                                            .x),
+                               max_name_width);
+                }
                 break;
             }
             default:
@@ -811,31 +941,52 @@ SummaryOverview::CompositionTable(const SummaryInfo::AggregateMetrics& metrics)
             ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight()), metrics,
             false);
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted(
-            m_data_provider.DataModel()
-                .GetSummary()
-                .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
-                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
-                .str.c_str());
+        if(m_data_provider.DataModel()
+               .GetSummary()
+               .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+               ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+               .numeric.uint)
+        {
+            ImGui::TextUnformatted(
+                m_data_provider.DataModel()
+                    .GetSummary()
+                    .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+                    ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .str.c_str());
+        }
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted(
-            m_data_provider.DataModel()
-                .GetSummary()
-                .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
-                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
-                .str.c_str());
+        if(m_data_provider.DataModel()
+               .GetSummary()
+               .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+               ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+               .numeric.uint)
+        {
+            ImGui::TextUnformatted(
+                m_data_provider.DataModel()
+                    .GetSummary()
+                    .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+                    ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .str.c_str());
+        }
         ImGui::TableNextColumn();
-        ImGui::TextUnformatted(
-            m_data_provider.DataModel()
-                .GetSummary()
-                .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
-                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
-                .str.c_str());
+        if(m_data_provider.DataModel()
+               .GetSummary()
+               .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+               ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+               .numeric.uint)
+        {
+            ImGui::TextUnformatted(
+                m_data_provider.DataModel()
+                    .GetSummary()
+                    .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+                    ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                    .str.c_str());
+        }
         if(open)
         {
             for(const SummaryInfo::AggregateMetrics& sub : metrics.sub_metrics)
             {
-                CompositionTable(sub);
+                CompositionTable(sub, max_name_width);
             }
             ImGui::TreePop();
         }
@@ -844,7 +995,7 @@ SummaryOverview::CompositionTable(const SummaryInfo::AggregateMetrics& metrics)
 }
 
 void
-SummaryOverview::Counters() const
+SummaryTopology::Counters() const
 {
     if(m_counters)
     {
@@ -876,13 +1027,13 @@ SummaryOverview::Counters() const
 }
 
 void
-SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 color) const
+SummaryTopology::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 color) const
 {
     const ImGuiStyle&    style = m_settings.GetDefaultStyle();
     const ProcessorInfo* processor =
         m_data_provider.DataModel().GetTopology().GetProcessor(
             counter.info->GetProcessorId());
-    float metadata_width =
+    float region_metadata =
         (processor ? ImGui::CalcTextSize(
                          m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
                              processor->type))
@@ -898,19 +1049,25 @@ SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 co
                    style.ItemSpacing.x
              : 0.0f) -
         style.ItemSpacing.x;
-    float name_width = ImGui::GetContentRegionAvail().x -
-                       (counter.info->description.size()
-                            ? ImGui::GetTextLineHeight() + style.ItemSpacing.x
-                            : 0.0f) -
-                       metadata_width;
-    if(name_width > ImGui::CalcTextSize(counter.info->GetName().c_str()).x)
+    float region_name = ImGui::GetContentRegionAvail().x -
+                        (counter.info->description.size()
+                             ? ImGui::GetTextLineHeight() + style.ItemSpacing.x
+                             : 0.0f);
+    if(region_name - region_metadata > ImGui::GetFrameHeightWithSpacing())
+    {
+        region_name -= region_metadata;
+    }
+    else
+    {
+        region_metadata = 0;
+    }
+    if(region_name > ImGui::CalcTextSize(counter.info->GetName().c_str()).x)
     {
         ImGui::TextUnformatted(counter.info->GetName().c_str());
     }
     else
     {
-        ElidedText(counter.info->GetName().c_str(), name_width,
-                   ImGui::GetContentRegionAvail().x);
+        ElidedText(counter.info->GetName().c_str(), region_name, ImGui::GetWindowWidth());
     }
     ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
     if(counter.info->description.size())
@@ -920,17 +1077,18 @@ SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 co
                    m_settings.GetFontManager().GetFont(FontType::kIcon));
         if(ImGui::IsItemHovered())
         {
-            ImGui::PushTextWrapPos(ImGui::GetWindowWidth());
+            float window_width = ImGui::GetWindowWidth();
             BeginTooltipStyled();
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width);
             ImGui::TextUnformatted(counter.info->description.c_str());
-            EndTooltipStyled();
             ImGui::PopTextWrapPos();
+            EndTooltipStyled();
         }
     }
     ImGui::PopStyleColor();
-    if(metadata_width > 0.0f)
+    if(region_metadata)
     {
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - metadata_width);
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - region_metadata);
         if(counter.info->units.size())
         {
             ImGui::Text("(%s)", counter.info->units.c_str());
@@ -944,8 +1102,8 @@ SummaryOverview::Counter(const SummaryInfo::Counters::Counter& counter, ImU32 co
         {
             ImGui::SameLine(ImGui::GetCursorPosX());
             ImGui::TextDisabled(
-                m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
-                    processor->type));
+                "%s", m_data_provider.DataModel().GetTopology().GetProcessorTypeName(
+                          processor->type));
         }
     }
     ImGui::PushFont(nullptr, m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
@@ -1900,20 +2058,57 @@ SummaryTopEvents::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
             ImGui::EndDisabled();
             ImGui::PushFont(nullptr,
                             m_settings.GetFontManager().GetFontSize(FontSize::kXSmall));
-            ImGui::TextDisabled(
-                "%0.1f%% | %s invocation(s) | %s %s",
-                m_op_events->top[i]
-                        .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
-                        .numeric.flt *
-                    100.0f,
-                m_op_events->top[i]
-                    .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
-                    .str.c_str(),
-                m_op_events->top[i]
-                    .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
-                    .str.c_str(),
-                timeformat_sufix(m_settings.GetUserSettings().unit_settings.time_format)
-                    .c_str());
+            if(ImGui::CalcTextSize("100.0%").x < ImGui::GetContentRegionAvail().x)
+            {
+                ImGui::TextDisabled(
+                    "%0.1f%%",
+                    m_op_events->top[i]
+                            .metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]
+                            .numeric.flt *
+                        100.0f);
+                ImGui::SameLine(0.0f, 0.0f);
+                if(ImGui::CalcTextSize(
+                       m_op_events->top[i]
+                           .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
+                           .str.c_str())
+                           .x +
+                       ImGui::CalcTextSize(
+                           m_op_events->top[i]
+                               .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
+                               .str.c_str())
+                           .x +
+                       ImGui::CalcTextSize("| invocation(s)").x <
+                   ImGui::GetContentRegionAvail().x)
+                {
+                    ImGui::TextDisabled(
+                        " | %s invocation(s)",
+                        m_op_events->top[i]
+                            .metrics[kRPVAnalysisSummaryTopEventMetricInvocations]
+                            .str.c_str());
+                    ImGui::SameLine(0.0f, 0.0f);
+                    if(ImGui::CalcTextSize(
+                           m_op_events->top[i]
+                               .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                               .str.c_str())
+                               .x +
+                           ImGui::CalcTextSize(
+                               timeformat_sufix(
+                                   m_settings.GetUserSettings().unit_settings.time_format)
+                                   .c_str())
+                               .x <
+                       ImGui::GetContentRegionAvail().x)
+                    {
+                        ImGui::TextDisabled(
+                            " | %s %s",
+                            m_op_events->top[i]
+                                .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                                .str.c_str(),
+                            timeformat_sufix(
+                                m_settings.GetUserSettings().unit_settings.time_format)
+                                .c_str());
+                    }
+                }
+            }
             ImGui::PopFont();
             ImGui::EndGroup();
             ImGui::EndGroup();

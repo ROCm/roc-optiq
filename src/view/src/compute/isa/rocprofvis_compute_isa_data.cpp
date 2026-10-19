@@ -4,12 +4,16 @@
 #include "rocprofvis_compute_isa_data.h"
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+static_assert(std::size(IsaDataBuilder::STALL_REASONS) ==
+              static_cast<size_t>(IsaDataBuilder::StallReasonKind::kUnknown));
 
 const CodeObjectStore*
 IsaDataBuilder::FindCodeObject(const PcSamplingData& data, uint64_t code_object_uuid)
@@ -106,6 +110,25 @@ IsaDataBuilder::BuildStallReasonText(const PcSamplingData& data)
     return text_by_lookup;
 }
 
+void
+IsaDataBuilder::AddStallReasonCount(StallReasonCounts& counts, uint64_t lookup_uuid,
+                                    uint64_t count)
+{
+    counts.overflow |= !AddSampleCount(counts.by_lookup[lookup_uuid], count);
+    counts.overflow |= !AddSampleCount(counts.total_count, count);
+}
+
+void
+IsaDataBuilder::MergeStallReasonCounts(StallReasonCounts&       total,
+                                       const StallReasonCounts& counts)
+{
+    total.overflow |= counts.overflow;
+    for(const auto& [lookup_uuid, count] : counts.by_lookup)
+    {
+        AddStallReasonCount(total, lookup_uuid, count);
+    }
+}
+
 IsaDataBuilder::GroupedStallReasonCounts
 IsaDataBuilder::GroupStallReasonCountsBySampleState(const PcSamplingData& data)
 {
@@ -113,8 +136,8 @@ IsaDataBuilder::GroupStallReasonCountsBySampleState(const PcSamplingData& data)
     counts_by_sample_state.reserve(data.pc_sample_states.size());
     for(const PcSampleStallReason& reason : data.pc_sample_stall_reasons)
     {
-        counts_by_sample_state[reason.pc_sample_state_uuid]
-                              [reason.pc_sample_stall_reason_lookup_uuid] += reason.count;
+        AddStallReasonCount(counts_by_sample_state[reason.pc_sample_state_uuid],
+                            reason.pc_sample_stall_reason_lookup_uuid, reason.count);
     }
     return counts_by_sample_state;
 }
@@ -135,24 +158,13 @@ IsaDataBuilder::FindOtherWaitLookupUuids(
     return lookup_uuids;
 }
 
-uint64_t
-IsaDataBuilder::SumStallReasonCounts(const StallReasonCounts& reason_counts)
-{
-    uint64_t total = 0;
-    for(const auto& [lookup_uuid, count] : reason_counts)
-    {
-        (void) lookup_uuid;
-        total += count;
-    }
-    return total;
-}
-
 void
 IsaDataBuilder::RemoveIssuedSamplesFromOtherWait(
     const PcSampleState& state, const std::vector<uint64_t>& other_wait_lookup_uuids,
     StallReasonCounts& reason_counts)
 {
-    if(!state.issue_count || !state.stall_count || other_wait_lookup_uuids.empty())
+    if(reason_counts.overflow || !state.issue_count || !state.stall_count ||
+       other_wait_lookup_uuids.empty())
     {
         return;
     }
@@ -161,7 +173,7 @@ IsaDataBuilder::RemoveIssuedSamplesFromOtherWait(
     const bool     reasons_include_issued_samples =
         issue_count > 0 && issue_count <= state.total_count &&
         *state.stall_count == state.total_count - issue_count &&
-        SumStallReasonCounts(reason_counts) == state.total_count;
+        reason_counts.total_count == state.total_count;
     if(!reasons_include_issued_samples)
     {
         return;
@@ -170,10 +182,14 @@ IsaDataBuilder::RemoveIssuedSamplesFromOtherWait(
     uint64_t other_wait_count = 0;
     for(uint64_t lookup_uuid : other_wait_lookup_uuids)
     {
-        const auto reason_it = reason_counts.find(lookup_uuid);
-        if(reason_it != reason_counts.end())
+        const auto reason_it = reason_counts.by_lookup.find(lookup_uuid);
+        if(reason_it != reason_counts.by_lookup.end())
         {
-            other_wait_count += reason_it->second;
+            if(!AddSampleCount(other_wait_count, reason_it->second))
+            {
+                reason_counts.overflow = true;
+                return;
+            }
         }
     }
     if(other_wait_count < issue_count)
@@ -183,17 +199,18 @@ IsaDataBuilder::RemoveIssuedSamplesFromOtherWait(
     uint64_t remaining_issued = issue_count;
     for(uint64_t lookup_uuid : other_wait_lookup_uuids)
     {
-        const auto reason_it = reason_counts.find(lookup_uuid);
-        if(reason_it == reason_counts.end())
+        const auto reason_it = reason_counts.by_lookup.find(lookup_uuid);
+        if(reason_it == reason_counts.by_lookup.end())
         {
             continue;
         }
         const uint64_t removed = std::min(reason_it->second, remaining_issued);
         reason_it->second -= removed;
+        reason_counts.total_count -= removed;
         remaining_issued -= removed;
         if(reason_it->second == 0)
         {
-            reason_counts.erase(reason_it);
+            reason_counts.by_lookup.erase(reason_it);
         }
         if(remaining_issued == 0)
         {
@@ -229,10 +246,8 @@ IsaDataBuilder::AggregateStallReasonCountsByInstruction(
         // issued samples, preserving profiles that already store stall-only reasons.
         RemoveIssuedSamplesFromOtherWait(state, other_wait_lookup_uuids, reason_counts);
 
-        for(const auto& [lookup_uuid, count] : reason_counts)
-        {
-            counts_by_instruction[state.instruction_uuid][lookup_uuid] += count;
-        }
+        MergeStallReasonCounts(counts_by_instruction[state.instruction_uuid],
+                               reason_counts);
     }
     return counts_by_instruction;
 }
@@ -262,12 +277,11 @@ IsaDataBuilder::ResolveStallReasonText(
 std::vector<IsaDataBuilder::StallReason>
 IsaDataBuilder::BuildStallReasons(
     const StallReasonCounts&                         reason_counts,
-    const std::unordered_map<uint64_t, std::string>& reason_text,
-    uint64_t&                                        classified_sample_count)
+    const std::unordered_map<uint64_t, std::string>& reason_text)
 {
     std::vector<StallReason> stall_reasons;
-    stall_reasons.reserve(reason_counts.size());
-    for(const auto& [lookup_uuid, reason_count] : reason_counts)
+    stall_reasons.reserve(reason_counts.by_lookup.size());
+    for(const auto& [lookup_uuid, reason_count] : reason_counts.by_lookup)
     {
         StallReason reason;
         reason.text       = ResolveStallReasonText(reason_text, lookup_uuid);
@@ -275,7 +289,6 @@ IsaDataBuilder::BuildStallReasons(
         reason.kind       = ResolveStallReasonKind(reason.text);
         reason.count_text = FormatSampleCount(reason.count);
         stall_reasons.push_back(std::move(reason));
-        classified_sample_count += reason_count;
     }
     std::sort(stall_reasons.begin(), stall_reasons.end(),
               [](const StallReason& lhs, const StallReason& rhs) {
@@ -351,25 +364,31 @@ IsaDataBuilder::ResolveStallReasonKind(std::string_view text)
     {
         text.remove_prefix(SDK_PREFIX.size());
     }
-    constexpr std::string_view REASON_NAMES[] = {
-        "NO_INSTRUCTION_AVAILABLE", "ALU_DEPENDENCY", "WAITCNT",
-        "INTERNAL_INSTRUCTION",     "BARRIER_WAIT",   "ARBITER_NOT_WIN",
-        "ARBITER_WIN_EX_STALL",     "OTHER_WAIT",     "SLEEP"
-    };
-    static_assert(sizeof(REASON_NAMES) / sizeof(REASON_NAMES[0]) ==
-                  static_cast<uint32_t>(StallReasonKind::kUnknown));
     if(text == "OTHER")
     {
         return StallReasonKind::kOtherWait;
     }
-    for(uint32_t i = 0; i < static_cast<uint32_t>(StallReasonKind::kUnknown); ++i)
+    for(const StallReasonInfo& reason : STALL_REASONS)
     {
-        if(text == REASON_NAMES[i])
+        if(text == reason.name)
         {
-            return static_cast<StallReasonKind>(i);
+            return reason.kind;
         }
     }
     return StallReasonKind::kUnknown;
+}
+
+const char*
+IsaDataBuilder::GetStallReasonName(StallReasonKind kind)
+{
+    for(const StallReasonInfo& reason : STALL_REASONS)
+    {
+        if(kind == reason.kind)
+        {
+            return reason.name;
+        }
+    }
+    return "Unknown";
 }
 
 std::vector<IsaDataBuilder::IsaRow>
@@ -453,13 +472,18 @@ IsaDataBuilder::UpdateSamplingRow(
     SamplingRow& row, const SampleCounts& counts, const StallReasonCounts& reasons,
     const std::unordered_map<uint64_t, std::string>& reason_text)
 {
-    row.sample_counts             = counts;
-    row.sampling                  = SummarizeSampling(counts);
-    row.stall_reason_sample_count = 0;
-    row.unclassified_stall_count  = 0;
+    row.sample_counts                = counts;
+    row.sampling                     = SummarizeSampling(counts);
+    row.stall_reason_sample_count    = 0;
+    row.stall_reason_counts_overflow = reasons.overflow;
+    row.unclassified_stall_count     = 0;
     row.unclassified_stall_count_text.clear();
-    row.stall_reasons =
-        BuildStallReasons(reasons, reason_text, row.stall_reason_sample_count);
+    row.stall_reasons.clear();
+    if(!reasons.overflow)
+    {
+        row.stall_reason_sample_count = reasons.total_count;
+        row.stall_reasons             = BuildStallReasons(reasons, reason_text);
+    }
     if(row.sampling.availability == SamplingAvailability::kValid)
     {
         const uint64_t stalled   = *counts.stall_count;
@@ -545,10 +569,7 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
         const auto reasons = prepared.reasons_by_instruction.find(instruction_uuid);
         if(reasons != prepared.reasons_by_instruction.end())
         {
-            for(const auto& [lookup_uuid, count] : reasons->second)
-            {
-                sampling.reasons[lookup_uuid] += count;
-            }
+            MergeStallReasonCounts(sampling.reasons, reasons->second);
         }
     }
     uint64_t hottest_source_samples = 0;

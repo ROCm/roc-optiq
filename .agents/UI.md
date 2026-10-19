@@ -1568,17 +1568,37 @@ The related data tests live in its `tests/` subfolder. CMake lists these files
 explicitly; generated Visual Studio projects use their standard source/header
 filters rather than a custom ISA group.
 
-The ISA implementation has three boundaries:
+The ISA implementation is organized as follows:
 
 - `rocprofvis_compute_isa_view.{h,cpp}` owns layer requests, selection,
-  source-file controls, and pane visibility. Existing generation and request-token
-  checks protect callbacks from stale selections.
+  source-file controls, and pane visibility. Its private `IsaPane` and `SourcePane`
+  compose a `PcSamplingFetchState` rather than inheriting request flags. Reset clears
+  request state and pane metadata while retaining widget ownership. ISA, source,
+  and stalls share one ordered layer list for queued submission and cancellation.
+  Cancellation clears the in-flight flag before calling the provider, rejecting
+  callbacks during cancellation and avoiding repeated cancel calls. Generation,
+  request-token, kernel, and selected-source-file checks still reject stale results.
 - `rocprofvis_compute_code_widgets.{h,cpp}` owns `BaseCodeWidget`,
   `SourceCodeWidget`, `IsaCodeWidget`, and their shared `LineSelection`.
-  `BaseCodeWidget` also owns the shared sampling column, bar, color legend, and
-  tooltip renderer, consuming `IsaDataBuilder::SamplingRow` for either pane.
-  `BeginCodeRow` shares the source/ISA selection and hover behavior; local cell
-  helpers share bounds, fill clipping, and hover/click targets.
+  `BaseCodeWidget` shares row layout, selection, hover, and cached scroll navigation.
+  Each widget delegates sampling cells and headers to its composed
+  `SamplingStateRenderer`; the cell returns clicks to the widget's row selection.
+- `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the common sampling
+  column, bar, header color legend, and tooltip for `IsaDataBuilder::SamplingRow`.
+  Each hovered valid cell builds one local list of tooltip rows (label, color,
+  formatted count, formatted percentage), ordered as issued, stall reasons,
+  unclassified stalls, and unclassified progress. Layout and drawing consume that
+  same list, so neither repeats category branches or numeric formatting. Borrowed
+  labels remain valid for the tooltip invocation; no row pointers are cached.
+  Pane-specific hottest counts are supplied by the widgets. Colors are resolved
+  from current settings. Missing/invalid data, overflow warnings, compact sizing,
+  wrapping, and wheel ownership are handled here.
+- `rocprofvis_compute_code_table.{h,cpp}` owns `ComputeCodeTable`. Its noncopyable
+  instances balance window padding, table begin/end, and row styles on both normal
+  and skipped-table paths. Row styles begin after headers. Static
+  `RenderCenteredHeader` and `RenderHeaderWithTooltip` methods share column headers
+  and the developer-mode text guard; `HeaderTooltipText` is nested in the class.
+  This class has no sampling dependency.
 - `rocprofvis_compute_isa_data.{h,cpp}` owns `IsaDataBuilder`, a View-layer
   projection with no ImGui or settings dependency. It builds instruction rows,
   updates source mappings and sampling independently, and prepares count validity,
@@ -1603,10 +1623,14 @@ without rebuilding sample counts or normalizing OTHER_WAIT again. Source mapping
 are taken from current source-layer data rather than frozen in the sampling
 snapshot, so correlations arriving after sampling remain correct. Column visibility
 does not reaggregate rows. Instruction storage survives source and sampling updates.
-The ISA widget addresses columns through its named `IsaColumn` logical indices;
-`SetupColumns` and `RenderHeaders` keep registration and header rendering separate
-from the clipped row loop. Tooltip summary, table, footer, and size measurement
-are separate methods consuming the same prepared row/reason data.
+The widgets address columns through named `IsaColumn` and `SourceColumn` logical
+indices; `SetupColumns` and `RenderHeaders` keep registration and header rendering separate
+from the clipped row loop. `SamplingStateRenderer` keeps tooltip summary, table,
+footer, and size measurement separate, with one prepared tooltip-row list for
+both measurement and drawing. `SamplingStateRenderer::CodePane` identifies the
+header's ISA/source context explicitly. Single-argument widget constructors are
+explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
+Source selection is shared through `LineSelection`, with no unused forwarding getters.
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
@@ -1730,14 +1754,29 @@ aggregated across sample states and sorted by descending count, then reason name
 The Sampling State header's user-facing tooltip contains only a compact color
 legend with small swatches, tight spacing, and no prose, table headings, or grid.
 Issued uses the success green, every supported reason uses its live theme color,
-and gray is labeled `Unknown / unclassified / N/A`. Canonical names live with the
-reason-color mapping, so the header lists the full palette even when the capture
-does not contain every reason. This legend appears in both standard and developer
+and gray is labeled `Unknown / unclassified / N/A`. Canonical identities and names
+live once in `IsaDataBuilder::STALL_REASONS`; the resolver and header legend both
+consume that metadata. The renderer owns only the reason-to-theme-color mapping,
+checked at compile time for coverage and enum order. Unknown names retain their
+captured text and neutral color; SDK prefixes and the OTHER alias are recognized.
+The header lists the full palette even when the capture lacks some reasons. This legend appears in both standard and developer
 builds. When `ROCPROFVIS_DEVELOPER_MODE` is enabled, the developer section documents
 T/I/S/H/R, bar fractions, bounded reason widths, gray remainders, issued-sample
 normalization, validity checks, ordering, and the tooltip's total-sample denominator.
 Other data-column headers describe their data and show database fields and grouping
 or filtering keys in developer mode; `#` headers have no tooltip.
+
+Stall-reason counts use the checked `StallReasonCounts` accumulator: lookup
+counts and their cached classified total saturate on overflow, and the overflow
+flag survives sample-state, instruction, and source-line merges. Overflow prevents
+OTHER_WAIT normalization from using a wrapped total. Valid normalization subtracts
+removed issued samples from both the lookup count and the cached total. The maximum
+representable count itself remains valid. An overflowing reason breakdown is
+discarded without changing measured total/issued/stalled counts; its stalled portion
+is gray. The tooltip keeps Issued and Unclassified stalls rows and shows an explicit
+range warning instead of wrapped counts, generic missing-details text, or misleading
+classification-mismatch totals. A later valid or empty update clears the overflow
+flag. `BuildStallReasons` consumes the checked total rather than summing it again.
 
 Known reason colors are stable across instructions and kernels and come from the
 central `kPcSampling*` dark/light theme palette. Green is reserved for issued
@@ -1795,9 +1834,15 @@ interactions. Both widgets combine the selectable's click with the
 `CopyableTextUnformatted` return value, so clicking instruction text, offsets,
 or source text selects the row as well as clicking its empty space.
 Clicking a correlated ISA or source row scrolls the opposite code pane so its
-first corresponding row is the top visible line. If an ISA row maps to a
-different source file, the view selects that file and fetches its lines before
-performing the scroll.
+first corresponding row is the top visible line. `BaseCodeWidget` caches a
+source-line ID to first-row index, rebuilding it only when source rows load or
+ISA correlations change. Zero IDs are omitted. Scroll requests use one map lookup
+and are consumed even when a loaded pane has no matching row, including source
+comments with no ISA mapping. The clipper receives an optional zero-based target;
+row zero remains a valid destination. Empty panes retain pending requests while
+data loads. If an ISA row maps to a different source file, the view selects that
+file and fetches its lines before performing the scroll; the old source pane does
+not consume that request while the file switch is pending.
 
 ### Compute data plumbing
 
@@ -3403,6 +3448,9 @@ All under `agenticprofiling/`, compiled only with
 - `ComputeIsaView` -> `compute/isa/rocprofvis_compute_isa_view.h`.
 - `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget`, `LineSelection` ->
   `compute/isa/rocprofvis_compute_code_widgets.h`.
+- `SamplingStateRenderer` ->
+  `compute/isa/rocprofvis_compute_sampling_state_renderer.h`.
+- `ComputeCodeTable` -> `compute/isa/rocprofvis_compute_code_table.h`.
 - `IsaDataBuilder` -> `compute/isa/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,

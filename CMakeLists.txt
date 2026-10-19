@@ -109,12 +109,16 @@ find_package(Vulkan REQUIRED)
 
 # ISA implementation files live together in the compute/isa directory.
 set(ISA_VIEW_FILES
+    src/view/src/compute/isa/rocprofvis_compute_code_table.cpp
+    src/view/src/compute/isa/rocprofvis_compute_code_table.h
     src/view/src/compute/isa/rocprofvis_compute_isa_view.cpp
     src/view/src/compute/isa/rocprofvis_compute_isa_view.h
     src/view/src/compute/isa/rocprofvis_compute_code_widgets.cpp
     src/view/src/compute/isa/rocprofvis_compute_code_widgets.h
     src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
     src/view/src/compute/isa/rocprofvis_compute_isa_data.h
+    src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.cpp
+    src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.h
 )
 set(ISA_VIEW_TEST_FILES
     src/view/src/compute/isa/tests/rocprofvis_compute_isa_data_tests.cpp

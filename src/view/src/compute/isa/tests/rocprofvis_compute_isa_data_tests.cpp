@@ -152,6 +152,40 @@ TEST_CASE("Reason mismatches preserve measured stall percentage and bound bar sh
     CHECK(rows[0].unclassified_stall_count == 20);
 }
 
+TEST_CASE("Canonical stall reasons support SDK aliases and preserve unknown names",
+          "[isa]")
+{
+    using Kind                   = IsaDataBuilder::StallReasonKind;
+    const Kind  expected_kinds[] = { Kind::kInstructionFetch, Kind::kAluDependency,
+                                     Kind::kWaitcnt,          Kind::kInternalInstruction,
+                                     Kind::kBarrier,          Kind::kArbiter,
+                                     Kind::kPipelineStall,    Kind::kOtherWait,
+                                     Kind::kSleeping };
+    const char* expected_names[] = {
+        "NO_INSTRUCTION_AVAILABLE", "ALU_DEPENDENCY", "WAITCNT",
+        "INTERNAL_INSTRUCTION",     "BARRIER_WAIT",   "ARBITER_NOT_WIN",
+        "ARBITER_WIN_EX_STALL",     "OTHER_WAIT",     "SLEEP"
+    };
+    for(size_t i = 0; i < sizeof(expected_kinds) / sizeof(expected_kinds[0]); ++i)
+    {
+        const std::string name = expected_names[i];
+        CHECK(IsaDataBuilder::GetStallReasonName(expected_kinds[i]) == name);
+        CHECK(IsaDataBuilder::ResolveStallReasonKind(name) == expected_kinds[i]);
+        CHECK(IsaDataBuilder::ResolveStallReasonKind(
+                  "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_" + name) ==
+              expected_kinds[i]);
+    }
+    CHECK(IsaDataBuilder::ResolveStallReasonKind("OTHER") == Kind::kOtherWait);
+    CHECK(IsaDataBuilder::ResolveStallReasonKind(
+              "ROCPROFILER_PC_SAMPLING_INSTRUCTION_NOT_ISSUED_REASON_OTHER") ==
+          Kind::kOtherWait);
+    CHECK(IsaDataBuilder::ResolveStallReasonKind("") == Kind::kUnknown);
+    CHECK(IsaDataBuilder::ResolveStallReasonKind("CUSTOM_REASON") == Kind::kUnknown);
+    CHECK(IsaDataBuilder::GetStallReasonName(Kind::kUnknown) == std::string("Unknown"));
+    CHECK(IsaDataBuilder::GetStallReasonName(static_cast<Kind>(UINT32_MAX)) ==
+          std::string("Unknown"));
+}
+
 TEST_CASE("Reason names, ordering, and formatted counts are prepared consistently",
           "[isa]")
 {
@@ -475,6 +509,125 @@ TEST_CASE(
     CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, {}) == 0);
     CHECK(source[0].sampling.availability ==
           IsaDataBuilder::SamplingAvailability::kMissing);
+}
+
+static void
+check_unavailable_reason_breakdown(const IsaDataBuilder::SamplingRow& row, uint64_t total,
+                                   uint64_t issued, uint64_t stalled)
+{
+    CHECK(row.sample_counts.total_count == total);
+    CHECK(row.sample_counts.issue_count == issued);
+    CHECK(row.sample_counts.stall_count == stalled);
+    CHECK_FALSE(row.sample_counts.invalid_counts);
+    CHECK(row.sampling.availability == IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(row.stall_reason_counts_overflow);
+    CHECK(row.stall_reasons.empty());
+    CHECK(row.stall_reason_sample_count == 0);
+    CHECK(row.unclassified_stall_count == stalled);
+}
+
+TEST_CASE("Overflowing reason records cannot wrap into valid normalization totals",
+          "[isa][source]")
+{
+    PcSamplingData data   = make_source_sampling_data();
+    data.pc_sample_states = { { 1, 10, 100, 40, 60 } };
+    SECTION("Repeated lookup overflows")
+    {
+        data.pc_sample_stall_reasons = { { 1, 2, UINT64_MAX }, { 1, 2, 1 } };
+    }
+    SECTION("Distinct lookups overflow the classified total")
+    {
+        // An unchecked sum wraps to 100 and could falsely justify subtracting issued
+        // samples from OTHER_WAIT, leaving an apparently matching stalled total.
+        data.pc_sample_stall_reasons = { { 1, 1, UINT64_MAX }, { 1, 2, 101 } };
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    CHECK(prepared.reasons_by_instruction.at(10).overflow);
+    CHECK(prepared.reasons_by_instruction.at(10).total_count == UINT64_MAX);
+    auto isa    = IsaDataBuilder::BuildInstructions(data, 1);
+    auto source = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    check_unavailable_reason_breakdown(isa[0], 100, 40, 60);
+    check_unavailable_reason_breakdown(source[0], 100, 40, 60);
+
+    // A later valid update must clear the warning and restore the reason colors.
+    data.pc_sample_stall_reasons = { { 1, 2, 60 } };
+    const auto recovered         = IsaDataBuilder::PrepareSampling(data);
+    IsaDataBuilder::UpdateSampling(isa, recovered);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, recovered);
+    CHECK_FALSE(isa[0].stall_reason_counts_overflow);
+    CHECK_FALSE(source[0].stall_reason_counts_overflow);
+    REQUIRE(isa[0].stall_reasons.size() == 1);
+    REQUIRE(source[0].stall_reasons.size() == 1);
+    CHECK(isa[0].stall_reason_sample_count == 60);
+    CHECK(source[0].stall_reason_sample_count == 60);
+    CHECK(isa[0].stall_reasons[0].bar_share == 1.0);
+    IsaDataBuilder::UpdateSampling(isa, {});
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, {});
+    CHECK_FALSE(isa[0].stall_reason_counts_overflow);
+    CHECK_FALSE(source[0].stall_reason_counts_overflow);
+}
+
+TEST_CASE("Instruction reason merges retain overflow from sums across sample states",
+          "[isa][source]")
+{
+    PcSamplingData data          = make_source_sampling_data();
+    data.pc_sample_states        = { { 1, 10, 100, 40, 60 }, { 2, 10, 100, 40, 60 } };
+    data.pc_sample_stall_reasons = { { 1, 2, UINT64_MAX }, { 2, 2, 1 } };
+    SECTION("Same lookup")
+    {
+        // Keep both counts in the same reason bucket.
+    }
+    SECTION("Different lookups")
+    {
+        data.pc_sample_stall_reasons[1].pc_sample_stall_reason_lookup_uuid = 3;
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa      = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source   = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    check_unavailable_reason_breakdown(isa[0], 200, 80, 120);
+    check_unavailable_reason_breakdown(source[0], 200, 80, 120);
+}
+
+TEST_CASE(
+    "Source reason merges detect overflow across otherwise representable instructions",
+    "[isa][source]")
+{
+    PcSamplingData data          = make_source_sampling_data();
+    data.pc_sample_states        = { { 1, 10, 100, 40, 60 }, { 2, 20, 100, 40, 60 } };
+    data.pc_sample_stall_reasons = { { 1, 2, UINT64_MAX }, { 2, 2, 1 } };
+    const auto prepared          = IsaDataBuilder::PrepareSampling(data);
+    CHECK_FALSE(prepared.reasons_by_instruction.at(10).overflow);
+    CHECK_FALSE(prepared.reasons_by_instruction.at(20).overflow);
+    auto isa    = IsaDataBuilder::BuildInstructions(data, 1);
+    auto source = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    CHECK_FALSE(isa[0].stall_reason_counts_overflow);
+    CHECK_FALSE(isa[1].stall_reason_counts_overflow);
+    check_unavailable_reason_breakdown(source[0], 200, 80, 120);
+}
+
+TEST_CASE("The maximum representable reason count remains valid at the boundary",
+          "[isa][source]")
+{
+    PcSamplingData data          = make_source_sampling_data();
+    data.pc_sample_states        = { { 1, 10, UINT64_MAX, 0, UINT64_MAX } };
+    data.pc_sample_stall_reasons = { { 1, 2, UINT64_MAX }, { 1, 3, 0 } };
+    const auto prepared          = IsaDataBuilder::PrepareSampling(data);
+    auto       isa               = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source            = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    CHECK_FALSE(isa[0].stall_reason_counts_overflow);
+    CHECK_FALSE(source[0].stall_reason_counts_overflow);
+    CHECK(isa[0].stall_reason_sample_count == UINT64_MAX);
+    CHECK(source[0].stall_reason_sample_count == UINT64_MAX);
+    REQUIRE_FALSE(isa[0].stall_reasons.empty());
+    CHECK(isa[0].stall_reasons[0].bar_share == 1.0);
 }
 
 }  // namespace View

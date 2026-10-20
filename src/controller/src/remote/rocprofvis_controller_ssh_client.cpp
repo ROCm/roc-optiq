@@ -536,6 +536,8 @@ namespace Controller
 
         libssh2_session_set_blocking(connection->GetSession(), 1);
 
+        libssh2_session_flag(connection->GetSession(), LIBSSH2_FLAG_COMPRESS, 1);
+
         if (libssh2_session_handshake(connection->GetSession(), connection->GetSocket()))
         {
             char* msg = nullptr;

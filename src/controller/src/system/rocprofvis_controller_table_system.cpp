@@ -400,6 +400,11 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
             free(query);
+
+            if(dm_result != kRocProfVisDmResultSuccess)
+            {
+                result = kRocProfVisResultUnknownError;
+            }
         }
         else
         {
@@ -407,7 +412,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
         }
     }
     delete query_args;
-    return result;
+    return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
 rocprofvis_result_t

@@ -1169,6 +1169,10 @@ namespace DataModel
                 }
             }
             file.close();
+            if (kRocProfVisDmResultSuccess == result && file.fail())
+            {
+                result = kRocProfVisDmResultDbAccessFailed;
+            }
             return result;
         }
         else

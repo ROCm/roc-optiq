@@ -82,9 +82,7 @@ public:
 protected:
     virtual bool IncludeTrack(uint64_t track_id) const;
     virtual void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
-    void         FormatData() const override;
     void         IndexColumns() override;
-    void         RowSelected(const ImGuiMouseButton mouse_button) override;
     void         OnSortChanged() override;
     void         AdjustFilterForRequest(FilterOptions& filter) const override;
 

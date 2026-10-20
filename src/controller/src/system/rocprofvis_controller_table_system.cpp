@@ -244,15 +244,15 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
                 rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
             ROCPROFVIS_ASSERT(db);
 
-            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
-            ROCPROFVIS_ASSERT(object2wait);
-
             char*                  count_query = nullptr;
             rocprofvis_dm_result_t dm_result = BuildQuery(db, *query_args, 0, 0, true, &count_query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
                 if(strlen(count_query) > 0)
                 {
+                    rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+                    ROCPROFVIS_ASSERT(object2wait);
+
                     rocprofvis_dm_table_id_t table_id = 0;
                     dm_result = rocprofvis_db_execute_query_async(
                         db, count_query, "Calculate table count", object2wait, &table_id);

@@ -14,9 +14,9 @@
   Variables supplied by CMake via -d flags:
       Version    = 3-part MSI version: Major.Minor.Patch, e.g. 1.0.0
       ExeFile    = absolute path to roc-optiq.exe
-      LicenseRtf = absolute path to the RTF license shown in the installer UI
-      BannerBmp  = absolute path to the 493x58 banner bitmap
-      DialogBmp  = absolute path to the 493x312 background bitmap
+      LicenseRtf = absolute path to the RTF license shown in the installer UI (wix/License_Public.rtf)
+      BannerBmp  = absolute path to the banner bitmap (wix/banner.bmp)
+      DialogBmp  = absolute path to the background bitmap (wix/main.bmp)
       IconFile   = absolute path to ROCm_Optiq.ico
 
   The RuntimePayload component group (every other file of the runtime

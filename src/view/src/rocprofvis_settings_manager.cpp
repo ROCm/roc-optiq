@@ -309,6 +309,8 @@ inline constexpr const char* SETTINGS_FILE_NAME           = "settings_applicatio
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
 inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
 inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
+inline constexpr float       COMPACT_SCROLLBAR_SIZE      = 10.0f;
+inline constexpr float       COMPACT_SCROLLBAR_ROUNDING  = 5.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -696,8 +698,10 @@ SettingsManager::InitStyling()
     style.GrabRounding      = 6.0f;
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 12.0f;
-    style.ScrollbarRounding = 8.0f;
-    style.ScrollbarSize     = 14.0f;
+    // Keep scrollbars compact so they support navigation without competing
+    // with the trace and analysis content for visual attention.
+    style.ScrollbarRounding = COMPACT_SCROLLBAR_ROUNDING;
+    style.ScrollbarSize     = COMPACT_SCROLLBAR_SIZE;
     style.FramePadding      = ImVec2(12, 6);
     style.ItemSpacing       = ImVec2(10, 8);
     style.ItemInnerSpacing  = ImVec2(8, 6);

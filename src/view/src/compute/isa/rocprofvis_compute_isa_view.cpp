@@ -559,7 +559,7 @@ ComputeIsaView::RenderDevelopmentNotice(float button_width)
 {
     constexpr const char* LABEL   = "Under development";
     constexpr const char* TOOLTIP = "ISA View is under development.\n"
-                                    "Profiling data interpretation"
+                                    "Profiling data interpretation "
                                     "may change in future releases.\n"
                                     "The layout and available controls may also change.";
 

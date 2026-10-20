@@ -236,7 +236,7 @@ rocprofvis_dm_result_t SqliteDatabase::CloseAsSqlite()
 }
 
 void
-SqliteDatabase::InterruptQuery(void* connection) {
+SqliteDatabase::InterruptAsSqlite(void* connection) {
     if (connection != nullptr)
     {
         sqlite3_interrupt((sqlite3*) connection);

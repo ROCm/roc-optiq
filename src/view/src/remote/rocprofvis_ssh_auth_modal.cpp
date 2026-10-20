@@ -30,15 +30,16 @@ struct KbdintState
 
 KbdintState& KbdintForFrame() { static KbdintState s; return s; }
 
-// Header band shared by the auth modals: accent SSH glyph, title, and a dim
-// one-line subtitle, matching the "Open Remote Trace" dialog header.
-void RenderAuthHeaderCard(const char* id, const char* title, const char* subtitle)
+// Header band shared by the auth modals: glyph, title, and a dim one-line
+// subtitle, matching the "Open Remote Trace" dialog header.
+void RenderAuthHeaderCard(const char* id, const char* glyph, Colors glyph_color,
+                          const char* title, const char* subtitle)
 {
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = ImGui::GetStyle();
 
     BeginPanelCard(id, PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true, &settings);
-    PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
+    PanelIcon(glyph, glyph_color, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::BeginGroup();
     ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
@@ -90,7 +91,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
-        popup_style.CenterPopup();
+        popup_style.CenterPopup(ImGuiCond_Always);
         // Borderless card-stack: the window hugs the cards (like the remote
         // trace dialog) and the header band carries the title instead of the
         // native title bar.
@@ -107,8 +108,8 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                                 ImVec2(style.ItemSpacing.x, 4.0f));
 
-            RenderAuthHeaderCard("##ssh_auth_header", "SSH Authentication",
-                                 "Enter your credentials to continue.");
+            RenderAuthHeaderCard("##ssh_auth_header", ICON_LOCKED, Colors::kAccent,
+                                 "SSH Authentication", "Enter your credentials to continue.");
 
             BeginPanelCard("##ssh_auth_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
                            true, &settings);
@@ -192,111 +193,76 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
-        popup_style.CenterPopup();
+        popup_style.CenterPopup(ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-        ImGui::SetNextWindowSize(ImVec2(520, 0));
+        ImGui::SetNextWindowSize(ImVec2(440, 0));
 
         if(ImGui::BeginPopupModal("SSH Host Key", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
                                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
         {
-            const bool  mismatch = req->state == HostKeyState::Mismatch;
-            const char* subtitle = mismatch ? "The server's host key does not match."
-                                            : "Verify this host before connecting.";
+            const bool        mismatch = req->state == HostKeyState::Mismatch;
+            const std::string server =
+                req->port == 22 ? req->host : req->host + ":" + std::to_string(req->port);
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                                 ImVec2(style.ItemSpacing.x, 4.0f));
 
-            RenderAuthHeaderCard("##ssh_hostkey_header", "SSH Host Key", subtitle);
+            RenderAuthHeaderCard("##ssh_hostkey_header", mismatch ? ICON_UNLOCKED : ICON_CHAIN,
+                                 mismatch ? Colors::kBgError : Colors::kAccent,
+                                 mismatch ? "Server key changed" : "Trust this server?",
+                                 server.c_str());
 
             BeginPanelCard("##ssh_hostkey_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
                            true, &settings);
             {
-                if(mismatch)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kBgError));
-                    ImGui::TextWrapped("WARNING: server host key has CHANGED");
-                    ImGui::PopStyleColor();
-                    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                    ImGui::TextWrapped("Someone could be eavesdropping on you right now "
-                                       "(man-in-the-middle attack), or the server's key was "
-                                       "rotated. Continue only if you know this is expected.");
-                    ImGui::PopStyleColor();
-                }
-                else
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                    ImGui::TextWrapped(
-                        "This is the first time you are connecting to this host. "
-                        "Verify the fingerprint matches what the server administrator "
-                        "expects before continuing.");
-                    ImGui::PopStyleColor();
-                }
-
+                ImGui::TextWrapped("%s",
+                                   mismatch
+                                       ? "This server's key is different from last time. That "
+                                         "is normal after a reinstall. If you did not expect "
+                                         "it, cancel."
+                                       : "First time connecting to this server. Optiq will "
+                                         "remember it.");
                 ImGui::Spacing();
-                if(ImGui::BeginTable("##ssh_hostkey_fields", 2,
-                                     ImGuiTableFlags_SizingStretchProp))
-                {
-                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 96.0f);
-                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    PanelFieldLabel("Host", true, &settings);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::AlignTextToFramePadding();
-                    ImGui::Text("%s:%lu", req->host.c_str(), req->port);
-
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    PanelFieldLabel("Key type", true, &settings);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::AlignTextToFramePadding();
-                    ImGui::TextUnformatted(req->key_type.c_str());
-
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    PanelFieldLabel("Fingerprint", true, &settings);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::AlignTextToFramePadding();
-                    ImGui::TextWrapped("%s", req->fingerprint_sha256_b64.c_str());
-                    ImGui::EndTable();
-                }
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+                ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+                ImGui::TextWrapped("Key fingerprint %s", req->fingerprint_sha256_b64.c_str());
+                ImGui::PopFont();
+                ImGui::PopStyleColor();
             }
             EndPanelCard();
 
             BeginPanelCard("##ssh_hostkey_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
                            true, &settings);
             {
-                constexpr float TRUST_WIDTH  = 150.0f;
                 constexpr float BUTTON_WIDTH = 104.0f;
-                const float     total =
-                    TRUST_WIDTH + BUTTON_WIDTH * 2.0f + style.ItemSpacing.x * 2.0f;
+                const char*     trust_label  = mismatch ? "Trust new key" : "Trust and connect";
+                const float     trust_width =
+                    ImGui::CalcTextSize(trust_label).x + style.FramePadding.x * 4.0f;
+                const float total = trust_width + BUTTON_WIDTH + style.ItemSpacing.x;
                 const float avail = ImGui::GetContentRegionAvail().x;
                 if(avail > total)
                 {
                     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
                 }
-                if(ImGui::Button("Reject", ImVec2(BUTTON_WIDTH, 0)))
-                {
-                    ssh_session->SubmitHostKeyDecision(HostKeyDecision::Reject);
+
+                auto decide = [&](HostKeyDecision decision) {
+                    ssh_session->SubmitHostKeyDecision(decision);
                     ImGui::CloseCurrentPopup();
                     ssh_session->GetHostKeyRequest()->ClearUpdated();
+                };
+                // A changed key makes Cancel the highlighted, safe choice.
+                if(mismatch ? AccentButton("Cancel", ImVec2(BUTTON_WIDTH, 0), &settings)
+                            : ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0)))
+                {
+                    decide(HostKeyDecision::Reject);
                 }
                 ImGui::SameLine();
-                if(ImGui::Button("Trust once", ImVec2(BUTTON_WIDTH, 0)))
+                if(mismatch ? ImGui::Button(trust_label, ImVec2(trust_width, 0))
+                            : AccentButton(trust_label, ImVec2(trust_width, 0), &settings))
                 {
-                    ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustOnce);
-                    ImGui::CloseCurrentPopup();
-                    ssh_session->GetHostKeyRequest()->ClearUpdated();
-                }
-                ImGui::SameLine();
-                if(AccentButton("Trust permanently", ImVec2(TRUST_WIDTH, 0), &settings))
-                {
-                    ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustPermanently);
-                    ImGui::CloseCurrentPopup();
-                    ssh_session->GetHostKeyRequest()->ClearUpdated();
+                    decide(HostKeyDecision::TrustPermanently);
                 }
             }
             EndPanelCard();

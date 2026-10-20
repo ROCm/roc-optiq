@@ -54,7 +54,6 @@ class SqliteDatabase
         SqliteDatabase(Database* db): m_db(db) {};
         // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~SqliteDatabase() {CloseAsSqlite();}
-        void  InterruptQuery(void* connection);
         // check if table present in database
         bool CheckTableExists(const std::string& table_name, uint32_t db_node_id);
 
@@ -62,6 +61,10 @@ class SqliteDatabase
 
         rocprofvis_dm_result_t OpenAsSqlite();
         rocprofvis_dm_result_t CloseAsSqlite();
+        // Method to interrupt the query running on a connection. SqliteDatabase is not a
+        // Database, so derived classes must forward Database::InterruptQuery to this.
+        // @param connection - sqlite connection running the query
+        void InterruptAsSqlite(void* connection);
 
         // ---------------------------------------SQL operations-----------------------------------------
         // Method to create SQL table

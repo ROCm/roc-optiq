@@ -133,7 +133,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- src/                  # All first-party code
 |   +-- app/              # Entry point: window, GLFW, ImGui backend, CLI
 |   |   +-- inc/          # rocprofvis_imgui_backend.h, rocprofvis_version.h
-|   |   +-- src/          # main.cpp, glfw_util, imgui_(opengl|vulkan), cli_parser
+|   |   +-- src/          # main.cpp, app_shell, rocprofvis_glfw_util, imgui_(opengl|vulkan), cli_parser, platform_helpers
 |   +-- core/             # Tiny core lib: assert macros, profile markers
 |   |   +-- inc/          # rocprofvis_core.h, rocprofvis_core_assert.h
 |   |   +-- src/
@@ -167,13 +167,11 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 +-- resources/            # Icons, fonts, AMD logo, embedded assets
 +-- sample/               # Sample traces (.db, .rpd, .rpv)
 +-- docs/                 # ReadTheDocs sources, screenshots
-+-- Installer/            # Windows installer (NSIS) config
++-- wix/                  # WiX v4 MSI sources (PACKAGE_WIX)
 +-- docker/               # Container build helpers
 +-- .github/workflows/    # CI: ubuntu, oracle, rocky, windows, macos
 +-- CMakeLists.txt        # Root build
 +-- CMakePresets.json     # Build presets (preferred entrypoint)
-+-- build.cmd             # Windows convenience wrapper
-+-- pkgbuild.cmd          # Windows packaging
 +-- CODING.md             # Coding standards (HARD RULES)
 +-- BUILDING.md           # Per-platform build steps
 +-- README.md             # Public README + UI tour
@@ -245,26 +243,46 @@ Key invariants:
 
 ### `src/app/`
 
-Owns the OS-level shell. Specifically:
+Owns the OS-level shell. Code declared here lives in
+`namespace RocProfVis::App`, except the GLFW window helpers and OS
+workarounds in `RocProfVis::Platform`. Platform code talks only to GLFW and
+the OS and never calls into the View; the app shell reports window changes
+to the View. Specifically:
 
-- `main.cpp` - GLFW window, fullscreen state, drag-and-drop callback, and
-  the lazy frame loop that calls `rocprofvis_view_render()` and sleeps
-  unless `rocprofvis_view_wants_continuous_render()` or an input/event
-  wake requires more frames.
-- `glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
-  `sync_fullscreen_state`. Use these instead of touching GLFW directly.
+- `main.cpp` - GLFW window and the lazy frame loop that calls
+  `rocprofvis_view_render()` and sleeps unless
+  `rocprofvis_view_wants_continuous_render()` or an input/event wake
+  requires more frames. `test/test_main.cpp` is the UI test harness's
+  counterpart with its own frame loop.
+- `rocprofvis_app_shell.{h,cpp}` - startup code shared by both
+  executables: log setup, common CLI options with `--help`/`--version`
+  handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
+  callbacks, and fullscreen toggles, including telling the View about
+  fullscreen changes. Put code both executables need here instead of
+  copying it.
+- `rocprofvis_glfw_util.{h,cpp}` - cross-platform GLFW window helpers in
+  `RocProfVis::Platform`: `FullscreenState`, `toggle_fullscreen`,
+  `sync_fullscreen_state`, `get_current_monitor`. Use these instead of
+  touching GLFW directly.
+- `rocprofvis_platform_helpers.{h,cpp}` /
+  `rocprofvis_platform_helpers_macos.mm` - per-OS workarounds such as the
+  Linux content-scale fallback and floating-viewport fixes. Each is only
+  implemented for its platform, so guard calls with the matching macro.
 - `rocprofvis_imgui_backend.{h,cpp}` plus `rocprofvis_imgui_opengl.cpp` /
   `rocprofvis_imgui_vulkan.cpp` - selects renderer at runtime, sets up
   ImGui's backend, and exposes the texture-creation callback that
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
-  (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
+  (`CLIParser::AddOption`). Flags both executables take are registered in
+  `add_common_cli_options` (`rocprofvis_app_shell.cpp`):
   `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
-  version. `-v hash` also prints the git commit. Official builds print the
-  hash alone. An unofficial build prints `unknown` and a line that the
-  commit hash is not recorded. About shows the same text. Add new flags by
-  calling `AddOption` in `main.cpp::parse_command_line_args`.
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Each executable's
+  `parse_command_line_args` adds its own flags (`-r/--drag-repair` in Linux
+  multi-window builds, `-t/--run-tests` in the test harness). `-v` prints the
+  version. `-v hash` also prints the
+  git commit. Official builds print the hash alone. An unofficial build
+  prints `unknown` and a line that the commit hash is not recorded. About
+  shows the same text.
 
 ### `src/core/`
 
@@ -433,7 +451,7 @@ AppWindow (singleton, RocWidget)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
 +-- ProfilerLauncherDialog   : optional profiler UI
-+-- SshTestDialog            : optional dev-only remote trace UI
++-- SshTestDialog            : File > Open Remote... (ROCPROFVIS_ENABLE_REMOTE)
 +-- AppMonitor               : singleton; polls background controller operations
 +-- LogViewer                : singleton production log overlay
 +-- NotificationManager     : singleton, drawn last (toasts overlay)
@@ -2291,11 +2309,14 @@ Layered, transport at the bottom and the panel at the top:
   about what each tool is for, so they are product behaviour rather
   than incidental text.
 - `rocprofvis_ai_tool_query.{h,cpp}` - turns query-shaped tool
-  arguments into the SQL fragments `DataProvider` takes. The one place
-  a bad argument could become bad SQL, so it treats model input as
-  hostile: column and operator whitelists rather than escaping, quoted
-  string literals, and escaped `LIKE` wildcards paired with an explicit
-  `ESCAPE` clause.
+  arguments into the table filter and grouping `DataProvider` takes. The
+  filter is written in the table filter-row language and applied to each
+  row before grouping and paging. The one place a bad argument could
+  become a bad filter, so it treats model input as hostile: column and
+  operator whitelists rather than escaping, quoted string literals, and
+  escaped `LIKE` wildcards paired with an explicit `ESCAPE` clause. Its
+  columns must be names the returned rows carry (`node`, not the SQL
+  `nodeId`), since a filter on any other name matches nothing.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
   `StartAssistantTool`, which parses the arguments, refuses everything
   but `offer_next_steps` when no trace is ready, then searches the UI
@@ -2520,23 +2541,36 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
 - `RemoteTraceOrchestrator` - connect -> authenticate -> optional
   execute -> optional download state machine. It filters
   `kRemoteStatusChanged` by active operation ID and reuses an
-  authenticated session for browsing.
+  authenticated, idle session for browsing and `DownloadPath()`. A
+  failed listing keeps the session authenticated (it is usually a
+  missing or unreadable folder); any other failure drops it, so the
+  next call reconnects.
 - `RenderSshAuthModal(session)` - renders keyboard-interactive and
   host-key requests. The owning dialog must call it every frame while
   the session exists; it is not rendered globally by `AppWindow`.
 - `SshSettingsDialog` - connection-profile CRUD modal.
-- `SshTestDialog` - remote trace opener/browser owned lazily by
-  `AppWindow`; its entry point requires both
-  `ROCPROFVIS_ENABLE_REMOTE` and `ROCPROFVIS_DEVELOPER_MODE`.
+- `SshTestDialog` - the `File > Open Remote...` flow, owned lazily by
+  `AppWindow`: it opens `RemoteFileBrowser` (or `SshSettingsDialog` when
+  no connection is saved) and downloads the picked file over the
+  browser's session (`RemoteFileBrowser::TakeSession`).
+- `RemoteFileBrowser` - the modal remote file/folder picker used by
+  `SshTestDialog` and the launcher's remote Browse buttons. When the
+  start folder does not list, it opens the nearest parent below `/`,
+  then the remote home, and says so in the footer; a failed navigation
+  keeps the last listed folder. Retry, and Refresh after a failure,
+  reconnect.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`, and
   `RemoteDir` in `rocprofvis_ssh_fetch.*` are mutex-protected snapshots;
   consume updates without holding locks across ImGui calls.
 
 `SshSession::IsConnected()` means a connection handle is allocated,
 not that transport and authentication succeeded. Do not start a second
-phase while one is in flight. In-flight destruction must follow
-`SshSession`'s `AppMonitor::AppendTeardown` path so a worker never sees
-a freed connection.
+phase while one is in flight. A failure is reported before its job
+lets go of the connection, so after one wait for
+`SshSession::IsIdle()` before starting another phase on it. Destruction
+while a phase's job may still run (in flight, or failed but not yet
+resolved) must follow `SshSession`'s `AppMonitor::AppendTeardown` path
+so a worker never sees a freed connection.
 
 Downloaded traces are cached under
 `{config}/remote_cache/<connection-and-path-hash>/<filename>`.
@@ -2583,11 +2617,11 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
-Tools: `kRPVProfilerToolRocprofSysRun`, `â€¦SysSample`, `â€¦SysInstrument`.
-Tabs: General, Sampling, ROCm,
-Process Sampling, Parallelism, Advanced, plus Instrument (only when the
-tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
-Perfetto options are nested inside Advanced, not a top-level tab.
+Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
+Tabs: General sits in the launcher form; Sampling, ROCm, Perfetto,
+Process, Parallelism, Logging, plus Instrument (only when the tool is
+`instrument`) live in the Advanced Options window, where the dialog
+appends an Overrides tab (`extra_argv` and `extra_env`).
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
@@ -2663,7 +2697,8 @@ express.
 these instead of re-authoring launcher UI: `RenderTargetSection`,
 `RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
 `RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
-{kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`. The
+{kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`, and the
+code-panel pieces (`BeginCodePanel` / `RenderCodeBox` / `EndCodePanel`). The
 connection-mode selector and SSH UI live in the dialog
 (`RenderRemoteSection`), not here.
 
@@ -2737,7 +2772,7 @@ wrong machine's install and print a path that is not what executes.
 shared `RenderToolLocationSection`, placed above the backend tabs because
 it belongs to the profile rather than to any one backend; in local mode the
 field also shows the absolute path the selection currently resolves to. A
-set directory is repeated above the command preview by
+set directory is repeated under "Where to run" by
 `RenderToolResolutionNotice`, so a profile imported from elsewhere cannot
 silently run a different build. If the tool is not in the configured
 directory the launch fails rather than falling back to `$ROCM_PATH` or
@@ -3200,7 +3235,9 @@ for nearly every common pattern.
 - **Handling monitor events without filtering operation ID.** Multiple
   SSH/profiler phases can emit the same event type.
 - **Starting overlapping SSH phases.** One `SshSession` supports one
-  operation at a time; advance through its orchestrator.
+  operation at a time; advance through its orchestrator. After a
+  failure, wait for `SshSession::IsIdle()`: the failed job may still be
+  using the connection.
 - **Rendering SSH authentication once.** `RenderSshAuthModal()` must
   run every frame while requests may be pending.
 - **Freeing an SSH/profiler handle before its future resolves.** Use
@@ -3499,8 +3536,9 @@ All under `agenticprofiling/`, compiled only with
 - `RenderSshAuthModal` -> `remote/rocprofvis_ssh_auth_modal.h` ->
   Keyboard-interactive and host-key UI.
 - `SshSettingsDialog`, `SshTestDialog` -> matching `remote/` headers ->
-  Profile editor and remote-trace window; `SshTestDialog` also requires
-  `ROCPROFVIS_DEVELOPER_MODE` at the `AppWindow` entry point.
+  Profile editor and the `File > Open Remote...` flow.
+- `RemoteFileBrowser` -> `remote/rocprofvis_remote_file_browser.h` ->
+  Modal remote file/folder picker over its own `SshSession`.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`,
   `RemoteDir` -> `remote/rocprofvis_ssh_fetch.h` -> Thread-safe UI
   snapshots.

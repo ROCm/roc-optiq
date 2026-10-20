@@ -530,6 +530,18 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     }
     sys_out->m_source_filter = node_id.has_value || agent_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id }) : std::nullopt;
     sys_out->m_filter = "__op = " + std::to_string(m_op);
+    uint32_t filter_length = 0;
+    if(kRocProfVisResultSuccess ==
+           args.GetString(kRPVControllerTableArgsFilter, 0, nullptr, &filter_length) &&
+       filter_length > 0)
+    {
+        std::string filter(filter_length, '\0');
+        if(kRocProfVisResultSuccess ==
+           args.GetString(kRPVControllerTableArgsFilter, 0, filter.data(), &filter_length))
+        {
+            sys_out->m_filter += " AND (" + filter + ")";
+        }
+    }
     sys_out->m_group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
         "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
     sys_out->m_group_cols = "name";

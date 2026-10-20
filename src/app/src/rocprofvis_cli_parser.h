@@ -8,7 +8,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace App
 {
 
 // Define the Option structure
@@ -62,5 +62,5 @@ private:
     std::map<std::string, CmdArgResult> m_results;
 };
 
-}  // namespace View
+}  // namespace App
 }  // namespace RocProfVis

@@ -432,7 +432,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
     rocprofvis_dm_database_t database, 
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
-    rocprofvis_dm_query_criteria_ptr source_filter,
+    rocprofvis_dm_query_criteria_ptr source_filter, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, 
     bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
@@ -449,7 +449,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
     std::string query;
     rocprofvis_dm_result_t result = db->BuildEventSearchQuery(start, end, 
                                                               num, ops,
-                                                              source_filter,
+                                                              source_filter, filter,
                                                               num_string_table_filters, string_table_filters,
                                                               include_substring, include_category, partial_matching,
                                                               sort_column, sort_order,

@@ -444,7 +444,7 @@ rocprofvis_dm_result_t
 QueryManager::BuildEventSearchQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
-    rocprofvis_dm_query_criteria_ptr source_filter,
+    rocprofvis_dm_query_criteria_ptr source_filter, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
     bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
@@ -485,7 +485,7 @@ QueryManager::BuildEventSearchQuery(
         return kRocProfVisDmResultSuccess;
     }
     return BuildCompoundQuery(kRPVDMTableUseCaseEventSearch, start, end, num, ops, slice_query_map_array,
-        GetProcessorIDSubquery(source_filter).c_str(), nullptr, nullptr, nullptr, sort_column, sort_order,
+        GetProcessorIDSubquery(source_filter).c_str(), filter, nullptr, nullptr, sort_column, sort_order,
         max_count, offset, count_only, query);
 }
 

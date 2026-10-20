@@ -15,7 +15,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace App
 {
 
 const size_t MIN_LONG_FLAG_SIZE = 3;
@@ -210,5 +210,5 @@ CLIParser::DetachFromConsole()
 #endif
 }
 
-}  // namespace View
+}  // namespace App
 }  // namespace RocProfVis

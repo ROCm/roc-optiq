@@ -9,7 +9,7 @@
 
 namespace RocProfVis
 {
-namespace View
+namespace Platform
 {
 
 // Default windowed mode settings
@@ -40,20 +40,21 @@ void init_fullscreen_state(GLFWwindow* window, FullscreenState& state);
 // Get the monitor where the window is currently located
 GLFWmonitor* get_current_monitor(GLFWwindow* window);
 
-// Toggle between fullscreen and windowed mode
-void toggle_fullscreen(GLFWwindow* window, FullscreenState& state);
+// Toggle between fullscreen and windowed mode. Returns true if the mode changed.
+bool toggle_fullscreen(GLFWwindow* window, FullscreenState& state);
 
 // Re-apply the saved windowed geometry after a return from fullscreen, if the
 // window manager did not land the window where it was asked to. Call once per
 // frame from the render loop; it is a no-op unless a restore is outstanding.
 void settle_windowed_geometry(GLFWwindow* window, FullscreenState& state);
 
-// Sync fullscreen state with actual window state (in case of OS-initiated changes)
-void sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState& state);
+// Sync fullscreen state with actual window state (in case of OS-initiated changes).
+// Returns true if the state changed.
+bool sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState& state);
 
 // Check if the window is currently in fullscreen mode
 bool is_fullscreen_active(GLFWwindow* window);
 
-}  // namespace View
+}  // namespace Platform
 }  // namespace RocProfVis
 

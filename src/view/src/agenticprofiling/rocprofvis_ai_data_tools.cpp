@@ -207,7 +207,8 @@ AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
     {
         out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
     }
-    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
+    out << "kernel_exec_time_total_ns: "
+        << nanosecond_to_str(gpu.kernel_exec_time_total) << "\n";
     out << "top_kernels:\n";
     const size_t count = std::min(gpu.top_kernels.size(), ASSISTANT_TOP_KERNEL_LIMIT);
     if(count == 0)
@@ -219,8 +220,8 @@ AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
     {
         const SummaryInfo::KernelMetrics& kernel = gpu.top_kernels[i];
         out << "  " << (i + 1) << ". " << kernel.name << "  pct=" << kernel.exec_time_pct
-            << "  calls=" << kernel.invocations << "  sum_ns=" << kernel.exec_time_sum
-            << "\n";
+            << "  calls=" << kernel.invocations
+            << "  sum_ns=" << nanosecond_to_str(kernel.exec_time_sum) << "\n";
     }
 }
 
@@ -520,6 +521,40 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
     return TrimResult(out.str());
 }
 
+// For an empty read, names the filter columns the table does not have. Such a
+// filter matches nothing, which would otherwise read as no row qualifying.
+std::string
+MissingFilterColumnsNote(const TablesModel& tables, TableType type,
+                         const std::vector<std::string>& filter_columns)
+{
+    const std::vector<std::string>& header = tables.GetTableHeader(type);
+    if(filter_columns.empty() || header.empty() || !tables.GetTableData(type).empty())
+    {
+        return std::string();
+    }
+    std::vector<std::string> missing;
+    for(const std::string& column : filter_columns)
+    {
+        if(std::find(header.begin(), header.end(), column) == header.end() &&
+           std::find(missing.begin(), missing.end(), column) == missing.end())
+        {
+            missing.push_back(column);
+        }
+    }
+    if(missing.empty())
+    {
+        return std::string();
+    }
+    std::ostringstream out;
+    out << "\nNo rows matched because this table has no ";
+    for(size_t i = 0; i < missing.size(); ++i)
+    {
+        out << (i == 0 ? "" : i + 1 == missing.size() ? " or " : ", ") << missing[i];
+    }
+    out << " column. Filter on a column listed above instead.";
+    return out.str();
+}
+
 // Names a track type for the model, using the same words the UI does.
 const char*
 TrackTypeName(TrackInfo::TrackType type)
@@ -551,8 +586,8 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
     if(!event->basic_info.name.empty())
     {
         out << "name: " << event->basic_info.name << "\n";
-        out << "start_ns: " << event->basic_info.start_ts << "\n";
-        out << "duration_ns: " << event->basic_info.duration << "\n";
+        out << "start_ns: " << nanosecond_to_str(event->basic_info.start_ts) << "\n";
+        out << "duration_ns: " << nanosecond_to_str(event->basic_info.duration) << "\n";
     }
     if(event->track_id != INVALID_UINT64_INDEX)
     {
@@ -719,8 +754,9 @@ AppendBinWindow(std::ostringstream& out, const char* label, size_t bin, size_t b
         return;
     }
     const double width = span_ns / static_cast<double>(bin_count);
-    out << label << ": " << (start_ns + width * static_cast<double>(bin)) << " .. "
-        << (start_ns + width * static_cast<double>(bin + 1)) << "\n";
+    out << label << ": "
+        << nanosecond_to_str(start_ns + width * static_cast<double>(bin)) << " .. "
+        << nanosecond_to_str(start_ns + width * static_cast<double>(bin + 1)) << "\n";
 }
 
 // Sums the event rows of the minimap. This is exactly what the histogram strip
@@ -767,9 +803,9 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     const double span_ns  = end_ns - start_ns;
 
     std::ostringstream out;
-    out << "trace_start_ns: " << start_ns << "\n";
-    out << "trace_end_ns: " << end_ns << "\n";
-    out << "trace_duration_ns: " << span_ns << "\n";
+    out << "trace_start_ns: " << nanosecond_to_str(start_ns) << "\n";
+    out << "trace_end_ns: " << nanosecond_to_str(end_ns) << "\n";
+    out << "trace_duration_ns: " << nanosecond_to_str(span_ns) << "\n";
 
     if(single_track != INVALID_UINT64_INDEX)
     {
@@ -795,17 +831,35 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
         {
             out << "counter_min: " << profile.min_value << "\n";
             out << "counter_max: " << profile.max_value << "\n";
+            out << "note: activity_0_100, busiest_window_ns, counter_min "
+                   "and counter_max come from per-bin averages, so short spikes "
+                   "and dips are smoothed away. Use them to choose where to look and "
+                   "do not report them as exact values; read the window with "
+                   "track_samples for those.\n";
         }
-        else
+        else if(track != nullptr)
         {
-            out << "event_count: " << profile.total << "\n";
+            out << "event_count: " << track->num_entries << "\n";
+            out << "note: event_count is exact. activity_0_100 and busiest_window_ns "
+                   "are estimates from the timeline histogram, which counts an event "
+                   "in every bucket it overlaps. Use them to choose where to look and "
+                   "do not report them as exact numbers; for an exact count in one "
+                   "window, call track_events on that window and track.\n";
+            if(track->topology.type == TrackInfo::TrackType::Stream)
+            {
+                out << "note: a stream track lists the same kernels and copies as the "
+                       "queue tracks, grouped by HIP stream, so do not add this count to "
+                       "theirs.\n";
+            }
         }
         return TrimResult(out.str());
     }
 
-    std::vector<std::pair<uint64_t, OverviewProfile>> event_tracks;
-    size_t                                            counter_count = 0;
-    double                                            event_total   = 0.0;
+    std::vector<const TrackInfo*> event_tracks;
+    size_t                        counter_count = 0;
+    size_t                        stream_count  = 0;
+    uint64_t                      stream_events = 0;
+    uint64_t                      event_total   = 0;
     for(const std::pair<const uint64_t, std::vector<double>>& row : minimap)
     {
         const TrackInfo* track = timeline.GetTrack(row.first);
@@ -819,16 +873,26 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
             continue;
         }
 
-        const OverviewProfile profile = Downsample(row.second, bin_count);
-        event_tracks.emplace_back(row.first, profile);
-        event_total += profile.total;
+        // A stream track re-lists kernels and copies that already sit on a queue
+        // track, so totalling or ranking it would count that GPU work twice.
+        if(track->topology.type == TrackInfo::TrackType::Stream)
+        {
+            ++stream_count;
+            stream_events += track->num_entries;
+        }
+        else
+        {
+            event_tracks.push_back(track);
+            event_total += track->num_entries;
+        }
     }
 
     const OverviewProfile overall = Downsample(CombinedEventRow(context), bin_count);
     out << "bins: " << overall.bins.size() << "\n";
     if(!overall.bins.empty())
     {
-        out << "bin_width_ns: " << (span_ns / static_cast<double>(overall.bins.size()))
+        out << "bin_width_ns: "
+            << nanosecond_to_str(span_ns / static_cast<double>(overall.bins.size()))
             << "\n";
     }
     AppendBinRow(out, overall);
@@ -845,30 +909,43 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     }
     AppendBinWindow(out, "quietest_window_ns", quietest, overall.bins.size(), start_ns,
                     span_ns);
+    out << "note: activity_0_100, busiest_window_ns and quietest_window_ns are "
+           "estimates from the timeline histogram, which counts an event in every "
+           "bucket it overlaps. Use them to choose where to look and do not report "
+           "them as exact numbers. total_events and busiest_tracks are exact; for "
+           "an exact count in one window, call track_events on that window with "
+           "the track_ids you need.\n";
     out << "total_events: " << event_total << "\n";
+    if(stream_count > 0)
+    {
+        out << "stream_tracks: " << stream_count << " tracks, " << stream_events
+            << " events. These are the same kernels and copies as the queue tracks, "
+               "grouped by HIP stream, so total_events and busiest_tracks leave them "
+               "out. The histogram still includes them, so GPU work counts twice in "
+               "activity_0_100 and both windows.\n";
+    }
 
     std::sort(event_tracks.begin(), event_tracks.end(),
-              [](const std::pair<uint64_t, OverviewProfile>& a,
-                 const std::pair<uint64_t, OverviewProfile>& b) {
-                  return a.second.total > b.second.total;
+              [](const TrackInfo* a, const TrackInfo* b) {
+                  return a->num_entries > b->num_entries;
               });
 
     out << "busiest_tracks:\n";
     const size_t shown = std::min(event_tracks.size(), ASSISTANT_OVERVIEW_TRACKS);
     for(size_t i = 0; i < shown; ++i)
     {
-        const uint64_t         track_id = event_tracks[i].first;
-        const OverviewProfile& profile  = event_tracks[i].second;
-        out << "  " << (i + 1) << ". track_id=" << track_id << " events="
-            << profile.total;
-        if(event_total > 0.0)
+        const TrackInfo* track = event_tracks[i];
+        out << "  " << (i + 1) << ". track_id=" << track->id
+            << " events=" << track->num_entries;
+        if(event_total > 0)
         {
             out << " share_pct="
-                << FormatPercent(
-                       static_cast<float>(profile.total / event_total * 100.0));
+                << FormatPercent(static_cast<float>(
+                       static_cast<double>(track->num_entries) /
+                       static_cast<double>(event_total) * 100.0));
         }
         out << " name=\""
-            << context.data_provider->DataModel().BuildTrackName(track_id) << "\"\n";
+            << context.data_provider->DataModel().BuildTrackName(track->id) << "\"\n";
     }
     if(event_tracks.size() > shown)
     {
@@ -1070,7 +1147,8 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     {
         out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
     }
-    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
+    out << "kernel_exec_time_total_ns: "
+        << nanosecond_to_str(gpu.kernel_exec_time_total) << "\n";
     out << "named_kernels_available: " << gpu.top_kernels.size() << "\n";
     out << "note: kernel names, per-kernel times, and event rows are NOT in this "
            "briefing. Call get_summary, top_events, or track_events to see them.\n";
@@ -1334,7 +1412,7 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
     }
 
     std::string       query_error;
-    const std::string where    = BuildAssistantWhereClause(args, query_error);
+    const std::string filter   = BuildAssistantFilterExpression(args, query_error);
     const std::string group_by = AssistantGroupByFromArgs(args, query_error);
     if(!query_error.empty())
     {
@@ -1358,7 +1436,7 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
-            spec->controller_type, tracks, start_ns, end_ns, where.c_str(), "",
+            spec->controller_type, tracks, start_ns, end_ns, nullptr, filter.c_str(),
             group_by.c_str(), "", OffsetFromArgs(args),
             static_cast<uint64_t>(limit),
             ResolveAssistantSortColumnNamed(
@@ -1381,7 +1459,7 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     const size_t limit = RowLimitFromArgs(args);
 
     std::string       query_error;
-    const std::string where = BuildAssistantWhereClause(args, query_error);
+    const std::string filter = BuildAssistantFilterExpression(args, query_error);
     if(!query_error.empty())
     {
         return DoneResult(query_error, "Bad query argument");
@@ -1400,9 +1478,10 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
 
     const uint64_t request_id =
         DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
-    const AssistantFetchState fetch = TableFetch(
+    AssistantFetchState fetch = TableFetch(
         AssistantFetchKind::kKernelInstances, TableType::kAssistantSummaryKernelTable,
         limit);
+    fetch.filter_columns = AssistantFilterColumns(args);
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1410,30 +1489,30 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
-        EventSearchRequestParams(
-            kRPVControllerTableTypeSummaryKernelInstances,
-            // The true is include_substrings. Exact-match could not find a real
-            // dispatch: the stored name is the full mangled signature, so
-            // anything short of the whole
-            // "ncclDevKernel_Generic(ncclDevKernelArgsStorage<4096ul>)" matched
-            // nothing and came back as bare column headers with no rows. The
-            // schema already promises "exact or unique kernel name"; this is
-            // what makes the second half of that true.
-            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), true,
-            false, false, { kernel_name }, OffsetFromArgs(args),
-            static_cast<uint64_t>(limit),
-            // Slowest first, like top_events. This tool is nearly always asked
-            // "which run of this kernel was the bad one", and the row the model
-            // points the user at is whichever comes back first - so a default
-            // of column 0 ascending handed back an instance picked by name or
-            // id, with no relation to duration, while the model described it as
-            // the outlier.
-            ResolveAssistantSortColumnNamed(
-                tables, TableType::kAssistantSummaryKernelTable,
-                JsonUtils::GetString(args, "sort_by", ""), "duration",
-                ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN),
-            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending))));
+    EventSearchRequestParams params(
+        kRPVControllerTableTypeSummaryKernelInstances,
+        // The true is include_substrings. Exact-match could not find a real
+        // dispatch: the stored name is the full mangled signature, so
+        // anything short of the whole
+        // "ncclDevKernel_Generic(ncclDevKernelArgsStorage<4096ul>)" matched
+        // nothing and came back as bare column headers with no rows. The
+        // schema already promises "exact or unique kernel name"; this is
+        // what makes the second half of that true.
+        { kRocProfVisDmOperationDispatch }, start_ns, end_ns, nullptr, true, false,
+        false, { kernel_name }, OffsetFromArgs(args), static_cast<uint64_t>(limit),
+        // Slowest first, like top_events. This tool is nearly always asked
+        // "which run of this kernel was the bad one", and the row the model
+        // points the user at is whichever comes back first - so a default
+        // of column 0 ascending handed back an instance picked by name or
+        // id, with no relation to duration, while the model described it as
+        // the outlier.
+        ResolveAssistantSortColumnNamed(
+            tables, TableType::kAssistantSummaryKernelTable,
+            JsonUtils::GetString(args, "sort_by", ""), "duration",
+            ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN),
+        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending));
+    params.m_filter   = filter;
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1453,9 +1532,9 @@ ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
            Core::String::to_lower_copy(kernel.name).find(needle) != std::string::npos)
         {
             out << "name=" << kernel.name << " calls=" << kernel.invocations
-                << " sum_ns=" << kernel.exec_time_sum
-                << " min_ns=" << kernel.exec_time_min
-                << " max_ns=" << kernel.exec_time_max
+                << " sum_ns=" << nanosecond_to_str(kernel.exec_time_sum)
+                << " min_ns=" << nanosecond_to_str(kernel.exec_time_min)
+                << " max_ns=" << nanosecond_to_str(kernel.exec_time_max)
                 << " pct=" << kernel.exec_time_pct << "\n";
             found = true;
             if(!kernel_name.empty())
@@ -1518,7 +1597,7 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     }
 
     std::string       query_error;
-    const std::string where    = BuildAssistantWhereClause(args, query_error);
+    const std::string filter   = BuildAssistantFilterExpression(args, query_error);
     const std::string group_by = AssistantGroupByFromArgs(args, query_error);
     if(!query_error.empty())
     {
@@ -1530,8 +1609,11 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns);
 
-    const AssistantFetchState fetch =
-        TableFetch(AssistantFetchKind::kDataTable, type, limit);
+    AssistantFetchState fetch = TableFetch(AssistantFetchKind::kDataTable, type, limit);
+    if(group_by.empty())
+    {
+        fetch.filter_columns = AssistantFilterColumns(args);
+    }
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1542,7 +1624,7 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
             events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
-            tracks, start_ns, end_ns, where.c_str(), "", group_by.c_str(), "",
+            tracks, start_ns, end_ns, nullptr, filter.c_str(), group_by.c_str(), "",
             OffsetFromArgs(args), static_cast<uint64_t>(limit),
             // Ask for the column by name, keeping the index only for the first
             // query of a session, before any header has been read. "id" is
@@ -1724,7 +1806,7 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
         JsonUtils::GetBool(args, "include_category", false);
 
     std::string       query_error;
-    const std::string where = BuildAssistantWhereClause(args, query_error);
+    const std::string filter = BuildAssistantFilterExpression(args, query_error);
     if(!query_error.empty())
     {
         return DoneResult(query_error, "Bad query argument");
@@ -1735,9 +1817,10 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns, false);
 
-    const uint64_t            request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
-    const AssistantFetchState fetch = TableFetch(
+    const uint64_t      request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    AssistantFetchState fetch      = TableFetch(
         AssistantFetchKind::kDataTable, TableType::kAssistantSearchTable, limit);
+    fetch.filter_columns = AssistantFilterColumns(args);
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1745,17 +1828,18 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
-        EventSearchRequestParams(
-            kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, where.c_str(),
-            contains, include_category, any_term, terms, OffsetFromArgs(args),
-            static_cast<uint64_t>(limit),
-            // "__uuid" is column 1 of the search table today - see the note on
-            // track rows for why the name leads and the index only trails.
-            ResolveAssistantSortColumnNamed(tables, TableType::kAssistantSearchTable,
-                                            JsonUtils::GetString(args, "sort_by", ""),
-                                            "__uuid", 1),
-            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
+    EventSearchRequestParams params(
+        kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, nullptr, contains,
+        include_category, any_term, terms, OffsetFromArgs(args),
+        static_cast<uint64_t>(limit),
+        // "__uuid" is column 1 of the search table today - see the note on
+        // track rows for why the name leads and the index only trails.
+        ResolveAssistantSortColumnNamed(tables, TableType::kAssistantSearchTable,
+                                        JsonUtils::GetString(args, "sort_by", ""),
+                                        "__uuid", 1),
+        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending));
+    params.m_filter   = filter;
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1816,8 +1900,9 @@ FinishAssistantFetch(const AssistantToolContext& context,
     if(fetch.kind == AssistantFetchKind::kKernelInstances ||
        fetch.kind == AssistantFetchKind::kDataTable)
     {
-        return FormatTableSnapshot(context.data_provider->DataModel().GetTables(),
-                                   fetch.table_type, limit);
+        const TablesModel& tables = context.data_provider->DataModel().GetTables();
+        return FormatTableSnapshot(tables, fetch.table_type, limit) +
+               MissingFilterColumnsNote(tables, fetch.table_type, fetch.filter_columns);
     }
     if(fetch.kind == AssistantFetchKind::kEventDetails)
     {

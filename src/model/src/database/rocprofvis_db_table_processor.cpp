@@ -742,7 +742,7 @@ namespace DataModel
                                 try {
                                     valid = lfilter.Evaluate(row_map);
                                 }
-                                catch (const std::runtime_error& err)
+                                catch (const std::exception& err)
                                 {
                                     valid = false;
                                     eptr = std::current_exception();
@@ -772,7 +772,7 @@ namespace DataModel
                                 std::rethrow_exception(eptr);
                             }
                     }
-                    catch (const std::runtime_error& e)
+                    catch (const std::exception& e)
                     {
                         spdlog::error("Error: {} ", e.what());
                         m_filter_lookup.clear();

@@ -75,6 +75,9 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close()  override { return CloseAsSqlite(); };
+        // Method to interrupt a running sqlite query
+        // @param connection - sqlite connection running the query
+        void InterruptQuery(void* connection) override { InterruptAsSqlite(connection); };
 
         // worker method to execute database query
         // @param query - database query 
@@ -209,6 +212,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t ops,
             rocprofvis_dm_query_criteria_ptr source_filter,
+            rocprofvis_dm_charptr_t filter,
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
             bool include_substring,

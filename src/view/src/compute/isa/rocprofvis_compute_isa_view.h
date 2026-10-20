@@ -76,6 +76,7 @@ private:
     };
 
     void               RenderControlPanel();
+    void               RenderDevelopmentNotice(float button_width);
     void               RenderSourceFileDropdown();
     void               SubscribeToEvents();
     void               SelectWorkload(uint32_t workload_id);

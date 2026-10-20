@@ -1642,8 +1642,19 @@ After trace metadata loads, `ComputeView` disables the ISA View tab and
 shows a tooltip without constructing its widget when no kernel in the database
 has ISA lines. The availability flag is initialized once with the other
 data-dependent tab states.
-`RenderControlPanel()` hosts the source-file dropdown and source-code visibility
-control. Sampling State visibility is controlled only by each table's native
+`RenderControlPanel()` hosts the source-file dropdown, an always-visible
+`In development` label, and the source-code visibility control, in that order.
+`RenderDevelopmentNotice(button_width)` owns the notice text, icon, tooltip,
+and layout. It groups a vector warning triangle with an exclamation mark and
+the label in the theme warning color, centers the group in the free space
+between the dropdown and visibility button, and leaves the cursor ready for
+the button using its reserved width. Both icon and text
+show the standard themed tooltip explaining that profiling data interpretation,
+displayed values, layout, and controls may change in future releases. The notice
+remains visible when no source file is available or the source pane is hidden,
+centered in the space to the left of the button. The group and button wrap to
+another row when space is limited, avoiding overlap. Sampling State visibility
+is controlled only by each table's native
 header context menu; there is no sampling-details button or global visibility
 flag. PC-sampling data is fetched
 through `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three

@@ -40,6 +40,7 @@ pc_sampling_request_id(PcSamplingLayer layer)
 
 constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
     "This database file has no ISA lines, so ISA View is inactive.";
+
 TabItem
 ComputeIsaView::CreateTabItem(DataProvider& data_provider)
 {
@@ -520,8 +521,7 @@ ComputeIsaView::RenderControlPanel()
         std::max(ImGui::CalcTextSize(show_source_code_str).x,
                  ImGui::CalcTextSize(hide_source_code_str).x) +
         ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
-                    button_source_code_width);
+    RenderDevelopmentNotice(button_source_code_width);
 
     if(ImGui::Button(m_source_layout_item->m_visible ? hide_source_code_str
                                                      : show_source_code_str))
@@ -552,6 +552,78 @@ ComputeIsaView::RenderControlPanel()
     m_control_panel_height = content_height + ImGui::GetStyle().WindowPadding.y * 2.0f;
 
     ImGui::EndChild();
+}
+
+void
+ComputeIsaView::RenderDevelopmentNotice(float button_width)
+{
+    constexpr const char* LABEL   = "Under development";
+    constexpr const char* TOOLTIP = "ISA View is under development.\n"
+                                    "Profiling data interpretation"
+                                    "may change in future releases.\n"
+                                    "The layout and available controls may also change.";
+
+    const ImGuiStyle& style     = ImGui::GetStyle();
+    const float       icon_size = ImGui::GetTextLineHeight();
+    const float       notice_width =
+        icon_size + style.ItemInnerSpacing.x + ImGui::CalcTextSize(LABEL).x;
+    const float row_start = ImGui::GetCursorPosX();
+    const float row_end   = row_start + ImGui::GetContentRegionAvail().x;
+    const float button_x  = std::max(row_start, row_end - button_width);
+    const bool  has_source_selector =
+        m_source_layout_item->m_visible && !m_source.file_uuid_by_path.empty();
+    float left  = has_source_selector ? ImGui::GetItemRectMax().x -
+                                           ImGui::GetWindowPos().x + style.ItemSpacing.x
+                                      : row_start;
+    float right = button_x - style.ItemSpacing.x;
+
+    // Center in the gap after the selector, or on a new row when it does not fit.
+    if(right - left < notice_width)
+    {
+        left = row_start;
+        if(right - left < notice_width)
+        {
+            right = row_end;
+        }
+    }
+    else if(has_source_selector)
+    {
+        ImGui::SameLine();
+    }
+    ImGui::SetCursorPosX(left + std::max(0.0f, (right - left - notice_width) * 0.5f));
+
+    ImGui::BeginGroup();
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    const ImVec2 icon_start(cursor.x, cursor.y + style.FramePadding.y);
+    const ImU32  color        = m_settings.GetColor(Colors::kTextWarning);
+    const float  stroke_width = std::max(1.0f, icon_size * 0.08f);
+    const float  center_x     = icon_start.x + icon_size * 0.5f;
+    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
+    draw_list->AddTriangle(
+        ImVec2(center_x, icon_start.y), ImVec2(icon_start.x, icon_start.y + icon_size),
+        ImVec2(icon_start.x + icon_size, icon_start.y + icon_size), color, stroke_width);
+    draw_list->AddLine(ImVec2(center_x, icon_start.y + icon_size * 0.35f),
+                       ImVec2(center_x, icon_start.y + icon_size * 0.65f), color,
+                       stroke_width);
+    draw_list->AddCircleFilled(ImVec2(center_x, icon_start.y + icon_size * 0.82f),
+                               stroke_width * 0.5f, color);
+    ImGui::Dummy(ImVec2(icon_size, ImGui::GetFrameHeight()));
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(color), "%s", LABEL);
+    ImGui::EndGroup();
+    if(ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    {
+        SetTooltipStyled("%s", TOOLTIP);
+    }
+
+    // Leave the cursor ready for the right-aligned visibility button.
+    const float notice_right = ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x;
+    if(notice_right + style.ItemSpacing.x <= button_x)
+    {
+        ImGui::SameLine();
+    }
+    ImGui::SetCursorPosX(button_x);
 }
 
 void

@@ -410,10 +410,14 @@ InfiniteScrollTable::Render()
 
     bool sort_requested = false;
 
+    // No saved settings: the table ID is derived from m_widget_name, which embeds
+    // the widget address, so ini entries never match across runs and a recycled
+    // address would hand this table another table's columns.
     ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                                   ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollX |
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
+                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable |
+                                  ImGuiTableFlags_NoSavedSettings;
 
     if(!TableRequestInFlight())
     {
@@ -513,6 +517,12 @@ InfiniteScrollTable::Render()
                 // table that cannot sort ignore this, so hold it until it can land.
                 if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
                 {
+                    // TableSetColumnSortDirection() walks every column, but ImGui
+                    // defers TableSetupColumn() to the layout whenever the column
+                    // set changed, so lock the layout first or it reads columns
+                    // that have no sort directions assigned yet.
+                    ImGui::TableGetSortSpecs();
+
                     // Resolved against the same header that set the columns up
                     // above, so the index handed to ImGui is always one it owns.
                     const size_t column = ColumnIndexOf(m_pending_sort_column);

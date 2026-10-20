@@ -776,6 +776,8 @@ namespace DataModel
                     {
                         spdlog::error("Error: {} ", e.what());
                         m_filter_lookup.clear();
+                        InvalidateFiltering();
+                        return kRocProfVisDmResultInvalidParameter;
                     }
 
                 }

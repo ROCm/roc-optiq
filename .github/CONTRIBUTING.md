@@ -63,10 +63,7 @@ External libraries including ImGui, GLFW, SQLite, spdlog, JSON parsers, and othe
 * `CMakeLists.txt` - Root CMake configuration
 * `CMakePresets.json` - CMake preset configurations for different platforms and build types
 * `.github/workflows/` - CI/CD workflows for building packages on Ubuntu, Oracle Linux, Rocky Linux, and Windows
-
-#### Internal build system
-* `build.cmd` / `pkgbuild.cmd` - Build scripts for Windows
-* `Installer/` - Windows installer configuration files
+* `wix/` - WiX v4 MSI sources, built by the `PACKAGE_WIX` CMake target
 
 ## Coding Style ##
 

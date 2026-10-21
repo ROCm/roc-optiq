@@ -34,7 +34,7 @@ public:
 private:
     uint32_t m_id;
     std::string m_name;
-    uint32_t m_invocation_count;
+    uint64_t m_invocation_count;
     uint64_t m_duration_total;
     uint64_t m_duration_min;
     uint64_t m_duration_max;

@@ -39,23 +39,34 @@ constexpr float kToggleWidthScale   = 1.75f;  // of toggle height
 constexpr float kToggleAnimSpeed    = 10.0f;
 constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 
-// Card interior vertical padding (horizontal padding still follows the app
-// style). Tighter than the app default so the stacked cards read as one compact
-// form instead of a column of tall panels.
-constexpr float kCardPadY = 5.0f;
+// Card interior padding, and the gap between rows inside a card. The dialog's
+// own item spacing (larger) is what separates one card from the next.
+constexpr float  kCardPadX       = 12.0f;
+constexpr float  kCardPadY       = 8.0f;
+constexpr ImVec2 kCardRowSpacing = ImVec2(8.0f, 6.0f);
 
-// A dimmed "(?)" that shows a wrapped tooltip on hover.
-void HelpTip(const char* tooltip)
+// Minimum height for the run-output console child.
+constexpr float kMinOutputConsoleHeight = 60.0f;
+
+// Wrapped tooltip shared by every launcher "(?)", attached to the last item.
+void LaunchHelpTooltip(const char* text)
 {
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-        ImGui::TextUnformatted(tooltip);
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
+        ImGui::TextUnformatted(text);
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+// A dimmed "(?)" tooltip marker, frame-aligned to sit level with its field.
+void HelpTip(const char* tooltip)
+{
+    ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextDisabled("(?)");
+    LaunchHelpTooltip(tooltip);
 }
 
 // Linear blend between two packed colors (t in [0,1]).
@@ -76,15 +87,23 @@ void BeginLaunchCard(const char* id)
     // the same rounded/bordered/tiered look as the remote dialogs. The tighter
     // kCardPadY keeps the stacked launcher cards reading as one compact form.
     SettingsManager&  settings = SettingsManager::Get();
-    const ImGuiStyle& def      = settings.GetDefaultStyle();
-    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(def.WindowPadding.x, kCardPadY), true,
+    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(kCardPadX, kCardPadY), true,
                    &settings);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kCardRowSpacing);
 }
 
 void EndLaunchCard()
 {
+    ImGui::PopStyleVar();  // ItemSpacing
     EndPanelCard();
     // Cards are separated by the surrounding item spacing only.
+}
+
+float LaunchActionButtonWidth(const char* label)
+{
+    const float text_w = ImGui::CalcTextSize(label, nullptr, true).x;
+    return std::max(kLaunchActionButtonWidth,
+                    text_w + ImGui::GetStyle().FramePadding.x * 2.0f);
 }
 
 void LaunchCardHeader(const char* icon, const char* title, const char* help)
@@ -92,14 +111,11 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     SettingsManager& settings = SettingsManager::Get();
     FontManager&     fonts    = settings.GetFontManager();
 
-    ImGui::PushFont(fonts.GetFont(FontType::kMainText),
-                    fonts.GetFontSize(FontSize::kMedLarge));
-
-    // Leading accent bar sized to the (larger) header text.
+    // Leading accent bar sized to the header text.
     const float  bar_h = ImGui::GetFontSize();
     ImVec2       p     = ImGui::GetCursorScreenPos();
     ImDrawList*  dl    = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + kAccentBarWidth, p.y + bar_h),
+    dl->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + kAccentBarWidth, p.y + bar_h - 1.0f),
                       settings.GetColor(Colors::kAccent), 2.0f);
 
     ImGui::Indent(kAccentBarWidth + kAccentBarGap);
@@ -107,8 +123,7 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     // Optional leading icon (drawn from the icon font, in the accent color).
     if (icon && icon[0])
     {
-        ImGui::PushFont(fonts.GetFont(FontType::kIcon),
-                        fonts.GetFontSize(FontSize::kMedLarge));
+        ImGui::PushFont(fonts.GetFont(FontType::kIcon), ImGui::GetFontSize());
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
         ImGui::TextUnformatted(icon);
         ImGui::PopStyleColor();
@@ -119,11 +134,22 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::TextUnformatted(title);
     ImGui::PopStyleColor();
-    ImGui::PopFont();
 
     if (help && help[0])
     {
-        HelpTip(help);
+        // Center the "(?)" on the taller title font, and submit the hit-target
+        // through the item system (occlusion- and delay-aware) rather than a raw
+        // IsMouseHoveringRect.
+        const float title_cy =
+            (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
+        ImGui::SameLine();
+        const ImVec2 q_sz = ImGui::CalcTextSize("(?)");
+        const ImVec2 q_at(ImGui::GetCursorScreenPos().x, title_cy - q_sz.y * 0.5f);
+        ImGui::SetCursorScreenPos(q_at);
+        ImGui::Dummy(q_sz);
+        ImGui::GetWindowDrawList()->AddText(q_at, settings.GetColor(Colors::kTextDim),
+                                            "(?)");
+        LaunchHelpTooltip(help);
     }
     ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
 }
@@ -241,8 +267,12 @@ void StatusPill(const char* label, ImU32 bg_color)
 void LaunchSubHeader(const char* text, const char* help)
 {
     SettingsManager& settings = SettingsManager::Get();
-    ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
+    // Frame-align the label so its trailing "(?)" lines up with it.
+    if (help && help[0])
+    {
+        ImGui::AlignTextToFramePadding();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     ImGui::TextUnformatted(text);
     ImGui::PopStyleColor();
     if (help && help[0])
@@ -310,6 +340,11 @@ bool ToggleSwitch(const char* label, bool* value)
     return changed;
 }
 
+float ToggleSwitchWidth()
+{
+    return ImGui::GetFrameHeight() * kToggleHeightScale * kToggleWidthScale;
+}
+
 bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window,
                          const std::function<void()>& on_remote_browse_program,
                          const std::function<void()>& on_remote_browse_output)
@@ -327,8 +362,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     SettingsManager&  settings      = SettingsManager::Get();
     ProfilerSettings& prof_settings = settings.GetProfilerSettings();
 
-    const float label_w  = 105.0f;
-    const float browse_w = 84.0f;
+    // Size the label column to the widest label so nothing clips at high DPI.
+    const float label_w  = std::max(kLaunchLabelColumnMinWidth,
+        ImGui::CalcTextSize("Output folder").x + ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    const float browse_w = LaunchActionButtonWidth("Browse");
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
     const float arrow_w  = ImGui::GetFrameHeight();
 
@@ -349,32 +386,8 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
         modified = true;
     }
 
-    ImGui::SameLine();
-    // Disabled only in remote mode without a remote-browse handler; local mode
-    // and remote-with-handler both keep the button live.
-    const bool exe_disabled = is_remote && !remote_browse_exe;
-    if (exe_disabled)
-    {
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)))
-    {
-        if (remote_browse_exe)
-        {
-            on_remote_browse_program();
-        }
-        else if (!is_remote && app_window)
-        {
-            app_window->ShowOpenFileDialog(
-                "Choose Program", {}, "",
-                [&target](std::string const& path) { target.executable = path; });
-        }
-    }
-    if (exe_disabled)
-    {
-        ImGui::EndDisabled();
-    }
-
+    // Recent-targets dropdown sits before Browse so Browse stays right-anchored
+    // and lines up with the Output folder row's Browse.
     if (has_recent)
     {
         ImGui::SameLine();
@@ -409,11 +422,38 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
         }
     }
 
+    ImGui::SameLine();
+    // Disabled only in remote mode without a remote-browse handler; local mode
+    // and remote-with-handler both keep the button live.
+    const bool exe_disabled = is_remote && !remote_browse_exe;
+    if (exe_disabled)
+    {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)))
+    {
+        if (remote_browse_exe)
+        {
+            on_remote_browse_program();
+        }
+        else if (!is_remote && app_window)
+        {
+            app_window->ShowOpenFileDialog(
+                "Choose Program", {}, "",
+                [&target](std::string const& path) { target.executable = path; });
+        }
+    }
+    if (exe_disabled)
+    {
+        ImGui::EndDisabled();
+    }
+
     // --- Arguments (free-form, passed verbatim to the program) ----------------
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Arguments");
     ImGui::SameLine(label_w);
-    ImGui::SetNextItemWidth(-FLT_MIN);
+    // Reserve the Browse-row trailing width so this box's right edge lines up.
+    ImGui::SetNextItemWidth(-(browse_w + spacing));
     if (InputTextStringWithHint(
             "##TargetArgs", "e.g.  --iterations 100 --input data.bin", target.arguments))
     {
@@ -475,8 +515,10 @@ bool RenderToolLocationSection(std::string& tool_directory, ConnectionType conne
     const bool is_remote     = (connection == ConnectionType::kSsh);
     const bool remote_browse = is_remote && static_cast<bool>(on_remote_browse_directory);
 
-    const float label_w  = 105.0f;
-    const float browse_w = 84.0f;
+    // Size the label column to fit its label (matches RenderTargetSection).
+    const float label_w  = std::max(kLaunchLabelColumnMinWidth,
+        ImGui::CalcTextSize("Tools folder").x + ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    const float browse_w = LaunchActionButtonWidth("Browse");
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::AlignTextToFramePadding();
@@ -550,42 +592,127 @@ std::string BuildCommandPreviewString(
     // argv is already the complete argument list (see
     // IProfilerBackend::FlattenToExecution), so the preview renders it as-is
     // rather than re-deriving any part of the command. Anything appended here
-    // would be shown but not run.
+    // would be shown but not run. Only line breaks are added: each flag starts
+    // a continuation line (its value stays beside it), and everything after
+    // "--" is the target's own command line.
+    constexpr const char* CONTINUATION = " \\\n    ";
     preview << tool_path;
-    for (auto const& arg : argv)
+    for (size_t i = 0; i < argv.size(); i++)
     {
-        preview << " " << arg;
+        std::string const& arg = argv[i];
+        if (arg == "--")
+        {
+            preview << CONTINUATION << arg;
+            for (size_t j = i + 1; j < argv.size(); j++)
+            {
+                preview << " " << argv[j];
+            }
+            break;
+        }
+        const bool is_flag = arg.size() > 1 && arg[0] == '-';
+        preview << (is_flag ? CONTINUATION : " ") << arg;
     }
 
     return preview.str();
 }
 
+void PushSlimScrollbarStyle()
+{
+    constexpr float SLIM_SCROLLBAR_SIZE    = 10.0f;
+    constexpr float SLIM_SCROLLBAR_PADDING = 2.0f;
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, SLIM_SCROLLBAR_SIZE);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarPadding, SLIM_SCROLLBAR_PADDING);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg,
+                          SettingsManager::Get().GetColor(Colors::kTransparent));
+}
+
+void PopSlimScrollbarStyle()
+{
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+}
+
+void BeginCodePanel(const char* id, ImVec2 size)
+{
+    // The launch cards' surface, at a size the caller chooses so the panel can
+    // fill a column or the run view. The style applies to this card only; the
+    // code box inside sets its own.
+    SettingsManager& settings = SettingsManager::Get();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kCardPadX, kCardPadY));
+    ImGui::BeginChild(id, size, ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kCardRowSpacing);
+}
+
+void EndCodePanel()
+{
+    ImGui::PopStyleVar();  // ItemSpacing
+    ImGui::EndChild();
+}
+
+void RenderCodeBox(const char* id, std::string const& text, bool follow_tail)
+{
+    // Rounded like an input field rather than like the card around it, so the
+    // nested corners stay concentric.
+    SettingsManager& settings = SettingsManager::Get();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kCardPadX, kCardPadY));
+    PushSlimScrollbarStyle();
+    ImGui::BeginChild(id, ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+    PopSlimScrollbarStyle();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kCode), 0.0f);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopFont();
+    if (follow_tail && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+    {
+        ImGui::SetScrollHereY(1.0f);
+    }
+    ImGui::EndChild();
+}
+
+void SameLineRightAligned(float width)
+{
+    ImGui::SameLine();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > width)
+    {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - width);
+    }
+}
+
+float ButtonWidth(const char* label)
+{
+    return ImGui::CalcTextSize(label, nullptr, true).x +
+           ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+float CheckboxWidth(const char* label)
+{
+    return ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x +
+           ImGui::CalcTextSize(label, nullptr, true).x;
+}
+
 void RenderCommandPreview(std::string const& preview_text)
 {
-    SettingsManager& settings = SettingsManager::Get();
-    FontManager&     fonts    = settings.GetFontManager();
-
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Command Preview");
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Copy##CmdPreview"))
+    SameLineRightAligned(ButtonWidth("Copy"));
+    if (ImGui::Button("Copy##CmdPreview"))
     {
         ImGui::SetClipboardText(preview_text.c_str());
     }
-
-    // Monospaced, softly-rounded panel so the command reads like a terminal.
-    // Fills the remaining height of its container (the launcher's preview panel).
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        settings.GetDefaultStyle().ChildRounding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-    ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar;
-    ImGui::BeginChild("CmdPreview", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, flags);
-    ImGui::PushFont(fonts.GetFont(FontType::kCode), 0.0f);
-    ImGui::TextUnformatted(preview_text.c_str());
-    ImGui::PopFont();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar();
+    RenderCodeBox("CmdPreview", preview_text, false);
 }
 
 bool RenderOutputConsole(
@@ -649,7 +776,9 @@ bool RenderOutputConsole(
 
     FontManager&     fonts       = settings.GetFontManager();
     ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
-    float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
+    // Fill the remaining height (no uneven bottom gap below the console).
+    float output_height =
+        std::max(ImGui::GetContentRegionAvail().y, kMinOutputConsoleHeight);
 
     // Terminal-style panel: darker background, soft corners, monospaced text.
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
@@ -692,8 +821,7 @@ std::string RenderSavedProfileBar(
 
     std::vector<PresetInfo> presets = preset_mgr.ListPresets(profiler_id);
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Saved Config");
+    PanelFieldLabel("Saved config");
     ImGui::SameLine();
 
     // Combo for selecting a saved configuration.
@@ -781,14 +909,30 @@ std::string RenderSavedProfileBar(
     }
 
     // Save-As popup
+    SettingsManager& settings = SettingsManager::Get();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
     if (ImGui::BeginPopup("SavePresetPopup"))
     {
-        ImGui::TextUnformatted("Config name:");
-        ImGui::SetNextItemWidth(240.0f);
-        bool commit = ImGui::InputText("##SaveName", s_save_preset_name,
-                                       sizeof(s_save_preset_name),
-                                       ImGuiInputTextFlags_EnterReturnsTrue);
-        if ((ImGui::Button("Save##SavePreset") || commit) &&
+        ImGui::TextUnformatted("Save configuration");
+        ImGui::TextDisabled("Give these settings a name.");
+        ImGui::SetNextItemWidth(280.0f);
+        bool commit = ImGui::InputTextWithHint(
+            "##SaveName", "Configuration name", s_save_preset_name,
+            sizeof(s_save_preset_name), ImGuiInputTextFlags_EnterReturnsTrue);
+
+        constexpr float BUTTON_WIDTH = 90.0f;
+        const float     actions_w    = BUTTON_WIDTH * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                             std::max(0.0f, ImGui::GetContentRegionAvail().x - actions_w));
+        if (ImGui::Button("Cancel##SavePreset", ImVec2(BUTTON_WIDTH, 0.0f)))
+        {
+            s_save_preset_name[0] = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if ((AccentButton("Save##SavePreset", ImVec2(BUTTON_WIDTH, 0.0f), &settings) ||
+             commit) &&
             std::strlen(s_save_preset_name) > 0)
         {
             current_preset_name = s_save_preset_name;
@@ -796,13 +940,9 @@ std::string RenderSavedProfileBar(
             s_save_preset_name[0] = '\0';
             ImGui::CloseCurrentPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel##SavePreset"))
-        {
-            ImGui::CloseCurrentPopup();
-        }
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar(2);
 
     return load_name;
 }

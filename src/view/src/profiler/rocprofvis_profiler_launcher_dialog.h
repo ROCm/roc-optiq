@@ -119,15 +119,15 @@ private:
 
     void RenderToolbar();
     void RenderMainContent();
-    // One line above the command preview: why the tool could not be resolved, or
-    // that a configured tool directory is deciding which build runs.
+    // Under "Where to run": why the tool could not be resolved, or that a
+    // configured tool directory is deciding which build runs.
     void RenderToolResolutionNotice();
     // Deeper, less-common backend settings, shown in a separate floating window
     // opened from the "Advanced Options..." button.
     void RenderAdvancedWindow();
-    // Combined "Arguments & Environment" panel: command-line args (one edit box,
-    // added as pills) lead, environment variables (name/value, added as pills)
-    // grow below. Clicking a pill pulls it back into the editor to edit/remove.
+    // The Advanced window's Overrides tab: command-line args (one edit box, added
+    // as pills) lead, environment variables (name/value, added as pills) grow
+    // below. Clicking a pill pulls it back into the editor to edit/remove.
     void RenderArgsEnvPanel();
     void RenderButtonRow();
     // Buttons for the run view: Cancel while running; Run Again / Back to
@@ -152,6 +152,8 @@ private:
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
+    // True when the bound connection has the host and user needed to connect.
+    bool HasRemoteConnection() const;
     // Lazily constructs m_remote_file_browser (bound to the shared RemoteUri).
     void EnsureRemoteFileBrowser();
 #endif

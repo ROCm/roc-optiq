@@ -388,7 +388,7 @@ SummaryOverview::Render()
                  (!m_top_events[kRPVAnalysisSummaryCategoryThread]->Empty() ? 1 : 0);
     tile_size.x =
         (region.x - (static_cast<float>(tile_count) - 1) * style.ItemSpacing.x) /
-        static_cast<float>(tile_count);
+        static_cast<float>(std::max(static_cast<uint8_t>(1), tile_count));
     tile_size.y    = ImGui::GetContentRegionAvail().y;
     bool same_line = false;
     for(size_t i = 0; i < m_top_events.size(); i++)

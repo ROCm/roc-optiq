@@ -201,7 +201,7 @@ from the model layer:
 ```c
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     database, use_case, start, end, num_tracks, tracks,
-    where, filter, group, group_cols,
+    source_filter, filter, group, group_cols,
     sort_column, sort_order,
     num_string_table_filters, string_table_filters,
     max_count, offset, count_only,
@@ -545,6 +545,12 @@ The legacy SQLite schema. Important traits:
   to `rocprofvis_event_data_category_enum_t` for each operation type.
 - Region track category is `kRocProfVisDmRegionTrack` (not the
   rocprof split into `RegionMain` / `RegionSample`).
+- `GetCriteriaSubquery` ignores `node_id` (single node) and turns
+  `agent_id`, `process_id` and `thread_id` into `AND`ed conditions on
+  the agent / process / thread service columns, each masked with
+  `TOPOLOGY_ID_MASK`. The thread condition always starts with
+  `AND`, so it only forms valid SQL alongside an agent or process id
+  - the Summary view always sends a thread with its process.
 
 ### 4.5 `RocprofDatabase` (`rocprofvis_db_rocprof.h`)
 
@@ -569,6 +575,10 @@ The modern SQLite schema; supports **multinode**. Important traits:
   from sample-derived sub-regions.
 - Categorized data (`s_rocprof_categorized_data`) covers
   `NoOp`, `Dispatch`, `MemoryAllocate`, and `MemoryCopy` mappings.
+- `GetCriteriaSubquery` requires `node_id`; with it set, `agent_id`,
+  `process_id` and `thread_id` each add an `AND` on the matching
+  service column (masked with `TOPOLOGY_ID_MASK`). Without a node,
+  the criteria produce no filter.
 
 ### 4.6 `ComputeDatabase` (`rocprofvis_db_compute.h`)
 
@@ -1045,6 +1055,15 @@ sniffs:
   experimental Chrome JSON and Perfetto trace formats. Loaded via their
   respective database adapters. These are the "New trace formats"
   experimental feature listed in CHANGES.md.
+  `GoogleTraceProcessor` converts the trace once into a cached SQLite
+  file (`<config>/<file hash>/perfetto/<stem>.tpdb`, every trace
+  processor table) - open that file to see which columns exist.
+  `__intrinsic_slice` carries no node / process / thread column, only
+  `track_id`, so its `GetCriteriaSubquery` filters on tracks: a
+  thread is `track_id = <id>` (a thread is a track there), and a
+  process is `track_id IN (...)` over the process's `process_track`,
+  `process_counter_track`, and its threads' `thread_track` rows. Node
+  and agent are ignored (single node).
 
 The list of recognized extensions is exercised at the application
 layer (`AppWindow` and `Project`). Adding a new format means adding a
@@ -1250,7 +1269,18 @@ Args passed all the way through:
 
 - `start`, `end` - time window in ns.
 - `num_tracks`, `tracks` - subset of track IDs to include.
-- `where`, `filter`, `group`, `group_cols` - SQL fragment overrides.
+- `source_filter` - a `rocprofvis_dm_query_criteria_t*` (or
+  `nullptr`) with optional `node_id`, `agent_id`, `process_id` and
+  `thread_id`. It replaced the raw `where` string: callers pass ids,
+  and each backend turns them into SQL in its
+  `GetCriteriaSubquery` override (`QueryManager` returns an empty
+  string, i.e. no filter). What each backend honours is listed under
+  it in section 4 and 7.
+- `filter`, `group`, `group_cols` - filter-row expression and
+  grouping spec. The group spec is not SQL: the table processor parses
+  it (`FilterExpression::ParseAggregationSpec`) and aggregates in C++,
+  so only `COUNT/AVG/MIN/MAX/SUM(column) AS alias` over a bare column
+  works. An expression inside the parentheses is silently dropped.
 - `sort_column`, `sort_order` - per-page sorting.
 - `num_string_table_filters`, `string_table_filters` - free-text
   search; the database resolves these via `BuildTableStringIdFilter`

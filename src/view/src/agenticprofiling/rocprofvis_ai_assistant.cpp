@@ -808,10 +808,11 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
         return;
     }
 
-    // switch_tab is the model changing traces on purpose. Keep its own reply,
-    // and do not run the rest of the batch: those calls were written against
-    // the trace it just left, ids and all. Same-kind or not, the hint says
-    // where to start on the one now in front.
+    // switch_tab is the model changing traces on purpose, and arrives here only
+    // once the trace it chose is in front. Keep its own reply, and do not run
+    // the rest of the batch: those calls were written against the trace it just
+    // left, ids and all. Same-kind or not, the hint says where to start on the
+    // one now in front.
     std::string reply = content;
     if(CurrentProjectId() != m_turn_project_id)
     {
@@ -901,6 +902,12 @@ AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
     {
         return context.data_provider->GetState() != ProviderState::kReady;
     }
+    // switch_tab asked for another trace, which the tab bar brings forward when
+    // it next draws.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTabSwitch)
+    {
+        return CurrentProjectId() != m_fetch_wait.fetch.project_id;
+    }
     for(uint64_t request_id : m_fetch_wait.request_ids)
     {
         if(context.data_provider->IsRequestPending(request_id))
@@ -937,7 +944,10 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    if(!m_fetch_wait.warmup && CurrentProjectId() != m_turn_project_id)
+    // A tab switch is the one wait whose point is that the trace changes.
+    if(!m_fetch_wait.warmup &&
+       m_fetch_wait.fetch.kind != AssistantFetchKind::kTabSwitch &&
+       CurrentProjectId() != m_turn_project_id)
     {
         AbandonBatchForNewTrace("The trace in front changed while this call waited on "
                                 "its data, so what it fetched belongs to a different "

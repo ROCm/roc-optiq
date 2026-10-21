@@ -87,7 +87,11 @@ public:
     // comes from MakeClientRequestId and the values land in their own
     // ComputeDataModel store, which is what lets the assistant read metrics
     // while a metric table is showing its own.
-    static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
+    //
+    // Not 1 or 2: those are COMPARE_CLIENT_ID, and the compare panes build
+    // their event, sample and top-events request ids from them - the same
+    // request types the assistant reads.
+    static constexpr uint64_t ASSISTANT_CLIENT_ID = 3;
     static_assert(ASSISTANT_CLIENT_ID < RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID,
                   "The assistant's client id must stay inside the reserved band, or "
                   "IdGenerator will eventually hand it to a widget.");

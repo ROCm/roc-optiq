@@ -96,17 +96,19 @@ public:
 
     /*
      * Client ids below this are spoken for by name and must never be handed out
-     * dynamically. Two of them are already load-bearing: 0 means "the UI" to
+     * dynamically. Three users are already load-bearing: 0 means "the UI" to
      * TableRequestParams, which routes to the shared request ids and the model
-     * slots the tabs render from, and DataProvider::ASSISTANT_CLIENT_ID is a
-     * compile-time constant because the assistant's request ids are derived
-     * from it at namespace scope.
+     * slots the tabs render from; 1 and 2 are COMPARE_CLIENT_ID, which keep the
+     * two compare sources' table requests apart; and
+     * DataProvider::ASSISTANT_CLIENT_ID is a compile-time constant because the
+     * assistant's request ids are derived from it at namespace scope.
      *
-     * A widget handed one of them would share that caller's request slot for
-     * every RequestType both use - and the assistant and the compute widgets
-     * both fetch metrics - plus, for metrics, its ComputeDataModel store, so
-     * each would clear the other's values. Keep the band wide enough that
-     * naming another reserved client does not require touching the generator.
+     * Two callers on one id share a request slot for every RequestType both use
+     * - and the assistant and the compute widgets both fetch metrics - plus, for
+     * metrics, a ComputeDataModel store, so each would clear the other's values.
+     * That is as true of two named callers as of a widget handed a named id, so
+     * a new named client takes an id nobody else uses. Keep the band wide enough
+     * that naming another does not require touching the generator.
      */
     static constexpr uint64_t FIRST_DYNAMIC_CLIENT_ID = 16;
 };

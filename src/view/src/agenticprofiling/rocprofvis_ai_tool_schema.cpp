@@ -664,8 +664,9 @@ MakeAssistantComputeToolsJson()
     jt::Json kernel_params = ObjectParams();
     AddComputeScopeParams(kernel_params, true);
     AddTool(tools, 2, "kernel_summary",
-            "One kernel's dispatch statistics, its share of total kernel time, and "
-            "its roofline intensity points if the trace recorded them. Use it after "
+            "One kernel's full name - the other tools shorten long ones - its "
+            "dispatch statistics, its share of total kernel time, and its roofline "
+            "intensity points if the trace recorded them. Use it after "
             "compute_overview names a kernel worth chasing.",
             kernel_params);
 
@@ -685,7 +686,7 @@ MakeAssistantComputeToolsJson()
             "1. No arguments: the tables. Each line is a table id, its category "
             "and table name, how many metrics it holds, and the value names (Avg, "
             "Min, Max, Peak and so on) it reports each one under. Start here - it "
-            "is a couple of dozen lines and it is usually enough to pick the table "
+            "is a few dozen lines and it is usually enough to pick the table "
             "you want.\n"
             "2. search=\"word\": the individual metrics matching that word, with "
             "their ids and units.\n"

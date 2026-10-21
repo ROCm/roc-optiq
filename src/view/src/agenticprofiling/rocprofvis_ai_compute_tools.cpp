@@ -18,6 +18,7 @@
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <map>
@@ -58,6 +59,20 @@ constexpr size_t ASSISTANT_COMPUTE_MAX_SELECTORS = 16;
 // A metric id is category.table.entry; a shorter one selects everything under
 // it.
 constexpr size_t ASSISTANT_METRIC_ID_PARTS = 3;
+// Past this a metric value prints in exponent form: its digits stop meaning
+// anything to the reader long before they stop fitting the buffer.
+constexpr double ASSISTANT_METRIC_MAX_FIXED = 1e15;
+// Longest kernel name printed whole anywhere but kernel_summary. Templated
+// kernels demangle to thousands of characters, which would fill a listing
+// before its statistics and be re-sent with every later round. The head says
+// what the kernel is and the tail tells its instantiations apart.
+constexpr size_t      ASSISTANT_KERNEL_NAME_CHARS      = 200;
+constexpr size_t      ASSISTANT_KERNEL_NAME_TAIL_CHARS = 60;
+constexpr const char* ASSISTANT_KERNEL_NAME_GAP        = " ... ";
+// The top two bits of a byte that continues a UTF-8 character, rather than
+// starting one.
+constexpr unsigned char UTF8_CONTINUATION_MASK = 0xC0;
+constexpr unsigned char UTF8_CONTINUATION_BITS = 0x80;
 
 // Instructions one kernel_pc_samples call lists, most-sampled first.
 constexpr size_t ASSISTANT_PC_DEFAULT_INSTRUCTIONS = 10;
@@ -119,6 +134,14 @@ constexpr const char* ASSISTANT_CEILING_COMPUTE_NAMES[] = {
     "VALU I32",  "VALU FP64", "MFMA FP64", "VALU I64",
 };
 constexpr const char* ASSISTANT_CEILING_BANDWIDTH_NAMES[] = { "HBM", "L2", "L1", "LDS" };
+static_assert(sizeof(ASSISTANT_CEILING_COMPUTE_NAMES) /
+                      sizeof(ASSISTANT_CEILING_COMPUTE_NAMES[0]) ==
+                  __KRPVControllerRooflineCeilingComputeTypeLast,
+              "One display name per roofline compute ceiling.");
+static_assert(sizeof(ASSISTANT_CEILING_BANDWIDTH_NAMES) /
+                      sizeof(ASSISTANT_CEILING_BANDWIDTH_NAMES[0]) ==
+                  __KRPVControllerRooflineCeilingBandwidthTypeLast,
+              "One display name per roofline bandwidth ceiling.");
 
 const char*
 CeilingComputeName(rocprofvis_controller_roofline_ceiling_compute_type_t type)
@@ -167,11 +190,32 @@ TrimComputeResult(std::string text)
 // Prints a metric value at a fixed precision rather than through the UI's unit
 // formatter: these carry their own units from the catalogue, and a counter, a
 // percentage and a GB/s figure must not all be reformatted as a time.
+//
+// A whole number prints in full, because launch geometry and allocation sizes
+// get divided by one another, and %g turned a grid of 65536 into 6.554e+04.
+// Other values keep the two decimals the metric tables show, except below one,
+// where two decimals would print a small rate as zero.
 std::string
 FormatMetricNumber(double value)
 {
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), "%.4g", value);
+    const double magnitude = std::fabs(value);
+    char         buffer[64];
+    if(!std::isfinite(value) || magnitude >= ASSISTANT_METRIC_MAX_FIXED)
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.6g", value);
+    }
+    else if(value == std::trunc(value))
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.0f", value);
+    }
+    else if(magnitude >= 1.0)
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.2f", value);
+    }
+    else
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.4g", value);
+    }
     return std::string(buffer);
 }
 
@@ -179,6 +223,51 @@ ComputeDataModel&
 Model(const AssistantToolContext& context)
 {
     return context.data_provider->ComputeModel();
+}
+
+// Whether a cut at pos would split a UTF-8 character.
+bool
+InsideUtf8Character(const std::string& text, size_t pos)
+{
+    bool inside = false;
+    if(pos < text.size())
+    {
+        const unsigned char byte = static_cast<unsigned char>(text[pos]);
+        inside = (byte & UTF8_CONTINUATION_MASK) == UTF8_CONTINUATION_BITS;
+    }
+    return inside;
+}
+
+// A kernel name as the listings print it: whole when it is short enough, else
+// its head and tail either side of ASSISTANT_KERNEL_NAME_GAP.
+std::string
+ShortKernelName(const std::string& name)
+{
+    if(name.size() <= ASSISTANT_KERNEL_NAME_CHARS)
+    {
+        return name;
+    }
+    size_t head_end   = ASSISTANT_KERNEL_NAME_CHARS - ASSISTANT_KERNEL_NAME_TAIL_CHARS;
+    size_t tail_begin = name.size() - ASSISTANT_KERNEL_NAME_TAIL_CHARS;
+    while(head_end > 0 && InsideUtf8Character(name, head_end))
+    {
+        --head_end;
+    }
+    while(tail_begin < name.size() && InsideUtf8Character(name, tail_begin))
+    {
+        ++tail_begin;
+    }
+    return name.substr(0, head_end) + ASSISTANT_KERNEL_NAME_GAP + name.substr(tail_begin);
+}
+
+void
+AppendShortenedNamesNote(std::ostringstream& out)
+{
+    out << "note: names longer than " << ASSISTANT_KERNEL_NAME_CHARS
+        << " characters show only their head and tail, around \""
+        << ASSISTANT_KERNEL_NAME_GAP
+        << "\". kernel_summary prints a name whole, and kernel_id is the way to name a "
+           "kernel to the other tools.\n";
 }
 
 // The request slot kernel_triage and get_metrics share. Derived from the
@@ -250,10 +339,10 @@ ResolveWorkload(const AssistantToolContext& context, const jt::Json& args,
     return workloads.front();
 }
 
-// Finds a kernel by exact name first, then by unique substring. Names come back
-// mangled and are long, so requiring the whole string would make the tool
-// unusable; resolving an ambiguous fragment would answer about the wrong
-// kernel, so that is refused instead.
+// Finds a kernel by exact name first, then by unique substring or the shortened
+// form a listing printed. Names come back mangled and are long, so requiring
+// the whole string would make the tool unusable; resolving an ambiguous
+// fragment would answer about the wrong kernel, so that is refused instead.
 const KernelInfo*
 KernelByName(const WorkloadInfo& workload, const std::string& name, bool& ambiguous_out)
 {
@@ -271,7 +360,8 @@ KernelByName(const WorkloadInfo& workload, const std::string& name, bool& ambigu
     for(const KernelInfo* kernel : workload.ordered_kernels)
     {
         if(kernel == nullptr ||
-           Core::String::to_lower_copy(kernel->name).find(needle) == std::string::npos)
+           (ShortKernelName(kernel->name) != name &&
+            Core::String::to_lower_copy(kernel->name).find(needle) == std::string::npos))
         {
             continue;
         }
@@ -367,7 +457,8 @@ AppendNameValueTable(std::ostringstream& out, const char* label,
     }
 }
 
-void
+// One listing row. True when the row's name had to be shortened.
+bool
 AppendKernelRow(std::ostringstream& out, const KernelInfo& kernel)
 {
     out << "  kernel_id=" << kernel.id
@@ -377,7 +468,8 @@ AppendKernelRow(std::ostringstream& out, const KernelInfo& kernel)
         << " duration_median_ns=" << kernel.dispatch_metrics[KernelInfo::DurationMedian]
         << " duration_min_ns=" << kernel.dispatch_metrics[KernelInfo::DurationMin]
         << " duration_max_ns=" << kernel.dispatch_metrics[KernelInfo::DurationMax]
-        << " name=\"" << kernel.name << "\"\n";
+        << " name=\"" << ShortKernelName(kernel.name) << "\"\n";
+    return kernel.name.size() > ASSISTANT_KERNEL_NAME_CHARS;
 }
 
 // One kernel's position on the roofline, at each memory level the trace
@@ -688,7 +780,8 @@ ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
                          b->dispatch_metrics[KernelInfo::DurationTotal];
               });
 
-    const size_t shown = std::min(kernels.size(), ASSISTANT_COMPUTE_TOP_KERNELS);
+    const size_t shown     = std::min(kernels.size(), ASSISTANT_COMPUTE_TOP_KERNELS);
+    bool         shortened = false;
     out << "top_kernels_by_total_time:\n";
     for(size_t i = 0; i < shown; ++i)
     {
@@ -696,12 +789,16 @@ ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
             << FormatPercentOf(kernels[i]->dispatch_metrics[KernelInfo::DurationTotal],
                                total_ns)
             << "\n";
-        AppendKernelRow(out, *kernels[i]);
+        shortened = AppendKernelRow(out, *kernels[i]) || shortened;
     }
     if(kernels.size() > shown)
     {
         out << "  ... " << (kernels.size() - shown)
             << " more kernels, see list_kernels\n";
+    }
+    if(shortened)
+    {
+        AppendShortenedNamesNote(out);
     }
     out << "note: these are aggregate dispatch statistics. A compute trace has no "
            "timeline, so there is no ordering or start time for an individual "
@@ -829,15 +926,20 @@ ToolListKernels(const AssistantToolContext& context, const jt::Json& args,
             << " matching kernels)\n";
         return DoneResult(out.str(), "Listed kernels");
     }
-    const size_t end = std::min(kernels.size(), offset + limit);
+    const size_t end       = std::min(kernels.size(), offset + limit);
+    bool         shortened = false;
     for(size_t i = offset; i < end; ++i)
     {
-        AppendKernelRow(out, *kernels[i]);
+        shortened = AppendKernelRow(out, *kernels[i]) || shortened;
     }
     if(end < kernels.size())
     {
         out << "  ... " << (kernels.size() - end) << " more, raise limit or page with "
                                                      "offset\n";
+    }
+    if(shortened)
+    {
+        AppendShortenedNamesNote(out);
     }
 
     return DoneResult(TrimComputeResult(out.str()), "Listed kernels");
@@ -921,8 +1023,7 @@ ToolListMetrics(const AssistantToolContext& context, const jt::Json& args,
     // Descriptions, for ids the model already has. Asked for by name because
     // they are the expensive half of the catalogue and are rarely needed: a
     // metric's name is usually enough to interpret it.
-    jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    if(mutable_args.contains("describe"))
+    if(HasArg(args, "describe"))
     {
         std::vector<MetricsRequestParams::MetricID> selectors;
         if(!ParseMetricSelectors(args, "describe", metrics, selectors, error))
@@ -1122,7 +1223,7 @@ ToolKernelRoofline(const AssistantToolContext& context, const jt::Json& args,
     if(kernel != nullptr)
     {
         out << "kernel_id: " << kernel->id << "\n";
-        out << "kernel_name: " << kernel->name << "\n";
+        out << "kernel_name: " << ShortKernelName(kernel->name) << "\n";
         AppendKernelIntensities(out, *kernel);
     }
     else
@@ -1734,7 +1835,7 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
     std::ostringstream out;
     out << "workload_id: " << workload.id << "\n";
     out << "kernel_id: " << kernel.id << "\n";
-    out << "kernel_name: " << kernel.name << "\n";
+    out << "kernel_name: " << ShortKernelName(kernel.name) << "\n";
     out << "samples_total: " << total << "\n";
     if(all_progress)
     {
@@ -2058,7 +2159,7 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
         out << "kernel_id: " << fetch.kernel_id << "\n";
         if(kernel != nullptr)
         {
-            out << "kernel_name: " << kernel->name << "\n";
+            out << "kernel_name: " << ShortKernelName(kernel->name) << "\n";
         }
     }
 
@@ -2214,7 +2315,7 @@ BuildAssistantComputeBriefing(const AssistantToolContext& context)
             out << "selected_kernel_id: " << kernel_id << "\n";
             if(kernel != nullptr)
             {
-                out << "selected_kernel_name: " << kernel->name << "\n";
+                out << "selected_kernel_name: " << ShortKernelName(kernel->name) << "\n";
             }
         }
     }

@@ -55,6 +55,10 @@ enum class AssistantFetchKind
     // A Python analysis script, which answers with its own text rather than
     // rows to format.
     kScript,
+    // switch_tab chose another trace. The tab bar brings it forward when it next
+    // draws, so the call waits for that before answering: the panel re-pins the
+    // turn and drops the rest of the batch by the trace in front.
+    kTabSwitch,
     // The trace was still loading when the tool was called. Nothing has been
     // queried yet: the panel parks until the trace is ready and then runs the
     // tool for real, so a big file is waited out rather than reported as a
@@ -98,6 +102,8 @@ struct AssistantFetchState
     uint64_t           event_id    = 0;
     uint64_t           track_id    = 0;
     size_t             row_limit   = ASSISTANT_DEFAULT_ROW_LIMIT;
+    // kTabSwitch: the trace the call waits to see in front.
+    std::string project_id;
     // Columns the filters of an ungrouped read named. A filter on a column the
     // table does not have matches nothing, so an empty result names them.
     std::vector<std::string> filter_columns;

@@ -4619,13 +4619,6 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
             rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumKernels, 0,
                                              metrics_params.m_kernel_ids.size());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        for(size_t i = 0; i < metrics_params.m_kernel_ids.size(); i++)
-        {
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerMetricArgsKernelIdIndexed, i,
-                static_cast<uint64_t>(metrics_params.m_kernel_ids[i]));
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        }
         result =
             rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumMetrics, 0,
                                              metrics_params.m_metric_ids.size());
@@ -4668,6 +4661,9 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
         {
             spdlog::error("Failed to fetch metrics, result: {}",
                           static_cast<int>(result));
+            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_arguments_free(args);
+            rocprofvis_controller_metrics_container_free(output);
             return false;
         }
     }

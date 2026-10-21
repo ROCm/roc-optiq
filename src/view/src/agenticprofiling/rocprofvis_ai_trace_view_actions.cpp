@@ -90,9 +90,9 @@ TraceView::ListAnalysisTabs()
 }
 
 bool
-TraceView::SelectAnalysisTab(const std::string& name)
+TraceView::SelectAnalysisTab(const std::string& name, std::string& selected_label)
 {
-    if(!m_analysis_view || !m_analysis_view->SelectTab(name))
+    if(!m_analysis_view || !m_analysis_view->SelectTab(name, selected_label))
     {
         return false;
     }

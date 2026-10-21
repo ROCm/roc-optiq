@@ -1927,6 +1927,12 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         return FinishAssistantScriptFetch(context);
     }
+    // switch_tab's reply is already the prefix; the wait only had to see the
+    // trace come forward.
+    if(fetch.kind == AssistantFetchKind::kTabSwitch)
+    {
+        return std::string();
+    }
     return "Fetch finished with nothing to report.";
 }
 

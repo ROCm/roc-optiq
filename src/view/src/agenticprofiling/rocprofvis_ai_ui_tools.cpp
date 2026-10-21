@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 // The tools that change Optiq rather than read it. Every body here goes through
-// OptiqActions and answers in the same call, so none of them park a fetch or
-// touch a request id. Adding a capability belongs in rocprofvis_ai_actions.h as
-// one method, not as wiring inside a tool here.
+// OptiqActions and none of them touch a request id. All but one answer in the
+// same call: switch_tab waits for the tab bar to bring a newly chosen trace
+// forward. Adding a capability belongs in rocprofvis_ai_actions.h as one method,
+// not as wiring inside a tool here.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cmath>
@@ -34,6 +35,9 @@ namespace
 constexpr size_t ASSISTANT_MAX_HIGHLIGHTS      = 12;
 constexpr size_t ASSISTANT_MAX_NEXT_STEPS      = 3;
 constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
+// A chosen trace comes forward within a couple of frames. This only bounds a
+// switch that never lands, such as one to a tab closed in the meantime.
+constexpr uint32_t ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS = 5;
 
 // Every UI-facing thing a tool does goes through here.
 OptiqActions
@@ -331,16 +335,27 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
 
     // Details tabs are the ones people usually mean by name, so try those
     // first; trace tabs are file names and rarely collide.
-    if(actions.SelectAnalysisTab(name))
+    std::string selected_label;
+    if(actions.SelectAnalysisTab(name, selected_label))
     {
-        return DoneResult("Opened the " + actions.ActiveAnalysisTab() +
-                              " tab in the details panel.",
+        return DoneResult("Opened the " + selected_label + " tab in the details panel.",
                           "Switched tabs");
     }
-    if(actions.SelectTab(name))
+    // The trace in front changes only when the tab bar next draws, so the call
+    // waits for that instead of answering now: the panel re-pins the turn and
+    // drops the rest of the batch by the trace in front.
+    std::string selected_id;
+    if(actions.SelectTab(name, selected_id, selected_label))
     {
-        return DoneResult("Switched to trace " + actions.ActiveTab() + ".",
-                          "Switched tabs");
+        AssistantToolStartResult result;
+        result.pending          = true;
+        result.started_fetch    = true;
+        result.fetch.kind       = AssistantFetchKind::kTabSwitch;
+        result.fetch.project_id = selected_id;
+        result.content          = "Switched to trace " + selected_label + ".";
+        result.status_line      = "Switching tabs...";
+        result.timeout_seconds  = ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS;
+        return result;
     }
 
     out << "Nothing matches \"" << name << "\".\n";

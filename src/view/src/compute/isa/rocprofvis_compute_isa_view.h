@@ -75,29 +75,30 @@ private:
         }
     };
 
-    void               RenderControlPanel();
-    void               RenderDevelopmentNotice(float button_width);
-    void               RenderSourceFileDropdown();
-    void               SubscribeToEvents();
-    void               SelectWorkload(uint32_t workload_id);
-    void               LoadData(uint32_t kernel_id);
-    void               ClearCodeData();
-    void               ClearSelectionData();
-    void               LoadSourceFileList(const PcSamplingData& data);
-    void               SelectSourceFile(uint64_t source_file_uuid);
-    void               SelectSourceFileForScroll();
-    void               QueuePcSamplingFetch(PcSamplingLayer layer);
-    void               ClearPendingPcSamplingFetches();
-    void               CancelPcSamplingFetch(PcSamplingLayer layer);
-    void               CancelInFlightFetches();
-    [[nodiscard]] bool HasValidPcSamplingSelection() const;
-    void               SubmitPcSamplingFetch(PcSamplingLayer layer);
-    void               FetchPendingPcSampling();
-    void               RefreshCodeWidgets(PcSamplingLayer layer);
-    void               RefreshSourceWidget();
-    void               OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
+    void RenderControlPanel();
+    void RenderDevelopmentNotice(float button_width);
+    void RenderSourceFileDropdown();
+    void SubscribeToEvents();
+    void SelectWorkload(uint32_t workload_id);
+    void LoadData(uint32_t kernel_id);
+    void ClearCodeData();
+    void ClearSelectionData();
+    void LoadSourceFileList(const PcSamplingData& data);
+    void SelectSourceFile(uint64_t source_file_uuid);
+    void SelectSourceFileForScroll();
+    void QueuePcSamplingFetch(PcSamplingLayer layer);
+    void ClearPendingPcSamplingFetches();
+    void CancelPcSamplingFetch(PcSamplingLayer layer);
+    void CancelInFlightFetches();    
+    void SubmitPcSamplingFetch(PcSamplingLayer layer);
+    void FetchPendingPcSampling();
+    void RefreshCodeWidgets(PcSamplingLayer layer);
+    void RefreshSourceWidget();
+    void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                                          uint64_t source_file_uuid, uint32_t generation,
                                          uint64_t request_token, rocprofvis_result_t result);
+
+    [[nodiscard]] bool HasValidPcSamplingSelection() const;
 
     PcSamplingFetchState& FetchStateFor(PcSamplingLayer layer);
 

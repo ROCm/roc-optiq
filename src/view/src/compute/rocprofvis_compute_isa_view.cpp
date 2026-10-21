@@ -740,7 +740,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable |
         ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_BordersInnerV |
-        ImGuiTableFlags_ScrollY;
+        ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoSavedSettings;
 }
 
 void

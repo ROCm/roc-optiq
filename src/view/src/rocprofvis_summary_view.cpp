@@ -800,7 +800,8 @@ TopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format)
     if(ImGui::BeginTable("Table", 5,
                          ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
-                             ImGuiTableFlags_Resizable,
+                             ImGuiTableFlags_Resizable |
+                             ImGuiTableFlags_NoSavedSettings,
                          ImGui::GetContentRegionAvail() -
                              ImVec2(plot_style.PlotBorderSize + plot_style.PlotPadding.x,
                                     ImGui::GetFrameHeightWithSpacing() +

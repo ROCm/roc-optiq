@@ -682,7 +682,8 @@ LogViewer::RenderTable()
 
     constexpr ImGuiTableFlags table_flags =
         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
-        ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
+        ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp |
+        ImGuiTableFlags_NoSavedSettings;
 
     const ImVec2 table_size = ImVec2(0.0f, ImGui::GetContentRegionAvail().y);
 

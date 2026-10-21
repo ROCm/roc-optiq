@@ -64,28 +64,38 @@ public:
 
     ~Segment();
 
-    double GetStartTimestamp();
-    double GetEndTimestamp();
-    double GetMinTimestamp();
-    double GetMaxTimestamp();
+    double GetStartTimestamp() { return m_start_timestamp; }
+    double GetEndTimestamp() { return m_end_timestamp; }
+    double GetMinTimestamp() { return m_min_timestamp; }
+    double GetMaxTimestamp() { return m_max_timestamp; }
 
-    void SetStartEndTimestamps(double start, double end);
+    void SetStartEndTimestamps(double start, double end)
+    {
+        m_start_timestamp = start;
+        m_end_timestamp   = end;
+    }
 
-    void SetMinTimestamp(double value);
+    void SetMinTimestamp(double value) { m_min_timestamp = value; }
 
-    void SetMaxTimestamp(double value);
+    void SetMaxTimestamp(double value) { m_max_timestamp = value; }
 
-    // Returns false when this level already holds an entry at this timestamp,
-    // meaning the object was not stored and the caller still owns it.
+    // Returns false for null/wrong-type objects or a duplicate level/timestamp.
+    // On failure, the object was not stored and the caller still owns it.
     bool Insert(double timestamp, uint8_t level, Handle* event);
 
-    rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params);
+    [[nodiscard]] rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params);
 
-    rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
+    [[nodiscard]] rocprofvis_result_t GetMemoryUsage(uint64_t* value, rocprofvis_common_property_t property);
 
     size_t              GetNumEntries();
-    void                SetTimelineIterator(rocprofvis_timeline_iterator_t timeline_iterator);
-    rocprofvis_timeline_iterator_t& GetTimelineIterator(void);
+    void SetTimelineIterator(rocprofvis_timeline_iterator_t timeline_iterator)
+    {
+        m_timeline_iterator = timeline_iterator;
+    }
+    rocprofvis_timeline_iterator_t& GetTimelineIterator(void)
+    {
+        return m_timeline_iterator;
+    }
 
 
 private:
@@ -109,25 +119,29 @@ class SegmentTimeline
 
 public:
     SegmentTimeline();
-    ~SegmentTimeline();
+    ~SegmentTimeline() {}
     SegmentTimeline(SegmentTimeline&& other);
     SegmentTimeline& operator=(SegmentTimeline&& other);
 
     void Init(double start_time, double segment_duration, uint32_t num_segments, size_t num_items);
-    void SetContext(Handle* ctx);
-    Handle * GetContext();
+    void SetContext(Handle* ctx) { m_ctx = ctx; }
+    Handle* GetContext() { return m_ctx; }
 
-    rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
-    rocprofvis_result_t Remove(Segment* segment);
-    rocprofvis_result_t Insert(double segment_start, std::unique_ptr<Segment>&& segment);
-    std::map<double, std::unique_ptr<Segment>>& GetSegments();
-    bool IsValid(uint32_t segment_index) const;
+    [[nodiscard]] rocprofvis_result_t FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func);
+    [[nodiscard]] rocprofvis_result_t Remove(Segment* segment);
+    [[nodiscard]] rocprofvis_result_t Insert(double segment_start, std::unique_ptr<Segment>&& segment);
+    std::map<double, std::unique_ptr<Segment>>& GetSegments() { return m_segments; }
+    const std::map<double, std::unique_ptr<Segment>>& GetSegments() const
+    {
+        return m_segments;
+    }
+    bool IsValid(uint32_t segment_index) const noexcept;
     void SetValid(uint32_t segment_index, bool state);
-    bool IsProcessed(uint32_t segment_index) const;
+    bool IsProcessed(uint32_t segment_index) const noexcept;
     void SetProcessed(uint32_t segment_index, bool state);
-    std::shared_mutex* GetMutex();
-    double GetSegmentDuration() const;
-    size_t GetMaxNumItems() const;
+    std::shared_mutex* GetMutex() { return &m_mutex; }
+    double GetSegmentDuration() const { return m_segment_duration; }
+    size_t GetMaxNumItems() const { return m_max_num_items; }
 
     /* Marks a fetch result array as currently populating this timeline. Segments
        created while it is registered are retained by it, so they cannot be evicted

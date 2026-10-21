@@ -391,6 +391,13 @@ Derived classes should keep their generic property overrides private
 and expose dedicated typed accessors for controller-internal C++ callers;
 the public virtual methods remain available through `Handle` for C ABI
 dispatch.
+Trivial member accessors on `Data`, `Event`, `Sample`, `SampleLOD`, `Graph`,
+`Timeline`, `Track`, `Trace`, `SystemTrace`, `Segment`, and `SegmentTimeline`
+are defined inline in their class headers. Empty destructors and simple
+property delegations are inline as well.
+Accessors requiring complete
+forward-declared types, model queries, locking, or validation remain in
+the implementation files.
 
 ### 4.2 `Reference<>` template
 File: `rocprofvis_controller_reference.h`.
@@ -485,6 +492,8 @@ File: `rocprofvis_controller_data.{h,cpp}`.
 properly frees its owned string in the destructor / on
 reassignment. It is the single primitive that flows through `Array`,
 `Arguments`, and `Table::m_rows`.
+Inclusive memory usage counts the cell plus its owned string buffer (including
+the terminator), or the referenced object. Exclusive usage counts only the cell.
 
 ### 4.6 `Array`
 File: `rocprofvis_controller_array.{h,cpp}`.
@@ -677,6 +686,9 @@ then waits and dispatches each returned slice through
 `ProcessPmcSampleRecords` allocate pooled controller objects and insert
 them into the segment timeline. Model slices and dependent futures are
 released after processing, including cancellation/error paths.
+Read-request and segment-range loops preserve the first failure while releasing
+pending resources and processed flags. Cache traversal does not overwrite a
+failed model read with a successful partial result.
 
 Track properties are exposed under
 `rocprofvis_controller_track_properties_t` (start at `0x30000000`):
@@ -700,6 +712,18 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
   into `StringTable`), `m_level`, `m_retain_counter`.
 - `m_children` (`Array*`) holds synthetic LOD children; only populated
   on summary events emitted by `Graph::GenerateLODEvent`.
+- Generic property getters and setters are private overrides for C ABI
+  dispatch through `Handle`. Internal callers use typed accessors for
+  IDs, levels, timestamps, duration, names and string-table indexes.
+  `SetLevel` accepts only 0..255 and returns `OutOfRange` without changing the
+  level for larger inputs. The C ABI setter propagates this result. Track loads
+  log the rejected level with event/track IDs, release the rejected event, and
+  propagate the failure; LOD generation also checks level-setting results.
+  `GetChildId` / `SetChildId` and `SetNumberOfChildren` preserve indexed
+  child bounds and allocation errors; `GetInclusiveMemoryUsage` includes
+  the child array and only writes the output on success. Names returned by
+  the typed getters are borrowed from
+  `StringTable` and remain valid for its lifetime.
 - Static helpers `FetchDataModelFlowTraceProperty`,
   `FetchDataModelStackTraceProperty`,
   `FetchDataModelExtendedDataProperty` populate an output `Array` from
@@ -712,8 +736,16 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
 
 `Sample` (`kRPVControllerObjectTypeSample`):
 
-- A primitive value sample with a timestamp. Bound by
+- A double-valued sample with a timestamp. Constructors and MemoryManager
+  allocation helpers accept no value-type argument; `GetValueType` and the C ABI
+  sample-type property always report `Double`. Bound by
   `rocprofvis_controller_sample_properties_t` (`0x40000000`).
+- Property overrides are private C ABI handlers; `SampleLOD` is a friend
+  solely to delegate its base-property handlers. Internal code uses inline
+  `GetId`, `GetValueType`, `GetTimestamp`, `GetEndTimestamp`, `GetValue`,
+  `SetValue`, and `SetEndTimestamp`. The ID remains the integer timestamp.
+  `GetNumberOfChildren` and `GetInclusiveMemoryUsage` dispatch virtually
+  for raw samples and LOD samples despite their shared runtime type tag.
 
 `SampleLOD : Sample` (`kRPVControllerObjectTypeSample` reused):
 
@@ -721,6 +753,15 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
   child statistics (`min`, `mean`, `median`, `max`,
   `min_timestamp`, `max_timestamp`) via the
   `kRPVControllerSampleChild*` family of properties.
+- Its property overrides are also private. Typed statistic accessors are
+  inline; `GetChild` / `SetChild` validate indexes and `SetNumberOfChildren`
+  resizes borrowed child pointers and recalculates statistics. Empty/null
+  collections produce zero statistics; zero-duration collections produce
+  a zero weighted mean. Child replacement alone does not recalculate.
+  Typed and C ABI memory queries count `sizeof(SampleLOD)` plus the allocated
+  child-pointer vector capacity, including capacity retained after shrinking.
+  Both common memory properties count this owned storage; borrowed child samples
+  are accounted for by their raw cache and are not counted recursively.
 
 ### 5.3 `Graph` (`rocprofvis_controller_graph.{h,cpp}`)
 
@@ -732,12 +773,23 @@ yet built, and emits the resulting `Event*` / `Sample*` into the
 caller's `Array`.
 
 `GenerateLODEvent` coalesces a vector of `Event*` into a single
-synthetic event whose `m_combined_top_name` is the longest contained
-event name. `CombineEventInfo` produces the shared display label and
-the `max_duration_str_index`. Controller-internal graph logic reads
+synthetic event whose `m_combined_top_name` identifies the name with the
+greatest total duration. `CombineEventInfo` produces the shared display label
+and the `max_duration_str_index`, selecting a valid name even when all event
+durations are zero. Controller-internal graph logic reads
 track type, bounds, and entry count through `Track`'s typed getters.
 LOD generation propagates invalid data/reference failures instead of
 depending on assertions alone.
+Graph's property overrides are private C ABI handlers. Internal callers
+use `GetId`, `GetGraphType`, `GetTrack`, `SetGraphType`, and `SetTrack`.
+Typed bounds and entry-count getters retain `UnknownError` for a graph
+without a track, while rejecting null output pointers. Memory accounting
+uses `GetInclusiveMemoryUsage` and `GetExclusiveMemoryUsage`; the existing
+inclusive count covers cached segments rather than `sizeof(Graph)`.
+Both typed memory getters are const; `SegmentTimeline::GetSegments` provides
+a const overload for traversing cached segments.
+Graph destruction unregisters each cached LOD timeline from the memory manager
+before destroying its segments, waiting for any active eviction pass to finish.
 
 ### 5.4 `Timeline` (`rocprofvis_controller_timeline.{h,cpp}`)
 
@@ -745,6 +797,18 @@ Wrapper around the trace-wide collection of `Graph*`s plus the global
 `min_ts` / `max_ts`. Property bank:
 `rocprofvis_controller_timeline_properties_t` (`0x10000000`). Fetch
 delegates to `SystemTrace::AsyncFetch(Graph& ...)`.
+Property overrides are private. Typed graph lookup uses `GetGraph` and
+`GetGraphById`; `SetNumberOfGraphs` owns graph lifetimes on shrink, and
+`SetGraph` transfers ownership on success, deleting a replaced graph, or moves
+an existing graph to the requested final index without deleting it. Null or
+wrong-type graph arguments return `InvalidArgument`; invalid indexes return
+`OutOfRange`. Its typed memory getters are const.
+Graph bounds are validated before modifying the list, so a failed
+assignment leaves the list intact. Indexed lookups return `OutOfRange` for
+empty slots as well as invalid indexes, leaving the output unchanged. Lookup
+and memory accounting skip
+unpopulated slots. Typed timestamp getters retain `OutOfRange` for an
+empty timeline, and memory getters preserve the existing accounting.
 
 ### 5.5 `Summary` and `SummaryMetrics`
 Files: `rocprofvis_controller_summary.{h,cpp}`,
@@ -1101,7 +1165,9 @@ unique_ptr<Segment>>` with two parallel `BitSet`s:
 A `Segment` is a fixed time slice (`kSegmentDuration` ns by default
 `1e9`, scalable to `kScalableSegmentDuration = 1e4` for high-density
 tracks) holding `map<level, map<timestamp, Handle*>>`. `Insert(...)`
-adds an event/sample, `Fetch(start, end, array, ...)` emits the
+rejects null handles and handles whose object tag does not match the segment
+track type before storing an event/sample. `SampleLOD` shares the Sample tag.
+`Fetch(start, end, array, ...)` emits the
 matching items into the caller's array.
 
 `SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`
@@ -1123,17 +1189,16 @@ process-wide LRU eviction policy. Constructor:
 void Init(size_t num_objects);
 void Configure(double weight);
 void AddLRUReference(SegmentTimeline* owner, Segment* reference,
-                     uint32_t lod, void* array_ptr);
-rocprofvis_result_t EnterArrayOwnership(void* array_ptr,
+                     uint64_t array_id);
+void RemoveLRUOwner(SegmentTimeline* owner);
+rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
                                         rocprofvis_owner_type_t type);
-rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
+rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
                                          rocprofvis_owner_type_t type);
 void Delete(Handle* handle, SegmentTimeline* owner);
 Event*     NewEvent(uint64_t id, double s, double e, SegmentTimeline*);
-Sample*    NewSample(rocprofvis_controller_primitive_type_t,
-                     uint64_t id, double ts, SegmentTimeline*);
-SampleLOD* NewSampleLOD(rocprofvis_controller_primitive_type_t,
-                        uint64_t id, double ts,
+Sample*    NewSample(uint64_t id, double ts, SegmentTimeline*);
+SampleLOD* NewSampleLOD(uint64_t id, double ts,
                         std::vector<Sample*>& children, SegmentTimeline*);
 ```
 
@@ -1151,6 +1216,12 @@ Internals worth knowing:
   through the pools, and clearing the `valid` bit on the segment.
 - Static `s_memory_manager_instances` and `Configure(weight)` let
   multiple traces share the global memory budget proportionally.
+- `ManageLRU` holds a shared `m_eviction_pass_mutex` lock from before
+  collecting owner/member pointers through the final timeline unlock.
+  `RemoveLRUOwner` takes the exclusive pass lock before `m_lru_mutex`
+  and erases the owner's entry while holding both. This keeps cached owner
+  and metadata pointers alive for active passes. Finish the owner's fetches
+  before unregistering it, and unregister before destroying it.
 - `kShortTracksMemoryPoolIdentifier = 1` partitions short, dense
   tracks into a separate pool so they are not evicted as easily as
   large sparse tracks.

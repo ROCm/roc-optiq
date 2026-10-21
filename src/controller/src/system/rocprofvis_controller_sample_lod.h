@@ -17,20 +17,40 @@ class SampleLOD : public Sample
     void CalculateChildValues(void);
 
 public:
-    SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
+    SampleLOD(uint64_t id, double timestamp);
 
-    SampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp,
-              std::vector<Sample*>& children);
+    SampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children);
 
     SampleLOD& operator=(SampleLOD&& other);
 
-    virtual ~SampleLOD();
+    virtual ~SampleLOD() {}
 
-    rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeSample;
+    }
 
-    size_t GetNumChildren();
+    uint64_t                          GetNumberOfChildren() const noexcept override { return m_children.size(); }
+    [[nodiscard]] rocprofvis_result_t GetChild(uint64_t index, Sample** value) const;
+    [[nodiscard]] rocprofvis_result_t SetChild(uint64_t index, Sample* child);
+    [[nodiscard]] rocprofvis_result_t SetNumberOfChildren(uint64_t count);
+    [[nodiscard]] rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const override;
 
-    // Handlers for getters.
+    double GetChildMin() const noexcept { return m_child_min; }
+    double GetChildMean() const noexcept { return m_child_mean; }
+    double GetChildMedian() const noexcept { return m_child_median; }
+    double GetChildMax() const noexcept { return m_child_max; }
+    double GetChildMinTimestamp() const noexcept { return m_child_min_timestamp; }
+    double GetChildMaxTimestamp() const noexcept { return m_child_max_timestamp; }
+
+    void SetChildMin(double value) noexcept { m_child_min = value; }
+    void SetChildMean(double value) noexcept { m_child_mean = value; }
+    void SetChildMedian(double value) noexcept { m_child_median = value; }
+    void SetChildMax(double value) noexcept { m_child_max = value; }
+    void SetChildMinTimestamp(double timestamp) noexcept { m_child_min_timestamp = timestamp; }
+    void SetChildMaxTimestamp(double timestamp) noexcept { m_child_max_timestamp = timestamp; }
+
+private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t* value) final;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,
@@ -38,7 +58,10 @@ public:
     rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t** value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index,
-                                  char* value, uint32_t* length) final;
+                                  char* value, uint32_t* length) final
+    {
+        return Sample::GetString(property, index, value, length);
+    }
 
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t value) final;

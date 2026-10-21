@@ -1601,6 +1601,9 @@ The ISA implementation is organized as follows:
   `BaseCodeWidget` shares row layout, selection, hover, and cached scroll navigation.
   Each widget delegates sampling cells and headers to its composed
   `SamplingStateRenderer`; the cell returns clicks to the widget's row selection.
+  Each widget directly balances table begin/end and style pushes, including
+  skipped-table paths. Row styles begin after headers; centered line-number headers
+  are rendered directly.
 - `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the common sampling
   column, bar, header color legend, and tooltip for `IsaDataBuilder::SamplingRow`.
   Each hovered valid cell builds one local list of tooltip rows (label, color,
@@ -1610,13 +1613,10 @@ The ISA implementation is organized as follows:
   labels remain valid for the tooltip invocation; no row pointers are cached.
   Pane-specific hottest counts are supplied by the widgets. Colors are resolved
   from current settings. Missing/invalid data, overflow warnings, compact sizing,
-  wrapping, and wheel ownership are handled here.
-- `rocprofvis_compute_code_table.{h,cpp}` owns `ComputeCodeTable`. Its noncopyable
-  instances balance window padding, table begin/end, and row styles on both normal
-  and skipped-table paths. Row styles begin after headers. Static
-  `RenderCenteredHeader` and `RenderHeaderWithTooltip` methods share column headers
-  and the developer-mode text guard; `HeaderTooltipText` is nested in the class.
-  This class has no sampling dependency.
+  wrapping, and wheel ownership are handled here. `HeaderTooltipText` is declared
+  at namespace scope alongside the renderer. Its static `RenderHeaderWithTooltip`
+  method shares column headers and the developer-mode text guard between the
+  renderer and both code widgets.
 - `rocprofvis_compute_isa_data.{h,cpp}` owns `IsaDataBuilder`, a View-layer
   projection with no ImGui or settings dependency. It builds instruction rows,
   updates source mappings and sampling independently, and prepares count validity,
@@ -1759,6 +1759,8 @@ issued/stalled data was recorded and explains that host-trap sampling does not
 collect stall data, which is expected. This is an explanation of host-trap behavior,
 not an inference about the capture method from a missing row. The view model does
 not currently expose the capture method. This applies to both ISA and source cells.
+Unavailable tooltips also show the total sample count with thousands separators,
+alongside the existing bar percentage when the count is nonzero.
 
 The Sampling State cell tooltip starts with `Stalled: count/total (percent)` and a
 compact table containing Color, Sampling State, Samples, and `% of Samples`. Issued is
@@ -3505,9 +3507,8 @@ All under `agenticprofiling/`, compiled only with
 - `ComputeIsaView` -> `compute/isa/rocprofvis_compute_isa_view.h`.
 - `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget`, `LineSelection` ->
   `compute/isa/rocprofvis_compute_code_widgets.h`.
-- `SamplingStateRenderer` ->
+- `SamplingStateRenderer`, `HeaderTooltipText`, and static header renderer ->
   `compute/isa/rocprofvis_compute_sampling_state_renderer.h`.
-- `ComputeCodeTable` -> `compute/isa/rocprofvis_compute_code_table.h`.
 - `IsaDataBuilder` -> `compute/isa/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,

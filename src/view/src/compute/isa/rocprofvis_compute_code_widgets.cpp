@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstdio>
 
-#include "rocprofvis_compute_code_table.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
@@ -17,14 +16,14 @@ namespace View
 constexpr const char* CODE_OBJECT_OFFSET_FORMAT        = "0x%llX";
 constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY = 19;
 
-constexpr ComputeCodeTable::HeaderTooltipText SOURCE_CODE_HEADER_TOOLTIP{
+constexpr HeaderTooltipText SOURCE_CODE_HEADER_TOOLTIP{
     "Source text for this line from the selected source file.",
     "DB field: compute_source_line.content\n"
     "Row key: compute_source_line.source_line_uuid\n"
     "Filter: source_file_uuid = selected source file"
 };
 
-constexpr ComputeCodeTable::HeaderTooltipText ISA_INSTRUCTION_HEADER_TOOLTIP{
+constexpr HeaderTooltipText ISA_INSTRUCTION_HEADER_TOOLTIP{
     "GPU instruction and its operands.",
     "DB field: compute_instruction_line.instruction\n"
     "Row key: compute_instruction_line.instruction_uuid\n"
@@ -32,7 +31,7 @@ constexpr ComputeCodeTable::HeaderTooltipText ISA_INSTRUCTION_HEADER_TOOLTIP{
     "View filter: selected code object UUID"
 };
 
-constexpr ComputeCodeTable::HeaderTooltipText CODE_OBJECT_OFFSET_HEADER_TOOLTIP{
+constexpr HeaderTooltipText CODE_OBJECT_OFFSET_HEADER_TOOLTIP{
     "Instruction's byte offset within the GPU code object, in hexadecimal.",
     "DB field: compute_instruction_line.code_object_offset\n"
     "Row key: compute_instruction_line.instruction_uuid\n"
@@ -200,16 +199,24 @@ SourceCodeWidget::Render()
 
     constexpr int columns_count = ColumnIndex(SourceColumn::kCount);
     CalculateLineNumberWidth(static_cast<size_t>(m_largest_line_number));
-    ComputeCodeTable table("SourceCodeSamplingState", columns_count,
-                           m_table_flags | ImGuiTableFlags_Reorderable,
-                           m_settings.GetDefaultStyle().WindowPadding);
-    if(!table.IsOpen())
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
+    if(!ImGui::BeginTable("SourceCodeSamplingState", columns_count,
+                          m_table_flags | ImGuiTableFlags_Reorderable))
     {
+        ImGui::PopStyleVar();
         return;
     }
+    ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
-    table.BeginRows(m_settings.GetColor(Colors::kTransparent));
+
+    const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
+                        ImVec2(ImGui::GetStyle().CellPadding.x, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, background_color);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, background_color);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, background_color);
 
     std::optional<uint32_t> scroll_target;
     // The ISA pane can request another file before the view processes the switch.
@@ -220,6 +227,11 @@ SourceCodeWidget::Render()
     }
     RenderClippedRows(m_lines.size(), scroll_target,
                       [this](uint32_t i) { RenderLine(i); });
+
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::EndTable();
+    ImGui::PopStyleVar();
 }
 
 void
@@ -240,11 +252,16 @@ void
 SourceCodeWidget::RenderHeaders()
 {
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    ComputeCodeTable::RenderCenteredHeader(ColumnIndex(SourceColumn::kLineNumber), "#");
+    if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kLineNumber)))
+    {
+        CenterNextTextItem("#");
+        ImGui::TableHeader("#");
+    }
     m_sampling_renderer.RenderHeader(ColumnIndex(SourceColumn::kSamplingState),
                                      SamplingStateRenderer::CodePane::kSource);
-    ComputeCodeTable::RenderHeaderWithTooltip(ColumnIndex(SourceColumn::kSourceText),
-                                              "Source code", SOURCE_CODE_HEADER_TOOLTIP);
+    SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(SourceColumn::kSourceText),
+                                                   "Source code",
+                                                   SOURCE_CODE_HEADER_TOOLTIP);
 }
 
 void
@@ -323,21 +340,34 @@ IsaCodeWidget::Render()
     CalculateLineNumberWidth(m_entries.size());
 
     // Keep the table ID stable to preserve users' column preferences.
-    ComputeCodeTable table("IsaCodeSamplingState", columns_count,
-                           m_table_flags | ImGuiTableFlags_Reorderable,
-                           m_settings.GetDefaultStyle().WindowPadding);
-    if(!table.IsOpen())
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
+    if(!ImGui::BeginTable("IsaCodeSamplingState", columns_count,
+                          m_table_flags | ImGuiTableFlags_Reorderable))
     {
+        ImGui::PopStyleVar();
         return;
     }
 
+    ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
-    table.BeginRows(m_settings.GetColor(Colors::kTransparent));
+
+    const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
+                        ImVec2(ImGui::GetStyle().CellPadding.x, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, background_color);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, background_color);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, background_color);
 
     RenderClippedRows(m_entries.size(),
                       TakeScrollTarget(m_line_selection.isa_scroll_line),
                       [this](uint32_t i) { RenderLine(i); });
+
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::EndTable();
+    ImGui::PopStyleVar();
 }
 
 void
@@ -365,12 +395,16 @@ void
 IsaCodeWidget::RenderHeaders()
 {
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    ComputeCodeTable::RenderCenteredHeader(ColumnIndex(IsaColumn::kLineNumber), "#");
+    if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kLineNumber)))
+    {
+        CenterNextTextItem("#");
+        ImGui::TableHeader("#");
+    }
     m_sampling_renderer.RenderHeader(ColumnIndex(IsaColumn::kSamplingState));
-    ComputeCodeTable::RenderHeaderWithTooltip(ColumnIndex(IsaColumn::kOffset), "Offset",
-                                              CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
-    ComputeCodeTable::RenderHeaderWithTooltip(ColumnIndex(IsaColumn::kInstruction), "ISA",
-                                              ISA_INSTRUCTION_HEADER_TOOLTIP);
+    SamplingStateRenderer::RenderHeaderWithTooltip(
+        ColumnIndex(IsaColumn::kOffset), "Offset", CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
+    SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(IsaColumn::kInstruction),
+                                                   "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
 }
 
 void

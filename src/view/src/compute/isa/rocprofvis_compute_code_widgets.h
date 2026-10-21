@@ -96,9 +96,10 @@ private:
     void RenderHeaders();
     void RenderLine(uint32_t index);
 
-    typedef IsaDataBuilder::SourceRow SourceRow;
-    uint64_t                          m_source_file_uuid    = 0;
-    uint64_t                          m_largest_line_number = 0;
+    using SourceRow = IsaDataBuilder::SourceRow;
+
+    uint64_t m_source_file_uuid    = 0;
+    uint64_t m_largest_line_number = 0;
 
     std::vector<SourceRow> m_lines;
 };
@@ -115,7 +116,7 @@ public:
     void UpdateSampling(const IsaDataBuilder::PreparedSamplingData& sampling);
 
 private:
-    typedef IsaDataBuilder::IsaRow IsaRow;
+    using IsaRow = IsaDataBuilder::IsaRow;
 
     enum class IsaColumn : int32_t
     {

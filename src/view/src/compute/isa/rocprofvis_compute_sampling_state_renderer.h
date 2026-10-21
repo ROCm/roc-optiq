@@ -16,6 +16,12 @@ namespace RocProfVis
 namespace View
 {
 
+struct HeaderTooltipText
+{
+    const char* user_description;
+    const char* developer_information;
+};
+
 // Renders the same sampling-state column for ISA instructions and source lines.
 class SamplingStateRenderer
 {
@@ -28,6 +34,10 @@ public:
 
     explicit SamplingStateRenderer(SettingsManager& settings);
 
+    static void RenderHeaderWithTooltip(int column, const char* label,
+                                        const HeaderTooltipText& tooltip,
+                                        void (*render_user_content)() = nullptr);
+
     void SetupColumn();
     void RenderHeader(int column, CodePane pane = CodePane::kIsa);
     // Returns whether the cell was clicked, for the owning widget's row selection.
@@ -35,10 +45,10 @@ public:
                                   uint64_t                           hottest_samples);
 
 private:
-    typedef IsaDataBuilder::SamplingRow          SamplingRow;
-    typedef IsaDataBuilder::SampleCounts         SampleCounts;
-    typedef IsaDataBuilder::StallReason          StallReason;
-    typedef IsaDataBuilder::SamplingAvailability SamplingAvailability;
+    using SamplingRow          = IsaDataBuilder::SamplingRow;
+    using SampleCounts         = IsaDataBuilder::SampleCounts;
+    using StallReason          = IsaDataBuilder::StallReason;
+    using SamplingAvailability = IsaDataBuilder::SamplingAvailability;
 
     static constexpr size_t SHARE_TEXT_CAPACITY = 32;
     struct TooltipRow
@@ -49,7 +59,7 @@ private:
         std::string count_text;
         char        share_text[SHARE_TEXT_CAPACITY];
     };
-    typedef std::vector<TooltipRow> TooltipRows;
+    using TooltipRows = std::vector<TooltipRow>;
 
     struct TooltipTableLayout
     {

@@ -93,7 +93,7 @@ public:
         uint64_t                               total_count = 0;
         bool                                   overflow    = false;
     };
-    typedef std::unordered_map<uint64_t, StallReasonCounts> GroupedStallReasonCounts;
+    using GroupedStallReasonCounts = std::unordered_map<uint64_t, StallReasonCounts>;
 
     // Owns normalized instruction sampling independently of source/ISA layer arrival.
     struct PreparedSamplingData

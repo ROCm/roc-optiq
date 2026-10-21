@@ -8,7 +8,6 @@
 #include <iterator>
 #include <utility>
 
-#include "rocprofvis_compute_code_table.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
@@ -65,7 +64,7 @@ stall_reason_presentations_in_enum_order()
 }
 static_assert(stall_reason_presentations_in_enum_order());
 
-constexpr ComputeCodeTable::HeaderTooltipText SAMPLING_STATE_HEADER_TOOLTIP{
+constexpr HeaderTooltipText SAMPLING_STATE_HEADER_TOOLTIP{
     nullptr,
     "DB: compute_pc_sample_state; group by instruction_uuid.\n"
     "T = SUM(total_count), I = SUM(issue_count), S = SUM(stall_count).\n"
@@ -84,7 +83,7 @@ constexpr ComputeCodeTable::HeaderTooltipText SAMPLING_STATE_HEADER_TOOLTIP{
     "Missing/invalid progress gives a gray total bar; zero H gives no bar."
 };
 
-constexpr ComputeCodeTable::HeaderTooltipText SOURCE_SAMPLING_STATE_HEADER_TOOLTIP{
+constexpr HeaderTooltipText SOURCE_SAMPLING_STATE_HEADER_TOOLTIP{
     nullptr,
     "DB: compute_pc_sample_state + compute_pc_sample_stall_reason and reason lookup.\n"
     "Map instruction_uuid through compute_instruction_source_line (frame_index = 0).\n"
@@ -112,6 +111,7 @@ constexpr const char* SAMPLING_STATE_MISSING_PROGRESS_COUNTS_TOOLTIP =
     "Host-trap sampling does not collect stall data (expected).";
 constexpr const char* SAMPLING_STATE_INVALID_COUNTS_TOOLTIP =
     "Issued/stalled counts are inconsistent with total samples.";
+constexpr const char* SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP = "Samples: %s";
 constexpr const char* SAMPLING_STATE_BAR_PERCENT_TOOLTIP =
     "Bar: %.1f%% of maximum samples.";
 
@@ -240,6 +240,40 @@ SamplingStateRenderer::SamplingStateRenderer(SettingsManager& settings)
 : m_settings(settings)
 {}
 
+void
+SamplingStateRenderer::RenderHeaderWithTooltip(int column, const char* label,
+                                               const HeaderTooltipText& tooltip,
+                                               void (*render_user_content)())
+{
+    if(!ImGui::TableSetColumnIndex(column))
+    {
+        return;
+    }
+    ImGui::TableHeader(label);
+    if(!ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    {
+        return;
+    }
+
+    BeginTooltipStyled();
+    if(tooltip.user_description)
+    {
+        ImGui::TextUnformatted(tooltip.user_description);
+    }
+    if(render_user_content)
+    {
+        render_user_content();
+    }
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::TextDisabled("Developer information");
+    ImGui::TextUnformatted(tooltip.developer_information);
+#endif
+    EndTooltipStyled();
+}
+
 bool
 SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples)
 {
@@ -336,8 +370,11 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
 {
     if(row.sampling.availability != SamplingAvailability::kValid)
     {
+        const std::string total_count =
+            IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
         BeginTooltipStyled();
         ImGui::TextUnformatted(GetUnavailableSamplingTooltip(row));
+        ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, total_count.c_str());
         if(row.sample_counts.total_count > 0)
         {
             ImGui::Text(SAMPLING_STATE_BAR_PERCENT_TOOLTIP, bar_percent);
@@ -566,11 +603,11 @@ SamplingStateRenderer::SetupColumn()
 void
 SamplingStateRenderer::RenderHeader(int column, CodePane pane)
 {
-    ComputeCodeTable::RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL,
-                                              pane == CodePane::kSource
-                                                  ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
-                                                  : SAMPLING_STATE_HEADER_TOOLTIP,
-                                              render_sampling_state_color_legend);
+    RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL,
+                            pane == CodePane::kSource
+                                ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
+                                : SAMPLING_STATE_HEADER_TOOLTIP,
+                            render_sampling_state_color_legend);
 }
 
 }  // namespace View

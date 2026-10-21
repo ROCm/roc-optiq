@@ -5165,23 +5165,19 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMin, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMin] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMin] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMax, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMax] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMax] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMean, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMean] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMean] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMedian, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMedian] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMedian] = uint64_data;
         workload.kernels[kernel.id] = std::move(kernel);
     }
 }

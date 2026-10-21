@@ -55,6 +55,8 @@ protected:
     bool IsValueColumn(uint32_t column_index) const;
     bool CanBePinned();
     virtual void RenderEmptyTable() = 0;
+    // Only way to set the title: the ImGui ids are derived from it.
+    void SetTableTitle(std::string title);
 
     std::map<uint32_t, std::string> m_columns;
     std::uint32_t                   m_last_column_index = 0;
@@ -62,7 +64,6 @@ protected:
 
     std::function<void(MetricId)> m_pin_metric_clicked;
     std::string                   m_event_source_id;
-    std::string                   m_table_title;
 
     static constexpr uint32_t LAST_INDEX = std::numeric_limits<uint32_t>::max();
     ImGuiTableFlags           m_table_flags;
@@ -76,6 +77,10 @@ protected:
 private:
     float GetTableHeight() const;
     void  RenderPinCheckBox(std::pair<const MetricId, Row>& row);
+
+    std::string m_table_title;
+    std::string m_panel_id_str;
+    std::string m_table_id_str;
 };
 
 

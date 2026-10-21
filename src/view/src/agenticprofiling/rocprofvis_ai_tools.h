@@ -20,6 +20,7 @@ namespace RocProfVis
 namespace View
 {
 
+class ComputeSelection;
 class DataProvider;
 class TimelineSelection;
 class TraceView;
@@ -45,9 +46,19 @@ enum class AssistantFetchKind
     kDataTable,
     kEventDetails,
     kTrackStatistics,
+    // Compute metric values, which land in the assistant's own store in
+    // ComputeDataModel rather than in a TablesModel slot.
+    kComputeMetrics,
+    // One layer of a kernel's PC samples. Never formatted here: the tool runs
+    // again once the layer lands and answers from memory when it has them all.
+    kPcSampling,
     // A Python analysis script, which answers with its own text rather than
     // rows to format.
     kScript,
+    // switch_tab chose another trace. The tab bar brings it forward when it next
+    // draws, so the call waits for that before answering: the panel re-pins the
+    // turn and drops the rest of the batch by the trace in front.
+    kTabSwitch,
     // The trace was still loading when the tool was called. Nothing has been
     // queried yet: the panel parks until the trace is ready and then runs the
     // tool for real, so a big file is waited out rather than reported as a
@@ -57,25 +68,42 @@ enum class AssistantFetchKind
 
 // What the tools may touch on the trace in front. Rebuilt for every call, so it
 // is never held across a frame.
+//
+// The view pointers are mutually exclusive: a system trace fills trace_view and
+// timeline_selection, a compute trace fills compute_selection, and is_compute
+// says which set to read. data_provider is filled either way - it comes from
+// RootView - but note that DataModel() is the system model and is merely empty
+// on a compute trace, so a tool that reads it without checking is_compute
+// reports a trace with no tracks rather than failing.
 struct AssistantToolContext
 {
-    DataProvider*      data_provider      = nullptr;
-    TimelineSelection* timeline_selection = nullptr;
-    TraceView*         trace_view         = nullptr;
-    bool               is_compute         = false;
-    std::string        trace_name;
+    DataProvider*           data_provider      = nullptr;
+    TimelineSelection*      timeline_selection = nullptr;
+    TraceView*              trace_view         = nullptr;
+    const ComputeSelection* compute_selection  = nullptr;
+    bool                    is_compute         = false;
+    std::string             trace_name;
 };
+
+// Stands in for a kernel id when a compute metric fetch asked for the
+// workload's own values rather than one kernel's. FetchMetrics distinguishes
+// the two by whether the kernel list is empty, so the parked state needs a way
+// to say "there was no kernel" that no real kernel id can collide with.
+constexpr uint32_t ASSISTANT_COMPUTE_WORKLOAD_SCOPE = UINT32_MAX;
 
 // Everything FinishAssistantFetch needs to format a completed fetch. Carried
 // unchanged from StartAssistantTool through the panel's wait state.
 struct AssistantFetchState
 {
-    AssistantFetchKind kind       = AssistantFetchKind::kNone;
-    TableType          table_type = TableType::kSummaryKernelTable;
-    uint32_t           kernel_id  = 0;
-    uint64_t           event_id   = 0;
-    uint64_t           track_id   = 0;
-    size_t             row_limit  = ASSISTANT_DEFAULT_ROW_LIMIT;
+    AssistantFetchKind kind        = AssistantFetchKind::kNone;
+    TableType          table_type  = TableType::kSummaryKernelTable;
+    uint32_t           workload_id = 0;
+    uint32_t           kernel_id   = 0;
+    uint64_t           event_id    = 0;
+    uint64_t           track_id    = 0;
+    size_t             row_limit   = ASSISTANT_DEFAULT_ROW_LIMIT;
+    // kTabSwitch: the trace the call waits to see in front.
+    std::string project_id;
     // Columns the filters of an ungrouped read named. A filter on a column the
     // table does not have matches nothing, so an empty result names them.
     std::vector<std::string> filter_columns;

@@ -656,7 +656,7 @@ BuildRequestBody(const AssistantChatRequest& request, EndpointFlavour flavour)
     }
     if(request.enable_tools)
     {
-        body["tools"]       = BuildAssistantToolsJson();
+        body["tools"]       = BuildAssistantToolsJson(request.compute_tools);
         body["tool_choice"] = "auto";
     }
     return body;

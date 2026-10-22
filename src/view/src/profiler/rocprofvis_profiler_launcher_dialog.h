@@ -125,9 +125,10 @@ private:
     // Deeper, less-common backend settings, shown in a separate floating window
     // opened from the "Advanced Options..." button.
     void RenderAdvancedWindow();
-    // The Advanced window's Overrides tab: command-line args (one edit box, added
-    // as pills) lead, environment variables (name/value, added as pills) grow
-    // below. Clicking a pill pulls it back into the editor to edit/remove.
+    // Combined "Arguments & Environment" card on the main launcher form:
+    // command-line args (one edit box, added as pills) lead, environment
+    // variables (name/value, added as pills) grow below. Clicking a pill pulls
+    // it back into the editor to edit/remove.
     void RenderArgsEnvPanel();
     void RenderButtonRow();
     // Buttons for the run view: Cancel while running; Run Again / Back to

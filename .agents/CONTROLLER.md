@@ -1,1515 +1,168 @@
-# CONTROLLER.md - ROCm Optiq Controller Layer Guide
-
-This document is the controller-layer companion to
-[`.agents/UI.md`](./UI.md). The UI guide covers the View layer in depth
-and gives a high-level pass over `controller/`. **This file is the deep
-dive for `src/controller/`** - the C ABI bridge between the Model
-(SQLite, parsing) and the View (ImGui UI).
-
-When humans and `CODING.md` disagree with this file, `CODING.md` wins.
-When this file disagrees with the source under `src/controller/`, the
-source wins; please update this file in the same change.
-
----
-
-## Table of Contents
-
-1. Identity & Scope
-2. Public C ABI Surface (`src/controller/inc/`)
-3. Internal Architecture & Threading Model
-4. Core Building Blocks (handle / future / job system / data / array / args)
-5. System Trace Domain (`src/controller/src/system/`)
-6. Compute Trace Domain (`src/controller/src/compute/`)
-7. Memory Manager & Segment Timeline (LOD + LRU eviction)
-8. Request Lifecycle: View Call -> Future -> Pixels
-9. Property Model & Object Type Tags
-10. Coding Conventions Specific to the Controller
-11. Reuse Catalog (controller edition)
-12. Common Pitfalls
-13. Testing
-14. Quick Reference Index
-
----
-
-## 1. Identity & Scope
-
-- **Library target:** `roc-optiq-controller` (CMake, see
-  `src/controller/CMakeLists.txt`).
-- **Public ABI:** C11 headers in `src/controller/inc/`. Implementation
-  is C++17 in `src/controller/src/`.
-- **Owner of:** trace lifecycle, async fetch jobs, the segment-based
-  LOD cache, memory budget enforcement, and all property/object shapes
-  exposed to the View.
-- **Does NOT own:** SQLite I/O (that is `src/model/`), ImGui rendering
-  (that is `src/view/`).
-- **Linked by:** the View through `DataProvider`
-  (`src/view/src/rocprofvis_data_provider.h`). Python CFFI binds the model
-  library directly and does not use this controller ABI.
-- **Build flags:**
-  - `BUILD_TESTING` - builds `roc-optiq-controller-system-tests` and
-    `roc-optiq-controller-compute-tests` (Catch2). Tests are wired
-    against fixture traces under `sample/`. With
-    `ROCPROFVIS_ENABLE_SCRIPTING=ON`, also builds
-    `roc-optiq-controller-script-tests`.
-
-The View must never include controller `src/` headers - only `inc/`.
-This is enforced by CMake: `inc/` is a `PUBLIC` include directory of
-`roc-optiq-controller` and `src/` is `PRIVATE`. Controller tests that
-exercise internals add `src/` to their own target explicitly.
-The controller must never include View headers.
-
-## 2. Public C ABI Surface (`src/controller/inc/`)
-
-The core public contract is three headers:
-
-- `rocprofvis_controller.h` - all core functions.
-- `rocprofvis_controller_types.h` - opaque handle typedefs and the full
-  set of `*_properties_t` enums (the property IDs you pass to the
-  generic getters).
-- `rocprofvis_controller_enums.h` - `rocprofvis_result_t`,
-  `rocprofvis_controller_object_type_t`,
-  `rocprofvis_controller_primitive_type_t`, sort orders, the property
-  banks for events / samples / tracks / tables / summary / etc.
-
-Feature sub-APIs add `rocprofvis_controller_analysis.h` (section 2.7),
-`rocprofvis_controller_script.h`, and `rocprofvis_profiler.h`.
-
-### 2.1 Handle types
-
-All controller objects are opaque `rocprofvis_handle_t*` from the
-caller's point of view. Typedefs in `rocprofvis_controller_types.h`:
-
-```c
-typedef rocprofvis_handle_t rocprofvis_controller_t;
-typedef rocprofvis_handle_t rocprofvis_controller_timeline_t;
-typedef rocprofvis_handle_t rocprofvis_controller_view_t;
-typedef rocprofvis_handle_t rocprofvis_controller_track_t;
-typedef rocprofvis_handle_t rocprofvis_controller_graph_t;
-typedef rocprofvis_handle_t rocprofvis_controller_table_t;
-typedef rocprofvis_handle_t rocprofvis_controller_sample_t;
-typedef rocprofvis_handle_t rocprofvis_controller_event_t;
-typedef rocprofvis_handle_t rocprofvis_controller_flow_control_t;
-typedef rocprofvis_handle_t rocprofvis_controller_callstack_t;
-typedef rocprofvis_handle_t rocprofvis_controller_ext_data_t;
-typedef rocprofvis_handle_t rocprofvis_controller_future_t;
-typedef rocprofvis_handle_t rocprofvis_controller_array_t;
-typedef rocprofvis_handle_t rocprofvis_controller_arguments_t;
-typedef rocprofvis_handle_t rocprofvis_controller_node_t;
-typedef rocprofvis_handle_t rocprofvis_controller_processor_t;
-typedef rocprofvis_handle_t rocprofvis_controller_process_t;
-typedef rocprofvis_handle_t rocprofvis_controller_thread_t;
-typedef rocprofvis_handle_t rocprofvis_controller_queue_t;
-typedef rocprofvis_handle_t rocprofvis_controller_stream_t;
-typedef rocprofvis_handle_t rocprofvis_controller_counter_t;
-typedef rocprofvis_handle_t rocprofvis_controller_summary_t;
-typedef rocprofvis_handle_t rocprofvis_controller_summary_metrics_t;
-typedef rocprofvis_handle_t rocprofvis_controller_topology_node_t;
-typedef rocprofvis_handle_t rocprofvis_controller_plot_t;
-typedef rocprofvis_handle_t rocprofvis_controller_workload_t;
-typedef rocprofvis_handle_t rocprofvis_controller_kernel_t;
-typedef rocprofvis_handle_t rocprofvis_controller_metrics_container_t;
-```
-
-You can always recover the runtime kind via
-`rocprofvis_controller_get_object_type(handle, &type)` returning a
-`rocprofvis_controller_object_type_t`.
-
-### 2.2 Lifecycle: alloc / load / free
-
-```c
-rocprofvis_controller_t* rocprofvis_controller_alloc(const char* filename);
-rocprofvis_result_t       rocprofvis_controller_load_async(
-    rocprofvis_controller_t*, rocprofvis_controller_future_t*);
-void                      rocprofvis_controller_free(rocprofvis_controller_t*);
-```
-
-`rocprofvis_controller_alloc` sniffs the file with
-`rocprofvis_db_identify_type` (from `src/model/`). It returns either a
-`SystemTrace*` (rocpd / rocprof / multinode SQLite) or a
-`ComputeTrace*` (compute SQLite). The
-caller treats both the same way - everything dispatches through the
-opaque handle and the runtime object type tag.
-
-`rocprofvis_controller_alloc_compare(filenames, count)` is the
-systems-trace comparison entry point (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
-It builds a `SystemTrace` from several rocprof SQLite files so each
-source's tracks carry a compare instance id.
-
-### 2.3 Generic property accessors
-
-The single dispatch surface for every object:
-
-```c
-rocprofvis_result_t rocprofvis_controller_get_uint64(handle, prop, index, &value);
-rocprofvis_result_t rocprofvis_controller_get_double(handle, prop, index, &value);
-rocprofvis_result_t rocprofvis_controller_get_object(handle, prop, index, &out_handle);
-rocprofvis_result_t rocprofvis_controller_get_string(handle, prop, index, buf, &len);
-rocprofvis_result_t rocprofvis_controller_get_object_type(handle, &type);
-
-rocprofvis_result_t rocprofvis_controller_set_uint64(handle, prop, index, value);
-rocprofvis_result_t rocprofvis_controller_set_double(handle, prop, index, value);
-rocprofvis_result_t rocprofvis_controller_set_object(handle, prop, index, value);
-rocprofvis_result_t rocprofvis_controller_set_string(handle, prop, index, str);
-```
-
-`property` is one of the enum values from
-`rocprofvis_controller_types.h`. Each property bank has a numeric range
-that does not collide with any other bank (e.g. track properties live
-in the `0x30000000` block, sample properties in `0x40000000`, summary
-metrics in `0xF0000000`, table arguments in `0xE0000000`, etc.). This
-is what lets the `Handle::Get*/Set*` overrides on each subclass key off
-`property` ranges without an explicit object-type check.
-
-### 2.4 Async fetch surface
-
-The primary async fetchers all return immediately and signal
-completion through a `rocprofvis_controller_future_t`:
-
-```c
-rocprofvis_controller_track_fetch_async(...);                    // raw track data
-rocprofvis_controller_graph_fetch_async(..., x_resolution, ...); // LOD-aware
-rocprofvis_controller_table_fetch_async(...);                    // tables (system + compute)
-rocprofvis_controller_table_export_csv(...);                     // table -> CSV file
-rocprofvis_controller_summary_fetch_async(...);                  // summary metrics
-rocprofvis_controller_get_indexed_property_async(...);           // event/table/system props
-rocprofvis_controller_metric_fetch_async(...);                   // compute metric values
-rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
-```
-
-PC-sampling data has three layer-specific fetchers. ISA View uses them so
-optional source and sampling-state data do not block the initial ISA display:
-
-```c
-rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
-rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
-rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons + optional instruction samples
-```
-
-Two more async surface APIs sit on the controller handle directly,
-covering trace-file maintenance:
-
-```c
-rocprofvis_controller_save_trimmed_trace(handle, start, end, path, future);
-rocprofvis_controller_cleanup_trace_database(handle, rebuild, future);
-```
-
-Plus the analysis sub-API (declared in
-`rocprofvis_controller_analysis.h`; see section 2.7), e.g.:
-
-```c
-rocprofvis_analysis_fetch_queue_utilization(
-    controller, track, start_time, end_time, future, &out_double);
-```
-
-### 2.5 Future API
-
-```c
-rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void);
-rocprofvis_result_t              rocprofvis_controller_future_wait(future, timeout_seconds);
-rocprofvis_result_t              rocprofvis_controller_future_cancel(future);
-void                             rocprofvis_controller_future_free(future);
-```
-
-Read progress via the generic getters with
-`rocprofvis_controller_future_properties_t`:
-
-- `kRPVControllerFutureResult` - final `rocprofvis_result_t` once done.
-- `kRPVControllerFutureProgressPercentage` - 0..100.
-- `kRPVControllerFutureProgressMessage` - free-form string.
-
-`timeout = 0.0f` is "poll, do not block", `FLT_MAX` is "wait forever".
-Cancelling is best-effort - the rule in the header is **callers must
-not assume cancellation succeeds**.
-
-### 2.6 Arguments / Array / SummaryMetrics
-
-The View packages typed call arguments into a generic
-`rocprofvis_controller_arguments_t` (a `map<property_id, vector<Data>>`)
-and the controller writes results into a `rocprofvis_controller_array_t`
-(a `vector<Data>`). Both are heap-allocated by the caller; both have
-matching `*_alloc` and `*_free` helpers. `Data` is a tagged-union held
-in `src/controller/src/rocprofvis_controller_data.h` carrying one of
-`UInt64`, `Double`, `String`, or `Object`.
-
-For summary, results land in the dedicated
-`rocprofvis_controller_summary_metrics_t` shape (a tree of
-trace -> node -> processor metrics; see section 5.5).
-
-For compute metric fetches, results land in a
-`rocprofvis_controller_metrics_container_t` (a flat list of
-`{metric_id, source_type, source_id, value_name, value}` rows).
-
-### 2.7 The "analysis" sub-API
-
-Cross-cutting analytics are declared in the public
-`inc/rocprofvis_controller_analysis.h`, implemented by the `Analysis`
-class in `src/rocprofvis_controller_analysis_internal.h` /
-`src/rocprofvis_controller_analysis.cpp`, and are
-exposed as `rocprofvis_analysis_*` functions (note this family drops
-the `_controller` infix). They reuse the same `Job + Future` plumbing
-as the data fetchers and back the View's Track Details and Top Events
-UI:
-
-- `rocprofvis_analysis_fetch_queue_utilization` - per-track queue
-  utilization over a time range (writes a `double`).
-- `rocprofvis_analysis_fetch_counter_statistics` - per-track counter
-  min/max/mean/stddev over a time range
-  (`rocprofvis_analysis_counter_statistics_t`).
-- `rocprofvis_analysis_get_*_events_table` - the five "top events"
-  table-handle getters (instrumented, dispatch, memory allocation,
-  memory copy, sampled).
-- `rocprofvis_analysis_fetch_table` - fetch rows for one of those
-  tables (paged via `rocprofvis_controller_arguments_t`).
-- `rocprofvis_analysis_free_trace_data` - release cached analysis
-  results for the trace.
-
-Add new cross-cutting analyses here rather than in the per-domain
-system / compute modules.
-
-User-authored Python analysis is a separate planned surface
-(`rocprofvis_script_*`, private `table_alloc` query tables, embedded
-interpreter). Do not extend `create_analysis_view_async` for that.
-See [`.agents/SCRIPTING.md`](./SCRIPTING.md).
-
-## 3. Internal Architecture & Threading Model
-
-```
-                     +-----------------------------+
-   View thread       |   rocprofvis_controller_*   |   public C ABI
-   (single-threaded) |   (extern "C" in            |
-                     |    rocprofvis_controller.cpp)|
-                     +--------------+--------------+
-                                    | Reference<>: type-checked cast
-                                    v
-                     +-----------------------------+
-                     |   Handle subclasses         |   Trace, Track, Graph,
-                     |   (per object type)         |   Table, Event, ...
-                     +--------------+--------------+
-                                    | schedules
-                                    v
-                     +-----------------------------+
-                     |   JobSystem (thread pool)   |   + Future fences
-                     +--------------+--------------+
-                                    | runs JobFunction:
-                                    | rocprofvis_result_t(Future*)
-                                    v
-                     +-----------------------------+
-                     |   Trace::Fetch* / DM        |   uses src/model/
-                     |   queries (model layer)     |   (rocprofvis_dm_*)
-                     +-----------------------------+
-                                    | results -> Array, Future done
-                                    v
-                     +-----------------------------+
-                     |   Future::Wait returns,     |   View polls each frame
-                     |   View pulls Data from Array|
-                     +-----------------------------+
-```
-
-### Threads at runtime
-
-- **One worker pool** owned by `JobSystem` (singleton via
-  `JobSystem::Get()`). Workers consume `Job*` values from a
-  `vector<Job*>` guarded by `m_queue_mutex` and signalled by
-  `m_condition_variable`. Worker count is decided in
-  `rocprofvis_controller_job_system.cpp`.
-- **One LRU thread per `MemoryManager`** (`m_lru_thread` in
-  `MemoryManager`), only spawned when the manager exists. It evicts
-  cached segment data when total memory usage exceeds the configured
-  share of `s_physical_memory_avail`.
-- **Caller threads** (the View's main thread, or Python) only ever
-  touch handles - they must not block the View loop on a future. The
-  pattern is always "issue, poll, react".
-
-### Threading rules
-
-1. The `extern "C"` ABI is reentrant in the sense that any thread can
-   call a getter, but each handle's mutability is governed by the
-   subclass (most data types are immutable post-load; the few mutable
-   ones - e.g. `Future`, `Array`, `MemoryManager` - protect their
-   state with `std::mutex` / `std::shared_mutex`).
-2. **Never** kick off a `std::thread` from controller code outside
-   `JobSystem` or `MemoryManager`. New asynchronous work goes through
-   `JobSystem::Get().IssueJob(...)`.
-3. The `Future` is the only legitimate cross-thread fence between the
-   View and a controller job. It exposes `Wait`, `Cancel`,
-   `IsCancelled`, plus progress data via the property API.
-4. Long-running database operations (load, trim, cleanup) compose a
-   controller `Future` with one or more `rocprofvis_db_future_t`
-   (`AddDependentFuture` / `RemoveDependentFuture` and the static
-   `Future::ProgressCallback`). DB-side progress is folded into the
-   controller `Future`'s percentage so the View's progress bar is a
-   single source of truth.
-
-## 4. Core Building Blocks
-
-### 4.1 `Handle` base class
-File: `src/controller/src/rocprofvis_controller_handle.{h,cpp}`.
-
-```cpp
-class Handle
-{
-public:
-    Handle(uint32_t first_prop_index, uint32_t last_prop_index);
-    virtual ~Handle() {}
-
-    virtual rocprofvis_controller_object_type_t GetType(void) = 0;
-
-    virtual rocprofvis_result_t GetUInt64(prop, index, uint64_t*  value);
-    virtual rocprofvis_result_t GetDouble(prop, index, double*    value);
-    virtual rocprofvis_result_t GetObject(prop, index, handle_t** value);
-    virtual rocprofvis_result_t GetString(prop, index, char* value, uint32_t* length);
-
-    virtual rocprofvis_result_t SetUInt64(prop, index, uint64_t           value);
-    // ... and the corresponding setters
-
-    virtual Handle* GetContext()              { return nullptr; }
-    virtual bool    IsDeletable()             { return true; }
-    virtual void    IncreaseRetainCounter()   {}
-};
-```
-
-Every public object type (`SystemTrace`, `Track`, `Graph`, `Event`,
-`Sample`, `SampleLOD`, `FlowControl`, `CallStack`, `ExtData`, `Future`,
-`Array`, `Arguments`, `Table`, `Summary`, `SummaryMetrics`,
-`TopologyNode` and friends, plus the compute-only `ComputeTrace`,
-`Workload`, `Kernel`, `PcSampling`, `Roofline`, `MetricsContainer`,
-`ComputeTable`, `ComputePivotTable`, `Plot`, `ComputePlot`,
-`PlotSeries`) inherits from `Handle`.
-
-`m_first_prop_index` / `m_last_prop_index` form a guard band so an
-unhandled getter falls back to `UnhandledProperty(property)`. A property
-inside the handle's bank returns `kRocProfVisResultInvalidType`; a
-property outside the bank returns `kRocProfVisResultInvalidEnum`.
-
-The protected method
-`GetStdStringImpl(value, length, std::string_view)` is the canonical
-string-copy helper. Passing a null buffer (or a zero buffer length)
-queries the payload byte count; otherwise it performs a bounded copy
-without appending a terminator. It replaced the old `GetStdStringImpl`
-macro and `GetStringImpl` helper.
-Derived classes should keep their generic property overrides private
-and expose dedicated typed accessors for controller-internal C++ callers;
-the public virtual methods remain available through `Handle` for C ABI
-dispatch.
-
-### 4.2 `Reference<>` template
-File: `rocprofvis_controller_reference.h`.
-
-```cpp
-template <typename Pointer, typename Type, unsigned Enum>
-class Reference;
-```
-
-Type-checked downcast helper. The C ABI receives a `rocprofvis_handle_t*`
-and the entry points create one of these to validate it actually points
-at the expected subclass via `GetType() == Enum` before dispatching. Every
-`extern "C"` function in `rocprofvis_controller.cpp` opens with one or
-more of:
-
-```cpp
-RocProfVis::Controller::SystemTraceRef trace(controller);
-RocProfVis::Controller::TrackRef       track_ref(track);
-RocProfVis::Controller::FutureRef      future_ref(result);
-RocProfVis::Controller::ArrayRef       array_ref(output);
-if (trace.IsValid() && track_ref.IsValid() && ...)
-```
-
-**Rule:** when adding a new entry point, declare a new `typedef
-Reference<...>` next to the others at the top of
-`rocprofvis_controller.cpp` and validate every input handle. Do not
-`reinterpret_cast` directly.
-
-### 4.3 `Future`
-File: `rocprofvis_controller_future.{h,cpp}`.
-
-`Future` is itself a `Handle` (object type
-`kRPVControllerObjectTypeFuture`). It stores:
-
-- `Job* m_job` - the worker job it fences.
-- `std::vector<rocprofvis_db_future_t> m_db_futures` - DB-side futures
-  it has subscribed to via `AddDependentFuture`. Removed via
-  `RemoveDependentFuture` when the DB future completes.
-- `std::atomic<bool> m_cancelled` and `std::mutex m_mutex` for safe
-  cancel state.
-- `m_progress_percentage`, `m_progress_message`, `m_progress_map` - per
-  DB future percentages folded into a single percentage exposed via
-  `kRPVControllerFutureProgressPercentage` /
-  `kRPVControllerFutureProgressMessage`.
-
-`Future::ProgressCallback` is the C-style callback registered with
-each DB future; it locks the mutex, writes into `m_progress_map`, and
-recomputes the aggregate percentage.
-
-### 4.4 `JobSystem`
-Files: `rocprofvis_controller_job_system.{h,cpp}`.
-
-```cpp
-typedef std::function<rocprofvis_result_t(Future*)> JobFunction;
-
-class Job
-{
-public:
-    Job(JobFunction function, Future* future);
-    void Execute();
-    void Cancel();
-    rocprofvis_result_t GetResult() const;
-    rocprofvis_result_t Wait(float timeout);
-};
-
-class JobSystem
-{
-public:
-    static JobSystem& Get();
-    Job* IssueJob(JobFunction function, Future* future);
-    rocprofvis_result_t CancelJob(Job* job);
-};
-```
-
-A `Job` owns a `JobFunction` and the `Future*` it should signal. The
-worker pool drains `m_jobs` under `m_queue_mutex`. Cancellation flips
-the `Future`'s cancel flag and the `JobFunction` is expected to check
-it cooperatively.
-
-**Rule:** any new async fetcher writes its body as a
-`JobFunction` lambda capturing the request inputs by value, calls into
-`Trace::*Fetch*` / `Table::Fetch` / `Plot::Fetch`, writes results into
-the caller's `Array` or `MetricsContainer`, then returns its
-`rocprofvis_result_t`. Issue it with `JobSystem::Get().IssueJob(...)`.
-
-### 4.5 `Data` tagged union
-File: `rocprofvis_controller_data.{h,cpp}`.
-
-`Data` carries one of: `uint64_t`, `double`, owned `char*`, or
-`rocprofvis_handle_t*`. `m_type` holds the
-`rocprofvis_controller_primitive_type_t`. `Data` is move-aware and
-properly frees its owned string in the destructor / on
-reassignment. It is the single primitive that flows through `Array`,
-`Arguments`, and `Table::m_rows`.
-
-### 4.6 `Array`
-File: `rocprofvis_controller_array.{h,cpp}`.
-
-A `Handle` wrapping `std::vector<Data>`. Properties:
-
-- `kRPVControllerArrayNumEntries` - get/set the count (on set, resizes
-  the vector).
-- `kRPVControllerArrayEntryIndexed` - get/set a single cell.
-
-`SetContext(Handle*)` is used for graph data: when a `Graph` fills an
-`Array` with `Event*` / `Sample*` allocated through the
-`MemoryManager`, the array carries the owning `SystemTrace*` so that
-`rocprofvis_controller_array_free` can call
-`MemoryManager::CancelArrayOwnership(...)` and let the LRU evictor
-release the underlying segments.
-
-### 4.7 `Arguments`
-File: `rocprofvis_controller_arguments.{h,cpp}`.
-
-A `Handle` wrapping `std::map<rocprofvis_property_t, std::vector<Data>>`.
-The View calls `Set*(property, index, value)` to package call
-parameters. The controller reads them via `Get*(property, index, ...)`.
-This is how table fetch, summary fetch, compute metric fetch, and
-compute pivot fetch all receive their typed argument lists without
-having to hand-roll a struct per call.
-
-### 4.8 `StringTable`
-File: `rocprofvis_controller_string_table.{h,cpp}`.
-
-Process-global string interning, singleton via `StringTable::Get()`.
-`AddString(str)` returns a stable `size_t` ID, `GetString(id)`
-returns the canonical pointer. Used heavily in `Event` (name, category,
-combined-top name) and in `Workload` metric definitions to avoid
-duplicating millions of identical strings across events.
-
-### 4.9 `IdGenerator<T>`
-File: `rocprofvis_controller_id.h`. Per-type 64-bit monotonic counter
-(`++m_id`, returns next ID). Used by trace/timeline/track/event/graph
-to give every object a unique ID without colliding across types.
-
-### 4.10 `Table` base class
-File: `rocprofvis_controller_table.{h,cpp}`.
-
-Shared base for both system-side and compute-side tables.
-
-```cpp
-class Table : public Handle
-{
-public:
-    virtual rocprofvis_result_t Setup(rocprofvis_dm_trace_t,
-                                      Arguments&, Future*) = 0;
-    virtual rocprofvis_result_t Fetch(rocprofvis_dm_trace_t, uint64_t index,
-                                      uint64_t count, Array&, Future*) = 0;
-    virtual rocprofvis_result_t ExportCSV(rocprofvis_dm_trace_t,
-                                          Arguments&, Future*,
-                                          const char* path) const = 0;
-protected:
-    struct ColumnDefintion { std::string m_name; rocprofvis_controller_primitive_type_t m_type; };
-    std::vector<ColumnDefintion>            m_columns;
-    std::map<uint64_t, std::vector<Data>>   m_rows;
-    std::string                             m_where;
-    std::string                             m_filter;
-    std::string                             m_group;
-    std::string                             m_group_cols;
-    uint64_t                                m_num_items;
-    uint64_t                                m_id;
-    uint64_t                                m_sort_column;
-    rocprofvis_controller_sort_order_t      m_sort_order;
-};
-```
-
-Subclasses are `SystemTable` (events/samples/search-results/kernel
-instances), `ComputeTable` (catalog of pre-baked compute CSV tables),
-and `ComputePivotTable` (dynamic pivoted metric matrix).
-
-### 4.11 `Trace` base class
-File: `rocprofvis_controller_trace.{h,cpp}`.
-
-```cpp
-class Trace : public Handle
-{
-public:
-    Trace(uint32_t first_prop_index, uint32_t last_prop_index, const std::string& filename);
-    virtual rocprofvis_result_t Init() = 0;
-    virtual rocprofvis_result_t Load(Future& future) = 0;
-    rocprofvis_dm_handle_t      GetDMHandle() const;
-protected:
-    uint64_t              m_id;
-    rocprofvis_dm_trace_t m_dm_handle;
-    std::mutex            m_mutex;
-    std::string           m_trace_file;
-};
-```
-
-`SystemTrace` and `ComputeTrace` derive from this. The DM handle is
-the `src/model/` layer's typed reference; the controller never reaches
-into SQLite directly, only through `rocprofvis_dm_*` calls.
-
-## 5. System Trace Domain (`src/controller/src/system/`)
-
-`SystemTrace` (`rocprofvis_controller_trace_system.{h,cpp}`) is the
-root system-trace controller. It owns:
-
-```cpp
-std::vector<Track*>  m_tracks;
-Timeline*            m_timeline;
-SystemTable*         m_event_table;
-SystemTable*         m_sample_table;
-EventSearchTable*    m_search_table;
-Summary*             m_summary;
-MemoryManager*       m_mem_mgmt;
-TopologyNode*        m_topology_root;
-```
-
-`LoadRocpd` is a staged load pipeline implemented by private helpers:
-`OpenRocpdDatabase` opens and binds the SQLite database;
-`ReadRocpdMetadata` issues `rocprofvis_db_read_metadata_async` and
-waits; `LoadRocpdTracks` filters supported model tracks and calls
-`LoadRocpdTrack`; `LoadRocpdTrack` snapshots track state and calls
-`AddRocpdGraph`; and `LoadRocpdTopology` constructs the `TopologyNode`
-tree before calling `ValidateRocpdTrackTopology`. Track and graph
-objects stay under local `unique_ptr` ownership until their setup
-succeeds, then ownership is transferred to `SystemTrace` / `Timeline`.
-
-Six `AsyncFetch(...)` overloads cover everything the View asks for:
-
-```cpp
-rocprofvis_result_t AsyncFetch(Track&,    Future&, Array&, double s, double e);
-rocprofvis_result_t AsyncFetch(Graph&,    Future&, Array&, double s, double e, uint32_t pixels);
-rocprofvis_result_t AsyncFetch(Event&,    Future&, Array&, rocprofvis_property_t);
-rocprofvis_result_t AsyncFetch(Table&,    Arguments&, Future&, Array&);
-rocprofvis_result_t AsyncFetch(Summary&,  Arguments&, Future&, SummaryMetrics&);
-rocprofvis_result_t AsyncFetch(rocprofvis_property_t, Future&, Array&,
-                               uint64_t index, uint64_t count);
-```
-
-Track and graph requests delegate through `Timeline`; the other
-overloads schedule a `Job` directly. On a worker thread they walk the
-model layer (`rocprofvis_dm_*`) and fill the caller's `Array` or
-`SummaryMetrics`. `TableExportCSV(...)` is the corresponding async
-table-export path. The View's `DataProvider` polls the `Future` once
-per frame.
-
-### 5.1 `Track` (`rocprofvis_controller_track.{h,cpp}`)
-
-Represents a single horizontal lane in the timeline (queue, stream,
-instrumented thread, sampled thread, counter). Carries:
-
-- `m_type` (`rocprofvis_controller_track_type_t`: `Samples` or `Events`).
-- `m_bounds` - entry count, timestamps, and sample-value bounds cached
-  at load time.
-- `m_metadata` - category, display names, and operation types cached at
-  load time.
-- `m_topology_ids` - node plus process/agent and thread/queue IDs.
-- `m_segments` (a `SegmentTimeline`, see section 7).
-- `m_topology_links` — struct holding `Thread*`, `Queue*`, `Stream*`,
-  `Counter*`; set after topology construction via `SetThread` /
-  `SetQueue` / `SetStream` / `SetCounter`. Access via the typed
-  getters `GetThread()`, `GetQueue()`, `GetStream()`, `GetCounter()`.
-- `m_dm_handle` - the model-layer track reference.
-- `m_state_changed` - condition variable that coordinates concurrent
-  requests for the same missing segment range.
-
-Typed accessors (prefer these over the generic property API for
-internal C++ code): `GetId()`, `GetTrackType()`,
-`GetStartTimestamp()`, `GetEndTimestamp()`, `GetNumberOfEntries()`,
-the extended-data getters, `GetThread()`, `GetQueue()`, `GetStream()`,
-`GetCounter()`, and `GetInclusiveMemoryUsage()`. The generic
-`Get*` / `Set*` overrides on `Track` are private; use the typed setters
-(`SetThread`, `SetQueue`, `SetStream`, `SetCounter`) when wiring
-topology links.
-
-`FillBounds()`, `FillMetadata()`, and `FillTopologyIds()` snapshot the
-corresponding track data from the model before the track is added to
-the trace. A failure in any snapshot step aborts that track's load.
-
-`Fetch(start, end, array, index, future)` delegates cache coordination
-to `Track::FetchSegments`. That method claims contiguous missing ranges
-with `SegmentTimeline`'s processed bits, waits on `m_state_changed` when
-another request owns a range, calls `FetchFromDataModel`, marks the
-range valid only on success, and finally walks the resident segments.
-`Graph` reuses this path to obtain raw LOD-0 entries.
-
-`FetchFromDataModel` is split into focused helpers. It aligns the
-request with `CalculateFetchRange`, estimates density from the track
-histogram, schedules model reads with `ScheduleTraceReadRequests`, and
-then waits and dispatches each returned slice through
-`ProcessTraceReadRequest`. `ProcessEventRecords` and
-`ProcessPmcSampleRecords` allocate pooled controller objects and insert
-them into the segment timeline. Model slices and dependent futures are
-released after processing, including cancellation/error paths.
-
-Track properties are exposed under
-`rocprofvis_controller_track_properties_t` (start at `0x30000000`):
-`kRPVControllerTrackId`, `kRPVControllerTrackType`,
-`kRPVControllerTrackMin/MaxTimestamp`, `kRPVControllerTrackNumberOfEntries`,
-`kRPVControllerTrackEntry`, `kRPVControllerCategory`,
-`kRPVControllerMainName`, `kRPVControllerSubName`,
-`kRPVControllerTrackDescription`, `kRPVControllerTrackMin/MaxValue`,
-`kRPVControllerTrackNode/Processor/Thread/Queue/Counter/Stream`,
-`kRPVControllerTrackExtData*Indexed`, histogram buckets, and the
-agent/queue id helpers.
-
-### 5.2 `Event` / `Sample` / `SampleLOD`
-Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
-`rocprofvis_controller_sample_lod.h`.
-
-`Event` (`kRPVControllerObjectTypeEvent`):
-
-- Carries `m_id`, `m_start_timestamp`, `m_end_timestamp`,
-  `m_name` / `m_category` / `m_combined_top_name` (all `size_t` IDs
-  into `StringTable`), `m_level`, `m_retain_counter`.
-- `m_children` (`Array*`) holds synthetic LOD children; only populated
-  on summary events emitted by `Graph::GenerateLODEvent`.
-- Static helpers `FetchDataModelFlowTraceProperty`,
-  `FetchDataModelStackTraceProperty`,
-  `FetchDataModelExtendedDataProperty` populate an output `Array` from
-  the model layer. These are what
-  `rocprofvis_controller_get_indexed_property_async` calls when the
-  property is a flow / callstack / ext-data ID.
-- Has `IsDeletable() / IncreaseRetainCounter()` overrides because the
-  same `Event*` can be retained by both a `Track` segment cache and a
-  `Graph` LOD; the count keeps it alive until both release.
-
-`Sample` (`kRPVControllerObjectTypeSample`):
-
-- A primitive value sample with a timestamp. Bound by
-  `rocprofvis_controller_sample_properties_t` (`0x40000000`).
-
-`SampleLOD : Sample` (`kRPVControllerObjectTypeSample` reused):
-
-- Wraps a `std::vector<Sample*> m_children` and exposes the aggregate
-  child statistics (`min`, `mean`, `median`, `max`,
-  `min_timestamp`, `max_timestamp`) via the
-  `kRPVControllerSampleChild*` family of properties.
-
-### 5.3 `Graph` (`rocprofvis_controller_graph.{h,cpp}`)
-
-A `Graph` represents a per-track LOD pyramid keyed by `m_lods`
-(`map<uint32_t, SegmentTimeline>`). `Fetch(pixels, start, end, array,
-index, future)` figures out which LOD level fits the requested pixel
-density, calls `GenerateLOD(lod_to_generate, ...)` if the level is not
-yet built, and emits the resulting `Event*` / `Sample*` into the
-caller's `Array`.
-
-`GenerateLODEvent` coalesces a vector of `Event*` into a single
-synthetic event whose `m_combined_top_name` is the longest contained
-event name. `CombineEventInfo` produces the shared display label and
-the `max_duration_str_index`. Controller-internal graph logic reads
-track type, bounds, and entry count through `Track`'s typed getters.
-LOD generation propagates invalid data/reference failures instead of
-depending on assertions alone.
-
-### 5.4 `Timeline` (`rocprofvis_controller_timeline.{h,cpp}`)
-
-Wrapper around the trace-wide collection of `Graph*`s plus the global
-`min_ts` / `max_ts`. Property bank:
-`rocprofvis_controller_timeline_properties_t` (`0x10000000`). Fetch
-delegates to `SystemTrace::AsyncFetch(Graph& ...)`.
-
-### 5.5 `Summary` and `SummaryMetrics`
-Files: `rocprofvis_controller_summary.{h,cpp}`,
-`rocprofvis_controller_summary_metrics.{h,cpp}`.
-
-`Summary` is the global summary controller hung off `SystemTrace`.
-Its `Fetch(dm_handle, args, output, future)` walks every node and
-processor, fills aggregate kernel exec time and GPU/CPU utilization,
-and writes into the caller-allocated `SummaryMetrics`. The kernel
-instance table for the Summary panel is owned here as
-`m_kernel_instance_table` (a `SystemTable` at table type
-`kRPVControllerTableTypeSummaryKernelInstances`).
-
-`SummaryMetrics` is a recursive tree:
-
-```
-trace level -> per-node level -> per-processor level
-```
-
-Each `SummaryMetrics` carries:
-
-- `m_aggregation_level` (`Trace | Node | Processor`).
-- Optional `m_id`, `m_name`, `m_processor_type`,
-  `m_processor_type_idx`.
-- `m_gpu` (gfx_util, mem_util, top_kernels list, kernel_exec_time_total)
-  or `m_cpu` (placeholder). Both `optional<...>` for sparse traces.
-- `m_sub_metrics` - children at the next level down.
-
-Property bank: `rocprofvis_controller_summary_metric_properties_t`
-(`0xF0000000`). `AggregateSubMetrics()` rolls children into the
-parent. `PadTopKernels()` makes sure every node has the same length
-top-kernels list so the View's table renders cleanly.
-
-### 5.6 `SystemTable` (`rocprofvis_controller_table_system.{h,cpp}`)
-
-Single class implementing four logical tables, distinguished by
-`rocprofvis_dm_table_use_case_enum_t m_use_case`:
-
-- `kRPVControllerTableTypeEvents` - per-track event detail table.
-- `kRPVControllerTableTypeSamples` - per-track sample detail table.
-- `kRPVControllerTableTypeSearchResults` - global event search table.
-- `kRPVControllerTableTypeSummaryKernelInstances` - kernel instance
-  rollup used by the summary panel.
-
-`Setup()` unpacks an `Arguments` (track IDs, start/end ns, sort
-column, sort order, where/filter/group strings, op-type filters,
-string-table filters) into a `QueryArguments` struct, then queries
-the model. `Fetch(index, count, ...)` returns a row range from
-`m_rows`. Argument property bank:
-`rocprofvis_controller_table_arguments_t` (`0xE0000000`).
-
-### 5.7 `TopologyNode` family
-File: `rocprofvis_controller_topology.{h,cpp}`.
-
-`TopologyNode` is the polymorphic base for the topology tree:
-`TopologyRoot`, `Node`, `Process`, `Processor`, `Thread`, `Queue`,
-`Stream`, `Counter`. Each one carries:
-
-- `m_dm_topology_node` - the model-layer reference.
-- `m_node_type` (`rocprofvis_controller_topology_node_type_t`).
-- `m_name`.
-- `m_children` (`map<type, vector<TopologyNode*>>`).
-- `m_parent`.
-- `m_track` - the optional `Track*` that this leaf node represents.
-
-`GetParent(type)` walks up the chain to the nearest ancestor of a
-given type. The View mirrors this tree into its own `TopologyTree`
-(`src/view/src/model/rocprofvis_topology_model.h`) at load; do not add a
-new topology kind without also extending both. Track-to-topology links
-come from the model node's `kRPVControllerTopologyNodeTrack` ID while the
-controller tree is constructed. The ID is resolved through
-`kRPVControllerSystemTrackIndexed`, then the typed `Track::Set*` method
-for the leaf kind records the reverse link. Track extended-data records
-are not a secondary wiring source. `SystemTrace::LoadRocpdTopology`
-checks whether every supported track received the expected thread,
-queue, stream, or counter link and logs incomplete topology without
-failing the trace load.
-
-### 5.8 `FlowControl`, `CallStack`, `ExtData`, `ArgumentData`
-Files: `rocprofvis_controller_flow_control.h`,
-`rocprofvis_controller_call_stack.h`,
-`rocprofvis_controller_ext_data.h`.
-
-- `FlowControl` - one outgoing/incoming arrow target on an event;
-  property bank `kRPVControllerFlowControlPropertiesFirst` (`0x50000000`).
-- `CallStack` - one call-stack frame attached to an event; property
-  bank `kRPVControllerCallstackPropertiesFirst` (`0x60000000`).
-- `ExtData` - one extended-data row (category / name / value / type),
-  property bank `kRPVControllerExtDataPropertiesFirst` (`0xD0000000`).
-- `ArgumentData : ExtData` - same shape plus position and arg type;
-  carries event-argument metadata.
-
-These are filled into an `Array` by the static
-`Event::FetchDataModelFlowTraceProperty` /
-`FetchDataModelStackTraceProperty` /
-`FetchDataModelExtendedDataProperty` helpers and surfaced via
-`rocprofvis_controller_get_indexed_property_async`.
-
-### 5.9 Memory management & segments
-See section 7. The other system-side files,
-`rocprofvis_controller_segment.{h,cpp}` and
-`rocprofvis_controller_mem_mgmt.{h,cpp}`, implement the LOD cache
-and LRU eviction.
-
-## 6. Compute Trace Domain (`src/controller/src/compute/`)
-
-The compute-side public API and `src/controller/src/compute/` sources
-are always compiled. The compute objects all share the same `Handle` base,
-the same `Reference<>` validation, the same `JobSystem` / `Future`
-plumbing.
-
-Build note: `src/controller/CMakeLists.txt` currently compiles the
-active compute controller set (`trace_compute`, `workload`, `kernel`,
-`metrics_container`, `roofline`, and `table_compute_pivot`). Older /
-experimental compute table and plot sources also exist in
-`src/controller/src/compute/`; keep them documented for discoverability,
-but check CMake before assuming a class is linked into
-`roc-optiq-controller`.
-
-### 6.1 `ComputeTrace` (`rocprofvis_controller_trace_compute.{h,cpp}`)
-
-Root of the compute trace. Owns:
-
-```cpp
-std::vector<Workload*>      m_workloads;
-QueryArgumentStore          m_query_arguments;
-QueryDataStore              m_query_output;
-std::atomic<uint64_t>       m_async_fetch_counter;
-ComputePivotTable*          m_kernel_metric_table;
-std::string                 m_profiler_version;
-std::string                 m_profiler_git_version;
-std::string                 m_schema_version;
-```
-
-`LoadRocpd` calls `FetchMetadata` (use case `kRPVComputeFetchMetadata`)
-before loading workloads and stores the single `compute_metadata` row.
-The strings are exposed through `GetString` as
-`kRPVControllerComputeProfilerVersion`,
-`kRPVControllerComputeProfilerGitVersion`, and
-`kRPVControllerComputeSchemaVersion`. A failed metadata read logs a
-warning and leaves the strings empty; it does not fail the load.
-
-Two `AsyncFetch` overloads:
-
-```cpp
-rocprofvis_result_t AsyncFetch(Arguments&, Future&, MetricsContainer&);
-rocprofvis_result_t AsyncFetch(Table&, Arguments&, Future&, Array&);
-```
-
-PC sampling uses `AsyncFetchPcSamplingIsaData`,
-`AsyncFetchPcSamplingSource`, and `AsyncFetchPcSamplingStalls` for the three
-on-demand layers. Each schedules a controller `Job`, locks only its layer on
-the kernel-owned `PcSampling` handle, and calls the corresponding synchronous
-stage helper. The helper creates model DB futures through `ExecuteQuery`, adds
-them as dependent controller futures, waits for their result on the worker,
-copies the temporary model table into `QueryDataStore`, and deletes that table.
-
-Internal helper `ExecuteQuery(...)` runs a database query through the
-compute model layer and dispatches rows into a callback. The nested
-`MetricID` class formats `"category.table.entry"` strings the View can
-parse back into typed metric refs. A valid kernel/workload request for an
-unavailable metric completes successfully with an empty `MetricsContainer`;
-omitting metric selectors remains an invalid request.
-
-### 6.2 `Workload` (`rocprofvis_controller_workload.{h,cpp}`)
-
-One profiling run / kernel session. Carries:
-
-- `m_id`, `m_name`, `m_sub_name`.
-- `JsonData m_system_info` and `m_profiling_config` - displayed in the
-  Workload view.
-- `std::vector<MetricDefinition> m_available_metrics` - catalog of the
-  metrics that can be queried (each row carries category id, table
-  id, name / description / unit string-table indices).
-- `std::vector<MetricValueName> m_metric_value_names` - the value-name
-  axis for each metric.
-- `std::vector<Kernel*> m_kernels`.
-- `Roofline* m_roofline`.
-
-Property bank: `rocprofvis_controller_workload_properties_t`.
-
-### 6.3 `Kernel` (`rocprofvis_controller_kernel.{h,cpp}`)
-
-A kernel within a workload. Carries `m_id`, `m_name`,
-`m_invocation_count`, the duration set (`total/min/max/median/mean`),
-and `m_has_isa_lines`, which lets the View determine ISA availability
-without eagerly fetching PC-sampling rows. Property bank:
-`rocprofvis_controller_kernel_properties_t`.
-
-Each kernel also owns a `PcSampling` handle. The
-`rocprofvis_controller_pc_sampling_fetch_isa_lines_async` path calls
-`ComputeTrace::AsyncFetchPcSamplingIsaData` to load the code objects, kernel
-symbols, and ISA lines needed for the initial ISA View. The source fetch loads
-source-file metadata, instruction/source mappings, and the requested source
-file's lines. Each instruction/source mapping includes the owning source-file
-UUID so ISA View can switch files for cross-pane navigation. Source file ID 0
-selects the first available source file. The stall fetch independently loads
-PC sample states and stall-reason counts. It also loads instruction-sample
-metadata by default for compatibility, unless the caller sets
-`kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
-that opt-out because it does not consume the metadata. Per-table flags on
-`PcSampling` prevent repeated queries while `m_source_line_cache` stores source
-lines separately by file UUID.
-
-Only `kRPVControllerPcSamplingArgsKernelId` is required by the ISA and stall
-entry points. The stall entry point also accepts the optional
-`kRPVControllerPcSamplingArgsIncludeInstructionSamples` flag, which defaults to
-enabled when omitted. The source entry point additionally requires
-`kRPVControllerPcSamplingArgsSourceFileUuid`; zero selects the first source
-file. `kRPVControllerPcSamplingArgsWorkloadId` remains in the public enum but
-is not read by these controller methods. The View uses its workload ID before
-the call to resolve the workload, kernel, and kernel-owned `PcSampling` handles.
-
-### 6.4 `Roofline` (`rocprofvis_controller_roofline.{h,cpp}`)
-
-Holds the roofline geometry: vectors of `CeilingBandwidth`,
-`CeilingCompute`, `CeilingRidge`, `Intensity` (kernel point in 2D). The
-public types
-`rocprofvis_controller_roofline_ceiling_compute_type_t`,
-`rocprofvis_controller_roofline_ceiling_bandwidth_type_t`,
-`rocprofvis_controller_roofline_kernel_intensity_type_t` enumerate
-every supported ceiling. Property bank:
-`rocprofvis_controller_roofline_properties_t`.
-
-### 6.5 `MetricsContainer` (`rocprofvis_controller_metrics_container.{h,cpp}`)
-
-The output handle for `rocprofvis_controller_metric_fetch_async`. A
-flat `vector<Metric>` where each row is:
-
-```cpp
-struct Metric {
-    size_t                                 id_idx;        // StringTable id
-    size_t                                 name_idx;      // StringTable id
-    rocprofvis_controller_metric_source_type_t source_type; // Workload | Kernel
-    uint32_t                               source_id;
-    size_t                                 value_name_idx; // StringTable id
-    double                                 value;
-};
-```
-
-Property bank: `rocprofvis_controller_metrics_container_properties_t`.
-
-### 6.6 `ComputeTable` and `ComputePivotTable`
-Files: `rocprofvis_controller_table_compute.{h,cpp}`,
-`rocprofvis_controller_table_compute_pivot.{h,cpp}`,
-`rocprofvis_controller_compute_metrics.h`.
-
-`ComputePivotTable` is part of the active controller target.
-`ComputeTable` source exists but is not currently listed in
-`src/controller/CMakeLists.txt`; treat it as older / auxiliary code
-unless you wire it into the build.
-
-`ComputeTable` is the catalog wrapper for the pre-baked compute CSV
-tables. The mapping from CSV filename to logical table type lives in
-`COMPUTE_TABLE_DEFINITIONS` inside
-`rocprofvis_controller_compute_metrics.h` (top-kernels, sysinfo,
-speed-of-light, memory chart, command processor, workgroup manager,
-wavefront launch / runtime, instruction mixes, compute units, LDS,
-caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
-`Fetch(index, count, ...)` returns rows; `GetMetric(key, &out)` and
-`GetMetricFuzzy(key, &out)` look metrics up by name.
-
-`ComputePivotTable` is the dynamic pivot used by the
-"Add Metric" workflow in the View. `Setup()` accepts:
-
-- `kRPVControllerCPTArgsWorkloadId`,
-- `kRPVControllerCPTArgsNumMetricSelectors` +
-  `kRPVControllerCPTArgsMetricSelectorIndexed` (strings of the form
-  `"category.table.entry:value_name"`, e.g. `"2.1.4:peak"`),
-- `kRPVControllerCPTArgsSortColumnIndex`, `kRPVControllerCPTArgsSortOrder`,
-- `kRPVControllerCPTArgsNumColumnFilters` plus column index +
-  expression for each filter.
-
-It pivots metric values into a `kernel x metric` matrix and exposes
-the result like any other table.
-
-### 6.7 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
-
-Object type `kRPVControllerObjectTypePCSampling = 30`. Each `Kernel`
-owns one `PcSampling` handle (accessed via
-`kRPVControllerKernelPcSampling`). Data is split into three independent
-layers, each with its own `std::recursive_mutex` so a completed ISA
-pane stays readable while source or stall data loads:
-
-| Layer   | Mutex                | Data vectors |
-|---------|----------------------|--------------|
-| ISA     | `m_isa_data_mutex`   | `m_code_object_store`, `m_kernel_symbols`, `m_instruction_lines` |
-| Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
-| Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
-
-Cached query-group booleans (`m_code_object_store_loaded`,
-`m_kernel_symbols_loaded`, `m_instruction_lines_loaded`,
-`m_instruction_source_lines_loaded`, `m_source_files_loaded`,
-`m_pc_sample_states_loaded`, `m_stalls_loaded`,
-`m_instruction_samples_loaded`) prevent repeated queries.
-Row-count setters clear their destination vectors before resizing so a failed
-fetch followed by a retry cannot preserve fields from an earlier result.
-
-`GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
-locking to the right mutex for each property ID.
-
-`QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t, property&,
-type&)` is the internal helper `ComputeTrace` uses to map a DB column
-enum to the right `kRPVControllerPCSampling*` property ID.
-
-PC-sample-state `issue_count` and `stall_count` are optional because host-trap
-sampling does not measure progress state. Empty database cells leave the
-corresponding `std::optional` unset. Their UInt64 getters return
-`kRocProfVisResultNotLoaded` for an unset value, while a measured zero returns
-success with zero; `total_count` remains a required UInt64 value.
-
-Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
-(guarded by `__kRPVControllerPCSamplingPropertiesFirst` and
-`__kRPVControllerPCSamplingPropertiesLast`). Its three groups have fixed high
-nibbles: source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`.
-Instruction/source correlation properties include both source-line and owning
-source-file UUIDs.
-
-### 6.8 `ComputePlot`, `Plot`, `PlotSeries`
-Files: `rocprofvis_controller_plot.{h,cpp}`,
-`rocprofvis_controller_plot_compute.{h,cpp}`,
-`rocprofvis_controller_plot_series.{h,cpp}`.
-
-These plot classes exist in source but are not currently listed in
-`src/controller/CMakeLists.txt`; the current View-side compute roofline
-path does not depend on these controller plot classes being linked.
-
-`Plot` is the abstract base for any data plot (axes + named series).
-`ComputePlot : Plot` consumes one or more `ComputeTable`s and
-populates the `m_series` map keyed on series name. `PlotSeries` is the
-concrete `(x, y)` value vector exposed to callers via the property
-API. The static catalog of built-in compute plots is
-`COMPUTE_PLOT_DEFINITIONS` in
-`rocprofvis_controller_compute_metrics.h` (kernel duration pie,
-SOL plots, instruction mix plots, cache stalls, etc.). Roofline plots
-are configured by `ROOFLINE_DEFINITION` in the same header.
-
-## 7. Memory Manager & Segment Timeline
-
-This is the trickiest part of the controller; it is also the only
-place that owns dedicated threads outside the `JobSystem`. Read
-`rocprofvis_controller_segment.h` and
-`rocprofvis_controller_mem_mgmt.h` together with this section.
-
-### 7.1 `Segment` and `SegmentTimeline`
-
-Every track owns a `SegmentTimeline` - a sparse `map<double,
-unique_ptr<Segment>>` with two parallel `BitSet`s:
-
-- `m_valid_segments` - which segments have been loaded from the model.
-- `m_processed_segments` - which segments have been post-processed
-  (e.g. LOD generated).
-
-A `Segment` is a fixed time slice (`kSegmentDuration` ns by default
-`1e9`, scalable to `kScalableSegmentDuration = 1e4` for high-density
-tracks) holding `map<level, map<timestamp, Handle*>>`. `Insert(...)`
-adds an event/sample, `Fetch(start, end, array, ...)` emits the
-matching items into the caller's array.
-
-`SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`
-walks resident segments overlapping the requested range and invokes
-`func` for each one. It does not populate missing data. Raw-track cache
-population and duplicate-request coordination live in
-`Track::FetchSegments`; graph LOD cache population lives in
-`Graph::GenerateLOD`. Both use the timeline's valid/processed bitsets
-and condition variables before delegating the final resident-segment
-walk to `SegmentTimeline::FetchSegments`.
-
-### 7.2 `MemoryManager`
-
-Owns memory pools for `Event`, `Sample`, `SampleLOD` plus a
-process-wide LRU eviction policy. Constructor:
-`MemoryManager(uint64_t id)`; one is created per `SystemTrace`.
-
-```cpp
-void Init(size_t num_objects);
-void Configure(double weight);
-void AddLRUReference(SegmentTimeline* owner, Segment* reference,
-                     uint32_t lod, void* array_ptr);
-rocprofvis_result_t EnterArrayOwnership(void* array_ptr,
-                                        rocprofvis_owner_type_t type);
-rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
-                                         rocprofvis_owner_type_t type);
-void Delete(Handle* handle, SegmentTimeline* owner);
-Event*     NewEvent(uint64_t id, double s, double e, SegmentTimeline*);
-Sample*    NewSample(rocprofvis_controller_primitive_type_t,
-                     uint64_t id, double ts, SegmentTimeline*);
-SampleLOD* NewSampleLOD(rocprofvis_controller_primitive_type_t,
-                        uint64_t id, double ts,
-                        std::vector<Sample*>& children, SegmentTimeline*);
-```
-
-Internals worth knowing:
-
-- `MemoryPool` - one pool per `(object_size, object_type, num_objects)`
-  triple. Allocations are slot-based with a `BitSet` mask so they are
-  O(1) and contiguous.
-- `m_lru_thread` - one background thread per manager that calls
-  `ManageLRU()` on a condition variable. When total `m_lru_storage_memory_used`
-  exceeds `m_lru_size_limit` (computed from `s_physical_memory_avail`,
-  `kUseVailMemoryPercent`, and per-trace weight) it walks `m_lru_array`
-  (sorted by oldest timestamp) and evicts segments by removing their
-  `array_ptr`s, deleting the resident `Event*` / `Sample*` / `SampleLOD*`s
-  through the pools, and clearing the `valid` bit on the segment.
-- Static `s_memory_manager_instances` and `Configure(weight)` let
-  multiple traces share the global memory budget proportionally.
-- `kShortTracksMemoryPoolIdentifier = 1` partitions short, dense
-  tracks into a separate pool so they are not evicted as easily as
-  large sparse tracks.
-- `Delete(handle, owner)` is the *only* legitimate destructor for
-  pooled objects - it returns the slot to the pool and decrements LRU
-  bookkeeping. Calling `delete` directly on a pooled `Event*` will
-  corrupt the pool.
-
-### 7.3 Array ownership and free-time eviction
-
-When a `Graph` fills an `Array` with pooled events, it calls
-`MemoryManager::EnterArrayOwnership(&array_vector, kRocProfVisOwnerTypeGraph)`
-to mark every reachable segment as in-use so the LRU thread will not
-evict them while the View holds the data. When the View later calls
-`rocprofvis_controller_array_free`, the controller-side free path
-checks whether the array was created by a `Trace` and, if so, calls
-`CancelArrayOwnership(...)` to release the in-use marker. This is why
-graph-output arrays carry a `Trace*` context and ordinary arrays do
-not. **Do not skip this step** when adding a new fetch path that
-returns pooled objects.
-
-## 8. Request Lifecycle: View Call -> Future -> Pixels
-
-This is the sequence the View and the controller follow for every
-async fetch. It is the same shape for every request type.
-
-```
-View thread (frame N):
-    DataProvider::FetchTrack(track_id, start, end, ...)
-        -> rocprofvis_controller_track_fetch_async(
-               controller, track, start, end, future, output_array)
-
-extern "C" entry (rocprofvis_controller.cpp):
-    SystemTraceRef trace(controller); TrackRef track_ref(track); ...
-    if (all valid) trace->AsyncFetch(*track_ref, *future, *array, start, end);
-
-SystemTrace::AsyncFetch -> Timeline::AsyncFetch:
-    JobSystem::Get().IssueJob([=](Future* f) {
-        // worker thread:
-        track_ref.Fetch(...) -> Track::FetchSegments(...)
-        for each unclaimed missing range:
-            Track::FetchFromDataModel(...)
-                -> ScheduleTraceReadRequests(...) -> rocprofvis_dm_*
-                -> ProcessEventRecords(...) / ProcessPmcSampleRecords(...)
-                -> MemoryManager::NewEvent(...) / NewSample(...)
-                -> segment->Insert(ts, level, handle);
-        SegmentTimeline::FetchSegments(...)
-            -> segment->Fetch(start, end, array, ...);
-        return kRocProfVisResultSuccess;
-    }, future);
-
-View thread (frame N+1..M):
-    rocprofvis_controller_future_wait(future, 0.0f) until kRocProfVisResultSuccess
-    (or read kRPVControllerFutureProgressPercentage to drive UI spinner)
-
-View thread (frame M, success):
-    Read array entries via rocprofvis_controller_get_object/uint64/...
-    Render as pixels.
-
-View thread on dispose:
-    rocprofvis_controller_array_free(array)
-        -> CancelArrayOwnership -> LRU may now evict the underlying segments.
-```
-
-When a request needs cancellation (e.g. tab close, view shutdown),
-the View calls `rocprofvis_controller_future_cancel`. The
-`JobFunction` is responsible for cooperatively checking
-`Future::IsCancelled()` at safe checkpoints. Cleanup work runs through
-`AppWindow::m_provider_cleanup_jobs` on the View side.
-
-## 9. Property Model & Object Type Tags
-
-Every controller object carries:
-
-1. A `rocprofvis_controller_object_type_t` returned by
-   `Handle::GetType()`. This is the runtime kind tag.
-2. A property range `[m_first_prop_index, m_last_prop_index)` that
-   every getter/setter call checks before dispatching.
-
-Property bank starting points (`uint32_t` enum bases):
-
-| Bank                                  | Base         |
-|---------------------------------------|--------------|
-| System controller                     | `0x00000000` |
-| Timeline                              | `0x10000000` |
-| View                                  | `0x20000000` |
-| Track                                 | `0x30000000` |
-| Sample                                | `0x40000000` |
-| Flow Control                          | `0x50000000` |
-| Callstack                             | `0x60000000` |
-| Event                                 | `0x70000000` |
-| Graph                                 | `0x80000000` |
-| Array                                 | `0x90000000` |
-| Table                                 | `0xA0000000` |
-| Future                                | `0xB0000000` |
-| Event Data (flow / callstack / ext)   | `0xC0000000` |
-| Ext Data                              | `0xD0000000` |
-| Table Arguments / Summary             | `0xE0000000` |
-| Summary Metrics                       | `0xF0000000` |
-| Common (memory usage, etc.)           | `0xFFFF0000` |
-
-Most compute-side banks start at the
-`__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
-`__first / __last` brackets in each enum are an extension hint - if
-you add a new property to an existing bank, declare it inside the
-brackets.
-
-`PcSampling` is the exception: its source, ISA, and stalls groups start at
-fixed values `0x10000000`, `0x20000000`, and `0x30000000`. Its
-`__kRPVControllerPCSamplingPropertiesFirst` / `Last` sentinels guard the full
-range across those groups, while `GetPropertyMutex` uses the high nibble to
-select the layer lock.
-
-When you add a new object type:
-
-1. Add a value to `rocprofvis_controller_object_type_t` (after the
-   existing range, never reorder).
-2. Add a typedef in `rocprofvis_controller_types.h`.
-3. Add a property bank enum in `rocprofvis_controller_types.h` with a
-   fresh base.
-4. Subclass `Handle` and implement only the getters/setters you need;
-   pass `(first, last)` to the base ctor.
-5. Add a `Reference<>` typedef in `rocprofvis_controller.cpp`.
-6. Add `*_alloc` / `*_free` if it is caller-allocated; otherwise hang
-   it off the parent and let `~ParentHandle()` delete it.
-
-## 10. Coding Conventions Specific to the Controller
-
-These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
-
-- **C ABI is C11.** No C++ types in the public headers crossing the
-  ABI boundary. Use `typedef enum`, `typedef struct`, fixed-width
-  integers from `<stdint.h>`, opaque `rocprofvis_handle_t*`.
-- **Implementation is C++17.** Use `nullptr`, fixed-width integers,
-  RAII, `std::unique_ptr` / `std::shared_ptr` for ownership. Prefer
-  stack allocation when feasible.
-- **Namespaces:** all C++ code lives in `RocProfVis::Controller`
-  (close blocks with the trailing `// namespace Controller / //
-  namespace RocProfVis` comments).
-- **No exceptions** across the C ABI boundary (and avoid them
-  internally). Return `rocprofvis_result_t`. Existing allocation, load,
-  worker, and parsing boundaries catch locally and translate to a result
-  code (for example `rocprofvis_controller_alloc`, `JobSystem`, and
-  `SystemTrace::LoadRocpd`); do the same when a throwing dependency
-  cannot be avoided.
-- **Logging:** `spdlog::info/warn/error` only. Never `std::cout` /
-  `printf` / `iostream`.
-- **Asserts:** `ROCPROFVIS_ASSERT` for runtime invariants;
-  `static_assert` for compile-time. Asserts must be side-effect free.
-- **Memory:** controller-pooled `Event` / `Sample` / `SampleLOD` MUST
-  go through `MemoryManager::New*`. Free with `MemoryManager::Delete`.
-  Do not call `new`/`delete` on these classes directly.
-- **Threading:** schedule async work via `JobSystem::Get().IssueJob`.
-  The only sanctioned long-lived thread outside `JobSystem` is
-  `MemoryManager::m_lru_thread`; if you must add another, follow the
-  same shutdown / atomic-flag pattern.
-- **String interning:** any high-cardinality string (event names,
-  metric names, file paths in callstacks) goes through `StringTable`.
-- **No globals.** Use `static T& Get()` singletons (matches
-  `JobSystem`, `StringTable`, `Analysis`).
-
-## 11. Reuse Catalog (controller edition)
-
-| You want to...                                          | Use this                                                                |
-|---------------------------------------------------------|-------------------------------------------------------------------------|
-| Validate a `rocprofvis_handle_t*` cast                  | `Reference<HandleT, MyType, kRPVControllerObjectType...>`               |
-| Schedule async work                                     | `JobSystem::Get().IssueJob(jobfn, future)`                              |
-| Wait or poll on async work                              | `Future::Wait(timeout)` / `kRPVControllerFutureProgressPercentage`      |
-| Cancel async work                                       | `Future::Cancel()` + check `Future::IsCancelled()` in your `JobFunction` |
-| Compose with a model-layer DB future                    | `Future::AddDependentFuture` + `Future::ProgressCallback`               |
-| Pass typed call arguments                               | `Arguments` (`Set*`/`Get*` per `property` bank)                         |
-| Return a list of typed values                           | `Array` (heap-allocated via `rocprofvis_controller_array_alloc`)        |
-| Return a primitive cell                                 | `Data` tagged union                                                     |
-| Hold an interned string                                 | `StringTable::Get().AddString(s)`                                       |
-| Allocate an `Event` / `Sample` / `SampleLOD`            | `MemoryManager::NewEvent` / `NewSample` / `NewSampleLOD`                |
-| Mark an array as in-use so segments survive eviction    | `MemoryManager::EnterArrayOwnership(arr, kRocProfVisOwnerTypeGraph)`    |
-| Release an array's in-use grip                          | `MemoryManager::CancelArrayOwnership(arr, type)` (called by `array_free`) |
-| Walk segments inside `[start, end]`                     | `SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`    |
-| Populate missing raw-track segments                     | `Track::FetchSegments(...)` / `Track::Fetch(...)`                       |
-| Read controller-internal track state                    | `Track` typed getters; reserve generic properties for C ABI dispatch    |
-| Identify a topology node's nearest typed ancestor       | `TopologyNode::GetParent(rocprofvis_controller_object_type_t)`          |
-| Get a track's linked topology node                      | `Track::GetThread()` / `GetQueue()` / `GetStream()` / `GetCounter()`   |
-| Wire a topology node to a track                         | `Track::SetThread()` / `SetQueue()` / `SetStream()` / `SetCounter()`   |
-| RAII-wrap a `rocprofvis_db_future_t`                    | `DataModelFuturePtr` (file-scope in `rocprofvis_controller_trace_system.cpp`) |
-| Implement a new table                                   | Subclass `Table`, override `Setup` / `Fetch` / `ExportCSV`              |
-| Implement a new system table use case                   | Add to `rocprofvis_dm_table_use_case_enum_t` and switch in `SystemTable` |
-| Implement a new compute pre-baked table                 | Add a `ComputeTableDefinition` row in `COMPUTE_TABLE_DEFINITIONS`       |
-| Implement a new compute plot                            | Add a `ComputeTablePlotDefinition` row in `COMPUTE_PLOT_DEFINITIONS`    |
-| Fetch one PC-sampling layer                             | Use the matching `ComputeTrace::AsyncFetchPcSampling*` method and the kernel-owned `PcSampling` handle |
-| Implement a new analysis function                       | Extend `Analysis` and add a free function in `inc/rocprofvis_controller_analysis.h` |
-| Add a new object type                                   | See section 9 (six-step recipe)                                         |
-| Add a new property to an existing object type           | Append to that bank's enum inside the `__first / __last` brackets       |
-| Generate / consume a unique 64-bit per-type id          | `IdGenerator<MyType>` (see `rocprofvis_controller_id.h`)                |
-
-## 12. Common Pitfalls
-
-- **Calling `delete` on pooled objects.** `Event`, `Sample`,
-  `SampleLOD` come from `MemoryManager`; deleting them with `delete`
-  corrupts the underlying pool. Always go through
-  `MemoryManager::Delete(handle, owner)`.
-- **Forgetting `EnterArrayOwnership`.** A `Graph` that fills an array
-  with pooled events but does not register ownership will see those
-  events evicted under it the moment the LRU thread runs. Pair every
-  pooled-fill with an `EnterArrayOwnership` and rely on
-  `CancelArrayOwnership` in `array_free`.
-- **`reinterpret_cast` from `rocprofvis_handle_t*`.** Always use a
-  `Reference<>` so the type tag is checked.
-- **Calling a derived class's generic property override internally.**
-  Keep those overrides private and add/use a typed getter or setter;
-  generic properties are the C ABI bridge, not the controller's C++
-  object interface.
-- **Treating `SegmentTimeline::FetchSegments` as a loader.** It only
-  walks resident segments. Use `Track::FetchSegments` when missing
-  raw-track ranges must be coordinated and populated.
-- **Spawning `std::thread` from a fetch.** Use
-  `JobSystem::Get().IssueJob`. The only legitimate non-job thread is
-  `MemoryManager::m_lru_thread`.
-- **Throwing exceptions.** Return `rocprofvis_result_t`. Do not let
-  exceptions cross any `extern "C"` boundary.
-- **Logging via `iostream` / `printf`.** Use `spdlog`.
-- **Adding properties without minding the bank base.** Property
-  values are bit-packed numerically, not symbolically; collisions
-  between banks will surface as silent dispatch errors.
-- **Holding a pointer returned by `GetString` past the next
-  `Set*`.** The buffer is owned by the caller; if you read into a
-  thread-local buffer and then call `SetString`, the pointer is stale.
-  Copy into a `std::string` immediately if you need to retain it.
-- **Calling `Future::Wait(FLT_MAX)` from the View thread.** That
-  blocks the UI. The View should call `Wait(0.0f)` (poll) or read the
-  progress percentage; it should never block the main loop.
-- **Mixing `SystemTrace` and `ComputeTrace` in one validation.** Only
-  one of `SystemTraceRef` / `ComputeTraceRef` is valid for a given
-  controller handle - use `rocprofvis_controller_get_object_type` first
-  if both paths are reachable (see
-  `rocprofvis_controller_table_fetch_async` for the canonical
-  example).
-
-## 13. Testing
-
-Catch2 tests live in `src/controller/tests/`:
-
-- `rocprofvis_controller_system_tests.cpp` - run twice in CI: against
-  `sample/trace_70b_1024_32.rpd` and `sample/rocpd-transpose.db`. Tests
-  the public ABI (alloc, load, fetch tracks / graphs / tables /
-  summary, save trimmed trace, cleanup, queue utilization), the
-  `MemoryManager` LRU eviction logic, and segment timeline behaviour.
-- `rocprofvis_controller_compute_tests.cpp` - runs against
-  `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
-  workload + kernel + roofline + metric-fetch + pivot-table flows.
-- `rocprofvis_controller_script_tests.cpp` - built only with
-  `ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0: execute a source string
-  and read `optiq.result.text`. Phase 1: load
-  `sample/trace_70b_1024_32.rpd`, fetch events / a private query
-  table from Python, and confirm `table_alloc` is not the UI Event
-  Table singleton. Accepts `--input_file`.
-
-The compute controller test currently does not exercise the PC-sampling ABI.
-Changes to the three PC-sampling fetchers or their property bank should add
-coverage for the matching schema-2.2 fixture.
-
-Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
-Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.
-
-When you add a new public API or a new domain class, add a
-corresponding test case here. Use the existing tests as templates -
-they show the canonical "alloc, load_async, wait, fetch, validate,
-free" sequence.
-
-## 14. Quick Reference Index
-
-### Public ABI
-
-- `rocprofvis_controller.h` -> all C functions.
-- `rocprofvis_controller_types.h` -> opaque handle typedefs and all
-  property banks.
-- `rocprofvis_controller_enums.h` -> `rocprofvis_result_t`,
-  `rocprofvis_controller_object_type_t`,
-  `rocprofvis_controller_primitive_type_t`, sort orders, table types,
-  table arguments, and PC-sampling property groups/arguments.
-- `rocprofvis_controller_analysis.h` -> `rocprofvis_analysis_*`
-  functions and `rocprofvis_analysis_counter_statistics_t`.
-
-### Core building blocks (`src/controller/src/`)
-
-- `rocprofvis_controller.cpp` -> all `extern "C"` entry points.
-- `rocprofvis_controller_handle.{h,cpp}` -> `Handle` base.
-- `rocprofvis_controller_reference.h` -> typed cast wrapper.
-- `rocprofvis_controller_id.h` -> `IdGenerator<T>`.
-- `rocprofvis_controller_data.{h,cpp}` -> `Data` tagged union.
-- `rocprofvis_controller_array.{h,cpp}` -> `Array`.
-- `rocprofvis_controller_arguments.{h,cpp}` -> `Arguments`.
-- `rocprofvis_controller_string_table.{h,cpp}` -> `StringTable`.
-- `rocprofvis_controller_future.{h,cpp}` -> `Future`.
-- `rocprofvis_controller_job_system.{h,cpp}` -> `Job`, `JobSystem`.
-- `rocprofvis_controller_table.{h,cpp}` -> `Table` base.
-- `rocprofvis_controller_trace.{h,cpp}` -> `Trace` base.
-- `rocprofvis_controller_analysis_internal.h` /
-  `rocprofvis_controller_analysis.cpp` -> `Analysis` (queue
-  utilization, room for more).
-- `rocprofvis_controller_script.{h,cpp}` / `script_engine.h` ->
-  `ScriptEngine`, `rocprofvis_script_*` (when scripting is enabled).
-- `python/rocprofvis_controller_python.{h,cpp}` -> `optiq` bindings.
-
-### System trace (`src/controller/src/system/`)
-
-- `rocprofvis_controller_trace_system.{h,cpp}` -> `SystemTrace`.
-- `rocprofvis_controller_track.{h,cpp}` -> `Track`.
-- `rocprofvis_controller_event.{h,cpp}` -> `Event`.
-- `rocprofvis_controller_sample.{h,cpp}` -> `Sample`.
-- `rocprofvis_controller_sample_lod.{h,cpp}` -> `SampleLOD`.
-- `rocprofvis_controller_segment.{h,cpp}` -> `Segment`,
-  `SegmentTimeline`.
-- `rocprofvis_controller_mem_mgmt.{h,cpp}` -> `MemoryManager`,
-  `MemoryPool`, `BitSet`, LRU thread.
-- `rocprofvis_controller_graph.{h,cpp}` -> `Graph` (LOD per track).
-- `rocprofvis_controller_timeline.{h,cpp}` -> `Timeline`.
-- `rocprofvis_controller_table_system.{h,cpp}` -> `SystemTable`.
-- `rocprofvis_controller_summary.{h,cpp}` -> `Summary`.
-- `rocprofvis_controller_summary_metrics.{h,cpp}` -> `SummaryMetrics`.
-- `rocprofvis_controller_topology.{h,cpp}` -> `TopologyNode`,
-  `TopologyRoot`, `Node`, `Process`, `Processor`, `Thread`, `Queue`,
-  `Stream`, `Counter`.
-- `rocprofvis_controller_flow_control.{h,cpp}` -> `FlowControl`.
-- `rocprofvis_controller_call_stack.{h,cpp}` -> `CallStack`.
-- `rocprofvis_controller_ext_data.{h,cpp}` -> `ExtData`,
-  `ArgumentData`.
-
-### Compute trace (`src/controller/src/compute/`)
-
-- `rocprofvis_controller_trace_compute.{h,cpp}` -> `ComputeTrace`.
-- `rocprofvis_controller_workload.{h,cpp}` -> `Workload`.
-- `rocprofvis_controller_kernel.{h,cpp}` -> `Kernel`.
-- `rocprofvis_controller_pc_sampling.{h,cpp}` -> `PcSampling` (three-layer PC sampling data; owned by `Kernel`).
-- `rocprofvis_controller_roofline.{h,cpp}` -> `Roofline`.
-- `rocprofvis_controller_metrics_container.{h,cpp}` -> `MetricsContainer`.
-- `rocprofvis_controller_table_compute.{h,cpp}` -> `ComputeTable`
-  (source present; not currently compiled by `src/controller/CMakeLists.txt`).
-- `rocprofvis_controller_table_compute_pivot.{h,cpp}` -> `ComputePivotTable`.
-- `rocprofvis_controller_plot.{h,cpp}` -> `Plot` base (source present;
-  not currently compiled by `src/controller/CMakeLists.txt`).
-- `rocprofvis_controller_plot_compute.{h,cpp}` -> `ComputePlot`
-  (source present; not currently compiled by `src/controller/CMakeLists.txt`).
-- `rocprofvis_controller_plot_series.{h,cpp}` -> `PlotSeries`
-  (source present; not currently compiled by `src/controller/CMakeLists.txt`).
-- `rocprofvis_controller_compute_metrics.h` -> static catalog
-  (`COMPUTE_TABLE_DEFINITIONS`, `COMPUTE_PLOT_DEFINITIONS`,
-  `COMPUTE_METRIC_DEFINITIONS`, `ROOFLINE_DEFINITION`).
-
-### Tests (`src/controller/tests/`)
-
-- `rocprofvis_controller_system_tests.cpp`
-- `rocprofvis_controller_compute_tests.cpp`
-
----
-
-**End of CONTROLLER.md.** When you change the controller, update the
-section that covers the area you touched (especially section 14 and
-the Reuse Catalog). Keep this file the single source of truth for
-"where does X live in the controller" and "what should I reuse instead
-of writing it." If you find a duplicate of something listed here,
-prefer to delete the duplicate and route callers through the canonical
-entry.
+# Controller
+
+The C ABI layer in `src/controller/` that turns model data into handles for the View and Python and runs slow work as jobs behind futures. Read it before changing a public function, property, object type, fetch, thread, or pooled object.
+
+## Overview
+
+The controller owns trace lifecycle, async jobs, the property model, the segment cache, and the memory budget, and reaches data only through the model's `rocprofvis_db_*` and `rocprofvis_dm_*` calls.
+
+**Code:** `src/controller/` (`inc/` public C11, `src/` C++17, `tests/`)
+
+**Related:** [Data flow](ARCHITECTURE.md#data-flow) (one request end to end), [Data provider](UI.md#data-provider) (the View's only caller), [C ABI and Python bindings](DATABASE.md#c-abi-and-python-bindings) (the model calls and futures underneath), [Tests](ARCHITECTURE.md#tests) (targets and fixtures)
+
+- The library is `roc-optiq-controller`. `inc/` is a PUBLIC include directory and `src/` is PRIVATE, so a test that needs internals adds `src/` itself.
+- `src/remote/` and `src/profiler/` belong to [Remote SSH](FEATURES.md#remote-ssh) and [Profiler launch](FEATURES.md#profiler-launch); `src/python/` is the embedded `optiq` module.
+- The controller has exactly these threads:
+  - `JobSystem` workers, one per `std::thread::hardware_concurrency()`, on a FIFO queue that is cancelled and joined at exit. A job holds its worker while it waits on model futures, and a profiler monitor job holds one for the whole run, so long jobs can starve the pool.
+  - One LRU thread per `MemoryManager` (one per `SystemTrace`), started by `MemoryManager::Init` after a successful load and joined in its destructor.
+  - With profiler and remote both built, one `SshProfilerExecutor` thread per remote run, blocked in `SshClient::ExecuteCommand` and joined in the executor's destructor.
+  - The `src/python` interpreter thread, which finishes script jobs with `Job::Complete` instead of queuing them ([Controller ABI and bindings](SCRIPTING.md#controller-abi-and-bindings)).
+  - Anything else is a job. A new dedicated thread needs an owner, a cancellation path, and a join.
+- No global lock guards the ABI. `Future`, `StringTable`, `MemoryManager`, `SegmentTimeline`, and `PcSampling` lock internally; `Array`, `Arguments`, `Table`, `MetricsContainer`, and `SummaryMetrics` do not, so never read an output or change an input while its future is pending.
+
+## C ABI and properties
+
+Every controller object is an opaque handle that answers generic getters keyed by numeric property banks, and every slow call completes a future.
+
+**Code:** `src/controller/inc/`, `src/controller/src/rocprofvis_controller.cpp`, `rocprofvis_controller_analysis.cpp`
+
+**Related:** [Building blocks](#building-blocks) (the classes behind handles and futures), [Data provider](UI.md#data-provider) (how the View polls, reads, and frees), [Controller ABI and bindings](SCRIPTING.md#controller-abi-and-bindings) (`rocprofvis_script_*`)
+
+### Handles and lifecycle
+
+- `rocprofvis_controller_alloc(filename, config_path)` builds a `SystemTrace` or `ComputeTrace` from `rocprofvis_db_identify_type`, runs `Init()`, and returns null on failure; `config_path` is where the model caches converted Perfetto files ([Database adapters and trace formats](DATABASE.md#database-adapters-and-trace-formats)). `rocprofvis_controller_alloc_compare` accepts only rocprof SQLite files ([Trace compare](FEATURES.md#trace-compare)).
+- Callers free what they allocate: futures, arrays, arguments, metrics containers, summary metrics (`rocprofvis_controller_summary_metric_free`), and private tables from `rocprofvis_controller_table_alloc` or `rocprofvis_controller_search_table_alloc` (`rocprofvis_controller_table_free`). Handles from getters or inside arrays are borrowed.
+- Tear down in order: wait for every future, because a job references the caller's inputs, outputs, tables, and trace, and `~Future` deletes the `Job`; free arrays, arguments, and private tables, because an array free reaches the trace's `MemoryManager`; call `rocprofvis_analysis_free_trace_data`, because `Analysis` caches tables per `Trace*`; then call `rocprofvis_controller_free`, which deletes only a `SystemTrace`, so a compute controller is never freed.
+- Declared but never defined: the `rocprofvis_controller_track_alloc` family (track, graph, event, sample, flow control), `rocprofvis_controller_create_analysis_view_async`, and `rocprofvis_controller_close_view`. User analysis goes through `rocprofvis_script_*`.
+
+### Properties
+
+- The generic `rocprofvis_controller_get_uint64` / `_double` / `_string` / `_object` and setters cast to `Handle*` and call the virtual accessor, whose switch falls through to `UnhandledProperty`: `kRocProfVisResultInvalidType` inside the handle's `[first, last)` bank, `kRocProfVisResultInvalidEnum` outside. A value kind the class never overrides returns `kRocProfVisResultNotSupported`.
+- `rocprofvis_controller_get_string` with a null buffer or zero length writes the byte count; otherwise it copies up to `*length` bytes without a terminator, so allocate `length + 1` and terminate it yourself. Implement string getters with `GetStdStringImpl`.
+- Banks live in `rocprofvis_controller_enums.h`:
+
+| Base | Banks |
+|---|---|
+| `0x00000000` | system trace |
+| `0x10000000` to `0xD0000000`, one each | timeline, view, track, sample, flow control, callstack, event, graph, array, table, future, event data, ext data |
+| `0xE0000000` | table arguments; summary properties |
+| `0xF0000000` | summary metrics; `rocprofvis_controller_table_type_t` values |
+| `0xF1000000` to `0xF5000000` | remote parameters, prompts, responses, status, properties |
+| `0x11000000` to `0x15000000` | summary aggregation levels and arguments, pivot-table arguments, script result and context |
+| `0xFFFF0000` | memory usage (`kRPVControllerCommonMemoryUsageInclusive`, `Exclusive`) |
+| `0` | compute trace, workload, kernel, metrics container, roofline, metric and PC-sampling arguments |
+
+- Banks sharing a base belong to different handle classes. The zero-based compute enums overlap, so a property sent to the wrong compute handle can return another property's value instead of an error; check the handle type first.
+- `PcSampling` groups properties at source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`; `GetPropertyMutex` picks the layer lock from that high nibble, so a new property joins its layer's group.
+
+### Futures and async calls
+
+- Trim and cleanup run as futures too ([Versioning and cleanup](DATABASE.md#versioning-and-cleanup)); `rocprofvis_controller_table_export_csv` works on system traces only.
+- `rocprofvis_controller_future_wait` with `0.0f` polls and with `FLT_MAX` blocks, so the UI thread passes zero. Success means finished, not succeeded: read `kRPVControllerFutureResult`, which may be `kRocProfVisResultCancelled` or an error. `kRocProfVisResultUnknownError` from the wait means no job was issued. Progress is `kRPVControllerFutureProgressPercentage` and `kRPVControllerFutureProgressMessage`.
+- `rocprofvis_controller_future_cancel` drops a still-queued job (it never runs; its result is `kRocProfVisResultCancelled`), sets the flag running jobs poll with `Future::IsCancelled()`, and cancels the model futures the job registered. Its return code does not say whether the work stopped.
+- Event flow, call stack, and ext data come from `rocprofvis_controller_get_indexed_property_async` on the controller handle with a `kRPVControllerSystemEventData*Indexed` property and the event ID as `index`; an `Event` handle reaches a stub that returns `kRocProfVisResultInvalidEnum`.
+- `rocprofvis_analysis_*` holds cross-cutting analyses: queue utilization, counter statistics, and six top-events tables. Each `rocprofvis_analysis_get_*` getter returns one table per trace and category, shared by every reader; `rocprofvis_analysis_events_table_alloc` returns a private one. New cross-cutting analyses go in `Analysis`.
+
+### Recipes
+
+**Recipe: add a public C function.**
+
+1. Declare it in its `inc/` header inside `extern "C"` with C11 types only; a gated feature puts the declaration and the definition inside its `ROCPROFVIS_ENABLE_*` guard.
+2. Define it in `rocprofvis_controller.cpp` or the feature's ABI file. Validate each typed input with its `Reference<>` typedef and return `kRocProfVisResultInvalidArgument` on failure; if both trace kinds are accepted, branch on `rocprofvis_controller_get_object_type` first, like `rocprofvis_controller_table_fetch_async`.
+3. Give caller-allocated objects an `_alloc` / `_free` pair, and add a test.
+
+**Recipe: add a property.**
+
+1. Append it before its bank's closing sentinel (for tracks, `__kRPVControllerTrackPropertiesLast`); explicit-valued enums take the next free value. Never reorder or renumber.
+2. Handle it in the owning class's private override for its value kind; controller C++ callers get a typed accessor instead.
+3. Surface it through `DataProvider`, and through the `optiq` module if scripts need it.
+
+**Recipe: add an object type.**
+
+1. Append a `rocprofvis_controller_object_type_t` value after `kRPVControllerObjectTypeScriptResult`, or inside its feature's `#ifdef` range (remote from 205, profiler from 306).
+2. Add an opaque typedef in `rocprofvis_controller_types.h` if callers need one, and a property enum with an unused base.
+3. Subclass `Handle`, pass the bank's first and last values to its constructor, implement `GetType`, and keep the generic overrides private.
+4. Add a `Reference<>` typedef beside the others in `rocprofvis_controller.cpp`.
+5. Make it caller-owned with an `_alloc` / `_free` pair, or owned and deleted by its parent.
+6. Add the `.cpp` to `rocprofvis_controller_source_files`, inside its feature's `if()` when gated.
+
+**Recipe: add an async fetch.**
+
+1. Add the entry point as above, taking a future and a caller-owned output.
+2. In the trace class, wrap the work as `future.Set(JobSystem::Get().IssueJob(...))` with the lambda and `&future`, and return success only if `future.IsValid()`.
+3. Capture scalars by value and C strings as `std::string`; caller-owned handles may be captured by reference.
+4. Between steps, return `kRocProfVisResultCancelled` if `future->IsCancelled()`. For each model call, allocate a `rocprofvis_db_future_t` (with `&Future::ProgressCallback` for progress), `AddDependentFuture` before waiting so a cancel reaches the model, then `RemoveDependentFuture` and free it on every path (`DataModelFuturePtr`).
+5. Write into the caller's output; pooled objects follow the recipe in [Memory and segments](#memory-and-segments).
+6. Add the View request in [Data provider](UI.md#data-provider) and a test.
+
+## Building blocks
+
+The classes every controller feature is made of.
+
+**Code:** `src/controller/src/rocprofvis_controller_*.{h,cpp}` for handle, reference, future, job system, data, array, arguments, string table, table, and trace
+
+**Related:** [C ABI and properties](#c-abi-and-properties) (the surface these implement), [Memory and segments](#memory-and-segments) (pooled objects and array pinning)
+
+- Besides the generic accessors, `Handle` carries `GetContext`, `IsDeletable`, and `IncreaseRetainCounter` for the memory manager.
+- `Reference<Pointer, Type, Enum>` is the checked cast: `TrackRef` is `Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack>`, and `IsValid()` is false for null or another type.
+- A `JobFunction` is `std::function<rocprofvis_result_t(Future*)>`. `IssueJob` queues it and `Future::Set` hands the `Job` to the `Future`, which owns it. `Job::Complete` finishes a job run by another owned thread and is a no-op once the job has left pending.
+- `Future::ProgressCallback` records each model future's percentage and publishes their mean, so several reads drive one bar; jobs without model progress set the percentage and message properties directly.
+- `Data` is a tagged union of `uint64_t`, `double`, an owned string, or a handle; a copy only borrows an owned handle, a move transfers it. `Arguments` maps each property to a `std::vector<Data>`.
+- `Array` wraps `std::vector<Data>` (`kRPVControllerArrayNumEntries`, `kRPVControllerArrayEntryIndexed`). `SetObject` borrows, as for pooled events; `SetOwnedObject` makes the array delete the child, as for table rows and event details. Never pair `SetObject` with a manual delete.
+- `StringTable::Get().AddString` interns a string permanently and returns a stable `size_t`; event names and metric names use it.
+- `Table::SetupAndFetch` runs `Setup` with the call's `Arguments`, then `Fetch` for the page in `kRPVControllerTableArgsStartIndex` / `kRPVControllerTableArgsStartCount`. Query state lives in a `TableArguments` subclass and rows in `m_rows`, so a shared table shows whichever reader fetched last. A new table subclasses `Table` or `SystemTable` and overrides `Setup`, `Fetch`, `ExportCSV`, and `UnpackArguments`.
+
+## System traces
+
+`SystemTrace` loads rocpd, rocprof, multinode, and converted traces and serves their tracks, graphs, tables, summary, and topology.
+
+**Code:** `src/controller/src/system/`
+
+**Related:** [Memory and segments](#memory-and-segments) (the cache behind tracks and graphs), [Data model](DATABASE.md#data-model) (the model tracks, slices, and topology), [Query pipeline](DATABASE.md#query-pipeline) (table SQL), [View models](UI.md#view-models) (`TopologyTree`)
+
+- `SystemTrace::Load` gates on the extension (`.rpd`, `.db`, `.yaml`, and with `ROCPROFVIS_PERFETTO_ENABLED` also `.json`, `.proto`, `.pftrace`), so a new format adds its extension there.
+- `LoadRocpdTracks` skips model categories missing from its `supported_track` test; a new category also needs its expected topology link in `ValidateRocpdTrackTopology`, which logs gaps without failing the load. Each track's `Graph` is `kRPVControllerGraphTypeLine` for PMC tracks and `kRPVControllerGraphTypeFlame` otherwise.
+- `Track::FetchSegments` claims missing segments with the processed bit, waits on `m_state_changed` while another request owns them, loads them through `FetchFromDataModel`, marks them valid only on success, and walks the resident ones; `Track::Fetch` reports each event once. A cancelled fetch keeps `kRocProfVisResultCancelled` so the View asks again.
+- `Graph::Fetch` picks a level of detail from the span and pixel width, each level ten times coarser (`kGraphScaleFactor`), and never serves level 0. `GenerateLOD` builds missing levels from raw entries read through `Track::FetchSegments`: events at one depth that fit a window merge into a new pooled `Event` named by `CombineEventInfo`, and samples into a `SampleLOD` with `kRPVControllerSampleChild*` statistics.
+- The trace owns one event, sample, and search table (`kRPVControllerSystemEventTable`, `kRPVControllerSystemSampleTable`, `kRPVControllerSystemSearchResultsTable`), shared by every reader. `SystemTrace::GetTableMutex` serializes `SystemTable` fetches per model use case; rows return as owned arrays of strings, and a node or agent filter (`kRPVControllerTableArgsNodeId`, `kRPVControllerTableArgsAgentId`) becomes a typed `rocprofvis_dm_query_criteria_t`, never SQL. A new use case is a `rocprofvis_dm_table_use_case_enum_t` value plus a branch in `SystemTable`.
+- `Summary::Fetch` fills a caller-allocated `SummaryMetrics` tree (trace, node, processor); `AggregateSubMetrics` rolls children up and `PadTopKernels` adds an `"Others"` row for kernel time outside the top list.
+- `TopologyRoot` mirrors the model topology. A leaf finds its track from `kRPVControllerTopologyNodeTrack` through `kRPVControllerSystemTrackIndexed`, and `Track::SetThread`, `SetQueue`, `SetStream`, or `SetCounter` records the reverse link. The View copies the tree into `TopologyTree` (`src/view/src/model/rocprofvis_topology_model.h`), so a new node kind changes both.
+
+## Compute traces
+
+`ComputeTrace` loads a rocprof-compute database and serves workloads, kernels, metric values, roofline geometry, pivot tables, and PC sampling.
+
+**Code:** `src/controller/src/compute/`
+
+**Related:** [Compute database](DATABASE.md#compute-database) (the use cases and columns behind every query), [Compute view](UI.md#compute-view) (the tabs that consume this), [Compute ISA view](UI.md#compute-isa-view) (the PC-sampling caller), [Compute memory chart](UI.md#compute-memory-chart) (parses `kRPVControllerWorkloadMemoryChartLayout`)
+
+- `ComputeTrace::Load` accepts `.db` only and reads metadata (a failure only warns), workloads, metric catalogs, kernels, and rooflines; metric values, pivot tables, and PC sampling load on demand.
+- The trace owns its `Workload`s and one `ComputePivotTable` (`kRPVControllerKernelMetricTable`); a `Workload` owns its `Kernel`s and `Roofline`; a `Kernel` owns its `PcSampling` (`kRPVControllerKernelPcSampling`).
+- Every query goes through `ComputeTrace::ExecuteQuery`, which builds the use case with `rocprofvis_db_build_compute_query`, waits, copies cells into a `QueryDataStore`, deletes the model table, and calls back. Map columns with the owning class's `QueryToPropertyEnum`, not a second mapper.
+- `rocprofvis_controller_metric_fetch_async` reads `kRPVControllerMetricArgs*`: kernel IDs win over a workload ID, and a selector without a table or entry ID takes the whole category or table. Pass an empty `MetricsContainer`: a filled one returns success without issuing a job, so the wait returns `kRocProfVisResultUnknownError`. A model `kRocProfVisDmResultNotSupported` counts as success with no rows.
+- `ComputePivotTable` reads `kRPVControllerCPTArgs*`: the workload, `category.table.entry:value_name` selectors (`2.1.4:peak`), sort column (0 name, 1 duration by default, 2 and up metrics) and order, and per-column filters.
+- PC sampling loads in three independent layers so the ISA pane appears before source and stall data: `rocprofvis_controller_pc_sampling_fetch_isa_lines_async`, `rocprofvis_controller_pc_sampling_fetch_source_async`, and `rocprofvis_controller_pc_sampling_fetch_stalls_async`. No test covers them yet.
+- A layer's job holds that layer's `std::recursive_mutex` for the whole fetch and its getters take the same lock, so reading a loading layer blocks the caller until it finishes.
+- All three need `kRPVControllerPcSamplingArgsKernelId`; the source fetch also needs `kRPVControllerPcSamplingArgsSourceFileUuid` (0 picks the first file). The stall fetch skips instruction samples only when `kRPVControllerPcSamplingArgsIncludeInstructionSamples` is 0, as the ISA View sends. `kRPVControllerPcSamplingArgsWorkloadId` is ignored.
+- `*_loaded` flags skip repeat queries and `m_source_line_cache` keeps each file's lines. `kRPVControllerPCSamplingPcSampleStateIssueCount` and `kRPVControllerPCSamplingPcSampleStateStallCount` return `kRocProfVisResultNotLoaded` when host-trap sampling did not measure them; a zero is a real zero.
+
+## Memory and segments
+
+System traces cache model data in segment timelines of pooled events and samples, and one LRU thread per trace evicts segments to keep all open traces inside a shared budget.
+
+**Code:** `src/controller/src/system/rocprofvis_controller_segment.{h,cpp}`, `rocprofvis_controller_mem_mgmt.{h,cpp}`
+
+**Related:** [System traces](#system-traces) (the tracks and graphs that fill segments), [Building blocks](#building-blocks) (`Array` ownership)
+
+- Each `Track` has a `SegmentTimeline` of one-second segments (`kSegmentDuration`), and each graph level has its own. The valid bit marks a resident segment and the processed bit one an in-flight fetch has claimed. `SegmentTimeline::FetchSegments` only walks resident segments; `Track::FetchSegments` and `Graph::GenerateLOD` load.
+- `MemoryManager::NewEvent`, `NewSample`, and `NewSampleLOD` construct objects in block pools keyed by the owning `SegmentTimeline`; small timelines share the `kShortTracksMemoryPoolIdentifier` pool. `Delete` finds the pool by owner, so pass the allocating one. An `Event` sits in every segment it overlaps, so `Delete` frees it only when its retain count reaches zero.
+- `Segment::Insert` returns false when that depth already holds an entry at that timestamp; the caller still owns the object and must `Delete` it.
+- The budget is `kUseVailMemoryPercent` (30) percent of the physical memory available at the first `Init`, split across live managers by weight times trace size; usage counts whole pool blocks. Setting `kRPVControllerSystemNotifySelected` calls `Configure(2.0)`, doubling the selected trace's weight.
+- Over the limit, the LRU thread try-locks the timelines it tracks (skipping busy ones), removes the least recently fetched timelines' segments that no in-use array references, and stops under the limit or after about 100 ms. `SegmentTimeline::Remove` clears the valid bit so the next fetch reloads.
+
+**Recipe: return pooled objects from a fetch.** Follow `Track::Fetch` and `Graph::Fetch`; a skipped step lets the LRU thread delete objects the View still holds.
+
+1. Call `EnterArrayOwnership(array.GetArrayId(), kRocProfVisOwnerTypeTrack)` (or `kRocProfVisOwnerTypeGraph`) before filling.
+2. Bracket segment creation with `AddActiveArray` / `RemoveActiveArray` on every timeline touched; `SegmentTimeline::Insert` asserts an active array and registers new segments under each.
+3. Pass `SegmentLRUParams` with the array ID so `Segment::Fetch` records an LRU reference for each segment read.
+4. Call `Array::SetContext` with the owning `SystemTrace`, so `rocprofvis_controller_array_free` calls `CancelArrayOwnership` for both owner types.

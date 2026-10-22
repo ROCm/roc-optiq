@@ -1,0 +1,29 @@
+---
+description: Search for an existing function or process before writing a new one
+alwaysApply: true
+---
+
+# Search before you write
+
+Before adding a function, type, widget, request, query, or workflow, find the one that already does that job. A second copy is a bug.
+
+1. Check **Already exists** in `AGENTS.md`, then search the tree by verb and noun (`trim`, `toast`, `fetch table`) and read the owning section in `.agents/`.
+2. Use what you find only if it does the job as written. Do not bend your code to fit something that almost works: no dummy arguments, no workarounds for its behavior, no patching its output afterwards.
+3. If it is close, extend it with a parameter or overload that leaves current callers unchanged, never a flag for one caller's special case. If it cannot be extended cleanly, write the right thing instead.
+
+## General code lives in general places
+
+- A `static`, anonymous-namespace, or private function in a feature file is not a shared helper. Do not copy it, and do not expose it in place (drop `static`, add an `extern`, make it public) for another file to call.
+- If that function does not depend on its feature's state or types, move it to a shared home and call it from both places.
+- Write a new general-purpose function in a shared home from the start. Only logic tied to one feature stays in that feature's file.
+- Shared homes: `src/core/` for anything layer-independent; `src/view/src/rocprofvis_utils.{h,cpp}` for formatting, math, and paths; `src/view/src/widgets/rocprofvis_gui_helpers.{h,cpp}` for ImGui helpers; `SettingsManager` and `FontManager` for style values. In the controller and model, put it beside the building block that owns that job.
+
+```cpp
+// Wrong: invented padding and a private "copied" tooltip
+ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
+ImGui::SetTooltip("Copied");
+
+// Right: both already exist
+ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, settings.GetDefaultStyle().FramePadding);
+NotificationManager::GetInstance().Show("Cell data was copied", NotificationLevel::Info);
+```

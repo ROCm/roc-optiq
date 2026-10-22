@@ -179,6 +179,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
         db, kRPVComputeFetchKernelMetricsMatrix,
         static_cast<rocprofvis_db_num_of_params_t>(params.size()), params.data(), &query);
 
+    bool fetched = false;
     if(dm_result == kRocProfVisDmResultSuccess && query)
     {
         // Create or get database future
@@ -203,7 +204,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
 
                 uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(
                     dm_handle, kRPVDMNumberOfTablesUInt64, 0);
-                if(num_tables > 0)
+                if(dm_result == kRocProfVisDmResultSuccess && num_tables > 0)
                 {
                     rocprofvis_dm_table_t table_handle =
                         rocprofvis_dm_get_property_as_handle(
@@ -263,13 +264,27 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                             m_rows[k] = std::move(row);
                         }
                         m_num_items = m_rows.size();
+                        fetched     = true;
                     }
                 }
-                rocprofvis_db_future_free(db_future);
                 future->RemoveDependentFuture(db_future);
+                // The model keys tables by query hash and returns an existing one
+                // without re-running it, so a kept table would be served again even
+                // if its query failed.
+                rocprofvis_dm_delete_table_at(dm_handle, table_id);
             }
+            rocprofvis_db_future_free(db_future);
         }
         free(query);
+    }
+
+    if(!fetched)
+    {
+        m_rows.clear();
+        m_columns.clear();
+        m_num_items = 0;
+        return (future && future->IsCancelled()) ? kRocProfVisResultCancelled
+                                                 : kRocProfVisResultUnknownError;
     }
 
     result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, m_rows.size());

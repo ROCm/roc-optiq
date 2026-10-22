@@ -6234,6 +6234,13 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
         {
             spdlog::error("Metric pivot table request failed with code {}",
                          req.response_code);
+            if(req.response_code != kRocProfVisResultCancelled)
+            {
+                // Keep the header so the filter row stays editable.
+                m_compute_model.GetKernelSelectionTable()
+                    .GetTableInfoMutable()
+                    .table_data.clear();
+            }
         }
 
         if(m_table_data_ready_callback)

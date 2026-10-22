@@ -410,7 +410,7 @@ ComputeIsaView::NotifyLoadFailure(PcSamplingLayer layer)
             }
             else
             {
-                message = "Sampling data could not be loaded. Retry from a column header.";
+                message = "Sampling data could not be loaded.";
             }
             break;
     }

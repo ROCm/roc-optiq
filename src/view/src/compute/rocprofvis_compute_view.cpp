@@ -19,7 +19,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_compute_isa_view.h"
+#include "isa/rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
 #include <algorithm>

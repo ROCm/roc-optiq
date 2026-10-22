@@ -1058,6 +1058,10 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingInstructionSampleLookupRecordUuid,
     kRPVControllerPCSamplingInstructionSampleLookupText,
 
+    // Completed query groups remain readable after a later sampling query fails.
+    kRPVControllerPCSamplingSampleStatesLoaded,
+    kRPVControllerPCSamplingStallDetailsLoaded,
+
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;

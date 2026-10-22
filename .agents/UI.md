@@ -1473,11 +1473,12 @@ resolves a layout in priority order: a temporary dev override at
 once template selection is stable) -> the per-workload JSON blob in
 `compute_workload.memory_chart_extdata` (dotted metric ids, used as authored)
 -> an **architecture-specific embedded layout** (picked from the workload's
-`gpu_arch`, e.g. gfx950 or the gfx94x family; metric ids are remapped by
+`gpu_arch`: an exact key such as gfx950, else a family file whose trailing
+`x` is a wildcard, e.g. `gfx115x` for gfx1151; metric ids are remapped by
 `metric_name`). If none of those exist, the chart shows "Memory chart is N/A
 for this workload." The embedded layouts
 are the per-arch JSON files under `resources/memory_chart/` (`gfx950.json`,
-`gfx94x.json`); at build time
+`gfx94x.json`, `gfx115x.json`); at build time
 `cmake/embed_memory_chart_layouts.cmake` compiles them into
 `rocprofvis_memory_chart_layouts_generated.h` (registry
 `kMemChartEmbeddedLayouts`), so they ship inside the binary rather than as

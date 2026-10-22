@@ -532,22 +532,30 @@ FindEmbeddedLayout(const char* key)
     return nullptr;
 }
 
-// Exact arch key first, then family (gfx94x/gfx950). No generic fallback: an
+// Exact arch key first, then the longest family key whose trailing 'x' is a
+// wildcard ("gfx115x" covers gfx1150, gfx1151, ...). No generic fallback: an
 // unknown architecture leaves the chart N/A.
 static const char*
 EmbeddedLayoutForArch(const std::string& arch)
 {
     if(arch.empty()) return nullptr;
     if(const char* exact = FindEmbeddedLayout(arch.c_str())) return exact;
-    if(arch.rfind("gfx94", 0) == 0)
+
+    const char* family          = nullptr;
+    size_t      best_prefix_len = 0;
+    for(const MemChartEmbeddedLayout& entry : kMemChartEmbeddedLayouts)
     {
-        if(const char* fam = FindEmbeddedLayout("gfx94x")) return fam;
+        size_t key_len = std::strlen(entry.key);
+        if(key_len < 2 || entry.key[key_len - 1] != 'x') continue;
+        size_t prefix_len = key_len - 1;
+        if(prefix_len > best_prefix_len &&
+           arch.compare(0, prefix_len, entry.key, prefix_len) == 0)
+        {
+            family          = entry.json;
+            best_prefix_len = prefix_len;
+        }
     }
-    else if(arch.rfind("gfx95", 0) == 0)
-    {
-        if(const char* fam = FindEmbeddedLayout("gfx950")) return fam;
-    }
-    return nullptr;
+    return family;
 }
 
 // GPU arch (e.g. "gfx950") from the workload's system info. The controller

@@ -1042,6 +1042,13 @@ Cached query-group booleans (`m_code_object_store_loaded`,
 `m_instruction_samples_loaded`) prevent repeated queries.
 Row-count setters clear their destination vectors before resizing so a failed
 fetch followed by a retry cannot preserve fields from an earlier result.
+Read-only uint64 properties `kRPVControllerPCSamplingSampleStatesLoaded` and
+`kRPVControllerPCSamplingStallDetailsLoaded` expose completed query groups under
+the stalls-layer lock. They are appended to the property bank to preserve existing
+IDs. They remain readable after a later query fails; a successful empty query is
+loaded as well. Stall details are complete only after both reasons and lookups
+succeed. Retrying the same request reuses completed groups and queries the failed
+group again.
 
 `GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
 locking to the right mutex for each property ID.
@@ -1407,9 +1414,12 @@ Catch2 tests live in `src/controller/tests/`:
   table from Python, and confirm `table_alloc` is not the UI Event
   Table singleton. Accepts `--input_file`.
 
-The compute controller test currently does not exercise the PC-sampling ABI.
-Changes to the three PC-sampling fetchers or their property bank should add
-coverage for the matching schema-2.2 fixture.
+`rocprofvis_controller_pc_sampling_tests.cpp` is part of the compute test target.
+It augments a private copy of the compute fixture with schema-2.2 sampling tables
+and exercises the public ABI. Missing state, reason, and lookup tables inject query
+failures; tests verify group completion, retained counts, recovery, cache reuse on
+retry, and successful empty results. Changes to PC-sampling fetchers or their
+property bank should extend this coverage.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.

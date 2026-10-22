@@ -12,6 +12,7 @@
 #include "rocprofvis_requests.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
@@ -202,6 +203,7 @@ ComputeIsaView::ClearSelectionData()
     m_source.Reset();
     m_stalls         = {};
     m_sampling_data  = {};
+    m_sample_counts_loaded = false;
     m_line_selection = {};
     ClearCodeData();
 }
@@ -227,6 +229,8 @@ ComputeIsaView::QueuePcSamplingFetch(PcSamplingLayer layer)
     PcSamplingFetchState& state = FetchStateFor(layer);
     state.queued                = true;
     state.request_token         = ++m_next_request_token;
+    state.status                = CodeLoadState::kLoading;
+    UpdateWidgetLoadStates();
 }
 
 void
@@ -275,6 +279,15 @@ ComputeIsaView::SubmitPcSamplingFetch(PcSamplingLayer layer)
                                          m_current_kernel_id, source_file_uuid,
                                          m_fetch_generation, state.request_token);
     state.in_flight = m_data_provider.FetchPcSampling(params);
+    if(!state.in_flight)
+    {
+        state.status = CodeLoadState::kFailed;
+        if(layer == PcSamplingLayer::kStalls)
+        {
+            RefreshCodeWidgets(layer);
+        }
+        NotifyLoadFailure(layer);
+    }
 }
 
 void
@@ -323,17 +336,40 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
     }
     state.in_flight = false;
 
+    if(result == kRocProfVisResultCancelled)
+    {
+        state.status = CodeLoadState::kNotLoaded;
+        UpdateWidgetLoadStates();
+        return;
+    }
+    state.status = result == kRocProfVisResultSuccess ? CodeLoadState::kLoaded
+                                                      : CodeLoadState::kFailed;
     if(result != kRocProfVisResultSuccess)
     {
+        if(layer == PcSamplingLayer::kStalls)
+        {
+            RefreshCodeWidgets(layer);
+        }
+        UpdateWidgetLoadStates();
+        NotifyLoadFailure(layer);
         return;
     }
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
     if(!kernel_info)
     {
+        state.status = CodeLoadState::kFailed;
+        UpdateWidgetLoadStates();
+        NotifyLoadFailure(layer);
         return;
     }
 
+    if(layer == PcSamplingLayer::kStalls &&
+       (!kernel_info->pc_sampling_data.sample_states_loaded ||
+        !kernel_info->pc_sampling_data.stall_details_loaded))
+    {
+        state.status = CodeLoadState::kFailed;
+    }
     if(layer == PcSamplingLayer::kSource)
     {
         m_source.selected_uuid = source_file_uuid;
@@ -344,6 +380,45 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         }
     }
     RefreshCodeWidgets(layer);
+    UpdateWidgetLoadStates();
+    if(state.status == CodeLoadState::kFailed)
+    {
+        NotifyLoadFailure(layer);
+    }
+}
+
+void
+ComputeIsaView::NotifyLoadFailure(PcSamplingLayer layer)
+{
+    constexpr double NOTIFICATION_DURATION_SECONDS = 5.0;
+
+    const char*       message = nullptr;
+    NotificationLevel level  = NotificationLevel::Error;
+    switch(layer)
+    {
+        case PcSamplingLayer::kIsa:
+            message = "ISA instructions could not be loaded. Use Retry in the ISA pane.";
+            break;
+        case PcSamplingLayer::kSource:
+            message = "Source code could not be loaded. Use Retry in the source pane.";
+            break;
+        case PcSamplingLayer::kStalls:
+            if(m_sample_counts_loaded)
+            {
+                message = "Stall data could not be loaded. Showing total samples only.";
+                level   = NotificationLevel::Warning;
+            }
+            else
+            {
+                message = "Sampling data could not be loaded. Retry from a column header.";
+            }
+            break;
+    }
+    if(message)
+    {
+        NotificationManager::GetInstance().Show(message, level,
+                                                NOTIFICATION_DURATION_SECONDS);
+    }
 }
 
 void
@@ -387,7 +462,9 @@ ComputeIsaView::SelectSourceFile(uint64_t source_file_uuid)
         m_source.fetch.queued        = false;
         m_source.fetch.request_token = ++m_next_request_token;
         CancelPcSamplingFetch(PcSamplingLayer::kSource);
+        m_source.fetch.status = CodeLoadState::kLoaded;
         RefreshSourceWidget();
+        UpdateWidgetLoadStates();
     }
     else
     {
@@ -448,6 +525,7 @@ ComputeIsaView::RefreshCodeWidgets(PcSamplingLayer layer)
         }
         case PcSamplingLayer::kStalls:
         {
+            m_sample_counts_loaded = data.sample_states_loaded;
             m_sampling_data = IsaDataBuilder::PrepareSampling(data);
             m_isa.widget->UpdateSampling(m_sampling_data);
             m_source.widget->UpdateSampling(data, m_sampling_data);
@@ -474,10 +552,60 @@ ComputeIsaView::RefreshSourceWidget()
 }
 
 void
+ComputeIsaView::UpdateWidgetLoadStates()
+{
+    m_isa.widget->SetLoadState(m_isa.fetch.status);
+    m_source.widget->SetLoadState(m_source.fetch.status);
+
+    using SamplingLoadState = SamplingStateRenderer::LoadState;
+
+    SamplingLoadState sampling_state = SamplingLoadState::kLoading;
+    if(m_stalls.status == CodeLoadState::kLoaded)
+    {
+        sampling_state = SamplingLoadState::kReady;
+    }
+    else if(m_sample_counts_loaded)
+    {
+        sampling_state = m_stalls.status == CodeLoadState::kLoading
+                             ? SamplingLoadState::kLoadingDetails
+                             : SamplingLoadState::kTotalsOnly;
+    }
+    else if(m_stalls.status == CodeLoadState::kFailed)
+    {
+        sampling_state = SamplingLoadState::kFailed;
+    }
+    m_isa.widget->SetSamplingLoadState(sampling_state);
+    m_source.widget->SetSamplingLoadState(sampling_state);
+}
+
+void
+ComputeIsaView::RetryFailedLayers()
+{
+    if(m_isa.widget->TakeCodeRetryRequest() &&
+       m_isa.fetch.status == CodeLoadState::kFailed)
+    {
+        QueuePcSamplingFetch(PcSamplingLayer::kIsa);
+    }
+    if(m_source.widget->TakeCodeRetryRequest() &&
+       m_source.fetch.status == CodeLoadState::kFailed)
+    {
+        QueuePcSamplingFetch(PcSamplingLayer::kSource);
+    }
+    const bool isa_retry    = m_isa.widget->TakeSamplingRetryRequest();
+    const bool source_retry = m_source.widget->TakeSamplingRetryRequest();
+    if((isa_retry || source_retry) && m_stalls.status == CodeLoadState::kFailed)
+    {
+        QueuePcSamplingFetch(PcSamplingLayer::kStalls);
+    }
+}
+
+void
 ComputeIsaView::Update()
 {
+    RetryFailedLayers();
     SelectSourceFileForScroll();
     FetchPendingPcSampling();
+    UpdateWidgetLoadStates();
 }
 
 void

@@ -1597,7 +1597,8 @@ The ISA implementation is organized as follows:
   callbacks during cancellation and avoiding repeated cancel calls. Generation,
   request-token, kernel, and selected-source-file checks still reject stale results.
 - `rocprofvis_compute_code_widgets.{h,cpp}` owns `BaseCodeWidget`,
-  `SourceCodeWidget`, `IsaCodeWidget`, and their shared `LineSelection`.
+  `SourceCodeWidget`, `IsaCodeWidget`, their shared `LineSelection`, and
+  `CodeLoadState` (not loaded, loading, loaded, or failed).
   `BaseCodeWidget` shares row layout, selection, hover, and cached scroll navigation.
   Each widget delegates sampling cells and headers to its composed
   `SamplingStateRenderer`; the cell returns clicks to the widget's row selection.
@@ -1862,10 +1863,45 @@ Instruction-sample metadata, active-thread percentage, wave-occupancy
 percentage, and dispatch UUID are available on the controller handle but are
 not currently represented in `PcSamplingData` or rendered by `ComputeIsaView`.
 
-PC-sampling queries require compute schema 2.2 or newer. A failed source or
-sampling request is isolated from an already-loaded ISA pane. Sampling is requested
-again on the next kernel selection; the removed sampling-details control and its
-retry-only fetch-status fields are not retained.
+PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
+its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected
+submissions and failed callbacks set the affected layer to failed; cancellation
+remains distinct. Existing generation, token, kernel, and source-file guards reject
+stale results. Empty code panes show loading or failure messages as appropriate,
+with a Retry button on failure. Retrying a layer retains other loaded panes.
+`ComputeIsaView::NotifyLoadFailure` shows a five-second `NotificationManager`
+toast for each rejected submission or failed current-layer completion, including
+repeat Retry failures. ISA, source, and sample-count failures use Error; a stall
+failure with retained total counts uses Warning and explains the total-only view.
+Successful empty results, expected host-trap absence, cancellation, and stale
+callbacks do not produce failure notifications.
+
+The sampling request still contains sample states and stall details, but their
+completion is tracked independently. `DataProvider` reads the controller's
+`SampleStatesLoaded` and `StallDetailsLoaded` properties even after a failed
+sampling request, except cancellation or a superseded request. It copies only
+completed query groups into `PcSamplingData`; reasons are published together with
+their lookups. Explicit completion flags distinguish successful empty results from
+failed queries. The view prepares any retained sample counts for both panes.
+
+If sample counts loaded but stall details failed, Sampling State displays neutral
+total-sample bars with formatted sample counts and the existing hottest-row
+percentage. Its tooltip explains the stall load failure, rather than identifying
+the capture as host-trap. Actual progress counts remain intact in the data model.
+While retrying details, the neutral bars remain and the tooltip says details are
+loading. If no sample counts loaded, the column remains registered and dimmed,
+with no bars; header and cell tooltips distinguish loading from failure. Disabled
+cells use `AllowWhenDisabled` for their tooltip hit targets, rather than the table
+column Disabled flag, so column visibility and ordering preferences are preserved.
+Successfully loaded zero-sample data keeps the usual no-observations behavior.
+
+The renderer extends ImGui's native column context menu using
+`DisableDefaultContextMenu`, `TableBeginContextMenuPopup`, and
+`TableDrawDefaultContextMenu`. Both widgets render it after their headers. Native
+column controls are retained, and a failed sampling layer adds Retry sampling data.
+This remains accessible from another header when Sampling State is hidden. Retry
+requests are consumed during Update, and only the failed layer is queued. No
+sampling-details visibility toggle is restored.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.
@@ -3505,7 +3541,7 @@ All under `agenticprofiling/`, compiled only with
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
 - `ComputeIsaView` -> `compute/isa/rocprofvis_compute_isa_view.h`.
-- `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget`, `LineSelection` ->
+- `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget`, `LineSelection`, `CodeLoadState` ->
   `compute/isa/rocprofvis_compute_code_widgets.h`.
 - `SamplingStateRenderer`, `HeaderTooltipText`, and static header renderer ->
   `compute/isa/rocprofvis_compute_sampling_state_renderer.h`.

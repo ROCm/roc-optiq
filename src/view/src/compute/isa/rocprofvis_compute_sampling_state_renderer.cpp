@@ -8,6 +8,8 @@
 #include <iterator>
 #include <utility>
 
+#include "imgui_internal.h"
+
 #include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
@@ -80,7 +82,9 @@ constexpr HeaderTooltipText SAMPLING_STATE_HEADER_TOOLTIP{
     "raw reasons = total_count, issue_count + stall_count = total_count, and OTHER "
     "suffices.\n"
     "Cell tooltip: 100 * count/T, including Issued; zero T gives 0%.\n"
-    "Missing/invalid progress gives a gray total bar; zero H gives no bar."
+    "Missing/invalid progress gives a gray total bar; zero H gives no bar.\n"
+    "Failed stall details retain total-only bars; failed sample loading disables the "
+    "column."
 };
 
 constexpr HeaderTooltipText SOURCE_SAMPLING_STATE_HEADER_TOOLTIP{
@@ -97,7 +101,9 @@ constexpr HeaderTooltipText SOURCE_SAMPLING_STATE_HEADER_TOOLTIP{
     "Gray: unclassified stalls and progress; missing or invalid progress is neutral.\n"
     "Missing counts propagate; any invalid contributing sample state invalidates the "
     "line.\n"
-    "Cell tooltip: count/T * 100 for Issued and each reason; zero denominator gives 0%."
+    "Cell tooltip: count/T * 100 for Issued and each reason; zero denominator gives 0%.\n"
+    "Failed stall details retain total-only bars; failed sample loading disables the "
+    "column."
 };
 
 constexpr const char* SAMPLING_STATE_NO_SAMPLES_TOOLTIP =
@@ -114,6 +120,13 @@ constexpr const char* SAMPLING_STATE_INVALID_COUNTS_TOOLTIP =
 constexpr const char* SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP = "Samples: %s";
 constexpr const char* SAMPLING_STATE_BAR_PERCENT_TOOLTIP =
     "Bar: %.1f%% of maximum samples.";
+constexpr const char* SAMPLING_STATE_LOADING_TOOLTIP = "Loading sampling data...";
+constexpr const char* SAMPLING_STATE_FAILED_TOOLTIP =
+    "Sampling data could not be loaded.\nRight-click a column header to retry.";
+constexpr const char* SAMPLING_STATE_TOTALS_ONLY_TOOLTIP =
+    "Stall data could not be loaded. Showing total samples only.";
+constexpr const char* SAMPLING_STATE_LOADING_DETAILS_TOOLTIP =
+    "Loading stall data. Showing total samples only.";
 
 constexpr const char* SAMPLING_STATE_ISSUED_TEXT                = "Issued";
 constexpr const char* SAMPLING_STATE_UNCLASSIFIED_STALLS_TEXT   = "Unclassified stalls";
@@ -161,11 +174,15 @@ get_code_cell_bounds()
 }
 
 static CodeCellInteraction
-finish_code_cell(const CodeCellBounds& cell, const char* interaction_id)
+finish_code_cell(const CodeCellBounds& cell, const char* interaction_id,
+                 bool disabled = false)
 {
     ImGui::SetCursorScreenPos(cell.start);
+    ImGui::BeginDisabled(disabled);
     const bool clicked = ImGui::InvisibleButton(interaction_id, cell.size);
-    return { clicked, ImGui::IsItemHovered() };
+    const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+    ImGui::EndDisabled();
+    return { clicked, hovered };
 }
 
 static const StallReasonPresentation&
@@ -275,6 +292,12 @@ SamplingStateRenderer::RenderHeaderWithTooltip(int column, const char* label,
 }
 
 bool
+SamplingStateRenderer::IsDisabled() const
+{
+    return m_load_state == LoadState::kLoading || m_load_state == LoadState::kFailed;
+}
+
+bool
 SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples)
 {
     const SampleCounts&  counts     = row.sample_counts;
@@ -286,13 +309,14 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
         IsaDataBuilder::CalculatePercentage(counts.total_count, hottest_samples);
     const float  bar_width = cell.size.x * static_cast<float>(bar_percent / 100.0);
     const ImVec2 bar_end(bar_start.x + bar_width, bar_start.y + bar_height);
-    if(bar_width > 0.0f)
+    if(!IsDisabled() && bar_width > 0.0f)
     {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         draw_list->PushClipRect(cell.start, cell.End(), true);
         draw_list->AddRectFilled(bar_start, bar_end,
                                  m_settings.GetColor(Colors::kTextDim));
-        if(row.sampling.availability == SamplingAvailability::kValid)
+        if(m_load_state == LoadState::kReady &&
+           row.sampling.availability == SamplingAvailability::kValid)
         {
             const float issue_width =
                 bar_width * static_cast<float>(row.sampling.issue_percent / 100.0);
@@ -311,7 +335,7 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
         draw_list->PopClipRect();
     }
     const CodeCellInteraction interaction =
-        finish_code_cell(cell, "##sampling_state_cell");
+        finish_code_cell(cell, "##sampling_state_cell", IsDisabled());
     if(interaction.hovered)
     {
         RenderTooltip(row, bar_percent);
@@ -368,12 +392,25 @@ SamplingStateRenderer::DrawStallReasonSegments(const SamplingRow& row,
 void
 SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
 {
-    if(row.sampling.availability != SamplingAvailability::kValid)
+    if(IsDisabled())
+    {
+        SetTooltipStyled("%s", m_load_state == LoadState::kLoading
+                                   ? SAMPLING_STATE_LOADING_TOOLTIP
+                                   : SAMPLING_STATE_FAILED_TOOLTIP);
+        return;
+    }
+    if(m_load_state != LoadState::kReady ||
+       row.sampling.availability != SamplingAvailability::kValid)
     {
         const std::string total_count =
             IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
         BeginTooltipStyled();
-        ImGui::TextUnformatted(GetUnavailableSamplingTooltip(row));
+        const char* description = m_load_state == LoadState::kTotalsOnly
+                                      ? SAMPLING_STATE_TOTALS_ONLY_TOOLTIP
+                                  : m_load_state == LoadState::kLoadingDetails
+                                      ? SAMPLING_STATE_LOADING_DETAILS_TOOLTIP
+                                      : GetUnavailableSamplingTooltip(row);
+        ImGui::TextUnformatted(description);
         ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, total_count.c_str());
         if(row.sample_counts.total_count > 0)
         {
@@ -593,6 +630,8 @@ SamplingStateRenderer::RenderTooltipTable(const TooltipRows&        rows,
 void
 SamplingStateRenderer::SetupColumn()
 {
+    // Reuse ImGui's column menu and append the layer retry action after the headers.
+    ImGui::GetCurrentTable()->DisableDefaultContextMenu = true;
     const float sampling_state_column_width =
         std::max(ImGui::CalcTextSize(SAMPLING_STATE_COLUMN_LABEL).x,
                  ImGui::CalcTextSize("0").x * SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS);
@@ -600,9 +639,39 @@ SamplingStateRenderer::SetupColumn()
                             sampling_state_column_width);
 }
 
+bool
+SamplingStateRenderer::RenderTableContextMenu()
+{
+    bool        retry = false;
+    ImGuiTable* table = ImGui::GetCurrentTable();
+    if(ImGui::TableBeginContextMenuPopup(table))
+    {
+        ImGui::TableDrawDefaultContextMenu(table, table->Flags);
+        if(m_load_state == LoadState::kFailed || m_load_state == LoadState::kTotalsOnly)
+        {
+            ImGui::Separator();
+            retry = ImGui::MenuItem("Retry sampling data");
+        }
+        ImGui::EndPopup();
+    }
+    return retry;
+}
+
 void
 SamplingStateRenderer::RenderHeader(int column, CodePane pane)
 {
+    if(IsDisabled())
+    {
+        const HeaderTooltipText tooltip{
+            m_load_state == LoadState::kLoading ? SAMPLING_STATE_LOADING_TOOLTIP
+                                                : SAMPLING_STATE_FAILED_TOOLTIP,
+            SAMPLING_STATE_HEADER_TOOLTIP.developer_information
+        };
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+        RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, tooltip);
+        ImGui::PopStyleColor();
+        return;
+    }
     RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL,
                             pane == CodePane::kSource
                                 ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP

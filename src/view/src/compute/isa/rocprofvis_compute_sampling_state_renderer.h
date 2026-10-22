@@ -32,6 +32,15 @@ public:
         kSource
     };
 
+    enum class LoadState : uint32_t
+    {
+        kReady,
+        kLoading,
+        kLoadingDetails,
+        kTotalsOnly,
+        kFailed
+    };
+
     explicit SamplingStateRenderer(SettingsManager& settings);
 
     static void RenderHeaderWithTooltip(int column, const char* label,
@@ -39,6 +48,9 @@ public:
                                         void (*render_user_content)() = nullptr);
 
     void SetupColumn();
+    void SetLoadState(LoadState state) { m_load_state = state; }
+    // Extends the native column menu; returns whether sampling should be retried.
+    [[nodiscard]] bool RenderTableContextMenu();
     void RenderHeader(int column, CodePane pane = CodePane::kIsa);
     // Returns whether the cell was clicked, for the owning widget's row selection.
     [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
@@ -71,6 +83,7 @@ private:
     };
 
     static const char* GetUnavailableSamplingTooltip(const SamplingRow& row);
+    [[nodiscard]] bool IsDisabled() const;
     static TooltipRows BuildTooltipRows(const SamplingRow& row);
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
@@ -82,6 +95,7 @@ private:
                                  const ImVec2& end);
 
     SettingsManager& m_settings;
+    LoadState        m_load_state = LoadState::kReady;
 };
 
 }  // namespace View

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <utility>
 
 #include "widgets/rocprofvis_gui_helpers.h"
 
@@ -49,6 +50,63 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable |
                     ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_BordersInnerV |
                     ImGuiTableFlags_ScrollY;
+}
+
+void
+BaseCodeWidget::SetLoadState(CodeLoadState state)
+{
+    m_load_state = state;
+    if(state != CodeLoadState::kFailed)
+    {
+        m_retry_code = false;
+    }
+}
+
+void
+BaseCodeWidget::SetSamplingLoadState(SamplingStateRenderer::LoadState state)
+{
+    m_sampling_renderer.SetLoadState(state);
+    if(state != SamplingStateRenderer::LoadState::kFailed &&
+       state != SamplingStateRenderer::LoadState::kTotalsOnly)
+    {
+        m_retry_sampling = false;
+    }
+}
+
+bool
+BaseCodeWidget::TakeCodeRetryRequest()
+{
+    return std::exchange(m_retry_code, false);
+}
+
+bool
+BaseCodeWidget::TakeSamplingRetryRequest()
+{
+    return std::exchange(m_retry_sampling, false);
+}
+
+void
+BaseCodeWidget::RenderEmptyState(const char* data_name, const char* empty_message)
+{
+    if(m_load_state == CodeLoadState::kLoading)
+    {
+        ImGui::TextDisabled("Loading %s...", data_name);
+    }
+    else if(m_load_state == CodeLoadState::kFailed)
+    {
+        ImGui::TextDisabled("Could not load %s.", data_name);
+        m_retry_code |= ImGui::Button("Retry");
+    }
+    else
+    {
+        ImGui::TextDisabled("%s", empty_message);
+    }
+}
+
+void
+BaseCodeWidget::RenderTableContextMenu()
+{
+    m_retry_sampling |= m_sampling_renderer.RenderTableContextMenu();
 }
 
 void
@@ -193,7 +251,7 @@ SourceCodeWidget::Render()
 {
     if(m_lines.empty())
     {
-        ImGui::TextDisabled("No file loaded");
+        RenderEmptyState("source code", "No file loaded");
         return;
     }
 
@@ -210,6 +268,7 @@ SourceCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
+    RenderTableContextMenu();
 
     const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
@@ -331,7 +390,7 @@ IsaCodeWidget::Render()
 {
     if(m_entries.empty())
     {
-        ImGui::TextDisabled("No ISA loaded");
+        RenderEmptyState("ISA instructions", "No ISA loaded");
         return;
     }
 
@@ -352,6 +411,7 @@ IsaCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
+    RenderTableContextMenu();
 
     const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,

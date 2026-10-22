@@ -40,9 +40,10 @@ public:
 private:
     struct PcSamplingFetchState
     {
-        bool     queued        = false;
-        bool     in_flight     = false;
-        uint64_t request_token = 0;
+        bool          queued        = false;
+        bool          in_flight     = false;
+        uint64_t      request_token = 0;
+        CodeLoadState status        = CodeLoadState::kNotLoaded;
     };
 
     struct IsaPane
@@ -94,6 +95,9 @@ private:
     void FetchPendingPcSampling();
     void RefreshCodeWidgets(PcSamplingLayer layer);
     void RefreshSourceWidget();
+    void UpdateWidgetLoadStates();
+    void RetryFailedLayers();
+    void NotifyLoadFailure(PcSamplingLayer layer);
     void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                                          uint64_t source_file_uuid, uint32_t generation,
                                          uint64_t request_token, rocprofvis_result_t result);
@@ -116,6 +120,7 @@ private:
     SourcePane           m_source;
     PcSamplingFetchState m_stalls;
     IsaDataBuilder::PreparedSamplingData m_sampling_data;
+    bool                                 m_sample_counts_loaded = false;
 
     LineSelection m_line_selection;
 

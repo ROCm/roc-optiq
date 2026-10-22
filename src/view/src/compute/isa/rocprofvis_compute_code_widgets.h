@@ -31,6 +31,14 @@ struct LineSelection
     bool                      hovered_this_frame = false;
 };
 
+enum class CodeLoadState : uint32_t
+{
+    kNotLoaded,
+    kLoading,
+    kLoaded,
+    kFailed
+};
+
 class BaseCodeWidget : public RocWidget
 {
 public:
@@ -39,10 +47,17 @@ public:
 
     virtual void Render() override = 0;
 
+    void               SetLoadState(CodeLoadState state);
+    void               SetSamplingLoadState(SamplingStateRenderer::LoadState state);
+    [[nodiscard]] bool TakeCodeRetryRequest();
+    [[nodiscard]] bool TakeSamplingRetryRequest();
+
 protected:
     uint64_t m_hottest_samples = 0;
 
     void               CalculateLineNumberWidth(size_t count);
+    void               RenderEmptyState(const char* data_name, const char* empty_message);
+    void               RenderTableContextMenu();
     [[nodiscard]] bool BeginCodeRow(uint64_t row_id, uint64_t source_line_id);
 
     // Rebuilt only when rows or source correlations change; keep the first matching row.
@@ -64,6 +79,10 @@ protected:
     ImVec4 m_line_num_color;
 
 private:
+    CodeLoadState m_load_state     = CodeLoadState::kNotLoaded;
+    bool          m_retry_code     = false;
+    bool          m_retry_sampling = false;
+
     std::unordered_map<uint64_t, uint32_t> m_row_index_by_source_line;
 };
 

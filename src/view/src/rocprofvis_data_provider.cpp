@@ -5948,7 +5948,8 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
 
-    if(success && pc_handle)
+    if(pc_handle && req.response_code != kRocProfVisResultCancelled &&
+       (success || params->m_layer == PcSamplingLayer::kStalls))
     {
         KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
             params->m_workload_id, params->m_kernel_id);
@@ -5972,14 +5973,45 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                     }
                     break;
                 case PcSamplingLayer::kStalls:
-                    LoadPcSamplingStates(*kernel, pc_handle);
-                    LoadPcSamplingStallReasons(*kernel, pc_handle);
-                    LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
+                {
+                    PcSamplingData& data           = kernel->pc_sampling_data;
+                    uint64_t        states_loaded  = 0;
+                    uint64_t        details_loaded = 0;
+                    data.sample_states_loaded =
+                        rocprofvis_controller_get_uint64(
+                            pc_handle, kRPVControllerPCSamplingSampleStatesLoaded, 0,
+                            &states_loaded) == kRocProfVisResultSuccess &&
+                        states_loaded != 0;
+                    data.stall_details_loaded =
+                        data.sample_states_loaded &&
+                        rocprofvis_controller_get_uint64(
+                            pc_handle, kRPVControllerPCSamplingStallDetailsLoaded, 0,
+                            &details_loaded) == kRocProfVisResultSuccess &&
+                        details_loaded != 0;
+                    if(data.sample_states_loaded)
+                    {
+                        LoadPcSamplingStates(*kernel, pc_handle);
+                    }
+                    else
+                    {
+                        data.pc_sample_states.clear();
+                    }
+                    if(data.stall_details_loaded)
+                    {
+                        LoadPcSamplingStallReasons(*kernel, pc_handle);
+                        LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
+                    }
+                    else
+                    {
+                        data.pc_sample_stall_reasons.clear();
+                        data.pc_sample_stall_reason_lookups.clear();
+                    }
                     break;
+                }
             }
         }
     }
-    else if(!success)
+    if(!success && req.response_code != kRocProfVisResultCancelled)
     {
         spdlog::warn("PC sampling request failed with code {}", req.response_code);
     }

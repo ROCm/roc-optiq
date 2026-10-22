@@ -1910,7 +1910,8 @@ SummaryTopEvents::RenderTable(const ImPlotStyle& plot_style)
     if(ImGui::BeginTable("Table", m_table_headers.size(),
                          ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
-                             ImGuiTableFlags_Resizable,
+                             ImGuiTableFlags_Resizable |
+                             ImGuiTableFlags_NoSavedSettings,
                          ImGui::GetContentRegionAvail() -
                              ImVec2(0.0f, ImGui::GetFrameHeightWithSpacing())))
     {

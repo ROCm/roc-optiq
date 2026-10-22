@@ -11,6 +11,12 @@ namespace Controller
 Kernel::Kernel()
 : Handle(__kRPVControllerKernelPropertiesFirst, __kRPVControllerKernelPropertiesLast) 
 , m_id(0)
+, m_invocation_count(0)
+, m_duration_total(0)
+, m_duration_min(0)
+, m_duration_max(0)
+, m_duration_median(0)
+, m_duration_mean(0)
 , m_has_isa_lines(false)
 {}
 
@@ -45,7 +51,7 @@ rocprofvis_result_t Kernel::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerKernelInvocationCount:
             {
-                *value = (uint64_t)m_invocation_count;
+                *value = m_invocation_count;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -57,25 +63,25 @@ rocprofvis_result_t Kernel::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerKernelDurationMin:
             {
-                *value = (uint64_t)m_duration_min;
+                *value = m_duration_min;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerKernelDurationMax:
             {
-                *value = (uint64_t)m_duration_max;
+                *value = m_duration_max;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerKernelDurationMedian:
             {
-                *value = (uint64_t)m_duration_median;
+                *value = m_duration_median;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerKernelDurationMean:
             {
-                *value = (uint64_t)m_duration_mean;
+                *value = m_duration_mean;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -151,7 +157,7 @@ rocprofvis_result_t Kernel::SetUInt64(rocprofvis_property_t property, uint64_t i
         }
         case kRPVControllerKernelInvocationCount:
         {
-            m_invocation_count = (uint32_t)value;
+            m_invocation_count = value;
             result = kRocProfVisResultSuccess;
             break;
         }
@@ -163,25 +169,25 @@ rocprofvis_result_t Kernel::SetUInt64(rocprofvis_property_t property, uint64_t i
         }
         case kRPVControllerKernelDurationMin:
         {
-            m_duration_min = (uint32_t)value;
+            m_duration_min = value;
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerKernelDurationMax:
         {
-            m_duration_max = (uint32_t)value;
+            m_duration_max = value;
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerKernelDurationMedian:
         {
-            m_duration_median = (uint32_t)value;
+            m_duration_median = value;
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerKernelDurationMean:
         {
-            m_duration_mean = (uint32_t)value;
+            m_duration_mean = value;
             result = kRocProfVisResultSuccess;
             break;
         }

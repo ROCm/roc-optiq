@@ -206,6 +206,18 @@ rocprofvis_dm_result_t QueryManager::BuildCounterSliceRightNeighbourQuery(rocpro
 
 }
 
+void
+QueryManager::BuildOpQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_event_operation_t op)
+{
+    for(auto db_inst : DbInstances())
+    {
+        if(GetEventOperationQuery(op).size())
+        {
+            slice_query_map[GetEventOperationQuery(op)][db_inst.first.GuidIndex()];
+        }
+    }
+}
+
 rocprofvis_dm_event_operation_t QueryManager::GetTableQueryOperation(std::string query)
 {
     std::string select_str = "SELECT ";
@@ -414,12 +426,7 @@ QueryManager::BuildTableQuery(
         }
         else 
         {
-            track = TABLE_QUERY_UNPACK_OP_TYPE(track);
-            for(auto db_inst : DbInstances())
-            {
-                slice_query_map_array[i][GetEventOperationQuery(
-                    (rocprofvis_dm_event_operation_t) track)][db_inst.first.GuidIndex()];
-            }
+            BuildOpQueryMap(slice_query_map_array[i], (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(track));
         }
     }
     bool slice_query_map_empty = true;
@@ -436,7 +443,7 @@ QueryManager::BuildTableQuery(
         return kRocProfVisDmResultSuccess;    
     }
     return BuildCompoundQuery(use_case, start, end, num, tracks, slice_query_map_array,
-        GetProcessorIDSubquery(source_filter).c_str(), filter, group, group_cols, sort_column, sort_order,
+        GetCriteriaSubquery(source_filter).c_str(), filter, group, group_cols, sort_column, sort_order,
         max_count, offset, count_only, query);
 }
 
@@ -485,7 +492,7 @@ QueryManager::BuildEventSearchQuery(
         return kRocProfVisDmResultSuccess;
     }
     return BuildCompoundQuery(kRPVDMTableUseCaseEventSearch, start, end, num, ops, slice_query_map_array,
-        GetProcessorIDSubquery(source_filter).c_str(), filter, nullptr, nullptr, sort_column, sort_order,
+        GetCriteriaSubquery(source_filter).c_str(), filter, nullptr, nullptr, sort_column, sort_order,
         max_count, offset, count_only, query);
 }
 

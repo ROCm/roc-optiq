@@ -64,6 +64,8 @@ public:
     static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID;
@@ -83,11 +85,11 @@ public:
     // model slots, so the two never meet. Anything else that reads tables
     // without being a tab wants the same treatment and a client id of its own.
     static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
-    static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
-    static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
-    static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
-    static const uint64_t ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
+    static const uint64_t     ASSISTANT_EVENT_TABLE_REQUEST_ID;
+    static const uint64_t     ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t     ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    static const uint64_t     ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t     ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
 #endif
@@ -314,9 +316,8 @@ private:
      */
     uint64_t             ClientTableRequestId(const TableRequestParams& table_params) const;
     rocprofvis_handle_t* ClientTableHandle(const TableRequestParams& table_params);
-    static TableType     ClientTableSlot(rocprofvis_controller_table_type_t table_type,
-                                         uint64_t                          client_id,
-                                         bool&                             is_analysis_model);
+    std::pair<TablesModel*, TableType> ClientTableSlot(
+        rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
 
@@ -375,6 +376,27 @@ private:
                              const RequestInfo&    req);
     void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                            std::vector<size_t>& sub_metrics_idx);
+    void CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::GPU&    output);
+    void CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::CPU&    output);
+    void CreateSummaryProcessThreadData(rocprofvis_handle_t*           metrics_handle,
+                                        SummaryInfo::AggregateMetrics& output);
+    void CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_handle,
+                                    SummaryInfo::AggregateMetrics& output);
+    void CreateSummaryTopOpEventsData(
+        rocprofvis_handle_t* metrics_handle,
+        std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>
+            op_properties,
+        std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>
+                              event_properties,
+        rocprofvis_property_t event_name_property, SummaryInfo::TopOpEvents& output);
+    void CreateSummaryCountersData(
+        rocprofvis_handle_t* metrics_handle, rocprofvis_property_t num_counters_property,
+        rocprofvis_property_t counter_property,
+        std::array<rocprofvis_property_t, __kRPVAnalysisSummaryCounterMetricLast>
+                               metric_properties,
+        SummaryInfo::Counters& output);
 
     rocprofvis_result_t GetString(rocprofvis_handle_t*  handle,
                                   rocprofvis_property_t property, uint64_t index,

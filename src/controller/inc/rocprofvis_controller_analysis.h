@@ -11,6 +11,198 @@ extern "C"
 #endif
 
 /*
+ * Available summary areas.
+ */
+typedef enum rocprofvis_analysis_summary_category_t : uint32_t
+{
+    __kRPVAnalysisSummaryCategoryFirst,
+    kRPVAnalysisSummaryCategoryKernel = __kRPVAnalysisSummaryCategoryFirst,
+    kRPVAnalysisSummaryCategoryMemory,
+    kRPVAnalysisSummaryCategoryThread,
+    __kRPVAnalysisSummaryCategoryLast
+} rocprofvis_analysis_summary_category_t;
+
+/*
+ * Available summary metrics for a family of events (ex. kernel dispatches, memory operations, or thread operations...etc).
+ */
+typedef enum rocprofvis_analysis_summary_top_events_metric_t : uint32_t
+{
+    __kRPVAnalysisSummaryTopEventsMetricFirst,
+    kRPVAnalysisSummaryTopEventsMetricNumTopEvents = __kRPVAnalysisSummaryTopEventsMetricFirst, // Number of top events.
+    kRPVAnalysisSummaryTopEventsMetricInvocations, // Total number of invocations for all events in the set.
+    kRPVAnalysisSummaryTopEventsMetricDurationSum, // Total duration for all events in the set.
+    __kRPVAnalysisSummaryTopEventsMetricLast
+} rocprofvis_analysis_summary_top_events_metric_t;
+
+/*
+ * Available summary metrics for a single top event.
+ */
+typedef enum rocprofvis_analysis_summary_top_event_metric_t : uint32_t
+{
+    __kRPVAnalysisSummaryTopEventMetricFirst,
+    kRPVAnalysisSummaryTopEventMetricInvocations = __kRPVAnalysisSummaryTopEventMetricFirst,
+    kRPVAnalysisSummaryTopEventMetricDurationSum,
+    kRPVAnalysisSummaryTopEventMetricDurationMin,
+    kRPVAnalysisSummaryTopEventMetricDurationMax,
+    kRPVAnalysisSummaryTopEventMetricDurationPct,
+    kRPVAnalysisSummaryTopEventMetricDurationAvg,
+    __kRPVAnalysisSummaryTopEventMetricLast
+} rocprofvis_analysis_summary_top_event_metric_t;
+
+/*
+ * Available summary metrics for a counter.
+ */
+typedef enum rocprofvis_analysis_summary_counter_metric_t : uint32_t
+{
+    __kRPVAnalysisSummaryCounterMetricFirst,
+    kRPVAnalysisSummaryCounterMetricMin = __kRPVAnalysisSummaryCounterMetricFirst,
+    kRPVAnalysisSummaryCounterMetricMax,
+    kRPVAnalysisSummaryCounterMetricMean,
+    kRPVAnalysisSummaryCounterMetricStdDev,
+    __kRPVAnalysisSummaryCounterMetricLast
+} rocprofvis_analysis_summary_counter_metric_t;
+
+/*
+ * Available summary aggregation levels.
+ */
+typedef enum rocprofvis_analysis_summary_aggregation_level_t : uint32_t
+{
+    __kRPVAnalysisSummaryAggregationLevelFirst,
+    kRPVAnalysisSummaryAggregationLevelTrace = __kRPVAnalysisSummaryAggregationLevelFirst,
+    kRPVAnalysisSummaryAggregationLevelNode,
+    kRPVAnalysisSummaryAggregationLevelProcessor,
+    kRPVAnalysisSummaryAggregationLevelProcess,
+    kRPVAnalysisSummaryAggregationLevelThread,
+    __kRPVAnalysisSummaryAggregationLevelLast
+} rocprofvis_analysis_summary_aggregation_level_t;
+
+/*
+ * Properties common to all summary aggregation levels.
+ */
+typedef enum rocprofvis_analysis_summary_metric_properties_t : uint32_t
+{
+    __kRPVAnalysisSummaryMetricPropertiesFirst = 0xF0000000,
+    // Aggregation level (rocprofvis_analysis_summary_aggregation_level_t). Determines which of the property blocks below carry valid data for this container
+    kRPVAnalysisSummaryMetricPropertyAggregationLevel = __kRPVAnalysisSummaryMetricPropertiesFirst,
+    // Number of child/sub-metrics
+    kRPVAnalysisSummaryMetricPropertyNumSubMetrics,
+    // Indexed child/sub-metrics objects
+    kRPVAnalysisSummaryMetricPropertySubMetricsIndexed,
+    // Level specific topology object (trace, node, processor, process, thread)
+    kRPVAnalysisSummaryMetricPropertyMetadata,
+    __kRPVAnalysisSummaryMetricPropertiesLast
+} rocprofvis_analysis_summary_metric_properties_t;
+
+/*
+ * Properties specific to the trace and node aggregation levels.
+ */
+typedef enum rocprofvis_analysis_summary_trace_node_property_t : uint32_t
+{
+    __kRPVAnalysisSummaryTraceNodePropertiesFirst = 0xF0100000,
+    kRPVAnalysisSummaryTraceNodePropertyMemoryEventsInvocationsTotal = __kRPVAnalysisSummaryTraceNodePropertiesFirst,
+    kRPVAnalysisSummaryTraceNodePropertyMemoryEventsDurationTotal,
+    kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventNameIndexed,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventInvocationsIndexed,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationSumIndexed,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationMinIndexed,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationMaxIndexed,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationPctIndexed,
+    kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationAvgIndexed,
+    __kRPVAnalysisSummaryTraceNodePropertiesLast
+} rocprofvis_analysis_summary_trace_node_property_t;
+
+/*
+ * Properties for a GPU at the trace, node, and processor aggregation levels.
+ */
+typedef enum rocprofvis_analysis_summary_gpu_property_t : uint32_t
+{
+    __kRPVAnalysisSummaryGpuPropertiesFirst = 0xF0300000,
+    kRPVAnalysisSummaryGpuPropertyDispatchEventsInvocationsTotal = __kRPVAnalysisSummaryGpuPropertiesFirst,
+    kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal,
+    kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventInvocationsIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationSumIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMinIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMaxIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationPctIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationAvgIndexed,
+    kRPVAnalysisSummaryGpuPropertyMemoryEventsInvocationsTotal,
+    kRPVAnalysisSummaryGpuPropertyMemoryEventsDurationTotal,
+    kRPVAnalysisSummaryGpuPropertyNumTopMemoryEvents,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventNameIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventInvocationsIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationSumIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMinIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMaxIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationPctIndexed,
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationAvgIndexed,
+    kRPVAnalysisSummaryGpuPropertyNumCounters,
+    kRPVAnalysisSummaryGpuPropertyCounterIndexed,
+    kRPVAnalysisSummaryGpuPropertyCounterMinIndexed,
+    kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed,
+    kRPVAnalysisSummaryGpuPropertyCounterMeanIndexed,
+    kRPVAnalysisSummaryGpuPropertyCounterStdDevIndexed,
+    kRPVAnalysisSummaryGpuPropertyCounterDurationIndexed,
+    __kRPVAnalysisSummaryGpuPropertiesLast
+} rocprofvis_analysis_summary_gpu_property_t;
+
+/*
+ * Properties for a CPU at the trace, node, and processor aggregation levels.
+ */
+typedef enum rocprofvis_analysis_summary_cpu_property_t : uint32_t
+{
+    __kRPVAnalysisSummaryCpuPropertiesFirst = 0xF0400000,
+    kRPVAnalysisSummaryCpuPropertyMemoryEventsInvocationsTotal = __kRPVAnalysisSummaryCpuPropertiesFirst,
+    kRPVAnalysisSummaryCpuPropertyMemoryEventsDurationTotal,
+    kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventNameIndexed,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventInvocationsIndexed,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationSumIndexed,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMinIndexed,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMaxIndexed,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationPctIndexed,
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationAvgIndexed,
+    kRPVAnalysisSummaryCpuPropertyNumCounters,
+    kRPVAnalysisSummaryCpuPropertyCounterIndexed,
+    kRPVAnalysisSummaryCpuPropertyCounterMinIndexed,
+    kRPVAnalysisSummaryCpuPropertyCounterMaxIndexed,
+    kRPVAnalysisSummaryCpuPropertyCounterMeanIndexed,
+    kRPVAnalysisSummaryCpuPropertyCounterStdDevIndexed,
+    kRPVAnalysisSummaryCpuPropertyCounterDurationIndexed,
+    __kRPVAnalysisSummaryCpuPropertiesLast
+} rocprofvis_analysis_summary_cpu_property_t;
+
+/*
+ * Properties for a process or thread at the trace, node, and process and thread aggregation levels.
+ */
+typedef enum rocprofvis_analysis_summary_process_thread_property_t : uint32_t
+{
+    __kRPVAnalysisSummaryProcessThreadPropertiesFirst = 0xF0500000,
+    kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsInvocationsTotal = __kRPVAnalysisSummaryProcessThreadPropertiesFirst,
+    kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsDurationTotal,
+    kRPVAnalysisSummaryProcessThreadPropertyNumTopLaunchEvents,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventNameIndexed,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventInvocationsIndexed,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationSumIndexed,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMinIndexed,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMaxIndexed,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationPctIndexed,
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationAvgIndexed,
+    __kRPVAnalysisSummaryProcessThreadPropertiesLast
+} rocprofvis_analysis_summary_process_thread_property_t;
+
+/*
+ * Arguments to fetch summary metrics from the summary controller
+ */
+typedef enum rocprofvis_analysis_summary_arguments_t : uint32_t
+{
+    kRPVAnalysisSummaryArgsStartTimestamp = 0x12000000,
+    kRPVAnalysisSummaryArgsEndTimestamp,
+} rocprofvis_analysis_summary_arguments_t;
+
+/*
 * Duration-weighted statistics for a counter track over a time range.
 */
 typedef struct rocprofvis_analysis_counter_statistics_t
@@ -44,6 +236,40 @@ rocprofvis_result_t rocprofvis_analysis_fetch_counter_statistics(rocprofvis_cont
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_analysis_fetch_queue_utilization(rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track, double start_time, double end_time, rocprofvis_controller_future_t* result, double* output);
+
+/*
+* Setup the summary based on the values in 'args' and fetch data.
+* @param controller The system trace controller instance.
+* @param args The arguments that setup the summary.
+* @param result The future to wait on.
+* @param output The summary metrics container to write to.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_fetch_summary(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_summary_metrics_t* output);
+
+/*
+* Returns the summary kernel-instance table.
+* @param controller The system trace controller instance.
+* @param table Out-param that receives the table handle.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_get_summary_kernel_instance_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
+
+/*
+* Returns the summary memory-instance table.
+* @param controller The system trace controller instance.
+* @param table Out-param that receives the table handle.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_get_summary_memory_instance_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
+
+/*
+* Returns the summary thread-instance table.
+* @param controller The system trace controller instance.
+* @param table Out-param that receives the table handle.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_get_summary_thread_instance_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
 
 /*
 * Returns the instrumented-thread events table.

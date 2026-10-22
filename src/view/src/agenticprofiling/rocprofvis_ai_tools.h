@@ -39,7 +39,7 @@ enum class AssistantFetchKind
     kNone,
     kSummary,
     kTopEvents,
-    kKernelInstances,
+    kEventInstances,
     // Any table read back out of TraceDataModel::GetTables(): track events,
     // counter samples, and search results.
     kDataTable,
@@ -79,6 +79,10 @@ struct AssistantFetchState
     // Columns the filters of an ungrouped read named. A filter on a column the
     // table does not have matches nothing, so an empty result names them.
     std::vector<std::string> filter_columns;
+    // get_summary's level and id, so a summary that lands later is formatted at
+    // the scope asked for.
+    std::string summary_level;
+    uint64_t    summary_id = INVALID_UINT64_INDEX;
 };
 
 // What one tool call produced: either finished content, or a set of requests
@@ -124,6 +128,9 @@ std::vector<AssistantActivityRow> GetAssistantActivityRows(
 
 // The short trace description the model sees before it asks anything.
 std::string BuildAssistantBriefing(const AssistantToolContext& context);
+
+// Whether the trace summary has been fetched and carries any data.
+bool AssistantSummaryLoaded(const AssistantToolContext& context);
 
 // Runs one named tool. Returns finished content, or the requests to wait on.
 AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,

@@ -2502,8 +2502,9 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
 Tabs: General sits in the launcher form; Sampling, ROCm, Perfetto,
 Process, Parallelism, Logging, plus Instrument (only when the tool is
-`instrument`) live in the Advanced Options window, where the dialog
-appends an Overrides tab (`extra_argv` and `extra_env`).
+`instrument`) live in the Advanced Options window. Command-line
+arguments (`extra_argv`) and environment variables (`extra_env`) live
+on the Arguments & Environment card on the main launcher form.
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.

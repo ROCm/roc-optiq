@@ -552,7 +552,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
     // Fetches event-type tracks into a table in paginated chunks, validates column
     // headers, column types, and reads cell values for every row. Exports the last chunk
-    // to CSV.
+    // to CSV, and checks that exports which cannot write the file report failure.
     // Fixture Reads: m_controller
     SECTION("Event Track Table Data")
     {
@@ -840,6 +840,39 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         spdlog::info("Free Future");
         rocprofvis_controller_future_free(future);
+
+        std::vector<std::string> unwritable_csv_paths = { "sample/missing_dir/test_export.csv" };
+#ifdef __linux__
+        if(std::filesystem::exists("/dev/full"))
+        {
+            unwritable_csv_paths.push_back("/dev/full");
+        }
+#endif
+        for(const std::string& unwritable_csv_path : unwritable_csv_paths)
+        {
+            spdlog::info("Allocating Future");
+            future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            spdlog::info("Exporting event table to unwritable CSV: {0}", unwritable_csv_path);
+            result = rocprofvis_controller_table_export_csv(m_controller, table_handle, args,
+                                                            future, unwritable_csv_path.c_str());
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            spdlog::info("Wait for future");
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            future_result = kRocProfVisResultSuccess;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+                                                      &future_result);
+            spdlog::info("Get future result: {0}", future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result != kRocProfVisResultSuccess);
+
+            spdlog::info("Free Future");
+            rocprofvis_controller_future_free(future);
+        }
 
         spdlog::info("Free Args");
         rocprofvis_controller_arguments_free(args);

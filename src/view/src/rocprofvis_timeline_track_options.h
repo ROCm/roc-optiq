@@ -188,9 +188,6 @@ public:
     // Render the "Show Hidden Tracks" submenu contents. Call within an open menu
     // or popup.
     void RenderHiddenTracksSubmenu();
-    // Render the "Select Tracks" submenu contents: all, flame chart, or line
-    // chart tracks, leaving hidden tracks out. Call within an open menu.
-    void RenderTrackSelectSubmenu(TimelineSelection& selection) const;
 
     void SetTrackSortSubmenu(std::function<void()> renderer);
 

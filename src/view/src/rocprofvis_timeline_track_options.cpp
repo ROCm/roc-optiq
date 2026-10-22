@@ -1096,54 +1096,6 @@ TimelineTrackOptions::RenderHiddenTracksSubmenu()
 }
 
 void
-TimelineTrackOptions::RenderTrackSelectSubmenu(TimelineSelection& selection) const
-{
-    std::vector<uint64_t> all;
-    std::vector<uint64_t> flame;
-    std::vector<uint64_t> line;
-    for(const auto& entry : m_options_map)
-    {
-        const TrackOptions* option = entry.second;
-        if(!option || !option->m_display || !option->GetTrackItem().GetTrackInfo())
-        {
-            continue;
-        }
-        all.push_back(entry.first);
-        switch(option->GetTrackItem().GetTrackInfo()->track_type)
-        {
-            case kRPVControllerTrackTypeEvents:
-            {
-                flame.push_back(entry.first);
-                break;
-            }
-            case kRPVControllerTrackTypeSamples:
-            {
-                line.push_back(entry.first);
-                break;
-            }
-            default:
-            {
-                break;
-            }
-        }
-    }
-
-    // Null icon keeps rows aligned with the icon-bearing parent menu.
-    if(IconMenuItem(nullptr, "All Tracks", !all.empty()))
-    {
-        selection.SetSelectedTracks(all);
-    }
-    if(IconMenuItem(nullptr, "Flame Charts", !flame.empty()))
-    {
-        selection.SetSelectedTracks(flame);
-    }
-    if(IconMenuItem(nullptr, "Line Charts", !line.empty()))
-    {
-        selection.SetSelectedTracks(line);
-    }
-}
-
-void
 TimelineTrackOptions::SetTrackSortSubmenu(std::function<void()> renderer)
 {
     m_render_sort_menu = std::move(renderer);

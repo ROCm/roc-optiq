@@ -539,13 +539,6 @@ TrackItem::RenderMetaArea()
 
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
-        // Match File Explorer: right-clicking outside the current selection
-        // selects only the target; right-clicking a selected item preserves
-        // the multi-selection.
-        if(m_timeline_selection && !m_timeline_selection->IsTrackSelected(*this))
-        {
-            m_timeline_selection->ClickTrack(*this, {}, false, false);
-        }
         m_timeline_track_options.InitTrackOptionsSubmenu(*this);
         ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
@@ -574,19 +567,6 @@ TrackItem::RenderMetaArea()
                 m_data_provider.GetTraceFilePath()));
         }
         ImGui::Separator();
-        if(m_timeline_selection)
-        {
-            if(IconBeginMenu(ICON_LIST, "Select Tracks"))
-            {
-                m_timeline_track_options.RenderTrackSelectSubmenu(*m_timeline_selection);
-                ImGui::EndMenu();
-            }
-            if(m_timeline_selection->HasSelectedTracks() &&
-               IconMenuItem(ICON_X_CIRCLED, "Unselect All Tracks"))
-            {
-                m_timeline_selection->UnselectAllTracks();
-            }
-        }
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
             m_timeline_track_options.RenderTrackOptionsSubmenu();

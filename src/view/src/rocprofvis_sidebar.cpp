@@ -764,13 +764,6 @@ SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
         const ImGuiIO& io = ImGui::GetIO();
         m_timeline_selection->ClickTrack(track, m_row_order, io.KeyCtrl, io.KeyShift);
     }
-    // Match File Explorer context-click selection without disturbing an
-    // existing multi-selection that already contains this track.
-    if(ImGui::IsItemClicked(ImGuiMouseButton_Right) &&
-       !m_timeline_selection->IsTrackSelected(track))
-    {
-        m_timeline_selection->ClickTrack(track, m_row_order, false, false);
-    }
     if(!display)
     {
         ImGui::PopStyleColor();

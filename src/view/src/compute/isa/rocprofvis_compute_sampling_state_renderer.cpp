@@ -416,6 +416,11 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
                                       ? SAMPLING_STATE_LOADING_DETAILS_TOOLTIP
                                       : GetUnavailableSamplingTooltip(row);
         ImGui::TextUnformatted(description);
+        if(row.sampling.availability == SamplingAvailability::kInvalid &&
+           m_load_state != LoadState::kReady)
+        {
+            ImGui::TextUnformatted(GetUnavailableSamplingTooltip(row));
+        }
         ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, total_count.c_str());
         if(row.sample_counts.total_count > 0 &&
            row.sampling.availability != SamplingAvailability::kInvalid)
@@ -666,22 +671,22 @@ SamplingStateRenderer::RenderTableContextMenu()
 void
 SamplingStateRenderer::RenderHeader(int column, CodePane pane)
 {
+    const HeaderTooltipText& pane_tooltip = pane == CodePane::kSource
+                                               ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
+                                               : SAMPLING_STATE_HEADER_TOOLTIP;
     if(IsDisabled())
     {
         const HeaderTooltipText tooltip{
             m_load_state == LoadState::kLoading ? SAMPLING_STATE_LOADING_TOOLTIP
                                                 : SAMPLING_STATE_FAILED_TOOLTIP,
-            SAMPLING_STATE_HEADER_TOOLTIP.developer_information
+            pane_tooltip.developer_information
         };
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
         RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, tooltip);
         ImGui::PopStyleColor();
         return;
     }
-    RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL,
-                            pane == CodePane::kSource
-                                ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
-                                : SAMPLING_STATE_HEADER_TOOLTIP,
+    RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, pane_tooltip,
                             render_sampling_state_color_legend);
 }
 

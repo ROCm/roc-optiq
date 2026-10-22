@@ -47,7 +47,6 @@ enum class RequestType
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
-    kFetchAnalysisTopHipEventsTable,
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,

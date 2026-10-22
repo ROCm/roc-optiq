@@ -451,7 +451,9 @@ InfiniteScrollTable::Render()
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
-        if(column_names.size())
+        // Filter row is enabled: render when columns are present regardless of data.
+        // Filter row is disabled: render when data is present.
+        if(m_display_filter_row && column_names.size() || table_data.size())
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",

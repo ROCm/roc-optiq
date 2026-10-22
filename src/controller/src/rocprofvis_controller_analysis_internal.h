@@ -52,7 +52,6 @@ public:
     rocprofvis_result_t GetMemoryAllocationEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetMemoryCopyEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetLaunchSampleEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
-    rocprofvis_result_t GetHipEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
 
     // Unlike the Get* calls, the caller owns what comes back and frees it with
     // rocprofvis_controller_table_free. Nothing is cached per trace, so two
@@ -81,7 +80,6 @@ private:
         EventsTable* memory_allocation_events_table;
         EventsTable* memory_copy_events_table;
         EventsTable* launch_sample_events_table;
-        EventsTable* hip_events_table;
         std::array<EventSearchTable*, __kRPVAnalysisSummaryCategoryLast> summary_instance_tables;
     };
 

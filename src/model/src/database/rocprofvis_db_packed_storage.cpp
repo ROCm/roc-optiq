@@ -317,7 +317,7 @@ namespace DataModel
                                 it_dst->second.numeric.data.u64 += it_src->second.numeric.data.u64;
                                 break;
                             case FilterExpression::SqlCommand::Avg:
-                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) / it->second.count;
+                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) * val.count / it->second.count;
                                 break;
                             case FilterExpression::SqlCommand::Min:
                                 it_dst->second.numeric.data.d = std::min(it_src->second.numeric.data.d, it_dst->second.numeric.data.d);

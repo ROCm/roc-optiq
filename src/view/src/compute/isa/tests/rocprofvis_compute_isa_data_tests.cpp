@@ -363,7 +363,7 @@ TEST_CASE("Source aggregation cannot mask malformed instruction counts or overfl
     auto           rows    = IsaDataBuilder::BuildSourceLines(data, 11);
     const uint64_t hottest = IsaDataBuilder::UpdateSourceSampling(
         rows, data, 11, IsaDataBuilder::PrepareSampling(data));
-    CHECK(hottest >= 200);
+    CHECK(hottest == 0);
     CHECK(rows[0].sampling.availability ==
           IsaDataBuilder::SamplingAvailability::kInvalid);
     CHECK(rows[0].sampling.issue_percent == 0.0);
@@ -465,11 +465,67 @@ TEST_CASE("Instruction count overflow is bounded and stays invalid in source tot
     const auto prepared = IsaDataBuilder::PrepareSampling(data);
     auto       isa      = IsaDataBuilder::BuildInstructions(data, 1);
     auto       source   = IsaDataBuilder::BuildSourceLines(data, 11);
-    CHECK(IsaDataBuilder::UpdateSampling(isa, prepared) == UINT64_MAX);
-    CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared) == UINT64_MAX);
+    CHECK(IsaDataBuilder::UpdateSampling(isa, prepared) == 0);
+    CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared) == 0);
     CHECK(isa[0].sample_counts.total_count == UINT64_MAX);
     CHECK(isa[0].sampling.availability == IsaDataBuilder::SamplingAvailability::kInvalid);
     CHECK(source[0].sampling.availability == isa[0].sampling.availability);
+}
+
+TEST_CASE("Invalid instructions do not collapse other ISA or source sample bars",
+          "[isa][source]")
+{
+    PcSamplingData data = make_source_sampling_data();
+    data.instruction_source_lines = { { 10, 101, 11, 0 }, { 20, 102, 11, 0 } };
+    data.pc_sample_states = { { 1, 10, UINT64_MAX, 0, 0 },
+                              { 2, 10, 1, 0, 0 },
+                              { 3, 20, 100, 25, 75 } };
+    SECTION("Overflowing instruction")
+    {
+        // Keep the overflowing total and its otherwise valid neighbor.
+    }
+    SECTION("Malformed progress counts")
+    {
+        data.pc_sample_states = { { 1, 10, 1000, 900, 200 }, { 2, 20, 100, 25, 75 } };
+    }
+    SECTION("Malformed counts with missing progress")
+    {
+        data.pc_sample_states = { { 1, 10, 1000, std::nullopt, 1001 },
+                                  { 2, 20, 100, 25, 75 } };
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa      = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source   = IsaDataBuilder::BuildSourceLines(data, 11);
+    CHECK(IsaDataBuilder::UpdateSampling(isa, prepared) == 100);
+    CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared) == 100);
+    CHECK(isa[0].sampling.availability == IsaDataBuilder::SamplingAvailability::kInvalid);
+    CHECK(source[0].sampling.availability ==
+          IsaDataBuilder::SamplingAvailability::kInvalid);
+    CHECK(isa[1].sample_counts.total_count == 100);
+    CHECK(source[1].sample_counts.total_count == 100);
+    CHECK(isa[1].sampling.issue_percent == 25.0);
+    CHECK(source[1].sampling.stall_percent == 75.0);
+}
+
+TEST_CASE("Source overflow does not hide another line or invalidate ISA totals",
+          "[isa][source]")
+{
+    PcSamplingData data = make_source_sampling_data();
+    data.pc_sample_states = { { 1, 10, UINT64_MAX, UINT64_MAX, 0 },
+                              { 2, 20, 1, 0, 1 },
+                              { 3, 30, 250, 100, 150 } };
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa      = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source   = IsaDataBuilder::BuildSourceLines(data, 11);
+    CHECK(IsaDataBuilder::UpdateSampling(isa, prepared) == UINT64_MAX);
+    CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared) == 250);
+    CHECK(isa[0].sampling.availability == IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(source[0].sample_counts.total_count == UINT64_MAX);
+    CHECK(source[0].sampling.availability ==
+          IsaDataBuilder::SamplingAvailability::kInvalid);
+    CHECK(source[1].sample_counts.total_count == 250);
+    CHECK(source[1].sampling.availability ==
+          IsaDataBuilder::SamplingAvailability::kValid);
 }
 
 TEST_CASE(

@@ -70,7 +70,8 @@ constexpr HeaderTooltipText SAMPLING_STATE_HEADER_TOOLTIP{
     nullptr,
     "DB: compute_pc_sample_state; group by instruction_uuid.\n"
     "T = SUM(total_count), I = SUM(issue_count), S = SUM(stall_count).\n"
-    "H = MAX(T) across displayed instructions; R = SUM(normalized reason counts).\n"
+    "H = MAX(T) across displayed instructions excluding invalid counts.\n"
+    "R = SUM(normalized reason counts).\n"
     "Reason DB: compute_pc_sample_stall_reason, joined by pc_sample_state_uuid;\n"
     "names: compute_pc_sample_stall_reason_lookup.text via lookup UUID.\n"
     "Valid: every state has non-NULL progress counts; I <= T and S <= T - I.\n"
@@ -82,7 +83,7 @@ constexpr HeaderTooltipText SAMPLING_STATE_HEADER_TOOLTIP{
     "raw reasons = total_count, issue_count + stall_count = total_count, and OTHER "
     "suffices.\n"
     "Cell tooltip: 100 * count/T, including Issued; zero T gives 0%.\n"
-    "Missing/invalid progress gives a gray total bar; zero H gives no bar.\n"
+    "Missing progress gives a gray total bar; invalid counts or zero H give no bar.\n"
     "Failed stall details retain total-only bars; failed sample loading disables the "
     "column."
 };
@@ -94,11 +95,13 @@ constexpr HeaderTooltipText SOURCE_SAMPLING_STATE_HEADER_TOOLTIP{
     "Use the first mapping per instruction; include only the selected file's lines.\n"
     "Sum total/issued/stalled counts and normalized reasons across mapped instructions.\n"
     "Normalize issued samples out of OTHER_WAIT per sample state before summing.\n"
-    "T/I/S = line total/issued/stalled counts; H = hottest displayed source line.\n"
+    "T/I/S = line total/issued/stalled counts.\n"
+    "H = hottest displayed source line excluding invalid counts.\n"
     "R = line normalized reason total. Bar fractions: total T/H, issued I/H.\n"
     "Each stall reason: (S/H) * reason_count / max(S, R).\n"
     "Order: issued first; reasons by descending count, then ascending name.\n"
-    "Gray: unclassified stalls and progress; missing or invalid progress is neutral.\n"
+    "Gray: unclassified stalls and progress; missing progress is neutral.\n"
+    "Invalid counts do not set the scale or draw a bar.\n"
     "Missing counts propagate; any invalid contributing sample state invalidates the "
     "line.\n"
     "Cell tooltip: count/T * 100 for Issued and each reason; zero denominator gives 0%.\n"
@@ -306,7 +309,9 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
     const ImVec2         bar_start(cell.start.x,
                                    cell.start.y + (cell.size.y - bar_height) * 0.5f);
     const double         bar_percent =
-        IsaDataBuilder::CalculatePercentage(counts.total_count, hottest_samples);
+        row.sampling.availability == SamplingAvailability::kInvalid
+            ? 0.0
+            : IsaDataBuilder::CalculatePercentage(counts.total_count, hottest_samples);
     const float  bar_width = cell.size.x * static_cast<float>(bar_percent / 100.0);
     const ImVec2 bar_end(bar_start.x + bar_width, bar_start.y + bar_height);
     if(!IsDisabled() && bar_width > 0.0f)
@@ -412,7 +417,8 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
                                       : GetUnavailableSamplingTooltip(row);
         ImGui::TextUnformatted(description);
         ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, total_count.c_str());
-        if(row.sample_counts.total_count > 0)
+        if(row.sample_counts.total_count > 0 &&
+           row.sampling.availability != SamplingAvailability::kInvalid)
         {
             ImGui::Text(SAMPLING_STATE_BAR_PERCENT_TOOLTIP, bar_percent);
         }
@@ -650,7 +656,7 @@ SamplingStateRenderer::RenderTableContextMenu()
         if(m_load_state == LoadState::kFailed || m_load_state == LoadState::kTotalsOnly)
         {
             ImGui::Separator();
-            retry = ImGui::MenuItem("Retry sampling data");
+            retry = ImGui::MenuItem("Refetch sampling data");
         }
         ImGui::EndPopup();
     }

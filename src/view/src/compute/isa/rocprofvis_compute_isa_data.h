@@ -135,12 +135,12 @@ public:
                                       const PcSamplingData& data);
     // Prepares owned counts and normalized reasons once for both panes.
     [[nodiscard]] static PreparedSamplingData PrepareSampling(const PcSamplingData& data);
-    // Updates row sampling data and returns the hottest displayed instruction's count.
+    // Updates row sampling and returns the largest usable instruction sample count.
     static uint64_t                             UpdateSampling(std::vector<IsaRow>&        rows,
                                                                const PreparedSamplingData& sampling);
     [[nodiscard]] static std::vector<SourceRow> BuildSourceLines(
         const PcSamplingData& data, uint64_t source_file_uuid);
-    // Aggregates mapped instructions once per line; returns the hottest source count.
+    // Aggregates mapped instructions per line; returns the largest usable sample count.
     static uint64_t UpdateSourceSampling(std::vector<SourceRow>&     rows,
                                          const PcSamplingData&       data,
                                          uint64_t                    source_file_uuid,

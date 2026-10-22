@@ -461,8 +461,11 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
             reasons_it != sampling.reasons_by_instruction.end() ? reasons_it->second
                                                                 : empty_reasons,
             sampling.reason_text);
-        hottest_instruction_samples =
-            std::max(hottest_instruction_samples, row.sample_counts.total_count);
+        if(row.sampling.availability != SamplingAvailability::kInvalid)
+        {
+            hottest_instruction_samples =
+                std::max(hottest_instruction_samples, row.sample_counts.total_count);
+        }
     }
     return hottest_instruction_samples;
 }
@@ -578,8 +581,11 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
         const SourceSampling& sampling = sampling_by_line.at(row.id);
         UpdateSamplingRow(row, sampling.has_samples ? sampling.counts : SampleCounts{},
                           sampling.reasons, prepared.reason_text);
-        hottest_source_samples =
-            std::max(hottest_source_samples, row.sample_counts.total_count);
+        if(row.sampling.availability != SamplingAvailability::kInvalid)
+        {
+            hottest_source_samples =
+                std::max(hottest_source_samples, row.sample_counts.total_count);
+        }
     }
     return hottest_source_samples;
 }

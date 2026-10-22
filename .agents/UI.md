@@ -1650,6 +1650,9 @@ both measurement and drawing. `SamplingStateRenderer::CodePane` identifies the
 header's ISA/source context explicitly. Single-argument widget constructors are
 explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
 Source selection is shared through `LineSelection`, with no unused forwarding getters.
+Source-file dropdown items use the complete source UUID in their ImGui ID scope,
+so equal basenames remain independently selectable without truncating 64-bit IDs.
+Hovering an entry or the closed selector shows the full source path.
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
@@ -1710,7 +1713,9 @@ Stall %, and Stall Categories columns have been removed, including their heatmap
 rendering, dedicated header tooltips, kernel-total bookkeeping, and stalled-only
 tooltip mode. The Samples count in the Sampling State tooltip is retained.
 `IsaDataBuilder::UpdateSampling` updates row data and returns the hottest displayed
-instruction's total sample count, used to scale Sampling State bars.
+instruction's usable total sample count, used to scale Sampling State bars. Both
+ISA and source maxima exclude rows with invalid counts; missing progress alone
+still permits a total-sample bar, including host-trap captures.
 
 The table uses `IsaCodeSamplingState` as its ID so the previous seven-column layout
 does not override these defaults. Subsequent visibility, width, and order choices
@@ -1746,10 +1751,13 @@ the measured stalled portion using their counts over the larger of the measured
 stalled count and the classified reason total. Missing stall classifications and
 unclassified progress remain gray. Mismatched reason totals cannot enlarge the
 bar or overwrite the issued portion. Zero-sample instructions have no bar.
-Host-trap, incomplete, and invalid progress data retain a neutral total-sample bar.
-Bars have no inline numeric labels. Both valid and unavailable tooltips retain
-`Bar: value% of maximum samples.`, using the hottest row's sample count in the
-current pane as the denominator, just as the bar width does. This percentage is
+Host-trap and incomplete progress data retain a neutral total-sample bar.
+Malformed or overflowing sample counts neither set the scale nor draw a bar;
+the cell remains hoverable for its warning tooltip. This applies independently
+to ISA instructions and aggregated source rows. Bars have no inline numeric
+labels. Tooltips for usable nonzero totals retain `Bar: value% of maximum
+samples.`, using the hottest usable row in the current pane as the denominator,
+just as the bar width does. Invalid-count tooltips omit the bar percentage. This percentage is
 separate from stall percentages and the tooltip table's percentages of this row's
 samples. Zero-sample cells have no bar; unavailable rows retain a brief no-samples
 message.
@@ -1898,7 +1906,7 @@ Successfully loaded zero-sample data keeps the usual no-observations behavior.
 The renderer extends ImGui's native column context menu using
 `DisableDefaultContextMenu`, `TableBeginContextMenuPopup`, and
 `TableDrawDefaultContextMenu`. Both widgets render it after their headers. Native
-column controls are retained, and a failed sampling layer adds Retry sampling data.
+column controls are retained, and a failed sampling layer adds Refetch sampling data.
 This remains accessible from another header when Sampling State is hidden. Retry
 requests are consumed during Update, and only the failed layer is queued. No
 sampling-details visibility toggle is restored.

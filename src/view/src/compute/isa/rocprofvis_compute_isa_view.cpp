@@ -785,18 +785,30 @@ ComputeIsaView::RenderSourceFileDropdown()
     {
         for(const auto& [path, id] : m_source.file_uuid_by_path)
         {
+            const std::string item_id = std::to_string(id);
+            ImGui::PushID(item_id.c_str());
             const bool selected = (id == m_source.selected_uuid);
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
             {
                 m_line_selection = {};
                 SelectSourceFile(id);
             }
+            if(ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
+                SetTooltipStyled("%s", path.c_str());
+            }
             if(selected)
             {
                 ImGui::SetItemDefaultFocus();
             }
+            ImGui::PopID();
         }
         ImGui::EndCombo();
+    }
+    if(selected_file_it != m_source.file_uuid_by_path.end() &&
+       ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    {
+        SetTooltipStyled("%s", selected_file_it->first.c_str());
     }
 }
 

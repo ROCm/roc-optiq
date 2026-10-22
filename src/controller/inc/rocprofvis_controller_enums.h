@@ -686,9 +686,8 @@ typedef enum rocprofvis_controller_table_type_t
     kRPVControllerTableTypeMemoryAllocationEvents    = 0xF0000006,
     kRPVControllerTableTypeMemoryCopyEvents          = 0xF0000007,
     kRPVControllerTableTypeSampledEvents             = 0xF0000008,
-    kRPVControllerTableTypeHipEvents                 = 0xF0000009,
-    kRPVControllerTableTypeSummaryMemoryInstances    = 0xF000000A,
-    kRPVControllerTableTypeSummaryThreadInstances    = 0xF000000B,
+    kRPVControllerTableTypeSummaryMemoryInstances    = 0xF0000009,
+    kRPVControllerTableTypeSummaryThreadInstances    = 0xF000000A,
 } rocprofvis_controller_table_type_t;
 
 

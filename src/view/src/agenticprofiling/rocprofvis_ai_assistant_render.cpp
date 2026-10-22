@@ -522,9 +522,7 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         // A notice that outlived its turn, such as a failed request.
         PanelIcon(ICON_X_CIRCLED, Colors::kTextError, &settings);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
-        ImGui::TextWrapped("%s", line.text.c_str());
-        ImGui::PopStyleColor();
+        RenderSelectableMessage(index, line.text, Colors::kTextError);
         ImGui::PopID();
         return;
     }
@@ -557,7 +555,7 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         PanelFieldLabel("Optiq", false, &settings);
     }
     ImGui::Spacing();
-    RenderSelectableMessage(index, line.text);
+    RenderSelectableMessage(index, line.text, Colors::kTextMain);
     EndPanelCard();
     ImGui::PopID();
 }
@@ -598,12 +596,16 @@ AssistantPanel::MessageSelect(size_t index)
 }
 
 void
-AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
+AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
+                                        Colors text_color)
 {
+    const ImU32 color  = SettingsManager::GetInstance().GetColor(text_color);
     TextSelect* select = MessageSelect(index);
     if(select == nullptr)
     {
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
         ImGui::TextWrapped("%s", text.c_str());
+        ImGui::PopStyleColor();
         return;
     }
     if(m_message_lines[index].empty())
@@ -622,12 +624,15 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
     ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                           ImGuiWindowFlags_NoScrollWithMouse);
+    // Scoped to the text so the copy menu below keeps the theme's text color.
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
     for(const std::string& line : m_message_lines[index])
     {
         ImGui::PushTextWrapPos(0.0f);
         ImGui::TextUnformatted(line.data(), line.data() + line.size());
         ImGui::PopTextWrapPos();
     }
+    ImGui::PopStyleColor();
 
     // Only one message keeps a highlight, so Ctrl+C copies what is on screen.
     // Ctrl+C reaches only the focused window, and right-click does not focus
@@ -647,16 +652,20 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
         }
     }
     select->update();
+    // update() copies on Ctrl+C but does not report it. The same chord in the
+    // same window fires on the same press.
+    bool copied_selection =
+        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && select->hasSelection();
 
     PushContextMenuStyles();
     if(ImGui::BeginPopupContextWindow("##message_copy"))
     {
-        if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection(), false,
-                        "Ctrl+C"))
+        if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection()))
         {
             select->copy();
+            copied_selection = true;
         }
-        if(IconMenuItem(ICON_LIST, "Select all", true, false, "Ctrl+A"))
+        if(IconMenuItem(ICON_LIST, "Select all"))
         {
             select->selectAll();
         }
@@ -664,10 +673,17 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text)
         if(IconMenuItem(ICON_DOCUMENT, "Copy message"))
         {
             ImGui::SetClipboardText(text.c_str());
+            NotificationManager::GetInstance().Show("Message copied to clipboard",
+                                                    NotificationLevel::Info);
         }
         ImGui::EndPopup();
     }
     PopContextMenuStyles();
+    if(copied_selection)
+    {
+        NotificationManager::GetInstance().Show("Selection copied to clipboard",
+                                                NotificationLevel::Info);
+    }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor();

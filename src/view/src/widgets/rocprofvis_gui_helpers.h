@@ -240,7 +240,7 @@ CopyableTextUnformatted(
 // Pass selected = true to show a trailing check mark (e.g. radio-style option groups).
 bool
 IconMenuItem(const char* icon, const char* label, bool enabled = true,
-             bool selected = false, const char* shortcut = nullptr);
+             bool selected = false);
 
 // Opens a submenu entry with a leading icon (from the icon font) before the label.
 // Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.

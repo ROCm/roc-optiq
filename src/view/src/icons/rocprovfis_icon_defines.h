@@ -14,6 +14,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF13D, 0xF13D,
     0xF142, 0xF142,
     0xF144, 0xF144,
+    0xF149, 0xF149,
     0xF1FE, 0xF1FE,
     0xF200, 0xF200,
     0xF20B, 0xF20B,
@@ -55,6 +56,7 @@ inline constexpr const char* ICON_FOLDER        = u8"\uF139";
 inline constexpr const char* ICON_GEAR          = u8"\uF13D";
 inline constexpr const char* ICON_QUESTION_MARK = u8"\uF142";
 inline constexpr const char* ICON_HOME          = u8"\uF144";
+inline constexpr const char* ICON_INFORMATION   = u8"\uF149";
 inline constexpr const char* ICON_CHAIN         = u8"\uF1FE";
 inline constexpr const char* ICON_LOCKED        = u8"\uF200";
 inline constexpr const char* ICON_ELLIPSIS      = u8"\uF20B";

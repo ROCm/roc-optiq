@@ -24,7 +24,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 ##### Memory chart
 
 - Architecture-specific memory-chart layouts: gfx950, gfx94x (including gfx940), and gfx115x (RDNA 3.5).
--The chart can be panned with the scroll wheel or a trackpad.
+- The chart can be panned with the scroll wheel or a trackpad.
 
 ##### Tables
 
@@ -41,7 +41,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 ##### ISA View
 
 - ISA View is now available in distributed binaries.
-- This feature is marked expiremental as the collected data format is still under development.
+- This feature is marked experimental as the collected data format is still under development.
 
 ##### Binaries / build
 
@@ -60,8 +60,8 @@ These features are in progress and available for preview only (build from source
 - Fixed kernel dispatch durations wrapping above about 4.29 seconds in the **Top Kernels** table and its bar chart, pie chart, and tooltips. Durations are stored as 64-bit nanosecond counts.
 - Fixed incorrect averages when a grouped query was merged across threads. Per-thread averages are now weighted, and MAX no longer starts at the smallest positive double.
 - Fixed table CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, a full disk).
-- Fixed tables no longer restore another table's column layout from the ImGui settings file.
-- Fixed **Top Events** showing an empty table as if it still had rows.
+- Fixed tables restoring another table's column layout from the ImGui settings file.
+- Fixed **Top Events** tables displaying incorrectly when they had no results.
 - Fixed **Track Details** showing PID 0 for counter tracks.
 - Fixed rocpd sample tracks missing their PMC samples.
 - Fixed a crash when a table filter could not be parsed.

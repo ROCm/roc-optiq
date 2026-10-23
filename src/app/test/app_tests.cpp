@@ -1549,33 +1549,34 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
-        // FetchSummary + TopKernels::Update only run while the Summary window is
-        // shown; headless with no saved layout it may be closed, leaving the kernel
+        // FetchSummary + SummaryTopEvents::Update only run while the Summary window is
+        // shown; headless with no saved layout it may be closed, leaving the event
         // list null forever. Force it open ourselves rather than depending on another
         // test having flipped this shared setting earlier in the process.
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
-        // Summary data loads asynchronously; let Update() populate the kernel list.
-        // KernelCount() is 0 while m_kernels is still null.
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        // Summary data loads asynchronously; let Update() populate the event list.
+        // EventCount() is 0 while m_op_events is still null.
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
 
         // Pick a real kernel index, skipping the synthetic "Others" bucket (which
-        // ToggleSelectKernel treats as a deselect). Bail if there's nothing else.
+        // ToggleSelectEvent treats as a deselect). Bail if there's nothing else.
         size_t target = 0;
         if (peer.PaddedIdx() == target) target = 1;
-        if (peer.KernelCount() <= target)
+        if (peer.EventCount() <= target)
         {
             ctx->LogWarning("SKIP: summary has no selectable top kernel for this trace");
             return;
         }
 
-        // This drives the model (ToggleSelectKernel) and asserts selection state.
+        // This drives the model (ToggleSelectEvent) and asserts selection state.
         // The pie is ImPlot-canvas drawn with no widget ID, so the click-to-index
         // hit-test is out of scope here; only the selection wiring is covered.
 
@@ -1602,25 +1603,30 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
-        // The Summary fetch (FetchSummary) and TopKernels::Update both run only when
-        // the Summary window is shown; headless with no saved layout it may be closed,
-        // leaving the kernel list null forever. Force it open before draining the load.
+        // The Summary fetch (FetchSummary) and SummaryTopEvents::Update both run only
+        // when the Summary window is shown; headless with no saved layout it may be
+        // closed, leaving the event list null forever. Force it open before draining the load.
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
-        // Summary data loads asynchronously; let Update() populate the kernel list.
-        // KernelCount() is 0 while m_kernels is still null.
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        // Summary data loads asynchronously; let Update() populate the event list.
+        // EventCount() is 0 while m_op_events is still null.
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
 
-        IM_CHECK(peer.KernelCount() > 0);
-        IM_CHECK(!peer.KernelName(0).empty());
-        for (size_t i=1; i < peer.KernelCount();i++){
-            IM_CHECK(peer.ExecTimeSum(0) >= peer.ExecTimeSum(i));
+        IM_CHECK(peer.EventCount() > 0);
+        IM_CHECK(!peer.EventName(0).empty());
+        // The synthetic "Others" bucket totals everything past the top events, so it
+        // can legitimately exceed the first entry; only rank the real events.
+        for (size_t i = 1; i < peer.EventCount(); i++)
+        {
+            if (peer.PaddedIdx() == i) continue;
+            IM_CHECK(peer.DurationSum(0) >= peer.DurationSum(i));
         }
 
     };
@@ -1633,18 +1639,26 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
         // The Pie/Bar/Table switcher renders only once the Summary window is
-        // shown and its kernel list has loaded; force it open and drain the
+        // shown and its event list has loaded; force it open and drain the
         // async fetch first (mirrors sys_summary_top_kernel_name).
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
-        IM_CHECK(peer.KernelCount() > 0);
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.EventCount() > 0);
+
+        // The switcher lives in the "Kernel Executions" tab and only the active tab
+        // renders, so bring it to the front before clicking.
+        TabContainer* tc = SummaryViewTestPeer{*sv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        tc->SetActiveTab("Kernel Executions");
 
         // Reaching this point means the load path ran (not the skip), so the
         // mode assertions below genuinely exercise the switcher. Default is Pie.

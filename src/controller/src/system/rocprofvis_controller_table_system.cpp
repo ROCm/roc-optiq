@@ -400,6 +400,11 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
             free(query);
+
+            if(dm_result != kRocProfVisDmResultSuccess)
+            {
+                result = kRocProfVisResultUnknownError;
+            }
         }
         else
         {
@@ -407,7 +412,7 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
         }
     }
     delete query_args;
-    return result;
+    return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
 rocprofvis_result_t
@@ -434,6 +439,8 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeEvents);
         c_optional_uint64_t node_id;
         c_optional_uint64_t agent_id;
+        c_optional_uint64_t process_id;
+        c_optional_uint64_t thread_id;
         result = UnpackUseCase(args, use_case);
         if (result == kRocProfVisResultSuccess)
         {
@@ -555,6 +562,23 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             }
         }
 
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
+        {
+            node_id.has_value = true;
+        }
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
+        {
+            agent_id.has_value = true;
+        }
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsProcessId, 0, &process_id.value))
+        {
+            process_id.has_value = true;
+        }
+        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsThreadId, 0, &thread_id.value))
+        {
+            thread_id.has_value = true;
+        }
+
         if(result == kRocProfVisResultSuccess)
         {
             sys_out->m_filter = std::move(filter);
@@ -564,18 +588,8 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             sys_out->m_use_case = use_case;
             sys_out->m_start_ts = start_ts;
             sys_out->m_end_ts = end_ts;
+            sys_out->m_source_filter = node_id.has_value || agent_id.has_value || process_id.has_value || thread_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id, process_id, thread_id }) : std::nullopt;
         }   
-
-        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
-        {
-            node_id.has_value = true;
-        }
-        if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
-        {
-            agent_id.has_value = true;
-        }
-
-        sys_out->m_source_filter = node_id.has_value || agent_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id }) : std::nullopt;
     }
 	return result;
 }
@@ -655,6 +669,8 @@ SystemTable::UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t&
         {
             case kRPVControllerTableTypeEvents:
             case kRPVControllerTableTypeSummaryKernelInstances:
+            case kRPVControllerTableTypeSummaryMemoryInstances:
+            case kRPVControllerTableTypeSummaryThreadInstances:
             {
                 out = kRPVDMTableUseCaseEventTrackTable;
                 break;

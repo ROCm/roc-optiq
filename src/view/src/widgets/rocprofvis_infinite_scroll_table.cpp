@@ -303,7 +303,18 @@ InfiniteScrollTable::SetDrawBorder(bool draw)
 void
 InfiniteScrollTable::FormatData() const
 {
-    // default implementation does nothing
+    ResetFormattedData();
+    FormatTimeColumns();
+}
+
+std::vector<FormattedColumnInfo>&
+InfiniteScrollTable::ResetFormattedData() const
+{
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_table_model_mutable().GetMutableFormattedTableData(m_table_type);
+    formatted_column_data.clear();
+    formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
+    return formatted_column_data;
 }
 
 void
@@ -399,10 +410,14 @@ InfiniteScrollTable::Render()
 
     bool sort_requested = false;
 
+    // No saved settings: the table ID is derived from m_widget_name, which embeds
+    // the widget address, so ini entries never match across runs and a recycled
+    // address would hand this table another table's columns.
     ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                                   ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollX |
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
+                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable |
+                                  ImGuiTableFlags_NoSavedSettings;
 
     if(!TableRequestInFlight())
     {
@@ -436,7 +451,9 @@ InfiniteScrollTable::Render()
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
-        if(column_names.size())
+        // Filter row is enabled: render when columns are present regardless of data.
+        // Filter row is disabled: render when data is present.
+        if(m_display_filter_row && column_names.size() || table_data.size())
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",
@@ -502,6 +519,12 @@ InfiniteScrollTable::Render()
                 // table that cannot sort ignore this, so hold it until it can land.
                 if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
                 {
+                    // TableSetColumnSortDirection() walks every column, but ImGui
+                    // defers TableSetupColumn() to the layout whenever the column
+                    // set changed, so lock the layout first or it reads columns
+                    // that have no sort directions assigned yet.
+                    ImGui::TableGetSortSpecs();
+
                     // Resolved against the same header that set the columns up
                     // above, so the index handed to ImGui is always one it owns.
                     const size_t column = ColumnIndexOf(m_pending_sort_column);
@@ -1219,21 +1242,36 @@ InfiniteScrollTable::IndexColumns()
 {
     m_time_column_indices = { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX };
+    m_important_column_idxs =
+        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
     const std::vector<std::string>& column_names =
         m_table_model().GetTableHeader(m_table_type);
-    for(int i = 0; i < column_names.size(); i++)
+    for(size_t i = 0; i < column_names.size(); i++)
     {
-        if(column_names[i] == START_TS_COLUMN_NAME)
+        const std::string& col = column_names[i];
+        if(col == START_TS_COLUMN_NAME)
         {
             m_time_column_indices[kTimeStartNs] = i;
         }
-        else if(column_names[i] == END_TS_COLUMN_NAME)
+        else if(col == END_TS_COLUMN_NAME)
         {
             m_time_column_indices[kTimeEndNs] = i;
         }
-        else if(column_names[i] == DURATION_COLUMN_NAME)
+        else if(col == DURATION_COLUMN_NAME)
         {
             m_time_column_indices[kDurationNs] = i;
+        }
+        else if(col == TRACK_ID_COLUMN_NAME)
+        {
+            m_important_column_idxs[kTrackId] = i;
+        }
+        else if(col == STREAM_ID_COLUMN_NAME)
+        {
+            m_important_column_idxs[kStreamId] = i;
+        }
+        else if(col == ID_COLUMN_NAME)
+        {
+            m_important_column_idxs[kUUId] = i;
         }
     }
 }
@@ -1241,6 +1279,10 @@ InfiniteScrollTable::IndexColumns()
 void
 InfiniteScrollTable::RowSelected(const ImGuiMouseButton mouse_button)
 {
+    if(mouse_button == ImGuiMouseButton_Right)
+    {
+        SelectedRowContextMenu();
+    }
     spdlog::debug(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
                                                        : "Row {} right-clicked",
                  m_selected_row);

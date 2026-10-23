@@ -504,7 +504,7 @@ Minimap::HandleNavigation(ImVec2 map_pos, ImVec2 map_size)
         if(total_h == 0) total_h = m_timeline_view->GetGraphSize().y;
 
         float  mouse_ratio_y = std::clamp((m.y - map_pos.y) / map_size.y, 0.0f, 1.0f);
-        double y_at_mouse    = mouse_ratio_y * total_h;
+        double y_at_mouse    = static_cast<double>(mouse_ratio_y) * total_h;
 
         // Get current view width (zoom level)
         double current_width = view_coords.v_max_x - view_coords.v_min_x;

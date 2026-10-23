@@ -43,7 +43,8 @@ AnnotationView::Render()
     else if(ImGui::BeginTable("StickyNotesTable", 5,
                               ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_SizingStretchProp))
+                                  ImGuiTableFlags_SizingStretchProp |
+                                  ImGuiTableFlags_NoSavedSettings))
     {
         ImGui::TableSetupColumn("Title");
         ImGui::TableSetupColumn("Text");

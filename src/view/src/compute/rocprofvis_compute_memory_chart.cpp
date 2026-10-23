@@ -36,8 +36,54 @@ namespace RocProfVis
 namespace View
 {
 
-// Filename of an optional runtime override dropped at <config-dir>/.
+// Embedded architecture templates were authored against one profiler version.
+// Remap their metric_name entries onto this file's category-3 ids. Database
+// layouts already carry dotted ids for the file that stored them, so they are
+// not remapped. Later this may key off schema version rather than layout source.
+static constexpr bool kRemapFallbackMemoryChartMetricIds = true;
+
+// Temporary. A file at <config-dir>/memory_chart.json forces the layout so a
+// template can be tuned without a rebuild. Remove once template selection is stable.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
+
+static constexpr const char* CHART_UNAVAILABLE_TEXT =
+    "Memory chart is N/A for this workload.";
+
+static void
+LogRemapFailure(const MemChartRemapFailure& failure)
+{
+    switch(failure.status)
+    {
+    case MemChartRemapStatus::kEmptyName:
+        spdlog::warn(
+            "Memory chart: metric id remap failed for template id '{}': empty metric_name",
+            failure.template_id);
+        break;
+    case MemChartRemapStatus::kNoMatch:
+        spdlog::warn("Memory chart: metric id remap failed for template id '{}', metric_name "
+                     "'{}': no category-3 match",
+                     failure.template_id, failure.metric_name);
+        break;
+    case MemChartRemapStatus::kAmbiguous:
+    {
+        std::string ids;
+        for(size_t i = 0; i < failure.match_ids.size(); ++i)
+        {
+            if(i != 0)
+            {
+                ids += ", ";
+            }
+            ids += failure.match_ids[i];
+        }
+        spdlog::warn("Memory chart: metric id remap failed for template id '{}', metric_name "
+                     "'{}': {} category-3 matches ({})",
+                     failure.template_id, failure.metric_name, failure.match_ids.size(), ids);
+        break;
+    }
+    case MemChartRemapStatus::kReplaced:
+        break;
+    }
+}
 
 // Layout constants.
 static constexpr float CHART_PADDING     = 20.0f;
@@ -467,7 +513,6 @@ ComputeMemoryChartView::ComputeMemoryChartView(
             RefreshPalette();
             RefreshCachedColors();
         });
-    LoadLayout();
 }
 
 ComputeMemoryChartView::~ComputeMemoryChartView()
@@ -487,30 +532,30 @@ FindEmbeddedLayout(const char* key)
     return nullptr;
 }
 
-static const char*
-DefaultEmbeddedLayout()
-{
-    const char* def = FindEmbeddedLayout("default");
-    return def ? def : kMemChartEmbeddedLayouts[0].json;
-}
-
-// Exact arch key first, then family (gfx94x/gfx950), then default.
+// Exact arch key first, then the longest family key whose trailing 'x' is a
+// wildcard ("gfx115x" covers gfx1150, gfx1151, ...). No generic fallback: an
+// unknown architecture leaves the chart N/A.
 static const char*
 EmbeddedLayoutForArch(const std::string& arch)
 {
-    if(!arch.empty())
+    if(arch.empty()) return nullptr;
+    if(const char* exact = FindEmbeddedLayout(arch.c_str())) return exact;
+
+    const char* family          = nullptr;
+    size_t      best_prefix_len = 0;
+    for(const MemChartEmbeddedLayout& entry : kMemChartEmbeddedLayouts)
     {
-        if(const char* exact = FindEmbeddedLayout(arch.c_str())) return exact;
-        if(arch.rfind("gfx94", 0) == 0)
+        size_t key_len = std::strlen(entry.key);
+        if(key_len < 2 || entry.key[key_len - 1] != 'x') continue;
+        size_t prefix_len = key_len - 1;
+        if(prefix_len > best_prefix_len &&
+           arch.compare(0, prefix_len, entry.key, prefix_len) == 0)
         {
-            if(const char* fam = FindEmbeddedLayout("gfx94x")) return fam;
-        }
-        else if(arch.rfind("gfx95", 0) == 0)
-        {
-            if(const char* fam = FindEmbeddedLayout("gfx950")) return fam;
+            family          = entry.json;
+            best_prefix_len = prefix_len;
         }
     }
-    return DefaultEmbeddedLayout();
+    return family;
 }
 
 // GPU arch (e.g. "gfx950") from the workload's system info. The controller
@@ -557,60 +602,97 @@ ComputeMemoryChartView::TryLoadOverrideFile()
 }
 
 void
-ComputeMemoryChartView::LoadLayout()
-{
-    // Dev override wins if present; otherwise the embedded default layout.
-    if(!TryLoadOverrideFile())
-    {
-        std::string error;
-        if(!MemChartLayout::ParseFromString(DefaultEmbeddedLayout(), m_layout, &error))
-        {
-            spdlog::error("Memory chart: failed to parse embedded default layout: {}", error);
-        }
-    }
-    OnLayoutLoaded();
-}
-
-void
 ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 {
-    // Priority: dev override file -> per-workload DB layout (parsed once by the
-    // data provider) -> architecture-specific embedded layout -> embedded default.
+    // Temporary testing override wins over the database and the architecture
+    // template. It is remapped like an embedded template. Remove with
+    // TryLoadOverrideFile once template selection is stable.
     if(TryLoadOverrideFile())
     {
-        OnLayoutLoaded();
+        OnLayoutLoaded(workload_id, true);
         return;
     }
 
+    // Database blob: its dotted ids already belong to this file. Otherwise the
+    // embedded template for the detected architecture, with metric-id remap.
+    // No architecture template means the chart is N/A.
     const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
     if(workload && !workload->memory_chart_layout.blocks.empty())
     {
         m_layout = workload->memory_chart_layout;
         spdlog::info("Memory chart: using layout from workload {} database blob", workload_id);
-        OnLayoutLoaded();
+        OnLayoutLoaded(workload_id, false);
         return;
     }
 
     const std::string arch   = WorkloadArch(workload);
     const char*       layout = EmbeddedLayoutForArch(arch);
-    std::string       error;
-    if(MemChartLayout::ParseFromString(layout, m_layout, &error))
+    if(layout)
     {
-        spdlog::info("Memory chart: using embedded layout for arch '{}' (workload {})",
-                     arch.empty() ? "default" : arch, workload_id);
-    }
-    else
-    {
+        std::string error;
+        if(MemChartLayout::ParseFromString(layout, m_layout, &error))
+        {
+            spdlog::info("Memory chart: using embedded layout for arch '{}' (workload {})",
+                         arch, workload_id);
+            OnLayoutLoaded(workload_id, true);
+            return;
+        }
         spdlog::error("Memory chart: failed to parse embedded layout for arch '{}': {}", arch,
                       error);
     }
-    OnLayoutLoaded();
+    else
+    {
+        spdlog::info("Memory chart: no layout for arch '{}' (workload {}); chart is N/A",
+                     arch.empty() ? "unknown" : arch, workload_id);
+    }
+
+    m_layout       = MemChartLayout{};
+    m_layout_dirty = true;
 }
 
 void
-ComputeMemoryChartView::OnLayoutLoaded()
+ComputeMemoryChartView::RemapMetricIds(uint32_t workload_id)
 {
+    if(!kRemapFallbackMemoryChartMetricIds)
+    {
+        return;
+    }
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
+    if(!workload)
+    {
+        spdlog::warn("Memory chart: metric id remap skipped, workload {} is not open",
+                     workload_id);
+        return;
+    }
+
+    MemChartMetricNameIndex index;
+    for(const AvailableMetrics::Entry& entry : workload->available_metrics.list)
+    {
+        index.Add(entry.name, entry.category_id, entry.table_id, entry.id);
+    }
+
+    std::vector<MemChartRemapFailure> failures;
+    m_layout.RemapMetricIds(index, failures);
+    for(const MemChartRemapFailure& failure : failures)
+    {
+        LogRemapFailure(failure);
+    }
+}
+
+void
+ComputeMemoryChartView::OnLayoutLoaded(uint32_t workload_id, bool remap_metric_ids)
+{
+    if(remap_metric_ids)
+    {
+        RemapMetricIds(workload_id);
+    }
+
     // Sort by column/order before resolving: ComputeLayout and PositionBlock must
     // not move these objects, or the arrows' endpoint pointers would dangle.
     SortLayoutBlocks(m_layout.blocks);
@@ -853,28 +935,15 @@ ComputeMemoryChartView::ColorFromKind(MemChartColorKind kind) const
     }
 }
 
-// Category and table ids (leading segments) of a dotted metric id
-// "category.table.entry".
+// Category and table ids of a dotted metric id "category.table.entry".
 static bool
-MetricCategoryTable(const MemChartMetricRef& ref, uint32_t& category, uint32_t& table)
+FindCategoryAndTable(const MemChartMetricRef& ref, uint32_t& category, uint32_t& table)
 {
-    if(!ref.valid) return false;
-    size_t d1 = ref.name.find('.');
-    if(d1 == 0 || d1 == std::string::npos) return false;
-    size_t d2 = ref.name.find('.', d1 + 1);
-    if(d2 == d1 + 1 || d2 == std::string::npos) return false;
-
-    auto parse = [](const std::string& s, size_t begin, size_t end, uint32_t& out) -> bool {
-        out = 0;
-        for(size_t i = begin; i < end; ++i)
-        {
-            char c = s[i];
-            if(c < '0' || c > '9') return false;
-            out = out * 10 + static_cast<uint32_t>(c - '0');
-        }
-        return end > begin;
-    };
-    return parse(ref.name, 0, d1, category) && parse(ref.name, d1 + 1, d2, table);
+    MetricId id;
+    if(!ref.valid || !ComputeDataModel::MetricIdFromString(ref.metric_id, id)) return false;
+    category = id.category_id;
+    table    = id.table_id;
+    return true;
 }
 
 static void
@@ -886,7 +955,8 @@ CollectTables(const std::vector<MemChartBlock>&        blocks,
         uint32_t category = 0, table = 0;
         for(const MemChartContentItem& item : block.content)
         {
-            if(MetricCategoryTable(item.metric, category, table)) out.insert({category, table});
+            if(FindCategoryAndTable(item.metric, category, table))
+                out.insert({category, table});
         }
         CollectTables(block.children, out);
     }
@@ -912,7 +982,8 @@ ComputeMemoryChartView::FetchMemChartMetrics()
     for(const MemChartArrow& arrow : m_layout.arrows)
     {
         uint32_t category = 0, table = 0;
-        if(MetricCategoryTable(arrow.metric, category, table)) tables.insert({category, table});
+        if(FindCategoryAndTable(arrow.metric, category, table))
+            tables.insert({category, table});
     }
     if(tables.empty()) return;
 
@@ -965,8 +1036,21 @@ ComputeMemoryChartView::ResolveMetric(const MemChartMetricRef& ref) const
     if(!ref.valid) return nullptr;
     // Layouts address metrics by their full dotted id ("category.table.entry").
     std::unordered_map<std::string, const MetricValue*>::const_iterator it =
-        m_ptr_by_metric_id.find(ref.name);
+        m_ptr_by_metric_id.find(ref.metric_id);
     return it != m_ptr_by_metric_id.end() ? it->second : nullptr;
+}
+
+const AvailableMetrics::Entry*
+ComputeMemoryChartView::FindMetricDefinition(const MemChartMetricRef& ref) const
+{
+    if(!ref.valid || !m_compute_selection) return nullptr;
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID) return nullptr;
+
+    MetricId id;
+    if(!ComputeDataModel::MetricIdFromString(ref.metric_id, id)) return nullptr;
+    return m_data_provider.ComputeModel().GetMetricInfo(workload_id, id);
 }
 
 std::string
@@ -976,7 +1060,7 @@ ComputeMemoryChartView::MetricLabel(const MemChartMetricRef& ref,
     if(!title_override.empty()) return title_override;
     const MetricValue* metric = ResolveMetric(ref);
     if(metric && metric->entry) return metric->entry->name;
-    if(!ref.name.empty()) return ref.name;
+    if(!ref.metric_id.empty()) return ref.metric_id;
     return "";
 }
 
@@ -1676,6 +1760,12 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
 void
 ComputeMemoryChartView::Render()
 {
+    if(m_layout.blocks.empty())
+    {
+        ImGui::TextDisabled("%s", CHART_UNAVAILABLE_TEXT);
+        return;
+    }
+
     float available_width = ImGui::GetContentRegionAvail().x;
     float font_size       = ImGui::GetFontSize();
 
@@ -2510,31 +2600,32 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                                ImGuiHoveredFlags_NoPopupHierarchy))
         return;
 
-    const MetricValue* metric    = ResolveMetric(ref);
-    bool               resolved  = metric && metric->entry;
-    bool               has_value = resolved && !metric->values.empty();
+    const AvailableMetrics::Entry* definition = FindMetricDefinition(ref);
+    const MetricValue*             metric     = ResolveMetric(ref);
+    bool                           has_value  = metric && !metric->values.empty();
 
     if(show_description)
     {
-        bool has_desc = resolved && !metric->entry->description.empty();
+        bool has_desc = definition && !definition->description.empty();
         bool show_val = show_raw_value && has_value;
         // Nothing to show (e.g. a title-only arrow with no metric): skip the
         // tooltip entirely instead of drawing an empty box.
         if(!ref.valid && !has_desc && !show_val) return;
 
         BeginTooltipStyled();
-        // The id is shown even when unresolved: that is when a layout author
-        // needs to know which metric a row showing N/A asked for.
+        // The id is shown even when the definition is missing: that is when a
+        // layout author needs to know which metric a row showing N/A asked for.
         if(ref.valid)
         {
-            ImGui::TextDisabled("Metric %s%s", ref.name.c_str(), resolved ? "" : " (not found)");
+            ImGui::TextDisabled("Metric %s%s", ref.metric_id.c_str(),
+                                definition ? "" : " (not found)");
         }
         if(has_desc)
         {
             if(ref.valid) ImGui::Spacing();
             // Wrap and auto-size; a window max-width below the wrap pos clips text.
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
-            ImGui::TextUnformatted(metric->entry->description.c_str());
+            ImGui::TextUnformatted(definition->description.c_str());
             ImGui::PopTextWrapPos();
         }
         if(show_val)

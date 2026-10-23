@@ -1116,6 +1116,12 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        if(ImGui::MenuItem("Open Remote..."))
+        {
+            HandleTestRemoteSSH();
+        }
+#endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
         // TEMPORARY (trace compare): remove guard when the feature graduates.
         if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
@@ -1524,10 +1530,10 @@ AppWindow::HandleFontChanged()
 void
 AppWindow::RenderAboutDialog()
 {
-    static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr const char* NAME_LABEL = "ROCm\u2122 Optiq";
     static constexpr const char* COPYRIGHT_LABEL =
         "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
-    static constexpr const char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr const char* DOC_LABEL = "ROCm Optiq Documentation";
     static constexpr const char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
     static const std::string VERSION_LABEL = []() {
@@ -1552,12 +1558,13 @@ AppWindow::RenderAboutDialog()
                               ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_NoMove))
     {
-        ImGui::PushFont(NULL, SettingsManager::GetInstance().GetFontManager().GetFontSize(
-                                  FontSize::kLarge));
+        FontManager& fonts = SettingsManager::GetInstance().GetFontManager();
+        ImGui::PushFont(NULL, fonts.GetFontSize(FontSize::kLarge));
 
+        const char* name_label = fonts.TrademarkText(NAME_LABEL);
         ImGui::SetCursorPosX(
-            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(NAME_LABEL).x) * 0.5f);
-        ImGui::TextUnformatted(NAME_LABEL);
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(name_label).x) * 0.5f);
+        ImGui::TextUnformatted(name_label);
         ImGui::PopFont();
 
         ImGui::Spacing();
@@ -1845,7 +1852,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, filters, config);
 }
 
-#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(ROCPROFVIS_ENABLE_REMOTE)
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 
 void
 AppWindow::HandleTestRemoteSSH()
@@ -1857,7 +1864,7 @@ AppWindow::HandleTestRemoteSSH()
     m_ssh_test_dialog->Show();
 }
 
-#endif // ROCPROFVIS_DEVELOPER_MODE && ROCPROFVIS_ENABLE_REMOTE
+#endif // ROCPROFVIS_ENABLE_REMOTE
 void
 AppWindow::UpdateStatusBar()
 {
@@ -2024,12 +2031,6 @@ AppWindow::RenderDeveloperMenu()
                                    }
                                });
         }
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-        if(ImGui::MenuItem("Open Remote...", nullptr, false))
-        {
-            HandleTestRemoteSSH();
-        }
-#endif        
         ImGui::EndMenu();
     }
 }

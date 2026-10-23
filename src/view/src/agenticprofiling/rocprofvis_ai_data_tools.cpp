@@ -11,7 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
-#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -47,7 +47,6 @@ namespace
 
 constexpr size_t   ASSISTANT_MAX_TRACKS       = 32;
 constexpr size_t   ASSISTANT_MAX_LIST_TRACKS  = 80;
-constexpr size_t   ASSISTANT_TOP_KERNEL_LIMIT = 10;
 constexpr size_t   ASSISTANT_MAX_RESULT_CHARS = 20000;
 constexpr size_t   ASSISTANT_MAX_CALL_STACK   = 40;
 constexpr size_t   ASSISTANT_MAX_FLOW_ROWS    = 20;
@@ -75,15 +74,23 @@ constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
  * than the longest: the slowest matvec came back as a 116 us instance that
  * happened to run last, while the true maximum was 12.77 ms.
  *
- * These are per table because the layouts differ:
+ * These are per table because the layouts differ. The instance layouts are
+ * the select orders in RocprofDatabase::GetEventOperationQuery:
  *   top events       name Invocations DurationTotal DurationAvg ...
  *                    (no __op, so DurationTotal really is 2)
  *   kernel instances __op id __uuid category name stream queue node PID TID
  *                    AgentAbsoluteIndex AgentType AgentTypeIndex AgentName
  *                    start end duration ...
+ *   memory instances the same through duration (allocations carry type and
+ *                    copies name at 4; the merge appends the other at the
+ *                    end, so duration stays 16)
+ *   thread instances __op id __uuid category name node PID TID start end
+ *                    duration ...
  */
-constexpr uint64_t ASSISTANT_DURATION_COLUMN                 = 2;
-constexpr uint64_t ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN = 16;
+constexpr uint64_t ASSISTANT_DURATION_COLUMN                  = 2;
+constexpr uint64_t ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN  = 16;
+constexpr uint64_t ASSISTANT_MEMORY_INSTANCE_DURATION_COLUMN  = 16;
+constexpr uint64_t ASSISTANT_THREAD_INSTANCE_DURATION_COLUMN  = 10;
 
 // Furthest a tool may page into a result set. limit is clamped too, but without
 // a ceiling here the model could ask the database to skip billions of rows.
@@ -195,33 +202,366 @@ FormatPercent(float value)
     return std::string(buffer);
 }
 
-// Writes the GPU utilization lines and the top-kernel list of a summary.
-void
-AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
+// The get_summary spelling of an aggregation level.
+const char*
+SummaryLevelName(rocprofvis_analysis_summary_aggregation_level_t level)
 {
-    if(gpu.gfx_utilization.has_value())
+    const char* name = "trace";
+    switch(level)
     {
-        out << "gfx_util_pct: " << FormatPercent(gpu.gfx_utilization.value()) << "\n";
+        case kRPVAnalysisSummaryAggregationLevelNode:
+        {
+            name = "node";
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcessor:
+        {
+            name = "processor";
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcess:
+        {
+            name = "process";
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelThread:
+        {
+            name = "thread";
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
-    if(gpu.mem_utilization.has_value())
+    return name;
+}
+
+// Parses get_summary's level argument. __kRPVAnalysisSummaryAggregationLevelLast
+// when it names no level.
+rocprofvis_analysis_summary_aggregation_level_t
+SummaryLevelFromName(const std::string& name)
+{
+    const std::string lowered = Core::String::to_lower_copy(name);
+    rocprofvis_analysis_summary_aggregation_level_t level =
+        __kRPVAnalysisSummaryAggregationLevelLast;
+    if(lowered == "trace")
     {
-        out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
+        level = kRPVAnalysisSummaryAggregationLevelTrace;
     }
-    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
-    out << "top_kernels:\n";
-    const size_t count = std::min(gpu.top_kernels.size(), ASSISTANT_TOP_KERNEL_LIMIT);
-    if(count == 0)
+    else if(lowered == "node")
     {
-        out << "  (none)\n";
-        return;
+        level = kRPVAnalysisSummaryAggregationLevelNode;
     }
-    for(size_t i = 0; i < count; ++i)
+    else if(lowered == "processor" || lowered == "device" || lowered == "gpu" ||
+            lowered == "cpu")
     {
-        const SummaryInfo::KernelMetrics& kernel = gpu.top_kernels[i];
-        out << "  " << (i + 1) << ". " << kernel.name << "  pct=" << kernel.exec_time_pct
-            << "  calls=" << kernel.invocations << "  sum_ns=" << kernel.exec_time_sum
+        level = kRPVAnalysisSummaryAggregationLevelProcessor;
+    }
+    else if(lowered == "process")
+    {
+        level = kRPVAnalysisSummaryAggregationLevelProcess;
+    }
+    else if(lowered == "thread")
+    {
+        level = kRPVAnalysisSummaryAggregationLevelThread;
+    }
+    return level;
+}
+
+// Parses get_summary_event_metrics' category argument.
+// __kRPVAnalysisSummaryCategoryLast when it names no category.
+rocprofvis_analysis_summary_category_t
+SummaryCategoryFromName(const std::string& name)
+{
+    const std::string lowered = Core::String::to_lower_copy(name);
+    rocprofvis_analysis_summary_category_t category = __kRPVAnalysisSummaryCategoryLast;
+    if(lowered == "kernel" || lowered == "kernels" || lowered == "dispatch")
+    {
+        category = kRPVAnalysisSummaryCategoryKernel;
+    }
+    else if(lowered == "memory")
+    {
+        category = kRPVAnalysisSummaryCategoryMemory;
+    }
+    else if(lowered == "thread" || lowered == "threads" || lowered == "launch")
+    {
+        category = kRPVAnalysisSummaryCategoryThread;
+    }
+    return category;
+}
+
+// The top_events categories that rank every name of a summary category.
+const char*
+SummaryCategoryTopEvents(rocprofvis_analysis_summary_category_t category)
+{
+    const char* top_events = "dispatch";
+    if(category == kRPVAnalysisSummaryCategoryMemory)
+    {
+        top_events = "memory_copy or memory_alloc";
+    }
+    else if(category == kRPVAnalysisSummaryCategoryThread)
+    {
+        top_events = "instrumented or sampled";
+    }
+    return top_events;
+}
+
+// The topology object a summary scope describes, nullptr at the trace level.
+const TopologyNode*
+SummaryScopeNode(const SummaryInfo::AggregateMetrics& metrics)
+{
+    const TopologyNode* node = nullptr;
+    switch(metrics.type)
+    {
+        case kRPVAnalysisSummaryAggregationLevelNode:
+        {
+            node = metrics.info.node;
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcessor:
+        {
+            node = metrics.info.processor;
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcess:
+        {
+            node = metrics.info.process;
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelThread:
+        {
+            node = metrics.info.thread;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    return node;
+}
+
+// A readable name for a summary scope, matching how the Summary view labels it.
+std::string
+SummaryScopeLabel(const SummaryInfo::AggregateMetrics& metrics)
+{
+    std::string label = "trace (every node, device, process and thread)";
+    switch(metrics.type)
+    {
+        case kRPVAnalysisSummaryAggregationLevelNode:
+        {
+            label = "node " + (metrics.info.node ? metrics.info.node->host_name
+                                                 : std::string("?"));
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcessor:
+        {
+            if(metrics.info.processor)
+            {
+                label = (metrics.info.processor->type == kRPVControllerProcessorTypeGPU
+                             ? "GPU"
+                         : metrics.info.processor->type == kRPVControllerProcessorTypeCPU
+                             ? "CPU"
+                             : "processor ") +
+                        std::to_string(metrics.info.processor->type_index) + ": " +
+                        metrics.info.processor->product_name;
+            }
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcess:
+        {
+            if(metrics.info.process)
+            {
+                label = "process " + std::to_string(metrics.info.process->GetId()) +
+                        ": " + metrics.info.process->command;
+            }
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelThread:
+        {
+            if(metrics.info.thread)
+            {
+                label = "thread " + metrics.info.thread->GetName();
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    return label;
+}
+
+// Total duration of one event category at a summary scope, 0 when it has none.
+uint64_t
+SummaryCategoryTotalNs(const SummaryModel&                    model,
+                       const SummaryInfo::AggregateMetrics&   metrics,
+                       rocprofvis_analysis_summary_category_t category)
+{
+    const SummaryInfo::TopOpEvents* events = model.TopOpEvents(metrics, category);
+    return events
+               ? events->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                     .numeric.uint
+               : 0;
+}
+
+// Writes one summary top event: its name, share, calls and total. With spread, also
+// its average, min and max, which only get_summary_event_metrics reports.
+void
+AppendSummaryEvent(std::ostringstream& out, const SummaryInfo::TopOpEvents::Event& event,
+                   bool spread)
+{
+    out << event.name << "  pct="
+        << FormatPercent(
+               event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct].numeric.flt *
+               100.0f)
+        << "  calls="
+        << event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations].numeric.uint
+        << "  sum_ns="
+        << nanosecond_to_str(static_cast<double>(
+               event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].numeric.uint));
+    if(spread)
+    {
+        out << "  avg_ns="
+            << nanosecond_to_str(
+                   event.metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg]
+                       .numeric.dbl)
+            << "  min_ns="
+            << nanosecond_to_str(static_cast<double>(
+                   event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMin]
+                       .numeric.uint))
+            << "  max_ns="
+            << nanosecond_to_str(static_cast<double>(
+                   event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMax]
+                       .numeric.uint));
+    }
+}
+
+// Writes one event category's top events at a summary scope, skipped when empty.
+void
+AppendSummaryTopEvents(std::ostringstream& out, const char* label,
+                       const SummaryInfo::TopOpEvents* events)
+{
+    if(events &&
+       events->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum].numeric.uint > 0)
+    {
+        out << label << ": total_ns="
+            << nanosecond_to_str(static_cast<double>(
+                   events->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
+                       .numeric.uint))
+            << " invocations="
+            << events->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations].numeric.uint
             << "\n";
+        for(size_t i = 0; i < events->top.size(); ++i)
+        {
+            out << "  " << (i + 1) << ". ";
+            AppendSummaryEvent(out, events->top[i], false);
+            out << "\n";
+        }
     }
+}
+
+// Writes one summary counter: its name, units, processor class, and its mean, min,
+// max and standard deviation.
+void
+AppendSummaryCounter(std::ostringstream&                   out,
+                     const SummaryInfo::Counters::Counter& counter,
+                     const char*                           processor_class)
+{
+    out << counter.info->GetName();
+    if(!counter.info->units.empty())
+    {
+        out << " [" << counter.info->units << "]";
+    }
+    out << " class=" << processor_class << " mean="
+        << counter.metrics[kRPVAnalysisSummaryCounterMetricMean].numeric.dbl
+        << " min=" << counter.metrics[kRPVAnalysisSummaryCounterMetricMin].numeric.dbl
+        << " max=" << counter.metrics[kRPVAnalysisSummaryCounterMetricMax].numeric.dbl
+        << " std_dev="
+        << counter.metrics[kRPVAnalysisSummaryCounterMetricStdDev].numeric.dbl;
+}
+
+// Lists the sub-metrics of a summary scope, each with the level and id that
+// get_summary takes to drill into it.
+void
+AppendSummarySubMetrics(std::ostringstream& out, const SummaryModel& model,
+                        const SummaryInfo::AggregateMetrics& metrics)
+{
+    if(!metrics.sub_metrics.empty())
+    {
+        out << "sub_metrics:\n";
+        for(const SummaryInfo::AggregateMetrics& sub : metrics.sub_metrics)
+        {
+            const TopologyNode* node = SummaryScopeNode(sub);
+            out << "  level=" << SummaryLevelName(sub.type)
+                << " id=" << (node ? node->GetId() : 0)
+                << " label=" << SummaryScopeLabel(sub) << " kernels_ns="
+                << SummaryCategoryTotalNs(model, sub, kRPVAnalysisSummaryCategoryKernel)
+                << " memory_ns="
+                << SummaryCategoryTotalNs(model, sub, kRPVAnalysisSummaryCategoryMemory)
+                << " thread_ns="
+                << SummaryCategoryTotalNs(model, sub, kRPVAnalysisSummaryCategoryThread)
+                << " counters="
+                << sub.gpu.counters.list.size() + sub.cpu.counters.list.size() << "\n";
+        }
+        out << "note: the values above cover this scope only. Call get_summary with a "
+               "sub-metric's level and id to see its own top events, or "
+               "get_summary_counter_stats with them to read a node's or processor's "
+               "counters.\n";
+    }
+}
+
+// Renders one summary scope: its top kernels, memory and thread operations, how many
+// counters it summarized, and the sub-metrics below it. The counters themselves are
+// left to get_summary_counter_stats, since their number has no bound.
+std::string
+FormatSummaryScope(const SummaryModel&                  model,
+                   const SummaryInfo::AggregateMetrics& metrics)
+{
+    std::ostringstream out;
+    out << "scope: " << SummaryScopeLabel(metrics) << "\n";
+    AppendSummaryTopEvents(out, "kernels",
+                           model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel));
+    AppendSummaryTopEvents(out, "memory_ops",
+                           model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory));
+    AppendSummaryTopEvents(out, "thread_ops",
+                           model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread));
+    if(SummaryCategoryTotalNs(model, metrics, kRPVAnalysisSummaryCategoryKernel) == 0 &&
+       SummaryCategoryTotalNs(model, metrics, kRPVAnalysisSummaryCategoryMemory) == 0 &&
+       SummaryCategoryTotalNs(model, metrics, kRPVAnalysisSummaryCategoryThread) == 0)
+    {
+        out << "note: no kernel, memory or thread activity at this scope. Call "
+               "top_events category=dispatch, memory_copy, memory_alloc, instrumented "
+               "or sampled to rank events directly.\n";
+    }
+    if(!metrics.gpu.counters.list.empty() || !metrics.cpu.counters.list.empty())
+    {
+        out << "counters: "
+            << metrics.gpu.counters.list.size() + metrics.cpu.counters.list.size()
+            << " - call get_summary_counter_stats to read them\n";
+    }
+    AppendSummarySubMetrics(out, model, metrics);
+    return out.str();
+}
+
+// Depth-first search for the summary scope at level with topology id.
+const SummaryInfo::AggregateMetrics*
+FindSummaryScope(const SummaryInfo::AggregateMetrics&            metrics,
+                 rocprofvis_analysis_summary_aggregation_level_t level, uint64_t id)
+{
+    const SummaryInfo::AggregateMetrics* found = nullptr;
+    const TopologyNode*                  node  = SummaryScopeNode(metrics);
+    if(metrics.type == level && node && node->GetId() == id)
+    {
+        found = &metrics;
+    }
+    for(size_t i = 0; i < metrics.sub_metrics.size() && found == nullptr; i++)
+    {
+        found = FindSummaryScope(metrics.sub_metrics[i], level, id);
+    }
+    return found;
 }
 
 // Caps a tool result so one big table cannot fill the model's context.
@@ -585,8 +925,8 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
     if(!event->basic_info.name.empty())
     {
         out << "name: " << event->basic_info.name << "\n";
-        out << "start_ns: " << event->basic_info.start_ts << "\n";
-        out << "duration_ns: " << event->basic_info.duration << "\n";
+        out << "start_ns: " << nanosecond_to_str(event->basic_info.start_ts) << "\n";
+        out << "duration_ns: " << nanosecond_to_str(event->basic_info.duration) << "\n";
     }
     if(event->track_id != INVALID_UINT64_INDEX)
     {
@@ -753,8 +1093,9 @@ AppendBinWindow(std::ostringstream& out, const char* label, size_t bin, size_t b
         return;
     }
     const double width = span_ns / static_cast<double>(bin_count);
-    out << label << ": " << (start_ns + width * static_cast<double>(bin)) << " .. "
-        << (start_ns + width * static_cast<double>(bin + 1)) << "\n";
+    out << label << ": "
+        << nanosecond_to_str(start_ns + width * static_cast<double>(bin)) << " .. "
+        << nanosecond_to_str(start_ns + width * static_cast<double>(bin + 1)) << "\n";
 }
 
 // Sums the event rows of the minimap. This is exactly what the histogram strip
@@ -801,9 +1142,9 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     const double span_ns  = end_ns - start_ns;
 
     std::ostringstream out;
-    out << "trace_start_ns: " << start_ns << "\n";
-    out << "trace_end_ns: " << end_ns << "\n";
-    out << "trace_duration_ns: " << span_ns << "\n";
+    out << "trace_start_ns: " << nanosecond_to_str(start_ns) << "\n";
+    out << "trace_end_ns: " << nanosecond_to_str(end_ns) << "\n";
+    out << "trace_duration_ns: " << nanosecond_to_str(span_ns) << "\n";
 
     if(single_track != INVALID_UINT64_INDEX)
     {
@@ -829,17 +1170,35 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
         {
             out << "counter_min: " << profile.min_value << "\n";
             out << "counter_max: " << profile.max_value << "\n";
+            out << "note: activity_0_100, busiest_window_ns, counter_min "
+                   "and counter_max come from per-bin averages, so short spikes "
+                   "and dips are smoothed away. Use them to choose where to look and "
+                   "do not report them as exact values; read the window with "
+                   "track_samples for those.\n";
         }
-        else
+        else if(track != nullptr)
         {
-            out << "event_count: " << profile.total << "\n";
+            out << "event_count: " << track->num_entries << "\n";
+            out << "note: event_count is exact. activity_0_100 and busiest_window_ns "
+                   "are estimates from the timeline histogram, which counts an event "
+                   "in every bucket it overlaps. Use them to choose where to look and "
+                   "do not report them as exact numbers; for an exact count in one "
+                   "window, call track_events on that window and track.\n";
+            if(track->topology.type == TrackInfo::TrackType::Stream)
+            {
+                out << "note: a stream track lists the same kernels and copies as the "
+                       "queue tracks, grouped by HIP stream, so do not add this count to "
+                       "theirs.\n";
+            }
         }
         return TrimResult(out.str());
     }
 
-    std::vector<std::pair<uint64_t, OverviewProfile>> event_tracks;
-    size_t                                            counter_count = 0;
-    double                                            event_total   = 0.0;
+    std::vector<const TrackInfo*> event_tracks;
+    size_t                        counter_count = 0;
+    size_t                        stream_count  = 0;
+    uint64_t                      stream_events = 0;
+    uint64_t                      event_total   = 0;
     for(const std::pair<const uint64_t, std::vector<double>>& row : minimap)
     {
         const TrackInfo* track = timeline.GetTrack(row.first);
@@ -853,16 +1212,26 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
             continue;
         }
 
-        const OverviewProfile profile = Downsample(row.second, bin_count);
-        event_tracks.emplace_back(row.first, profile);
-        event_total += profile.total;
+        // A stream track re-lists kernels and copies that already sit on a queue
+        // track, so totalling or ranking it would count that GPU work twice.
+        if(track->topology.type == TrackInfo::TrackType::Stream)
+        {
+            ++stream_count;
+            stream_events += track->num_entries;
+        }
+        else
+        {
+            event_tracks.push_back(track);
+            event_total += track->num_entries;
+        }
     }
 
     const OverviewProfile overall = Downsample(CombinedEventRow(context), bin_count);
     out << "bins: " << overall.bins.size() << "\n";
     if(!overall.bins.empty())
     {
-        out << "bin_width_ns: " << (span_ns / static_cast<double>(overall.bins.size()))
+        out << "bin_width_ns: "
+            << nanosecond_to_str(span_ns / static_cast<double>(overall.bins.size()))
             << "\n";
     }
     AppendBinRow(out, overall);
@@ -879,30 +1248,43 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     }
     AppendBinWindow(out, "quietest_window_ns", quietest, overall.bins.size(), start_ns,
                     span_ns);
+    out << "note: activity_0_100, busiest_window_ns and quietest_window_ns are "
+           "estimates from the timeline histogram, which counts an event in every "
+           "bucket it overlaps. Use them to choose where to look and do not report "
+           "them as exact numbers. total_events and busiest_tracks are exact; for "
+           "an exact count in one window, call track_events on that window with "
+           "the track_ids you need.\n";
     out << "total_events: " << event_total << "\n";
+    if(stream_count > 0)
+    {
+        out << "stream_tracks: " << stream_count << " tracks, " << stream_events
+            << " events. These are the same kernels and copies as the queue tracks, "
+               "grouped by HIP stream, so total_events and busiest_tracks leave them "
+               "out. The histogram still includes them, so GPU work counts twice in "
+               "activity_0_100 and both windows.\n";
+    }
 
     std::sort(event_tracks.begin(), event_tracks.end(),
-              [](const std::pair<uint64_t, OverviewProfile>& a,
-                 const std::pair<uint64_t, OverviewProfile>& b) {
-                  return a.second.total > b.second.total;
+              [](const TrackInfo* a, const TrackInfo* b) {
+                  return a->num_entries > b->num_entries;
               });
 
     out << "busiest_tracks:\n";
     const size_t shown = std::min(event_tracks.size(), ASSISTANT_OVERVIEW_TRACKS);
     for(size_t i = 0; i < shown; ++i)
     {
-        const uint64_t         track_id = event_tracks[i].first;
-        const OverviewProfile& profile  = event_tracks[i].second;
-        out << "  " << (i + 1) << ". track_id=" << track_id << " events="
-            << profile.total;
-        if(event_total > 0.0)
+        const TrackInfo* track = event_tracks[i];
+        out << "  " << (i + 1) << ". track_id=" << track->id
+            << " events=" << track->num_entries;
+        if(event_total > 0)
         {
             out << " share_pct="
-                << FormatPercent(
-                       static_cast<float>(profile.total / event_total * 100.0));
+                << FormatPercent(static_cast<float>(
+                       static_cast<double>(track->num_entries) /
+                       static_cast<double>(event_total) * 100.0));
         }
         out << " name=\""
-            << context.data_provider->DataModel().BuildTrackName(track_id) << "\"\n";
+            << context.data_provider->DataModel().BuildTrackName(track->id) << "\"\n";
     }
     if(event_tracks.size() > shown)
     {
@@ -946,19 +1328,98 @@ FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
     return out.str();
 }
 
-// Renders a system trace's GPU summary, with a nudge when it has no kernels.
-std::string
-FormatSystemSummary(const AssistantToolContext& context)
+// The summary scope a tool's level and id arguments name: the trace when no level is
+// given. nullptr when nothing matches, with the reason and the trace's sub_metrics
+// written to error_out.
+const SummaryInfo::AggregateMetrics*
+ResolveSummaryScope(const SummaryModel& model, const std::string& level_name, uint64_t id,
+                    std::string& error_out)
 {
-    std::ostringstream out;
-    const SummaryInfo::AggregateMetrics& summary =
-        context.data_provider->DataModel().GetSummary().GetSummaryData();
-    AppendGpuMetrics(out, summary.gpu);
-    if(summary.gpu.top_kernels.empty())
+    const SummaryInfo::AggregateMetrics& summary = model.GetSummaryData();
+    const SummaryInfo::AggregateMetrics* scope   = &summary;
+    if(!level_name.empty())
     {
-        out << "note: summary has no kernels. Call top_events category=dispatch.\n";
+        const rocprofvis_analysis_summary_aggregation_level_t level =
+            SummaryLevelFromName(level_name);
+        if(level != kRPVAnalysisSummaryAggregationLevelTrace)
+        {
+            scope = FindSummaryScope(summary, level, id);
+        }
+        if(scope == nullptr)
+        {
+            std::ostringstream out;
+            out << "No summary sub-metric with level=" << level_name << " id=" << id
+                << ". Use a level and id from a sub_metrics list.\n";
+            AppendSummarySubMetrics(out, model, summary);
+            error_out = out.str();
+        }
     }
-    return out.str();
+    return scope;
+}
+
+// The source filter the Summary view's instance tables apply for a scope: the
+// node, plus the processor, process or thread inside it.
+rocprofvis_dm_query_criteria_t
+SummaryScopeCriteria(const SummaryInfo::AggregateMetrics& scope)
+{
+    rocprofvis_dm_query_criteria_t criteria;
+    const TopologyNode*            node = SummaryScopeNode(scope);
+    if(node)
+    {
+        const TopologyNode* host = node->GetNodeType() == TopologyNodeType::kNode
+                                       ? node
+                                       : node->GetParent(TopologyNodeType::kNode);
+        if(host)
+        {
+            criteria.node_id = host->GetId();
+        }
+        switch(scope.type)
+        {
+            case kRPVAnalysisSummaryAggregationLevelProcessor:
+            {
+                criteria.agent_id = node->GetId();
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelProcess:
+            {
+                criteria.process_id = node->GetId();
+                break;
+            }
+            case kRPVAnalysisSummaryAggregationLevelThread:
+            {
+                const TopologyNode* process =
+                    node->GetParent(TopologyNodeType::kProcess);
+                if(process)
+                {
+                    criteria.process_id = process->GetId();
+                }
+                criteria.thread_id = node->GetId();
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+    }
+    return criteria;
+}
+
+// Renders the summary scope get_summary was asked for: the trace when no level is
+// given, otherwise the sub-metric at that level and id.
+std::string
+FormatRequestedSummary(const AssistantToolContext& context, const std::string& level_name,
+                       uint64_t id)
+{
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    std::string         text;
+    const SummaryInfo::AggregateMetrics* scope =
+        ResolveSummaryScope(model, level_name, id, text);
+    if(scope)
+    {
+        text = FormatSummaryScope(model, *scope);
+    }
+    return text;
 }
 
 // Appends one operation name to a comma-separated list, if the track has it.
@@ -1091,24 +1552,44 @@ BuildAssistantBriefing(const AssistantToolContext& context)
         }
     }
 
-    // Headline numbers only. The kernel breakdown is left out so the model has
-    // to fetch it rather than answer from the briefing alone.
-    const SummaryInfo::GPUMetrics& gpu =
-        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
+    // Headline numbers only. The top events and counters are left out so the
+    // model has to fetch them rather than answer from the briefing alone.
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    const SummaryInfo::AggregateMetrics& summary = model.GetSummaryData();
     out << "summary:\n";
-    if(gpu.gfx_utilization.has_value())
-    {
-        out << "gfx_util_pct: " << FormatPercent(gpu.gfx_utilization.value()) << "\n";
-    }
-    if(gpu.mem_utilization.has_value())
-    {
-        out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
-    }
-    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
-    out << "named_kernels_available: " << gpu.top_kernels.size() << "\n";
-    out << "note: kernel names, per-kernel times, and event rows are NOT in this "
-           "briefing. Call get_summary, top_events, or track_events to see them.\n";
+    out << "kernel_exec_time_total_ns: "
+        << SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryKernel)
+        << "\n";
+    out << "memory_op_time_total_ns: "
+        << SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryMemory)
+        << "\n";
+    out << "thread_op_time_total_ns: "
+        << SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryThread)
+        << "\n";
+    out << "summarized_counters: "
+        << summary.gpu.counters.list.size() + summary.cpu.counters.list.size() << "\n";
+    out << "sub_metrics: " << summary.sub_metrics.size() << "\n";
+    out << "note: these are trace-wide totals. Top kernels, memory and thread "
+           "operations, counter statistics, per node/device/process/thread "
+           "breakdowns, and event rows are NOT in this briefing. Call get_summary, "
+           "top_events, or track_events to see them.\n";
     return out.str();
+}
+
+bool
+AssistantSummaryLoaded(const AssistantToolContext& context)
+{
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    const SummaryInfo::AggregateMetrics& summary = model.GetSummaryData();
+        return context.data_provider->DataModel().GetTopology().GetRevision() ==
+               model.GetRevision() &&
+           (!summary.sub_metrics.empty() ||
+            SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryKernel) >
+                0 ||
+            SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryMemory) >
+                0 ||
+            SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryThread) >
+                0);
 }
 
 // Returns one track's activity, or the whole trace's, normalized to its peak.
@@ -1250,21 +1731,25 @@ ToolTraceOverview(const AssistantToolContext& context, const jt::Json& args,
 }
 
 AssistantToolStartResult
-ToolGetSummary(const AssistantToolContext& context, const jt::Json&, const std::string&)
+ToolGetSummary(const AssistantToolContext& context, const jt::Json& args,
+               const std::string&)
 {
-    const AssistantFetchState summary_fetch =
+    AssistantFetchState summary_fetch =
         TableFetch(AssistantFetchKind::kSummary, TableType::kSummaryKernelTable,
                    ASSISTANT_DEFAULT_ROW_LIMIT);
+    summary_fetch.summary_level = JsonUtils::GetString(args, "level", "");
+    summary_fetch.summary_id    = JsonU64(args, "id", INVALID_UINT64_INDEX);
     if(context.data_provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
     {
         return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
                              "Loading summary...", false);
     }
-    const SummaryInfo::GPUMetrics& gpu =
-        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
-    if(!gpu.top_kernels.empty() || gpu.kernel_exec_time_total > 0.0)
+    if(AssistantSummaryLoaded(context))
     {
-        return DoneResult(FormatSystemSummary(context), "Read summary");
+        return DoneResult(TrimResult(FormatRequestedSummary(
+                              context, summary_fetch.summary_level,
+                              summary_fetch.summary_id)),
+                          "Read summary");
     }
     if(context.data_provider->FetchSummary())
     {
@@ -1279,7 +1764,7 @@ ToolGetSummary(const AssistantToolContext& context, const jt::Json&, const std::
     // The fetch was refused and nothing is in flight, so the summary really
     // is empty. Formatting it anyway would hand the model a page of zeroes
     // that reads like a measurement.
-    return DoneResult("The GPU summary could not be loaded for this trace. "
+    return DoneResult("The summary could not be loaded for this trace. "
                       "Use top_events or track_events instead.",
                       "Summary unavailable");
 }
@@ -1404,14 +1889,79 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
 }
 
 AssistantToolStartResult
-ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
-                    const std::string& tool_name)
+ToolEventInstances(const AssistantToolContext& context, const jt::Json& args,
+                   const std::string& tool_name)
 {
-    const std::string kernel_name = JsonUtils::GetString(args, "kernel_name", "");
-    if(kernel_name.empty())
+    // kernel_name is what this tool took when it only covered kernels.
+    const std::string name = JsonUtils::GetString(
+        args, "name", JsonUtils::GetString(args, "kernel_name", ""));
+    if(name.empty())
     {
-        return DoneResult("kernel_instances needs kernel_name.", "Missing kernel_name");
+        return DoneResult("event_instances needs name.", "Missing name");
     }
+    const std::string category_name =
+        JsonUtils::GetString(args, "category", "kernel");
+    const rocprofvis_analysis_summary_category_t category =
+        SummaryCategoryFromName(category_name);
+    if(category == __kRPVAnalysisSummaryCategoryLast)
+    {
+        return DoneResult("Unknown category '" + category_name +
+                              "'. Use kernel, memory or thread.",
+                          "Bad category");
+    }
+
+    // The table, operations and model slot the Summary view's instance table of
+    // this category uses.
+    rocprofvis_controller_table_type_t table_type =
+        kRPVControllerTableTypeSummaryKernelInstances;
+    std::vector<rocprofvis_dm_event_operation_t> op_types = {
+        kRocProfVisDmOperationDispatch
+    };
+    TableType slot            = TableType::kAssistantSummaryKernelTable;
+    uint64_t  duration_column = ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN;
+    if(category == kRPVAnalysisSummaryCategoryMemory)
+    {
+        table_type      = kRPVControllerTableTypeSummaryMemoryInstances;
+        op_types        = { kRocProfVisDmOperationMemoryAllocate,
+                            kRocProfVisDmOperationMemoryCopy };
+        slot            = TableType::kAssistantSummaryMemoryTable;
+        duration_column = ASSISTANT_MEMORY_INSTANCE_DURATION_COLUMN;
+    }
+    else if(category == kRPVAnalysisSummaryCategoryThread)
+    {
+        table_type      = kRPVControllerTableTypeSummaryThreadInstances;
+        op_types        = { kRocProfVisDmOperationLaunch,
+                            kRocProfVisDmOperationLaunchSample };
+        slot            = TableType::kAssistantSummaryThreadTable;
+        duration_column = ASSISTANT_THREAD_INSTANCE_DURATION_COLUMN;
+    }
+
+    // A summary level and id narrow the search to that node, device, process or
+    // thread, the same way the Summary view's filters do.
+    std::optional<rocprofvis_dm_query_criteria_t> criteria;
+    if(!JsonUtils::GetString(args, "level", "").empty())
+    {
+        if(!AssistantSummaryLoaded(context))
+        {
+            return DoneResult("The summary is not loaded yet, so level and id cannot "
+                              "be resolved. Call get_summary first.",
+                              "Summary not loaded");
+        }
+        const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+        std::string         scope_error;
+        const SummaryInfo::AggregateMetrics* scope =
+            ResolveSummaryScope(model, JsonUtils::GetString(args, "level", ""),
+                                JsonU64(args, "id", INVALID_UINT64_INDEX), scope_error);
+        if(scope == nullptr)
+        {
+            return DoneResult(scope_error, "Unknown summary scope");
+        }
+        if(scope->type != kRPVAnalysisSummaryAggregationLevelTrace)
+        {
+            criteria = SummaryScopeCriteria(*scope);
+        }
+    }
+
     const size_t limit = RowLimitFromArgs(args);
 
     std::string       query_error;
@@ -1426,17 +1976,15 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     // Whole trace unless the model asks for a window, the same as search_events
     // and for the same reason: this is a lookup by name, not a read of what is
     // on screen. Defaulting to the selection scoped it to whatever range the
-    // last goto happened to leave behind, so asking for a kernel's instances
-    // could return nothing while that kernel ran hundreds of times just outside
-    // the window - indistinguishable, to the model, from a kernel that does not
+    // last goto happened to leave behind, so asking for an event's instances
+    // could return nothing while that event ran hundreds of times just outside
+    // the window - indistinguishable, to the model, from an event that does not
     // exist.
     TimeRangeFromArgs(context, args, start_ns, end_ns, false);
 
-    const uint64_t request_id =
-        DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
-    AssistantFetchState fetch = TableFetch(
-        AssistantFetchKind::kKernelInstances, TableType::kAssistantSummaryKernelTable,
-        limit);
+    const uint64_t request_id = DataProvider::ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
+    AssistantFetchState fetch =
+        TableFetch(AssistantFetchKind::kEventInstances, slot, limit);
     fetch.filter_columns = AssistantFilterColumns(args);
     if(context.data_provider->IsRequestPending(request_id))
     {
@@ -1446,26 +1994,25 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
     EventSearchRequestParams params(
-        kRPVControllerTableTypeSummaryKernelInstances,
+        table_type,
         // The true is include_substrings. Exact-match could not find a real
         // dispatch: the stored name is the full mangled signature, so
         // anything short of the whole
         // "ncclDevKernel_Generic(ncclDevKernelArgsStorage<4096ul>)" matched
         // nothing and came back as bare column headers with no rows. The
-        // schema already promises "exact or unique kernel name"; this is
-        // what makes the second half of that true.
-        { kRocProfVisDmOperationDispatch }, start_ns, end_ns, nullptr, true, false,
-        false, { kernel_name }, OffsetFromArgs(args), static_cast<uint64_t>(limit),
+        // schema already promises "exact or unique name"; this is what makes
+        // the second half of that true.
+        op_types, start_ns, end_ns, criteria ? &criteria.value() : nullptr, true, false,
+        false, { name }, OffsetFromArgs(args), static_cast<uint64_t>(limit),
         // Slowest first, like top_events. This tool is nearly always asked
-        // "which run of this kernel was the bad one", and the row the model
-        // points the user at is whichever comes back first - so a default
-        // of column 0 ascending handed back an instance picked by name or
-        // id, with no relation to duration, while the model described it as
-        // the outlier.
-        ResolveAssistantSortColumnNamed(
-            tables, TableType::kAssistantSummaryKernelTable,
-            JsonUtils::GetString(args, "sort_by", ""), "duration",
-            ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN),
+        // "which run of this was the bad one", and the row the model points
+        // the user at is whichever comes back first - so a default of column 0
+        // ascending handed back an instance picked by name or id, with no
+        // relation to duration, while the model described it as the outlier.
+        ResolveAssistantSortColumnNamed(tables, slot,
+                                        JsonUtils::GetString(args, "sort_by", ""),
+                                        "duration",
+                                        duration_column),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending));
     params.m_filter   = filter;
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
@@ -1473,37 +2020,196 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
 }
 
 AssistantToolStartResult
-ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
-                  const std::string&)
+ToolSummaryEventMetrics(const AssistantToolContext& context, const jt::Json& args,
+                        const std::string&)
 {
-    const std::string kernel_name = JsonUtils::GetString(args, "kernel_name", "");
-    std::ostringstream out;
-    const std::vector<SummaryInfo::KernelMetrics>& kernels =
-        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu.top_kernels;
-    const std::string needle = Core::String::to_lower_copy(kernel_name);
-    bool              found  = false;
-    for(const SummaryInfo::KernelMetrics& kernel : kernels)
+    // kernel_name is what this tool took when it only covered kernels.
+    const std::string name = JsonUtils::GetString(
+        args, "name", JsonUtils::GetString(args, "kernel_name", ""));
+    const std::string category_name =
+        JsonUtils::GetString(args, "category", "kernel");
+    const rocprofvis_analysis_summary_category_t category =
+        SummaryCategoryFromName(category_name);
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    std::string         error;
+    std::ostringstream  out;
+    if(!AssistantSummaryLoaded(context))
     {
-        if(kernel_name.empty() || kernel.name == kernel_name ||
-           Core::String::to_lower_copy(kernel.name).find(needle) != std::string::npos)
+        out << "The summary is not loaded yet. Call get_summary first.";
+    }
+    else if(category == __kRPVAnalysisSummaryCategoryLast)
+    {
+        out << "Unknown category '" << category_name
+            << "'. Use kernel, memory or thread.";
+    }
+    else
+    {
+        const SummaryInfo::AggregateMetrics* scope =
+            ResolveSummaryScope(model, JsonUtils::GetString(args, "level", ""),
+                                JsonU64(args, "id", INVALID_UINT64_INDEX), error);
+        if(scope == nullptr)
         {
-            out << "name=" << kernel.name << " calls=" << kernel.invocations
-                << " sum_ns=" << kernel.exec_time_sum
-                << " min_ns=" << kernel.exec_time_min
-                << " max_ns=" << kernel.exec_time_max
-                << " pct=" << kernel.exec_time_pct << "\n";
-            found = true;
-            if(!kernel_name.empty())
+            out << error;
+        }
+        else
+        {
+            const SummaryInfo::TopOpEvents* events = model.TopOpEvents(*scope, category);
+            out << "scope: " << SummaryScopeLabel(*scope) << "\n";
+            out << "category: " << category_name << "\n";
+            if(events == nullptr || events->top.empty())
             {
-                break;
+                out << "No " << category_name << " events at this scope.";
+            }
+            else
+            {
+                const std::string needle = Core::String::to_lower_copy(name);
+                std::vector<const SummaryInfo::TopOpEvents::Event*> matches;
+                const SummaryInfo::TopOpEvents::Event*              exact = nullptr;
+                for(const SummaryInfo::TopOpEvents::Event& event : events->top)
+                {
+                    // "Others" is the summary's remainder bucket, not an event.
+                    if(event.name != "Others")
+                    {
+                        const std::string lowered = Core::String::to_lower_copy(event.name);
+                        if(name.empty() || lowered.find(needle) != std::string::npos)
+                        {
+                            matches.push_back(&event);
+                        }
+                        if(!name.empty() && exact == nullptr && lowered == needle)
+                        {
+                            exact = &event;
+                        }
+                    }
+                }
+                if(exact)
+                {
+                    matches.assign(1, exact);
+                }
+                else if(matches.size() > 1 && !name.empty())
+                {
+                    out << "Several events match '" << name
+                        << "'; pass the exact name to read one.\n";
+                }
+                for(const SummaryInfo::TopOpEvents::Event* match : matches)
+                {
+                    out << "  ";
+                    AppendSummaryEvent(out, *match, true);
+                    out << "\n";
+                }
+                if(matches.empty())
+                {
+                    out << "Not in the summary at this scope. The summary keeps only "
+                           "the busiest names per scope; call top_events category="
+                        << SummaryCategoryTopEvents(category)
+                        << " to rank every name, or get_summary to see the ones it "
+                           "kept.";
+                }
             }
         }
     }
-    if(!found)
+    return DoneResult(out.str(), "Read event summary stats");
+}
+
+AssistantToolStartResult
+ToolSummaryCounterStats(const AssistantToolContext& context, const jt::Json& args,
+                        const std::string&)
+{
+    const std::string   name  = JsonUtils::GetString(args, "name", "");
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    std::string         error;
+    std::ostringstream  out;
+    if(!AssistantSummaryLoaded(context))
     {
-        out << "Kernel not in the current summary. Call get_summary first.\n";
+        out << "The summary is not loaded yet. Call get_summary first.\n";
     }
-    return DoneResult(out.str(), "Read kernel summary stats");
+    else
+    {
+        const SummaryInfo::AggregateMetrics* scope =
+            ResolveSummaryScope(model, JsonUtils::GetString(args, "level", ""),
+                                JsonU64(args, "id", INVALID_UINT64_INDEX), error);
+        if(scope == nullptr)
+        {
+            out << error;
+        }
+        else
+        {
+            // GPU counters first, then CPU, each with the class it came from.
+            std::vector<std::pair<const SummaryInfo::Counters::Counter*, const char*>>
+                counters;
+            for(const SummaryInfo::Counters::Counter& counter : scope->gpu.counters.list)
+            {
+                if(counter.info)
+                {
+                    counters.emplace_back(&counter, "GPU");
+                }
+            }
+            for(const SummaryInfo::Counters::Counter& counter : scope->cpu.counters.list)
+            {
+                if(counter.info)
+                {
+                    counters.emplace_back(&counter, "CPU");
+                }
+            }
+            out << "scope: " << SummaryScopeLabel(*scope) << "\n";
+            if(scope->type == kRPVAnalysisSummaryAggregationLevelProcess ||
+               scope->type == kRPVAnalysisSummaryAggregationLevelThread)
+            {
+                out << "Processes and threads have no counters. Counters are only "
+                       "summarized at trace, node and processor scope.\n";
+            }
+            else if(counters.empty())
+            {
+                out << "No counters were summarized at this scope.\n";
+            }
+            else if(name.empty())
+            {
+                // Every counter with its statistics, paged, so a long counter list
+                // is read in pieces rather than truncated.
+                const size_t first =
+                    std::min(static_cast<size_t>(OffsetFromArgs(args)), counters.size());
+                const size_t last =
+                    std::min(first + RowLimitFromArgs(args), counters.size());
+                for(size_t i = first; i < last; i++)
+                {
+                    out << "  ";
+                    AppendSummaryCounter(out, *counters[i].first, counters[i].second);
+                    out << "\n";
+                }
+                out << "showing " << first << "-" << last << " of " << counters.size()
+                    << " counters";
+                if(last < counters.size())
+                {
+                    out << "; call again with offset=" << last << " for more";
+                }
+                out << ". Pass a name to pick out specific counters.\n";
+            }
+            else
+            {
+                const std::string needle = Core::String::to_lower_copy(name);
+                bool              found  = false;
+                for(const std::pair<const SummaryInfo::Counters::Counter*, const char*>&
+                        counter : counters)
+                {
+                    if(counter.first->info->GetName() == name ||
+                       Core::String::to_lower_copy(counter.first->info->GetName())
+                               .find(needle) != std::string::npos)
+                    {
+                        out << "  ";
+                        AppendSummaryCounter(out, *counter.first, counter.second);
+                        out << "\n";
+                        found = true;
+                    }
+                }
+                if(!found)
+                {
+                    out << "No counter named '" << name
+                        << "' at this scope. Call get_summary_counter_stats without a "
+                           "name to list them.\n";
+                }
+            }
+        }
+    }
+    return DoneResult(TrimResult(out.str()), "Read counter summary stats");
 }
 
 // Implements track_events and track_samples, which differ only in which table
@@ -1804,8 +2510,9 @@ const AssistantToolEntry k_data_tool_handlers[] = {
     { "get_summary", ToolGetSummary },
     { "list_tracks", ToolListTracks },
     { "top_events", ToolTopEvents },
-    { "kernel_instances", ToolKernelInstances },
-    { "kernel_metrics", ToolKernelMetrics },
+    { "event_instances", ToolEventInstances },
+    { "get_summary_event_metrics", ToolSummaryEventMetrics },
+    { "get_summary_counter_stats", ToolSummaryCounterStats },
     { "track_events", ToolTrackRows },
     { "track_samples", ToolTrackRows },
     { "event_details", ToolEventDetails },
@@ -1839,7 +2546,13 @@ FinishAssistantFetch(const AssistantToolContext& context,
 
     if(fetch.kind == AssistantFetchKind::kSummary)
     {
-        return FormatSystemSummary(context);
+        if(!AssistantSummaryLoaded(context))
+        {
+            return "The summary could not be loaded for this trace. "
+                   "Use top_events or track_events instead.";
+        }
+        return TrimResult(
+            FormatRequestedSummary(context, fetch.summary_level, fetch.summary_id));
     }
     if(fetch.kind == AssistantFetchKind::kTopEvents)
     {
@@ -1853,7 +2566,7 @@ FinishAssistantFetch(const AssistantToolContext& context,
         }
         return FormatTableSnapshot(tables, fetch.table_type, limit);
     }
-    if(fetch.kind == AssistantFetchKind::kKernelInstances ||
+    if(fetch.kind == AssistantFetchKind::kEventInstances ||
        fetch.kind == AssistantFetchKind::kDataTable)
     {
         const TablesModel& tables = context.data_provider->DataModel().GetTables();

@@ -15,6 +15,8 @@
 
 #include "imgui.h"
 #include "spdlog/spdlog.h"
+// ~AssistantPanel() destroys m_message_select, which needs the complete type.
+#include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
@@ -344,9 +346,7 @@ AssistantPanel::TryStartSummaryWarmup(const std::string& question)
     {
         return false;
     }
-    const SummaryInfo::GPUMetrics& gpu =
-        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
-    if(!gpu.top_kernels.empty() || gpu.kernel_exec_time_total > 0.0)
+    if(AssistantSummaryLoaded(context))
     {
         return false;
     }

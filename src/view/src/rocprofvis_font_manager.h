@@ -5,6 +5,9 @@
 
 #include "imgui.h"
 #include <array>
+#include <functional>
+#include <map>
+#include <string>
 #include <vector>
 
 namespace RocProfVis
@@ -67,6 +70,13 @@ public:
     int   ClampFontSizeIndex(int idx) const;
     void  SetFontSize(int idx);
 
+    /*
+     * Returns text unchanged when the main font can draw U+2122, otherwise a copy
+     * with each U+2122 spelled "(TM)", so a font without the trademark glyph
+     * never shows a box or '?'. The result lives as long as the FontManager.
+     */
+    const char* TrademarkText(const char* text);
+
     static constexpr int kNumSizes = static_cast<int>(FontSize::__kLastSize);
 
 private:
@@ -83,6 +93,10 @@ private:
     // Last effective ImGui font size, used to detect both user-selected and
     // auto-DPI font-size changes.
     float m_last_font_size = 0.0f;
+
+    bool m_has_trademark_glyph = false;
+    // Spelled-out copies of text passed to TrademarkText, keyed by the original.
+    std::map<std::string, std::string, std::less<>> m_trademark_fallbacks;
 };
 
 }  // namespace View

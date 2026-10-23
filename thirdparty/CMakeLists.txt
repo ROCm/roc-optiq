@@ -123,6 +123,18 @@ if(APPLE)
 endif()
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
+# TEMPORARY (agentic profiling): ImGuiTextSelect (MIT), pinned to v1.3.2.
+# Ask Optiq message cards compile textselect.cpp directly. Upstream's
+# CMakeLists is a GLFW example that FetchContent's its own Dear ImGui, so
+# this directory is not added as a subdirectory.
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiTextSelect/textselect.hpp)
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING is ON but thirdparty/ImGuiTextSelect is "
+        "empty. Run: git submodule update --init thirdparty/ImGuiTextSelect")
+endif()
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
 # TEMPORARY (remote/SSH): libssh2 and its crypto-backend selection stay gated
 # until remote graduates. The TLS library itself is resolved above and shared
 # with the Ask Optiq client.
@@ -131,8 +143,6 @@ if(ROCPROFVIS_ENABLE_REMOTE)
 # mbedtls/libssh2 set BUILD_TESTING OFF; restore after so imgui_te is still built.
 set(_prev_build_testing ${BUILD_TESTING})
 set(_prev_build_examples ${BUILD_EXAMPLES})
-
-set(ENABLE_ZLIB_COMPRESSION OFF)
 
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 
@@ -163,6 +173,18 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 
 endif()
 
+# Vendored zlib for SSH transport compression. Static only, and libssh2's
+# find_package(ZLIB) is pointed at it so no system zlib is required.
+set(ENABLE_ZLIB_COMPRESSION ON CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(ZLIB_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(zlib)
+
+add_library(ZLIB::ZLIB ALIAS zlibstatic)
+set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib CACHE PATH "" FORCE)
+set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
 
 set(LIBSSH2_INSTALL OFF CACHE BOOL "" FORCE)
 set(LIBSSH2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)

@@ -19,6 +19,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+
+# /Zi stores every file's debug info in one PDB. A parallel build runs many
+# cl.exe processes against that file, and without /FS they fail with C1041.
+if(MSVC)
+    add_compile_options(/FS)
+endif()
 set(BUILD_SHARED_LIBS OFF)
 
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
@@ -124,6 +130,21 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
 find_package(Vulkan REQUIRED)
 
+# ISA implementation files live together in the compute/isa directory.
+set(ISA_VIEW_FILES
+    src/view/src/compute/isa/rocprofvis_compute_isa_view.cpp
+    src/view/src/compute/isa/rocprofvis_compute_isa_view.h
+    src/view/src/compute/isa/rocprofvis_compute_code_widgets.cpp
+    src/view/src/compute/isa/rocprofvis_compute_code_widgets.h
+    src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
+    src/view/src/compute/isa/rocprofvis_compute_isa_data.h
+    src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.cpp
+    src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.h
+)
+set(ISA_VIEW_TEST_FILES
+    src/view/src/compute/isa/tests/rocprofvis_compute_isa_data_tests.cpp
+)
+
 # View related src files
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp
@@ -204,7 +225,7 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
     src/view/src/compute/rocprofvis_compute_comparison.cpp
-    src/view/src/compute/rocprofvis_compute_isa_view.cpp
+    ${ISA_VIEW_FILES}
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -303,6 +324,8 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
+    # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
+    thirdparty/ImGuiTextSelect/textselect.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
@@ -381,6 +404,9 @@ endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
 add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
+# UI strings carry U+2122 and go to GLFW and ImGui as UTF-8. MSVC otherwise
+# encodes narrow string literals in the system code page.
+target_compile_options(${TARGET_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 
 # Before the macOS codesign step below, which has to see the staged runtime.
 if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
@@ -425,6 +451,10 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+target_include_directories(${TARGET_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 # TEMPORARY (profiler launch): remove when the profiler feature graduates.
 if(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -465,6 +495,18 @@ if(BUILD_TESTING)
     target_include_directories(${MEMCHART_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
     target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
     add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
+
+    # ISA sampling interpretation is independent of ImGui, a database, and a GPU.
+    set(ISA_DATA_TEST_NAME ${TARGET_NAME}-isa-data-tests)
+    add_executable(${ISA_DATA_TEST_NAME}
+        ${ISA_VIEW_TEST_FILES}
+        src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
+        src/view/src/compute/isa/rocprofvis_compute_isa_data.h)
+    target_include_directories(${ISA_DATA_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+    target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+    add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
@@ -505,6 +547,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
     add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
+    target_compile_options(${TEST_TARGET} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
@@ -523,6 +566,10 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
     )
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    target_include_directories(${TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
+    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     # TEMPORARY (profiler launch): remove when the profiler feature graduates.
     if(ROCPROFVIS_ENABLE_PROFILER)
     target_include_directories(${TEST_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -1019,9 +1066,9 @@ if(WIN32)
         -arch x64
         -d "Version=${_wix_version}"
         -d "ExeFile=${_wix_stage}/$<TARGET_FILE_NAME:${TARGET_NAME}>"
-        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
-        -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
-        -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
+        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/wix/License_Public.rtf"
+        -d "BannerBmp=${CMAKE_SOURCE_DIR}/wix/banner.bmp"
+        -d "DialogBmp=${CMAKE_SOURCE_DIR}/wix/main.bmp"
         -d "IconFile=${CMAKE_SOURCE_DIR}/resources/ROCm_Optiq.ico"
         -ext WixToolset.UI.wixext
         -out "${_wix_out}"

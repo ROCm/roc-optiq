@@ -24,7 +24,8 @@ namespace View
 constexpr ImGuiTableFlags TABLE_FLAGS = ImGuiTableFlags_BordersOuter |
                                         ImGuiTableFlags_RowBg |
                                         ImGuiTableFlags_Resizable |
-                                        ImGuiTableFlags_SizingStretchProp;
+                                        ImGuiTableFlags_SizingStretchProp |
+                                        ImGuiTableFlags_NoSavedSettings;
 
 constexpr int kFlowColumnCount      = 6;
 constexpr int kCallStackColumnCount = 5;

@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -40,12 +41,56 @@ enum class MemChartColorKind : uint8_t
     kStall,
 };
 
+// Memory-chart metrics are category 3, so their dotted ids are "3.x.x".
+constexpr uint32_t kMemChartMetricCategoryId = 3;
+
 // A reference to a metric by its full dotted id ("category.table.entry", e.g.
-// "3.1.0"), held in `name` when `valid` is true.
+// "3.1.0"), held in `metric_id` when `valid` is true. `metric_name` is the
+// database name used to find the real category-3 id when remapping is enabled.
 struct MemChartMetricRef
 {
     bool        valid = false;
-    std::string name;
+    std::string metric_id;
+    std::string metric_name;
+};
+
+// Result of looking up one template metric by name.
+enum class MemChartRemapStatus : uint8_t
+{
+    kReplaced = 0,  // `metric_id` was replaced with the category-3 id.
+    kEmptyName,     // The template metric has no metric_name.
+    kNoMatch,       // No category-3 metric has that name.
+    kAmbiguous,     // More than one category-3 metric has that name.
+};
+
+// A template metric that was not remapped. `template_id` is the dotted id read
+// from the template. A miss or an ambiguous name also clears the ref's `valid`
+// flag; an empty metric_name leaves that id valid. `match_ids` lists the
+// category-3 ids when ambiguous.
+struct MemChartRemapFailure
+{
+    std::string              template_id;
+    std::string              metric_name;
+    MemChartRemapStatus      status = MemChartRemapStatus::kNoMatch;
+    std::vector<std::string> match_ids;
+};
+
+// Category-3 metric names from the open workload. Entries in other categories
+// are ignored, so a name that also exists outside category 3 still resolves to
+// the single "3.x.x" row.
+class MemChartMetricNameIndex
+{
+public:
+    void Add(const std::string& name, uint32_t category_id, uint32_t table_id,
+             uint32_t entry_id);
+
+    // Clears `dotted_id` and `match_ids`. Returns kReplaced, kNoMatch, or
+    // kAmbiguous. An empty name is the caller's concern (kEmptyName).
+    MemChartRemapStatus Lookup(const std::string& metric_name, std::string& dotted_id,
+                               std::vector<std::string>& match_ids) const;
+
+private:
+    std::unordered_map<std::string, std::vector<std::string>> m_by_name;
 };
 
 // One line inside a block. All fields optional: `title` overrides the metric's
@@ -140,6 +185,14 @@ struct MemChartLayout
 
     MemChartBlock*       FindBlock(const std::string& id);
     const MemChartBlock* FindBlock(const std::string& id) const;
+
+    // Replace each metric's dotted id with the category-3 id for its
+    // metric_name. Refs with no metric are skipped. A miss or an ambiguous name
+    // invalidates the ref so a reused template id cannot resolve. An empty
+    // metric_name keeps the authored id. Every unsuccessful lookup is appended
+    // to `failures`.
+    void RemapMetricIds(const MemChartMetricNameIndex&     index,
+                        std::vector<MemChartRemapFailure>& failures);
 };
 
 }  // namespace View

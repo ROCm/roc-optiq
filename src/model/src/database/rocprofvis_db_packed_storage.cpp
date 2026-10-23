@@ -284,7 +284,7 @@ namespace DataModel
         std::map<std::string, ColumnAggr> result;
         for (auto & map : m_aggregation.aggregation_maps)
         {
-            for (auto [key, val] : map)
+            for (auto & [key, val] : map)
             {
                 auto it = result.find(val.name);
                 if (it == result.end())
@@ -304,7 +304,7 @@ namespace DataModel
                 } else
                 { 
                     it->second.count+=val.count;
-                    for (auto param : m_aggregation.agg_params)
+                    for (auto & param : m_aggregation.agg_params)
                     {
                         auto it_dst = it->second.result.find(param.public_name);
                         auto it_src = val.result.find(param.public_name);
@@ -484,7 +484,7 @@ namespace DataModel
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Max:
-                        it->second.result[param.public_name].numeric.data.d = DBL_MIN;
+                        it->second.result[param.public_name].numeric.data.d = -DBL_MAX;
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Sum:

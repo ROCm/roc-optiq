@@ -900,7 +900,7 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
 inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
-static void
+void
 PushContextMenuStyles()
 {
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -915,7 +915,7 @@ PushContextMenuStyles()
                           settings.GetColor(Colors::kAccent));
 }
 
-static void
+void
 PopContextMenuStyles()
 {
     ImGui::PopStyleColor(3);

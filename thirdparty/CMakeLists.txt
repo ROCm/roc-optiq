@@ -123,6 +123,18 @@ if(APPLE)
 endif()
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
+# TEMPORARY (agentic profiling): ImGuiTextSelect (MIT), pinned to v1.3.2.
+# Ask Optiq message cards compile textselect.cpp directly. Upstream's
+# CMakeLists is a GLFW example that FetchContent's its own Dear ImGui, so
+# this directory is not added as a subdirectory.
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiTextSelect/textselect.hpp)
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING is ON but thirdparty/ImGuiTextSelect is "
+        "empty. Run: git submodule update --init thirdparty/ImGuiTextSelect")
+endif()
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
 # TEMPORARY (remote/SSH): libssh2 and its crypto-backend selection stay gated
 # until remote graduates. The TLS library itself is resolved above and shared
 # with the Ask Optiq client.

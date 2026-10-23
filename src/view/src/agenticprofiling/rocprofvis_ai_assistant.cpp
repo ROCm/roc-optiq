@@ -15,6 +15,8 @@
 
 #include "imgui.h"
 #include "spdlog/spdlog.h"
+// ~AssistantPanel() destroys m_message_select, which needs the complete type.
+#include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"

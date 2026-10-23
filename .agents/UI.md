@@ -1762,6 +1762,35 @@ sampling visibility state overrides the saved ImGui preference. The ISA table
 enables `Reorderable`, so users can drag any visible column header to change its
 display order; headers and cells address logical indices after reordering.
 
+ISA mnemonic colouring is prepared by `IsaDataBuilder::BuildInstructions`. Each
+`IsaRow` owns its original instruction string, byte offsets for its first token,
+and a semantic `InstructionKind` resolved once from the instruction-type lookup
+text. `INSTRUCTION_TYPES` is the canonical name/kind catalogue used by type
+resolution, line tooltips, and legend labels. It describes the compute database's
+`compute_instruction_type_lookup.text` categories: INTERNAL, MATRIX, SCALAR,
+BRANCH, VALU, and FLAT, in that legend order. Names are accepted case-insensitively;
+UUIDs remain lookup keys and never select colours. Each category has a distinct
+`kIsa*` dark/light palette entry. Missing or unrecognised types use the current theme's regular text
+colour. Each row owns its display type name; unrecognised nonempty names retain
+the captured text. Empty lines, labels, directives, and standalone comments have
+no coloured span. `IsaCodeWidget` resolves colours at render time, so theme changes
+do not rebuild rows. Operands, spacing, and trailing comments retain normal text
+colour.
+
+Hovering ISA text shows `Instruction type: <name>` through the themed item tooltip;
+normal popup/window occlusion prevents tooltips over covered cells. The ISA header
+shows the full type palette plus Unknown / unavailable in regular text colour as compact swatches and
+labels, with no user-facing prose, grid, or column headings. The mnemonic and
+legend both consume `INSTRUCTION_PRESENTATIONS`, with compile-time coverage/order
+checks. `SamplingStateRenderer::RenderColorLegend` and `ColorLegendEntry` provide
+the common legend layout used by both ISA and Sampling State headers. Developer
+header information remains behind `ROCPROFVIS_DEVELOPER_MODE`.
+
+`CopyableTextUnformatted` accepts an optional single-line `TextColorRange`. It
+keeps one full-text interaction item and the existing copy menu, then draws the
+prefix, coloured range, and suffix without inserting spacing. The original full
+string remains the clipboard value. Invalid or empty ranges use ordinary text.
+
 Offset shows each instruction's byte offset inside the selected code object as
 uppercase hexadecimal, not an absolute runtime address. Right-clicking an offset,
 ISA instruction, or source-code line opens its copy context menu. Offset and `#`

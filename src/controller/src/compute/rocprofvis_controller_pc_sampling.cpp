@@ -52,13 +52,13 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
         {
             case kRPVControllerPCSamplingSampleStatesLoaded:
             {
-                *value = m_pc_sample_states_loaded;
+                *value = IsLoaded(kPcSampleStates);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerPCSamplingStallDetailsLoaded:
             {
-                *value = m_stalls_loaded;
+                *value = IsLoaded(kStalls);
                 result = kRocProfVisResultSuccess;
                 break;
             }

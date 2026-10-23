@@ -16,9 +16,102 @@ make_isa_data()
 {
     PcSamplingData data;
     data.code_objects = {
-        { 1, { { 1, 1, { { 10, 0x40, "s_nop 0" }, { 20, 0x44, "s_endpgm" } } } } }
+        { 1, { { 1, 1, { { 10, 0, 0x40, "s_nop 0" }, { 20, 0, 0x44, "s_endpgm" } } } } }
     };
     return data;
+}
+
+TEST_CASE("ISA mnemonic ranges preserve operands, spacing, and comments", "[isa]")
+{
+    struct Case
+    {
+        const char* instruction;
+        const char* mnemonic;
+    };
+    const Case cases[] = { { "v_add_f32 v0, v1, v2", "v_add_f32" },
+                           { "  v_add_f32_e32\tv0, v1, v2 ; keep ## and %",
+                             "v_add_f32_e32" },
+                           { "\ts_waitcnt vmcnt(0) lgkmcnt(0)", "s_waitcnt" },
+                           { "s_endpgm", "s_endpgm" },
+                           { "s_nop 0 ; v_add_f32 is a comment", "s_nop" },
+                           { "", "" },
+                           { " \t", "" },
+                           { "; standalone comment", "" },
+                           { "# standalone comment", "" },
+                           { ".LBB0_1:", "" },
+                           { "label:", "" },
+                           { ".long 0x1234", "" } };
+    for(const Case& entry : cases)
+    {
+        INFO(entry.instruction);
+        PcSamplingData data = make_isa_data();
+        data.code_objects[0].kernel_symbols[0].instruction_lines[0].instruction =
+            entry.instruction;
+        const std::vector<IsaDataBuilder::IsaRow> rows =
+            IsaDataBuilder::BuildInstructions(data, 1);
+        REQUIRE(rows.size() == 2);
+        const IsaDataBuilder::IsaRow& row = rows[0];
+        CHECK(row.instruction == entry.instruction);
+        REQUIRE(row.mnemonic_begin <= row.mnemonic_end);
+        REQUIRE(row.mnemonic_end <= row.instruction.size());
+        CHECK(row.instruction.substr(row.mnemonic_begin,
+                                     row.mnemonic_end - row.mnemonic_begin) ==
+              entry.mnemonic);
+    }
+}
+
+TEST_CASE("ISA instruction colours follow type names independently of database UUIDs",
+          "[isa]")
+{
+    using Kind = IsaDataBuilder::InstructionKind;
+    struct Case
+    {
+        uint64_t    uuid;
+        const char* text;
+        Kind        kind;
+        const char* name;
+    };
+    const Case cases[] = {
+        { 1, "INTERNAL", Kind::kInternal, "INTERNAL" },
+        { 2, "MATRIX", Kind::kMatrix, "MATRIX" },
+        { 3, "SCALAR", Kind::kScalar, "SCALAR" },
+        { 4, "BRANCH", Kind::kBranch, "BRANCH" },
+        { 5, "VALU", Kind::kValu, "VALU" },
+        { 6, "FLAT", Kind::kFlat, "FLAT" },
+        { 3, "scalar", Kind::kScalar, "SCALAR" },
+        { 4, "branch", Kind::kBranch, "BRANCH" },
+        { 7, "FUTURE_INSTRUCTION_TYPE", Kind::kUnknown, "FUTURE_INSTRUCTION_TYPE" },
+        { 8, "NO_INST", Kind::kUnknown, "NO_INST" },
+        { 9, "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU", Kind::kUnknown,
+          "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU" },
+        { 0, "", Kind::kUnknown, "Unknown / unavailable" }
+    };
+    for(const Case& entry : cases)
+    {
+        INFO(entry.text);
+        PcSamplingData                data = make_isa_data();
+        std::vector<InstructionLine>& instructions =
+            data.code_objects[0].kernel_symbols[0].instruction_lines;
+        instructions[0].instruction_type_uuid = entry.uuid;
+        instructions[1].instruction_type_uuid = 901;
+        data.instruction_type_lookup_map      = { { entry.uuid, entry.text },
+                                                  { 901, entry.text } };
+        const std::vector<IsaDataBuilder::IsaRow> rows =
+            IsaDataBuilder::BuildInstructions(data, 1);
+        REQUIRE(rows.size() == 2);
+        CHECK(rows[0].instruction_kind == entry.kind);
+        CHECK(rows[1].instruction_kind == entry.kind);
+        CHECK(rows[0].instruction_type_name == entry.name);
+        CHECK(rows[1].instruction_type_name == entry.name);
+        CHECK(rows[0].code_object_offset == 0x40);
+        data.instruction_type_lookup_map.clear();
+        const std::vector<IsaDataBuilder::IsaRow> missing =
+            IsaDataBuilder::BuildInstructions(data, 1);
+        CHECK(missing[0].instruction_kind == Kind::kUnknown);
+        CHECK(missing[1].instruction_kind == Kind::kUnknown);
+        CHECK(missing[0].instruction_type_name == "Unknown / unavailable");
+        CHECK(missing[1].instruction_type_name == "Unknown / unavailable");
+    }
 }
 
 TEST_CASE("ISA progress distinguishes missing, invalid, and genuine zero counts", "[isa]")

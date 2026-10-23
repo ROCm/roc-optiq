@@ -8,36 +8,31 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 #### Features and improvements
 
-##### Summary
+##### Systems Trace Summary
 
-- The **Summary** view now covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top kernels also report percent of total duration and mean duration.
+- The **Summary** view now covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top entries also report percent of total duration and mean duration.
 - Each category has a **Details** tab with a fuller breakdown of that category. 
 - A **System Topology** tab shows the system topology and counters.
 
 ##### Compute profiling
 
 - Roofline comparison: compare a kernel against a baseline kernel, including a kernel from another workload, and choose whether hardware peaks come from the baseline or the compared workload.
-- Roofline option menus open outside the plot by default, and labels stay clamped inside the view.
+- Roofline option menus open outside the plot by default.
+- Roofline now has Toggleable labels for Hardware peaks.
 - **Profile Details** (formerly **Workload Details**) includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
 
 ##### Memory chart
 
-- Architecture-specific memory-chart layouts, embedded in the binary: gfx950, gfx94x (including gfx940), and gfx115x (RDNA 3.5).
-- Chart colors follow the active theme. The chart can be panned with the scroll wheel or a trackpad.
+- Architecture-specific memory-chart layouts: gfx950, gfx94x (including gfx940), and gfx115x (RDNA 3.5).
+-The chart can be panned with the scroll wheel or a trackpad.
 
 ##### Tables
 
 - Table columns auto-fit to their content and are capped in width, so long values (such as demangled kernel names) are elided. The full value stays in a hover tooltip. Columns resized by hand are left alone, and widths are re-fit when the result set changes.
-- Thinner scrollbars.
 
 ##### Trace formats
 
 - rocpd schema 3.0.4 (`rocpd_hip_event`): HIP events appear on the timeline, in search, in the topology tree, and in data flow from region events.
-
-##### Tracks
-
-- rocpd PMC samples attach to the correct sample track. The counter id is matched as text.
-- Counter tracks report their owning process in **Track Details**.
 
 ##### Timeline and navigation
 
@@ -47,7 +42,6 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 - ISA View is now available in distributed binaries.
 - This feature is marked expiremental as the collected data format is still under development.
-- PC-sampling columns now include sample-count and stall-category bars, a sampling-state column (including on correlated source), and tooltips for missing and host-trap fields.
 
 ##### Binaries / build
 
@@ -65,8 +59,7 @@ These features are in progress and available for preview only (build from source
 
 - Fixed kernel dispatch durations wrapping above about 4.29 seconds in the **Top Kernels** table and its bar chart, pie chart, and tooltips. Durations are stored as 64-bit nanosecond counts.
 - Fixed incorrect averages when a grouped query was merged across threads. Per-thread averages are now weighted, and MAX no longer starts at the smallest positive double.
-- Fixed CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, a full disk).
-- Fixed a crash when an table, including the second table in trace compare, received its first rows while a sort was pending. 
+- Fixed table CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, a full disk).
 - Fixed tables no longer restore another table's column layout from the ImGui settings file.
 - Fixed **Top Events** showing an empty table as if it still had rows.
 - Fixed **Track Details** showing PID 0 for counter tracks.

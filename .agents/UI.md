@@ -1703,17 +1703,17 @@ shows a tooltip without constructing its widget when no kernel in the database
 has ISA lines. The availability flag is initialized once with the other
 data-dependent tab states.
 `RenderControlPanel()` hosts the source-file dropdown, an always-visible
-`In development` label, and the source-code visibility control, in that order.
+Experimental notice, and the source-code visibility control, in that order.
 `RenderDevelopmentNotice(button_width)` owns the notice text, icon, tooltip,
-and layout. It groups a vector warning triangle with an exclamation mark and
-the label in the theme warning color, centers the group in the free space
-between the dropdown and visibility button, and leaves the cursor ready for
-the button using its reserved width. Both icon and text
+and layout. It groups the `ICON_INFORMATION` glyph (`PanelIcon`, dim text
+color) with the label and places that group immediately after the source-file
+dropdown, using normal item spacing. When the dropdown is hidden it starts at
+the left of the row. It then leaves the cursor ready for the visibility button
+using that button's reserved width. Both icon and text
 show the standard themed tooltip explaining that profiling data interpretation,
 displayed values, layout, and controls may change in future releases. The notice
-remains visible when no source file is available or the source pane is hidden,
-centered in the space to the left of the button. The group and button wrap to
-another row when space is limited, avoiding overlap. Sampling State visibility
+remains visible when no source file is available or the source pane is hidden.
+The button wraps to another row when the notice would overlap it. Sampling State visibility
 is controlled only by each table's native
 header context menu; there is no sampling-details button or global visibility
 flag. PC-sampling data is fetched
@@ -2353,8 +2353,8 @@ Use these instead of writing your own.
 ### Icons (`src/view/src/icons/`)
 
 - `rocprovfis_icon_defines.h` (note the typo - kept for stability)
-  - `ICON_CHEVRON_DOWN/LEFT/RIGHT`, `ICON_X_CIRCLED`, `ICON_EYE`,
-    `ICON_EYE_SLASH`, `ICON_EYE_THIN`, `ICON_GEAR`, `ICON_CHAIN`,
+  - `ICON_CHEVRON_DOWN/LEFT/RIGHT`, `ICON_X_CIRCLED`, `ICON_INFORMATION`,
+    `ICON_EYE`, `ICON_EYE_SLASH`, `ICON_EYE_THIN`, `ICON_GEAR`, `ICON_CHAIN`,
     `ICON_ADD_NOTE`, `ICON_ARROWS_SHRINK`, `ICON_COMPASS`,
     `ICON_CHART_BAR`, `ICON_CHART_PIE`, `ICON_ARCHIVE`,
     `ICON_DELETE`, `ICON_TREE`, `ICON_GRID`, `ICON_ARROW_UP/DOWN`,

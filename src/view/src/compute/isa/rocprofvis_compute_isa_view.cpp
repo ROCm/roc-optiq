@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
@@ -685,57 +686,28 @@ ComputeIsaView::RenderControlPanel()
 void
 ComputeIsaView::RenderDevelopmentNotice(float button_width)
 {
-    constexpr const char* LABEL   = "Under development";
+    constexpr const char* LABEL   = "Experimental";
     constexpr const char* TOOLTIP = "ISA View is under development.\n"
                                     "Profiling data interpretation "
                                     "may change in future releases.\n"
                                     "The layout and available controls may also change.";
 
     const ImGuiStyle& style     = ImGui::GetStyle();
-    const float       icon_size = ImGui::GetTextLineHeight();
-    const float       notice_width =
-        icon_size + style.ItemInnerSpacing.x + ImGui::CalcTextSize(LABEL).x;
-    const float row_start = ImGui::GetCursorPosX();
-    const float row_end   = row_start + ImGui::GetContentRegionAvail().x;
-    const float button_x  = std::max(row_start, row_end - button_width);
-    const bool  has_source_selector =
+    const float       row_start = ImGui::GetCursorPosX();
+    const float       row_end   = row_start + ImGui::GetContentRegionAvail().x;
+    const float       button_x  = std::max(row_start, row_end - button_width);
+    const bool        has_source_selector =
         m_source_layout_item->m_visible && !m_source.file_uuid_by_path.empty();
-    float left  = has_source_selector ? ImGui::GetItemRectMax().x -
-                                           ImGui::GetWindowPos().x + style.ItemSpacing.x
-                                      : row_start;
-    float right = button_x - style.ItemSpacing.x;
 
-    // Center in the gap after the selector, or on a new row when it does not fit.
-    if(right - left < notice_width)
-    {
-        left = row_start;
-        if(right - left < notice_width)
-        {
-            right = row_end;
-        }
-    }
-    else if(has_source_selector)
+    if(has_source_selector)
     {
         ImGui::SameLine();
     }
-    ImGui::SetCursorPosX(left + std::max(0.0f, (right - left - notice_width) * 0.5f));
 
     ImGui::BeginGroup();
-    const ImVec2 cursor = ImGui::GetCursorScreenPos();
-    const ImVec2 icon_start(cursor.x, cursor.y + style.FramePadding.y);
-    const ImU32  color        = m_settings.GetColor(Colors::kTextWarning);
-    const float  stroke_width = std::max(1.0f, icon_size * 0.08f);
-    const float  center_x     = icon_start.x + icon_size * 0.5f;
-    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
-    draw_list->AddTriangle(
-        ImVec2(center_x, icon_start.y), ImVec2(icon_start.x, icon_start.y + icon_size),
-        ImVec2(icon_start.x + icon_size, icon_start.y + icon_size), color, stroke_width);
-    draw_list->AddLine(ImVec2(center_x, icon_start.y + icon_size * 0.35f),
-                       ImVec2(center_x, icon_start.y + icon_size * 0.65f), color,
-                       stroke_width);
-    draw_list->AddCircleFilled(ImVec2(center_x, icon_start.y + icon_size * 0.82f),
-                               stroke_width * 0.5f, color);
-    ImGui::Dummy(ImVec2(icon_size, ImGui::GetFrameHeight()));
+    const ImU32 color = m_settings.GetColor(Colors::kTextDim);
+    ImGui::AlignTextToFramePadding();
+    PanelIcon(ICON_INFORMATION, Colors::kTextDim, &m_settings, style.FontSizeBase);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::AlignTextToFramePadding();
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(color), "%s", LABEL);

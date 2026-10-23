@@ -17,7 +17,15 @@ class CLIParser;
 // Shell plumbing shared by the application (main.cpp) and the UI test harness
 // (test/test_main.cpp), which drive the same window with different frame loops.
 
-constexpr const char* APP_NAME = "ROCm(TM) Optiq";
+// The product name. U+2122 is the trademark sign, drawn as a raised "TM".
+constexpr const char* APP_NAME = "ROCm\u2122 Optiq";
+// APP_NAME for text that may not be read as UTF-8: terminals, and the X11
+// WM_CLASS property, which is Latin-1.
+constexpr const char* APP_NAME_ASCII = "ROCm(TM) Optiq";
+
+static_assert(sizeof("\u2122") == 4 && "\u2122"[0] == '\xE2' && "\u2122"[1] == '\x84' &&
+                  "\u2122"[2] == '\xA2',
+              "String literals must be UTF-8 (MSVC needs /utf-8)");
 
 // Lazy rendering: after each OS event render a few frames so animations and the
 // deferred event dispatch settle, then sleep until the next event when idle.

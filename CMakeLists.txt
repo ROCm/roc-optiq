@@ -19,6 +19,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+
+# /Zi stores every file's debug info in one PDB. A parallel build runs many
+# cl.exe processes against that file, and without /FS they fail with C1041.
+if(MSVC)
+    add_compile_options(/FS)
+endif()
 set(BUILD_SHARED_LIBS OFF)
 
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
@@ -398,6 +404,9 @@ endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
 add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
+# UI strings carry U+2122 and go to GLFW and ImGui as UTF-8. MSVC otherwise
+# encodes narrow string literals in the system code page.
+target_compile_options(${TARGET_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 
 # Before the macOS codesign step below, which has to see the staged runtime.
 if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
@@ -538,6 +547,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
     add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
+    target_compile_options(${TEST_TARGET} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc

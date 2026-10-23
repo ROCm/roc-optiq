@@ -5,7 +5,7 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
-#include "rocprofvis_c_interface.h"
+#include "rocprofvis_controller_analysis.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -15,11 +15,17 @@ namespace RocProfVis
 namespace Controller
 {
 
+class Counter;
+class SystemTrace;
+class Node;
+class Processor;
+class Process;
+class Thread;
+
 class SummaryMetrics : public Handle
 {
 public:
     SummaryMetrics();
-    virtual ~SummaryMetrics();
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
@@ -34,56 +40,63 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
     rocprofvis_result_t AggregateSubMetrics();
-    void PadTopKernels();
     void Reset();
     bool Empty() const;
 
 private:
-    template<typename T>
-    std::optional<T> AddOptionals(const std::optional<T>& a, const std::optional<T>& b)
+    struct TopOpEvents
+    {        
+        struct Event
+        {
+            std::string name;
+            uint64_t invocations;
+            uint64_t duration_sum;
+            uint64_t duration_min;
+            uint64_t duration_max;
+            float duration_pct_of_total;
+        };
+        std::vector<Event> top;
+        uint64_t op_invocations;
+        uint64_t op_duration;
+    };
+    struct Counter
     {
-        if(a && b)
-        {
-            return a.value() + b.value();
-        }
-        else if(a)
-        {
-            return a;
-        }
-        else if(b)
-        {
-            return b;
-        }
-        else
-        {
-            return std::nullopt;
-        }
-    }
-
-    struct KernelMetrics {
-        std::string name;
-        uint64_t invocations;
-        double exec_time_sum;
-        double exec_time_min;
-        double exec_time_max;
-        float exec_time_pct;
+        Controller::Counter* metadata;
+        rocprofvis_analysis_counter_statistics_t stats;
+        uint64_t duration;
     };
-    struct GPUMetrics {
-        std::optional<float> gfx_util;
-        std::optional<float> mem_util;
-        std::vector<KernelMetrics> top_kernels;
-        double kernel_exec_time_total;
+    struct GPU 
+    {
+        TopOpEvents dispatch;
+        TopOpEvents memory;
+        std::vector<Counter> counters;        
     };
-    struct CPUMetrics {
+    struct CPU
+    {
+        TopOpEvents memory;
+        std::vector<Counter> counters;
     };
 
-    rocprofvis_controller_summary_aggregation_level_t m_aggregation_level;
-    std::optional<uint64_t> m_id;
-    std::optional<std::string> m_name;
-    std::optional<rocprofvis_controller_processor_type_t> m_processor_type;
-    std::optional<uint64_t> m_processor_type_idx;
-    std::optional<GPUMetrics> m_gpu;
-    std::optional<CPUMetrics> m_cpu;
+    void AggregateTopEvents(const std::vector<const TopOpEvents*>& subs, TopOpEvents& output);
+    void PruneTopEvents(SummaryMetrics& metrics);
+    void AppendTopEventsRemainder(TopOpEvents& events);
+    std::vector<Counter> AggregateCounters(const std::vector<const std::vector<Counter>*>& subs);
+    bool CounterSortComparator(const Counter& a, const Counter& b);
+    std::string GetStringProperty(Handle* handle, rocprofvis_property_t property);
+
+    rocprofvis_analysis_summary_aggregation_level_t m_aggregation_level;
+    union
+    {
+        SystemTrace* trace;
+        Node* node;
+        Processor* processor;
+        Process* process;
+        Thread* thread;
+    } m_metadata;
+    std::optional<GPU> m_gpu;
+    std::optional<CPU> m_cpu;
+    std::optional<TopOpEvents> m_memory;
+    std::optional<TopOpEvents> m_launch;
     std::vector<SummaryMetrics> m_sub_metrics;
 };
 

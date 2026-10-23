@@ -44,3 +44,6 @@
 [submodule "thirdparty/ImGuiTextSelect"]
 	path = thirdparty/ImGuiTextSelect
 	url = https://github.com/AidanSun05/ImGuiTextSelect.git
+[submodule "thirdparty/zlib"]
+	path = thirdparty/zlib
+	url = https://github.com/madler/zlib.git

@@ -134,6 +134,9 @@ struct PcSamplingData
     std::vector<PcSampleState>              pc_sample_states;
     std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
     std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
+    // Completion is independent of row count: an empty successful query is loaded.
+    bool sample_states_loaded = false;
+    bool stall_details_loaded = false;
 };
 
 struct KernelInfo

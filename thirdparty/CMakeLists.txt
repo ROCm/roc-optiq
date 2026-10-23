@@ -144,8 +144,6 @@ if(ROCPROFVIS_ENABLE_REMOTE)
 set(_prev_build_testing ${BUILD_TESTING})
 set(_prev_build_examples ${BUILD_EXAMPLES})
 
-set(ENABLE_ZLIB_COMPRESSION OFF)
-
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 
 	unset(ROCPROFVIS_OPENSSL_VERSION_MAJOR CACHE)
@@ -175,6 +173,18 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 
 endif()
 
+# Vendored zlib for SSH transport compression. Static only, and libssh2's
+# find_package(ZLIB) is pointed at it so no system zlib is required.
+set(ENABLE_ZLIB_COMPRESSION ON CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(ZLIB_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(zlib)
+
+add_library(ZLIB::ZLIB ALIAS zlibstatic)
+set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib CACHE PATH "" FORCE)
+set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
 
 set(LIBSSH2_INSTALL OFF CACHE BOOL "" FORCE)
 set(LIBSSH2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)

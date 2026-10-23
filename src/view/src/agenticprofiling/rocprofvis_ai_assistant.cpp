@@ -346,9 +346,7 @@ AssistantPanel::TryStartSummaryWarmup(const std::string& question)
     {
         return false;
     }
-    const SummaryInfo::GPUMetrics& gpu =
-        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
-    if(!gpu.top_kernels.empty() || gpu.kernel_exec_time_total > 0.0)
+    if(AssistantSummaryLoaded(context))
     {
         return false;
     }

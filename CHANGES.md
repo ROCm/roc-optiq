@@ -2,6 +2,75 @@
 
 Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
 
+## ROCm Optiq 1.2.0
+
+### Added
+
+#### Features and improvements
+
+##### Summary
+
+- The **Summary** view now covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top kernels also report percent of total duration and mean duration.
+- Each category has a **Details** tab with a fuller breakdown of that category. 
+- A **System Topology** tab shows the system topology and counters.
+
+##### Compute profiling
+
+- Roofline comparison: compare a kernel against a baseline kernel, including a kernel from another workload, and choose whether hardware peaks come from the baseline or the compared workload.
+- Roofline option menus open outside the plot by default, and labels stay clamped inside the view.
+- **Profile Details** (formerly **Workload Details**) includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
+
+##### Memory chart
+
+- Architecture-specific memory-chart layouts, embedded in the binary: gfx950, gfx94x (including gfx940), and gfx115x (RDNA 3.5).
+- Chart colors follow the active theme. The chart can be panned with the scroll wheel or a trackpad.
+
+##### Tables
+
+- Table columns auto-fit to their content and are capped in width, so long values (such as demangled kernel names) are elided. The full value stays in a hover tooltip. Columns resized by hand are left alone, and widths are re-fit when the result set changes.
+- Thinner scrollbars.
+
+##### Trace formats
+
+- rocpd schema 3.0.4 (`rocpd_hip_event`): HIP events appear on the timeline, in search, in the topology tree, and in data flow from region events.
+
+##### Tracks
+
+- rocpd PMC samples attach to the correct sample track. The counter id is matched as text.
+- Counter tracks report their owning process in **Track Details**.
+
+##### ISA View
+
+- ISA View is now available in distributed binaries.
+- This feature is marked expiremental as the collected data format is still under development.
+- PC-sampling columns now include sample-count and stall-category bars, a sampling-state column (including on correlated source), and tooltips for missing and host-trap fields.
+
+##### Binaries / build
+
+- Official CI builds embed the git commit hash, printed by `--version`. Local builds report `unknown`.
+
+##### Experimental (not yet released)
+
+These features are in progress and available for preview only (build from source). Enable them at build time with the noted build flags. The described behavior and UI are subject to change.
+
+- **Ask Optiq**: Message text is selectable, and a message or selection can be copied. The conversation can be copied or exported as Markdown. Tool output prints whole-nanosecond timestamps, so a value passed back to navigation still lands on a short kernel. `trace_overview` reports each track's record count, leaves HIP stream tracks out of the total (they repeat the queue's kernels and copies), and marks the activity profile as a histogram estimate. Build flags: `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, `ROCPROFVIS_ENABLE_SCRIPTING`.
+- **Python analysis**: `optiq.table().fetch()` returns numeric cells as numbers (empty cells as `None`, and a bad numeric cell raises `ValueError`). Scripting builds vendor CPython and package that runtime in the Windows installer. Build flag: `ROCPROFVIS_ENABLE_SCRIPTING`.
+- **Profiler launch**: **Launch Profiler** and **Advanced Options** use the same frameless, draggable dialogs as the rest of the app. Command-line arguments and environment variables are on the main page. Closing the launcher hides it and keeps a running or finished capture, including **View Last Run**. **File > Open Remote...** opens a trace from a remote host, and SSH downloads are compressed. Build flags: `ROCPROFVIS_ENABLE_PROFILER` (plus `ROCPROFVIS_ENABLE_REMOTE` for the SSH workflow).
+
+### Resolved issues
+
+- Fixed kernel dispatch durations wrapping above about 4.29 seconds in the **Top Kernels** table and its bar chart, pie chart, and tooltips. Durations are stored as 64-bit nanosecond counts.
+- Fixed incorrect averages when a grouped query was merged across threads. Per-thread averages are now weighted, and MAX no longer starts at the smallest positive double.
+- Fixed CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, a full disk).
+- Fixed a crash when an table, including the second table in trace compare, received its first rows while a sort was pending. 
+- Fixed tables no longer restore another table's column layout from the ImGui settings file.
+- Fixed **Top Events** showing an empty table as if it still had rows.
+- Fixed **Track Details** showing PID 0 for counter tracks.
+- Fixed rocpd sample tracks missing their PMC samples.
+- Fixed a crash when a table filter could not be parsed.
+- Fixed a macOS hang in the job system: a worker could signal a job after that job had already been freed.
+- Fixed a leaked row-count query when a table had nothing to count.
+
 ## ROCm Optiq 1.1.0
 
 ### Added

@@ -523,16 +523,6 @@ SideBar::Render()
         }
     }
     m_row_order.swap(m_rows_drawn);
-
-    // A plain click on the pane's empty space, not on a row, clears the track
-    // selection.
-    const ImGuiIO& io = ImGui::GetIO();
-    if(ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyCtrl && !io.KeyShift &&
-       m_timeline_selection && m_timeline_selection->HasSelectedTracks())
-    {
-        m_timeline_selection->UnselectAllTracks();
-    }
 }
 
 void

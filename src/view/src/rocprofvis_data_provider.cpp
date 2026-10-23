@@ -142,6 +142,7 @@ DataProvider::FreeRequests()
     cleanup_work.requests        = std::move(m_requests);
     m_requests.clear();
     m_pc_sampling_replacements.clear();
+    m_queued_event_fetches.clear();
 
     CleanupDetachedResources(std::move(cleanup_work));
 }
@@ -175,6 +176,7 @@ DataProvider::DetachCleanupWork()
 
     m_requests.clear();
     m_pc_sampling_replacements.clear();
+    m_queued_event_fetches.clear();
     m_trace_controller = nullptr;
     m_trace_timeline   = nullptr;
     m_model.Clear();
@@ -2754,6 +2756,7 @@ DataProvider::HandleRequests()
 {
     if(m_requests.size() > 0)
     {
+        std::vector<uint64_t> finished_event_fetches;
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
             RequestInfo&        req = it->second;
@@ -2781,6 +2784,12 @@ DataProvider::HandleRequests()
                 ProcessRequest(req);
                 // remove request from processing container
                 it = m_requests.erase(it);
+                if(erased_type == RequestType::kFetchEventExtendedData ||
+                   erased_type == RequestType::kFetchEventFlowDetails ||
+                   erased_type == RequestType::kFetchEventCallStack)
+                {
+                    finished_event_fetches.push_back(erased_id);
+                }
                 // If a PC sampling replacement was queued while this layer was
                 // in-flight, submit it now that the slot is free.
                 if(erased_type == RequestType::kFetchPcSampling)
@@ -2805,6 +2814,11 @@ DataProvider::HandleRequests()
             {
                 ++it;
             }
+        }
+        // Submitted after the loop: inserting into m_requests can rehash it.
+        for(uint64_t request_id : finished_event_fetches)
+        {
+            SubmitQueuedEventFetch(request_id);
         }
     }
 }
@@ -2965,15 +2979,16 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
 
-    uint64_t event_id = INVALID_UINT64_INDEX;
+    uint64_t event_id = event_params ? event_params->m_event_id : INVALID_UINT64_INDEX;
     bool success = false;
-    if(event_params && m_model.GetEvents().EventCount() > 0)
+    if(event_params && req.response_code == kRocProfVisResultSuccess &&
+       m_model.GetEvents().EventCount() > 0)
     {
-        event_id = event_params->m_event_id;
         EventInfo* event_info = m_model.GetEvents().GetEvent(event_params->m_event_id);
         if(event_info)
         {
             event_info->ext_info.clear();
+            event_info->args.clear();
 
             for(uint64_t j = 0; j < prop_count; j++)
             {
@@ -2987,14 +3002,19 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                     continue;
                 }
 
-                uint64_t data_type;  // rocprofvis_controller_primitive_type_t
-                uint64_t data_enum;  // rocprofvis_event_data_category_enum_t
+                uint64_t data_type = 0;  // rocprofvis_controller_primitive_type_t
+                uint64_t data_enum = 0;  // rocprofvis_event_data_category_enum_t
                 result = rocprofvis_controller_get_uint64(ext_data_handle,
                                                           kRPVControllerExtDataType, 0,
                                                           (uint64_t*) &data_type);
                 result = rocprofvis_controller_get_uint64(
                     ext_data_handle, kRPVControllerExtDataCategoryEnum, 0,
                     (uint64_t*) &data_enum);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    spdlog::warn("Failed to get extended data category for entry {}", j);
+                    continue;
+                }
 
                 // skip this item if it is argument data, it will be handled below
                 if(data_enum != kRocProfVisEventArgumentData)
@@ -4708,6 +4728,59 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 }
 
 bool
+DataProvider::QueueEventFetch(uint64_t request_id, uint64_t event_id)
+{
+    auto pending = m_requests.find(request_id);
+    if(pending == m_requests.end())
+    {
+        return false;
+    }
+    std::shared_ptr<EventRequestParams> pending_params =
+        std::dynamic_pointer_cast<EventRequestParams>(pending->second.custom_params);
+    std::deque<uint64_t>& queue = m_queued_event_fetches[request_id];
+    if((!pending_params || pending_params->m_event_id != event_id) &&
+       std::find(queue.begin(), queue.end(), event_id) == queue.end())
+    {
+        queue.push_back(event_id);
+    }
+    return true;
+}
+
+void
+DataProvider::SubmitQueuedEventFetch(uint64_t request_id)
+{
+    bool submitted = IsRequestPending(request_id);
+    while(!submitted)
+    {
+        auto queued = m_queued_event_fetches.find(request_id);
+        if(queued == m_queued_event_fetches.end() || queued->second.empty())
+        {
+            break;
+        }
+        const uint64_t event_id = queued->second.front();
+        queued->second.pop_front();
+        // Results are only stored for events still in the model, so skip ones that
+        // were deselected while queued.
+        if(m_model.GetEvents().GetEvent(event_id) == nullptr)
+        {
+            continue;
+        }
+        if(request_id == EVENT_EXTENDED_DATA_REQUEST_ID)
+        {
+            submitted = FetchEventExtData(event_id);
+        }
+        else if(request_id == EVENT_FLOW_DATA_REQUEST_ID)
+        {
+            submitted = FetchEventFlowDetails(event_id);
+        }
+        else if(request_id == EVENT_CALL_STACK_DATA_REQUEST_ID)
+        {
+            submitted = FetchEventCallStackData(event_id);
+        }
+    }
+}
+
+bool
 DataProvider::FetchEventExtData(uint64_t event_id)
 {
     if(m_state != ProviderState::kReady)
@@ -4715,6 +4788,10 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
         return false;
+    }
+    if(QueueEventFetch(EVENT_EXTENDED_DATA_REQUEST_ID, event_id))
+    {
+        return true;
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4760,6 +4837,10 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
+    if(QueueEventFetch(EVENT_FLOW_DATA_REQUEST_ID, event_id))
+    {
+        return true;
+    }
 
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
@@ -4803,6 +4884,10 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
         return false;
+    }
+    if(QueueEventFetch(EVENT_CALL_STACK_DATA_REQUEST_ID, event_id))
+    {
+        return true;
     }
 
     auto future   = rocprofvis_controller_future_alloc();

@@ -11,6 +11,7 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -319,6 +320,10 @@ private:
         rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+    // Queues event_id if a fetch with this request ID is in flight; returns true when
+    // the caller should not start one.
+    bool QueueEventFetch(uint64_t request_id, uint64_t event_id);
+    void SubmitQueuedEventFetch(uint64_t request_id);
 
     // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
@@ -528,6 +533,10 @@ private:
     // Stores a pending replacement submission for a PC sampling layer whose
     // in-flight request is being cancelled. Keyed by the per-layer request ID.
     std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
+
+    // Events waiting for the in-flight event detail, flow or call stack fetch, which
+    // each have a single request ID. Keyed by that request ID.
+    std::unordered_map<uint64_t, std::deque<uint64_t>> m_queued_event_fetches;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,

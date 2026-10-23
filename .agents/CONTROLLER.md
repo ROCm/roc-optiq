@@ -1100,11 +1100,9 @@ pane stays readable while source or stall data loads:
 | Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
 | Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
 
-Cached query-group booleans (`m_code_object_store_loaded`,
-`m_kernel_symbols_loaded`, `m_instruction_lines_loaded`,
-`m_instruction_source_lines_loaded`, `m_source_files_loaded`,
-`m_pc_sample_states_loaded`, `m_stalls_loaded`,
-`m_instruction_samples_loaded`) prevent repeated queries.
+Cached query-group bits in `m_loaded_flags`, accessed through `IsLoaded` and
+`SetLoaded` with the `LoadedFlag` enum, prevent repeated queries. The completion
+properties read the same `kPcSampleStates` and `kStalls` bits used by the fetchers.
 Row-count setters clear their destination vectors before resizing so a failed
 fetch followed by a retry cannot preserve fields from an earlier result.
 Read-only uint64 properties `kRPVControllerPCSamplingSampleStatesLoaded` and
@@ -1133,7 +1131,9 @@ Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 `__kRPVControllerPCSamplingPropertiesLast`). Its three groups have fixed high
 nibbles: source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`.
 Instruction/source correlation properties include both source-line and owning
-source-file UUIDs.
+source-file UUIDs. Each ISA instruction line stores its instruction-type UUID;
+the ISA load also builds a UUID-to-text map used to resolve the public
+instruction-type text property.
 
 ### 6.8 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,

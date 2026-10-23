@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_sampling_state_renderer.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <iterator>
 #include <utility>
@@ -216,6 +217,23 @@ render_sampling_color_swatch(const char* text, ImU32 color, float size_fraction 
 static void
 render_sampling_state_color_legend()
 {
+    std::array<ColorLegendEntry, std::size(STALL_REASON_PRESENTATIONS) + 2> entries{};
+    entries.front() = { SAMPLING_STATE_ISSUED_TEXT, Colors::kTextSuccess };
+    for(size_t i = 0; i < std::size(STALL_REASON_PRESENTATIONS); ++i)
+    {
+        const StallReasonPresentation& presentation = STALL_REASON_PRESENTATIONS[i];
+        entries[i + 1] = { IsaDataBuilder::GetStallReasonName(presentation.kind),
+                           presentation.color };
+    }
+    entries.back() = { "Unknown / unclassified / N/A", Colors::kTextDim };
+    SamplingStateRenderer::RenderColorLegend("##SamplingStateColorLegend", entries.data(),
+                                             entries.size());
+}
+
+void
+SamplingStateRenderer::RenderColorLegend(const char* id, const ColorLegendEntry* entries,
+                                         size_t count)
+{
     SettingsManager& settings                   = SettingsManager::GetInstance();
     constexpr float  SWATCH_SIZE_FRACTION       = 0.7f;
     constexpr float  CELL_PADDING_IN_CHARACTERS = 0.25f;
@@ -225,32 +243,18 @@ render_sampling_state_color_legend()
     const ImGuiTableFlags flags =
         ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoHostExtendX |
         ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoSavedSettings;
-    if(ImGui::BeginTable("##SamplingStateColorLegend", 2, flags))
+    if(ImGui::BeginTable(id, 2, flags))
     {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        render_sampling_color_swatch(SAMPLING_STATE_ISSUED_TEXT,
-                                     settings.GetColor(Colors::kTextSuccess),
-                                     SWATCH_SIZE_FRACTION);
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextUnformatted(SAMPLING_STATE_ISSUED_TEXT);
-        for(const StallReasonPresentation& presentation : STALL_REASON_PRESENTATIONS)
+        for(size_t i = 0; i < count; ++i)
         {
-            const char* name = IsaDataBuilder::GetStallReasonName(presentation.kind);
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            render_sampling_color_swatch(name, settings.GetColor(presentation.color),
+            render_sampling_color_swatch(entries[i].name,
+                                         settings.GetColor(entries[i].color),
                                          SWATCH_SIZE_FRACTION);
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(name);
+            ImGui::TextUnformatted(entries[i].name);
         }
-        constexpr const char* GRAY_LABEL = "Unknown / unclassified / N/A";
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        render_sampling_color_swatch(GRAY_LABEL, settings.GetColor(Colors::kTextDim),
-                                     SWATCH_SIZE_FRACTION);
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextUnformatted(GRAY_LABEL);
         ImGui::EndTable();
     }
     ImGui::PopStyleVar();

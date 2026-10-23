@@ -327,6 +327,7 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
     {
         const uint64_t response_code = table_event->GetResponseCode();
         if(response_code != kRocProfVisResultSuccess &&
+           response_code != kRocProfVisResultInvalidUserInput &&
            response_code != kRocProfVisResultCancelled)
         {
             // A failed request leaves the previous rows in the model. Clear them but
@@ -334,14 +335,17 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
             m_table_model_mutable().SetTableData(m_table_type, {});
             m_table_model_mutable().SetTableTotalRowCount(m_table_type, 0);
             m_data_changed = true;
-            NotificationManager::GetInstance().Show(
-                m_filter_options.filter.empty()
-                    ? "Failed to load table data"
-                    : "Could not apply filter: " + m_filter_options.filter,
-                NotificationLevel::Error);
+            NotificationManager::GetInstance().Show("Failed to load table data",
+                                                    NotificationLevel::Error);
         }
         else
         {
+            if(response_code == kRocProfVisResultInvalidUserInput)
+            {
+                NotificationManager::GetInstance().Show(
+                    "Could not apply filter: " + m_filter_options.filter,
+                    NotificationLevel::Error);
+            }
             m_data_changed      = true;
             m_update_filter_row = m_display_filter_row;
             IndexColumns();

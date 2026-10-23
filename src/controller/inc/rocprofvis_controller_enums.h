@@ -44,6 +44,8 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultToolNotFound = 15,
     // A requested value could not be determined
     kRocProfVisResultNotAvailable = 16,
+    // Operation completed, but user input such as a table filter was invalid
+    kRocProfVisResultInvalidUserInput = 17,
 } rocprofvis_result_t;
 
 /*

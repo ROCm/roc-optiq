@@ -814,6 +814,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             bool        valid;
         };
         // Invalid filters are listed twice: the table processor caches the last filter.
+        // They must still return the columns, which the view needs to keep the filter
+        // row.
         const FilterCase filter_cases[] = {
             { "duration > 0", true },        { "name LIKE '%O''Brien%'", true },
             { "duration 5", false },         { "duration 5", false },
@@ -845,7 +847,22 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                       0, &future_result);
             spdlog::info("Get future result: {0}", future_result);
             REQUIRE(result == kRocProfVisResultSuccess);
-            REQUIRE((future_result == kRocProfVisResultSuccess) == filter_case.valid);
+            REQUIRE(future_result == (filter_case.valid ? kRocProfVisResultSuccess
+                                                        : kRocProfVisResultInvalidUserInput));
+            if(!filter_case.valid)
+            {
+                uint64_t filtered_columns = 0;
+                result = rocprofvis_controller_get_uint64(
+                    table_handle, kRPVControllerTableNumColumns, 0, &filtered_columns);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_columns == num_columns);
+
+                uint64_t filtered_rows = 0;
+                result = rocprofvis_controller_get_uint64(
+                    array, kRPVControllerArrayNumEntries, 0, &filtered_rows);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_rows == 0);
+            }
 
             rocprofvis_controller_future_free(future);
             rocprofvis_controller_array_free(array);

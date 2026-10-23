@@ -19,6 +19,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+
+# /Zi stores every file's debug info in one PDB. A parallel build runs many
+# cl.exe processes against that file, and without /FS they fail with C1041.
+if(MSVC)
+    add_compile_options(/FS)
+endif()
 set(BUILD_SHARED_LIBS OFF)
 
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)

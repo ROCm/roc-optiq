@@ -108,7 +108,7 @@ Your PR should target the default branch.  Our current default branch is the **m
 
 Before submitting a PR:
 
-- Agree to the statements made in the [Licensing](#Licensing) section
+- Agree to the statements made in the [Licensing](#Licensing) section.
 - Ensure the change addresses an existing issue or documented requirement.
 - Run all applicable tests and validate the results.
 - Update documentation as needed.

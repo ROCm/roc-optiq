@@ -3893,7 +3893,10 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
         return;
     }
 
-    if(req.response_code == kRocProfVisResultSuccess)
+    // An invalid filter still returns the columns (with no rows), and the view needs
+    // them to keep the filter row and decide whether to draw the table.
+    if(req.response_code == kRocProfVisResultSuccess ||
+       req.response_code == kRocProfVisResultInvalidUserInput)
     {
         rocprofvis_controller_table_type_t table_type;
         switch(req.request_type)

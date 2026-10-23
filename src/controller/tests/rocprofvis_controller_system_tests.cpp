@@ -809,6 +809,68 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             start_index += chunk_size;
         } while(start_index < num_rows);
 
+        struct FilterCase
+        {
+            const char* filter;
+            bool        valid;
+        };
+        // Invalid filters are listed twice: the table processor caches the last filter.
+        // They must still return the columns, which the view needs to keep the filter
+        // row.
+        const FilterCase filter_cases[] = {
+            { "duration > 0", true },        { "name LIKE '%O''Brien%'", true },
+            { "duration 5", false },         { "duration 5", false },
+            { "no_such_column > 5", false }, { "no_such_column > 5", false },
+        };
+        for(const FilterCase& filter_case : filter_cases)
+        {
+            spdlog::info("Fetching event table with filter: {0}", filter_case.filter);
+            result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter,
+                                                      0, filter_case.filter);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStartIndex, 0, 0);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            REQUIRE(array != nullptr);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_table_fetch_async(m_controller, table_handle,
+                                                             args, future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t future_result = kRocProfVisResultSuccess;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult,
+                                                      0, &future_result);
+            spdlog::info("Get future result: {0}", future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result == (filter_case.valid ? kRocProfVisResultSuccess
+                                                        : kRocProfVisResultInvalidUserInput));
+            if(!filter_case.valid)
+            {
+                uint64_t filtered_columns = 0;
+                result = rocprofvis_controller_get_uint64(
+                    table_handle, kRPVControllerTableNumColumns, 0, &filtered_columns);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_columns == num_columns);
+
+                uint64_t filtered_rows = 0;
+                result = rocprofvis_controller_get_uint64(
+                    array, kRPVControllerArrayNumEntries, 0, &filtered_rows);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_rows == 0);
+            }
+
+            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_array_free(array);
+        }
+        result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
+        REQUIRE(result == kRocProfVisResultSuccess);
+
         const char* csv_path = "sample/test_export.csv";
 
         spdlog::info("Allocating Future");

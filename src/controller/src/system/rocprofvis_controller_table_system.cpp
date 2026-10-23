@@ -54,6 +54,7 @@ rocprofvis_result_t SystemTable::SetupAndFetch(Trace& controller, Arguments& arg
 rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    bool invalid_user_input = false;
     rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
     if(object2wait)
     {
@@ -82,6 +83,11 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
                     {
                         future->AddDependentFuture(object2wait);
                         dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+                        invalid_user_input = dm_result == kRocProfVisDmResultInvalidUserInput;
+                        if(invalid_user_input)
+                        {
+                            dm_result = kRocProfVisDmResultSuccess;
+                        }
                     }
 
                     if(dm_result == kRocProfVisDmResultSuccess)
@@ -216,6 +222,10 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
     {
         result = kRocProfVisResultMemoryAllocError;
     }
+    if(result == kRocProfVisResultSuccess && invalid_user_input)
+    {
+        result = kRocProfVisResultInvalidUserInput;
+    }
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
@@ -261,6 +271,11 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
                     {
                         future->AddDependentFuture(object2wait);
                         dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+                        // Fetch reports the invalid input; the count and columns still apply.
+                        if(dm_result == kRocProfVisDmResultInvalidUserInput)
+                        {
+                            dm_result = kRocProfVisDmResultSuccess;
+                        }
                     }
 
                     future->RemoveDependentFuture(object2wait);

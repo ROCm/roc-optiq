@@ -511,6 +511,7 @@ rocprofvis_dm_result_t  QueryManager::ExecuteQuery(
         std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
+        rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
         if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
         {
             auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
@@ -521,7 +522,8 @@ rocprofvis_dm_result_t  QueryManager::ExecuteQuery(
             }
             bool query_updated = !m_table_processor[data_type].IsCurrentQuery(queries);
             m_table_processor[data_type].SaveCurrentQuery(queries);
-            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, query_updated)) break;
+            result = m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, query_updated);
+            if (kRocProfVisDmResultSuccess != result && kRocProfVisDmResultInvalidUserInput != result) break;
         }
         else
         {
@@ -530,7 +532,7 @@ rocprofvis_dm_result_t  QueryManager::ExecuteQuery(
         }
 
         ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
-        return future->SetPromise(kRocProfVisDmResultSuccess);
+        return future->SetPromise(result);
     }
     ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed); 

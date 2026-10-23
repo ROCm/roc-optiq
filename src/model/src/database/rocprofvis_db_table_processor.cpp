@@ -712,6 +712,7 @@ namespace DataModel
         }
 
         bool filtered = !m_last_filter_str.empty();
+        bool filter_invalid = false;
         it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "FILTER"; });
         if (it != commands.end())
         {
@@ -776,6 +777,8 @@ namespace DataModel
                     {
                         spdlog::error("Error: {} ", e.what());
                         m_filter_lookup.clear();
+                        InvalidateFiltering();
+                        filter_invalid = true;
                     }
 
                 }
@@ -959,7 +962,9 @@ namespace DataModel
             }
         }
 
-        return kRocProfVisDmResultSuccess;
+        // The columns above are still filled in, so callers that only need them can
+        // treat this like success.
+        return filter_invalid ? kRocProfVisDmResultInvalidUserInput : kRocProfVisDmResultSuccess;
     }
 
     // SQLite row callback used by compound queries.

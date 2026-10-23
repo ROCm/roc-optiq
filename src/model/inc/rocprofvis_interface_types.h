@@ -79,6 +79,8 @@ typedef enum rocprofvis_dm_result_t
     kRocProfVisDmResultResourceBusy = 9,
     // Operation failed due to busy status of resource
     kRocProfVisDmResultDbAbort = 10,
+    // Operation completed, but user input such as a table filter was invalid
+    kRocProfVisDmResultInvalidUserInput = 11,
 } rocprofvis_dm_result_t;
 
 // Track category

@@ -39,6 +39,10 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 - rocpd PMC samples attach to the correct sample track. The counter id is matched as text.
 - Counter tracks report their owning process in **Track Details**.
 
+##### Timeline and navigation
+
+- File Explorer-style track selection: In the timeline and the topology sidebar, click a track to select only that track, **Ctrl**+click to add or remove it, and **Shift**+click to select every track in between.
+
 ##### ISA View
 
 - ISA View is now available in distributed binaries.

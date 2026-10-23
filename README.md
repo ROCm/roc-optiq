@@ -127,7 +127,7 @@ Report bugs and request features through the [GitHub issue tracker](https://gith
 
 ## Contributions and license
 
-Contributions of any kind are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the contribution process and
+Contributions of any kind are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution process and
 [CODING.md](CODING.md) for the style rules that apply to all C++ changes.
 
 Licensing information is in [LICENSE.md](LICENSE.md).

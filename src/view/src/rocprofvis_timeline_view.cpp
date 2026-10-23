@@ -1916,20 +1916,6 @@ TimelineView::RenderGraphView()
         RenderTrack(index, request_data, window_flags, container_size);
     }
 
-    // A plain click on the empty area below the last track clears the track
-    // selection, like a click on a folder's background in File Explorer.
-    const ImVec2   rows_end = ImGui::GetCursorScreenPos();
-    const ImVec2   view_min = ImGui::GetWindowPos();
-    const ImGuiIO& io       = ImGui::GetIO();
-    if(ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-       !io.KeyCtrl && !io.KeyShift &&
-       ImGui::IsMouseHoveringRect(ImVec2(view_min.x, rows_end.y),
-                                  view_min + ImGui::GetWindowSize()) &&
-       m_timeline_selection->HasSelectedTracks())
-    {
-        m_timeline_selection->UnselectAllTracks();
-    }
-
     RenderEmptyTrackAreaMenu();
 
     TrackItem::SetSidebarSize(m_sidebar_size);

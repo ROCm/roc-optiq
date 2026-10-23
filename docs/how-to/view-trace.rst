@@ -164,7 +164,7 @@ Use the following actions to select tracks in the Timeline View or the **System 
 - Click a track in the **Description** area to select only that track.
 - Press and hold **Ctrl** while clicking a track to add it to the selection or remove it.
 - Press and hold **Shift** while clicking a track to select every track between it and the track you last clicked. Hold **Ctrl** as well to add those tracks to the current selection.
-- Click the empty area below the last track, or empty space in the **System Topology View**, to unselect all tracks.
+- Click empty space in the **System Topology View** to unselect all tracks.
 - Right-click the track to select **Copy track name**, **Copy track ID**, or **Track Options**. 
 
 When a track is selected, the details display in the **Track Details** pane.

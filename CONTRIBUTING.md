@@ -51,6 +51,45 @@ General guidelines:
   data, screen captures, and system information. This significantly reduces triage time.
 - Check your issue regularly — we may ask follow-up questions.
 
+## Acceptance Criteria ##
+
+The aim of ROCm Optiq is to visualize data captured by ROCm profiling tools. 
+
+Contributors wanting to submit new implementations, improvements, or bug fixes should follow the below mentioned guidelines.
+
+## Code Structure ##
+
+ROCm Optiq follows a modular architecture with clear separation of concerns:
+
+### Source Code (`src/`)
+
+* **`src/app/`** - Application entry point and main window initialization
+  
+* **`src/core/`** - Core library with fundamental data structures and utilities
+  * Public API headers in `inc/`
+
+* **`src/model/`** - Data model layer responsible for trace file parsing and Database access layer (SQLite-based trace file parsing)
+  * Public API in `inc/`
+
+* **`src/controller/`** - Business logic layer, implements the controller pattern
+  * Handles trace loading, timeline management, event processing, and data transformations
+  * Provides the bridge between the model and view layers
+  * Public API in `inc/`
+
+* **`src/view/`** - User interface layer (ImGui-based)
+  * Implements timeline visualization, event tables, analysis views, and other UI components
+
+### Third-Party Dependencies (`thirdparty/`)
+
+External libraries including ImGui, GLFW, SQLite, spdlog, JSON parsers, and others.
+
+### Build System and Packaging
+
+* `CMakeLists.txt` - Root CMake configuration
+* `CMakePresets.json` - CMake preset configurations for different platforms and build types
+* `.github/workflows/` - CI/CD workflows for building packages on Ubuntu, Oracle Linux, Rocky Linux, and Windows
+* `wix/` - WiX v4 MSI sources, built by the `PACKAGE_WIX` CMake target
+
 ### Code style
 
 See [CODING.md](CODING.md).
@@ -65,9 +104,11 @@ Discussion about new features and test areas is welcome via:
 ### Pull Requests
 
 All contributions should be submitted through a Pull Request (PR).
+Your PR should target the default branch.  Our current default branch is the **main** branch, which serves as our integration branch.
 
 Before submitting a PR:
 
+- Agree to the statements made in the [Licensing](#Licensing) section.
 - Ensure the change addresses an existing issue or documented requirement.
 - Run all applicable tests and validate the results.
 - Update documentation as needed.

@@ -41,6 +41,16 @@ public:
     void SelectTrack(TrackItem& track);
     void UnselectTrack(TrackItem& track);
     void ToggleSelectTrack(TrackItem& track);
+    /*
+     * File Explorer click rules. row_order is the clicked view's rows, top to
+     * bottom. Click selects only this track and Ctrl toggles it; both make it
+     * the anchor. Shift selects the rows from the anchor through this track,
+     * and Ctrl+Shift adds them to the selection.
+     */
+    void ClickTrack(TrackItem& track, const std::vector<uint64_t>& row_order, bool ctrl,
+                    bool shift);
+    // Selects exactly these tracks.
+    void SetSelectedTracks(const std::vector<uint64_t>& track_ids);
     void UnselectAllTracks();
     bool GetSelectedTracks(std::vector<uint64_t>& track_ids) const;
     bool HasSelectedTracks() const;
@@ -100,6 +110,7 @@ private:
 
     static constexpr double HIGHLIGHT_TIMEOUT_S = 10.0;
     uint64_t                m_last_highlighted_event_id;
+    uint64_t                m_range_anchor_id;
 };
 
 }  // namespace View

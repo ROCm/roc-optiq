@@ -271,6 +271,15 @@ ImGuiID TrackButtonId(ImGuiTestItemList& items, const std::string& name)
     return 0;
 }
 
+// Ctrl-click toggles one track row and keeps the rest of the selection. A plain
+// click would replace the selection with that track.
+void CtrlClick(ImGuiTestContext* ctx, ImGuiID id)
+{
+    ctx->KeyDown(ImGuiMod_Ctrl);
+    ctx->ItemClick(id);
+    ctx->KeyUp(ImGuiMod_Ctrl);
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -1837,6 +1846,57 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "sys_track_selection_modifiers");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        std::vector<FlameTrackItem*> tracks;
+        for (int i = 0; i < 60 && tracks.size() < 3; i++)
+        {
+            tracks = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (tracks.size() < 3) ctx->Yield(2);
+        }
+        if (tracks.size() < 3)
+        {
+            ctx->LogWarning("SKIP: need three displayed tracks for range selection");
+            return;
+        }
+
+        std::vector<uint64_t> rows;
+        for (FlameTrackItem* track : tracks) rows.push_back(track->GetID());
+        auto selected_count = [&]() {
+            std::vector<uint64_t> ids;
+            sel->GetSelectedTracks(ids);
+            return ids.size();
+        };
+
+        sel->UnselectAllTracks();
+        sel->ClickTrack(*tracks[0], rows, false, false);
+        IM_CHECK(selected_count() == 1 && sel->IsTrackSelected(*tracks[0]));
+
+        sel->ClickTrack(*tracks[2], rows, false, true);
+        IM_CHECK(selected_count() == 3);
+        IM_CHECK(sel->IsTrackSelected(*tracks[0]));
+        IM_CHECK(sel->IsTrackSelected(*tracks[1]));
+        IM_CHECK(sel->IsTrackSelected(*tracks[2]));
+
+        sel->ClickTrack(*tracks[1], rows, true, false);
+        IM_CHECK(selected_count() == 2 && !sel->IsTrackSelected(*tracks[1]));
+        sel->ClickTrack(*tracks[2], rows, true, true);
+        IM_CHECK(selected_count() == 3 && sel->IsTrackSelected(*tracks[1]));
+
+        sel->UnselectAllTracks();
+        ctx->Yield(2);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_track_details_populates_on_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2491,9 +2551,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         sel->ClearTimeRange();
         drain();
 
-        // Every select and deselect below is a click on the track's sidebar row,
-        // whose button runs ToggleSelectTrack, so the same click selects an
-        // unselected track and deselects a selected one.
+        // Every select and deselect below is a Ctrl-click on the track's sidebar
+        // row, so the same click selects an unselected track and deselects a
+        // selected one.
         ImGuiWindow* sidebar = FindSidebarWindow(ctx);
         if (sidebar == nullptr) restore();
         IM_CHECK(sidebar != nullptr);
@@ -2529,13 +2589,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
         for (size_t i = 0; i < flames.size() && i < kMaxCandidates && track_b == nullptr; i++)
         {
             if (buttons[i] == 0) continue;
-            ctx->ItemClick(buttons[i]);
+            CtrlClick(ctx, buttons[i]);
             drain();
             // Two same-named tracks resolve to one row, so a click lands on only one
             // of them. The selection model says which, and only then is the count
             // that track's own total.
             const uint64_t rows = sel->IsTrackSelected(*flames[i]) ? row_count() : 0;
-            ctx->ItemClick(buttons[i]);  // same button toggles the track back off
+            CtrlClick(ctx, buttons[i]);  // same button toggles the track back off
             drain();
             if (rows == 0) continue;
             if (track_a == nullptr) { track_a = flames[i]; button_a = buttons[i]; }
@@ -2550,13 +2610,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         sel->UnselectAllTracks();
         drain();
-        ctx->ItemClick(button_a);
+        CtrlClick(ctx, button_a);
         drain();
-        ctx->ItemClick(button_b);
+        CtrlClick(ctx, button_b);
         drain();
         const uint64_t count_ab = row_count();
 
-        ctx->ItemClick(button_b);  // toggles B back off, leaving only A selected
+        CtrlClick(ctx, button_b);  // toggles B back off, leaving only A selected
         drain();
         const uint64_t count_a = row_count();
 
@@ -2644,10 +2704,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ImGuiTestItemList sidebar_items;
         ctx->GatherItems(&sidebar_items, "");
 
-        // Fill the table by clicking each flame track's sidebar row. Same-named rows
-        // share one button id and the button toggles, so click the distinct ids once
-        // each. A duplicate-named pair fills from one of the two, which still holds
-        // raw rows to aggregate.
+        // Fill the table by Ctrl-clicking each flame track's sidebar row. Same-named
+        // rows share one button id and Ctrl-click toggles, so click the distinct ids
+        // once each. A duplicate-named pair fills from one of the two, which still
+        // holds raw rows to aggregate.
         std::vector<ImGuiID> track_buttons;
         for (FlameTrackItem* flame : flames)
         {
@@ -2663,7 +2723,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             restore();
             return;
         }
-        for (ImGuiID id : track_buttons) ctx->ItemClick(id);
+        for (ImGuiID id : track_buttons) CtrlClick(ctx, id);
         drain_event_table();
 
         const TablesModel& tables = dp->DataModel().GetTables();

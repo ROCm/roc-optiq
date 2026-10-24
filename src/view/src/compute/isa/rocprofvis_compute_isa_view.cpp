@@ -686,11 +686,9 @@ ComputeIsaView::RenderControlPanel()
 void
 ComputeIsaView::RenderDevelopmentNotice(float button_width)
 {
-    constexpr const char* LABEL   = "Experimental";
-    constexpr const char* TOOLTIP = "ISA View is under development.\n"
-                                    "Profiling data interpretation "
-                                    "may change in future releases.\n"
-                                    "The layout and available controls may also change.";
+    constexpr const char* LABEL   = "Tech Preview";
+    constexpr const char* TOOLTIP = "Tech Preview Feature.\n"
+                                    "Functionality may change.";
 
     const ImGuiStyle& style     = ImGui::GetStyle();
     const float       row_start = ImGui::GetCursorPosX();

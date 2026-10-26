@@ -7,6 +7,8 @@
 #include "rocprofvis_db_rocprof.h"
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
 #include "rocprofvis_db_profiler_hub.h"
+#include "rocprofvis_db_pytorch_hub.h"
+#include "trace_context.h"
 #endif
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_db_compute.h"
@@ -35,6 +37,11 @@
 rocprofvis_db_type_t rocprofvis_db_identify_type(
     rocprofvis_db_filename_t filename) {
     std::vector<std::string> multinode_files;
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    if (RocProfVis::DataModel::PytorchRouteEnabled() &&
+        optiq::ProbeTraceFormat(filename) == optiq::TraceFormat::PytorchKineto)
+        return rocprofvis_db_type_t::kPytorchTrace;
+#endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
     rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
@@ -62,14 +69,39 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
-#ifdef ROCPROFVIS_PERFETTO_ENABLED
-        db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
-        if (db_type == rocprofvis_db_type_t::kAutodetect)
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+        if (RocProfVis::DataModel::PytorchRouteEnabled() &&
+            optiq::ProbeTraceFormat(filename) == optiq::TraceFormat::PytorchKineto)
+            db_type = rocprofvis_db_type_t::kPytorchTrace;
 #endif
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+        if (db_type == rocprofvis_db_type_t::kAutodetect)
+            db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+#endif
+        if (db_type == rocprofvis_db_type_t::kAutodetect)
         {
             db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
         }
     } 
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    if (db_type == rocprofvis_db_type_t::kPytorchTrace)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::PytorchHubDatabase(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            } else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open PyTorch trace through profiler-hub!",
+                    nullptr);
+            }
+        }
+        catch(std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
+#endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
     {

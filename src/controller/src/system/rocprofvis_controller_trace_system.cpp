@@ -476,6 +476,7 @@ rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)
             if(ends_with(m_trace_file, ".rpd") ||
                 ends_with(m_trace_file, ".db") ||
                 ends_with(m_trace_file, ".yaml")
+                || ends_with(m_trace_file, ".json.gz")
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
                 ||
                 ends_with(m_trace_file, ".json") ||

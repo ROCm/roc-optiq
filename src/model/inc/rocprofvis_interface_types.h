@@ -148,7 +148,8 @@ typedef enum rocprofvis_db_type_t {
     // chrom trace or perfetto
     kChromeTrace = 5,
     kPerfettoTrace = 6,
-    kGoogleSqlite = 7
+    kGoogleSqlite = 7,
+    kPytorchTrace = 8
 
 } rocprofvis_db_type_t;
 

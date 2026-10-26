@@ -131,7 +131,6 @@ main(int argc, char** argv)
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #endif
         RocProfVis::Platform::set_window_class_hints(RocProfVis::App::APP_NAME_ASCII);
-        RocProfVis::Platform::apply_window_class_hints();
         GLFWwindow* window =
             glfwCreateWindow(RocProfVis::Platform::DEFAULT_WINDOWED_WIDTH,
                              RocProfVis::Platform::DEFAULT_WINDOWED_HEIGHT,

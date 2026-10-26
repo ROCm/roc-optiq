@@ -39,7 +39,6 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow*
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #endif
-    RocProfVis::Platform::apply_window_class_hints();
 
     *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if(!*window)

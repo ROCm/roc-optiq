@@ -980,6 +980,20 @@ if(UNIX AND NOT APPLE)
             COMPONENT ${RUNTIME_COMP_TYPE}
             EXCLUDE_FROM_ALL)
 
+    # These directories belong to the filesystem and hicolor-icon-theme packages.
+    # CPack's RPM claims every parent directory it does not exclude, and its
+    # default exclusions stop at /usr/share.
+    list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+         /usr/share/applications /usr/share/icons /usr/share/icons/hicolor)
+    file(GLOB LINUX_ICON_SIZES LIST_DIRECTORIES true
+         RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+         "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor/*")
+    foreach(ICON_SIZE ${LINUX_ICON_SIZES})
+        list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+             /usr/share/icons/hicolor/${ICON_SIZE}
+             /usr/share/icons/hicolor/${ICON_SIZE}/apps)
+    endforeach()
+
     find_program(DESKTOP_FILE_VALIDATE desktop-file-validate)
     if(BUILD_TESTING AND DESKTOP_FILE_VALIDATE)
         add_test(NAME ${TARGET_NAME}-desktop-entry

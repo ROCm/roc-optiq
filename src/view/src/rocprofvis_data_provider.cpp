@@ -25,12 +25,6 @@ const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchTrackSampleTable);
 const uint64_t DataProvider::EVENT_SEARCH_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchEventSearchTable);
-const uint64_t DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID =
-    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventExtendedData);
-const uint64_t DataProvider::EVENT_FLOW_DATA_REQUEST_ID =
-    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventFlowDetails);
-const uint64_t DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID =
-    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventCallStack);
 const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kSaveTrimmedTrace);
 const uint64_t DataProvider::CLEANUP_DATABASE_REQUEST_ID =
@@ -142,7 +136,6 @@ DataProvider::FreeRequests()
     cleanup_work.requests        = std::move(m_requests);
     m_requests.clear();
     m_pc_sampling_replacements.clear();
-    m_queued_event_fetches.clear();
 
     CleanupDetachedResources(std::move(cleanup_work));
 }
@@ -176,7 +169,6 @@ DataProvider::DetachCleanupWork()
 
     m_requests.clear();
     m_pc_sampling_replacements.clear();
-    m_queued_event_fetches.clear();
     m_trace_controller = nullptr;
     m_trace_timeline   = nullptr;
     m_model.Clear();
@@ -2756,7 +2748,6 @@ DataProvider::HandleRequests()
 {
     if(m_requests.size() > 0)
     {
-        std::vector<uint64_t> finished_event_fetches;
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
             RequestInfo&        req = it->second;
@@ -2784,12 +2775,6 @@ DataProvider::HandleRequests()
                 ProcessRequest(req);
                 // remove request from processing container
                 it = m_requests.erase(it);
-                if(erased_type == RequestType::kFetchEventExtendedData ||
-                   erased_type == RequestType::kFetchEventFlowDetails ||
-                   erased_type == RequestType::kFetchEventCallStack)
-                {
-                    finished_event_fetches.push_back(erased_id);
-                }
                 // If a PC sampling replacement was queued while this layer was
                 // in-flight, submit it now that the slot is free.
                 if(erased_type == RequestType::kFetchPcSampling)
@@ -2814,11 +2799,6 @@ DataProvider::HandleRequests()
             {
                 ++it;
             }
-        }
-        // Submitted after the loop: inserting into m_requests can rehash it.
-        for(uint64_t request_id : finished_event_fetches)
-        {
-            SubmitQueuedEventFetch(request_id);
         }
     }
 }
@@ -2896,7 +2876,7 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
 
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
-    if(event_params)
+    if(event_params && req.response_code == kRocProfVisResultSuccess)
     {
         EventInfo* event_info = const_cast<EventInfo*>(
             m_model.GetEvents().GetEvent(event_params->m_event_id));
@@ -3194,7 +3174,7 @@ DataProvider::ProcessEventFlowDetailsRequest(RequestInfo& req)
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
 
-    if(event_params)
+    if(event_params && req.response_code == kRocProfVisResultSuccess)
     {
         EventInfo* event_info = m_model.GetEvents().GetEvent(event_params->m_event_id);
         if(event_info)
@@ -4728,56 +4708,17 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 }
 
 bool
-DataProvider::QueueEventFetch(uint64_t request_id, uint64_t event_id)
+DataProvider::IsPendingEventFetch(const RequestInfo& pending, uint64_t event_id) const
 {
-    auto pending = m_requests.find(request_id);
-    if(pending == m_requests.end())
-    {
-        return false;
-    }
     std::shared_ptr<EventRequestParams> pending_params =
-        std::dynamic_pointer_cast<EventRequestParams>(pending->second.custom_params);
-    std::deque<uint64_t>& queue = m_queued_event_fetches[request_id];
-    if((!pending_params || pending_params->m_event_id != event_id) &&
-       std::find(queue.begin(), queue.end(), event_id) == queue.end())
+        std::dynamic_pointer_cast<EventRequestParams>(pending.custom_params);
+    const bool same_event = pending_params && pending_params->m_event_id == event_id;
+    if(!same_event)
     {
-        queue.push_back(event_id);
+        spdlog::warn("Event {} shares request id {:x} with an in-flight fetch", event_id,
+                     pending.request_id);
     }
-    return true;
-}
-
-void
-DataProvider::SubmitQueuedEventFetch(uint64_t request_id)
-{
-    bool submitted = IsRequestPending(request_id);
-    while(!submitted)
-    {
-        auto queued = m_queued_event_fetches.find(request_id);
-        if(queued == m_queued_event_fetches.end() || queued->second.empty())
-        {
-            break;
-        }
-        const uint64_t event_id = queued->second.front();
-        queued->second.pop_front();
-        // Results are only stored for events still in the model, so skip ones that
-        // were deselected while queued.
-        if(m_model.GetEvents().GetEvent(event_id) == nullptr)
-        {
-            continue;
-        }
-        if(request_id == EVENT_EXTENDED_DATA_REQUEST_ID)
-        {
-            submitted = FetchEventExtData(event_id);
-        }
-        else if(request_id == EVENT_FLOW_DATA_REQUEST_ID)
-        {
-            submitted = FetchEventFlowDetails(event_id);
-        }
-        else if(request_id == EVENT_CALL_STACK_DATA_REQUEST_ID)
-        {
-            submitted = FetchEventCallStackData(event_id);
-        }
-    }
+    return same_event;
 }
 
 bool
@@ -4789,9 +4730,12 @@ DataProvider::FetchEventExtData(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-    if(QueueEventFetch(EVENT_EXTENDED_DATA_REQUEST_ID, event_id))
+    const uint64_t request_id = RequestIdBuilder::MakeEventDataRequestId(
+        event_id, RequestType::kFetchEventExtendedData);
+    auto pending = m_requests.find(request_id);
+    if(pending != m_requests.end())
     {
-        return true;
+        return IsPendingEventFetch(pending->second, event_id);
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4810,7 +4754,7 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
-        request_info.request_id         = EVENT_EXTENDED_DATA_REQUEST_ID;
+        request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
@@ -4837,9 +4781,12 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-    if(QueueEventFetch(EVENT_FLOW_DATA_REQUEST_ID, event_id))
+    const uint64_t request_id = RequestIdBuilder::MakeEventDataRequestId(
+        event_id, RequestType::kFetchEventFlowDetails);
+    auto pending = m_requests.find(request_id);
+    if(pending != m_requests.end())
     {
-        return true;
+        return IsPendingEventFetch(pending->second, event_id);
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4858,7 +4805,7 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
-        request_info.request_id         = EVENT_FLOW_DATA_REQUEST_ID;
+        request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
@@ -4885,9 +4832,12 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-    if(QueueEventFetch(EVENT_CALL_STACK_DATA_REQUEST_ID, event_id))
+    const uint64_t request_id = RequestIdBuilder::MakeEventDataRequestId(
+        event_id, RequestType::kFetchEventCallStack);
+    auto pending = m_requests.find(request_id);
+    if(pending != m_requests.end())
     {
-        return true;
+        return IsPendingEventFetch(pending->second, event_id);
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4906,7 +4856,7 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
-        request_info.request_id         = EVENT_CALL_STACK_DATA_REQUEST_ID;
+        request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);

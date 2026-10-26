@@ -2315,12 +2315,15 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
             "Missing event_uuid");
     }
 
-    // These request ids are shared with the event panel. A fetch issued while one
-    // is in flight is queued behind it, so waiting on the ids covers both.
+    // Event fetches are keyed by event, so these are this event's ids. A fetch the
+    // event panel already has in flight for it is reused, not duplicated.
     const std::vector<uint64_t> request_ids = {
-        DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID,
-        DataProvider::EVENT_FLOW_DATA_REQUEST_ID,
-        DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventExtendedData),
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventFlowDetails),
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventCallStack)
     };
 
     const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);

@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "model/rocprofvis_model_types.h"
 #include "model/rocprofvis_tables_model.h"
 #include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
@@ -80,6 +81,24 @@ public:
                (static_cast<uint64_t>(group_id) << TRACK_GROUP_OFFSET_BITS) |
                (static_cast<uint64_t>(chunk_index) << TRACK_CHUNK_OFFSET_BITS) |
                (static_cast<uint64_t>(track_id));
+    }
+
+    static constexpr uint8_t EVENT_NODE_OFFSET_BITS = 44;
+    static constexpr uint8_t EVENT_OP_OFFSET_BITS   = EVENT_NODE_OFFSET_BITS + 8;
+    static_assert(EVENT_OP_OFFSET_BITS + 4 == REQUEST_TYPE_OFFSET_BITS,
+                  "event op must sit just below the request type");
+
+    // Packs the event's op, node and the low 44 bits of its database id, so fetches
+    // for different events get different ids. Database ids are far narrower than
+    // 44 bits in practice.
+    static uint64_t MakeEventDataRequestId(uint64_t event_uuid, RequestType request_type)
+    {
+        TraceEventId id;
+        id.uuid = event_uuid;
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               (static_cast<uint64_t>(id.bitfield.event_op) << EVENT_OP_OFFSET_BITS) |
+               (static_cast<uint64_t>(id.bitfield.event_node) << EVENT_NODE_OFFSET_BITS) |
+               (id.bitfield.event_id & ((1ULL << EVENT_NODE_OFFSET_BITS) - 1));
     }
 
     static uint64_t MakeRequestId(RequestType request_type)

@@ -847,8 +847,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                       0, &future_result);
             spdlog::info("Get future result: {0}", future_result);
             REQUIRE(result == kRocProfVisResultSuccess);
-            REQUIRE(future_result == (filter_case.valid ? kRocProfVisResultSuccess
-                                                        : kRocProfVisResultInvalidUserInput));
+            REQUIRE(future_result == kRocProfVisResultSuccess);
+
+            uint32_t error_length = 0;
+            result = rocprofvis_controller_get_string(
+                future, kRPVControllerFutureLastErrorMessage, 0, nullptr, &error_length);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE((error_length > 0) == !filter_case.valid);
             if(!filter_case.valid)
             {
                 uint64_t filtered_columns = 0;

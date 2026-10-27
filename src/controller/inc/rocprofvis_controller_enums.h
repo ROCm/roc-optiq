@@ -44,8 +44,6 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultToolNotFound = 15,
     // A requested value could not be determined
     kRocProfVisResultNotAvailable = 16,
-    // Operation completed, but user input such as a table filter was invalid
-    kRocProfVisResultInvalidUserInput = 17,
 } rocprofvis_result_t;
 
 /*
@@ -798,6 +796,9 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     kRPVControllerFutureProgressPercentage,
     // Progress message
     kRPVControllerFutureProgressMessage,
+    // Message the operation left for the user, such as a table filter that could not be
+    // applied. Empty when there is none.
+    kRPVControllerFutureLastErrorMessage,
     __kRPVControllerFuturePropertiesLast
    
 } rocprofvis_controller_future_properties_t;

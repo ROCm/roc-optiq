@@ -138,7 +138,7 @@ namespace DataModel
 
             if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0 && !future->Interrupted())
             {
-                result = ProcessCompoundQuery(handle, commands, !same_queries);
+                result = ProcessCompoundQuery(future, handle, commands, !same_queries);
                 m_tracks = tracks;
             }
             else
@@ -608,7 +608,7 @@ namespace DataModel
         return result;
     };
 
-    rocprofvis_dm_result_t TableProcessor::ProcessCompoundQuery(rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated)
+    rocprofvis_dm_result_t TableProcessor::ProcessCompoundQuery(Future* future, rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated)
     {
         auto GetRowMap = [&](int row_index, std::unordered_map<std::string, FilterExpression::Value> & map)
             {
@@ -712,7 +712,6 @@ namespace DataModel
         }
 
         bool filtered = !m_last_filter_str.empty();
-        bool filter_invalid = false;
         it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "FILTER"; });
         if (it != commands.end())
         {
@@ -776,9 +775,9 @@ namespace DataModel
                     catch (const std::exception& e)
                     {
                         spdlog::error("Error: {} ", e.what());
+                        future->SetErrorMessage("Could not apply filter: " + Trim(e.what()));
                         m_filter_lookup.clear();
                         InvalidateFiltering();
-                        filter_invalid = true;
                     }
 
                 }
@@ -962,9 +961,7 @@ namespace DataModel
             }
         }
 
-        // The columns above are still filled in, so callers that only need them can
-        // treat this like success.
-        return filter_invalid ? kRocProfVisDmResultInvalidUserInput : kRocProfVisDmResultSuccess;
+        return kRocProfVisDmResultSuccess;
     }
 
     // SQLite row callback used by compound queries.

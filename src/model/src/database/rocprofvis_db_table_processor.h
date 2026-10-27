@@ -274,7 +274,7 @@ namespace DataModel
         static int CallbackRunCompoundQuery(void* data, int argc, void* stmt, char** azColName);
 
     private:
-        rocprofvis_dm_result_t ProcessCompoundQuery(rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated);
+        rocprofvis_dm_result_t ProcessCompoundQuery(Future* future, rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated);
         static std::string Trim(const std::string& str);
         rocprofvis_dm_result_t AddTableCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index);
         rocprofvis_dm_result_t AddTableColumns(bool to_file, rocprofvis_dm_handle_t handle);

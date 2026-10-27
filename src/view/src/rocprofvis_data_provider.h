@@ -233,8 +233,11 @@ public:
 
     void SetTrackMetadataChangedCallback(
         const std::function<void(const std::string&)>& callback);
+    // Called with the trace path, request id, response code and any error message the
+    // controller left for the user.
     void SetTableDataReadyCallback(
-        const std::function<void(const std::string&, uint64_t, uint64_t)>& callback);
+        const std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>&
+            callback);
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
@@ -397,7 +400,8 @@ private:
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when table data has changed
-    std::function<void(const std::string&, uint64_t, uint64_t)> m_table_data_ready_callback;
+    std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>
+        m_table_data_ready_callback;
     // Called when new track data is ready
     std::function<void(uint64_t, const std::string&, const RequestInfo&)>
         m_track_data_ready_callback;

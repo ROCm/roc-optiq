@@ -435,6 +435,10 @@ File: `rocprofvis_controller_future.{h,cpp}`.
   DB future percentages folded into a single percentage exposed via
   `kRPVControllerFutureProgressPercentage` /
   `kRPVControllerFutureProgressMessage`.
+- `m_last_error_message` - a message for the user that the operation can
+  leave even when it succeeds (e.g. an invalid table filter), exposed via
+  `kRPVControllerFutureLastErrorMessage`. `KeepErrorMessage(db_future)`
+  copies it from a finished DB future.
 
 `Future::ProgressCallback` is the C-style callback registered with
 each DB future; it locks the mutex, writes into `m_progress_map`, and

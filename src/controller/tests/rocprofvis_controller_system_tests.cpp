@@ -811,15 +811,26 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         struct FilterCase
         {
             const char* filter;
-            bool        valid;
+            const char* error;  // null when the filter is valid
         };
         // Invalid filters are listed twice: the table processor caches the last filter.
         // They must still return the columns, which the view needs to keep the filter
         // row.
         const FilterCase filter_cases[] = {
-            { "duration > 0", true },        { "name LIKE '%O''Brien%'", true },
-            { "duration 5", false },         { "duration 5", false },
-            { "no_such_column > 5", false }, { "no_such_column > 5", false },
+            { "duration > 0", nullptr },
+            { "name LIKE '%O''Brien%'", nullptr },
+            { "duration == 0", nullptr },
+            { "duration 5",
+              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"" },
+            { "duration 5",
+              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"" },
+            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"" },
+            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"" },
+            { "duration > 5 ms", "Could not apply filter: Unexpected \"ms\" after \"duration > 5\"" },
+            { "duration >", "Could not apply filter: Expected a value after >, but the filter ended" },
+            { "duration > 0 AND",
+              "Could not apply filter: Expected a condition after AND, but the filter ended" },
+            { "duration <> 5", "Could not apply filter: \"<>\" is not supported; use != instead" },
         };
         for(const FilterCase& filter_case : filter_cases)
         {
@@ -853,8 +864,17 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             result = rocprofvis_controller_get_string(
                 future, kRPVControllerFutureLastErrorMessage, 0, nullptr, &error_length);
             REQUIRE(result == kRocProfVisResultSuccess);
-            REQUIRE((error_length > 0) == !filter_case.valid);
-            if(!filter_case.valid)
+            std::string error(error_length, '\0');
+            if(error_length > 0)
+            {
+                result = rocprofvis_controller_get_string(
+                    future, kRPVControllerFutureLastErrorMessage, 0, error.data(),
+                    &error_length);
+                REQUIRE(result == kRocProfVisResultSuccess);
+            }
+            spdlog::info("Filter error message: {0}", error);
+            REQUIRE(error == (filter_case.error ? filter_case.error : ""));
+            if(filter_case.error)
             {
                 uint64_t filtered_columns = 0;
                 result = rocprofvis_controller_get_uint64(

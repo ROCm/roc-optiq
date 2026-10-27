@@ -361,7 +361,7 @@ KernelMetricTable::Render()
     if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, total_table_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
-        if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
+        if(!header.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
         {
             ImGuiTableFlags table_flags =
                 ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX |
@@ -506,9 +506,11 @@ KernelMetricTable::Render()
 
                 if(data.empty())
                 {
+                    // The ID column is hidden, so the note goes under Name.
                     ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    ImGui::TextDisabled("None");
+                    ImGui::TableSetColumnIndex(NAME_COLUMN_INDEX);
+                    ImGui::TextDisabled(active_count > 0 ? "No kernels match the applied filters"
+                                                         : "None");
                 }
 
                 // Get sort specs

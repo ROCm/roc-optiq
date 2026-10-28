@@ -21,10 +21,6 @@ namespace RocProfVis
 namespace DataModel
 {
 
-// False only when OPTIQ_PYTORCH_ROUTE=perfetto, so a PyTorch trace bypasses profiler-hub
-// and falls through to Optiq's own trace detection.
-bool PytorchRouteEnabled();
-
 class PytorchHubDatabase : public Database
 {
 public:
@@ -33,6 +29,10 @@ public:
 
     rocprofvis_dm_result_t Open() override;
     rocprofvis_dm_result_t Close() override;
+
+    // kAutodetect for any other file, and for a PyTorch trace when
+    // OPTIQ_PYTORCH_ROUTE=perfetto, so that trace falls through to Optiq's own detection.
+    static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
 
 private:
     rocprofvis_dm_result_t BuildComputeQuery(rocprofvis_db_compute_use_case_enum_t use_case,

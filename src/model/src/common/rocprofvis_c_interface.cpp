@@ -8,7 +8,6 @@
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
 #include "rocprofvis_db_profiler_hub.h"
 #include "rocprofvis_db_pytorch_hub.h"
-#include "trace_context.h"
 #endif
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_db_compute.h"
@@ -38,9 +37,9 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(
     rocprofvis_db_filename_t filename) {
     std::vector<std::string> multinode_files;
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
-    if (RocProfVis::DataModel::PytorchRouteEnabled() &&
-        optiq::ProbeTraceFormat(filename) == optiq::TraceFormat::PytorchKineto)
-        return rocprofvis_db_type_t::kPytorchTrace;
+    rocprofvis_db_type_t pytorch_db_type = RocProfVis::DataModel::PytorchHubDatabase::Detect(filename);
+    if (pytorch_db_type == rocprofvis_db_type_t::kPytorchTrace)
+        return pytorch_db_type;
 #endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
     rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
@@ -70,9 +69,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
-        if (RocProfVis::DataModel::PytorchRouteEnabled() &&
-            optiq::ProbeTraceFormat(filename) == optiq::TraceFormat::PytorchKineto)
-            db_type = rocprofvis_db_type_t::kPytorchTrace;
+        db_type = RocProfVis::DataModel::PytorchHubDatabase::Detect(filename);
 #endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
         if (db_type == rocprofvis_db_type_t::kAutodetect)

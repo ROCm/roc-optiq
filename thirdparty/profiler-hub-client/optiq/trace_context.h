@@ -21,11 +21,11 @@ public:
     }
 };
 
-enum class TraceFormat
+enum class TraceFormat : uint32_t
 {
-    Unknown,
-    Sqlite,
-    PytorchKineto
+    kUnknown,
+    kSqlite,
+    kPytorchKineto
 };
 
 TraceFormat ProbeTraceFormat(const std::string& file_path);

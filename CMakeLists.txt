@@ -891,6 +891,9 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
+# Archive generators wrap the prefix in <package>-<version>-<system>/. DEB and
+# RPM do not. Leave it off so the tarball extracts onto / at the install prefix.
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 
 set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
 # Detect Linux distro for additional package types

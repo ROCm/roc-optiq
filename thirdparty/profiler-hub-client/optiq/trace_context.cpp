@@ -7,6 +7,21 @@
 
 namespace optiq {
 
+TraceFormat ProbeTraceFormat(const std::string &file_path) {
+  ph_trace_format_t format = PH_TRACE_FORMAT_UNKNOWN;
+  if (ph_probe_trace_format(file_path.c_str(), &format) != PH_RESULT_SUCCESS)
+    return TraceFormat::kUnknown;
+
+  switch (format) {
+  case PH_TRACE_FORMAT_SQLITE:
+    return TraceFormat::kSqlite;
+  case PH_TRACE_FORMAT_PYTORCH_KINETO:
+    return TraceFormat::kPytorchKineto;
+  default:
+    return TraceFormat::kUnknown;
+  }
+}
+
 TraceContext::TraceContext(const std::string &file_path) : m_ctx(nullptr) {
   if (ph_ctx_create(&m_ctx, file_path.c_str()) != PH_RESULT_SUCCESS)
     throw TraceOpenError(file_path);

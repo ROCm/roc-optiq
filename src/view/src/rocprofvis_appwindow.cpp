@@ -58,15 +58,15 @@ constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutd
 constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
-const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml", "json", "proto", "pftrace"};
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml", "json.gz", "json", "proto", "pftrace"};
 #else
-const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml"};
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml", "json.gz"};
 #endif
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
-const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv", "json", "proto", "pftrace" };
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv", "json.gz", "json", "proto", "pftrace" };
 #else
-const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv", "json.gz" };
 #endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };

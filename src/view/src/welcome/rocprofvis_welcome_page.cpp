@@ -89,10 +89,10 @@ constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 6;
 
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
-    "Supported types: .db, .rpd, .yaml, .rpv, .json, .proto, .pftrace";
+    "Supported types: .db, .rpd, .yaml, .rpv, .json.gz, .json, .proto, .pftrace";
 #else
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
-    "Supported types: .db, .rpd, .yaml, .rpv";
+    "Supported types: .db, .rpd, .yaml, .rpv, .json.gz";
 #endif
 
 struct ResourceGroup
@@ -518,7 +518,7 @@ WelcomePage::RenderLeftCard()
                             ImVec2(0.0f, font_size * WELCOME_ACTION_SPACING_EM));
         const float inner_w = ImGui::GetContentRegionAvail().x;
         if(DrawPrimaryAction(settings, "open_trace", "Open Trace File...",
-                             "Open a .db, .rpd, .rpv or .yaml file.",
+                             "Open a .db, .rpd, .rpv, .yaml or .json.gz file.",
                              SUPPORTED_FILE_TYPES_HINT, inner_w))
         {
             m_on_open_file();

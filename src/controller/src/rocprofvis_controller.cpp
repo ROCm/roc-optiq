@@ -194,6 +194,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
                 case kChromeTrace:
                 case kPerfettoTrace:
                 case kGoogleSqlite:
+                case kPytorchTrace:
                 {
                     trace = new RocProfVis::Controller::SystemTrace(filename, config_path!=nullptr?config_path:"");
                     break;

@@ -737,15 +737,19 @@ namespace DataModel
                             auto lfilter = filter;
                             for (size_t row_index = start_row; row_index < end_row; row_index++)
                             {
-                                GetRowMap(static_cast<int>(row_index), row_map);
                                 bool valid = true;
                                 try {
+                                    GetRowMap(static_cast<int>(row_index), row_map);
                                     valid = lfilter.Evaluate(row_map);
                                 }
-                                catch (const std::exception& err)
+                                catch (const std::exception&)
                                 {
                                     valid = false;
-                                    eptr = std::current_exception();
+                                    std::lock_guard<std::mutex> lock(mtx);
+                                    if(!eptr) // only set exception if not already set
+                                    {
+                                        eptr = std::current_exception();
+                                    }
                                     break;
                                 }
                                 if (valid)
@@ -753,7 +757,6 @@ namespace DataModel
                                     std::lock_guard<std::mutex> lock(mtx);
                                     m_filter_lookup.insert(static_cast<uint32_t>(row_index));
                                 }
-
                             }
                             };
 

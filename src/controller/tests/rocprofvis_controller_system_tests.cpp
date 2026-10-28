@@ -811,26 +811,31 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         struct FilterCase
         {
             const char* filter;
-            const char* error;  // null when the filter is valid
+            const char* error;  // null when nothing is reported
+            bool        empty;  // the filter leaves no rows
         };
-        // Invalid filters are listed twice: the table processor caches the last filter.
-        // They must still return the columns, which the view needs to keep the filter
-        // row.
+        // An invalid filter is reported when it is applied. Sending the same query again
+        // returns the cached empty result without reporting it again. Either way the
+        // columns come back, which the view needs to keep the filter row.
         const FilterCase filter_cases[] = {
-            { "duration > 0", nullptr },
-            { "name LIKE '%O''Brien%'", nullptr },
-            { "duration == 0", nullptr },
+            { "duration > 0", nullptr, false },
+            { "name LIKE '%O''Brien%'", nullptr, false },
+            { "duration == 0", nullptr, false },
             { "duration 5",
-              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"" },
-            { "duration 5",
-              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"" },
-            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"" },
-            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"" },
-            { "duration > 5 ms", "Could not apply filter: Unexpected \"ms\" after \"duration > 5\"" },
-            { "duration >", "Could not apply filter: Expected a value after >, but the filter ended" },
+              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"",
+              true },
+            { "duration 5", nullptr, true },
+            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"",
+              true },
+            { "no_such_column > 5", nullptr, true },
+            { "duration > 5 ms", "Could not apply filter: Unexpected \"ms\" after \"duration > 5\"",
+              true },
+            { "duration >", "Could not apply filter: Expected a value after >, but the filter ended",
+              true },
             { "duration > 0 AND",
-              "Could not apply filter: Expected a condition after AND, but the filter ended" },
-            { "duration <> 5", "Could not apply filter: \"<>\" is not supported; use != instead" },
+              "Could not apply filter: Expected a condition after AND, but the filter ended", true },
+            { "duration <> 5", "Could not apply filter: \"<>\" is not supported; use != instead",
+              true },
         };
         for(const FilterCase& filter_case : filter_cases)
         {
@@ -874,7 +879,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             }
             spdlog::info("Filter error message: {0}", error);
             REQUIRE(error == (filter_case.error ? filter_case.error : ""));
-            if(filter_case.error)
+            if(filter_case.empty)
             {
                 uint64_t filtered_columns = 0;
                 result = rocprofvis_controller_get_uint64(

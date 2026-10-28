@@ -780,7 +780,6 @@ namespace DataModel
                         spdlog::error("Error: {} ", e.what());
                         future->SetErrorMessage("Could not apply filter: " + Trim(e.what()));
                         m_filter_lookup.clear();
-                        InvalidateFiltering();
                     }
 
                 }

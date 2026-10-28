@@ -325,41 +325,25 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
     if(table_event && table_event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
        table_event->GetRequestID() == m_request_id)
     {
-        const uint64_t response_code = table_event->GetResponseCode();
-        if(response_code != kRocProfVisResultSuccess &&
-           response_code != kRocProfVisResultCancelled)
+        if(!table_event->GetErrorMessage().empty())
         {
-            // A failed request leaves the previous rows in the model. Clear them but
-            // keep the header, so the filter row stays editable.
-            m_table_model_mutable().SetTableData(m_table_type, {});
-            m_table_model_mutable().SetTableTotalRowCount(m_table_type, 0);
-            m_data_changed = true;
-            NotificationManager::GetInstance().Show("Failed to load table data",
+            NotificationManager::GetInstance().Show(table_event->GetErrorMessage(),
                                                     NotificationLevel::Error);
+        }
+        m_data_changed      = true;
+        m_update_filter_row = m_display_filter_row;
+        IndexColumns();
+
+        // A content change (select/filter) re-fits the columns fresh; any other
+        // page-in of this table's data just lets columns grow to newly loaded values.
+        if(m_refit_requested)
+        {
+            m_refit_pending   = true;
+            m_refit_requested = false;
         }
         else
         {
-            if(!table_event->GetErrorMessage().empty())
-            {
-                NotificationManager::GetInstance().Show(table_event->GetErrorMessage(),
-                                                        NotificationLevel::Error);
-            }
-            m_data_changed      = true;
-            m_update_filter_row = m_display_filter_row;
-            IndexColumns();
-
-            // A content change (select/filter) re-fits the columns fresh; any other
-            // page-in of this table's data just lets columns grow to newly loaded
-            // values.
-            if(m_refit_requested)
-            {
-                m_refit_pending   = true;
-                m_refit_requested = false;
-            }
-            else
-            {
-                m_grow_pending = true;
-            }
+            m_grow_pending = true;
         }
     }
 }

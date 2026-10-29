@@ -10,6 +10,16 @@ lines are cached, so a rerun only voices lines whose text or voice changed, plus
 any listed with --redo (pass a different --seed for another take).
 
   python voxcpm_narrate.py lines.json clips [--voice voice.json] [--only 01] [--redo 01_03 --seed 7]
+
+The whole narration, after a change to the chapter script or the cards:
+  1. Here:  py -3 voice_masters.py lines --from-script --out lines.json
+  2. Box:   copy the last clips folder (it keeps unchanged takes), then
+            python voxcpm_narrate.py lines.json clips --voice voices/conversational_clean.json
+            python hear_all.py lines.json clips, and for each flagged line
+            python revoice_best.py lines.json clips voices/conversational_clean.json <id> ...
+  3. Here:  py -3 clean_onsets.py <clips> --trim --out voice --lines lines.json
+  4. Box:   python time_words.py lines.json <trimmed clips>, then copy its
+            words.tsv into voice/, where record_tutorials.ps1 reads the narration.
 """
 
 import argparse
@@ -73,7 +83,8 @@ def main():
     ap.add_argument("--only", default="", help="only lines whose id starts with this, like 01")
     ap.add_argument("--redo", nargs="*", default=[], metavar="ID", help="line ids to voice again")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--timesteps", type=int, default=10, help="diffusion steps per frame")
+    # The published narration used 30 steps; the setting is part of every take's cache key.
+    ap.add_argument("--timesteps", type=int, default=30, help="diffusion steps per frame")
     ap.add_argument("--cfg", type=float, default=2.0, help="guidance scale")
     args = ap.parse_args()
 

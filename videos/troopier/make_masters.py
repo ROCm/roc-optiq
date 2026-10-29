@@ -51,6 +51,9 @@ as it is.
 # How the narrator says words a text-to-speech voice gets wrong, applied to the
 # script text only; the footage keeps the real spellings.
 SPOKEN = [
+    (r"\bAMD\b", "A-M-D"),
+    (r"\bISA\b", "I-S-A"),
+    (r"\bPC\b", "P-C"),
     (r"\bROCm\b", "Rock-em"),
     # Said as one flowing name; as two words the voice stresses each like a separate name.
     (r"\bWimalasuriyan\b", "Wimala-suriyan"),
@@ -180,12 +183,14 @@ def main():
         stem = raw_video.stem
         cues = spoken_lines(stem, args.raw)
         said = [text for _, text in cues]
-        missing = [line for line in expected.get(stem, []) if line not in said]
+        # A step's fallback branch says the same line as the step, so each line counts once.
+        script = list(dict.fromkeys(expected.get(stem, [])))
+        missing = [line for line in script if line not in said]
         for line in missing:
             print(f"{stem}: SKIPPED STEP, this line never ran: {line}")
         problems += len(missing)
         if args.check_only:
-            print(f"{stem}: {len(said)} of {len(expected.get(stem, []))} lines ran")
+            print(f"{stem}: {len(set(said) & set(script))} of {len(script)} lines ran")
             continue
 
         args.videos.mkdir(parents=True, exist_ok=True)

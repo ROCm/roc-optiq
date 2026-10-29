@@ -19,6 +19,9 @@ from faster_whisper import WhisperModel
 
 # Spellings Whisper may choose for a word the voice said right, mapped to one form.
 CANON = [
+    (r"\ba\.? ?m\.? ?d\b\.?|\ba-m-d\b", "amd"),
+    (r"\bi\.? ?s\.? ?a\b\.?|\bi-s-a\b", "isa"),
+    (r"\bp\.? ?c\b\.?|\bp-c\b", "pc"),
     (r"\brock[- ']?[eu]m\b|\bro(?:c?k+h?)[aiu]?m\b|\brokom\b|\bra?ckham\b|\brocm\b", "rocm"),
     (r"\bopti[ckq]\b", "optiq"),
     (r"\bsaa?j[ae]?[ey]?[ei]?th+\b|\bsajith\b|\bsajid\b|\bsajeet\b", "sajeeth"),

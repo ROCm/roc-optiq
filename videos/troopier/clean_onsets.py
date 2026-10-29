@@ -11,12 +11,14 @@ By default everything before the speech is silenced and every line keeps its
 length, for lines a chapter was already recorded to. With --trim it is cut
 instead, and the parts of a line voiced separately are joined with a natural
 pause, for lines voiced before recording; the recorder then paces the
-chapters to the trimmed lengths.
+chapters to the trimmed lengths, which --lines writes to cache.json and
+lines.tsv in the output folder.
 
-  python clean_onsets.py <clips folder> [--trim] [--out <folder>] [--only 01_02 ...]
+  python clean_onsets.py <clips folder> [--trim] [--out <folder>] [--lines lines.json] [--only 01_02 ...]
 """
 
 import argparse
+import json
 import wave
 from pathlib import Path
 
@@ -146,11 +148,33 @@ def clean(samples, sr, trim):
     return out, notes
 
 
+def finalize(lines_path, clips, out):
+    """Rewrites each line's length in <out>/cache.json and <out>/lines.tsv from its
+    cleaned clip, in the order of the lines file."""
+    lines = json.loads(lines_path.read_text(encoding="utf-8"))
+    cache = json.loads((clips / "cache.json").read_text(encoding="utf-8"))
+    rows, missing = [], []
+    for line in lines:
+        path = out / f"{line['id']}.wav"
+        if not path.exists() or line["id"] not in cache:
+            missing.append(line["id"])
+            continue
+        with wave.open(str(path), "rb") as w:
+            seconds = w.getnframes() / w.getframerate()
+        cache[line["id"]]["seconds"] = round(seconds, 3)
+        rows.append(f"{seconds:.3f}\t{line['text']}")
+    (out / "cache.json").write_text(json.dumps(cache, indent=1, ensure_ascii=False), encoding="utf-8")
+    (out / "lines.tsv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    total = sum(float(row.split("\t")[0]) for row in rows)
+    print(f"{len(rows)} lines, {total / 60:.1f} min of narration; missing: {' '.join(missing) or 'none'}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("clips", type=Path)
     ap.add_argument("--trim", action="store_true", help="cut the lead-in instead of silencing it")
     ap.add_argument("--out", type=Path, help="write here instead of over the clips")
+    ap.add_argument("--lines", type=Path, help="lines.json: write the cleaned lengths for the recorder")
     ap.add_argument("--only", nargs="*", default=None, metavar="ID")
     args = ap.parse_args()
     out = args.out or args.clips
@@ -164,6 +188,8 @@ def main():
         length = f" ({len(samples) / params.framerate:.2f} -> {len(cleaned) / params.framerate:.2f} s)" \
             if args.trim else ""
         print(f"{path.stem}{length}: {'; '.join(notes) if notes else 'no speech found, unchanged'}")
+    if args.lines:
+        finalize(args.lines, args.clips, out)
 
 
 if __name__ == "__main__":

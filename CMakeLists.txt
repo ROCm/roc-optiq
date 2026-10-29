@@ -970,8 +970,15 @@ endif()
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_DEPENDS_LIST "libvulkan1")
+# libGL.so.1 and libOpenGL.so.0 (libglvnd). RPM picks these up via
+# AUTOREQPROV; DEB depends are listed explicitly.
+list(APPEND DEB_DEPENDS_LIST "libgl1" "libopengl0")
 if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
+endif()
+# libdbus-1.so.3 from the xdg-desktop-portal file dialog.
+if(USE_NATIVE_FILE_DIALOG AND NFD_PORTAL)
+    list(APPEND DEB_DEPENDS_LIST "libdbus-1-3")
 endif()
 # DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
 # OpenSSL runtime only when remote or Ask Optiq is built against OpenSSL.

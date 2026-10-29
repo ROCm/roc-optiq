@@ -347,10 +347,9 @@ namespace DataModel
 
     bool TableProcessor::IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries)
     {
-        if(m_current_queries.size() && (*m_current_queries.begin()).second.size() && TABLE_QUERY_UNPACK_OP_TYPE((*(*m_current_queries.begin()).second.begin()).second.track))
-        {
-            return false;
-        }
+        // Search ids pack an operation into the track id. Their statements are
+        // compared like ordinary track queries, so the data request following a
+        // count request can reuse the rows already loaded.
         for(std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
         {
             if(m_current_queries.count(track.first) && track.second.size())
@@ -966,6 +965,12 @@ namespace DataModel
         return kRocProfVisDmResultSuccess;
     }
 
+    uint32_t TableProcessor::AddPackedTable()
+    {
+        m_tables.push_back(std::make_unique<PackedTable>());
+        return (uint32_t) (m_tables.size() - 1);
+    }
+
     // SQLite row callback used by compound queries.
     // For each returned row, this method validates callback state, handles cancellation,
     // performs one-time per-query initialization, appends a row to the destination table,
@@ -988,38 +993,45 @@ namespace DataModel
 
         int column_index = 0;
 
-        // One-time initialization for the first processed row of this query execution.
-        if (callback_params->future->GetProcessedRowsCount() == 0)
-        {
-            table_processor->m_tables[callback_params->track_id]->ResetTrackIdetifiers();
+        PackedTable* table = table_processor->m_tables[callback_params->track_id].get();
 
+        // Each operation owns a packed table. Initialize that table from the
+        // column names of its own query, independent of rows already stored
+        // for another operation.
+        if (table->ColumnCount() == 0)
+        {
+            table->ResetTrackIdetifiers();
             for (; column_index < argc; column_index++)
             {
                 auto it = Builder::table_view_schema.find(azColName[column_index]);
 
                 if (it != Builder::table_view_schema.end())
                 {
-                    table_processor->m_tables[callback_params->track_id]->AddColumn(it->second.public_name, it->second.type, static_cast<uint8_t>(column_index), it->second.index);
+                    table->AddColumn(it->second.public_name, it->second.type,
+                                     static_cast<uint8_t>(column_index), it->second.index);
                 }
-                db->GetTrackIdentifierIndices(column_index, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices);
+                db->GetTrackIdentifierIndices(column_index, azColName,
+                                              table->track_ids_indices);
             }
 
             auto it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
-            table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index), it->second.index); 
-            if (!table_processor->m_tables[callback_params->track_id]->track_ids_indices.is_pmc_identifier)
+            table->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index),
+                             it->second.index);
+            if (!table->track_ids_indices.is_pmc_identifier)
             {
                 it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
-                table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index), static_cast<uint8_t>(Builder::table_view_schema.size()));
+                table->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index),
+                                 static_cast<uint8_t>(Builder::table_view_schema.size()));
             }
 
         }
 
         // Fetch column metadata and append a destination row before filling cell values.
-        auto columns = table_processor->m_tables[callback_params->track_id]->GetColumns();
-        table_processor->m_tables[callback_params->track_id]->AddRow();
+        const std::vector<ColumnDef>& columns = table->GetColumns();
+        table->AddRow();
         column_index = 0;
         uint64_t op = 0;
-        for (; column_index < table_processor->m_tables[callback_params->track_id]->ColumnCount(); column_index++)
+        for (; column_index < table->ColumnCount(); column_index++)
         {  
             if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_TRACK_ID)
             {
@@ -1030,20 +1042,20 @@ namespace DataModel
             {
                 uint64_t value = Builder::TypeEnumToInt(db->TableColumnText(func, stmt, azColName, 
                     columns[column_index].m_orig_index).c_str(), Builder::mem_alloc_types);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_LEVEL)
             {
                 uint64_t value = Builder::TypeEnumToInt(db->TableColumnText(func, stmt, azColName, 
                     columns[column_index].m_orig_index).c_str(), Builder::mem_alloc_levels);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_VALUE)
             {
                 double value = db->TableColumnDouble(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_OPERATION)
             {
                 op = db->TableColumnInt(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, op);
+                table->PlaceValue(column_index, op);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_ID)
             {
                 uint64_t id = db->TableColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
@@ -1051,29 +1063,29 @@ namespace DataModel
                 value.bitfield.event_id = id;
                 value.bitfield.event_node = callback_params->db_instance->GuidIndex();
                 value.bitfield.event_op = op;
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value.value);
+                table->PlaceValue(column_index, value.value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD ||
                 columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_CATEGORY_PERFETTO || 
                 columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_NAME_PERFETTO)
             {
                 uint64_t value = db->StringTableReference().ToInt(db->TableColumnText(func, stmt, azColName,
                     columns[column_index].m_orig_index).c_str());
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             }
             else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_NODE_ID)
             {
                 uint64_t value = 0;
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             }
             else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_END || columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_START)
             {
                 uint64_t value = db->TableColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value - db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()]);
+                table->PlaceValue(column_index, value - db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()]);
             }
             else 
             {
                 uint64_t value = db->TableColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             }
             
         }
@@ -1102,21 +1114,21 @@ namespace DataModel
             }
         }
 
-        table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, (uint64_t)track_id);
+        table->PlaceValue(column_index++, (uint64_t)track_id);
         if (op != kRocProfVisDmOperationNoOp)
         {
             if (op == kRocProfVisDmOperationLaunch || 
                 op == kRocProfVisDmOperationLaunchSample || 
-                table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
+                table->track_ids_indices.stream_index == -1 ||
                 !db->FindTrack(kRocProfVisDmStreamTrack,
-                   db->TableColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.pid_index),
-                db->TableColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
+                   db->TableColumnInt(func, stmt, azColName, table->track_ids_indices.pid_index),
+                db->TableColumnInt(func, stmt, azColName, table->track_ids_indices.stream_index),
                 callback_params->db_instance->GuidIndex(),
                 track_id))
             {
                 track_id = INVALID_INDEX;
             }
-            table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index,(uint64_t) track_id);
+            table->PlaceValue(column_index,(uint64_t) track_id);
         }
 
         callback_params->future->CountThisRow();

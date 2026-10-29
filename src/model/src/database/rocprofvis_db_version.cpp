@@ -227,14 +227,14 @@ namespace DataModel
                 result = m_db->ExecuteSQLQuery(future, &db_instance, query.c_str(), s_metadata_cache_table_name, (rocprofvis_dm_handle_t)&metadata_table, &m_db->CallbackCacheTable);
                 if (result == kRocProfVisDmResultSuccess)
                 {
-                    TableCache* table = (TableCache*)metadata_table.GetTableHandle(s_metadata_cache_table_name);
+                    CatalogTable* table = (CatalogTable*)metadata_table.GetTableHandle(s_metadata_cache_table_name);
                     uint32_t dependency_mask = 0;
                     for (int i = 0; i < table->NumRows(); i++)
                     {
-                        uint32_t id = std::atol(table->GetCellByIndex(i, "id"));
-                        std::string base_name = table->GetCellByIndex(i, "name");
-                        uint64_t hash = std::atoll(table->GetCellByIndex(i, "hash"));
-                        uint32_t version = std::atol(table->GetCellByIndex(i, "version"));
+                        uint32_t id = std::atol(table->CellTextByIndex(i, "id"));
+                        std::string base_name = table->CellTextByIndex(i, "name");
+                        uint64_t hash = std::atoll(table->CellTextByIndex(i, "hash"));
+                        uint32_t version = std::atol(table->CellTextByIndex(i, "version"));
                         roc_optiq_metadata_t& data = m_roc_optiq_table_properties[id];
 
                         if (data.type == kRocOptiqTablePerGuid)

@@ -10,10 +10,13 @@
 #include "rocprofvis_dm_track.h"
 #include "rocprofvis_dm_table.h"
 #include "rocprofvis_dm_topology.h"
-#include <vector> 
-#include <memory> 
+#include <deque>
+#include <vector>
+#include <memory>
 #include <map>
 #include <mutex>
+#include <shared_mutex>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -309,10 +312,15 @@ class Trace : public DmBase{
         std::vector<std::shared_ptr<Table>>             m_tables;
         // vector array of Table objects
         std::vector<std::unique_ptr<InfoTable>>         m_info_tables;
-        // vector array of strings
-        std::vector<std::string>                        m_strings;
-        // vector array of sorted lookup indeces to string array
+        // Strings in insertion order. deque keeps existing string pointers valid
+        // when a later slice interns another name.
+        std::deque<std::string>                         m_strings;
+        // Text to the index in m_strings. Existing text is not inserted again.
+        std::unordered_map<std::string, uint32_t>       m_string_to_index;
+        // Rank of each string index in lexicographic order. Rebuilt when a
+        // sort asks for a rank and new strings have been interned since.
         std::vector<uint32_t>                           m_sorted_strings_lookup_array;
+        mutable std::shared_mutex                       m_string_lock;
         // map of every event level in graph
         event_level_map_t                               m_event_level_map;
         // object mutex, for shared access

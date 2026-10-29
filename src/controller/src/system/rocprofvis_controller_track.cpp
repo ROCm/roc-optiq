@@ -775,11 +775,11 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
     rocprofvis_result_t result = kRocProfVisResultSuccess;
     uint64_t index = 0;
     uint64_t sample_id = 0;
-    double timestamp = (double)rocprofvis_dm_get_property_as_uint64(
+    uint64_t timestamp = rocprofvis_dm_get_property_as_uint64(
         data, kRPVDMTimestampUInt64Indexed, 0);
     double value = rocprofvis_dm_get_property_as_double(
         data, kRPVDMPmcValueDoubleIndexed, 0);
-    double last_timestamp = timestamp;
+    uint64_t last_timestamp = timestamp;
     double last_value = value;
 
     for(int record_index = 1; record_index < num_records; record_index++)
@@ -790,7 +790,7 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
             break;
         }
 
-        timestamp = (double)rocprofvis_dm_get_property_as_uint64(
+        timestamp = rocprofvis_dm_get_property_as_uint64(
             data, kRPVDMTimestampUInt64Indexed, record_index);
         value = rocprofvis_dm_get_property_as_double(
             data, kRPVDMPmcValueDoubleIndexed, record_index);
@@ -804,11 +804,12 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
 
         Sample* new_sample = static_cast<SystemTrace*>(GetContext())
                                  ->GetMemoryManager()->NewSample(
-            kRPVControllerPrimitiveTypeDouble, sample_id++, last_timestamp, GetSegments());
+            kRPVControllerPrimitiveTypeDouble, sample_id++, (double)last_timestamp,
+            GetSegments());
         if(new_sample)
         {
             new_sample->SetDouble(kRPVControllerSampleValue, 0, last_value);
-            new_sample->SetDouble(kRPVControllerSampleEndTimestamp, 0, timestamp);
+            new_sample->SetDouble(kRPVControllerSampleEndTimestamp, 0, (double)timestamp);
             SetObject(
                 kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)new_sample);
         }

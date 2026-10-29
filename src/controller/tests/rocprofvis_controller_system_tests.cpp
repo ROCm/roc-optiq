@@ -143,10 +143,11 @@ TEST_CASE("Memory Manager LRU Eviction")
     }
 }
 
-// Appends the start and end timestamps of every sample in a fetched track array.
+// Appends the start and end timestamps of every sample in a fetched track array. They
+// are whole nanoseconds, so they are compared as integers.
 static void
-AppendSamples(rocprofvis_controller_array_t*          array,
-              std::vector<std::pair<double, double>>& samples)
+AppendSamples(rocprofvis_controller_array_t*              array,
+              std::vector<std::pair<uint64_t, uint64_t>>& samples)
 {
     uint64_t            num_results = 0;
     rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
@@ -165,15 +166,16 @@ AppendSamples(rocprofvis_controller_array_t*          array,
                                                  &start_ts) == kRocProfVisResultSuccess);
         REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleEndTimestamp,
                                                  0, &end_ts) == kRocProfVisResultSuccess);
-        samples.emplace_back(start_ts, end_ts);
+        samples.emplace_back(static_cast<uint64_t>(start_ts),
+                             static_cast<uint64_t>(end_ts));
     }
 }
 
 // Requires one sample per distinct timestamp the model holds for the track, with each
 // sample ending where the next one starts.
 static void
-RequireSamplesMatchModel(rocprofvis_handle_t*                    track_handle,
-                         std::vector<std::pair<double, double>>& samples)
+RequireSamplesMatchModel(rocprofvis_handle_t*                        track_handle,
+                         std::vector<std::pair<uint64_t, uint64_t>>& samples)
 {
     std::sort(samples.begin(), samples.end());
     samples.erase(std::unique(samples.begin(), samples.end()), samples.end());
@@ -554,7 +556,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 continue;
             }
 
-            std::vector<std::pair<double, double>> samples;
+            std::vector<std::pair<uint64_t, uint64_t>> samples;
             AppendSamples(m_track_data[track_idx], samples);
             if(!samples.empty())
             {
@@ -3486,7 +3488,7 @@ TEST_CASE("Sample Track Slice Boundaries")
             1, (uint32_t) std::ceil((max_time - min_time) / segment_duration));
         num_boundaries += num_segments - 1;
 
-        std::vector<std::pair<double, double>> samples;
+        std::vector<std::pair<uint64_t, uint64_t>> samples;
         for(uint32_t first : { 0u, 1u })
         {
             for(uint32_t segment = first; segment < num_segments; segment += 2)

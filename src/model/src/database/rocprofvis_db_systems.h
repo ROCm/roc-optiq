@@ -9,6 +9,7 @@
 #include "rocprofvis_db_version.h"
 #include "rocprofvis_db.h"
 #include "rocprofvis_db_packed_storage.h"
+#include "rocprofvis_db_table_processor.h"
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -93,7 +94,9 @@ class SystemDatabase : public Database
         SystemDatabase(   
                     rocprofvis_db_filename_t path):
                     Database(path),
-                    m_track_lookup(this) {
+                    m_track_lookup(this),
+                    m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)}
+        {
         };
         // Database destructor, must be defined as virtual to free resources of derived classes 
         virtual ~SystemDatabase(){};
@@ -279,15 +282,15 @@ class SystemDatabase : public Database
         virtual rocprofvis_dm_result_t  ExecuteQuery(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                                Future* object) = 0;
+                                                                Future* object);
 
         // method to export the results of a table query to .CSV
         // @param query - database query
         // @param file_path - .CSV output path
         // @return status of operation 
-        virtual rocprofvis_dm_result_t ExportTableCSV(          rocprofvis_dm_charptr_t query,
+        rocprofvis_dm_result_t ExportTableCSV(          rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t file_path,
-                                                                Future* future) = 0;
+                                                                Future* future);
 
     private:
         // vector array of track parameters. Used as a reference for data model Track objects and for Database component to generate proper database queries 
@@ -332,6 +335,8 @@ class SystemDatabase : public Database
 
         virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
 
+        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+
         // return suffix to sub-process name for provided track category ('TID', 'Queue')
         // @param category - track category
         // @return track sub-process name suffix  ('TID', 'Queue')  
@@ -357,6 +362,9 @@ class SystemDatabase : public Database
         friend class TrackLookup;
         friend class PackedTable;
         friend class SqliteDatabase;
+
+        protected:
+            TableProcessor m_table_processor[kRPVTableDataTypesNum];
 };
 
 }  // namespace DataModel

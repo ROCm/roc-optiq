@@ -152,7 +152,11 @@ typedef enum rocprofvis_db_type_t {
     // chrom trace or perfetto
     kChromeTrace = 5,
     kPerfettoTrace = 6,
-    kGoogleSqlite = 7
+    kGoogleSqlite = 7,
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    // supported by profiler hub
+    kProfilerHub = 8,
+#endif
 
 } rocprofvis_db_type_t;
 

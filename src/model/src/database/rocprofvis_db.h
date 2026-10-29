@@ -156,6 +156,17 @@ class Database
         // returns pointer to trace properties, which contains shared trace information
         rocprofvis_dm_trace_params_t*   TraceProperties() { return m_binding_info->trace_properties; }
 
+        // Extends one database instance's time range and the trace duration.
+        // The stored start is the minimum start_ts and the stored end is the
+        // maximum end_ts. trace_duration becomes the longest instance span.
+        // @param db_instance - index into db_inst_start_time and db_inst_end_time
+        // @param start_ts - candidate start timestamp
+        // @param end_ts - candidate end timestamp
+        void                            UpdateTraceDuration(
+                                                                uint32_t db_instance,
+                                                                rocprofvis_dm_timestamp_t start_ts,
+                                                                rocprofvis_dm_timestamp_t end_ts);
+
         // ---------------------------------------------Helpers---------------------------------------
 
 

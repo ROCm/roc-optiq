@@ -117,6 +117,14 @@ main(int argc, char** argv)
                           "it to PATH");
             return 1;
         }
+        const std::string extras = RocProfVis::Tutorial::ExperimentalFeatures();
+        if(!extras.empty())
+        {
+            spdlog::error("[tutorial] --record-tutorials needs a build with release features "
+                          "(cmake --preset x64-tutorial), but this one also has {}",
+                          extras);
+            return 1;
+        }
         RocProfVis::Tutorial::SetConfig(config);
         // The recording reads the OpenGL back buffer, and the built-in file dialog
         // draws inside the captured window where a native one would not.

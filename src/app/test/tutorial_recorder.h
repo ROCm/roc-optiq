@@ -41,12 +41,23 @@ const RecorderConfig& GetConfig();
 // otherwise the first ffmpeg found on PATH. Empty when neither exists.
 std::string ResolveEncoderPath(const std::string& hint);
 
-// Points the capture tool at the OpenGL back buffer and at the encoder.
+// The features this build has that release builds leave out, comma-separated,
+// or empty for a build that matches a release. The footage must show only what
+// users of a release will see.
+std::string ExperimentalFeatures();
+
+// Points the capture tool at the OpenGL back buffer and at the encoder, loads
+// the caption font and keeps the session awake for the length of the run.
 void InstallCapture(ImGuiTestEngine* engine);
 
 // Draws click ripples, key captions and the spotlight over the finished frame.
 // Call once per frame between the view render and ImGui::Render().
 void RenderOverlay();
+
+// Steps a chapter skipped or narrated out of step since ResetProblems(): every
+// error the engine logs, a missing item to point at, a word not in its line.
+void ResetProblems();
+int  ProblemCount();
 
 // Records one chapter and paces it to its narration: each line starts once the
 // previous one has finished, and the actions after it play while it is spoken.
@@ -153,6 +164,8 @@ private:
     std::string LabelOf(ImGuiTestRef ref);
     std::string LabelAtPointer();
     void        ShowCaption(const char* text, float seconds);
+    // Logs a step the chapter could not take as scripted, which fails it.
+    void Problem(const std::string& text);
 
     ImGuiTestContext*         m_ctx;
     std::string               m_file_stem;

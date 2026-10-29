@@ -113,7 +113,9 @@ constexpr float  RIPPLE_THICKNESS    = 3.5f;
 constexpr float  RIPPLE_FILL_ALPHA   = 0.18f;
 constexpr float  PRESSED_DOT_RADIUS  = 11.0f;
 constexpr float  PRESSED_DOT_ALPHA   = 0.35f;
-constexpr float  CAPTION_FONT_SIZE   = 26.0f;
+// Klavika is the AMD brand typeface; the brand falls back to Arial without it.
+constexpr const char* CAPTION_FONT_FILES[] = { "Klavika-Medium.otf", "arialbd.ttf" };
+constexpr float  CAPTION_FONT_SIZE   = 28.0f;
 constexpr float  CAPTION_PADDING_X   = 20.0f;
 constexpr float  CAPTION_PADDING_Y   = 10.0f;
 constexpr float  CAPTION_ROUNDING    = 10.0f;
@@ -156,6 +158,8 @@ struct OverlayState
 
 static RecorderConfig g_config;
 static OverlayState   g_overlay;
+static ImFont*        g_caption_font = nullptr;
+static int            g_problems     = 0;
 
 static std::string
 read_environment(const char* name)
@@ -452,6 +456,7 @@ forward_engine_log(ImGuiTestEngine* engine, ImGuiTestContext* ctx, ImGuiTestVerb
     const char* test_name = (ctx != nullptr && ctx->Test != nullptr) ? ctx->Test->Name : "-";
     if(level <= ImGuiTestVerboseLevel_Error)
     {
+        g_problems++;
         spdlog::error("[tutorial {}] {}", test_name, message);
     }
     else if(level == ImGuiTestVerboseLevel_Warning)
@@ -598,7 +603,7 @@ render_caption(ImDrawList* draw_list, double now)
         return;
     }
 
-    ImFont*      font = ImGui::GetFont();
+    ImFont*      font = g_caption_font != nullptr ? g_caption_font : ImGui::GetFont();
     const ImVec2 text_size =
         font->CalcTextSizeA(CAPTION_FONT_SIZE, FLT_MAX, 0.0f, g_overlay.caption.c_str());
     const ImVec2 display = ImGui::GetIO().DisplaySize;
@@ -627,6 +632,76 @@ extend_wheel_caption(double seconds)
         g_overlay.caption_end = ImMax(g_overlay.caption_end, now + seconds);
     }
 }
+
+// The installed copy of the font file `file_name`, system-wide or per-user, or
+// empty when neither has it.
+static std::string
+find_font_file(const char* file_name)
+{
+    std::vector<std::filesystem::path> dirs;
+    const std::string                  windows_dir = read_environment("WINDIR");
+    const std::string                  user_dir    = read_environment("LOCALAPPDATA");
+    if(!windows_dir.empty())
+    {
+        dirs.push_back(std::filesystem::path(windows_dir) / "Fonts");
+    }
+    if(!user_dir.empty())
+    {
+        dirs.push_back(std::filesystem::path(user_dir) / "Microsoft" / "Windows" / "Fonts");
+    }
+    std::string     found;
+    std::error_code ec;
+    for(const std::filesystem::path& dir : dirs)
+    {
+        if(found.empty() && std::filesystem::is_regular_file(dir / file_name, ec))
+        {
+            found = (dir / file_name).string();
+        }
+    }
+    return found;
+}
+
+static void
+load_caption_font()
+{
+    for(const char* file_name : CAPTION_FONT_FILES)
+    {
+        const std::string path = find_font_file(file_name);
+        if(g_caption_font == nullptr && !path.empty())
+        {
+            g_caption_font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), 0.0f);
+            spdlog::info("[tutorial] captions use {}", path);
+        }
+    }
+    if(g_caption_font == nullptr)
+    {
+        spdlog::warn("[tutorial] neither Klavika nor Arial is installed; captions use the app font");
+    }
+}
+
+#ifdef _WIN32
+// The policy screen saver locks the session after a stretch without input, and
+// a locked session stops the capture. A zero-distance mouse move resets that
+// timer without moving the pointer, and the engine drops it before ImGui sees it.
+constexpr double KEEP_AWAKE_INTERVAL_S = 60.0;
+
+static void
+keep_session_awake()
+{
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point last_input;
+    const Clock::time_point  now = Clock::now();
+    if(last_input == Clock::time_point() ||
+       std::chrono::duration<double>(now - last_input).count() >= KEEP_AWAKE_INTERVAL_S)
+    {
+        last_input  = now;
+        INPUT input = {};
+        input.type       = INPUT_MOUSE;
+        input.mi.dwFlags = MOUSEEVENTF_MOVE;
+        SendInput(1, &input, sizeof(input));
+    }
+}
+#endif
 
 void
 SetConfig(const RecorderConfig& config)
@@ -680,6 +755,42 @@ ResolveEncoderPath(const std::string& hint)
     return found;
 }
 
+std::string
+ExperimentalFeatures()
+{
+    std::vector<const char*> features;
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    features.push_back("ROCPROFVIS_DEVELOPER_MODE");
+#endif
+#ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
+    features.push_back("ROCPROFVIS_ENABLE_INTERNAL_BANNER");
+#endif
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+    features.push_back("ROCPROFVIS_ENABLE_PROFILER");
+#endif
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    features.push_back("ROCPROFVIS_ENABLE_REMOTE");
+#endif
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    features.push_back("ROCPROFVIS_ENABLE_AGENTIC_PROFILING");
+#endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    features.push_back("ROCPROFVIS_ENABLE_SCRIPTING");
+#endif
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    features.push_back("ROCPROFVIS_ENABLE_TRACE_COMPARE");
+#endif
+#ifdef ROCPROFVIS_MULTI_WINDOW
+    features.push_back("ROCPROFVIS_MULTI_WINDOW");
+#endif
+    std::string list;
+    for(const char* feature : features)
+    {
+        list += (list.empty() ? "" : ", ") + std::string(feature);
+    }
+    return list;
+}
+
 void
 InstallCapture(ImGuiTestEngine* engine)
 {
@@ -704,11 +815,31 @@ InstallCapture(ImGuiTestEngine* engine)
     // Switching to another window would otherwise release the simulated keys
     // and buttons mid-chapter.
     ImGui::GetIO().ConfigDebugIgnoreFocusLoss = true;
+    load_caption_font();
+#ifdef _WIN32
+    // Neither the display nor the system may sleep while the run lasts.
+    SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+#endif
+}
+
+void
+ResetProblems()
+{
+    g_problems = 0;
+}
+
+int
+ProblemCount()
+{
+    return g_problems;
 }
 
 void
 RenderOverlay()
 {
+#ifdef _WIN32
+    keep_session_awake();
+#endif
     const double now = ImGui::GetTime();
     render_spotlight(now);
     ImDrawList* draw_list = ImGui::GetForegroundDrawList();
@@ -852,6 +983,13 @@ Director::Say(const char* text)
     {
         length_s = found->second;
     }
+    else if(!g_config.narration_dir.empty())
+    {
+        // With narration to pace it, a line without its voice is a line whose
+        // text changed after the voicing; the final mix would have no clip for it.
+        length_s = estimated_length(text);
+        Problem(std::string("no synthesized narration for: ") + text);
+    }
     else
     {
         length_s = estimated_length(text);
@@ -872,16 +1010,16 @@ Director::Say(const char* text)
 double
 Director::WordTime(const char* word)
 {
-    const std::string wanted = word_key(word);
-    const auto&       timed  = narration_words();
-    const auto        found  = timed.find(m_line_text);
+    const std::string wanted      = word_key(word);
+    const auto&       timed       = narration_words();
+    const auto        found       = timed.find(m_line_text);
+    const auto        starts_like = [&wanted](const std::string& key) {
+        return key.size() >= WORD_PREFIX_MIN && wanted.size() >= WORD_PREFIX_MIN &&
+               (key.rfind(wanted, 0) == 0 || wanted.rfind(key, 0) == 0);
+    };
     if(found != timed.end())
     {
         const std::vector<TimedWord>& heard = found->second;
-        const auto                    starts_like = [&wanted](const std::string& key) {
-            return key.size() >= WORD_PREFIX_MIN && wanted.size() >= WORD_PREFIX_MIN &&
-                   (key.rfind(wanted, 0) == 0 || wanted.rfind(key, 0) == 0);
-        };
         for(const bool exact : { true, false })
         {
             for(size_t i = m_word_cursor; i < heard.size(); i++)
@@ -894,22 +1032,28 @@ Director::WordTime(const char* word)
             }
         }
     }
-    // Without a timing, a word is placed by where it falls in the text.
-    std::istringstream words(m_line_text);
-    std::string        each;
-    size_t             offset = 0;
-    while(words >> each)
+    // Without a timing, a word is placed by where it falls in the text, matched
+    // the same way as a heard word.
+    for(const bool exact : { true, false })
     {
-        offset = m_line_text.find(each, offset);
-        if(offset >= m_text_cursor && word_key(each) == wanted)
+        std::istringstream words(m_line_text);
+        std::string        each;
+        size_t             offset = 0;
+        while(words >> each)
         {
-            m_text_cursor = offset + each.size();
-            return m_line_start_s + m_line_length_s * static_cast<double>(offset) /
-                                        static_cast<double>(ImMax<size_t>(m_line_text.size(), 1));
+            offset = m_line_text.find(each, offset);
+            const std::string key = word_key(each);
+            if(offset >= m_text_cursor && (exact ? key == wanted : starts_like(key)))
+            {
+                m_text_cursor = offset + each.size();
+                return m_line_start_s +
+                       m_line_length_s * static_cast<double>(offset) /
+                           static_cast<double>(ImMax<size_t>(m_line_text.size(), 1));
+            }
+            offset += each.size();
         }
-        offset += each.size();
     }
-    spdlog::warn("[tutorial {}] '{}' is not in the line: {}", m_file_stem, word, m_line_text);
+    Problem("'" + std::string(word) + "' is not in the line: " + m_line_text);
     return -1.0;
 }
 
@@ -982,8 +1126,8 @@ Director::PointAtItem(ImGuiTestRef ref, const char* word)
     SetFramesSaved(was_saved);
     if(info.ID == 0)
     {
-        spdlog::warn("[tutorial {}] nothing to point at for '{}'", m_file_stem,
-                     ref.Path != nullptr ? ref.Path : "");
+        Problem("nothing to point at for '" + std::string(ref.Path != nullptr ? ref.Path : "") +
+                "'");
         return;
     }
     PointAt(info.RectClipped.GetCenter(), word);
@@ -1212,6 +1356,12 @@ Director::Caption(const char* text, float seconds)
 {
     Log(VideoTime(), "caption " + quoted(printable(text)));
     ShowCaption(text, seconds);
+}
+
+void
+Director::Problem(const std::string& text)
+{
+    m_ctx->LogError("%s", text.c_str());
 }
 
 void

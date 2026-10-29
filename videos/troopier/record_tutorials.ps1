@@ -19,11 +19,16 @@ are copied to a neutral public folder so no personal paths appear on screen,
 and the host, user and workload names stored in the copies are replaced with
 neutral ones (anonymize_samples.py; needs Python).
 
-Build the executable first:
-  cmake --preset x64-release -B build/tutorial -DROCPROFVIS_ENABLE_UI_TESTS=ON
-  cmake --build build/tutorial --config Release --target roc-optiq-tests
+Build the executable first, with the features of a release build (the recorder
+refuses to run from a developer or experimental build):
+  cmake --preset x64-tutorial
+  cmake --build --preset "Windows Tutorial Build"
 
-Do not click into the Optiq window while it records.
+Each chapter reports PASS only when every scripted step ran; the log lines
+printed at the end name any step that did not. Earlier recordings of the
+chapters being recorded move to raw\previous, so a chapter that fails leaves no
+stale footage behind. The recorder keeps the session awake and unlocked while it
+runs. Do not click into the Optiq window while it records.
 
 .EXAMPLE
 .\record_tutorials.ps1
@@ -42,7 +47,7 @@ $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 if (-not $Exe) {
-    $Exe = Join-Path $repo "build\tutorial\Release\roc-optiq-tests.exe"
+    $Exe = Join-Path $repo "build\x64-tutorial\Release\roc-optiq-tests.exe"
 }
 if (-not (Test-Path $Exe)) {
     throw "Test executable not found: $Exe (see the build steps in this script's help)"
@@ -81,6 +86,24 @@ if (Test-Path $settings) { Remove-Item $settings -Recurse -Force }
 New-Item -ItemType Directory -Path $settings | Out-Null
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+# Chapters that fail before recording write nothing, so their earlier footage
+# would otherwise pass for new.
+$previous = Join-Path $OutputDir "previous"
+$earlier = @()
+foreach ($part in ($Chapters -split ",")) {
+    $part = $part.Trim()
+    $earlier += @(Get-ChildItem $OutputDir -Filter "*$part*.mkv" -File -ErrorAction SilentlyContinue)
+    $earlier += @(Get-ChildItem (Join-Path $OutputDir "timing") -Filter "*$part*" -File -ErrorAction SilentlyContinue)
+}
+$earlier = @($earlier | Sort-Object FullName -Unique)
+if ($earlier.Count -gt 0) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $previous "timing") | Out-Null
+    foreach ($file in $earlier) {
+        $into = if ($file.Directory.Name -eq "timing") { Join-Path $previous "timing" } else { $previous }
+        Move-Item $file.FullName $into -Force
+    }
+    Write-Host "Moved $($earlier.Count) earlier recording files to $previous"
+}
 $arguments = @("--record-tutorials", "`"$OutputDir`"", "--ffmpeg", "`"$Ffmpeg`"",
                "--ui-scale", $UiScale.ToString([Globalization.CultureInfo]::InvariantCulture))
 if ($Chapters) { $arguments += @("--chapters", "`"$Chapters`"") }

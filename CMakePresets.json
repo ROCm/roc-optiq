@@ -51,6 +51,25 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
+        },
+        {
+            "name": "x64-tutorial",
+            "displayName": "x64 Tutorial Recorder",
+            "description": "Configure the UI test harness for recording the tutorial videos, with the feature set of release builds.",
+            "inherits": "windows-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "/EHsc",
+                "ROCPROFVIS_ENABLE_UI_TESTS": "ON",
+                "ROCPROFVIS_DEVELOPER_MODE": "OFF",
+                "ROCPROFVIS_ENABLE_INTERNAL_BANNER": "OFF",
+                "ROCPROFVIS_ENABLE_PROFILER": "OFF",
+                "ROCPROFVIS_ENABLE_REMOTE": "OFF",
+                "ROCPROFVIS_ENABLE_AGENTIC_PROFILING": "OFF",
+                "ROCPROFVIS_ENABLE_SCRIPTING": "OFF",
+                "ROCPROFVIS_ENABLE_TRACE_COMPARE": "OFF",
+                "ROCPROFVIS_MULTI_WINDOW": "OFF"
+            }
         },        
         {
             "name": "linux-base",
@@ -182,6 +201,14 @@
             "displayName": "",
             "configurePreset": "x64-release-symbols",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "Windows Tutorial Build",
+            "description": "Build the tutorial recorder (roc-optiq-tests) with release features",
+            "displayName": "Windows Tutorial Build",
+            "configurePreset": "x64-tutorial",
+            "configuration": "Release",
+            "targets": [ "roc-optiq-tests" ]
         },
         {
             "name": "macOS Debug Build",

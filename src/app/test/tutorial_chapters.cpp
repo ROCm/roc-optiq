@@ -175,11 +175,6 @@ constexpr float QUEUE_IDLE_X        = 0.03f;
 // Across a track's description area, a spot right of its name and pills and left
 // of its values and arrow, where nothing raises a tooltip.
 constexpr float META_EMPTY_X        = 0.72f;
-// Down the summary window, the dispatch table under the chart.
-constexpr float SUMMARY_REST_Y      = 0.85f;
-// Right of the summary's chart buttons, empty space in the row under the chart,
-// far enough right that the pointer's tail misses the column headers below.
-constexpr float SUMMARY_ASIDE_X     = 230.0f;
 // The track summary's tooltip belongs to both of its lines, and its breakdown
 // line spans the summary's width; this far in from that line's right end, past
 // its words, the pointer raises the tooltip without covering any text.
@@ -468,6 +463,16 @@ find_hashed_item(ImGuiTestContext* ctx, ImGuiWindow* window, const char* label)
     return ImGuiTestItemInfo();
 }
 
+// The combo that `PushID(label); BeginCombo("")` draws straight into `window`.
+// An empty label hashes to its scope, so the combo's ID is the label's ID.
+static ImGuiTestItemInfo
+find_scoped_combo(ImGuiTestContext* ctx, const ImGuiWindow* window, const char* label)
+{
+    return window != nullptr
+               ? ctx->ItemInfo(ImHashStr(label, 0, window->ID), ImGuiTestOpFlags_NoError)
+               : ImGuiTestItemInfo();
+}
+
 static ImGuiTestItemInfo
 find_item_exact(ImGuiTestContext* ctx, ImGuiWindow* window, const char* label,
                 bool with_frozen_rows = false)
@@ -541,7 +546,7 @@ hover_popup_item(Director& director, const char* label, float seconds = 0.9f)
     const ImGuiTestItemInfo item = find_popup_item(director.Context(), label);
     if(item.ID == 0)
     {
-        director.Context()->LogWarning("Menu entry '%s' not found", label);
+        director.Context()->LogError("Menu entry '%s' not found", label);
         return false;
     }
     director.Hover(label_point(item.RectFull), seconds);
@@ -591,7 +596,7 @@ point_at_popup_item(Director& director, const char* label, const char* word)
     const ImGuiTestItemInfo item = find_popup_item(director.Context(), label);
     if(item.ID == 0)
     {
-        director.Context()->LogWarning("Menu entry '%s' not found", label);
+        director.Context()->LogError("Menu entry '%s' not found", label);
         return false;
     }
     director.PointAt(label_point(item.RectFull), word);
@@ -1822,7 +1827,9 @@ chapter_open_trace(ImGuiTestContext* ctx)
         return;
     }
     director.Beat();
-    director.Say("In the file browser, select the trace file, and then click OK.");
+    // Release builds show the system's own file dialog on a desktop, so the
+    // line names no control that only the built-in dialog has.
+    director.Say("In the file dialog, select the trace file, and then open it.");
     director.PointAt(file_row_pos, "select");
     director.ClickHere();
     const ImGuiTestItemInfo ok = find_item(ctx, find_file_dialog_window(), "OK");
@@ -1831,7 +1838,7 @@ chapter_open_trace(ImGuiTestContext* ctx)
         ctx->LogError("File dialog has no OK button");
         return;
     }
-    director.PointAt(ok.RectFull.GetCenter(), "OK");
+    director.PointAt(ok.RectFull.GetCenter(), "open");
     director.ClickHere();
     director.Say("Optiq reads the trace and opens it in a new tab.");
 
@@ -2040,10 +2047,6 @@ chapter_interface_tour(ImGuiTestContext* ctx)
                  "on.");
     spotlight_and_hover(director, status_bar_rect(), 0.05f, 0.5f);
     director.ClearSpotlight();
-    if(have_queue)
-    {
-        director.Click(queue_point);
-    }
     director.Pause();
 
     // Splitters resize the panes.
@@ -2333,11 +2336,6 @@ chapter_topology_panel(ImGuiTestContext* ctx)
             click_popup_item_on(director, "Show All Tracks", "Show");
             settle(director);
         }
-        // A second click on the name unselects the track again.
-        if(find_sidebar_track(ctx, sidebar, "Queue 1", queue1))
-        {
-            director.ClickItem(queue1.name.ID);
-        }
         director.Pause();
     }
 
@@ -2436,26 +2434,76 @@ chapter_working_with_tracks(ImGuiTestContext* ctx)
     director.Say("Now let's select, style, and arrange the tracks on the timeline.");
     director.Pause();
 
-    // Selecting a track fills the details panel.
+    // Selecting a track fills the details panel. A click selects only that
+    // track, Shift+click the tracks between, and Ctrl+click adds or removes one.
     std::vector<TrackRow> rows      = track_rows(trace_view);
     const TrackRow*       queue_row = find_row(rows, is_kernel_queue);
     if(queue_row != nullptr)
     {
         const TrackRow queue = *queue_row;
-        director.Say("Click a track's description area to select it, and its events fill the "
-                     "Event Table below.");
+        director.Say("Click a track's description area to select only that track, and its events "
+                     "fill the Event Table below.");
         director.PointAt(track_meta_point(queue), "Click");
         director.ClickHere();
         settle(director);
         director.Say("The Track Details tab describes the selected track itself.");
         click_details_tab_on(director, "Track Details", "Track");
         settle(director);
-        director.Say("Switch back to the Event Table, and click the track again to clear the "
-                     "selection.");
+        director.Say("Back on the Event Table, hold Shift and click another track, and every "
+                     "track in between is selected too.");
         click_details_tab_on(director, "Event Table", "Event");
         settle(director);
-        director.PointAt(track_meta_point(queue), "click");
-        director.ClickHere();
+        // Two tracks next to the queue, below it when both are on screen.
+        rows         = track_rows(trace_view);
+        size_t index = 0;
+        while(index < rows.size() && rows[index].track != queue.track)
+        {
+            index++;
+        }
+        const auto shown = [](const TrackRow& row) {
+            return visible_part(row.meta).GetHeight() >= row.meta.GetHeight() * REST_ROW_SHOWN;
+        };
+        const TrackRow* near_row = nullptr;
+        const TrackRow* far_row  = nullptr;
+        if(index + 2 < rows.size() && shown(rows[index + 1]) && shown(rows[index + 2]))
+        {
+            near_row = &rows[index + 1];
+            far_row  = &rows[index + 2];
+        }
+        else if(index >= 2 && index < rows.size() && shown(rows[index - 1]) &&
+                shown(rows[index - 2]))
+        {
+            near_row = &rows[index - 1];
+            far_row  = &rows[index - 2];
+        }
+        if(near_row != nullptr && far_row != nullptr)
+        {
+            const TrackRow near_track = *near_row;
+            const TrackRow far_track  = *far_row;
+            director.WaitUntilSaid("Shift");
+            director.HoldKeys(ImGuiMod_Shift, "Shift + Click");
+            director.PointAt(track_meta_point(far_track), "click");
+            director.ClickHere();
+            director.ReleaseKeys();
+            settle(director);
+            director.Say("Hold Control and click a track to add it to the selection, or to take it "
+                         "out, like this one.");
+            director.WaitUntilSaid("Control");
+            director.HoldKeys(ImGuiMod_Ctrl, "Ctrl + Click");
+            director.PointAt(track_meta_point(near_track), "take");
+            director.ClickHere();
+            director.ReleaseKeys();
+            settle(director);
+        }
+        else
+        {
+            ctx->LogError("No two tracks beside the queue to select a range with");
+        }
+        director.Say("To clear the selection, choose Edit, then Unselect All Tracks.");
+        open_menu_on(director, "Edit", "Edit");
+        click_popup_item_on(director, "Unselect All Tracks", "Unselect");
+        rest_pointer(director, true);
+        settle(director);
         director.Beat();
 
         // Utilization of the visible range, as a pill.
@@ -3183,19 +3231,22 @@ chapter_details_tables(ImGuiTestContext* ctx)
 
     // Selected tracks feed the Event Table.
     std::vector<TrackRow> rows = track_rows(trace_view);
-    director.Say("The tables show the tracks you select. Select a CPU thread and a GPU queue, "
-                 "and the Event Table lists all of their events.");
-    const std::pair<std::function<bool(TrackItem*)>, const char*> picks[] = {
-        { is_api_thread, "thread" }, { named("Queue 1"), "queue" }
-    };
-    for(const auto& [match, word] : picks)
+    director.Say("The tables show the tracks you select. Click a CPU thread, then hold Control "
+                 "and click a GPU queue, and the Event Table lists the events of both.");
+    if(const TrackRow* row = find_row(rows, is_api_thread))
     {
-        if(const TrackRow* row = find_row(rows, match))
-        {
-            director.PointAt(track_meta_point(*row), word);
-            director.ClickHere();
-            settle(director);
-        }
+        director.PointAt(track_meta_point(*row), "thread");
+        director.ClickHere();
+        settle(director);
+    }
+    if(const TrackRow* row = find_row(rows, named("Queue 1")))
+    {
+        director.WaitUntilSaid("Control");
+        director.HoldKeys(ImGuiMod_Ctrl, "Ctrl + Click");
+        director.PointAt(track_meta_point(*row), "queue");
+        director.ClickHere();
+        director.ReleaseKeys();
+        settle(director);
     }
     director.Pause();
 
@@ -3393,13 +3444,15 @@ chapter_details_tables(ImGuiTestContext* ctx)
 
     // Track Details misreports the end of the thread track, so only the queue
     // stays selected for it.
-    director.Say("With just the queue selected, Track Details shows how busy the queue was "
-                 "during the range.");
+    director.Say("Control-click the thread to take it out of the selection. With just the queue "
+                 "selected, Track Details shows how busy the queue was during the range.");
     rows = track_rows(trace_view);
     if(const TrackRow* api = find_row(rows, is_api_thread))
     {
-        director.PointAt(track_meta_point(*api), "just");
+        director.HoldKeys(ImGuiMod_Ctrl, "Ctrl + Click");
+        director.PointAt(track_meta_point(*api), "thread");
         director.ClickHere();
+        director.ReleaseKeys();
         settle(director);
     }
     click_details_tab_on(director, "Track Details", "Details");
@@ -3407,21 +3460,15 @@ chapter_details_tables(ImGuiTestContext* ctx)
     director.Hover(rect_point(window_rect(find_details_window()), 0.4f, 0.5f), READ_S);
     director.Pause();
 
-    // Counter tracks fill the Sample Table. Sidebar clicks add to the selection,
-    // so the queue is unselected first.
+    // Counter tracks fill the Sample Table. A click in the sidebar selects only
+    // that track, so the queue leaves the selection.
     ImGuiWindow* sidebar = find_sidebar_window(ctx);
-    director.Say("Counter tracks have their own table. To start fresh, choose Edit, then "
-                 "Unselect All Tracks.");
-    open_menu_on(director, "Edit", "Edit");
-    click_popup_item_on(director, "Unselect All Tracks", "Unselect");
-    rest_pointer(director, true);
-    settle(director);
-    SidebarRow gfx;
+    SidebarRow   gfx;
     if(sidebar != nullptr && find_sidebar_track(ctx, sidebar, "GFX Busy", gfx))
     {
-        director.Say("Then select a counter, like GFX Busy, and the Sample Table lists its "
-                     "values.");
-        click_item_on(director, gfx.name.ID, "select");
+        director.Say("Counter tracks have their own table. Click a counter in the System Topology "
+                     "panel, like GFX Busy, and the Sample Table lists its values.");
+        click_item_on(director, gfx.name.ID, "Click");
         settle(director);
         click_details_tab_on(director, "Sample Table", "Sample");
         settle(director);
@@ -3616,38 +3663,75 @@ chapter_search_minimap_summary(ImGuiTestContext* ctx)
         click_reset_view(director);
     }
 
-    // View > Show Summary lists the top kernels.
-    director.Say("Choose View, then Show Summary, to chart the top kernels by execution time.");
+    // View > Show Summary opens on an Overview with a tile per kind of work,
+    // each with a Details button that opens that kind's own tab.
+    director.Say("Choose View, then Show Summary, for an overview of where the trace spends its "
+                 "time.");
     open_menu_on(director, "View", "View");
     click_popup_item_on(director, "Show Summary", "Summary");
+    // A progress window stands in for the summary while it is computed.
+    director.WaitFor(
+        []() {
+            ImGuiWindow* window = ImGui::FindWindowByName("Summary");
+            return window != nullptr && window->WasActive;
+        },
+        VISIBLE_SETTLE_S, LOAD_TIMEOUT_S);
     settle(director, 1.0f);
     ImGuiWindow* summary = ImGui::FindWindowByName("Summary");
-    if(summary != nullptr && summary->WasActive)
+    std::vector<ImGuiTestItemInfo> details;
+    for(int tile = 0; summary != nullptr && summary->WasActive && tile < 3; tile++)
     {
-        // Resting below the chart, the pointer is clear of the window's resize
-        // border and doesn't turn the pie to its black hover color.
-        director.Hover(rect_point(summary->Rect(), 0.4f, SUMMARY_REST_Y), READ_S);
-
-        // Selecting a kernel lists its dispatches below the chart. A hovered
-        // slice turns black, and this kernel is nearly the whole pie, so the
-        // pointer leaves the chart as soon as it has clicked, for the empty
-        // stretch right of the chart buttons, clear of the list as well.
-        const ImVec2 wedge = rect_point(summary->Rect(), 0.46f, 0.25f);
-        ctx->SetRef("//Summary");
-        const std::string       list_ref = std::string("**/") + ICON_LIST + "/" + ICON_LIST;
-        const ImGuiTestItemInfo list_button =
-            ctx->ItemInfo(list_ref.c_str(), ImGuiTestOpFlags_NoError);
-        const ImVec2 aside =
-            list_button.ID != 0
-                ? ImVec2(list_button.RectFull.Max.x + SUMMARY_ASIDE_X,
-                         list_button.RectFull.GetCenter().y)
-                : rect_point(summary->Rect(), 0.4f, SUMMARY_REST_Y);
-        director.Say("Select a kernel to list its dispatches below the chart.");
-        director.PointAt(wedge, "Select");
-        director.ClickHere();
-        director.MoveTo(aside);
+        const ImGuiTestItemInfo button = find_item(ctx, summary, "Details", tile);
+        if(button.ID != 0)
+        {
+            details.push_back(button);
+        }
+    }
+    if(details.size() == 3)
+    {
+        // The title bar raises nothing, and keeps the pointer off the charts.
+        const ImVec2 rest = summary->TitleBarRect().GetCenter();
+        director.Say("Its Overview covers kernel executions, memory operations, and thread "
+                     "operations, each with its top entries by execution time.");
+        const char* const tile_words[] = { "kernel", "memory", "thread" };
+        for(size_t tile = 0; tile < details.size(); tile++)
+        {
+            const ImRect tile_rect = window_rect(details[tile].Window);
+            director.PointAt(ImVec2(tile_rect.Min.x + tile_rect.GetWidth() * 0.3f,
+                                    details[tile].RectFull.GetCenter().y),
+                             tile_words[tile]);
+        }
+        director.Hold(HOVER_S);
+        director.Say("Click Details on kernel executions for the full breakdown.");
+        click_item_on(director, details[0].ID, "Details");
         settle(director);
-        director.Hold(READ_S);
+        director.MoveTo(rest);
+
+        // The legend lists the top kernels; choosing one lists its dispatches
+        // below the chart.
+        ImGuiWindow*      legend = find_window("/legend_");
+        ImGuiTestItemInfo first_kernel;
+        for(const ImGuiTestItemInfo& item : gather_items(ctx, legend))
+        {
+            if(first_kernel.ID == 0 && item.RectFull.GetWidth() > 0.0f)
+            {
+                first_kernel = item;
+            }
+        }
+        director.Say("Its chart ranks the top kernels. Select one in the legend, and its "
+                     "dispatches are listed below.");
+        if(first_kernel.ID != 0)
+        {
+            director.PointAt(label_point(first_kernel.RectFull), "Select");
+            director.ClickHere();
+            director.MoveTo(rest);
+            settle(director);
+            director.Hold(READ_S);
+        }
+        else
+        {
+            ctx->LogError("The summary legend lists no kernels");
+        }
         director.Pause();
         ctx->SetRef("//Summary");
         director.Say("The buttons at the bottom switch the chart between bars, a table, and the "
@@ -3663,9 +3747,26 @@ chapter_search_minimap_summary(ImGuiTestContext* ctx)
                 click_item_on(director, ref.c_str(), word);
                 settle(director);
             }
+            else
+            {
+                ctx->LogError("The summary has no chart button for '%s'", word);
+            }
         }
+        director.MoveTo(rest);
         director.Hold(1.0f);
         director.Pause();
+        director.Say("And the System Topology tab shows the hardware in the trace, and its "
+                     "counters.");
+        ctx->SetRef("//Summary");
+        click_item_on(director, "**/System Topology", "System");
+        settle(director);
+        director.MoveTo(rest);
+        director.Hold(READ_S);
+        director.Pause();
+    }
+    else
+    {
+        ctx->LogError("The Summary window did not show its three Details buttons");
     }
     director.Say("That's search, the minimap, and the summary.");
     director.Finish();
@@ -3715,7 +3816,7 @@ write_note_on(Director& director, const char* title, const char* text, const cha
     ImGuiWindow*      note = newest_sticky_note();
     if(note == nullptr)
     {
-        ctx->LogWarning("No annotation window opened");
+        ctx->LogError("No annotation window opened");
         return;
     }
     const ImGuiTestItemInfo title_field = find_item(ctx, note, "##title_");
@@ -3931,15 +4032,19 @@ chapter_annotations_bookmarks(ImGuiTestContext* ctx)
     const ImGuiTestItemInfo name_field = find_item(ctx, dialog, "##FileName");
     if(name_field.ID != 0)
     {
-        director.Say("Give the project a name, and click OK.");
+        director.Say("Give the project a name, and save it.");
         click_item_on(director, name_field.ID, "name");
         ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_A);
         director.Type(PROJECT_FILE_STEM);
         const ImGuiTestItemInfo ok = find_item(ctx, find_file_dialog_window(), "OK");
         if(ok.ID != 0)
         {
-            director.PointAt(ok.RectFull.GetCenter(), "OK");
+            director.PointAt(ok.RectFull.GetCenter(), "save");
             director.ClickHere();
+        }
+        else
+        {
+            ctx->LogError("The Save As dialog has no OK button");
         }
         settle(director);
         director.Pause();
@@ -4219,8 +4324,11 @@ chapter_customizing(ImGuiTestContext* ctx)
     }
     else
     {
+        // make_masters.py expects every line of the script to run, so a failed
+        // step says the line it stands for.
         ctx->LogError("The hotkeys table did not show");
-        director.Say("Click Cancel to close without making changes.");
+        director.Say("Scroll through the list to find a shortcut, and click Cancel to close "
+                     "without making changes.");
     }
     settings_button_on(director, "Cancel", "Cancel");
     rest_pointer(director, true);
@@ -4483,8 +4591,8 @@ chapter_compute_summary(ImGuiTestContext* ctx)
     director.Hold(0.4f);
     const ImGuiTestItemInfo file_types =
         find_hashed_item(ctx, find_file_dialog_window(), "##Filters");
-    director.Say("In the file browser, set the file type to All Supported, then select the "
-                 "database, and click OK.");
+    director.Say("In the file dialog, set the file type to All Supported, select the database, "
+                 "and then open it.");
     if(file_types.ID != 0)
     {
         click_item_on(director, file_types.ID, "type");
@@ -4520,7 +4628,7 @@ chapter_compute_summary(ImGuiTestContext* ctx)
         ready_frames = compute_view_ready(current_compute_view()) ? ready_frames + 1 : 0;
         return ready_frames >= LAYOUT_SETTLE_FRAMES;
     };
-    director.PointAt(ok.RectFull.GetCenter(), "OK");
+    director.PointAt(ok.RectFull.GetCenter(), "open");
     if(!director.ClickAndCutUntil(ok.RectFull.GetCenter(), laid_out, LOAD_TIMEOUT_S))
     {
         ctx->LogError("Compute database %s did not open", COMPUTE_TRACE_FILE);
@@ -4534,14 +4642,20 @@ chapter_compute_summary(ImGuiTestContext* ctx)
 
     // Each analysis view has its own tab; workload and kernel pickers sit above.
     ctx->SetRef(MAIN_WINDOW);
-    director.Say("The analysis has five views: Summary, Kernel Details, Table View, Workload "
-                 "Details, and Baseline Comparison.");
+    // ISA View is greyed out for databases without PC sampling, as here; its
+    // tooltip says why while the pointer rests on it.
+    director.Say("The analysis has six views: Summary, Kernel Details, Table View, Baseline "
+                 "Comparison, Profile Details, and ISA View, which needs PC sampling data.");
     for(const std::string tab : { "Summary View", "Kernel Details", "Table View",
-                                  "Workload Details", "Baseline Comparison" })
+                                  "Baseline Comparison", "Profile Details", "ISA View" })
     {
         if(ctx->ItemExists(("**/" + tab).c_str()))
         {
             director.PointAtItem(("**/" + tab).c_str(), tab.substr(0, tab.find(' ')).c_str());
+        }
+        else
+        {
+            ctx->LogError("No %s tab", tab.c_str());
         }
     }
     director.Hold(TOOLBAR_HOVER_S);
@@ -4608,14 +4722,19 @@ chapter_compute_summary(ImGuiTestContext* ctx)
     {
         director.Say("Next is the roofline chart. The menus above it filter the chart to a "
                      "compute peak, or to a single kernel.");
-        const std::pair<const char*, const char*> filters[] = { { "##compute_peak", "peak" },
-                                                                { "##kernel", "kernel" } };
+        const ImGuiWindow* card = find_window("/roofline_card_");
+        const std::pair<const char*, const char*> filters[] = { { "Compute Peak", "peak" },
+                                                                { "Kernel", "kernel" } };
         for(const auto& [filter, word] : filters)
         {
-            const ImGuiTestItemInfo combo = find_hashed_item(ctx, roofline, filter);
+            const ImGuiTestItemInfo combo = find_scoped_combo(ctx, card, filter);
             if(combo.ID != 0)
             {
                 browse_combo_on(director, combo.ID, -1, word);
+            }
+            else
+            {
+                ctx->LogError("No '%s' filter on the roofline", filter);
             }
         }
         const ImGuiTestItemInfo legend = find_hashed_item(ctx, roofline, "toggle_menus");
@@ -4836,6 +4955,34 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
     {
         return;
     }
+    // The comparison's roofline only draws kernels with roofline data, which
+    // the kernel selected at first lacks, so the first kernel that has some is
+    // the baseline and the next one the target.
+    int                     target_kernel = 1;
+    View::ComputeSelection* selection     = ComputeViewTestPeer{ *compute_view }.ComputeSelectionPtr();
+    const std::vector<const View::KernelInfo*> kernels =
+        compute_view->GetDataProvider()->ComputeModel().GetKernelInfoList(
+            selection->GetSelectedWorkload());
+    std::vector<size_t> with_roofline;
+    for(size_t i = 0; i < kernels.size(); i++)
+    {
+        if(kernels[i] != nullptr && !kernels[i]->roofline.intensities.empty())
+        {
+            with_roofline.push_back(i);
+        }
+    }
+    if(with_roofline.size() >= 2)
+    {
+        selection->SelectKernel(kernels[with_roofline[0]]->id);
+        target_kernel = static_cast<int>(with_roofline[1]);
+        ctx->Yield(10);
+        settle_off_camera(ctx);
+        ctx->Yield(10);
+    }
+    else
+    {
+        ctx->LogError("Fewer than two kernels have roofline data to compare");
+    }
     park_pointer(ctx, PARK_X, PARK_STATUS_Y);
 
     Director director(ctx, ctx->Test->Name);
@@ -4843,7 +4990,7 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
     {
         return;
     }
-    director.Say("Finally, let's explore the Table View, Workload Details, and Baseline "
+    director.Say("Finally, let's explore the Table View, Profile Details, and Baseline "
                  "Comparison.");
     director.Pause();
 
@@ -4959,7 +5106,11 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
     }
     else
     {
-        director.Say("You can save your pinned metrics as a preset for next time.");
+        // make_masters.py expects every line of the script to run, so a failed
+        // step says the line it stands for.
+        ctx->LogError("The Table View lists no metrics to pin");
+        director.Say("Back in the Table View, you can save your pinned metrics as a preset for "
+                     "next time.");
     }
 
     const ImGuiTestItemInfo presets =
@@ -4996,9 +5147,10 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
         director.Pause();
     }
 
-    // Workload Details: the system and the profiler configuration.
-    director.Say("Workload Details shows the system the data was collected on, and how the "
-                 "profiler was configured.");
+    // Profile Details: the tool that wrote the data, the system and the
+    // profiler configuration, each on a card of its own.
+    director.Say("Profile Details names the analysis tool that wrote the data, the system it "
+                 "was collected on, and how the profiler was configured.");
     if(presets.ID != 0)
     {
         // A click away from the popup closes it, on the status bar, where the
@@ -5007,26 +5159,36 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
         director.Click(ImVec2(display.x * PARK_X, display.y * PARK_STATUS_Y));
         director.Context()->PopupCloseAll();
     }
-    click_compute_tab_on(director, "Workload Details", "Workload");
-    director.PointAt(rect_point(page_rect, 0.25f, 0.35f), "system");
-    director.Hold(1.0f);
-    director.PointAt(rect_point(page_rect, 0.75f, 0.35f), "configured");
-    director.Hold(1.2f);
+    click_compute_tab_on(director, "Profile Details", "Profile");
+    // Over each card's title, clear of the copyable values below it.
+    const std::pair<const char*, const char*> cards[] = {
+        { "/analysis_info_", "tool" }, { "/sys_info_", "system" }, { "/config_", "configured" }
+    };
+    for(const auto& [fragment, word] : cards)
+    {
+        const ImRect card_rect = window_rect(find_window(fragment));
+        if(has_area(card_rect))
+        {
+            director.PointAt(ImVec2(card_rect.Min.x + card_rect.GetWidth() * 0.6f,
+                                    card_rect.Min.y + ImGui::GetFrameHeight() * 0.8f),
+                             word);
+            director.Hold(1.0f);
+        }
+        else
+        {
+            ctx->LogError("No '%s' card on Profile Details", fragment);
+        }
+    }
+    director.Hold(0.4f);
     director.Pause();
 
-    // Baseline Comparison: two kernels or workloads side by side.
+    // Baseline Comparison: two kernels or workloads side by side, on a shared
+    // roofline first, then metric by metric.
     director.Say("Baseline Comparison puts two measurements side by side: two workloads, or "
                  "two kernels from the same workload.");
     click_compute_tab_on(director, "Baseline Comparison", "Baseline");
     director.Pause();
-    ImGuiWindow* toolbar = nullptr;
-    for(ImGuiWindow* window : ImGui::GetCurrentContext()->Windows)
-    {
-        if(window_name_contains(window, "TabContainer") && window_name_contains(window, "/toolbar_"))
-        {
-            toolbar = window;
-        }
-    }
+    ImGuiWindow* toolbar = find_window("/compare_target_toolbar_");
     if(toolbar != nullptr)
     {
         director.Say("Choose the target workload and kernel to compare with the baseline.");
@@ -5039,11 +5201,36 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
         ctx->SetRef(toolbar->ID);
         if(ctx->ItemExists("##target_kernels"))
         {
-            browse_combo_on(director, ImGuiTestRef(ctx->GetID("##target_kernels")), 1, "kernel");
+            browse_combo_on(director, ImGuiTestRef(ctx->GetID("##target_kernels")), target_kernel,
+                            "kernel");
         }
         settle(director, 1.0f);
-        director.Say("The table shows each metric for both, with the difference and the "
-                     "percentage change color coded.");
+        director.Say("It opens on a roofline that plots both kernels together, so you can see how "
+                     "the target moved against the baseline.");
+        ImRect plot = window_rect(find_window("/roofline_card_"));
+        plot.ClipWith(page_rect);
+        if(has_area(plot))
+        {
+            director.PointAt(rect_point(plot, 0.35f, 0.65f), "roofline");
+            director.Hold(1.0f);
+            director.PointAt(rect_point(plot, 0.55f, 0.6f), "moved");
+            director.Hold(1.0f);
+        }
+        rest_pointer(director, true);
+        director.Pause();
+        const ImGuiTestItemInfo metrics = find_item_exact(ctx, toolbar, "Metrics");
+        director.Say("Switch to Metrics, and the table shows each metric for both, with the "
+                     "difference and the percentage change color coded.");
+        if(metrics.ID != 0)
+        {
+            click_item_on(director, metrics.ID, "Metrics");
+            settle(director, 1.0f);
+            rest_pointer(director, true);
+        }
+        else
+        {
+            ctx->LogError("No Metrics button in the comparison toolbar");
+        }
         director.Hold(1.5f);
         ctx->SetRef(toolbar->ID);
         if(ctx->ItemExists("##threshold_percentage"))
@@ -5068,22 +5255,35 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
             rest_pointer(director, true);
             director.Hold(1.2f);
         }
-        // The button's label names what the table lists now, not what a click does.
-        director.Say("The Show All Metrics button switches between all metrics and only the ones "
-                     "both measurements share. These two ran on the same GPU, so nothing changes "
-                     "here, but it matters across GPU architectures.");
-        const std::pair<const char*, const char*> toggles[] = {
-            { "Show All Metrics", "switches" }, { "Show Common Metrics", "share" }
-        };
-        for(const auto& [label, word] : toggles)
+        else
         {
-            ctx->SetRef(toolbar->ID);
-            if(ctx->ItemExists(label))
+            ctx->LogError("No threshold in the comparison toolbar");
+        }
+        // The eye's icon, and with it the button's ID, flips with each click.
+        director.Say("The Peerless Metrics eye hides the metrics that only one of the two "
+                     "measurements has. These two ran on the same GPU, so nothing changes here, "
+                     "but it matters across GPU architectures.");
+        for(const char* word : { "hides", "matters" })
+        {
+            ImGuiTestItemInfo eye = find_item_exact(ctx, toolbar, ICON_EYE);
+            if(eye.ID == 0)
             {
-                click_item_on(director, label, word);
+                eye = find_item_exact(ctx, toolbar, ICON_EYE_SLASH);
+            }
+            if(eye.ID != 0)
+            {
+                click_item_on(director, eye.ID, word);
                 settle(director);
             }
+            else
+            {
+                ctx->LogError("No Peerless Metrics eye in the comparison toolbar");
+            }
         }
+    }
+    else
+    {
+        ctx->LogError("The Baseline Comparison toolbar did not show");
     }
     rest_pointer(director);
     director.Pause();
@@ -5093,11 +5293,34 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
 
 // ---------------------------------------------------------------------------
 
+// Chapter functions by registration order; each test's ArgVariant indexes it.
+static std::vector<ImGuiTestTestFunc*> g_chapter_funcs;
+
+// Runs a chapter and fails it unless every step ran as scripted, so a renamed
+// control or a skipped line shows up in the results instead of the footage.
+static void
+run_chapter(ImGuiTestContext* ctx)
+{
+    ResetProblems();
+    g_chapter_funcs[static_cast<size_t>(ctx->Test->ArgVariant)](ctx);
+    const int problems = ProblemCount();
+    if(problems > 0)
+    {
+        IM_ERRORF_NOHDR("%d step(s) did not run as scripted; see the errors above", problems);
+    }
+    else
+    {
+        ctx->LogInfo("Every step ran as scripted");
+    }
+}
+
 static void
 register_chapter(ImGuiTestEngine* engine, const char* name, ImGuiTestTestFunc* func)
 {
-    ImGuiTest* test = IM_REGISTER_TEST(engine, "tutorial", name);
-    test->TestFunc  = func;
+    ImGuiTest* test  = IM_REGISTER_TEST(engine, "tutorial", name);
+    test->ArgVariant = static_cast<int>(g_chapter_funcs.size());
+    test->TestFunc   = run_chapter;
+    g_chapter_funcs.push_back(func);
 }
 
 void

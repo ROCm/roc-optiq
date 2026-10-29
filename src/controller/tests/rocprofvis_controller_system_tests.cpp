@@ -10,11 +10,13 @@
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_segment.h"
+#include "system/rocprofvis_controller_track.h"
 #include <algorithm>
 #include <atomic>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
+#include <cmath>
 #include <cstring>
 #include <chrono>
 #include <filesystem>
@@ -138,6 +140,100 @@ TEST_CASE("Memory Manager LRU Eviction")
     for(uint32_t i = 0; i < num_segments; i++)
     {
         REQUIRE_FALSE(timeline.IsValid(i));
+    }
+}
+
+// Appends the start and end timestamps of every sample in a fetched track array.
+static void
+AppendSamples(rocprofvis_controller_array_t*          array,
+              std::vector<std::pair<double, double>>& samples)
+{
+    uint64_t            num_results = 0;
+    rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
+        array, kRPVControllerArrayNumEntries, 0, &num_results);
+    REQUIRE(result == kRocProfVisResultSuccess);
+    for(uint64_t i = 0; i < num_results; i++)
+    {
+        rocprofvis_handle_t* entry = nullptr;
+        result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed,
+                                                  i, &entry);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        double start_ts = 0;
+        double end_ts   = 0;
+        REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleTimestamp, 0,
+                                                 &start_ts) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleEndTimestamp,
+                                                 0, &end_ts) == kRocProfVisResultSuccess);
+        samples.emplace_back(start_ts, end_ts);
+    }
+}
+
+// Requires one sample per distinct timestamp the model holds for the track, with each
+// sample ending where the next one starts.
+static void
+RequireSamplesMatchModel(rocprofvis_handle_t*                    track_handle,
+                         std::vector<std::pair<double, double>>& samples)
+{
+    std::sort(samples.begin(), samples.end());
+    samples.erase(std::unique(samples.begin(), samples.end()), samples.end());
+
+    uint64_t track_id = 0;
+    double   min_time = 0;
+    double   max_time = 0;
+    REQUIRE(rocprofvis_controller_get_uint64(track_handle, kRPVControllerTrackId, 0,
+                                             &track_id) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMinTimestamp,
+                                             0, &min_time) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMaxTimestamp,
+                                             0, &max_time) == kRocProfVisResultSuccess);
+
+    rocprofvis_dm_track_t dm_track =
+        reinterpret_cast<RocProfVis::Controller::Track*>(track_handle)->GetDmHandle();
+    rocprofvis_dm_trace_t dm_trace =
+        rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackTraceHandle, 0);
+    rocprofvis_dm_database_t db =
+        rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
+    const uint64_t slice_start = static_cast<uint64_t>(min_time);
+    const uint64_t slice_end   = static_cast<uint64_t>(max_time);
+    uint32_t       dm_track_id = static_cast<uint32_t>(track_id);
+
+    rocprofvis_db_future_t db_future = rocprofvis_db_future_alloc(nullptr);
+    REQUIRE(db_future != nullptr);
+    REQUIRE(rocprofvis_db_read_trace_slice_async(
+                db, slice_start, slice_end, kRocProfVisDmHashedTimestampTagTrackSlice, 1,
+                (rocprofvis_db_track_selection_t) &dm_track_id, db_future) ==
+            kRocProfVisDmResultSuccess);
+    REQUIRE(rocprofvis_db_future_wait(db_future, UINT64_MAX) == kRocProfVisDmResultSuccess);
+    rocprofvis_db_future_free(db_future);
+
+    rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
+        dm_track, kRPVDMSliceHandleTimed,
+        rocprofvis_dm_hash_combine_timestamp(slice_start, slice_end,
+                                             kRocProfVisDmHashedTimestampTagTrackSlice));
+    REQUIRE(slice != nullptr);
+
+    // The slice ends with a record that only closes the last sample.
+    const uint64_t num_records =
+        rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
+    std::vector<uint64_t> timestamps;
+    for(uint64_t i = 0; i + 1 < num_records; i++)
+    {
+        timestamps.push_back(
+            rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i));
+    }
+    REQUIRE(rocprofvis_dm_delete_time_slice_handle(
+                dm_trace, static_cast<rocprofvis_dm_track_id_t>(track_id), slice) ==
+            kRocProfVisDmResultSuccess);
+    std::sort(timestamps.begin(), timestamps.end());
+    timestamps.erase(std::unique(timestamps.begin(), timestamps.end()), timestamps.end());
+
+    spdlog::info("Track {0}: {1} timestamps, {2} samples", track_id, timestamps.size(),
+                 samples.size());
+    REQUIRE(samples.size() == timestamps.size());
+    for(size_t i = 1; i < samples.size(); i++)
+    {
+        REQUIRE(samples[i - 1].second == samples[i].first);
     }
 }
 
@@ -427,6 +523,42 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
                 spdlog::info("Free Future");
                 rocprofvis_controller_future_free(future);
+            }
+        }
+    }
+
+    // Checks that each sample track returns one sample per distinct timestamp in the
+    // model and that every sample ends where the next one starts.
+    // Fixture Reads: m_controller, m_track_data
+    SECTION("Sample Track Continuity")
+    {
+        uint64_t            num_tracks = 0;
+        rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
+            m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
+        {
+            rocprofvis_handle_t* track_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t track_type = 0;
+            result              = rocprofvis_controller_get_uint64(
+                track_handle, kRPVControllerTrackType, 0, &track_type);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            if(track_type != kRPVControllerTrackTypeSamples ||
+               m_track_data[track_idx] == nullptr)
+            {
+                continue;
+            }
+
+            std::vector<std::pair<double, double>> samples;
+            AppendSamples(m_track_data[track_idx], samples);
+            if(!samples.empty())
+            {
+                RequireSamplesMatchModel(track_handle, samples);
             }
         }
     }
@@ -3297,6 +3429,91 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
 // Empty names are copied into the table. Distinct temporary buffers share one
 // id, and that pointer stays valid after the temporaries die.
+// Fetches each sample track one segment at a time, so that every segment is read as its
+// own slice, and checks the samples across the slice boundaries. Even segments are read
+// before odd ones so that boundaries are crossed with both loaded and unloaded
+// neighbours.
+TEST_CASE("Sample Track Slice Boundaries")
+{
+    rocprofvis_controller_t* controller =
+        rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
+    REQUIRE(controller != nullptr);
+
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    REQUIRE(future != nullptr);
+    REQUIRE(rocprofvis_controller_load_async(controller, future) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+            kRocProfVisResultSuccess);
+    rocprofvis_controller_future_free(future);
+
+    uint64_t num_tracks = 0;
+    REQUIRE(rocprofvis_controller_get_uint64(controller, kRPVControllerSystemNumTracks, 0,
+                                             &num_tracks) == kRocProfVisResultSuccess);
+
+    uint64_t num_boundaries = 0;
+    for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
+    {
+        rocprofvis_handle_t* track_handle = nullptr;
+        REQUIRE(rocprofvis_controller_get_object(controller,
+                                                 kRPVControllerSystemTrackIndexed,
+                                                 track_idx, &track_handle) ==
+                kRocProfVisResultSuccess);
+
+        uint64_t track_type = 0;
+        REQUIRE(rocprofvis_controller_get_uint64(track_handle, kRPVControllerTrackType, 0,
+                                                 &track_type) == kRocProfVisResultSuccess);
+        uint64_t track_num_entries = 0;
+        REQUIRE(rocprofvis_controller_get_uint64(track_handle,
+                                                 kRPVControllerTrackNumberOfEntries, 0,
+                                                 &track_num_entries) ==
+                kRocProfVisResultSuccess);
+        if(track_type != kRPVControllerTrackTypeSamples || track_num_entries == 0)
+        {
+            continue;
+        }
+
+        double min_time = 0;
+        double max_time = 0;
+        REQUIRE(rocprofvis_controller_get_double(track_handle,
+                                                 kRPVControllerTrackMinTimestamp, 0,
+                                                 &min_time) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_get_double(track_handle,
+                                                 kRPVControllerTrackMaxTimestamp, 0,
+                                                 &max_time) == kRocProfVisResultSuccess);
+        constexpr double segment_duration = RocProfVis::Controller::kSegmentDuration;
+        const uint32_t   num_segments     = std::max<uint32_t>(
+            1, (uint32_t) std::ceil((max_time - min_time) / segment_duration));
+        num_boundaries += num_segments - 1;
+
+        std::vector<std::pair<double, double>> samples;
+        for(uint32_t first : { 0u, 1u })
+        {
+            for(uint32_t segment = first; segment < num_segments; segment += 2)
+            {
+                rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+                REQUIRE(array != nullptr);
+                future = rocprofvis_controller_future_alloc();
+                REQUIRE(future != nullptr);
+                REQUIRE(rocprofvis_controller_track_fetch_async(
+                            controller, (rocprofvis_controller_track_t*) track_handle,
+                            min_time + segment * segment_duration,
+                            min_time + (segment + 1) * segment_duration, future,
+                            array) == kRocProfVisResultSuccess);
+                REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                        kRocProfVisResultSuccess);
+                AppendSamples(array, samples);
+                rocprofvis_controller_future_free(future);
+                rocprofvis_controller_array_free(array);
+            }
+        }
+        RequireSamplesMatchModel(track_handle, samples);
+    }
+    spdlog::info("Checked {0} slice boundaries", num_boundaries);
+
+    rocprofvis_controller_free(controller);
+}
+
 TEST_CASE("StringTable empty string is stored by value")
 {
     using RocProfVis::Controller::StringTable;

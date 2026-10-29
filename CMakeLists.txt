@@ -959,6 +959,48 @@ endif()
 # Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
 set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
 
+# Linux desktop entry and hicolor icons, so desktop shells list the app in
+# search and show its icon. Shells only scan XDG_DATA_DIRS (/usr/share by
+# default), not the /opt prefix, hence the absolute destinations.
+# EXCLUDE_FROM_ALL keeps them to the per-component DEB/RPM installs: the TGZ
+# archive and a plain `cmake --install` cannot stage absolute paths and would
+# write to the build machine's /usr/share instead.
+if(UNIX AND NOT APPLE)
+    set(LINUX_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop.in"
+        "${LINUX_DESKTOP_FILE}"
+        @ONLY)
+    install(FILES "${LINUX_DESKTOP_FILE}"
+            DESTINATION /usr/share/applications
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+            DESTINATION /usr/share/icons
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+
+    # These directories belong to the filesystem and hicolor-icon-theme packages.
+    # CPack's RPM claims every parent directory it does not exclude, and its
+    # default exclusions stop at /usr/share.
+    list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+         /usr/share/applications /usr/share/icons /usr/share/icons/hicolor)
+    file(GLOB LINUX_ICON_SIZES LIST_DIRECTORIES true
+         RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+         "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor/*")
+    foreach(ICON_SIZE ${LINUX_ICON_SIZES})
+        list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+             /usr/share/icons/hicolor/${ICON_SIZE}
+             /usr/share/icons/hicolor/${ICON_SIZE}/apps)
+    endforeach()
+
+    find_program(DESKTOP_FILE_VALIDATE desktop-file-validate)
+    if(BUILD_TESTING AND DESKTOP_FILE_VALIDATE)
+        add_test(NAME ${TARGET_NAME}-desktop-entry
+                 COMMAND ${DESKTOP_FILE_VALIDATE} "${LINUX_DESKTOP_FILE}")
+    endif()
+endif()
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)

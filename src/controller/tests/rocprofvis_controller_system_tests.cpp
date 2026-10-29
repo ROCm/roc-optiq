@@ -809,6 +809,98 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             start_index += chunk_size;
         } while(start_index < num_rows);
 
+        struct FilterCase
+        {
+            const char* filter;
+            const char* error;  // null when nothing is reported
+            bool        empty;  // the filter leaves no rows
+        };
+        // An invalid filter is reported when it is applied. Sending the same query again
+        // returns the cached empty result without reporting it again. Either way the
+        // columns come back, which the view needs to keep the filter row.
+        const FilterCase filter_cases[] = {
+            { "duration > 0", nullptr, false },
+            { "name LIKE '%O''Brien%'", nullptr, false },
+            { "duration == 0", nullptr, false },
+            { "duration 5",
+              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"",
+              true },
+            { "duration 5", nullptr, true },
+            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"",
+              true },
+            { "no_such_column > 5", nullptr, true },
+            { "duration > 5 ms", "Could not apply filter: Unexpected \"ms\" after \"duration > 5\"",
+              true },
+            { "duration >", "Could not apply filter: Expected a value after >, but the filter ended",
+              true },
+            { "duration > 0 AND",
+              "Could not apply filter: Expected a condition after AND, but the filter ended", true },
+            { "duration <> 5", "Could not apply filter: \"<>\" is not supported; use != instead",
+              true },
+        };
+        for(const FilterCase& filter_case : filter_cases)
+        {
+            spdlog::info("Fetching event table with filter: {0}", filter_case.filter);
+            result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter,
+                                                      0, filter_case.filter);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStartIndex, 0, 0);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            REQUIRE(array != nullptr);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_table_fetch_async(m_controller, table_handle,
+                                                             args, future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t future_result = kRocProfVisResultSuccess;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult,
+                                                      0, &future_result);
+            spdlog::info("Get future result: {0}", future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result == kRocProfVisResultSuccess);
+
+            uint32_t error_length = 0;
+            result = rocprofvis_controller_get_string(
+                future, kRPVControllerFutureLastErrorMessage, 0, nullptr, &error_length);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            std::string error(error_length, '\0');
+            if(error_length > 0)
+            {
+                result = rocprofvis_controller_get_string(
+                    future, kRPVControllerFutureLastErrorMessage, 0, error.data(),
+                    &error_length);
+                REQUIRE(result == kRocProfVisResultSuccess);
+            }
+            spdlog::info("Filter error message: {0}", error);
+            REQUIRE(error == (filter_case.error ? filter_case.error : ""));
+            if(filter_case.empty)
+            {
+                uint64_t filtered_columns = 0;
+                result = rocprofvis_controller_get_uint64(
+                    table_handle, kRPVControllerTableNumColumns, 0, &filtered_columns);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_columns == num_columns);
+
+                uint64_t filtered_rows = 0;
+                result = rocprofvis_controller_get_uint64(
+                    array, kRPVControllerArrayNumEntries, 0, &filtered_rows);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_rows == 0);
+            }
+
+            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_array_free(array);
+        }
+        result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
+        REQUIRE(result == kRocProfVisResultSuccess);
+
         const char* csv_path = "sample/test_export.csv";
 
         spdlog::info("Allocating Future");

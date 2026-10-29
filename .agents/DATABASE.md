@@ -148,7 +148,12 @@ rocprofvis_db_future_t   rocprofvis_db_future_alloc(callback, user_data);
 rocprofvis_dm_result_t   rocprofvis_db_future_wait(future, timeout_seconds);
 void                     rocprofvis_db_future_cancel(future);
 void                     rocprofvis_db_future_free(future);
+rocprofvis_dm_charptr_t  rocprofvis_db_future_get_error_message(future);
 ```
+
+`rocprofvis_db_future_get_error_message` returns a message the last
+operation left for the user (set with `Future::SetErrorMessage`, e.g. a
+table filter the table processor could not apply), or an empty string.
 
 The progress callback `rocprofvis_db_progress_callback_t` receives:
 

@@ -354,7 +354,8 @@ DataProvider::SetTrackMetadataChangedCallback(
 
 void
 DataProvider::SetTableDataReadyCallback(
-    const std::function<void(const std::string&, uint64_t, uint64_t)>& callback)
+    const std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>&
+        callback)
 {
     m_table_data_ready_callback = callback;
 }
@@ -2771,6 +2772,8 @@ DataProvider::HandleRequests()
                                                                      kRPVControllerFutureResult, 0,
                                                                      &req.response_code);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                GetString(req.request_future, kRPVControllerFutureLastErrorMessage, 0,
+                          req.error_message);
 
                 rocprofvis_controller_future_free(req.request_future);
                 req.request_future = nullptr;
@@ -4215,7 +4218,8 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
 
     if(m_table_data_ready_callback)
     {
-        m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id, req.response_code);
+        m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id,
+                                    req.response_code, req.error_message);
     }
 }
 
@@ -6196,7 +6200,8 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
 
         if(m_table_data_ready_callback)
         {
-            m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id, req.response_code);
+            m_table_data_ready_callback(m_model.GetTraceFilePath(), req.request_id,
+                                        req.response_code, req.error_message);
         }
 
         // Free array

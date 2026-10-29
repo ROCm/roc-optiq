@@ -325,6 +325,11 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
     if(table_event && table_event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
        table_event->GetRequestID() == m_request_id)
     {
+        if(!table_event->GetErrorMessage().empty())
+        {
+            NotificationManager::GetInstance().Show(table_event->GetErrorMessage(),
+                                                    NotificationLevel::Error);
+        }
         m_data_changed      = true;
         m_update_filter_row = m_display_filter_row;
         IndexColumns();
@@ -1181,8 +1186,17 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(uint64_t frame_count)
                         }
                         case kRPVControllerPrimitiveTypeString:
                         {
+                            std::string escaped_input;
+                            for(char c : filter->input)
+                            {
+                                escaped_input += c;
+                                if(c == '\'')
+                                {
+                                    escaped_input += '\'';
+                                }
+                            }
                             m_active_filter_row_clause +=
-                                filter->column_name + " LIKE '%" + filter->input + "%'";
+                                filter->column_name + " LIKE '%" + escaped_input + "%'";
                             m_active_filter_row_inputs.insert(filter);
                             break;
                         }

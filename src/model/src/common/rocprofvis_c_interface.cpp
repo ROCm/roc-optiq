@@ -302,6 +302,23 @@ rocprofvis_db_future_cancel(rocprofvis_db_future_t object)
 }
 
 /****************************************************************************************************
+ * @brief Gets the message the last operation left for the user, such as a table filter that
+ *        could not be applied
+ *
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @return message owned by the future, empty when there is none
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_charptr_t
+rocprofvis_db_future_get_error_message(rocprofvis_db_future_t object)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL, "");
+    return ((RocProfVis::DataModel::Future*) object)->ErrorMessage();
+}
+
+/****************************************************************************************************
  * @brief Asynchronous call to read data model metadata 
  *              (static objects residing in trace class memory until trace is deleted)
  * 

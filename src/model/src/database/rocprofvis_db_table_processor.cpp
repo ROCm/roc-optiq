@@ -138,7 +138,7 @@ namespace DataModel
 
             if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0 && !future->Interrupted())
             {
-                result = ProcessCompoundQuery(handle, commands, !same_queries);
+                result = ProcessCompoundQuery(future, handle, commands, !same_queries);
                 m_tracks = tracks;
             }
             else
@@ -608,7 +608,7 @@ namespace DataModel
         return result;
     };
 
-    rocprofvis_dm_result_t TableProcessor::ProcessCompoundQuery(rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated)
+    rocprofvis_dm_result_t TableProcessor::ProcessCompoundQuery(Future* future, rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated)
     {
         auto GetRowMap = [&](int row_index, std::unordered_map<std::string, FilterExpression::Value> & map)
             {
@@ -737,15 +737,19 @@ namespace DataModel
                             auto lfilter = filter;
                             for (size_t row_index = start_row; row_index < end_row; row_index++)
                             {
-                                GetRowMap(static_cast<int>(row_index), row_map);
                                 bool valid = true;
                                 try {
+                                    GetRowMap(static_cast<int>(row_index), row_map);
                                     valid = lfilter.Evaluate(row_map);
                                 }
-                                catch (const std::exception& err)
+                                catch (const std::exception&)
                                 {
                                     valid = false;
-                                    eptr = std::current_exception();
+                                    std::lock_guard<std::mutex> lock(mtx);
+                                    if(!eptr) // only set exception if not already set
+                                    {
+                                        eptr = std::current_exception();
+                                    }
                                     break;
                                 }
                                 if (valid)
@@ -753,7 +757,6 @@ namespace DataModel
                                     std::lock_guard<std::mutex> lock(mtx);
                                     m_filter_lookup.insert(static_cast<uint32_t>(row_index));
                                 }
-
                             }
                             };
 
@@ -775,6 +778,7 @@ namespace DataModel
                     catch (const std::exception& e)
                     {
                         spdlog::error("Error: {} ", e.what());
+                        future->SetErrorMessage("Could not apply filter: " + Trim(e.what()));
                         m_filter_lookup.clear();
                     }
 

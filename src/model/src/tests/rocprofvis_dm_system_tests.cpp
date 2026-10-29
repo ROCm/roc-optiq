@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string.h>
 #include <string>
 #include <vector>
@@ -567,6 +568,63 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         std::filesystem::remove("sample/trimmed.db");
 
         rocprofvis_db_future_free(object2wait);
+    }
+
+    // Saving a trim over the open trace is refused and leaves the trace untouched,
+    // also when the path is spelled differently.
+    // Fixture Reads:  m_db, m_start_time, m_end_time
+    SECTION("Trim Trace Over Source")
+    {
+        PrintHeader("Trim trace over its own file");
+        const std::filesystem::path source(g_input_file);
+        const std::string other_spelling = (source.parent_path() / "." / source.filename()).string();
+        for(const std::string& target : { g_input_file, other_spelling })
+        {
+            const uint64_t size_before = std::filesystem::file_size(source);
+            const auto     time_before = std::filesystem::last_write_time(source);
+
+            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
+            REQUIRE(nullptr != object2wait);
+            rocprofvis_dm_result_t result = rocprofvis_db_trim_save_async(
+                m_db, m_start_time, m_start_time + ((m_end_time - m_start_time) / 2),
+                target.c_str(), object2wait);
+            REQUIRE(result == kRocProfVisDmResultSuccess);
+            REQUIRE(rocprofvis_db_future_wait(object2wait, UINT64_MAX) !=
+                    kRocProfVisDmResultSuccess);
+            rocprofvis_db_future_free(object2wait);
+
+            REQUIRE(std::filesystem::file_size(source) == size_before);
+            REQUIRE(std::filesystem::last_write_time(source) == time_before);
+            REQUIRE_FALSE(std::filesystem::exists(target + ".optiq-trim.tmp"));
+        }
+    }
+
+    // A trim over an existing file replaces it once the trim succeeded and leaves no
+    // temporary file behind.
+    // Fixture Reads:  m_db, m_start_time, m_end_time
+    SECTION("Trim Trace Over Existing File")
+    {
+        PrintHeader("Trim trace over an existing file");
+        const std::string target      = "sample/trimmed_existing.db";
+        const std::string old_content = "not a trace";
+        {
+            std::ofstream existing(target, std::ios::binary);
+            existing << old_content;
+        }
+
+        rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
+        REQUIRE(nullptr != object2wait);
+        rocprofvis_dm_result_t result = rocprofvis_db_trim_save_async(
+            m_db, m_start_time, m_start_time + ((m_end_time - m_start_time) / 2),
+            target.c_str(), object2wait);
+        REQUIRE(result == kRocProfVisDmResultSuccess);
+        REQUIRE(rocprofvis_db_future_wait(object2wait, UINT64_MAX) ==
+                kRocProfVisDmResultSuccess);
+        rocprofvis_db_future_free(object2wait);
+
+        REQUIRE(std::filesystem::file_size(target) > old_content.size());
+        REQUIRE_FALSE(std::filesystem::exists(target + ".optiq-trim.tmp"));
+        std::filesystem::remove(target);
     }
 
     // Reads each selected track's full time range one at a time, measuring read

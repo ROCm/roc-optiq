@@ -1428,6 +1428,79 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 }
             }
 
+            if(workload_idx == 0)
+            {
+                struct FilterCase
+                {
+                    const char* expression;
+                    bool        valid;
+                };
+                // Invalid filters are listed twice: the model returns a table it
+                // already holds for the same query without running it again.
+                const FilterCase filter_cases[] = {
+                    { "5", false },
+                    { "5", false },
+                    { "> 0", true },
+                };
+                const uint64_t duration_sum_column = 2;
+                for(const FilterCase& filter_case : filter_cases)
+                {
+                    spdlog::info("Fetching pivot table with filter: {0}",
+                                 filter_case.expression);
+                    result = rocprofvis_controller_set_uint64(
+                        (rocprofvis_handle_t*) args, kRPVControllerCPTArgsNumColumnFilters,
+                        0, 1);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_set_uint64(
+                        (rocprofvis_handle_t*) args,
+                        kRPVControllerCPTArgsFilterColumnIndexIndexed, 0,
+                        duration_sum_column);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_set_string(
+                        (rocprofvis_handle_t*) args,
+                        kRPVControllerCPTArgsFilterExpressionIndexed, 0,
+                        filter_case.expression);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    rocprofvis_controller_future_t* filter_future =
+                        rocprofvis_controller_future_alloc();
+                    REQUIRE(filter_future != nullptr);
+                    rocprofvis_controller_array_t* filter_array =
+                        rocprofvis_controller_array_alloc(0);
+                    REQUIRE(filter_array != nullptr);
+
+                    result = rocprofvis_controller_table_fetch_async(
+                        m_controller, table_handle, args, filter_future, filter_array);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_future_wait(filter_future, FLT_MAX);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    uint64_t filter_result = kRocProfVisResultSuccess;
+                    result = rocprofvis_controller_get_uint64(
+                        filter_future, kRPVControllerFutureResult, 0, &filter_result);
+                    spdlog::info("Pivot table fetch result: {0}", filter_result);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE((filter_result == kRocProfVisResultSuccess) ==
+                            filter_case.valid);
+                    if(filter_case.valid)
+                    {
+                        uint64_t filtered_rows = 0;
+                        result = rocprofvis_controller_get_uint64(
+                            (rocprofvis_handle_t*) filter_array,
+                            kRPVControllerArrayNumEntries, 0, &filtered_rows);
+                        REQUIRE(result == kRocProfVisResultSuccess);
+                        REQUIRE(filtered_rows == num_rows);
+                    }
+
+                    rocprofvis_controller_array_free(filter_array);
+                    rocprofvis_controller_future_free(filter_future);
+                }
+                result = rocprofvis_controller_set_uint64(
+                    (rocprofvis_handle_t*) args, kRPVControllerCPTArgsNumColumnFilters, 0,
+                    0);
+                REQUIRE(result == kRocProfVisResultSuccess);
+            }
+
             spdlog::info("Free pivot table resources");
             rocprofvis_controller_array_free(array);
             rocprofvis_controller_arguments_free(args);

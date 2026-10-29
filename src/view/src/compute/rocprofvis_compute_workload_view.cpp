@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_workload_view.h"
+#include <iterator>
+#include <string>
+#include <utility>
 #include "imgui.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_compute_selection.h"
@@ -17,13 +20,16 @@ namespace RocProfVis
 namespace View
 {
 
+static constexpr const char* UNAVAILABLE_VALUE_TEXT   = "N/A";
+static constexpr const char* WORKLOAD_SECTION_TITLE   = "Workload Information";
+
 TabItem
 ComputeWorkloadView::CreateTabItem(
     DataProvider& data_provider,
     const std::shared_ptr<ComputeSelection>& compute_selection)
 {
     return RocWidget::CreateTabItem(
-        "Workload Details", TAB_ID,
+        "Profile Details", TAB_ID,
         std::make_shared<ComputeWorkloadView>(data_provider, compute_selection));
 }
 
@@ -74,35 +80,41 @@ ComputeWorkloadView::Render()
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     m_workload_info      = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
+    SettingsManager& settings = SettingsManager::GetInstance();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
+
+    RenderAnalysisInfo(m_data_provider.ComputeModel().GetAnalysisInfo());
+
     if(m_workload_info)
     {
-        SettingsManager& settings = SettingsManager::GetInstance();
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                            settings.GetDefaultStyle().ChildRounding);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                              settings.GetColor(Colors::kBgPanel));
-        ImGui::PushStyleColor(ImGuiCol_Border,
-                              settings.GetColor(Colors::kBorderColor));
         if(ImGui::BeginChild("info", ImVec2(0, 0),
                              ImGuiChildFlags_Borders |
                                  ImGuiChildFlags_AlwaysUseWindowPadding))
         {
-            SectionTitle("Workload Information");
+            const std::string title =
+                m_workload_info->name.empty()
+                    ? std::string(WORKLOAD_SECTION_TITLE)
+                    : std::string(WORKLOAD_SECTION_TITLE) + ": " + m_workload_info->name;
+            SectionTitle(title.c_str());
             if(m_content_container)
             {
                 m_content_container->Render();
             }
         }
         ImGui::EndChild();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar();
     }
     else
     {
-        SectionTitle("Workload Information");
+        SectionTitle(WORKLOAD_SECTION_TITLE);
         const char* label = "Workload Information Unavailable";
         RenderUnavailableMessage(label);
     }
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
 }
 
 void
@@ -115,6 +127,58 @@ ComputeWorkloadView::RenderUnavailableMessage(const char* label)
     CenterNextTextItem(label);
     ImGui::TextUnformatted(label);
     ImGui::EndDisabled();
+}
+
+void
+ComputeWorkloadView::RenderInfoRow(int row_id, const char* name, const char* value)
+{
+    ImGui::PushID(row_id);
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    CopyableTextUnformatted(name, "", COPY_DATA_NOTIFICATION, false, true);
+    ImGui::TableNextColumn();
+    CopyableTextUnformatted(value, "", COPY_DATA_NOTIFICATION, false, true);
+    ImGui::PopID();
+}
+
+void
+ComputeWorkloadView::RenderAnalysisInfo(const AnalysisInfo& analysis_info)
+{
+    if(ImGui::BeginChild("analysis_info", ImVec2(0, 0),
+                         ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
+                             ImGuiChildFlags_AlwaysUseWindowPadding))
+    {
+        SectionTitle("Analysis Tool");
+
+        const std::pair<const char*, const std::string*> rows[] = {
+            { "ROCm Compute Profiler Version", &analysis_info.profiler_version },
+            { "Git Revision", &analysis_info.profiler_git_version },
+            { "Database Schema Version", &analysis_info.schema_version },
+        };
+        bool has_value = false;
+        for(const std::pair<const char*, const std::string*>& row : rows)
+        {
+            has_value = has_value || !row.second->empty();
+        }
+
+        if(!has_value)
+        {
+            const char* label = "Analysis Tool Information Unavailable";
+            RenderUnavailableMessage(label);
+        }
+        else if(ImGui::BeginTable("analysis_info_table", 2,
+                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders))
+        {
+            for(size_t i = 0; i < std::size(rows); i++)
+            {
+                const std::string& value = *rows[i].second;
+                RenderInfoRow(static_cast<int>(i), rows[i].first,
+                              value.empty() ? UNAVAILABLE_VALUE_TEXT : value.c_str());
+            }
+            ImGui::EndTable();
+        }
+    }
+    ImGui::EndChild();
 }
 
 void
@@ -136,16 +200,9 @@ ComputeWorkloadView::RenderSystemInfo(const WorkloadInfo& workload_info)
             {
                 for(size_t i = 0; i < workload_info.system_info[0].size(); i++)
                 {
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    CopyableTextUnformatted(workload_info.system_info[0][i].c_str(), "",
-                                            COPY_DATA_NOTIFICATION, false, true);
-
-                    ImGui::TableNextColumn();
-                    CopyableTextUnformatted(workload_info.system_info[1][i].c_str(), "",
-                                            COPY_DATA_NOTIFICATION, false, true);
-                    ImGui::PopID();
+                    RenderInfoRow(static_cast<int>(i),
+                                  workload_info.system_info[0][i].c_str(),
+                                  workload_info.system_info[1][i].c_str());
                 }
                 ImGui::EndTable();
             }
@@ -180,15 +237,9 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
             {
                 for(size_t i = 0; i < workload_info.profiling_config[0].size(); i++)
                 {
-                    ImGui::PushID(static_cast<int>(i));
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    CopyableTextUnformatted(workload_info.profiling_config[0][i].c_str(),
-                                            "", COPY_DATA_NOTIFICATION, false, true);
-                    ImGui::TableNextColumn();
-                    CopyableTextUnformatted(workload_info.profiling_config[1][i].c_str(),
-                                            "", COPY_DATA_NOTIFICATION, false, true);
-                    ImGui::PopID();
+                    RenderInfoRow(static_cast<int>(i),
+                                  workload_info.profiling_config[0][i].c_str(),
+                                  workload_info.profiling_config[1][i].c_str());
                 }
                 ImGui::EndTable();
             }
@@ -198,8 +249,8 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
             const char* label = "Profiling Configuration Unavailable";
             RenderUnavailableMessage(label);
         }
-        ImGui::EndChild();
     }
+    ImGui::EndChild();
 }
 
 }  // namespace View

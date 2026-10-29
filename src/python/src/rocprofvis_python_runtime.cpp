@@ -10,12 +10,26 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
+
+#if defined(_WIN32)
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    ifndef WIN32_LEAN_AND_MEAN
+#        define WIN32_LEAN_AND_MEAN
+#    endif
+#    include <windows.h>
+#elif defined(__APPLE__)
+#    include <mach-o/dyld.h>
+#endif
 
 #define PY_SSIZE_T_CLEAN
 #include "rocprofvis_python.h"
@@ -39,6 +53,29 @@ uint64_t const INTERRUPT_RETRY_MS = 1000;
 // Enough traceback to find the failing line, without pasting a runaway
 // recursion into the transcript.
 size_t const MAX_ERROR_CHARS = 4000;
+
+// The longest path Windows hands back once long paths are enabled.
+uint32_t const MAX_EXECUTABLE_PATH = 32768;
+
+// A vendored build sets ROCPROFVIS_PYTHON_RELDIR to where the package keeps the
+// interpreter, relative to the executable. A build against the build machine's
+// Python sets the ROCPROFVIS_PYTHON_HOME / STDLIB / STDARCH paths instead.
+#ifndef ROCPROFVIS_PYTHON_RELDIR
+#    define ROCPROFVIS_PYTHON_RELDIR ""
+#endif
+#ifndef ROCPROFVIS_PYTHON_HOME
+#    define ROCPROFVIS_PYTHON_HOME ""
+#endif
+#ifndef ROCPROFVIS_PYTHON_STDLIB
+#    define ROCPROFVIS_PYTHON_STDLIB ""
+#endif
+#ifndef ROCPROFVIS_PYTHON_STDARCH
+#    define ROCPROFVIS_PYTHON_STDARCH ""
+#endif
+char const* const PYTHON_RELDIR         = ROCPROFVIS_PYTHON_RELDIR;
+char const* const SYSTEM_PYTHON_HOME    = ROCPROFVIS_PYTHON_HOME;
+char const* const SYSTEM_PYTHON_STDLIB  = ROCPROFVIS_PYTHON_STDLIB;
+char const* const SYSTEM_PYTHON_STDARCH = ROCPROFVIS_PYTHON_STDARCH;
 
 char const* const ALLOWLISTED_MODULES[] = {
     "math",       "statistics", "decimal",     "fractions", "itertools",
@@ -332,19 +369,196 @@ private:
     PyObject*                             m_screen_fn = nullptr;
 };
 
-wchar_t*
-DecodePath(char const* path)
+// Where the interpreter's standard library lives. stdarch is empty unless a
+// system install keeps platform modules apart from the pure-Python ones.
+struct python_layout_t
 {
-    if(!path)
+    std::filesystem::path home;
+    std::filesystem::path stdlib;
+    std::filesystem::path stdarch;
+};
+
+/*
+ * Converts a path to the wide string PyConfig takes. Returns null when the
+ * path cannot be decoded. Release the result with free_wide_path.
+ */
+wchar_t*
+alloc_wide_path(std::filesystem::path const& path)
+{
+    wchar_t* wide = nullptr;
+#if defined(_WIN32)
+    std::wstring const& native = path.native();
+    size_t const        bytes  = (native.size() + 1) * sizeof(wchar_t);
+    wide                       = static_cast<wchar_t*>(PyMem_RawMalloc(bytes));
+    if(wide)
     {
-        return nullptr;
+        std::memcpy(wide, native.c_str(), bytes);
     }
-    return Py_DecodeLocale(path, nullptr);
+#else
+    wide = Py_DecodeLocale(path.c_str(), nullptr);
+#endif
+    return wide;
+}
+
+void
+free_wide_path(wchar_t* wide)
+{
+    PyMem_RawFree(wide);
+}
+
+PyStatus
+set_config_path(PyConfig& config, wchar_t** field, std::filesystem::path const& path)
+{
+    wchar_t* wide = alloc_wide_path(path);
+    if(!wide)
+    {
+        return PyStatus_Error("could not decode a Python runtime path");
+    }
+    PyStatus status = PyConfig_SetString(&config, field, wide);
+    free_wide_path(wide);
+    return status;
+}
+
+PyStatus
+append_search_path(PyConfig& config, std::filesystem::path const& dir)
+{
+    wchar_t* wide = alloc_wide_path(dir);
+    if(!wide)
+    {
+        return PyStatus_Error("could not decode a Python module path");
+    }
+    PyStatus status = PyWideStringList_Append(&config.module_search_paths, wide);
+    free_wide_path(wide);
+    return status;
+}
+
+// A directory that is not present is skipped, so a layout without that
+// folder still initializes.
+PyStatus
+append_existing_dir(PyConfig& config, std::filesystem::path const& dir)
+{
+    std::error_code ec;
+    if(!std::filesystem::is_directory(dir, ec))
+    {
+        return PyStatus_Ok();
+    }
+    return append_search_path(config, dir);
+}
+
+std::filesystem::path
+executable_dir()
+{
+    std::filesystem::path exe;
+#if defined(_WIN32)
+    std::vector<wchar_t> buffer(MAX_EXECUTABLE_PATH, L'\0');
+    DWORD const          length =
+        GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if(length > 0 && length < buffer.size())
+    {
+        exe = std::filesystem::path(buffer.data(), buffer.data() + length);
+    }
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::vector<char> buffer(size + 1, '\0');
+    if(_NSGetExecutablePath(buffer.data(), &size) == 0)
+    {
+        exe = buffer.data();
+    }
+#else
+    std::error_code link_ec;
+    exe = std::filesystem::read_symlink("/proc/self/exe", link_ec);
+#endif
+    std::filesystem::path dir;
+    if(!exe.empty())
+    {
+        std::error_code             ec;
+        std::filesystem::path const resolved = std::filesystem::weakly_canonical(exe, ec);
+        dir = (ec ? exe : resolved).parent_path();
+    }
+    return dir;
+}
+
+// CPython's own landmark: lib/pythonX.Y/os.py on Linux and macOS, Lib/os.py
+// on Windows.
+bool
+layout_from_home(std::filesystem::path const& home, python_layout_t& layout)
+{
+    std::string const version_dir = "python" + std::to_string(PY_MAJOR_VERSION) +
+                                    "." + std::to_string(PY_MINOR_VERSION);
+    std::filesystem::path const candidates[] = {home / "lib" / version_dir,
+                                                home / "Lib"};
+    bool found = false;
+    for(std::filesystem::path const& stdlib : candidates)
+    {
+        std::error_code ec;
+        if(!found && std::filesystem::is_regular_file(stdlib / "os.py", ec))
+        {
+            layout.home   = home;
+            layout.stdlib = stdlib;
+            layout.stdarch.clear();
+            found = true;
+        }
+    }
+    return found;
+}
+
+/*
+ * An explicit runtime_root wins. Otherwise the runtime shipped with the
+ * executable, which sits beside it in the build tree and wherever
+ * ROCPROFVIS_PYTHON_RELDIR points in a package. Last, the build machine's
+ * Python, which only a build that did not vendor one knows about.
+ */
+bool
+resolve_layout(std::string const& runtime_root, python_layout_t& layout)
+{
+    bool found = false;
+    if(!runtime_root.empty())
+    {
+        found = layout_from_home(std::filesystem::path(runtime_root), layout);
+        if(!found)
+        {
+            spdlog::error("Python init failed: no standard library under {}",
+                          runtime_root);
+        }
+    }
+    else
+    {
+        std::filesystem::path const exe_dir = executable_dir();
+        if(!exe_dir.empty())
+        {
+            found = layout_from_home(exe_dir / "python", layout);
+            if(!found && PYTHON_RELDIR[0] != '\0')
+            {
+                found = layout_from_home((exe_dir / PYTHON_RELDIR).lexically_normal(),
+                                         layout);
+            }
+        }
+        if(!found && SYSTEM_PYTHON_STDLIB[0] != '\0')
+        {
+            layout.home    = SYSTEM_PYTHON_HOME;
+            layout.stdlib  = SYSTEM_PYTHON_STDLIB;
+            layout.stdarch = SYSTEM_PYTHON_STDARCH;
+            found          = true;
+        }
+        if(!found)
+        {
+            spdlog::error("Python init failed: no Python runtime beside {}",
+                          exe_dir.generic_u8string());
+        }
+    }
+    return found;
 }
 
 bool
 Runtime::InitializeInterpreter()
 {
+    python_layout_t layout;
+    if(!resolve_layout(m_runtime_root, layout))
+    {
+        return false;
+    }
+
     PyConfig config;
     PyConfig_InitIsolatedConfig(&config);
     config.site_import            = 0;
@@ -352,25 +566,10 @@ Runtime::InitializeInterpreter()
     config.use_environment        = 0;
     config.install_signal_handlers = 0;
 
-    char const* home = m_runtime_root.empty() ? nullptr : m_runtime_root.c_str();
-#ifndef ROCPROFVIS_PYTHON_HOME
-#define ROCPROFVIS_PYTHON_HOME ""
-#endif
-#ifndef ROCPROFVIS_PYTHON_STDLIB
-#define ROCPROFVIS_PYTHON_STDLIB ""
-#endif
-#ifndef ROCPROFVIS_PYTHON_STDARCH
-#define ROCPROFVIS_PYTHON_STDARCH ""
-#endif
-    if(!home || home[0] == '\0')
-    {
-        home = ROCPROFVIS_PYTHON_HOME;
-    }
-
     PyStatus status = PyStatus_Ok();
-    if(home && home[0] != '\0')
+    if(!layout.home.empty())
     {
-        status = PyConfig_SetBytesString(&config, &config.home, home);
+        status = set_config_path(config, &config.home, layout.home);
     }
     if(!PyStatus_Exception(status))
     {
@@ -378,28 +577,27 @@ Runtime::InitializeInterpreter()
                                          "roc-optiq");
     }
 
-    char const* stdlib  = ROCPROFVIS_PYTHON_STDLIB;
-    char const* stdarch = ROCPROFVIS_PYTHON_STDARCH;
-    if(!PyStatus_Exception(status) && stdlib && stdlib[0] != '\0')
+    config.module_search_paths_set = 1;
+    if(!PyStatus_Exception(status))
     {
-        config.module_search_paths_set = 1;
-        wchar_t* w_stdlib              = DecodePath(stdlib);
-        if(w_stdlib)
-        {
-            status = PyWideStringList_Append(&config.module_search_paths,
-                                             w_stdlib);
-            PyMem_RawFree(w_stdlib);
-        }
-        if(!PyStatus_Exception(status) && stdarch && stdarch[0] != '\0')
-        {
-            wchar_t* w_stdarch = DecodePath(stdarch);
-            if(w_stdarch)
-            {
-                status = PyWideStringList_Append(&config.module_search_paths,
-                                                 w_stdarch);
-                PyMem_RawFree(w_stdarch);
-            }
-        }
+        status = append_search_path(config, layout.stdlib);
+    }
+    if(!PyStatus_Exception(status) && !layout.stdarch.empty() &&
+       layout.stdarch != layout.stdlib)
+    {
+        status = append_search_path(config, layout.stdarch);
+    }
+    // Pinning module_search_paths skips the directories CPython would add
+    // for extension modules. _random (imported by statistics) is
+    // lib-dynload/_random*.so in a system Linux Python. On Windows those
+    // modules live in <prefix>/DLLs.
+    if(!PyStatus_Exception(status))
+    {
+        status = append_existing_dir(config, layout.stdlib / "lib-dynload");
+    }
+    if(!PyStatus_Exception(status) && !layout.home.empty())
+    {
+        status = append_existing_dir(config, layout.home / "DLLs");
     }
 
     if(!PyStatus_Exception(status))
@@ -409,10 +607,12 @@ Runtime::InitializeInterpreter()
     PyConfig_Clear(&config);
     if(PyStatus_Exception(status))
     {
-        spdlog::error("Python init failed: {}",
-                      status.err_msg ? status.err_msg : "unknown");
+        spdlog::error("Python init failed: {} (stdlib {})",
+                      status.err_msg ? status.err_msg : "unknown",
+                      layout.stdlib.generic_u8string());
         return false;
     }
+    spdlog::info("Python runtime: {}", layout.stdlib.generic_u8string());
 
     // Compiled once, here, rather than per exec. ScreenSource fails closed
     // without it, so a runtime that cannot build the screen is not usable.

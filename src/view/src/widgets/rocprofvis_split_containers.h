@@ -40,12 +40,16 @@ public:
     , m_resize_grip_size(grip_size)
     , m_first_min_size(first_min_size)
     , m_second_min_size(second_min_size)
-    , m_split_ratio(split_ratio) {}
+    , m_split_ratio(split_ratio)
+    , m_split_spacing(0.0f)
+    {}
     virtual ~SplitContainerBase() = default;
     virtual void Render() override;
 
     void SetSplit(float ratio) { m_split_ratio = ratio; };
+    void SetSplitSpacing(float spacing) { m_split_spacing = spacing; };
     void ShowSplitter(bool show) { m_always_show_splitter = show; };
+    void SetSplitterSize(float size) { m_resize_grip_size = size; };
 
     float GetMinSize();
 
@@ -74,6 +78,7 @@ protected:
 
     float m_split_ratio;
     float m_resize_grip_size;
+    float m_split_spacing;
 
     std::string m_first_name;
     std::string m_second_name;
@@ -128,7 +133,7 @@ private:
                             float available_height) override;
 
     ImVec2 GetSplitterSize(const ImVec2& total_size) override;
-    void   AddSameLine() override {};  // No same line for vertical split
+    void   AddSameLine() override;
     float  GetItemSize() override;
 };
 

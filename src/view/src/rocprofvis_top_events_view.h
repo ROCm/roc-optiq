@@ -82,7 +82,7 @@ private:
         const char* header = nullptr;
     };
 
-    static constexpr size_t CATEGORY_COUNT = 5;
+    static constexpr size_t CATEGORY_COUNT = kRocProfVisDmOperationLaunchSample;
 
     static bool AnyVisible(const Category& category);
 

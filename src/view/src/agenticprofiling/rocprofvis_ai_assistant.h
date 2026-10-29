@@ -15,10 +15,14 @@
 #include <string>
 #include <vector>
 
+class TextSelect;
+
 namespace RocProfVis
 {
 namespace View
 {
+
+enum class Colors;
 
 class AssistantPanel : public RocWidget
 {
@@ -95,10 +99,13 @@ private:
     void AppendLine(Speaker speaker, const std::string& text);
     void AppendChart(uint64_t track_id);
     void RenderActivityChart(uint64_t track_id);
-    void RenderHeaderCard();
-    void RenderTranscript();
-    void RenderMessageCard(size_t index, const ChatLine& line);
-    void RenderComposer();
+    void        RenderHeaderCard();
+    void        RenderTranscript();
+    void        RenderMessageCard(size_t index, const ChatLine& line);
+    void        RenderSelectableMessage(size_t index, const std::string& text,
+                                        Colors text_color);
+    TextSelect* MessageSelect(size_t index);
+    void        RenderComposer();
     // Explain this view on an empty chat, or the model's offered follow-ups
     // after a turn.
     void RenderSuggestedActions();
@@ -106,6 +113,10 @@ private:
     // Transient progress text, kept outside the transcript so it disappears
     // with the spinner when the turn ends.
     void SetStatus(const std::string& text);
+    // Serializes the transcript to a Markdown string, shared by copy and export.
+    std::string BuildTranscriptText() const;
+    void        CopyTranscript();
+    void        ExportTranscript();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
     void CancelPendingRequest();
@@ -146,6 +157,10 @@ private:
     // the right amount instead of guessing and overflowing.
     float                 m_composer_height;
     std::vector<ChatLine> m_lines;
+    // Parallel to m_lines. Text rows create one; charts do not. Cleared with
+    // the transcript so a new conversation does not keep an old highlight.
+    std::vector<std::unique_ptr<TextSelect>> m_message_select;
+    std::vector<std::vector<std::string>>     m_message_lines;
 
     std::string                    m_queued_question;
     std::vector<AssistantMessage>  m_conversation;

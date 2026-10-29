@@ -51,7 +51,9 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
         if(result == kRocProfVisResultSuccess &&
            (table_type == kRPVControllerTableTypeSearchResults ||
-            table_type == kRPVControllerTableTypeSummaryKernelInstances))
+            table_type == kRPVControllerTableTypeSummaryKernelInstances ||
+            table_type == kRPVControllerTableTypeSummaryMemoryInstances ||
+            table_type == kRPVControllerTableTypeSummaryThreadInstances))
         {
             result = args.GetUInt64(kRPVControllerTableArgsNumStringTableFilters, 0, &num_string_table_filters);
             if(result == kRocProfVisResultSuccess)
@@ -151,7 +153,8 @@ EventSearchTable::BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, 
     result = rocprofvis_db_build_event_search_query(db, 
                                                     static_cast<rocprofvis_dm_timestamp_t>(arguments.m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(arguments.m_end_ts), 
                                                     static_cast<rocprofvis_db_num_of_tracks_t>(arguments.m_tracks.size()), arguments.m_tracks.data(),
-                                                    arguments.m_where.c_str(),
+                                                    arguments.m_source_filter.has_value() ? &arguments.m_source_filter.value() : nullptr,
+                                                    arguments.m_filter.c_str(),
                                                     static_cast<rocprofvis_dm_num_string_table_filters_t>(string_table_filters_ptr.size()), string_table_filters_ptr.data(),
                                                     arguments.m_include_substrings, arguments.m_include_category, arguments.m_partial_matching,
                                                     sort_column, (rocprofvis_dm_sort_order_t)arguments.m_sort_order,

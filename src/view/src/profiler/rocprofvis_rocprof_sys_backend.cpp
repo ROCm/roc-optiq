@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_rocprof_sys_backend.h"
+#include "rocprofvis_launch_config.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_json_utils.h"
@@ -130,11 +131,13 @@ namespace
 
 void HelpMarker(char const* env_var, char const* desc)
 {
+    // Frame-align so the "(?)" sits level with the field/toggle/label it follows.
     ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
         ImGui::TextUnformatted(env_var);
         ImGui::Separator();
         ImGui::TextUnformatted(desc);
@@ -160,10 +163,8 @@ constexpr int   kCheckboxMaxCols  = 4;
 // Duration on one line).
 constexpr float kPresetLabelW    = 110.0f;
 constexpr float kPresetComboW    = 240.0f;
-constexpr float kOutputColW      = 160.0f;
-constexpr float kTraceInlineNumW = 85.0f;   // Delay / Duration inputs (share a row)
-constexpr float kTraceFieldGapX  = 16.0f;   // gap between Delay and Duration
-constexpr float kTraceRegionTrail = 26.0f;  // width reserved for the Region (?)
+constexpr float kOutputColW      = 160.0f;  // OUTPUT FORMAT column minimum width
+constexpr float kTraceInlineNumW = 85.0f;   // Delay / Duration numeric inputs
 
 // Renders a label in a fixed-width column and sizes the next item so a whole
 // column of controls lines up regardless of label length.
@@ -239,7 +240,8 @@ void BeginPresetLockedSection(std::string const& preset)
     {
         ImGui::TextColored(kPresetLockColor,
                            "Preset \"%s\" controls these settings.", preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::TextDisabled(
+            "Clear the preset, or set values under Arguments & Environment.");
         ImGui::Spacing();
     }
     ImGui::BeginDisabled(has_preset);
@@ -539,7 +541,7 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
         return const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }, true});
     tabs.push_back({"perfetto", "Perfetto", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }, true});
-    tabs.push_back({"process_sampling", "Process Sampling", [this]() {
+    tabs.push_back({"process_sampling", "Process", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); },
         true});
     tabs.push_back({"parallelism", "Parallelism", [this]() {
@@ -552,7 +554,7 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
             true});
     }
 
-    tabs.push_back({"advanced", "Config & Logging", [this]() {
+    tabs.push_back({"advanced", "Logging", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }, true});
 
     return tabs;
@@ -634,6 +636,15 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
             "Consider binary rewrite mode or use the Sample tool"});
     }
 
+    // --preset is a run/sample flag; instrument would reject it as unknown.
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument &&
+        !m_settings.rocprof_preset.empty())
+    {
+        warnings.push_back({WarningMessage::kWarning,
+            "Built-in presets are ignored by rocprof-sys-instrument "
+            "(--preset is a run/sample flag). Select none or switch tool"});
+    }
+
     // Tool routing: run + sampling
     if (config.tool == kRPVProfilerToolRocprofSysRun && m_settings.use_sampling &&
         !m_settings.trace_backend)
@@ -662,7 +673,6 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
 std::vector<std::string> RocprofSysBackend::GetSummaryTags(
     LaunchConfig const& config) const
 {
-    (void)config;
     std::vector<std::string> tags;
 
     // Output format (what the run will produce).
@@ -685,10 +695,18 @@ std::vector<std::string> RocprofSysBackend::GetSummaryTags(
     }
     tags.push_back(output);
 
-    // Active preset (or Custom when none is selected).
-    tags.push_back(m_settings.rocprof_preset.empty()
-                       ? std::string("Custom")
-                       : m_settings.rocprof_preset);
+    // Instrument does not accept --preset, so never label the run with a
+    // preset that FlattenToExecution will not emit.
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+    {
+        tags.push_back("Runtime instrumentation");
+    }
+    else
+    {
+        tags.push_back(m_settings.rocprof_preset.empty()
+                           ? std::string("none")
+                           : m_settings.rocprof_preset);
+    }
 
     return tags;
 }
@@ -697,10 +715,37 @@ std::vector<std::string> RocprofSysBackend::GetSummaryTags(
 // FlattenToExecution -- only emits non-default values
 // ==================================================================================
 
-void RocprofSysBackend::FlattenToExecution(
+// extra_argv is the override hatch: last among the profiler's own flags, still
+// ahead of "--". Tokens past the separator belong to the target.
+static void AppendExtraArgv(
+    LaunchConfig const& config, std::vector<std::string>& argv_out)
+{
+    for (auto const& arg : config.extra_argv)
+    {
+        argv_out.push_back(arg);
+    }
+}
+
+static void AppendTargetArgv(
+    LaunchConfig const& config, std::vector<std::string>& argv_out)
+{
+    if (config.target.executable.empty())
+    {
+        return;
+    }
+
+    argv_out.push_back("--");
+    argv_out.push_back(config.target.executable);
+
+    for (auto const& arg : SplitArguments(config.target.arguments))
+    {
+        argv_out.push_back(arg);
+    }
+}
+
+void RocprofSysBackend::EmitCuratedEnv(
     LaunchConfig const& config,
-    std::vector<std::pair<std::string, std::string>>& env_out,
-    std::vector<std::string>& argv_out) const
+    std::vector<std::pair<std::string, std::string>>& env_out) const
 {
     RocprofSysSettings defaults = RocprofSysSettings::FromJson(jt::Json());
 
@@ -734,13 +779,6 @@ void RocprofSysBackend::FlattenToExecution(
             env_out.emplace_back(env_name, std::to_string(val));
     };
 
-    // Emit --preset= in argv when a built-in preset is selected
-    if (!m_settings.rocprof_preset.empty())
-    {
-        argv_out.push_back("--preset=" + m_settings.rocprof_preset);
-    }
-
-    // Output path (always emit if set)
     if (!config.target.output_directory.empty())
     {
         env_out.emplace_back("ROCPROFSYS_OUTPUT_PATH", config.target.output_directory);
@@ -763,14 +801,6 @@ void RocprofSysBackend::FlattenToExecution(
     emit_bool_always("ROCPROFSYS_PROFILE", m_settings.profile);
     emit_bool_always("ROCPROFSYS_FLAT_PROFILE", m_settings.flat_profile);
     emit_bool_always("ROCPROFSYS_USE_ROCPD", m_settings.use_rocpd);
-
-    // Perfetto tracing — emit as CLI arg so it can override --preset precedence
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset || m_settings.trace_backend != defaults.trace_backend)
-    {
-        argv_out.push_back(
-            std::string("--trace=") + (m_settings.trace_backend ? "true" : "false"));
-    }
 
     // Collection — defer to preset when at default
     emit_bool("ROCPROFSYS_USE_SAMPLING", m_settings.use_sampling, defaults.use_sampling);
@@ -874,35 +904,30 @@ void RocprofSysBackend::FlattenToExecution(
     // so PID suffixing is forced off whenever MPI is enabled.
     bool effective_use_pid = m_settings.use_pid && !m_settings.use_mpip;
     emit_bool("ROCPROFSYS_USE_PID", effective_use_pid, defaults.use_pid);
+}
 
-    // Instrument args
-    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+void RocprofSysBackend::FlattenRunOrSample(
+    LaunchConfig const& config,
+    std::vector<std::string>& argv_out) const
+{
+    // rocprof-sys-sample shares run's common argv (--preset, --trace, --output)
+    // via register_preset_and_domain_arguments. Sampling is forced inside the
+    // sample binary; Flatten does not special-case it.
+    if (!m_settings.rocprof_preset.empty())
     {
-        if (!m_settings.instr_include.empty())
-        {
-            argv_out.push_back("-I");
-            argv_out.push_back(m_settings.instr_include);
-        }
-        if (!m_settings.instr_exclude.empty())
-        {
-            argv_out.push_back("-E");
-            argv_out.push_back(m_settings.instr_exclude);
-        }
-        if (m_settings.min_instructions > 0)
-        {
-            argv_out.push_back("--min-instructions");
-            argv_out.push_back(std::to_string(m_settings.min_instructions));
-        }
+        argv_out.push_back("--preset=" + m_settings.rocprof_preset);
     }
 
-    // The user's raw escape hatch goes last among the profiler's own flags, so
-    // it can override anything emitted above, but still ahead of the "--"
-    // separator - past that point the tokens belong to the target, not to
-    // rocprof-sys.
-    for (auto const& arg : config.extra_argv)
+    // Perfetto tracing as CLI so it can override --preset precedence.
+    RocprofSysSettings defaults   = RocprofSysSettings::FromJson(jt::Json());
+    bool               has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset || m_settings.trace_backend != defaults.trace_backend)
     {
-        argv_out.push_back(arg);
+        argv_out.push_back(
+            std::string("--trace=") + (m_settings.trace_backend ? "true" : "false"));
     }
+
+    AppendExtraArgv(config, argv_out);
 
     if (!config.target.output_directory.empty())
     {
@@ -910,16 +935,56 @@ void RocprofSysBackend::FlattenToExecution(
         argv_out.push_back(config.target.output_directory);
     }
 
-    // Everything after "--" is the command rocprof-sys should run.
-    if (!config.target.executable.empty())
-    {
-        argv_out.push_back("--");
-        argv_out.push_back(config.target.executable);
+    AppendTargetArgv(config, argv_out);
+}
 
-        for (auto const& arg : SplitArguments(config.target.arguments))
-        {
-            argv_out.push_back(arg);
-        }
+void RocprofSysBackend::FlattenInstrumentRuntime(
+    LaunchConfig const& config,
+    std::vector<std::pair<std::string, std::string>>& env_out,
+    std::vector<std::string>& argv_out) const
+{
+    // rocprof-sys-instrument treats -o/--output as a rewritten-binary filename
+    // and then exits without running the app. One-shot runtime instrumentation
+    // therefore keeps the output folder on ROCPROFSYS_OUTPUT_PATH only.
+    // --preset and --trace are registered only on run/sample; passing them
+    // here is a parse error, so Perfetto enablement is env instead.
+    env_out.emplace_back("ROCPROFSYS_TRACE",
+                         m_settings.trace_backend ? "true" : "false");
+
+    if (!m_settings.instr_include.empty())
+    {
+        argv_out.push_back("-I");
+        argv_out.push_back(m_settings.instr_include);
+    }
+    if (!m_settings.instr_exclude.empty())
+    {
+        argv_out.push_back("-E");
+        argv_out.push_back(m_settings.instr_exclude);
+    }
+    if (m_settings.min_instructions > 0)
+    {
+        argv_out.push_back("--min-instructions");
+        argv_out.push_back(std::to_string(m_settings.min_instructions));
+    }
+
+    AppendExtraArgv(config, argv_out);
+    AppendTargetArgv(config, argv_out);
+}
+
+void RocprofSysBackend::FlattenToExecution(
+    LaunchConfig const& config,
+    std::vector<std::pair<std::string, std::string>>& env_out,
+    std::vector<std::string>& argv_out) const
+{
+    EmitCuratedEnv(config, env_out);
+
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+    {
+        FlattenInstrumentRuntime(config, env_out, argv_out);
+    }
+    else
+    {
+        FlattenRunOrSample(config, argv_out);
     }
 }
 
@@ -1133,26 +1198,31 @@ bool RocprofSysBackend::RenderGeneralTraceOptions()
 {
     bool changed = false;
 
-    // Delay + Duration share a row; Region takes the next.
+    // Stack Delay / Duration / Region in their own rows sharing a fixed label
+    // column, so their input boxes align and survive a compressed pane.
+    const ImGuiStyle& gs      = ImGui::GetStyle();
+    const float       label_w = ImGui::CalcTextSize("Duration (s)").x + gs.ItemSpacing.x * 2.0f;
+
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Delay (s)");
-    ImGui::SameLine();
+    ImGui::SameLine(label_w);
     ImGui::SetNextItemWidth(kTraceInlineNumW);
     changed |=
         ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
 
-    ImGui::SameLine(0.0f, kTraceFieldGapX);
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Duration (s)");
-    ImGui::SameLine();
+    ImGui::SameLine(label_w);
     ImGui::SetNextItemWidth(kTraceInlineNumW);
     changed |= ImGui::InputDouble("##TraceDuration", &m_settings.trace_duration, 0.0,
                                   0.0, "%.2f");
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Region");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(-kTraceRegionTrail);
+    ImGui::SameLine(label_w);
+    // Reserve room for the trailing "(?)" so it neither overlaps nor clips.
+    const float region_trail = gs.ItemSpacing.x * 2.0f + ImGui::CalcTextSize("(?)").x;
+    ImGui::SetNextItemWidth(-region_trail);
     changed |= InputTextStringWithHint("##TraceRegion",
                                        "ROCTX regions (comma-separated)",
                                        m_settings.trace_region);
@@ -1172,12 +1242,12 @@ bool RocprofSysBackend::RenderBackendsTab()
     ImGui::SameLine(kPresetLabelW);
 
     const char* preset_label =
-        m_settings.rocprof_preset.empty() ? "Custom" : m_settings.rocprof_preset.c_str();
+        m_settings.rocprof_preset.empty() ? "none" : m_settings.rocprof_preset.c_str();
 
     ImGui::SetNextItemWidth(kPresetComboW);
     if (ImGui::BeginCombo("##RocprofPresetCombo", preset_label))
     {
-        if (ImGui::Selectable("Custom", m_settings.rocprof_preset.empty()))
+        if (ImGui::Selectable("none", m_settings.rocprof_preset.empty()))
         {
             m_settings.rocprof_preset.clear();
             changed = true;
@@ -1200,7 +1270,7 @@ bool RocprofSysBackend::RenderBackendsTab()
     HelpMarker("Profiling preset",
                "Pick a built-in rocprof-sys preset to configure collection defaults. "
                "When a preset is active, detailed settings are locked to preset values. "
-               "Choose Custom to unlock every control.");
+               "Select none to unlock every control.");
 
     bool has_preset = !m_settings.rocprof_preset.empty();
 
@@ -1222,33 +1292,60 @@ bool RocprofSysBackend::RenderBackendsTab()
         }
     }
 
-    // Output format and the trace window sit side by side.
-    if (ImGui::BeginTable("general_split", 2, ImGuiTableFlags_None))
-    {
-        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed, kOutputColW);
-        ImGui::TableSetupColumn("##trace", ImGuiTableColumnFlags_WidthStretch);
+    // Output format and the trace window sit side by side, stacking vertically
+    // when the pane is too narrow to keep both columns usable. The OUTPUT FORMAT
+    // column is sized to fit its widest row (the "ROCpd database" toggle + "(?)").
+    const ImGuiStyle& gs       = ImGui::GetStyle();
+    const float       toggle_w = ToggleSwitchWidth();
+    const float output_col_w =
+        std::max(kOutputColW, toggle_w + gs.ItemSpacing.x +
+                                  ImGui::CalcTextSize("ROCpd database").x +
+                                  gs.ItemSpacing.x + ImGui::CalcTextSize("(?)").x +
+                                  gs.ItemSpacing.x);
 
-        ImGui::TableNextColumn();
+    auto render_output_format = [&]() {
         LaunchSubHeader("OUTPUT FORMAT");
         changed |= ToggleSwitch("Perfetto trace", &m_settings.trace_backend);
         HelpMarker("ROCPROFSYS_TRACE", "Enable the Perfetto trace backend");
         changed |= ToggleSwitch("ROCpd database", &m_settings.use_rocpd);
         HelpMarker("ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
-
-        ImGui::TableNextColumn();
+    };
+    auto render_trace_window = [&]() {
         ImGui::BeginDisabled(has_preset);
         LaunchSubHeader("TRACE WINDOW");
         changed |= RenderGeneralTraceOptions();
         ImGui::EndDisabled();
+    };
+
+    // A usable trace column needs its label column plus a numeric input.
+    const float trace_min = ImGui::CalcTextSize("Duration (s)").x +
+                            gs.ItemSpacing.x * 3.0f + kTraceInlineNumW;
+    if (ImGui::GetContentRegionAvail().x >= output_col_w + trace_min &&
+        ImGui::BeginTable("general_split", 2, ImGuiTableFlags_None))
+    {
+        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed, output_col_w);
+        ImGui::TableSetupColumn("##trace", ImGuiTableColumnFlags_WidthStretch);
+
+        ImGui::TableNextColumn();
+        render_output_format();
+
+        ImGui::TableNextColumn();
+        render_trace_window();
 
         ImGui::EndTable();
+    }
+    else
+    {
+        render_output_format();
+        ImGui::Spacing();
+        render_trace_window();
     }
 
     if (has_preset)
     {
         ImGui::Spacing();
         ImGui::TextDisabled("Preset \"%s\" controls the locked options above. "
-                            "Choose Custom to edit them.",
+                            "Select none to edit them.",
                             m_settings.rocprof_preset.c_str());
     }
 
@@ -1338,6 +1435,7 @@ bool RocprofSysBackend::RenderRocmTab()
 
     BeginPresetLockedSection(m_settings.rocprof_preset);
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("ROCm Domains:");
     HelpMarker("ROCPROFSYS_ROCM_DOMAINS",
                "ROCm SDK domains to trace (checked = enabled)");
@@ -1436,6 +1534,7 @@ bool RocprofSysBackend::RenderPerfettoTab()
     bool has_enable  = AnyEnabled(m_settings.enable_categories);
     bool has_disable = AnyEnabled(m_settings.disable_categories);
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Enable Categories (allowlist):");
     HelpMarker("ROCPROFSYS_ENABLE_CATEGORIES",
                "Perfetto categories to enable (mutually exclusive with disable list)");
@@ -1452,6 +1551,7 @@ bool RocprofSysBackend::RenderPerfettoTab()
 
     ImGui::Spacing();
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Disable Categories (denylist):");
     HelpMarker("ROCPROFSYS_DISABLE_CATEGORIES",
                "Perfetto categories to disable (mutually exclusive with enable list)");
@@ -1497,6 +1597,7 @@ bool RocprofSysBackend::RenderProcessSamplingTab()
 
     ImGui::Separator();
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("AMD SMI Metrics:");
     HelpMarker("ROCPROFSYS_AMD_SMI_METRICS",
                "GPU metrics to collect (checked = enabled)");

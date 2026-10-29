@@ -2258,7 +2258,17 @@ TimelineView::RenderNormalTrack(TrackItem* track_item, int track_index,
         // check for mouse click
         if(track_item->IsMetaAreaClicked())
         {
-            m_timeline_selection->ToggleSelectTrack(*track_item);
+            std::vector<uint64_t> rows;
+            rows.reserve(m_tracks->size());
+            for(TrackItem* track : *m_tracks)
+            {
+                if(track && track->IsDisplayed())
+                {
+                    rows.push_back(track->GetID());
+                }
+            }
+            const ImGuiIO& io = ImGui::GetIO();
+            m_timeline_selection->ClickTrack(*track_item, rows, io.KeyCtrl, io.KeyShift);
         }
     }
     ImGui::EndChild();

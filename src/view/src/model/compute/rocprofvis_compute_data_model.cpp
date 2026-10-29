@@ -62,6 +62,18 @@ ComputeDataModel::GetWorkload(uint32_t workload_id) const
     return nullptr;
 }
 
+const AnalysisInfo&
+ComputeDataModel::GetAnalysisInfo() const
+{
+    return m_analysis_info;
+}
+
+void
+ComputeDataModel::SetAnalysisInfo(AnalysisInfo& analysis_info)
+{
+    m_analysis_info = std::move(analysis_info);
+}
+
 const std::vector<std::shared_ptr<MetricValue>>*
 ComputeDataModel::GetKernelMetricsData(uint64_t store_id, uint32_t kernel_id) const
 {
@@ -279,6 +291,12 @@ ComputeDataModel::GetMetricInfo(uint32_t workload_id, uint32_t category_id,
 }
 
 const AvailableMetrics::Entry*
+ComputeDataModel::GetMetricInfo(uint32_t workload_id, const MetricId& id) const
+{
+    return GetMetricInfo(workload_id, id.category_id, id.table_id, id.entry_id);
+}   
+
+const AvailableMetrics::Entry*
 ComputeDataModel::GetMetricInfo(const WorkloadInfo& workload, uint32_t category_id,
                                 uint32_t table_id, uint32_t entry_id)
 {
@@ -295,12 +313,19 @@ ComputeDataModel::GetMetricInfo(const WorkloadInfo& workload, uint32_t category_
     return nullptr;
 }
 
+const AvailableMetrics::Entry*
+ComputeDataModel::GetMetricInfo(const WorkloadInfo& workload, const MetricId& id)
+{
+    return GetMetricInfo(workload, id.category_id, id.table_id, id.entry_id);
+}
+
 void
 ComputeDataModel::Clear()
 {
     ClearAllMetricValues();
     m_workloads.clear();
     m_ordered_workloads.clear();
+    m_analysis_info = AnalysisInfo();
     m_kernel_selection_table.Clear();
 }
 
@@ -496,6 +521,46 @@ ComputeKernelSelectionTable&
 ComputeDataModel::GetKernelSelectionTable()
 {
     return m_kernel_selection_table;
+}
+
+bool
+ComputeDataModel::MetricIdFromString(const std::string& text, MetricId& out)
+{
+    auto parse = [](const std::string& s, size_t begin, size_t end,
+                    uint32_t& value) -> bool {
+        bool     ok = end > begin;
+        uint32_t n  = 0;
+        for(size_t i = begin; ok && i < end; ++i)
+        {
+            char c = s[i];
+            ok     = c >= '0' && c <= '9';
+            if(ok)
+            {
+                n = n * 10u + static_cast<uint32_t>(c - '0');
+            }
+        }
+        if(ok)
+        {
+            value = n;
+        }
+        return ok;
+    };
+
+    size_t first  = text.find('.');
+    size_t second = first == std::string::npos ? first : text.find('.', first + 1);
+    size_t third  = second == std::string::npos ? second : text.find('.', second + 1);
+
+    MetricId id;
+    bool     parsed = first != 0 && first != std::string::npos && second != first + 1 &&
+                      second != std::string::npos && third == std::string::npos &&
+                      parse(text, 0, first, id.category_id) &&
+                      parse(text, first + 1, second, id.table_id) &&
+                      parse(text, second + 1, text.size(), id.entry_id);
+    if(parsed)
+    {
+        out = id;
+    }
+    return parsed;
 }
 
 }  // namespace View

@@ -11,18 +11,23 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "imgui.h"
+#include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 namespace RocProfVis
 {
@@ -39,6 +44,11 @@ constexpr float  ASSISTANT_SPLITTER_WIDTH = 6.0f;
 constexpr ImVec2 ASSISTANT_WINDOW_PADDING = ImVec2(14.0f, 12.0f);
 constexpr ImVec2 ASSISTANT_CARD_PADDING   = ImVec2(14.0f, 10.0f);
 constexpr float  ASSISTANT_SEND_WIDTH     = 80.0f;
+// Composer row: input, Send, and three icon buttons (copy, export, clear),
+// with four gaps between the five items.
+constexpr float  ASSISTANT_COMPOSER_MIN_INPUT_WIDTH = 80.0f;
+constexpr int    ASSISTANT_COMPOSER_ICON_BUTTONS    = 3;
+constexpr int    ASSISTANT_COMPOSER_GAP_COUNT       = 4;
 constexpr float  ASSISTANT_DOT_RADIUS     = 2.5f;
 constexpr int    ASSISTANT_DOT_COUNT      = 3;
 constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
@@ -99,6 +109,25 @@ WrapButtonLabel(const std::string& text, float wrap_width)
         out += line;
     }
     return out.empty() ? text : out;
+}
+
+std::vector<std::string>
+SplitMessageLines(const std::string& text)
+{
+    std::vector<std::string> lines;
+    size_t                   start = 0;
+    do
+    {
+        const size_t end = text.find('\n', start);
+        if(end == std::string::npos)
+        {
+            lines.emplace_back(text, start, text.size() - start);
+            break;
+        }
+        lines.emplace_back(text, start, end - start);
+        start = end + 1;
+    } while(start <= text.size());
+    return lines;
 }
 
 }  // namespace
@@ -493,9 +522,7 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         // A notice that outlived its turn, such as a failed request.
         PanelIcon(ICON_X_CIRCLED, Colors::kTextError, &settings);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
-        ImGui::TextWrapped("%s", line.text.c_str());
-        ImGui::PopStyleColor();
+        RenderSelectableMessage(index, line.text, Colors::kTextError);
         ImGui::PopID();
         return;
     }
@@ -528,11 +555,138 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         PanelFieldLabel("Optiq", false, &settings);
     }
     ImGui::Spacing();
-    ImGui::PushTextWrapPos(0.0f);
-    ImGui::TextWrapped("%s", line.text.c_str());
-    ImGui::PopTextWrapPos();
+    RenderSelectableMessage(index, line.text, Colors::kTextMain);
     EndPanelCard();
     ImGui::PopID();
+}
+
+TextSelect*
+AssistantPanel::MessageSelect(size_t index)
+{
+    if(index >= m_lines.size())
+    {
+        return nullptr;
+    }
+    if(m_message_select.size() < m_lines.size())
+    {
+        m_message_select.resize(m_lines.size());
+    }
+    if(m_message_lines.size() < m_lines.size())
+    {
+        m_message_lines.resize(m_lines.size());
+    }
+    if(m_message_select[index] == nullptr)
+    {
+        m_message_select[index] = std::make_unique<TextSelect>(
+            [this, index](size_t line_index) {
+                if(index >= m_message_lines.size() ||
+                   line_index >= m_message_lines[index].size())
+                {
+                    return std::string_view();
+                }
+                return std::string_view(m_message_lines[index][line_index]);
+            },
+            [this, index]() {
+                return index < m_message_lines.size() ? m_message_lines[index].size()
+                                                      : size_t{0};
+            },
+            true);
+    }
+    return m_message_select[index].get();
+}
+
+void
+AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
+                                        Colors text_color)
+{
+    const ImU32 color  = SettingsManager::GetInstance().GetColor(text_color);
+    TextSelect* select = MessageSelect(index);
+    if(select == nullptr)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextWrapped("%s", text.c_str());
+        ImGui::PopStyleColor();
+        return;
+    }
+    if(m_message_lines[index].empty())
+    {
+        m_message_lines[index] = SplitMessageLines(text);
+    }
+
+    // TextSelect expects a text-only window whose first glyph is at its origin.
+    // Splitting on explicit newlines preserves blank paragraphs while its word
+    // wrapping handles each visual line.
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    const ImVec2 message_spacing = ImGui::GetStyle().ItemSpacing;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(message_spacing.x, 0.0f));
+    ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                          ImGuiWindowFlags_NoScrollWithMouse);
+    // Scoped to the text so the copy menu below keeps the theme's text color.
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    for(const std::string& line : m_message_lines[index])
+    {
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(line.data(), line.data() + line.size());
+        ImGui::PopTextWrapPos();
+    }
+    ImGui::PopStyleColor();
+
+    // Only one message keeps a highlight, so Ctrl+C copies what is on screen.
+    // Ctrl+C reaches only the focused window, and right-click does not focus
+    // on its own. The popup flag keeps this working when the click lands while
+    // another message's menu is still open.
+    if(ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+       (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+        ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
+    {
+        ImGui::SetWindowFocus();
+        for(const std::unique_ptr<TextSelect>& other : m_message_select)
+        {
+            if(other != nullptr && other.get() != select)
+            {
+                other->clearSelection();
+            }
+        }
+    }
+    select->update();
+    // update() copies on Ctrl+C but does not report it. The same chord in the
+    // same window fires on the same press.
+    bool copied_selection =
+        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && select->hasSelection();
+
+    PushContextMenuStyles();
+    if(ImGui::BeginPopupContextWindow("##message_copy"))
+    {
+        if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection()))
+        {
+            select->copy();
+            copied_selection = true;
+        }
+        if(IconMenuItem(ICON_LIST, "Select all"))
+        {
+            select->selectAll();
+        }
+        ImGui::Separator();
+        if(IconMenuItem(ICON_DOCUMENT, "Copy message"))
+        {
+            ImGui::SetClipboardText(text.c_str());
+            NotificationManager::GetInstance().Show("Message copied to clipboard",
+                                                    NotificationLevel::Info);
+        }
+        ImGui::EndPopup();
+    }
+    PopContextMenuStyles();
+    if(copied_selection)
+    {
+        NotificationManager::GetInstance().Show("Selection copied to clipboard",
+                                                NotificationLevel::Info);
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor();
 }
 
 // Stacked follow-ups under the transcript: Explain this view on an empty chat,
@@ -614,6 +768,111 @@ AssistantPanel::RenderSuggestedActions()
     ImGui::Spacing();
 }
 
+std::string
+AssistantPanel::BuildTranscriptText() const
+{
+    std::string out = "# Ask Optiq conversation\n\n";
+    for(const ChatLine& line : m_lines)
+    {
+        switch(line.speaker)
+        {
+            case Speaker::kUser:
+                out += "## You\n\n";
+                out += line.text;
+                out += "\n\n";
+                break;
+            case Speaker::kAssistant:
+                out += "## Optiq\n\n";
+                out += line.text;
+                out += "\n\n";
+                break;
+            case Speaker::kStatus:
+                out += "> Notice: ";
+                out += line.text;
+                out += "\n\n";
+                break;
+            case Speaker::kChart:
+                // Charts redraw from live model data, so note one was shown
+                // rather than freezing a snapshot.
+                if(line.track_id == INVALID_UINT64_INDEX)
+                {
+                    out += "_[Timeline overview chart]_\n\n";
+                }
+                else
+                {
+                    out += "_[Activity chart for track " +
+                           std::to_string(line.track_id) + "]_\n\n";
+                }
+                break;
+        }
+    }
+    return out;
+}
+
+void
+AssistantPanel::CopyTranscript()
+{
+    if(m_lines.empty())
+    {
+        return;
+    }
+    ImGui::SetClipboardText(BuildTranscriptText().c_str());
+    NotificationManager::GetInstance().Show("Conversation copied to clipboard",
+                                            NotificationLevel::Success);
+}
+
+void
+AssistantPanel::ExportTranscript()
+{
+    if(m_lines.empty())
+    {
+        return;
+    }
+    AppWindow* app = AppWindow::GetInstance();
+    if(app == nullptr)
+    {
+        return;
+    }
+
+    FileFilter md_filter;
+    md_filter.m_name       = "Markdown";
+    md_filter.m_extensions = { "md" };
+    FileFilter txt_filter;
+    txt_filter.m_name       = "Text";
+    txt_filter.m_extensions = { "txt" };
+
+    // Captured by value: the save dialog is async and the conversation may
+    // change before the user picks a path.
+    const std::string text = BuildTranscriptText();
+    app->ShowSaveFileDialog(
+        "Export Conversation", { md_filter, txt_filter }, "ask-optiq-conversation.md",
+        [text](std::string path) {
+            if(path.empty())
+            {
+                return;
+            }
+            std::ofstream file(path, std::ios::binary);
+            if(!file.is_open())
+            {
+                NotificationManager::GetInstance().Show("Could not write " + path,
+                                                        NotificationLevel::Error);
+                return;
+            }
+            file.write(text.data(), static_cast<std::streamsize>(text.size()));
+            // Close explicitly and check: the write may be buffered, so a full
+            // disk or flush failure only surfaces here, not at is_open().
+            file.close();
+            if(file.fail())
+            {
+                NotificationManager::GetInstance().Show("Failed to write " + path,
+                                                        NotificationLevel::Error);
+                return;
+            }
+            NotificationManager::GetInstance().Show("Conversation exported to " + path,
+                                                    NotificationLevel::Success);
+        });
+}
+
 void
 AssistantPanel::RenderComposer()
 {
@@ -638,8 +897,10 @@ AssistantPanel::RenderComposer()
     const float gap       = style.ItemInnerSpacing.x;
     const float icon_size = ImGui::GetFrameHeight();
     const float input_width =
-        std::max(80.0f, ImGui::GetContentRegionAvail().x - ASSISTANT_SEND_WIDTH -
-                            icon_size - gap * 2.0f);
+        std::max(ASSISTANT_COMPOSER_MIN_INPUT_WIDTH,
+                 ImGui::GetContentRegionAvail().x - ASSISTANT_SEND_WIDTH -
+                     icon_size * ASSISTANT_COMPOSER_ICON_BUTTONS -
+                     gap * ASSISTANT_COMPOSER_GAP_COUNT);
 
     ImGui::SetNextItemWidth(input_width);
     InputTextStringWithHint("##assistant_input",
@@ -655,6 +916,30 @@ AssistantPanel::RenderComposer()
     ImGui::EndDisabled();
 
     ImGui::SameLine(0.0f, gap);
+    ImGui::BeginDisabled(m_lines.empty());
+    if(IconButton(ICON_COPY, settings.GetFontManager().GetFont(FontType::kIcon),
+                  ImVec2(icon_size, icon_size), "Copy the conversation", false,
+                  ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
+                  settings.GetColor(Colors::kButtonHovered),
+                  settings.GetColor(Colors::kButtonActive)))
+    {
+        CopyTranscript();
+    }
+
+    ImGui::SameLine(0.0f, gap);
+    // ICON_ARROW_IN_BOX reads as "import" (it is the Import-from-Basic glyph), so
+    // a document icon is used here to mean "write the conversation out to a file".
+    if(IconButton(ICON_DOCUMENT, settings.GetFontManager().GetFont(FontType::kIcon),
+                  ImVec2(icon_size, icon_size), "Export the conversation to a file", false,
+                  ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
+                  settings.GetColor(Colors::kButtonHovered),
+                  settings.GetColor(Colors::kButtonActive)))
+    {
+        ExportTranscript();
+    }
+    ImGui::EndDisabled();
+
+    ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(m_lines.empty() && m_input.empty() && !Busy());
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size), "Clear the conversation", false,
@@ -664,6 +949,8 @@ AssistantPanel::RenderComposer()
     {
         ResetTurn();
         m_lines.clear();
+        m_message_select.clear();
+        m_message_lines.clear();
         m_input.clear();
         m_conversation.clear();
         m_next_steps.clear();

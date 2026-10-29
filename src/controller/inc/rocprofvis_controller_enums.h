@@ -42,6 +42,8 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultFailedSshCommunication = 14,
     // A requested profiler tool could not be found on this system
     kRocProfVisResultToolNotFound = 15,
+    // A requested value could not be determined
+    kRocProfVisResultNotAvailable = 16,
 } rocprofvis_result_t;
 
 /*
@@ -102,28 +104,26 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeStream = 19,
     // Counter metadata object
     kRPVControllerObjectTypeCounter = 20,
-    // Summary controller object
-    kRPVControllerObjectTypeSummary = 21,
     // Summary metrics container object
-    kRPVControllerObjectTypeSummaryMetrics = 22,
+    kRPVControllerObjectTypeSummaryMetrics = 21,
     // Extended data object
-    kRPVControllerObjectTypeEventArgument = 23,
+    kRPVControllerObjectTypeEventArgument = 22,
     // Topology node object
-    kRPVControllerObjectTypeTopologyNode = 24,
+    kRPVControllerObjectTypeTopologyNode = 23,
     // Compute trace controller object
-    kRPVControllerObjectTypeControllerCompute = 25,
+    kRPVControllerObjectTypeControllerCompute = 24,
     // Workload object
-    kRPVControllerObjectTypeWorkload = 26,
+    kRPVControllerObjectTypeWorkload = 25,
     // Kernel object
-    kRPVControllerObjectTypeKernel = 27,
+    kRPVControllerObjectTypeKernel = 26,
     // Metrics container object
-    kRPVControllerObjectTypeMetricsContainer = 28,
+    kRPVControllerObjectTypeMetricsContainer = 27,
     // Roofline object
-    kRPVControllerObjectTypeRoofline = 29,
+    kRPVControllerObjectTypeRoofline = 28,
     //PcSampling
-    kRPVControllerObjectTypePCSampling = 30,
+    kRPVControllerObjectTypePCSampling = 29,
     // Result of a Python analysis script
-    kRPVControllerObjectTypeScriptResult = 31,
+    kRPVControllerObjectTypeScriptResult = 30,
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote connection object
     kRPVControllerObjectTypeRemoteConnection = 205,
@@ -135,6 +135,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVProfilerConfig = 306,
     // Profiler session (owns ProfilerProcessController)
     kRPVProfiler = 307,
+    // Profiler pipeline stage (authoring handle; copied into the config)
+    kRPVProfilerStage = 308,
 #endif
 } rocprofvis_controller_object_type_t;
 
@@ -199,8 +201,6 @@ typedef enum rocprofvis_controller_system_properties_t : uint32_t
     kRPVControllerSystemBucketDataValueIndexed,
     // Global event search table controller
     kRPVControllerSystemSearchResultsTable,
-    // Global summary view controller
-    kRPVControllerSystemSummary,
     __kRPVControllerSystemPropertiesLast
 } rocprofvis_controller_system_properties_t;
 /* JSON: RPVController
@@ -659,7 +659,7 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsSortOrder                           = 0xE0000006,
     kRPVControllerTableArgsStartIndex                          = 0xE0000007,
     kRPVControllerTableArgsStartCount                          = 0xE0000008,
-    kRPVControllerTableArgsWhere                               = 0xE0000009,
+    kRPVControllerTableArgsNodeId                              = 0xE0000009,
     kRPVControllerTableArgsFilter                              = 0xE000000A,
     kRPVControllerTableArgsGroup                               = 0xE000000B,
     kRPVControllerTableArgsGroupColumns                        = 0xE000000C,
@@ -670,6 +670,9 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsStringTableFiltersIncludeSubstrings = 0xE0000011,
     kRPVControllerTableArgsStringTableFiltersIncludeCategory   = 0xE0000012,
     kRPVControllerTableArgsStringTableFiltersPartialMatching   = 0xE0000013,
+    kRPVControllerTableArgsAgentId                             = 0xE0000014,
+    kRPVControllerTableArgsProcessId                           = 0xE0000015,
+    kRPVControllerTableArgsThreadId                            = 0xE0000016,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t
@@ -683,6 +686,8 @@ typedef enum rocprofvis_controller_table_type_t
     kRPVControllerTableTypeMemoryAllocationEvents    = 0xF0000006,
     kRPVControllerTableTypeMemoryCopyEvents          = 0xF0000007,
     kRPVControllerTableTypeSampledEvents             = 0xF0000008,
+    kRPVControllerTableTypeSummaryMemoryInstances    = 0xF0000009,
+    kRPVControllerTableTypeSummaryThreadInstances    = 0xF000000A,
 } rocprofvis_controller_table_type_t;
 
 
@@ -840,74 +845,6 @@ typedef enum rocprofvis_controller_extdata_properties_t : uint32_t
 }
 */
 
-/*
- * Properties for the summary controller
- */
-typedef enum rocprofvis_controller_summary_properties_t : uint32_t
-{
-    __kRPVControllerSummaryPropertiesFirst = 0xE0000000,
-    kRPVControllerSummaryPropertyKernelInstanceTable = __kRPVControllerSummaryPropertiesFirst,
-    __kRPVControllerSummaryPropertiesLast
-} rocprofvis_controller_summary_properties_t;
-
-/*
- * Properties for the summary metrics container
- */
-typedef enum rocprofvis_controller_summary_metric_properties_t : uint32_t
-{
-    __kRPVControllerSummaryMetricPropertiesFirst = 0xF0000000,
-    // [Mandatory] Aggregation level (rocprofvis_controller_summary_aggregation_level_t)
-    kRPVControllerSummaryMetricPropertyAggregationLevel = __kRPVControllerSummaryMetricPropertiesFirst,
-    // [Mandatory] Number of child/sub-metrics
-    kRPVControllerSummaryMetricPropertyNumSubMetrics,
-    // [Mandatory] Indexed child/sub-metrics objects
-    kRPVControllerSummaryMetricPropertySubMetricsIndexed,
-    // [Optional] Level specific id (node id, processor id)
-    kRPVControllerSummaryMetricPropertyId,
-    // [Optional] Level specific name (node name, processor name)
-    kRPVControllerSummaryMetricPropertyName,
-    // [Optional] Processor level specific type (rocprofvis_controller_processor_type_t)
-    kRPVControllerSummaryMetricPropertyProcessorType,
-    // [Optional] Processor level specific type index (GPU 0, 1, CPU 0, CPU 1...etc)
-    kRPVControllerSummaryMetricPropertyProcessorTypeIndex,
-    // [Optional] Processor level gpu specific metrics...
-    kRPVControllerSummaryMetricPropertyGpuGfxUtil,
-    kRPVControllerSummaryMetricPropertyGpuMemUtil,
-    // [Optional, Mandatory if GPU processor level] Number of top kernels
-    kRPVControllerSummaryMetricPropertyNumKernels,
-    // [Optional, Mandatory if GPU processor level] Total execution time for all kernels
-    kRPVControllerSummaryMetricPropertyKernelsExecTimeTotal,
-    // [Optional, Mandatory if GPU processor level] Indexed top kernel properties/metrics...
-    kRPVControllerSummaryMetricPropertyKernelNameIndexed,
-    kRPVControllerSummaryMetricPropertyKernelInvocationsIndexed,
-    kRPVControllerSummaryMetricPropertyKernelExecTimeSumIndexed,
-    kRPVControllerSummaryMetricPropertyKernelExecTimeMinIndexed,
-    kRPVControllerSummaryMetricPropertyKernelExecTimeMaxIndexed,
-    kRPVControllerSummaryMetricPropertyKernelExecTimePctIndexed,
-    __kRPVControllerSummaryMetricPropertiesLast
-} rocprofvis_controller_summary_metric_properties_t;
-
-/*
- * Aggregation levels for summary metrics container
- */
-typedef enum rocprofvis_controller_summary_aggregation_level_t : uint32_t
-{
-    __kRPVControllerSummaryAggregationLevelFirst = 0x11000000,
-    kRPVControllerSummaryAggregationLevelTrace = __kRPVControllerSummaryAggregationLevelFirst,
-    kRPVControllerSummaryAggregationLevelNode,
-    kRPVControllerSummaryAggregationLevelProcessor,
-    __kRPVControllerSummaryAggregationLevelLast
-} rocprofvis_controller_summary_aggregation_level_t;
-
-/*
- * Arguments to fetch summary metrics from the summary controller
- */
-typedef enum rocprofvis_controller_summary_arguments_t : uint32_t
-{
-    kRPVControllerSummaryArgsStartTimestamp = 0x12000000,
-    kRPVControllerSummaryArgsEndTimestamp,
-} rocprofvis_controller_summary_arguments_t;
-
 typedef enum rocprofvis_controller_sort_order_t
 {
     kRPVControllerSortOrderAscending,
@@ -981,6 +918,9 @@ typedef enum rocprofvis_controller_compute_properties_t : uint32_t
     kRPVControllerWorkloadIndexed,
     kRPVControllerWorkloadById,
     kRPVControllerKernelMetricTable,
+    kRPVControllerComputeProfilerVersion,
+    kRPVControllerComputeProfilerGitVersion,
+    kRPVControllerComputeSchemaVersion,
     __kRPVControllerComputePropertiesLast
 } rocprofvis_controller_compute_properties_t;
 
@@ -1117,6 +1057,10 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingInstructionSampleLookupRecordUuid,
     kRPVControllerPCSamplingInstructionSampleLookupText,
 
+    // Completed query groups remain readable after a later sampling query fails.
+    kRPVControllerPCSamplingSampleStatesLoaded,
+    kRPVControllerPCSamplingStallDetailsLoaded,
+
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;
@@ -1136,13 +1080,16 @@ typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
 } rocprofvis_controller_metric_arguments_t;
 
 /*
- * Arguments for fetching PC sampling data for a specific source file.
+ * Arguments for fetching PC sampling data.
  */
 typedef enum rocprofvis_controller_pc_sampling_arguments_t : uint32_t
 {
     kRPVControllerPcSamplingArgsWorkloadId,
     kRPVControllerPcSamplingArgsKernelId,
     kRPVControllerPcSamplingArgsSourceFileUuid,
+    // Optional uint64: zero omits instruction-sample metadata; omitted or
+    // nonzero includes it.
+    kRPVControllerPcSamplingArgsIncludeInstructionSamples,
 } rocprofvis_controller_pc_sampling_arguments_t;
 
 /*
@@ -1294,10 +1241,12 @@ typedef enum rocprofvis_controller_roofline_ceiling_bandwidth_type_t : uint32_t
 */
 typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
 {
-    kRPVControllerRooflineKernelIntensityTypeHBM,
+    __kRPVControllerRooflineKernelIntensityTypeFirst,
+    kRPVControllerRooflineKernelIntensityTypeHBM = __kRPVControllerRooflineKernelIntensityTypeFirst,
     kRPVControllerRooflineKernelIntensityTypeL2,
     kRPVControllerRooflineKernelIntensityTypeL1,
     kRPVControllerRooflineKernelIntensityTypeLDS,
+    __kRPVControllerRooflineKernelIntensityTypeLast,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 
 /*
@@ -1327,6 +1276,25 @@ typedef enum rocprofvis_profiler_tool_t : uint32_t
 } rocprofvis_profiler_tool_t;
 
 /*
+ * What a stage asks its tool to do.
+ *
+ * Together with the tool and its version this selects the scrape rules the
+ * controller applies to the stage's output. Most tools have a single mode and
+ * use kRPVProfilerOperationDefault; the enum exists because rocprof-compute is
+ * one binary with two modes that print entirely different things.
+ */
+typedef enum rocprofvis_profiler_operation_t : uint32_t
+{
+    // The tool's only mode, or its default rules.
+    kRPVProfilerOperationDefault = 0,
+    // Run the workload and write a workload directory (rocprof-compute profile).
+    kRPVProfilerOperationCapture = 1,
+    // Post-process a workload into a database (rocprof-compute analyze).
+    kRPVProfilerOperationAnalyze = 2,
+    __kRPVProfilerOperationLast
+} rocprofvis_profiler_operation_t;
+
+/*
  * Profiler execution state
  */
 typedef enum rocprofvis_profiler_state_t
@@ -1342,3 +1310,25 @@ typedef enum rocprofvis_profiler_state_t
     // Profiler was cancelled by user
     kRPVProfilerStateCancelled = 4,
 } rocprofvis_profiler_state_t;
+
+/*
+ * Status of a named value scraped from profiler stdout/stderr.
+ *
+ * The rules that produce these values are owned by the controller and keyed by
+ * tool, operation, and version, so there is no ABI type for a rule itself. A
+ * caller names a value by key and reads its status.
+ */
+typedef enum rocprofvis_profiler_scrape_status_t
+{
+    // The owning stage has not finished; a match may still arrive.
+    kRPVProfilerScrapePending = 0,
+    // Matched. The value is available.
+    kRPVProfilerScrapeResolved = 1,
+    // Owning stage finished and no line ever matched.
+    kRPVProfilerScrapeUnmatched = 2,
+    // The rule threw during matching and was disabled.
+    kRPVProfilerScrapeRuleFailed = 3,
+    // The owning stage never ran because an earlier stage failed or the
+    // pipeline was cancelled.
+    kRPVProfilerScrapeStageSkipped = 4,
+} rocprofvis_profiler_scrape_status_t;

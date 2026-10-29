@@ -40,6 +40,7 @@ enum class RocEvents
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
     kComputeShowMetricInKernelDetails,
+    kThemeChanged,
 };
 
 enum class RocEventType

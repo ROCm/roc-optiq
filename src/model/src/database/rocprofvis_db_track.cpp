@@ -94,6 +94,9 @@ namespace DataModel
         case kRocProfVisDmOperationMemoryAllocate:
             cat = kRocProfVisDmMemoryAllocationTrack;
             break;
+        case kRocProfVisDmOperationHipEvent:
+            cat = kRocProfVisDmHipEventTrack;
+            break;
         }
         return cat;
     }

@@ -50,6 +50,18 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
     {
         switch(property)
         {
+            case kRPVControllerPCSamplingSampleStatesLoaded:
+            {
+                *value = m_pc_sample_states_loaded;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPCSamplingStallDetailsLoaded:
+            {
+                *value = m_stalls_loaded;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerPCSamplingNumSourceFiles:
             {
                 (void)index;
@@ -337,8 +349,16 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    *value = m_pc_sample_states[index].issue_count;
-                    result = kRocProfVisResultSuccess;
+                    const auto& issue_count = m_pc_sample_states[index].issue_count;
+                    if(issue_count)
+                    {
+                        *value = *issue_count;
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultNotLoaded;
+                    }
                 }
                 break;
             }
@@ -346,8 +366,16 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    *value = m_pc_sample_states[index].stall_count;
-                    result = kRocProfVisResultSuccess;
+                    const auto& stall_count = m_pc_sample_states[index].stall_count;
+                    if(stall_count)
+                    {
+                        *value = *stall_count;
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultNotLoaded;
+                    }
                 }
                 break;
             }
@@ -748,6 +776,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumPcSampleStates:
         {
             (void)index;
+            m_pc_sample_states.clear();
             m_pc_sample_states.resize(value);
             result = kRocProfVisResultSuccess;
             break;
@@ -809,6 +838,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumPcSampleStallReasons:
         {
             (void)index;
+            m_pc_sample_stall_reasons.clear();
             m_pc_sample_stall_reasons.resize(value);
             result = kRocProfVisResultSuccess;
             break;
@@ -852,6 +882,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumPcSampleStallReasonLookups:
         {
             (void)index;
+            m_pc_sample_stall_reason_lookups.clear();
             m_pc_sample_stall_reason_lookups.resize(value);
             result = kRocProfVisResultSuccess;
             break;

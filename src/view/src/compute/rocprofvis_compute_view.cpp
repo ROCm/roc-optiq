@@ -19,7 +19,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_compute_isa_view.h"
+#include "isa/rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
 #include <algorithm>
@@ -252,10 +252,12 @@ ComputeView::CreateTabContainer()
     m_tab_container->AddTab(
         ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
     const bool database_has_isa_lines = HasIsaLines(workloads);
     m_tab_container->AddTab(
         ComputeIsaView::CreateTabItem(m_data_provider, database_has_isa_lines));
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+
     m_tab_container->AddTab(
         ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
 #endif
@@ -415,11 +417,15 @@ ComputeView::RenderWorkloadSelection()
 
         for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload->name.c_str(),
-                                 workload_id == workload->id))
+            ImGui::PushID(static_cast<int>(workload->id));
+            if(ImGui::Selectable("", workload_id == workload->id))
             {
                 m_compute_selection->SelectWorkload(workload->id);
             }
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ElidedText(workload->name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }
@@ -442,10 +448,15 @@ ComputeView::RenderWorkloadSelection()
     {
         for(const KernelInfo* info : kernel_info_list)
         {
-            if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
+            ImGui::PushID(static_cast<int>(info->id));
+            if(ImGui::Selectable("", kernel_id == info->id))
             {
                 m_compute_selection->SelectKernel(info->id);
             }
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ElidedText(info->name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }

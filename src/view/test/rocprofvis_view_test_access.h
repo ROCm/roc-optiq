@@ -206,27 +206,33 @@ struct ComputeWorkloadViewTestPeer
 struct ComputeComparisonViewTestPeer
 {
     ComputeComparisonView& v;
-    uint32_t TargetWorkloadId() const { return v.m_target_workload_id; }
-    uint32_t TargetKernelId() const { return v.m_target_kernel_id; }
-    size_t   CategoryCount() const { return v.m_categories.size(); }
+    ComparisonTable* ComparisonTablePtr() const { return v.m_comparison_table.get(); }
+};
+
+struct ComputeComparisonTableTestPeer
+{
+    ComparisonTable& t;
+    uint32_t TargetWorkloadId() const { return t.m_target_workload_id; }
+    uint32_t TargetKernelId() const { return t.m_target_kernel_id; }
+    size_t   CategoryCount() const { return t.m_categories.size(); }
     // True while either the baseline or target metrics fetch is still pending.
     bool RequestsPending() const
     {
-        return v.m_data_provider.IsRequestPending(v.m_baseline_request_id) ||
-               v.m_data_provider.IsRequestPending(v.m_target_request_id);
+        return t.m_data_provider.IsRequestPending(t.m_baseline_request_id) ||
+               t.m_data_provider.IsRequestPending(t.m_target_request_id);
     }
-    // True once a built table has a "Difference##" column, i.e. deltas were
+    // True once a built table has a "\xCE\x94 ##" column, i.e. deltas were
     // actually computed (not just tables allocated).
     bool HasDifferenceColumn() const
     {
-        for(const auto& category : v.m_categories)
+        for(const auto& category : t.m_categories)
         {
             for(const auto& table : category.tables)
             {
                 if(!table) continue;
                 for(const std::string& name : table->OrderedValueNames())
                 {
-                    if(name.rfind("Difference##", 0) == 0) return true;
+                    if(name.rfind("\xCE\x94 ##", 0) == 0) return true;
                 }
             }
         }
@@ -469,35 +475,51 @@ struct TraceViewTestPeer
 struct SummaryViewTestPeer
 {
     const SummaryView& v;
-    TopKernels* TopKernelsPtr() const { return v.m_top_kernels.get(); }
+    SummaryTopEvents* TopEventsPtr(rocprofvis_analysis_summary_category_t category) const
+    {
+        return v.m_top_events[category].get();
+    }
+    TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
 };
 
-// TopKernels drives the pie/bar/table kernel selection. The pie is ImPlot-canvas
-// drawn (no ImGui widget ID), so tests drive the model path (ToggleSelectKernel)
-// rather than clicking a wedge, and assert on m_selected_idx.
-struct TopKernelsTestPeer
+// SummaryTopEvents drives the pie/bar/table top-event selection for one category.
+// The pie is ImPlot-canvas drawn (no ImGui widget ID), so tests drive the model path
+// (ToggleSelectEvent) rather than clicking a wedge, and assert on m_selected_idx.
+struct SummaryTopEventsTestPeer
 {
-    TopKernels& v;
-    // KernelCount() is 0 when m_kernels is null (pre-load) or empty; one check covers both.
-    size_t                KernelCount() const { return v.m_kernels ? v.m_kernels->size() : 0; }
-    // Return name of kernel at given index
-    std::string KernelName(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).name : std::string{};}
-    double ExecTimeSum(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).exec_time_sum : 0.0;}
+    SummaryTopEvents& v;
+    // EventCount() is 0 when m_op_events is null (pre-load) or empty; one check covers both.
+    size_t      EventCount() const { return v.m_op_events ? v.m_op_events->top.size() : 0; }
+    // Return name of event at given index
+    std::string EventName(size_t idx) const
+    {
+        return (v.m_op_events && idx < v.m_op_events->top.size())
+                   ? v.m_op_events->top[idx].name
+                   : std::string{};
+    }
+    uint64_t DurationSum(size_t idx) const
+    {
+        return (v.m_op_events && idx < v.m_op_events->top.size())
+                   ? v.m_op_events->top[idx]
+                         .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                         .numeric.uint
+                   : 0;
+    }
     std::optional<size_t> SelectedIdx() const { return v.m_selected_idx; }
     // Current chart/table display mode, exposed as booleans so the private
-    // TopKernels::DisplayMode enum stays encapsulated.
-    bool IsDisplayPie() const { return v.m_display_mode == TopKernels::Pie; }
-    bool IsDisplayBar() const { return v.m_display_mode == TopKernels::Bar; }
-    bool IsDisplayTable() const { return v.m_display_mode == TopKernels::Table; }
-    // The synthetic "Others" bucket, if present. ToggleSelectKernel treats it as a
+    // SummaryTopEvents::DisplayMode enum stays encapsulated.
+    bool IsDisplayPie() const { return v.m_display_mode == SummaryTopEvents::Pie; }
+    bool IsDisplayBar() const { return v.m_display_mode == SummaryTopEvents::Bar; }
+    bool IsDisplayTable() const { return v.m_display_mode == SummaryTopEvents::Table; }
+    // The synthetic "Others" bucket, if present. ToggleSelectEvent treats it as a
     // deselect, so tests must avoid selecting it.
     std::optional<size_t> PaddedIdx() const { return v.m_padded_idx; }
     // Toggles idx; on a cleared baseline (SelectedIdx()==nullopt) that is a select.
     // Caller must ClearSelection() first and avoid the padded index.
-    void                  Select(size_t idx) { v.ToggleSelectKernel(idx); }
+    void                  Select(size_t idx) { v.ToggleSelectEvent(idx); }
     void                  ClearSelection()
     {
-        if(v.m_selected_idx.has_value()) v.ToggleSelectKernel(v.m_selected_idx.value());
+        if(v.m_selected_idx.has_value()) v.ToggleSelectEvent(v.m_selected_idx.value());
     }
 };
 

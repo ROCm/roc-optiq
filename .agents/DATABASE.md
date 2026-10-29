@@ -201,7 +201,7 @@ from the model layer:
 ```c
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     database, use_case, start, end, num_tracks, tracks,
-    where, filter, group, group_cols,
+    source_filter, filter, group, group_cols,
     sort_column, sort_order,
     num_string_table_filters, string_table_filters,
     max_count, offset, count_only,
@@ -452,15 +452,19 @@ does not race when multiple nodes are loaded concurrently.
 
 ### 4.2 `SqliteDatabase` (`rocprofvis_db_sqlite.h`)
 
-Adds SQLite plumbing on top of `Database`. Key concepts:
+SQLite plumbing that `QueryManager` and `ComputeDatabase` inherit
+alongside their `Database` base. Key concepts:
 
 - **DB nodes (`rocprofvis_db_sqlite_db_node_t`):** one per file in a
   multinode set. Carries the `node_id`, file path, and the
   available/in-use connection pools. `MAX_CONNECTIONS = 100`.
 - **Connection management:** `OpenConnection`, `GetConnection`,
-  `GetServiceConnection`, `ReleaseConnection`, `InterruptQuery`. New
+  `GetServiceConnection`, `ReleaseConnection`, `InterruptAsSqlite`. New
   query paths must release every connection they take, even on early
-  exit.
+  exit. `SqliteDatabase` does not derive from `Database`, so a class
+  that inherits both must override `Database::InterruptQuery` to call
+  `InterruptAsSqlite`; otherwise cancelling a future never interrupts
+  its running query.
 - **`Sqlite3Exec` / `ExecuteSQLQuery` overloads:** the canonical way
   to run SQL. The internal `Sqlite3Exec` mimics `sqlite3_exec` using
   `sqlite3_prepare_v2` so callbacks receive a real `sqlite3_stmt*`
@@ -541,6 +545,12 @@ The legacy SQLite schema. Important traits:
   to `rocprofvis_event_data_category_enum_t` for each operation type.
 - Region track category is `kRocProfVisDmRegionTrack` (not the
   rocprof split into `RegionMain` / `RegionSample`).
+- `GetCriteriaSubquery` ignores `node_id` (single node) and turns
+  `agent_id`, `process_id` and `thread_id` into `AND`ed conditions on
+  the agent / process / thread service columns, each masked with
+  `TOPOLOGY_ID_MASK`. The thread condition always starts with
+  `AND`, so it only forms valid SQL alongside an agent or process id
+  - the Summary view always sends a thread with its process.
 
 ### 4.5 `RocprofDatabase` (`rocprofvis_db_rocprof.h`)
 
@@ -565,6 +575,10 @@ The modern SQLite schema; supports **multinode**. Important traits:
   from sample-derived sub-regions.
 - Categorized data (`s_rocprof_categorized_data`) covers
   `NoOp`, `Dispatch`, `MemoryAllocate`, and `MemoryCopy` mappings.
+- `GetCriteriaSubquery` requires `node_id`; with it set, `agent_id`,
+  `process_id` and `thread_id` each add an `AND` on the matching
+  service column (masked with `TOPOLOGY_ID_MASK`). Without a node,
+  the criteria produce no filter.
 
 ### 4.6 `ComputeDatabase` (`rocprofvis_db_compute.h`)
 
@@ -598,7 +612,15 @@ databases:
   resolved through `ColumnNameToEnum`, and the resulting model `Table` stores
   each column's `rocprofvis_db_compute_column_enum_t` plus raw string cells.
   The controller later converts that temporary table into typed `PcSampling`
-  vectors.
+  vectors. The PC-sample-state projection preserves SQL NULL for `issue_count`
+  and `stall_count`; the generic callback represents NULL as an empty cell, so
+  the controller can distinguish host-trap's unavailable progress data from a
+  stochastic sample's measured zero. `total_count` remains coalesced to zero.
+- `CallbackParseMetadata` reads only `schema_version` from
+  `compute_metadata` to select the query dialect. The full row
+  (`compute_version`, `git_version`, `schema_version`) is served to the
+  controller by the `kRPVComputeFetchMetadata` use case through
+  `CallbackGetComputeGeneric`; it is valid for every schema version.
 - Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
   the kernel x metric pivot table from a JSON plan (`jt::Json`).
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
@@ -1033,6 +1055,15 @@ sniffs:
   experimental Chrome JSON and Perfetto trace formats. Loaded via their
   respective database adapters. These are the "New trace formats"
   experimental feature listed in CHANGES.md.
+  `GoogleTraceProcessor` converts the trace once into a cached SQLite
+  file (`<config>/<file hash>/perfetto/<stem>.tpdb`, every trace
+  processor table) - open that file to see which columns exist.
+  `__intrinsic_slice` carries no node / process / thread column, only
+  `track_id`, so its `GetCriteriaSubquery` filters on tracks: a
+  thread is `track_id = <id>` (a thread is a track there), and a
+  process is `track_id IN (...)` over the process's `process_track`,
+  `process_counter_track`, and its threads' `thread_track` rows. Node
+  and agent are ignored (single node).
 
 The list of recognized extensions is exercised at the application
 layer (`AppWindow` and `Project`). Adding a new format means adding a
@@ -1238,7 +1269,18 @@ Args passed all the way through:
 
 - `start`, `end` - time window in ns.
 - `num_tracks`, `tracks` - subset of track IDs to include.
-- `where`, `filter`, `group`, `group_cols` - SQL fragment overrides.
+- `source_filter` - a `rocprofvis_dm_query_criteria_t*` (or
+  `nullptr`) with optional `node_id`, `agent_id`, `process_id` and
+  `thread_id`. It replaced the raw `where` string: callers pass ids,
+  and each backend turns them into SQL in its
+  `GetCriteriaSubquery` override (`QueryManager` returns an empty
+  string, i.e. no filter). What each backend honours is listed under
+  it in section 4 and 7.
+- `filter`, `group`, `group_cols` - filter-row expression and
+  grouping spec. The group spec is not SQL: the table processor parses
+  it (`FilterExpression::ParseAggregationSpec`) and aggregates in C++,
+  so only `COUNT/AVG/MIN/MAX/SUM(column) AS alias` over a bare column
+  works. An expression inside the parentheses is silently dropped.
 - `sort_column`, `sort_order` - per-page sorting.
 - `num_string_table_filters`, `string_table_filters` - free-text
   search; the database resolves these via `BuildTableStringIdFilter`
@@ -1332,7 +1374,16 @@ compute pivot table's per-column filter. The recipe:
    `ParseAggregationSpec(line)` returning a list of
    `SqlAggregation { column, command (Count|Avg|Min|Max|Sum), public_name }`.
 
-`MatchLike(text, pattern)` supports SQL `%` and `_` wildcards.
+`MatchLike(text, pattern, escape)` supports SQL `%` and `_` wildcards,
+case-insensitively, and `LIKE 'pattern' ESCAPE 'c'` to match a
+wildcard literally. `LIKE` on a number matches its printed text.
+Number literals may be negative or carry an exponent. Strings compare
+with every comparison operator, byte by byte. A number compared with
+text that reads as a number compares numerically; with other text it
+matches only `!=`, and with empty text (a column the row lacks) it
+matches nothing. Parsing stops at the first token it does not
+recognise rather than failing, so a caller that builds expressions
+must emit only this syntax or later conditions are silently dropped.
 
 The expression layer is intentionally schema-agnostic - any caller
 that wants to filter rows hands it a row-as-map representation.
@@ -1669,9 +1720,9 @@ Two Catch2 binaries live in `src/model/src/tests/` (built when
   read-event-property + table-query flow plus cleanup and trim.
 - **`datamodel-compute-tests`** -
   `src/model/src/tests/rocprofvis_dm_compute_tests.cpp`. Runs against
-  `sample/rocprof_compute_23ed6f36.db`. Validates workload list, top
-  kernels, kernel + metric matrix, roofline ceilings, metric values,
-  and the pivot table flow.
+  `sample/rocprof_compute_23ed6f36.db`. Validates workload list,
+  compute metadata, top kernels, kernel + metric matrix, roofline
+  ceilings, metric values, and the pivot table flow.
 
 The compute model test currently does not cover the schema-2.2 PC-sampling
 query use cases. Changes to those queries should add a matching fixture and

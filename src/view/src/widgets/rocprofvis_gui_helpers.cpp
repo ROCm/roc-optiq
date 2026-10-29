@@ -35,6 +35,29 @@ StringResizeCallback(ImGuiInputTextCallbackData* data)
     }
     return 0;
 }
+
+// Byte length of the UTF-8 sequence at `begin` (from the lead byte), clamped to
+// `end`. Returns >= 1 when begin < end so callers always advance.
+size_t
+Utf8SequenceLength(const char* begin, const char* end)
+{
+    if(begin >= end)
+    {
+        return 0;
+    }
+    const unsigned char lead = static_cast<unsigned char>(*begin);
+    size_t              len  = 1;
+    if((lead & 0x80u) == 0x00u)  // 0xxxxxxx
+        len = 1;
+    else if((lead & 0xE0u) == 0xC0u)  // 110xxxxx
+        len = 2;
+    else if((lead & 0xF0u) == 0xE0u)  // 1110xxxx
+        len = 3;
+    else if((lead & 0xF8u) == 0xF0u)  // 11110xxx
+        len = 4;
+    // A continuation/invalid lead byte falls through as a single byte.
+    return std::min(len, static_cast<size_t>(end - begin));
+}
 }  // namespace
 
 bool
@@ -50,20 +73,26 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
-    bool input_changed = InputTextString(id, str, flags);
-    if(str.empty())
+    // ImGui draws the hint inside the field, so the field stays the last item:
+    // SameLine() and tooltips after this call line up against the field itself
+    // rather than against a separate overlay.
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    bool input_changed = ImGui::InputTextWithHint(
+        id, hint ? hint : "", str.data(), str.capacity() + 1,
+        flags | ImGuiInputTextFlags_CallbackResize, StringResizeCallback,
+        static_cast<void*>(&str));
+
+    // A hint wider than the field is clipped. Offer it whole on hover, but not
+    // while the field is focused, where the tooltip would cover the caret.
+    if(str.empty() && hint && hint[0] && !ImGui::IsItemActive())
     {
-        const float& padding = ImGui::GetStyle().FramePadding.x;
-        ImGui::BeginDisabled();
-        ImGui::SetCursorScreenPos(
-            ImVec2(ImGui::GetItemRectMin().x + padding, ImGui::GetItemRectMin().y));
-        if(ElidedText(hint, ImGui::GetItemRectSize().x - 2.0f * padding, 0.0f,
-                   Alignment_Left, true) && BeginItemTooltipStyled())
+        const float pad   = ImGui::GetStyle().FramePadding.x;
+        const float avail = ImGui::GetItemRectSize().x - 2.0f * pad;
+        if(ImGui::CalcTextSize(hint).x > avail && BeginItemTooltipStyled())
         {
             ImGui::TextUnformatted(hint);
             EndTooltipStyled();
         }
-        ImGui::EndDisabled();
     }
     return input_changed;
 }
@@ -411,7 +440,8 @@ ElidedText(const char* text, float available_width, float tooltip_width,
                                                   ? ImGui::GetFrameHeight()
                                                   : ImGui::GetTextLineHeight()),
                       ImGuiChildFlags_None,
-                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs |
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     if(imgui_AlignTextToFramePadding)
     {
@@ -466,16 +496,33 @@ ElidedText(const char* text, float available_width, float tooltip_width,
 std::string
 ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
 {
-    std::string out       = text.substr(0, max_chars);
-    bool        truncated = text.size() > max_chars;
-    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    // Optional hard character cap first.
+    const std::string capped =
+        (max_chars < text.size()) ? text.substr(0, max_chars) : text;
+    bool truncated = capped.size() < text.size();
+
+    // Trim to fit max_width in one pass (CalcTextSizeA reports where it stopped).
+    const char* begin      = capped.c_str();
+    const char* end        = begin + capped.size();
+    const float ellipsis_w = ImGui::CalcTextSize(TEXT_ELLIPSIS).x;
+    const char* remaining  = begin;
+    ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(),
+                                    std::max(max_width - ellipsis_w, 0.0f), 0.0f, begin,
+                                    end, &remaining);
+    if(remaining < end)
     {
-        out.pop_back();
         truncated = true;
     }
+    // Keep at least one whole codepoint so a multibyte character is never split.
+    if(remaining == begin && end > begin)
+    {
+        remaining = begin + Utf8SequenceLength(begin, end);
+    }
+
+    std::string out(begin, remaining);
     if(truncated)
     {
-        out += "...";
+        out += TEXT_ELLIPSIS;
     }
     return out;
 }
@@ -707,7 +754,7 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
+    popup_style.CenterPopup(ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
     ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
@@ -741,13 +788,11 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
             ImGui::Spacing();
             if(total > 0)
             {
-                float frac = static_cast<float>(downloaded) / static_cast<float>(total);
-                if(frac > 1.0f)
-                {
-                    frac = 1.0f;
-                }
-                std::string label = std::to_string(downloaded / 1024) + " / " +
-                                    std::to_string(total / 1024) + " KiB";
+                const float frac =
+                    std::min(1.0f, static_cast<float>(downloaded) / static_cast<float>(total));
+                const std::string label = format_byte_size(downloaded) + " of " +
+                                          format_byte_size(total) + "  (" +
+                                          std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
                 ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
             }
             else
@@ -832,7 +877,7 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     }
 
     dl->AddConvexPolyFilled(quad, 4, col_fill);
-    dl->AddPolyline(quad, 4, col_border, true, 1.0f);
+    dl->AddPolyline(quad, 4, col_border, 1.0f, ImDrawFlags_Closed);
 
     // Add text at unrotated local position (centered), then rotate vertices
     ImVec2 text_local_pos(-ts.x * 0.5f, -ts.y * 0.5f);
@@ -854,6 +899,28 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 
 inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
 inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
+
+void
+PushContextMenuStyles()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const auto&      style    = settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    ImGui::PushStyleColor(ImGuiCol_Header,
+                          settings.GetColor(Colors::kTabAccent));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                          settings.GetColor(Colors::kTabAccentHover));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          settings.GetColor(Colors::kAccent));
+}
+
+void
+PopContextMenuStyles()
+{
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+}
 
 static float
 MenuIconColumnWidth()
@@ -928,14 +995,15 @@ CopyableTextUnformatted(
     if(!unique_id.empty())
         ImGui::PushID(unique_id.data());
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-
-    if(ImGui::Button(text, ImVec2(0, 0)))
+    // Keep interaction on an identified item, but render separately because button
+    // labels treat "##" as the start of a hidden identifier.
+    const ImVec2 text_position = ImGui::GetCursorScreenPos();
+    const ImVec2 text_size     = ImGui::CalcTextSize(text);
+    clicked = ImGui::InvisibleButton(
+        text, ImVec2(std::max(text_size.x, 1.0f),
+                     std::max(text_size.y, ImGui::GetTextLineHeight())));
+    if(clicked)
     {
-        clicked = true;
         if(one_click_copy)
         {
             ImGui::SetClipboardText(text);
@@ -949,9 +1017,7 @@ CopyableTextUnformatted(
 
     if(context_menu)
     {
-        auto style = SettingsManager::GetInstance().GetDefaultStyle();
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+        PushContextMenuStyles();
         if(menu_func)
         {
             menu_func(text);
@@ -969,8 +1035,11 @@ CopyableTextUnformatted(
             }
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar(2);
+        PopContextMenuStyles();
     }
+
+    ImGui::SetCursorScreenPos(text_position);
+    ImGui::TextUnformatted(text);
 
     if(one_click_copy)
     {
@@ -979,9 +1048,6 @@ CopyableTextUnformatted(
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
     }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
 
     if(!unique_id.empty())
     {
@@ -1039,12 +1105,10 @@ CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open)
 bool
 BeginCellContextMenu(const char* popup_id)
 {
-    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    PushContextMenuStyles();
     bool open = ImGui::BeginPopup(popup_id);
     if(!open)
-        ImGui::PopStyleVar(2);
+        PopContextMenuStyles();
     return open;
 }
 
@@ -1052,7 +1116,7 @@ void
 EndCellContextMenu()
 {
     ImGui::EndPopup();
-    ImGui::PopStyleVar(2);
+    PopContextMenuStyles();
 }
 
 void

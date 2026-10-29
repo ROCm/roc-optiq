@@ -23,14 +23,14 @@ typedef enum rocprofvis_db_async_tracks_flags_t
 
  typedef std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator rocprofvis_dm_track_params_it;
 
-class Database;
+class SystemDatabase;
 
 class TrackLookup
 {
 
 public:
 
-    TrackLookup(Database* db) : m_db(db) {};
+    TrackLookup(SystemDatabase* db) : m_db(db) {};
 
     struct TrackKey
     {
@@ -94,7 +94,7 @@ private:
  
     std::unordered_map<TrackKey, std::vector<TrackEntry>, TrackKeyHash> m_track_lookup;
     StringTable m_string_lookup;
-    Database* m_db;
+    SystemDatabase* m_db;
 
 };
 

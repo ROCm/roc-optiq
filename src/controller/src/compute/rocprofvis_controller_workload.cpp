@@ -586,7 +586,7 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].category_name_idx = StringTable::Get().AddString(value, true);
+                m_available_metrics[index].category_name_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -599,7 +599,7 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].table_name_idx = StringTable::Get().AddString(value, true);
+                m_available_metrics[index].table_name_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -612,7 +612,7 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].name_idx = StringTable::Get().AddString(value, true);
+                m_available_metrics[index].name_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -625,7 +625,7 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].description_idx = StringTable::Get().AddString(value, true);
+                m_available_metrics[index].description_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -638,7 +638,7 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].unit_idx = StringTable::Get().AddString(value, true);
+                m_available_metrics[index].unit_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -651,7 +651,7 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         {
             if(index < m_metric_value_names.size())
             {
-                m_metric_value_names[index].value_name_idx = StringTable::Get().AddString(value, true);
+                m_metric_value_names[index].value_name_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else

@@ -7,6 +7,7 @@
 #include "rocprofvis_memory_chart_model.h"
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -55,14 +56,32 @@ struct Point
 {
     double x;
     double y;
+    bool operator==(const Point& other) const
+    {
+        return x == other.x && y == other.y;
+    }
 };
 
 struct PcSampleState
 {
-    uint64_t instruction_uuid = 0;
-    uint64_t total_count      = 0;
-    uint64_t issue_count      = 0;
-    uint64_t stall_count      = 0;
+    uint64_t pc_sample_state_uuid = 0;
+    uint64_t instruction_uuid     = 0;
+    uint64_t total_count          = 0;
+    std::optional<uint64_t> issue_count;
+    std::optional<uint64_t> stall_count;
+};
+
+struct PcSampleStallReason
+{
+    uint64_t pc_sample_state_uuid               = 0;
+    uint64_t pc_sample_stall_reason_lookup_uuid = 0;
+    uint64_t count                              = 0;
+};
+
+struct PcSampleStallReasonLookup
+{
+    uint64_t    pc_sample_stall_reason_lookup_uuid = 0;
+    std::string text;
 };
 
 struct InstructionSourceLine
@@ -75,7 +94,8 @@ struct InstructionSourceLine
 
 struct InstructionLine
 {
-    uint64_t    instruction_uuid = 0;
+    uint64_t    instruction_uuid   = 0;
+    uint64_t    code_object_offset = 0;
     std::string instruction;
 };
 
@@ -108,10 +128,15 @@ struct SourceFile
 
 struct PcSamplingData
 {
-    std::vector<CodeObjectStore>       code_objects;
-    std::vector<SourceFile>            source_files;
-    std::vector<InstructionSourceLine> instruction_source_lines;
-    std::vector<PcSampleState>         pc_sample_states;
+    std::vector<CodeObjectStore>            code_objects;
+    std::vector<SourceFile>                 source_files;
+    std::vector<InstructionSourceLine>      instruction_source_lines;
+    std::vector<PcSampleState>              pc_sample_states;
+    std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
+    // Completion is independent of row count: an empty successful query is loaded.
+    bool sample_states_loaded = false;
+    bool stall_details_loaded = false;
 };
 
 struct KernelInfo
@@ -171,8 +196,6 @@ struct WorkloadInfo
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
               ceiling_compute;
-        Point max;
-        Point min;
     };
     uint32_t                                 id;
     std::string                              name;
@@ -183,6 +206,14 @@ struct WorkloadInfo
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null
     Roofline                                 roofline;
+};
+
+// Trace-level compute_metadata describing the profiler that produced the database.
+struct AnalysisInfo
+{
+    std::string profiler_version;
+    std::string profiler_git_version;
+    std::string schema_version;
 };
 
 struct MetricValue

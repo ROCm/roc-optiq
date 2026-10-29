@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_c_interface.h"
 #include <vector>
+#include <optional>
 
 namespace RocProfVis
 {
@@ -35,7 +36,7 @@ public:
 protected:
     struct SystemTableArguments : TableArguments
     {
-        std::string m_where;
+        std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
         std::string m_filter;
         std::string m_group;
         std::string m_group_cols;
@@ -62,7 +63,7 @@ private:
     rocprofvis_dm_table_use_case_enum_t m_use_case;
     double m_start_ts;
     double m_end_ts;
-    std::string m_where;
+    std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
     std::string m_filter;
     std::string m_group;
     std::string m_group_cols;

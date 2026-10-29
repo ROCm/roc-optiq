@@ -9,15 +9,10 @@
 #include "rocprofvis_controller_script.h"
 #endif
 #include "rocprofvis_core_assert.h"
-#include "rocprofvis_event_manager.h"
-#include "rocprofvis_events.h"
 
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
-#include <cfloat>
-#include <future>
-#include <iostream>
 
 namespace RocProfVis
 {
@@ -48,6 +43,10 @@ const uint64_t DataProvider::SUMMARY_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchSummary);
 const uint64_t DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchSummaryKernelInstanceTable);
+const uint64_t DataProvider::SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID =
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchSummaryMemoryInstanceTable);
+const uint64_t DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID =
+    RequestIdBuilder::MakeRequestId(RequestType::kFetchSummaryThreadInstanceTable);
 const uint64_t DataProvider::ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchAnalysisTopEventsTable);
 const uint64_t DataProvider::ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID =
@@ -76,7 +75,7 @@ const uint64_t DataProvider::ASSISTANT_SAMPLE_TABLE_REQUEST_ID =
 const uint64_t DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID =
     RequestIdBuilder::MakeClientRequestId(RequestType::kFetchEventSearchTable,
                                           DataProvider::ASSISTANT_CLIENT_ID);
-const uint64_t DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
+const uint64_t DataProvider::ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeClientRequestId(RequestType::kFetchSummaryKernelInstanceTable,
                                           DataProvider::ASSISTANT_CLIENT_ID);
 const uint64_t DataProvider::ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID =
@@ -283,7 +282,13 @@ DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
                     reinterpret_cast<rocprofvis_controller_script_result_t*>(
                         req.request_obj_handle));
             }
+            else if(req.request_type == RequestType::kFetchSummary)
+#else
+            if(req.request_type == RequestType::kFetchSummary)
 #endif
+            {
+                rocprofvis_controller_summary_metric_free(req.request_obj_handle);
+            }
             req.request_obj_handle = nullptr;
         }
     }
@@ -1675,9 +1680,36 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               table_params.m_sort_order);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0,
-                                              table_params.m_where.data());
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    if(table_params.m_source_filter.has_value())
+    {
+        const rocprofvis_dm_query_criteria_t& source_filter =
+            table_params.m_source_filter.value();
+        if(source_filter.node_id.has_value)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsNodeId, 0, source_filter.node_id.value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+        if(source_filter.agent_id.has_value)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsAgentId, 0, source_filter.agent_id.value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+        if(source_filter.process_id.has_value)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsProcessId, 0,
+                source_filter.process_id.value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+        if(source_filter.thread_id.has_value)
+        {
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsThreadId, 0, source_filter.thread_id.value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
+    }
 
     result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0,
                                               table_params.m_filter.data());
@@ -1715,7 +1747,7 @@ DataProvider::FetchSingleTrackSampleTable(uint64_t track_id, double start_ts,
                                           rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts, "", filter, "",
+        kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts, nullptr, filter, "",
         "", start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1728,7 +1760,7 @@ DataProvider::FetchSingleTrackEventTable(uint64_t track_id, double start_ts,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts, "", filter, group,
+        kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts, nullptr, filter, group,
         group_cols, start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1741,7 +1773,7 @@ DataProvider::FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts, "", filter, "", "",
+        kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts, nullptr, filter, "", "",
         start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1756,7 +1788,7 @@ DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids,
 
 {
     return FetchTable(TrackTableRequestParams(
-        kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts, "", filter, group,
+        kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts, nullptr, filter, group,
         group_cols, start_row, req_row_count, sort_column_index, sort_order));
 }
 
@@ -1764,7 +1796,9 @@ bool
 DataProvider::FetchTable(const TableRequestParams& table_params)
 {
     if(table_params.m_table_type == kRPVControllerTableTypeSearchResults ||
-       table_params.m_table_type == kRPVControllerTableTypeSummaryKernelInstances)
+       table_params.m_table_type == kRPVControllerTableTypeSummaryKernelInstances ||
+       table_params.m_table_type == kRPVControllerTableTypeSummaryMemoryInstances ||
+       table_params.m_table_type == kRPVControllerTableTypeSummaryThreadInstances)
     {
         return FetchEventSearch(
             static_cast<const EventSearchRequestParams&>(table_params));
@@ -1817,7 +1851,9 @@ DataProvider::ClientTableRequestId(const TableRequestParams& table_params) const
         case kRPVControllerTableTypeSearchResults:
             return ASSISTANT_EVENT_SEARCH_REQUEST_ID;
         case kRPVControllerTableTypeSummaryKernelInstances:
-            return ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+        case kRPVControllerTableTypeSummaryMemoryInstances:
+        case kRPVControllerTableTypeSummaryThreadInstances:
+            return ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
         default: return ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
     }
 }
@@ -1849,7 +1885,9 @@ DataProvider::ClientTableHandle(const TableRequestParams& table_params)
         }
     }
     else if(table_params.m_table_type == kRPVControllerTableTypeSearchResults ||
-            table_params.m_table_type == kRPVControllerTableTypeSummaryKernelInstances)
+            table_params.m_table_type == kRPVControllerTableTypeSummaryKernelInstances ||
+            table_params.m_table_type == kRPVControllerTableTypeSummaryMemoryInstances ||
+            table_params.m_table_type == kRPVControllerTableTypeSummaryThreadInstances)
     {
         handle = reinterpret_cast<rocprofvis_handle_t*>(
             rocprofvis_controller_search_table_alloc());
@@ -1872,48 +1910,60 @@ DataProvider::ClientTableHandle(const TableRequestParams& table_params)
 
 // Which model slot the finished rows land in. The assistant's slots exist so
 // that a tab never re-renders because a background reader asked something.
-TableType
+std::pair<TablesModel*, TableType>
 DataProvider::ClientTableSlot(rocprofvis_controller_table_type_t table_type,
-                              uint64_t client_id, bool& is_analysis_model)
+                              uint64_t                           client_id)
 {
-    is_analysis_model = false;
     if(client_id != 0)
     {
         switch(table_type)
         {
-            case kRPVControllerTableTypeEvents: return TableType::kAssistantEventTable;
-            case kRPVControllerTableTypeSamples: return TableType::kAssistantSampleTable;
+            case kRPVControllerTableTypeEvents:
+                return { &m_model.GetTables(), TableType::kAssistantEventTable };
+            case kRPVControllerTableTypeSamples:
+                return { &m_model.GetTables(), TableType::kAssistantSampleTable };
             case kRPVControllerTableTypeSearchResults:
-                return TableType::kAssistantSearchTable;
+                return { &m_model.GetTables(), TableType::kAssistantSearchTable };
             case kRPVControllerTableTypeSummaryKernelInstances:
-                return TableType::kAssistantSummaryKernelTable;
-            default: return TableType::kAssistantTopEventsTable;
+                return { &m_model.GetTables(), TableType::kAssistantSummaryKernelTable };
+            case kRPVControllerTableTypeSummaryMemoryInstances:
+                return { &m_model.GetTables(), TableType::kAssistantSummaryMemoryTable };
+            case kRPVControllerTableTypeSummaryThreadInstances:
+                return { &m_model.GetTables(), TableType::kAssistantSummaryThreadTable };
+            default: return { &m_model.GetTables(), TableType::kAssistantTopEventsTable };
         }
     }
 
     switch(table_type)
     {
-        case kRPVControllerTableTypeEvents: return TableType::kEventTable;
-        case kRPVControllerTableTypeSamples: return TableType::kSampleTable;
-        case kRPVControllerTableTypeSearchResults: return TableType::kEventSearchTable;
+        case kRPVControllerTableTypeEvents:
+            return { &m_model.GetTables(), TableType::kEventTable };
+        case kRPVControllerTableTypeSamples:
+            return { &m_model.GetTables(), TableType::kSampleTable };
+        case kRPVControllerTableTypeSearchResults:
+            return { &m_model.GetTables(), TableType::kEventSearchTable };
         case kRPVControllerTableTypeSummaryKernelInstances:
-            return TableType::kSummaryKernelTable;
+            return { &m_model.GetSummary().GetTables(), TableType::kSummaryKernelTable };
+        case kRPVControllerTableTypeSummaryMemoryInstances:
+            return { &m_model.GetSummary().GetTables(), TableType::kSummaryMemoryTable };
+        case kRPVControllerTableTypeSummaryThreadInstances:
+            return { &m_model.GetSummary().GetTables(), TableType::kSummaryThreadTable };
         case kRPVControllerTableTypeInstrumentedEvents:
-            is_analysis_model = true;
-            return TableType::kAnalysisTopInstrumentedEventsTable;
+            return { &m_model.GetAnalysis().GetTables(),
+                     TableType::kAnalysisTopInstrumentedEventsTable };
         case kRPVControllerTableTypeDispatchEvents:
-            is_analysis_model = true;
-            return TableType::kAnalysisTopDispatchEventsTable;
+            return { &m_model.GetAnalysis().GetTables(),
+                     TableType::kAnalysisTopDispatchEventsTable };
         case kRPVControllerTableTypeMemoryAllocationEvents:
-            is_analysis_model = true;
-            return TableType::kAnalysisTopMemoryAllocationEventsTable;
+            return { &m_model.GetAnalysis().GetTables(),
+                     TableType::kAnalysisTopMemoryAllocationEventsTable };
         case kRPVControllerTableTypeMemoryCopyEvents:
-            is_analysis_model = true;
-            return TableType::kAnalysisTopMemoryCopyEventsTable;
+            return { &m_model.GetAnalysis().GetTables(),
+                     TableType::kAnalysisTopMemoryCopyEventsTable };
         case kRPVControllerTableTypeSampledEvents:
-            is_analysis_model = true;
-            return TableType::kAnalysisTopSampledEventsTable;
-        default: return TableType::__kTableTypeCount;
+            return { &m_model.GetAnalysis().GetTables(),
+                     TableType::kAnalysisTopSampledEventsTable };
+        default: return { nullptr, TableType::__kTableTypeCount };
     }
 }
 
@@ -2330,6 +2380,16 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
                 request_id = SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
                 break;
             }
+            case kRPVControllerTableTypeSummaryMemoryInstances:
+            {
+                request_id = SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID;
+                break;
+            }
+            case kRPVControllerTableTypeSummaryThreadInstances:
+            {
+                request_id = SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID;
+                break;
+            }
             default:
             {
                 spdlog::error("Unsupported table type: {}",
@@ -2365,15 +2425,22 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
                     m_trace_controller, kRPVControllerSystemSearchResultsTable, 0,
                     &table_handle);
             }
+            else if(table_params.m_table_type ==
+                    kRPVControllerTableTypeSummaryMemoryInstances)
+            {
+                result = rocprofvis_analysis_get_summary_memory_instance_table(
+                    m_trace_controller, &table_handle);
+            }
+            else if(table_params.m_table_type ==
+                    kRPVControllerTableTypeSummaryThreadInstances)
+            {
+                result = rocprofvis_analysis_get_summary_thread_instance_table(
+                    m_trace_controller, &table_handle);
+            }
             else
             {
-                rocprofvis_handle_t* summary_handle = nullptr;
-                result                              = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemSummary, 0, &summary_handle);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && summary_handle);
-                result = rocprofvis_controller_get_object(
-                    summary_handle, kRPVControllerSummaryPropertyKernelInstanceTable, 0,
-                    &table_handle);
+                result = rocprofvis_analysis_get_summary_kernel_instance_table(
+                    m_trace_controller, &table_handle);
             }
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             ROCPROFVIS_ASSERT(table_handle);
@@ -2464,6 +2531,16 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
         {
             request_info.request_type = RequestType::kFetchEventSearchTable;
         }
+        else if(table_params.m_table_type ==
+                kRPVControllerTableTypeSummaryMemoryInstances)
+        {
+            request_info.request_type = RequestType::kFetchSummaryMemoryInstanceTable;
+        }
+        else if(table_params.m_table_type ==
+                kRPVControllerTableTypeSummaryThreadInstances)
+        {
+            request_info.request_type = RequestType::kFetchSummaryThreadInstanceTable;
+        }
         else
         {
             request_info.request_type = RequestType::kFetchSummaryKernelInstanceTable;
@@ -2514,23 +2591,19 @@ DataProvider::FetchSummary()
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
         result = rocprofvis_controller_set_double(
-            args, kRPVControllerSummaryArgsStartTimestamp, 0, m_model.GetTimeline().GetStartTime());
+            args, kRPVAnalysisSummaryArgsStartTimestamp, 0,
+            m_model.GetTimeline().GetStartTime());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         result = rocprofvis_controller_set_double(
-            args, kRPVControllerSummaryArgsEndTimestamp, 0, m_model.GetTimeline().GetEndTime());
+            args, kRPVAnalysisSummaryArgsEndTimestamp, 0,
+            m_model.GetTimeline().GetEndTime());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        rocprofvis_handle_t* summary_handle = nullptr;
-        result                              = rocprofvis_controller_get_object(
-            m_trace_controller, kRPVControllerSystemSummary, 0, &summary_handle);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        ROCPROFVIS_ASSERT(summary_handle);
         rocprofvis_controller_summary_metrics_t* metrics =
             rocprofvis_controller_summary_metrics_alloc();
         ROCPROFVIS_ASSERT(metrics);
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);
-        result = rocprofvis_controller_summary_fetch_async(
-            m_trace_controller, summary_handle, args, future, metrics);
+        result = rocprofvis_analysis_fetch_summary(m_trace_controller, args, future, metrics);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         m_requests.emplace(SUMMARY_REQUEST_ID,
                            RequestInfo{ SUMMARY_REQUEST_ID, future, nullptr, metrics,
@@ -2745,6 +2818,7 @@ DataProvider::UpdateRequestProgress(RequestInfo& req)
         case RequestType::kSaveTrimmedTrace:
         case RequestType::kTableExport:
         case RequestType::kExecuteScript:
+        case RequestType::kFetchSummary:
         {
             if(m_request_progress_callback && req.request_future &&
                kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(
@@ -3236,6 +3310,8 @@ DataProvider::ProcessRequest(RequestInfo& req)
         case RequestType::kFetchTrackSampleTable:
         case RequestType::kFetchEventSearchTable:
         case RequestType::kFetchSummaryKernelInstanceTable:
+        case RequestType::kFetchSummaryMemoryInstanceTable:
+        case RequestType::kFetchSummaryThreadInstanceTable:
         case RequestType::kFetchAnalysisTopEventsTable:
         case RequestType::kFetchAnalysisTopDispatchEventsTable:
         case RequestType::kFetchAnalysisTopMemoryAllocationEventsTable:
@@ -3349,8 +3425,11 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
         rocprofvis_controller_summary_metrics_t* metrics_handle = req.request_obj_handle;
         if(req.response_code == kRocProfVisResultSuccess)
         {
+            m_model.GetSummary().Clear();
+            m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
             CreateSummaryData(metrics_handle, scratch);
+            m_model.GetSummary().UpdateValueStrings();
         }
         else
         {
@@ -3408,30 +3487,26 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
 {
     if(metrics_handle)
     {
-        rocprofvis_result_t            result      = kRocProfVisResultUnknownError;
-        uint64_t                       uint64_data = 0;
-        double                         double_data = 0.0;
-        std::string                    str_data;
+        rocprofvis_result_t            result             = kRocProfVisResultUnknownError;
+        uint64_t                       uint64_data        = 0;
         SummaryInfo::AggregateMetrics* output_ptr         = nullptr;
         rocprofvis_handle_t*           sub_metrics_handle = nullptr;
         result = rocprofvis_controller_get_uint64(
-            metrics_handle, kRPVControllerSummaryMetricPropertyAggregationLevel, 0,
+            metrics_handle, kRPVAnalysisSummaryMetricPropertyAggregationLevel, 0,
             &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        rocprofvis_controller_summary_aggregation_level_t aggregation_level =
-            static_cast<rocprofvis_controller_summary_aggregation_level_t>(uint64_data);
+        rocprofvis_analysis_summary_aggregation_level_t aggregation_level =
+            static_cast<rocprofvis_analysis_summary_aggregation_level_t>(uint64_data);
 
         // Get reference to model's summary for modification
         SummaryInfo::AggregateMetrics& root_summary =
-            const_cast<SummaryInfo::AggregateMetrics&>(m_model.GetSummary().GetSummaryData());
+            m_model.GetSummary().GetSummaryData();
 
-        if(aggregation_level == __kRPVControllerSummaryAggregationLevelFirst)
+        if(aggregation_level == __kRPVAnalysisSummaryAggregationLevelFirst)
         {
             output_ptr = &root_summary;
         }
-        else if(sub_metrics_idx.size() <=
-                __kRPVControllerSummaryAggregationLevelLast -
-                    __kRPVControllerSummaryAggregationLevelFirst)
+        else if(!sub_metrics_idx.empty())
         {
             output_ptr = &root_summary.sub_metrics[sub_metrics_idx[0]];
             for(size_t i = 1; i < sub_metrics_idx.size(); i++)
@@ -3443,101 +3518,81 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
         {
             SummaryInfo::AggregateMetrics& output = *output_ptr;
             output.type                           = aggregation_level;
-            result                                = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyId, 0, &uint64_data);
-            if(result == kRocProfVisResultSuccess)
+            output.info.node                      = nullptr;
+            rocprofvis_handle_t* metadata_handle  = nullptr;
+            result                                = rocprofvis_controller_get_object(
+                metrics_handle, kRPVAnalysisSummaryMetricPropertyMetadata, 0,
+                &metadata_handle);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && metadata_handle);
+            switch(aggregation_level)
             {
-                output.id = uint64_data;
-            }
-            result = GetString(metrics_handle, kRPVControllerSummaryMetricPropertyName, 0,
-                               str_data);
-            if(result == kRocProfVisResultSuccess)
-            {
-                output.name = str_data;
-            }
-            result = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyProcessorType, 0,
-                &uint64_data);
-            if(result == kRocProfVisResultSuccess)
-            {
-                output.device_type =
-                    static_cast<rocprofvis_controller_processor_type_t>(uint64_data);
-                result = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyProcessorTypeIndex,
-                    0, &uint64_data);
-                if(result == kRocProfVisResultSuccess)
+                case kRPVAnalysisSummaryAggregationLevelTrace:
                 {
-                    output.device_type_index = uint64_data;
+                    CreateSummaryTraceNodeData(metrics_handle, output);
+                    break;
+                }
+                case kRPVAnalysisSummaryAggregationLevelNode:
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        metadata_handle, kRPVControllerNodeId, 0, &uint64_data);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    output.info.node = m_model.GetTopology().GetNode(uint64_data);
+                    ROCPROFVIS_ASSERT(output.info.node);
+                    CreateSummaryTraceNodeData(metrics_handle, output);
+                    break;
+                }
+                case kRPVAnalysisSummaryAggregationLevelProcessor:
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        metadata_handle, kRPVControllerProcessorId, 0, &uint64_data);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    output.info.processor =
+                        m_model.GetTopology().GetProcessor(uint64_data);
+                    ROCPROFVIS_ASSERT(output.info.processor);
+                    if(output.info.processor->type == kRPVControllerProcessorTypeGPU)
+                    {
+                        CreateSummaryGPUData(metrics_handle, output.gpu);
+                    }
+                    else if(output.info.processor->type == kRPVControllerProcessorTypeCPU)
+                    {
+                        CreateSummaryCPUData(metrics_handle, output.cpu);
+                    }
+                    break;
+                }
+                case kRPVAnalysisSummaryAggregationLevelProcess:
+                {
+                    result = rocprofvis_controller_get_uint64(
+                        metadata_handle, kRPVControllerProcessId, 0, &uint64_data);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    output.info.process = m_model.GetTopology().GetProcess(uint64_data);
+                    ROCPROFVIS_ASSERT(output.info.process);
+                    CreateSummaryProcessThreadData(metrics_handle, output);
+                    break;
+                }
+                case kRPVAnalysisSummaryAggregationLevelThread:
+                {
+                    uint64_t thread_type = kRPVControllerThreadTypeUndefined;
+                    result               = rocprofvis_controller_get_uint64(
+                        metadata_handle, kRPVControllerThreadType, 0, &thread_type);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_get_uint64(
+                        metadata_handle, kRPVControllerThreadId, 0, &uint64_data);
+                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    output.info.thread = m_model.GetTopology().GetThread(
+                        uint64_data, thread_type == kRPVControllerThreadTypeInstrumented
+                                         ? ThreadInfo::Kind::kInstrumented
+                                         : ThreadInfo::Kind::kSampled);
+                    ROCPROFVIS_ASSERT(output.info.thread);
+                    CreateSummaryProcessThreadData(metrics_handle, output);
+                    break;
+                }
+                default:
+                {
+                    break;
                 }
             }
-            result = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyGpuGfxUtil, 0,
-                &double_data);
-            if(result == kRocProfVisResultSuccess)
-            {
-                output.gpu.gfx_utilization = static_cast<float>(double_data);
-            }
-            result = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyGpuMemUtil, 0,
-                &double_data);
-            if(result == kRocProfVisResultSuccess)
-            {
-                output.gpu.mem_utilization = static_cast<float>(double_data);
-            }
             result = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyNumKernels, 0,
-                &uint64_data);
-            if(result == kRocProfVisResultSuccess)
-            {
-                output.gpu.top_kernels.resize(uint64_data);
-            }
-            result = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyKernelsExecTimeTotal,
-                0, &double_data);
-            if(result == kRocProfVisResultSuccess)
-            {
-                output.gpu.kernel_exec_time_total = double_data;
-            }
-            for(size_t i = 0; i < output.gpu.top_kernels.size(); i++)
-            {
-                result = GetString(metrics_handle,
-                                   kRPVControllerSummaryMetricPropertyKernelNameIndexed,
-                                   i, str_data);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                output.gpu.top_kernels[i].name = str_data;
-                result                         = rocprofvis_controller_get_uint64(
-                    metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelInvocationsIndexed, i,
-                    &uint64_data);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                output.gpu.top_kernels[i].invocations = uint64_data;
-                result                                = rocprofvis_controller_get_double(
-                    metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeSumIndexed, i,
-                    &double_data);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                output.gpu.top_kernels[i].exec_time_sum = double_data;
-                result = rocprofvis_controller_get_double(
-                    metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeMinIndexed, i,
-                    &double_data);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                output.gpu.top_kernels[i].exec_time_min = double_data;
-                result = rocprofvis_controller_get_double(
-                    metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeMaxIndexed, i,
-                    &double_data);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                output.gpu.top_kernels[i].exec_time_max = double_data;
-                result = rocprofvis_controller_get_double(
-                    metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimePctIndexed, i,
-                    &double_data);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                output.gpu.top_kernels[i].exec_time_pct = static_cast<float>(double_data);
-            }
-            result = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyNumSubMetrics, 0,
+                metrics_handle, kRPVAnalysisSummaryMetricPropertyNumSubMetrics, 0,
                 &uint64_data);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             output.sub_metrics.resize(uint64_data);
@@ -3545,12 +3600,279 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
             {
                 sub_metrics_idx.push_back(j);
                 result = rocprofvis_controller_get_object(
-                    metrics_handle, kRPVControllerSummaryMetricPropertySubMetricsIndexed,
+                    metrics_handle, kRPVAnalysisSummaryMetricPropertySubMetricsIndexed,
                     j, &sub_metrics_handle);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 CreateSummaryData(sub_metrics_handle, sub_metrics_idx);
                 sub_metrics_idx.pop_back();
             }
+        }
+    }
+}
+
+void
+DataProvider::CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
+                                   SummaryInfo::GPU&    output)
+{
+    CreateSummaryTopOpEventsData(
+        metrics_handle,
+        { kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents,
+          kRPVAnalysisSummaryGpuPropertyDispatchEventsInvocationsTotal,
+          kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal },
+        { kRPVAnalysisSummaryGpuPropertyTopDispatchEventInvocationsIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationSumIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMinIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMaxIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationPctIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationAvgIndexed },
+        kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed, output.dispatch);
+    CreateSummaryTopOpEventsData(
+        metrics_handle,
+        { kRPVAnalysisSummaryGpuPropertyNumTopMemoryEvents,
+          kRPVAnalysisSummaryGpuPropertyMemoryEventsInvocationsTotal,
+          kRPVAnalysisSummaryGpuPropertyMemoryEventsDurationTotal },
+        { kRPVAnalysisSummaryGpuPropertyTopMemoryEventInvocationsIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationSumIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMinIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMaxIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationPctIndexed,
+          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationAvgIndexed },
+        kRPVAnalysisSummaryGpuPropertyTopMemoryEventNameIndexed, output.memory);
+    CreateSummaryCountersData(metrics_handle, kRPVAnalysisSummaryGpuPropertyNumCounters,
+                              kRPVAnalysisSummaryGpuPropertyCounterIndexed,
+                              { kRPVAnalysisSummaryGpuPropertyCounterMinIndexed,
+                                kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed,
+                                kRPVAnalysisSummaryGpuPropertyCounterMeanIndexed,
+                                kRPVAnalysisSummaryGpuPropertyCounterStdDevIndexed },
+                              output.counters);
+}
+
+void
+DataProvider::CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
+                                   SummaryInfo::CPU&    output)
+{
+    CreateSummaryTopOpEventsData(
+        metrics_handle,
+        { kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents,
+          kRPVAnalysisSummaryCpuPropertyMemoryEventsInvocationsTotal,
+          kRPVAnalysisSummaryCpuPropertyMemoryEventsDurationTotal },
+        { kRPVAnalysisSummaryCpuPropertyTopMemoryEventInvocationsIndexed,
+          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationSumIndexed,
+          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMinIndexed,
+          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMaxIndexed,
+          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationPctIndexed,
+          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationAvgIndexed },
+        kRPVAnalysisSummaryCpuPropertyTopMemoryEventNameIndexed, output.memory);
+    CreateSummaryCountersData(metrics_handle, kRPVAnalysisSummaryCpuPropertyNumCounters,
+                              kRPVAnalysisSummaryCpuPropertyCounterIndexed,
+                              { kRPVAnalysisSummaryCpuPropertyCounterMinIndexed,
+                                kRPVAnalysisSummaryCpuPropertyCounterMaxIndexed,
+                                kRPVAnalysisSummaryCpuPropertyCounterMeanIndexed,
+                                kRPVAnalysisSummaryCpuPropertyCounterStdDevIndexed },
+                              output.counters);
+}
+
+void
+DataProvider::CreateSummaryProcessThreadData(rocprofvis_handle_t* metrics_handle,
+                                             SummaryInfo::AggregateMetrics& output)
+{
+    CreateSummaryTopOpEventsData(
+        metrics_handle,
+        { kRPVAnalysisSummaryProcessThreadPropertyNumTopLaunchEvents,
+          kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsInvocationsTotal,
+          kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsDurationTotal },
+        { kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventInvocationsIndexed,
+          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationSumIndexed,
+          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMinIndexed,
+          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMaxIndexed,
+          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationPctIndexed,
+          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationAvgIndexed },
+        kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventNameIndexed,
+        output.thread);
+}
+
+void
+DataProvider::CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_handle,
+                                         SummaryInfo::AggregateMetrics& output)
+{
+    CreateSummaryTopOpEventsData(
+        metrics_handle,
+        { kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents,
+          kRPVAnalysisSummaryTraceNodePropertyMemoryEventsInvocationsTotal,
+          kRPVAnalysisSummaryTraceNodePropertyMemoryEventsDurationTotal },
+        { kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventInvocationsIndexed,
+          kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationSumIndexed,
+          kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationMinIndexed,
+          kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationMaxIndexed,
+          kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationPctIndexed,
+          kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationAvgIndexed },
+        kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventNameIndexed, output.memory);
+    CreateSummaryGPUData(metrics_handle, output.gpu);
+    CreateSummaryCPUData(metrics_handle, output.cpu);
+    CreateSummaryProcessThreadData(metrics_handle, output);
+}
+
+void
+DataProvider::CreateSummaryTopOpEventsData(
+    rocprofvis_handle_t* metrics_handle,
+    std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>
+        op_properties,
+    std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>
+                          event_properties,
+    rocprofvis_property_t event_name_property, SummaryInfo::TopOpEvents& output)
+{
+    rocprofvis_result_t result      = kRocProfVisResultUnknownError;
+    uint64_t            uint64_data = 0;
+    double              double_data = 0.0;
+    std::string         str_data;
+    result = rocprofvis_controller_get_uint64(
+        metrics_handle, op_properties[kRPVAnalysisSummaryTopEventsMetricNumTopEvents], 0,
+        &uint64_data);
+    if(result == kRocProfVisResultSuccess)
+    {
+        output.top.resize(uint64_data);
+        output.metrics[kRPVAnalysisSummaryTopEventsMetricNumTopEvents].numeric.uint =
+            uint64_data;
+        output.metrics[kRPVAnalysisSummaryTopEventsMetricNumTopEvents].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterEventValue(
+            output.metrics[kRPVAnalysisSummaryTopEventsMetricNumTopEvents]);
+    }
+    result = rocprofvis_controller_get_uint64(
+        metrics_handle, op_properties[kRPVAnalysisSummaryTopEventsMetricInvocations], 0,
+        &uint64_data);
+    if(result == kRocProfVisResultSuccess)
+    {
+        output.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations].numeric.uint =
+            uint64_data;
+        output.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterEventValue(
+            output.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]);
+    }
+    result = rocprofvis_controller_get_uint64(
+        metrics_handle, op_properties[kRPVAnalysisSummaryTopEventsMetricDurationSum], 0,
+        &uint64_data);
+    if(result == kRocProfVisResultSuccess)
+    {
+        output.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum].numeric.uint =
+            uint64_data;
+        output.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterTimeunitValue(
+            output.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]);
+    }
+    for(size_t i = 0; i < output.top.size(); i++)
+    {
+        SummaryInfo::TopOpEvents::Event& event = output.top[i];
+        result = GetString(metrics_handle, event_name_property, i, str_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.name = str_data;
+        result     = rocprofvis_controller_get_uint64(
+            metrics_handle,
+            event_properties[kRPVAnalysisSummaryTopEventMetricInvocations], i,
+            &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations].numeric.uint =
+            uint64_data;
+        event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterEventValue(
+            event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations]);
+        result = rocprofvis_controller_get_uint64(
+            metrics_handle,
+            event_properties[kRPVAnalysisSummaryTopEventMetricDurationSum], i,
+            &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].numeric.uint =
+            uint64_data;
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterTimeunitValue(
+            event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]);
+        result = rocprofvis_controller_get_uint64(
+            metrics_handle,
+            event_properties[kRPVAnalysisSummaryTopEventMetricDurationMin], i,
+            &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMin].numeric.uint =
+            uint64_data;
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMin].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterTimeunitValue(
+            event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMin]);
+        result = rocprofvis_controller_get_uint64(
+            metrics_handle,
+            event_properties[kRPVAnalysisSummaryTopEventMetricDurationMax], i,
+            &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMax].numeric.uint =
+            uint64_data;
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMax].type =
+            SummaryInfo::Value::Type::UInt;
+        m_model.GetSummary().RegisterTimeunitValue(
+            event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMax]);
+        result = rocprofvis_controller_get_double(
+            metrics_handle,
+            event_properties[kRPVAnalysisSummaryTopEventMetricDurationPct], i,
+            &double_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct].numeric.flt =
+            static_cast<float>(double_data);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct].type =
+            SummaryInfo::Value::Type::Float;
+        m_model.GetSummary().RegisterEventValue(
+            event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]);
+        result = rocprofvis_controller_get_double(
+            metrics_handle,
+            event_properties[kRPVAnalysisSummaryTopEventMetricDurationAvg], i,
+            &double_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg].numeric.dbl =
+            double_data;
+        event.metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg].type =
+            SummaryInfo::Value::Type::Double;
+        m_model.GetSummary().RegisterTimeunitValue(
+            event.metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg]);
+    }
+}
+
+void
+DataProvider::CreateSummaryCountersData(
+    rocprofvis_handle_t* metrics_handle, rocprofvis_property_t num_counters_property,
+    rocprofvis_property_t counter_handle_property,
+    std::array<rocprofvis_property_t, __kRPVAnalysisSummaryCounterMetricLast>
+                           counter_properties,
+    SummaryInfo::Counters& output)
+{
+    rocprofvis_result_t result      = kRocProfVisResultUnknownError;
+    uint64_t            uint64_data = 0;
+    result = rocprofvis_controller_get_uint64(metrics_handle, num_counters_property, 0,
+                                              &uint64_data);
+    if(result == kRocProfVisResultSuccess)
+    {
+        output.list.resize(uint64_data);
+    }
+    for(size_t i = 0; i < output.list.size(); i++)
+    {
+        SummaryInfo::Counters::Counter& counter        = output.list[i];
+        rocprofvis_handle_t*            counter_handle = nullptr;
+        result = rocprofvis_controller_get_object(metrics_handle, counter_handle_property,
+                                                  i, &counter_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        result = rocprofvis_controller_get_uint64(counter_handle, kRPVControllerCounterId,
+                                                  0, &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        counter.info = m_model.GetTopology().GetCounter(uint64_data);
+        ROCPROFVIS_ASSERT(counter.info);
+        for(size_t j = 0; j < __kRPVAnalysisSummaryCounterMetricLast; j++)
+        {
+            result =
+                rocprofvis_controller_get_double(metrics_handle, counter_properties[j], i,
+                                                 &counter.metrics[j].numeric.dbl);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            counter.metrics[j].type = SummaryInfo::Value::Type::Double;
+            m_model.GetSummary().RegisterCounterValue(counter.metrics[j]);
         }
     }
 }
@@ -3594,6 +3916,16 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             case RequestType::kFetchSummaryKernelInstanceTable:
             {
                 table_type = kRPVControllerTableTypeSummaryKernelInstances;
+                break;
+            }
+            case RequestType::kFetchSummaryMemoryInstanceTable:
+            {
+                table_type = kRPVControllerTableTypeSummaryMemoryInstances;
+                break;
+            }
+            case RequestType::kFetchSummaryThreadInstanceTable:
+            {
+                table_type = kRPVControllerTableTypeSummaryThreadInstances;
                 break;
             }
             case RequestType::kFetchAnalysisTopEventsTable:
@@ -3652,74 +3984,84 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
         }
         else
         {
-        switch(table_type)
-        {
-            case kRPVControllerTableTypeEvents:
+            switch(table_type)
             {
-                result = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemEventTable, 0, &table_handle);
-                break;
+                case kRPVControllerTableTypeEvents:
+                {
+                    result = rocprofvis_controller_get_object(
+                        m_trace_controller, kRPVControllerSystemEventTable, 0,
+                        &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeSamples:
+                {
+                    result = rocprofvis_controller_get_object(
+                        m_trace_controller, kRPVControllerSystemSampleTable, 0,
+                        &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeSearchResults:
+                {
+                    result = rocprofvis_controller_get_object(
+                        m_trace_controller, kRPVControllerSystemSearchResultsTable, 0,
+                        &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeSummaryKernelInstances:
+                {
+                    result = rocprofvis_analysis_get_summary_kernel_instance_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeSummaryMemoryInstances:
+                {
+                    result = rocprofvis_analysis_get_summary_memory_instance_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeSummaryThreadInstances:
+                {
+                    result = rocprofvis_analysis_get_summary_thread_instance_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeInstrumentedEvents:
+                {
+                    result = rocprofvis_analysis_get_instrumented_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeDispatchEvents:
+                {
+                    result = rocprofvis_analysis_get_dispatch_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeMemoryAllocationEvents:
+                {
+                    result = rocprofvis_analysis_get_memory_allocation_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeMemoryCopyEvents:
+                {
+                    result = rocprofvis_analysis_get_memory_copy_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                case kRPVControllerTableTypeSampledEvents:
+                {
+                    result = rocprofvis_analysis_get_sampled_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                }
+                default:
+                {
+                    spdlog::error("Unsupported table type: {}",
+                                  static_cast<int>(table_type));
+                    return;
+                }
             }
-            case kRPVControllerTableTypeSamples:
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemSampleTable, 0, &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeSearchResults:
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemSearchResultsTable, 0,
-                    &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeSummaryKernelInstances:
-            {
-                rocprofvis_handle_t* summary_handle = nullptr;
-                result                              = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemSummary, 0, &summary_handle);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && summary_handle);
-                result = rocprofvis_controller_get_object(
-                    summary_handle, kRPVControllerSummaryPropertyKernelInstanceTable, 0,
-                    &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeInstrumentedEvents:
-            {
-                result = rocprofvis_analysis_get_instrumented_events_table(
-                    m_trace_controller, &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeDispatchEvents:
-            {
-                result = rocprofvis_analysis_get_dispatch_events_table(m_trace_controller,
-                                                                       &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeMemoryAllocationEvents:
-            {
-                result = rocprofvis_analysis_get_memory_allocation_events_table(
-                    m_trace_controller, &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeMemoryCopyEvents:
-            {
-                result = rocprofvis_analysis_get_memory_copy_events_table(
-                    m_trace_controller, &table_handle);
-                break;
-            }
-            case kRPVControllerTableTypeSampledEvents:
-            {
-                result = rocprofvis_analysis_get_sampled_events_table(m_trace_controller,
-                                                                      &table_handle);
-                break;
-            }
-            default:
-            {
-                spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
-                return;
-            }
-        }
         }
 
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -3826,17 +4168,15 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
 
         // The client that asked decides where the rows land: the UI writes the
         // slots the tabs render, and anything else writes its own.
-        const uint64_t client_id         = table_params ? table_params->m_client_id : 0;
-        bool           is_analysis_model = false;
-        TableType      table_type_enum =
-            ClientTableSlot(table_type, client_id, is_analysis_model);
+        const uint64_t client_id = table_params ? table_params->m_client_id : 0;
+        std::pair<TablesModel*, TableType> slot = ClientTableSlot(table_type, client_id);
+        TablesModel*                       table_model     = slot.first;
+        TableType                          table_type_enum = slot.second;
         if(table_type_enum == TableType::__kTableTypeCount)
         {
             spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
             return;
         }
-        TablesModel* table_model = is_analysis_model ? &m_model.GetAnalysis().GetTables()
-                                                     : &m_model.GetTables();
         // Compare mode feeds one controller table type into two view slots, so the
         // request says which of them its rows belong to. Both slots live in the
         // model the controller table type already picked above. Only the UI names
@@ -4840,6 +5180,8 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
                 m_trace_controller, args, future, pc_handle);
             break;
         case PcSamplingLayer::kStalls:
+            rocprofvis_controller_set_uint64(
+                args, kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0, 0);
             result = rocprofvis_controller_pc_sampling_fetch_stalls_async(
                 m_trace_controller, args, future, pc_handle);
             break;
@@ -4876,6 +5218,8 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         }
         return;
     }
+    LoadAnalysisInfo();
+
     uint64_t            num_workloads = 0;
     rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
@@ -4890,6 +5234,20 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
     {
         m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
     }
+}
+
+inline void
+DataProvider::LoadAnalysisInfo()
+{
+    // Metadata is best-effort: a missing value leaves its field empty.
+    AnalysisInfo analysis_info;
+    GetString(m_trace_controller, kRPVControllerComputeProfilerVersion, 0,
+              analysis_info.profiler_version);
+    GetString(m_trace_controller, kRPVControllerComputeProfilerGitVersion, 0,
+              analysis_info.profiler_git_version);
+    GetString(m_trace_controller, kRPVControllerComputeSchemaVersion, 0,
+              analysis_info.schema_version);
+    m_compute_model.SetAnalysisInfo(analysis_info);
 }
 
 inline void
@@ -5095,23 +5453,19 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMin, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMin] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMin] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMax, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMax] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMax] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMean, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMean] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMean] = uint64_data;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationMedian, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMedian] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMedian] = uint64_data;
         workload.kernels[kernel.id] = std::move(kernel);
     }
 }
@@ -5211,6 +5565,9 @@ DataProvider::LoadPcSamplingInstructionLine(InstructionLine&     instruction_lin
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingInstructionLineUuid, index,
                                      &instruction_uuid);
     instruction_line.instruction_uuid = instruction_uuid;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingInstructionLineCodeObjectOffset, index,
+        &instruction_line.code_object_offset);
     instruction_line.instruction =
         GetString(pc_handle, kRPVControllerPCSamplingInstructionLineInstruction, index);
 }
@@ -5256,17 +5613,79 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
     {
         PcSampleState& state = kernel.pc_sampling_data.pc_sample_states[i];
         rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateUuid, i,
+            &state.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateInstructionUuid, i,
             &state.instruction_uuid);
         rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateTotalCount, i,
             &state.total_count);
+        state.issue_count.reset();
+        state.stall_count.reset();
+        uint64_t count = 0;
+        if(rocprofvis_controller_get_uint64(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
+               &count) == kRocProfVisResultSuccess)
+        {
+            state.issue_count = count;
+        }
+        if(rocprofvis_controller_get_uint64(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
+               &count) == kRocProfVisResultSuccess)
+        {
+            state.stall_count = count;
+        }
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingStallReasons(KernelInfo&          kernel,
+                                         rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_stall_reasons = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasons, 0,
+        &num_stall_reasons);
+
+    kernel.pc_sampling_data.pc_sample_stall_reasons.resize(num_stall_reasons);
+    for(uint64_t i = 0; i < num_stall_reasons; i++)
+    {
+        PcSampleStallReason& reason =
+            kernel.pc_sampling_data.pc_sample_stall_reasons[i];
         rocprofvis_controller_get_uint64(
-            pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
-            &state.issue_count);
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonStateUuid, i,
+            &reason.pc_sample_state_uuid);
         rocprofvis_controller_get_uint64(
-            pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
-            &state.stall_count);
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupUuid, i,
+            &reason.pc_sample_stall_reason_lookup_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonCount, i,
+            &reason.count);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingStallReasonLookups(KernelInfo&          kernel,
+                                               rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_stall_reason_lookups = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasonLookups, 0,
+        &num_stall_reason_lookups);
+
+    kernel.pc_sampling_data.pc_sample_stall_reason_lookups.resize(
+        num_stall_reason_lookups);
+    for(uint64_t i = 0; i < num_stall_reason_lookups; i++)
+    {
+        PcSampleStallReasonLookup& lookup =
+            kernel.pc_sampling_data.pc_sample_stall_reason_lookups[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle,
+            kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid, i,
+            &lookup.pc_sample_stall_reason_lookup_uuid);
+        lookup.text = GetString(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupText, i);
     }
 }
 
@@ -5383,8 +5802,6 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
     rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsRidge, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    workload.roofline.max = { DBL_MIN, DBL_MIN };
-    workload.roofline.min = { DBL_MAX, DBL_MAX };
 
     for(uint64_t j = 0; j < num_entries; j++)
     {
@@ -5463,10 +5880,6 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.max.x =
-                    std::max(workload.roofline.max.x, ceiling.position.p2.x);
-                workload.roofline.max.y =
-                    std::max(workload.roofline.max.y, ceiling.position.p2.y);
                 workload.roofline
                     .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] =
                     ceiling;
@@ -5527,10 +5940,6 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.min.x =
-                    std::min(workload.roofline.min.x, ceiling.position.p1.x);
-                workload.roofline.min.y =
-                    std::min(workload.roofline.min.y, ceiling.position.p1.y);
                 workload.roofline
                     .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
                     ceiling;
@@ -5582,10 +5991,6 @@ DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
                 &double_data);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             intensity.position.y = double_data;
-            workload.roofline.max.y =
-                std::max(workload.roofline.max.y, intensity.position.y);
-            workload.roofline.min.y =
-                std::min(workload.roofline.min.y, intensity.position.y);
             workload.kernels[kernel_id].roofline.intensities[intensity.type] =
                 std::move(intensity);
         }
@@ -5827,7 +6232,8 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
 
-    if(success && pc_handle)
+    if(pc_handle && req.response_code != kRocProfVisResultCancelled &&
+       (success || params->m_layer == PcSamplingLayer::kStalls))
     {
         KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
             params->m_workload_id, params->m_kernel_id);
@@ -5851,12 +6257,45 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                     }
                     break;
                 case PcSamplingLayer::kStalls:
-                    LoadPcSamplingStates(*kernel, pc_handle);
+                {
+                    PcSamplingData& data           = kernel->pc_sampling_data;
+                    uint64_t        states_loaded  = 0;
+                    uint64_t        details_loaded = 0;
+                    data.sample_states_loaded =
+                        rocprofvis_controller_get_uint64(
+                            pc_handle, kRPVControllerPCSamplingSampleStatesLoaded, 0,
+                            &states_loaded) == kRocProfVisResultSuccess &&
+                        states_loaded != 0;
+                    data.stall_details_loaded =
+                        data.sample_states_loaded &&
+                        rocprofvis_controller_get_uint64(
+                            pc_handle, kRPVControllerPCSamplingStallDetailsLoaded, 0,
+                            &details_loaded) == kRocProfVisResultSuccess &&
+                        details_loaded != 0;
+                    if(data.sample_states_loaded)
+                    {
+                        LoadPcSamplingStates(*kernel, pc_handle);
+                    }
+                    else
+                    {
+                        data.pc_sample_states.clear();
+                    }
+                    if(data.stall_details_loaded)
+                    {
+                        LoadPcSamplingStallReasons(*kernel, pc_handle);
+                        LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
+                    }
+                    else
+                    {
+                        data.pc_sample_stall_reasons.clear();
+                        data.pc_sample_stall_reason_lookups.clear();
+                    }
                     break;
+                }
             }
         }
     }
-    else if(!success)
+    if(!success && req.response_code != kRocProfVisResultCancelled)
     {
         spdlog::warn("PC sampling request failed with code {}", req.response_code);
     }

@@ -65,6 +65,11 @@ namespace DataModel
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
             "");
     }
+    std::string Builder::Select(rocprofvis_db_sqlite_hip_event_table_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }   
     std::string Builder::Select(rocprofvis_db_sqlite_sample_table_query_format params)
     {
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters,

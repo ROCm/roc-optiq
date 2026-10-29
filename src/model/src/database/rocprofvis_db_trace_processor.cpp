@@ -402,7 +402,7 @@ namespace RocProfVis
     int GoogleTraceProcessor::CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         void* func = (void*)&CallbackCacheTable;
-        rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         GoogleTraceProcessor* db = (GoogleTraceProcessor*)callback_params->db;
         DatabaseCache * ref_tables = (DatabaseCache *)callback_params->handle;
         std::lock_guard<std::mutex> lock(db->m_lock);
@@ -430,7 +430,7 @@ namespace RocProfVis
     int GoogleTraceProcessor::CallbackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         void* func = (void*)&CallbackAddTrack;
-        rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         GoogleTraceProcessor* db = (GoogleTraceProcessor*)callback_params->db;
         uint32_t db_index = callback_params->db_instance->GuidIndex();
 
@@ -609,6 +609,31 @@ namespace RocProfVis
         return kRocProfVisDmResultSuccess;
     }
 
+    std::string GoogleTraceProcessor::GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
+    {
+        std::string where_str;
+        if(source_filter)
+        {
+            if(source_filter->process_id.has_value)
+            {
+                std::string upid = std::to_string(source_filter->process_id.value & TOPOLOGY_ID_MASK);
+                where_str = std::string(Builder::TRACK_ID_SERVICE_NAME) + " IN (" +
+                    "SELECT id FROM process_track WHERE upid = " + upid +
+                    " UNION SELECT id FROM process_counter_track WHERE upid = " + upid +
+                    " UNION SELECT TT.id FROM thread_track TT JOIN __intrinsic_thread T ON T.id = TT.utid WHERE T.upid = " + upid + ")";
+            }
+            if(source_filter->thread_id.has_value)
+            {
+                if(!where_str.empty())
+                {
+                    where_str += " AND ";
+                }
+                where_str += std::string(Builder::TRACK_ID_SERVICE_NAME) + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
+            }
+        }
+        return where_str;
+    }
+
     rocprofvis_dm_result_t GoogleTraceProcessor::LoadInformationTables(Future* future) {
 
         std::vector<std::thread> threads;
@@ -771,8 +796,8 @@ namespace RocProfVis
         ROCPROFVIS_ASSERT_MSG_RETURN(argc == 5, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         void *func = (void*)&CallbackGetTrackProperties;
-        rocprofvis_db_sqlite_callback_parameters* callback_params =
-            (rocprofvis_db_sqlite_callback_parameters*) data;
+        rocprofvis_db_query_callback_parameters* callback_params =
+            (rocprofvis_db_query_callback_parameters*) data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         uint32_t db_instance = callback_params->db_instance->GuidIndex();
         GoogleTraceProcessor*            db = (GoogleTraceProcessor*) callback_params->db;
@@ -794,7 +819,7 @@ namespace RocProfVis
     int GoogleTraceProcessor::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         void*  func = (void*)&CallBackAddString;
-        rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         GoogleTraceProcessor* db = (GoogleTraceProcessor*)callback_params->db;
         if(callback_params->future->Interrupted()) return SQLITE_ABORT;
@@ -813,7 +838,7 @@ namespace RocProfVis
             ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         void *func = (void*)&CallbackAddAnyRecord;
-        rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         uint32_t db_instance = callback_params->db_instance->GuidIndex();
         GoogleTraceProcessor* db = (GoogleTraceProcessor*)callback_params->db;
@@ -1019,7 +1044,7 @@ namespace RocProfVis
 
     void GoogleTraceProcessor::GetTrackIdentifierIndices(
             int column_index, char** azColName,
-            rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices)
+            rocprofvis_db_track_descriptor_t& track_ids_indices)
     {
         std::string column_name = azColName[column_index];
 
@@ -1047,7 +1072,7 @@ namespace RocProfVis
     int GoogleTraceProcessor::CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         void*  func = (void*)&CallbackAddExtInfo;
-        rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         GoogleTraceProcessor* db = (GoogleTraceProcessor*)callback_params->db;
         std::string value_type;
@@ -1155,7 +1180,7 @@ namespace RocProfVis
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(argc == 8, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
         void*  func = (void*)&CallbackAddFlowTrace;
-        rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+        rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         uint32_t db_instance = callback_params->db_instance->GuidIndex();
         GoogleTraceProcessor* db = (GoogleTraceProcessor*)callback_params->db;
@@ -1324,8 +1349,8 @@ namespace RocProfVis
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
         void*  func = (void*)&CallbackAddStackTrace;
-        rocprofvis_db_sqlite_callback_parameters* callback_params =
-            (rocprofvis_db_sqlite_callback_parameters*) data;
+        rocprofvis_db_query_callback_parameters* callback_params =
+            (rocprofvis_db_query_callback_parameters*) data;
         GoogleTraceProcessor*           db = (GoogleTraceProcessor*) callback_params->db;
         rocprofvis_db_stack_data_t record = {"","","",0,0};
         static const char * empty_blob = "{}";

@@ -105,9 +105,11 @@ typedef enum rocprofvis_dm_track_category_t {
     kRocProfVisDmRegionMainTrack = 0x100,
     // Object is region sample track
     kRocProfVisDmRegionSampleTrack = 0x200,
+    // Object is HIP event track
+    kRocProfVisDmHipEventTrack = 0x400,
 
     kRocProfVisDmLaunchTrack = kRocProfVisDmRegionTrack | kRocProfVisDmRegionMainTrack | kRocProfVisDmRegionSampleTrack,
-    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack,
+    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack | kRocProfVisDmHipEventTrack,
     kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack,
     kRocProfVisDmCounterTrack = kRocProfVisDmPmcTrack,
     kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack,
@@ -126,10 +128,12 @@ typedef enum rocprofvis_dm_event_operation_t {
     kRocProfVisDmOperationMemoryAllocate = 3,
     // Memory copy event
     kRocProfVisDmOperationMemoryCopy = 4,
-    // Memory copy event
+    // Launch sample event
     kRocProfVisDmOperationLaunchSample = 5,
+    // Hip event
+    kRocProfVisDmOperationHipEvent = 6,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1,
+    kRocProfVisDmNumOperation,
     kRocProfVisDmMultipleOperations,
 } rocprofvis_dm_event_operation_t;
 
@@ -430,6 +434,46 @@ typedef enum rocprofvis_dm_sort_order_t {
     kRPVDMSortOrderDesc,
 } rocprofvis_dm_sort_order_t;
 
+// C version of std::optional
+typedef struct c_optional_uint64_t
+{
+    uint64_t value = 0;
+    bool has_value = false;
+    c_optional_uint64_t() = default;
+    c_optional_uint64_t(uint64_t v) : value(v), has_value(true) {}
+} c_optional_uint64_t;
+
+// Former WHERE parameter to all table query methods
+// Contains variables for firtering primary source by essential identifiers
+typedef struct rocprofvis_dm_query_criteria_t
+{
+    c_optional_uint64_t node_id;
+    c_optional_uint64_t agent_id;
+    c_optional_uint64_t process_id;
+    c_optional_uint64_t thread_id;
+
+} rocprofvis_dm_query_criteria_t,  * rocprofvis_dm_query_criteria_ptr;
+
+#ifdef __cplusplus
+inline bool operator==(const c_optional_uint64_t& lhs, const c_optional_uint64_t& rhs)
+{
+    if(lhs.has_value != rhs.has_value)
+        return false;
+    if(!lhs.has_value)
+        return true;  
+    return lhs.value == rhs.value;
+}
+
+inline bool operator==(const rocprofvis_dm_query_criteria_t& lhs, 
+    const rocprofvis_dm_query_criteria_t& rhs)
+{
+    return lhs.node_id == rhs.node_id &&
+        lhs.agent_id == rhs.agent_id &&
+        lhs.process_id == rhs.process_id &&
+        lhs.thread_id == rhs.thread_id;
+}
+#endif
+
 // Tags for hrocprofvis_dm_hashed_timestamp
 typedef enum rocprofvis_dm_hashed_timestamp_tag_t
 {
@@ -437,6 +481,8 @@ typedef enum rocprofvis_dm_hashed_timestamp_tag_t
     kRocProfVisDmHashedTimestampTagTrackSlice = 0,
     // Controller analysis fetches
     kRocProfVisDmHashedTimestampTagAnalysis = 1,
+    // Controller summary fetches
+    kRocProfVisDmHashedTimestampTagSummary = 2,
 } rocprofvis_dm_hashed_timestamp_tag_t;
 
 // Event id structure
@@ -581,6 +627,10 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid,
 
     kRPVComputeColumnKernelHasIsaLines,
+
+    kRPVComputeColumnMetadataComputeVersion,
+    kRPVComputeColumnMetadataGitVersion,
+    kRPVComputeColumnMetadataSchemaVersion,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -610,6 +660,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelInstructionTypeLookups,
     kRPVComputeFetchKernelInstructionSamples,
     kRPVComputeFetchKernelInstructionSampleLookups,
+    kRPVComputeFetchMetadata,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

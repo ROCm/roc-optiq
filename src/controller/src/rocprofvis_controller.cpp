@@ -23,7 +23,6 @@
 #include "system/rocprofvis_controller_table_system.h"
 #include "system/rocprofvis_controller_table_system_search.h"
 #include "system/rocprofvis_controller_graph.h"
-#include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
 #include "compute/rocprofvis_controller_metrics_container.h"
 #include "compute/rocprofvis_controller_trace_compute.h"
@@ -46,7 +45,6 @@ typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTy
 typedef Reference<rocprofvis_controller_graph_t, Graph, kRPVControllerObjectTypeGraph> GraphRef;
 typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectTypeTable> TableRef;
 typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerObjectTypeArguments> ArgumentsRef;
-typedef Reference<rocprofvis_controller_table_t, Summary, kRPVControllerObjectTypeSummary> SummaryRef;
 typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVControllerObjectTypeSummaryMetrics> SummaryMetricsRef;
 typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_t, MetricsContainer, kRPVControllerObjectTypeMetricsContainer> MetricsContainerRef;
@@ -475,25 +473,6 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
         {
             error = kRocProfVisResultUnknownError;
         }
-    }
-    return error;
-}
-
-rocprofvis_result_t rocprofvis_controller_summary_fetch_async(
-    rocprofvis_controller_t* controller, rocprofvis_controller_summary_t* summary,
-    rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result,
-    rocprofvis_controller_summary_metrics_t* output)
-{
-    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::SystemTraceRef trace(controller);
-    RocProfVis::Controller::SummaryRef summary_ref(summary);
-    RocProfVis::Controller::ArgumentsRef args_ref(args);
-    RocProfVis::Controller::FutureRef future(result);
-    RocProfVis::Controller::SummaryMetricsRef output_ref(output);
-    if (trace.IsValid() && summary_ref.IsValid() && args_ref.IsValid() && future.IsValid() &&
-        output_ref.IsValid())
-    {
-        error = trace->AsyncFetch(*summary_ref, *args_ref, *future, *output_ref);
     }
     return error;
 }

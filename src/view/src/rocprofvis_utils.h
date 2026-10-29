@@ -283,6 +283,10 @@ posix_parent_path(const std::string& path);
 std::string
 join_posix_path(const std::string& dir, const std::string& name);
 
+// Formats a byte count with a binary unit, e.g. "512 B" or "19.4 MiB".
+std::string
+format_byte_size(uint64_t bytes);
+
 /**
  * @brief Detects whether the current process appears to be running in a remote
  *        session where xdg-desktop-portal file dialogs cannot reach the user.

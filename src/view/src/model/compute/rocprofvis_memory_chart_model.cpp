@@ -5,6 +5,8 @@
 
 #include "json.h"
 
+#include <unordered_set>
+
 namespace RocProfVis
 {
 namespace View
@@ -41,20 +43,6 @@ ReadInt(jt::Json& node, const char* key, int32_t fallback)
     return fallback;
 }
 
-uint32_t
-ReadUint(jt::Json& node, const char* key, uint32_t fallback)
-{
-    if(node.isObject() && node.contains(key))
-    {
-        jt::Json& value = node[key];
-        if(value.isNumber())
-        {
-            return static_cast<uint32_t>(value.getNumber());
-        }
-    }
-    return fallback;
-}
-
 // A metric reference is the metric's full dotted id ("category.table.entry").
 MemChartMetricRef
 ParseMetricRef(jt::Json& value)
@@ -62,8 +50,8 @@ ParseMetricRef(jt::Json& value)
     MemChartMetricRef ref;
     if(value.isString())
     {
-        ref.name  = value.getString();
-        ref.valid = !ref.name.empty();
+        ref.metric_id = value.getString();
+        ref.valid     = !ref.metric_id.empty();
     }
     return ref;
 }
@@ -94,8 +82,9 @@ ParseContentItem(jt::Json& element)
     MemChartContentItem item;
     if(element.isObject())
     {
-        item.metric   = ReadMetricRef(element, "metric");
-        item.title    = ReadString(element, "title");
+        item.metric             = ReadMetricRef(element, "metric");
+        item.metric.metric_name = ReadString(element, "metric_name");
+        item.title              = ReadString(element, "title");
         item.category = ReadString(element, "category");
         item.unit     = ReadString(element, "unit");
     }
@@ -110,8 +99,9 @@ MemChartBlock
 ParseBlock(jt::Json& node)
 {
     MemChartBlock block;
-    block.id     = ReadUint(node, "id", 0);
+    block.id     = ReadString(node, "id");  // Non-string ids read as "" and are rejected.
     block.column = ReadInt(node, "column", 0);
+    block.row    = ReadInt(node, "row", 0);
     block.order  = ReadInt(node, "order", -1);
     block.title  = ReadString(node, "title");
 
@@ -146,13 +136,58 @@ MemChartArrow
 ParseArrow(jt::Json& node)
 {
     MemChartArrow arrow;
-    arrow.from      = ReadUint(node, "from", 0);
-    arrow.to        = ReadUint(node, "to", 0);
+    arrow.from      = ReadString(node, "from");
+    arrow.to        = ReadString(node, "to");
     arrow.direction = ParseDirection(ReadString(node, "direction", "forward"));
-    arrow.metric    = ReadMetricRef(node, "metric");
-    arrow.title     = ReadString(node, "title");
+    arrow.metric             = ReadMetricRef(node, "metric");
+    arrow.metric.metric_name = ReadString(node, "metric_name");
+    arrow.title              = ReadString(node, "title");
     arrow.category  = ReadString(node, "category");
     return arrow;
+}
+
+// Gather every block id in the tree (nested blocks are arrow endpoints too),
+// rejecting missing and duplicate ids.
+bool
+CollectBlockIds(const std::vector<MemChartBlock>& blocks, std::unordered_set<std::string>& ids,
+                std::string& error)
+{
+    for(const MemChartBlock& block : blocks)
+    {
+        if(block.id.empty())
+        {
+            error = "block '" + block.title + "' has a missing or non-string id";
+            return false;
+        }
+        if(!ids.insert(block.id).second)
+        {
+            error = "duplicate block id '" + block.id + "'";
+            return false;
+        }
+        if(!CollectBlockIds(block.children, ids, error))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
+ValidateArrowEndpoint(const std::unordered_set<std::string>& ids, const std::string& id,
+                      const char* key, size_t arrow_index, std::string& error)
+{
+    std::string where = "arrow " + std::to_string(arrow_index) + " '" + key + "'";
+    if(id.empty())
+    {
+        error = where + " is missing or not a string";
+        return false;
+    }
+    if(ids.count(id) == 0)
+    {
+        error = where + " references unknown block '" + id + "'";
+        return false;
+    }
+    return true;
 }
 
 }  // namespace
@@ -217,6 +252,26 @@ MemChartLayout::ParseFromString(const std::string& json_text, MemChartLayout& ou
         return false;
     }
 
+    // Reject rather than render: a bad id would otherwise leave arrows silently
+    // disconnected, and failing lets the caller fall back to the next layout.
+    std::unordered_set<std::string> ids;
+    std::string                     validation_error;
+    bool                            valid = CollectBlockIds(layout.blocks, ids, validation_error);
+    for(size_t i = 0; valid && i < layout.arrows.size(); ++i)
+    {
+        const MemChartArrow& arrow = layout.arrows[i];
+        valid = ValidateArrowEndpoint(ids, arrow.from, "from", i, validation_error) &&
+                ValidateArrowEndpoint(ids, arrow.to, "to", i, validation_error);
+    }
+    if(!valid)
+    {
+        if(error)
+        {
+            *error = validation_error;
+        }
+        return false;
+    }
+
     out = std::move(layout);
     return true;
 }
@@ -224,7 +279,7 @@ MemChartLayout::ParseFromString(const std::string& json_text, MemChartLayout& ou
 namespace
 {
 MemChartBlock*
-FindInBlocks(std::vector<MemChartBlock>& blocks, uint32_t id)
+FindInBlocks(std::vector<MemChartBlock>& blocks, const std::string& id)
 {
     for(MemChartBlock& block : blocks)
     {
@@ -243,15 +298,123 @@ FindInBlocks(std::vector<MemChartBlock>& blocks, uint32_t id)
 }  // namespace
 
 MemChartBlock*
-MemChartLayout::FindBlock(uint32_t id)
+MemChartLayout::FindBlock(const std::string& id)
 {
     return FindInBlocks(blocks, id);
 }
 
 const MemChartBlock*
-MemChartLayout::FindBlock(uint32_t id) const
+MemChartLayout::FindBlock(const std::string& id) const
 {
     return FindInBlocks(const_cast<std::vector<MemChartBlock>&>(blocks), id);
+}
+
+void
+MemChartMetricNameIndex::Add(const std::string& name, uint32_t category_id, uint32_t table_id,
+                             uint32_t entry_id)
+{
+    if(category_id != kMemChartMetricCategoryId || name.empty())
+    {
+        return;
+    }
+    std::string dotted_id = std::to_string(category_id) + "." + std::to_string(table_id) + "." +
+                            std::to_string(entry_id);
+    std::vector<std::string>& ids = m_by_name[name];
+    for(const std::string& existing : ids)
+    {
+        if(existing == dotted_id)
+        {
+            return;
+        }
+    }
+    ids.push_back(std::move(dotted_id));
+}
+
+MemChartRemapStatus
+MemChartMetricNameIndex::Lookup(const std::string& metric_name, std::string& dotted_id,
+                                std::vector<std::string>& match_ids) const
+{
+    dotted_id.clear();
+    match_ids.clear();
+    std::unordered_map<std::string, std::vector<std::string>>::const_iterator it =
+        m_by_name.find(metric_name);
+    if(it == m_by_name.end() || it->second.empty())
+    {
+        return MemChartRemapStatus::kNoMatch;
+    }
+    if(it->second.size() == 1)
+    {
+        dotted_id = it->second.front();
+        return MemChartRemapStatus::kReplaced;
+    }
+    match_ids = it->second;
+    return MemChartRemapStatus::kAmbiguous;
+}
+
+namespace
+{
+
+void
+RemapRef(MemChartMetricRef& ref, const MemChartMetricNameIndex& index,
+         std::vector<MemChartRemapFailure>& failures)
+{
+    // A row with no metric is not a lookup. Arrows often name endpoints only.
+    if(!ref.valid)
+    {
+        return;
+    }
+    if(ref.metric_name.empty())
+    {
+        failures.push_back(
+            { ref.metric_id, ref.metric_name, MemChartRemapStatus::kEmptyName, {} });
+        return;
+    }
+
+    std::string              dotted_id;
+    std::vector<std::string> match_ids;
+    MemChartRemapStatus      status = index.Lookup(ref.metric_name, dotted_id, match_ids);
+    if(status == MemChartRemapStatus::kReplaced)
+    {
+        ref.metric_id = std::move(dotted_id);
+        return;
+    }
+
+    // The template id may now belong to a different metric. Drop the ref so the
+    // row renders N/A instead of that metric's value. `metric_id` stays so the
+    // failure log can still name the template id.
+    ref.valid = false;
+    failures.push_back(
+        { ref.metric_id, ref.metric_name, status, std::move(match_ids) });
+}
+
+void
+RemapBlock(MemChartBlock& block, const MemChartMetricNameIndex& index,
+           std::vector<MemChartRemapFailure>& failures)
+{
+    for(MemChartContentItem& item : block.content)
+    {
+        RemapRef(item.metric, index, failures);
+    }
+    for(MemChartBlock& child : block.children)
+    {
+        RemapBlock(child, index, failures);
+    }
+}
+
+}  // namespace
+
+void
+MemChartLayout::RemapMetricIds(const MemChartMetricNameIndex&     index,
+                               std::vector<MemChartRemapFailure>& failures)
+{
+    for(MemChartBlock& block : blocks)
+    {
+        RemapBlock(block, index, failures);
+    }
+    for(MemChartArrow& arrow : arrows)
+    {
+        RemapRef(arrow.metric, index, failures);
+    }
 }
 
 }  // namespace View

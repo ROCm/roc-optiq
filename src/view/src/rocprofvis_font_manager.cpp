@@ -6,11 +6,14 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_event_manager.h"
+#include "spdlog/spdlog.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace RocProfVis
@@ -29,6 +32,10 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
 // Offsets applied to the user-selected base index (kMedium) to produce
 // kXSmall/kSmall/kMedium/kMedLarge/kLarge.
 static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -5, -1, 0, 1, 2 };
+
+constexpr ImWchar     TRADEMARK_CODEPOINT = 0x2122;
+constexpr const char* TRADEMARK_UTF8      = "\u2122";
+constexpr const char* TRADEMARK_ASCII     = "(TM)";
 
 FontManager::FontManager() {}
 
@@ -197,6 +204,14 @@ FontManager::Init()
         m_text_font                = io.Fonts->AddFontDefault(&fallback_config);
     }
 
+    m_has_trademark_glyph =
+        m_text_font && m_text_font->IsGlyphInFont(TRADEMARK_CODEPOINT);
+    if(!m_has_trademark_glyph)
+    {
+        spdlog::info("UI font '{}' has no U+2122 glyph, so trademarks are drawn as {}",
+                     font_path ? font_path : "built-in", TRADEMARK_ASCII);
+    }
+
 #ifdef _WIN32
     const char* code_font_paths[] = {
         "C:\\Windows\\Fonts\\CascadiaCode.ttf",
@@ -279,6 +294,31 @@ FontManager::GetFontSize(FontSize font_size) const
     if(idx < 0 || idx >= kNumSizes)
         return BASE_FONT_SIZE;
     return m_sizes[idx];
+}
+
+const char*
+FontManager::TrademarkText(const char* text)
+{
+    if(m_has_trademark_glyph || text == nullptr)
+    {
+        return text;
+    }
+
+    auto it = m_trademark_fallbacks.find(std::string_view(text));
+    if(it == m_trademark_fallbacks.end())
+    {
+        const size_t utf8_length  = std::strlen(TRADEMARK_UTF8);
+        const size_t ascii_length = std::strlen(TRADEMARK_ASCII);
+        std::string  spelled(text);
+        size_t       pos = spelled.find(TRADEMARK_UTF8);
+        while(pos != std::string::npos)
+        {
+            spelled.replace(pos, utf8_length, TRADEMARK_ASCII);
+            pos = spelled.find(TRADEMARK_UTF8, pos + ascii_length);
+        }
+        it = m_trademark_fallbacks.emplace(text, std::move(spelled)).first;
+    }
+    return it->second.c_str();
 }
 
 }  // namespace View

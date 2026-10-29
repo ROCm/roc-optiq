@@ -17,6 +17,7 @@
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include <algorithm>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -64,6 +65,16 @@ namespace
         }
         return cv;
     }
+
+// SetRef(ImGuiWindow*) strcpy's the window's full path into the fixed
+// 256-byte ImGuiTestContext::RefStr. Nested child windows exceed that, and
+// glibc's fortified strcpy aborts the process. Referencing by ID resolves the
+// same window without copying its name.
+void SetRefWindow(ImGuiTestContext* ctx, ImGuiWindow* window)
+{
+    IM_CHECK(window != nullptr);
+    ctx->SetRef(ImGuiTestRef(window->ID));
+}
 
 // Flame-graph event bars are raw draw_list rects registered with the Test
 // Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
@@ -221,7 +232,7 @@ ImGuiWindow* OpenTrackGearMenu(ImGuiTestContext* ctx, unsigned int fv_id)
 // Returns false if no gathered item matches.
 bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* label)
 {
-    ctx->SetRef(menu);
+    SetRefWindow(ctx, menu);
     ImGuiTestItemList items;
     ctx->GatherItems(&items, "");
     for(int i = 0; i < items.GetSize(); i++)
@@ -258,6 +269,15 @@ ImGuiID TrackButtonId(ImGuiTestItemList& items, const std::string& name)
         if(items[i]->ID == ImHashStr(name.c_str(), 0, items[i]->ParentID))
             return items[i]->ID;
     return 0;
+}
+
+// Ctrl-click toggles one track row and keeps the rest of the selection. A plain
+// click would replace the selection with that track.
+void CtrlClick(ImGuiTestContext* ctx, ImGuiID id)
+{
+    ctx->KeyDown(ImGuiMod_Ctrl);
+    ctx->ItemClick(id);
+    ctx->KeyUp(ImGuiMod_Ctrl);
 }
 
 // Restores show_summary when it goes out of scope. The Summary tests set it
@@ -675,9 +695,16 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         if (wv == nullptr)
         {
-            ctx->LogWarning("SKIP: no Workload Details tab in this build");
+            ctx->LogWarning("SKIP: no Profile Details tab in this build");
             return;
         }
+        IM_CHECK(wv_label == "Profile Details");
+
+        // Trace-level metadata is loaded with the trace, independent of the workload.
+        const AnalysisInfo& analysis_info =
+            cv->GetDataProvider()->ComputeModel().GetAnalysisInfo();
+        IM_CHECK(!analysis_info.profiler_version.empty());
+        IM_CHECK(!analysis_info.schema_version.empty());
 
         // m_workload_info populates in Render(), so the tab must be active first.
         ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());
@@ -724,15 +751,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
 
         const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComputeComparisonView* comp = nullptr;
+        ComparisonTable* comp = nullptr;
         std::string            comp_label;
         for (const TabItem* tab : tabs)
         {
             if (tab->m_id == ComputeComparisonView::TAB_ID)
             {
-                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
-                comp_label = tab->m_label;
-                break;
+                ComputeComparisonView* view =
+                    dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                if (view)
+                {
+                    ComputeComparisonViewTestPeer peer{*view};
+                    comp = peer.ComparisonTablePtr();
+                    comp_label = tab->m_label;
+                    break;
+                }               
             }
         }
         if (comp == nullptr)
@@ -752,7 +785,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
         ctx->Yield(3);
 
-        ComputeComparisonViewTestPeer peer{*comp};
+        ComputeComparisonTableTestPeer peer{*comp};
 
         // The toolbar combos live in a nested child window the "//Main Window/**/"
         // wildcard can't reach. Find it by name fragment, click relative to it, and
@@ -763,14 +796,20 @@ void RegisterAppTests(ImGuiTestEngine* e)
             for (ImGuiWindow* w : g->Windows)
             {
                 if (w->WasActive && strstr(w->Name, "TabContainer") &&
-                    strstr(w->Name, "/toolbar_"))
+                    strstr(w->Name, "/compare_target_toolbar_"))
                 {
-                    ctx->SetRef(w);
+                    SetRefWindow(ctx, w);
                     return true;
                 }
             }
             return false;
         };
+
+        // The tab opens on the Roofline view; the metric tables sit behind the
+        // Metrics toggle.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("Metrics");
+        ctx->Yield(2);
 
         // Pick the target workload first; it enables the kernel combo.
         IM_CHECK(set_ref_to_toolbar());
@@ -785,8 +824,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         ctx->Yield(2);
 
-        // Index into the target workload's kernels (not baseline's): that combo's
-        // order is the gathered-item order we click by index below.
+        // Choose a kernel from the target workload, not the baseline workload.
         const uint32_t target_workload = peer.TargetWorkloadId();
         std::vector<const KernelInfo*> kernels =
             cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
@@ -809,11 +847,15 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick("##target_kernels");
         ctx->Yield(1);
         {
-            ImGuiTestItemList items;
-            ctx->GatherItems(&items, "//$FOCUSED");
-            IM_CHECK(target_idx < items.GetSize());
-            if (target_idx >= items.GetSize()) return;
-            ctx->ItemClick(items[target_idx]->ID);
+            ImGuiWindow* popup = ImGui::GetCurrentContext()->NavWindow;
+            IM_CHECK(popup != nullptr);
+            if (popup == nullptr) return;
+
+            // PushID(kernel_id) + Selectable("") uses this ID. GatherItems also
+            // includes decorative ElidedText children, so its index is not a kernel index.
+            const ImGuiID selectable_id =
+                popup->GetID(static_cast<int>(kernels[target_idx]->id));
+            ctx->ItemClick(selectable_id);
         }
         ctx->Yield(2);
         ctx->SetRef("//Main Window");
@@ -915,7 +957,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // followed by the metric-id cell (label like "0.1.3:Duration"). So the pin
         // control is the empty-label item just before a cell whose label starts with
         // a digit and contains a dot.
-        ctx->SetRef(table_win);
+        SetRefWindow(ctx, table_win);
         ImGuiTestItemList items;
         ctx->GatherItems(&items, "");
         ImGuiID pin_checkbox = 0;
@@ -1507,33 +1549,34 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
-        // FetchSummary + TopKernels::Update only run while the Summary window is
-        // shown; headless with no saved layout it may be closed, leaving the kernel
+        // FetchSummary + SummaryTopEvents::Update only run while the Summary window is
+        // shown; headless with no saved layout it may be closed, leaving the event
         // list null forever. Force it open ourselves rather than depending on another
         // test having flipped this shared setting earlier in the process.
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
-        // Summary data loads asynchronously; let Update() populate the kernel list.
-        // KernelCount() is 0 while m_kernels is still null.
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        // Summary data loads asynchronously; let Update() populate the event list.
+        // EventCount() is 0 while m_op_events is still null.
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
 
         // Pick a real kernel index, skipping the synthetic "Others" bucket (which
-        // ToggleSelectKernel treats as a deselect). Bail if there's nothing else.
+        // ToggleSelectEvent treats as a deselect). Bail if there's nothing else.
         size_t target = 0;
         if (peer.PaddedIdx() == target) target = 1;
-        if (peer.KernelCount() <= target)
+        if (peer.EventCount() <= target)
         {
             ctx->LogWarning("SKIP: summary has no selectable top kernel for this trace");
             return;
         }
 
-        // This drives the model (ToggleSelectKernel) and asserts selection state.
+        // This drives the model (ToggleSelectEvent) and asserts selection state.
         // The pie is ImPlot-canvas drawn with no widget ID, so the click-to-index
         // hit-test is out of scope here; only the selection wiring is covered.
 
@@ -1560,25 +1603,30 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
-        // The Summary fetch (FetchSummary) and TopKernels::Update both run only when
-        // the Summary window is shown; headless with no saved layout it may be closed,
-        // leaving the kernel list null forever. Force it open before draining the load.
+        // The Summary fetch (FetchSummary) and SummaryTopEvents::Update both run only
+        // when the Summary window is shown; headless with no saved layout it may be
+        // closed, leaving the event list null forever. Force it open before draining the load.
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
-        // Summary data loads asynchronously; let Update() populate the kernel list.
-        // KernelCount() is 0 while m_kernels is still null.
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        // Summary data loads asynchronously; let Update() populate the event list.
+        // EventCount() is 0 while m_op_events is still null.
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
 
-        IM_CHECK(peer.KernelCount() > 0);
-        IM_CHECK(!peer.KernelName(0).empty());
-        for (size_t i=1; i < peer.KernelCount();i++){
-            IM_CHECK(peer.ExecTimeSum(0) >= peer.ExecTimeSum(i));
+        IM_CHECK(peer.EventCount() > 0);
+        IM_CHECK(!peer.EventName(0).empty());
+        // The synthetic "Others" bucket totals everything past the top events, so it
+        // can legitimately exceed the first entry; only rank the real events.
+        for (size_t i = 1; i < peer.EventCount(); i++)
+        {
+            if (peer.PaddedIdx() == i) continue;
+            IM_CHECK(peer.DurationSum(0) >= peer.DurationSum(i));
         }
 
     };
@@ -1591,18 +1639,26 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
         // The Pie/Bar/Table switcher renders only once the Summary window is
-        // shown and its kernel list has loaded; force it open and drain the
+        // shown and its event list has loaded; force it open and drain the
         // async fetch first (mirrors sys_summary_top_kernel_name).
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
-        IM_CHECK(peer.KernelCount() > 0);
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.EventCount() > 0);
+
+        // The switcher lives in the "Kernel Executions" tab and only the active tab
+        // renders, so bring it to the front before clicking.
+        TabContainer* tc = SummaryViewTestPeer{*sv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        tc->SetActiveTab("Kernel Executions");
 
         // Reaching this point means the load path ran (not the skip), so the
         // mode assertions below genuinely exercise the switcher. Default is Pie.
@@ -1787,6 +1843,57 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // Leave a clean selection for following tests.
         sel->UnselectAllEvents();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_track_selection_modifiers");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        std::vector<FlameTrackItem*> tracks;
+        for (int i = 0; i < 60 && tracks.size() < 3; i++)
+        {
+            tracks = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (tracks.size() < 3) ctx->Yield(2);
+        }
+        if (tracks.size() < 3)
+        {
+            ctx->LogWarning("SKIP: need three displayed tracks for range selection");
+            return;
+        }
+
+        std::vector<uint64_t> rows;
+        for (FlameTrackItem* track : tracks) rows.push_back(track->GetID());
+        auto selected_count = [&]() {
+            std::vector<uint64_t> ids;
+            sel->GetSelectedTracks(ids);
+            return ids.size();
+        };
+
+        sel->UnselectAllTracks();
+        sel->ClickTrack(*tracks[0], rows, false, false);
+        IM_CHECK(selected_count() == 1 && sel->IsTrackSelected(*tracks[0]));
+
+        sel->ClickTrack(*tracks[2], rows, false, true);
+        IM_CHECK(selected_count() == 3);
+        IM_CHECK(sel->IsTrackSelected(*tracks[0]));
+        IM_CHECK(sel->IsTrackSelected(*tracks[1]));
+        IM_CHECK(sel->IsTrackSelected(*tracks[2]));
+
+        sel->ClickTrack(*tracks[1], rows, true, false);
+        IM_CHECK(selected_count() == 2 && !sel->IsTrackSelected(*tracks[1]));
+        sel->ClickTrack(*tracks[2], rows, true, true);
+        IM_CHECK(selected_count() == 3 && sel->IsTrackSelected(*tracks[1]));
+
+        sel->UnselectAllTracks();
         ctx->Yield(2);
     };
 
@@ -2444,13 +2551,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
         sel->ClearTimeRange();
         drain();
 
-        // Every select and deselect below is a click on the track's sidebar row,
-        // whose button runs ToggleSelectTrack, so the same click selects an
-        // unselected track and deselects a selected one.
+        // Every select and deselect below is a Ctrl-click on the track's sidebar
+        // row, so the same click selects an unselected track and deselects a
+        // selected one.
         ImGuiWindow* sidebar = FindSidebarWindow(ctx);
         if (sidebar == nullptr) restore();
         IM_CHECK(sidebar != nullptr);
-        ctx->SetRef(sidebar);
+        SetRefWindow(ctx, sidebar);
         ImGuiTestItemList sidebar_items;
         ctx->GatherItems(&sidebar_items, "");
 
@@ -2482,13 +2589,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
         for (size_t i = 0; i < flames.size() && i < kMaxCandidates && track_b == nullptr; i++)
         {
             if (buttons[i] == 0) continue;
-            ctx->ItemClick(buttons[i]);
+            CtrlClick(ctx, buttons[i]);
             drain();
             // Two same-named tracks resolve to one row, so a click lands on only one
             // of them. The selection model says which, and only then is the count
             // that track's own total.
             const uint64_t rows = sel->IsTrackSelected(*flames[i]) ? row_count() : 0;
-            ctx->ItemClick(buttons[i]);  // same button toggles the track back off
+            CtrlClick(ctx, buttons[i]);  // same button toggles the track back off
             drain();
             if (rows == 0) continue;
             if (track_a == nullptr) { track_a = flames[i]; button_a = buttons[i]; }
@@ -2503,13 +2610,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         sel->UnselectAllTracks();
         drain();
-        ctx->ItemClick(button_a);
+        CtrlClick(ctx, button_a);
         drain();
-        ctx->ItemClick(button_b);
+        CtrlClick(ctx, button_b);
         drain();
         const uint64_t count_ab = row_count();
 
-        ctx->ItemClick(button_b);  // toggles B back off, leaving only A selected
+        CtrlClick(ctx, button_b);  // toggles B back off, leaving only A selected
         drain();
         const uint64_t count_a = row_count();
 
@@ -2593,14 +2700,14 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ImGuiWindow* sidebar = FindSidebarWindow(ctx);
         if (sidebar == nullptr) restore();
         IM_CHECK(sidebar != nullptr);
-        ctx->SetRef(sidebar);
+        SetRefWindow(ctx, sidebar);
         ImGuiTestItemList sidebar_items;
         ctx->GatherItems(&sidebar_items, "");
 
-        // Fill the table by clicking each flame track's sidebar row. Same-named rows
-        // share one button id and the button toggles, so click the distinct ids once
-        // each. A duplicate-named pair fills from one of the two, which still holds
-        // raw rows to aggregate.
+        // Fill the table by Ctrl-clicking each flame track's sidebar row. Same-named
+        // rows share one button id and Ctrl-click toggles, so click the distinct ids
+        // once each. A duplicate-named pair fills from one of the two, which still
+        // holds raw rows to aggregate.
         std::vector<ImGuiID> track_buttons;
         for (FlameTrackItem* flame : flames)
         {
@@ -2616,7 +2723,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             restore();
             return;
         }
-        for (ImGuiID id : track_buttons) ctx->ItemClick(id);
+        for (ImGuiID id : track_buttons) CtrlClick(ctx, id);
         drain_event_table();
 
         const TablesModel& tables = dp->DataModel().GetTables();

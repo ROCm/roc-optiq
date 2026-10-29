@@ -14,9 +14,7 @@ Synthesize the narration first so the pacing matches the voice exactly;
 without it, line lengths are estimated.
 
 The run uses a throwaway settings folder so the footage shows default settings
-and your own recent files and preferences stay untouched; it holds the app's
-default Memory Chart layout as an override, because the gfx950 layout reads the
-wrong metrics for the compute sample. The sample traces
+and your own recent files and preferences stay untouched. The sample traces
 are copied to a neutral public folder so no personal paths appear on screen,
 and the host, user and workload names stored in the copies are replaced with
 neutral ones (anonymize_samples.py; needs Python).
@@ -81,21 +79,6 @@ if (Get-Command py -ErrorAction SilentlyContinue) {
 $settings = Join-Path ([IO.Path]::GetTempPath()) "optiq-tutorial-settings"
 if (Test-Path $settings) { Remove-Item $settings -Recurse -Force }
 New-Item -ItemType Directory -Path $settings | Out-Null
-
-# Optiq picks the Memory Chart layout by GPU architecture, and its gfx950 layout
-# reads the wrong metrics for the compute sample, which numbers them the way the
-# default layout does. The app's default layout goes in as the developer
-# override (memory_chart.json in the config folder), which the app loads first.
-$layouts = Get-Content (Join-Path $repo "src\view\src\compute\rocprofvis_memory_chart_layouts_generated.h") -Raw
-$default = [regex]::Match($layouts, 'kMemChartLayout_default = R"MCJSON\((.*?)\)MCJSON"', 'Singleline')
-if ($default.Success) {
-    $config = Join-Path $settings "AMD\ROCm-Optiq"
-    New-Item -ItemType Directory -Force -Path $config | Out-Null
-    [IO.File]::WriteAllText((Join-Path $config "memory_chart.json"), $default.Groups[1].Value,
-                            (New-Object Text.UTF8Encoding $false))
-} else {
-    Write-Warning "Default Memory Chart layout not found; the compute chapters will show wrong values."
-}
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $arguments = @("--record-tutorials", "`"$OutputDir`"", "--ffmpeg", "`"$Ffmpeg`"",

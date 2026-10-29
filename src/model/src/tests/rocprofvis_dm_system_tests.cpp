@@ -594,7 +594,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             rocprofvis_db_future_free(object2wait);
 
             REQUIRE(std::filesystem::file_size(source) == size_before);
-            REQUIRE(std::filesystem::last_write_time(source) == time_before);
+            // Catch2 can't print file_time_type on libc++, so compare it as a bool.
+            REQUIRE((std::filesystem::last_write_time(source) == time_before));
             REQUIRE_FALSE(std::filesystem::exists(target + ".optiq-trim.tmp"));
         }
     }

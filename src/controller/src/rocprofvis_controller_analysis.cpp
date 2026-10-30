@@ -215,6 +215,58 @@ namespace RocProfVis
 namespace Controller
 {
 
+constexpr top_event_properties_t GPU_DISPATCH_PROPERTIES = {
+    { kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents,
+      kRPVAnalysisSummaryGpuPropertyDispatchEventsInvocationsTotal,
+      kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal },
+    { kRPVAnalysisSummaryGpuPropertyTopDispatchEventInvocationsIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationSumIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMinIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMaxIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationPctIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationAvgIndexed },
+    kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed
+};
+
+constexpr top_event_properties_t GPU_MEMORY_PROPERTIES = {
+    { kRPVAnalysisSummaryGpuPropertyNumTopMemoryEvents,
+      kRPVAnalysisSummaryGpuPropertyMemoryEventsInvocationsTotal,
+      kRPVAnalysisSummaryGpuPropertyMemoryEventsDurationTotal },
+    { kRPVAnalysisSummaryGpuPropertyTopMemoryEventInvocationsIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationSumIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMinIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMaxIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationPctIndexed,
+      kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationAvgIndexed },
+    kRPVAnalysisSummaryGpuPropertyTopMemoryEventNameIndexed
+};
+
+constexpr top_event_properties_t CPU_MEMORY_PROPERTIES = {
+    { kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents,
+      kRPVAnalysisSummaryCpuPropertyMemoryEventsInvocationsTotal,
+      kRPVAnalysisSummaryCpuPropertyMemoryEventsDurationTotal },
+    { kRPVAnalysisSummaryCpuPropertyTopMemoryEventInvocationsIndexed,
+      kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationSumIndexed,
+      kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMinIndexed,
+      kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMaxIndexed,
+      kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationPctIndexed,
+      kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationAvgIndexed },
+    kRPVAnalysisSummaryCpuPropertyTopMemoryEventNameIndexed
+};
+
+constexpr top_event_properties_t THREAD_LAUNCH_PROPERTIES = {
+    { kRPVAnalysisSummaryProcessThreadPropertyNumTopLaunchEvents,
+      kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsInvocationsTotal,
+      kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsDurationTotal },
+    { kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventInvocationsIndexed,
+      kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationSumIndexed,
+      kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMinIndexed,
+      kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMaxIndexed,
+      kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationPctIndexed,
+      kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationAvgIndexed },
+    kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventNameIndexed
+};
+
 Analysis& Analysis::GetInstance()
 {
     static Analysis instance;
@@ -769,16 +821,7 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                                         dm_handle,
                                                         { kRocProfVisDmOperationDispatch },
                                                         processor_criteria, start, end,
-                                                        { kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents,
-                                                          kRPVAnalysisSummaryGpuPropertyDispatchEventsInvocationsTotal,
-                                                          kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal },
-                                                        { kRPVAnalysisSummaryGpuPropertyTopDispatchEventInvocationsIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationSumIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMinIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMaxIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationPctIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationAvgIndexed },
-                                                        kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed,
+                                                        GPU_DISPATCH_PROPERTIES,
                                                         processor_metrics, future);
                                                     if(result != kRocProfVisResultSuccess)
                                                     {
@@ -791,16 +834,7 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                                         { kRocProfVisDmOperationMemoryAllocate,
                                                           kRocProfVisDmOperationMemoryCopy },
                                                         processor_criteria, start, end,
-                                                        { kRPVAnalysisSummaryGpuPropertyNumTopMemoryEvents,
-                                                          kRPVAnalysisSummaryGpuPropertyMemoryEventsInvocationsTotal,
-                                                          kRPVAnalysisSummaryGpuPropertyMemoryEventsDurationTotal },
-                                                        { kRPVAnalysisSummaryGpuPropertyTopMemoryEventInvocationsIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationSumIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMinIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationMaxIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationPctIndexed,
-                                                          kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationAvgIndexed },
-                                                        kRPVAnalysisSummaryGpuPropertyTopMemoryEventNameIndexed,
+                                                        GPU_MEMORY_PROPERTIES,
                                                         processor_metrics, future);
                                                     if(result != kRocProfVisResultSuccess)
                                                     {
@@ -816,16 +850,7 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                                         { kRocProfVisDmOperationMemoryAllocate,
                                                           kRocProfVisDmOperationMemoryCopy },
                                                         processor_criteria, start, end,
-                                                        { kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents,
-                                                          kRPVAnalysisSummaryCpuPropertyMemoryEventsInvocationsTotal,
-                                                          kRPVAnalysisSummaryCpuPropertyMemoryEventsDurationTotal },
-                                                        { kRPVAnalysisSummaryCpuPropertyTopMemoryEventInvocationsIndexed,
-                                                          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationSumIndexed,
-                                                          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMinIndexed,
-                                                          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationMaxIndexed,
-                                                          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationPctIndexed,
-                                                          kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationAvgIndexed },
-                                                        kRPVAnalysisSummaryCpuPropertyTopMemoryEventNameIndexed,
+                                                        CPU_MEMORY_PROPERTIES,
                                                         processor_metrics, future);
                                                     if(result != kRocProfVisResultSuccess)
                                                     {
@@ -963,16 +988,7 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                                                           kRocProfVisDmOperationLaunchSample },
                                                                         thread_criteria,
                                                                         start, end,
-                                                                        { kRPVAnalysisSummaryProcessThreadPropertyNumTopLaunchEvents,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsInvocationsTotal,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsDurationTotal },
-                                                                        { kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventInvocationsIndexed,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationSumIndexed,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMinIndexed,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMaxIndexed,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationPctIndexed,
-                                                                          kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationAvgIndexed },
-                                                                        kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventNameIndexed,
+                                                                        THREAD_LAUNCH_PROPERTIES,
                                                                         thread_metrics,
                                                                         future);
                                                                     if(result !=
@@ -1083,7 +1099,12 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
-rocprofvis_result_t Analysis::FetchTopEvents(rocprofvis_dm_trace_t dm_handle, const std::vector<rocprofvis_dm_event_operation_t>& ops, const rocprofvis_dm_query_criteria_t& criteria, double start, double end, const std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>& op_properties, const std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>& event_properties, rocprofvis_property_t event_name_property, SummaryMetrics& output, Future* future) const
+rocprofvis_result_t
+Analysis::FetchTopEvents(rocprofvis_dm_trace_t                               dm_handle,
+                         const std::vector<rocprofvis_dm_event_operation_t>& ops,
+                         const rocprofvis_dm_query_criteria_t& criteria, double start,
+                         double end, const top_event_properties_t& properties,
+                         SummaryMetrics& output, Future* future) const
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(!future->IsCancelled())
@@ -1107,70 +1128,122 @@ rocprofvis_result_t Analysis::FetchTopEvents(rocprofvis_dm_trace_t dm_handle, co
                                                         UINT32_MAX, 0, false, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
-                dm_result = ExecuteTableQuery(dm_handle, query, future, [&output, &op_properties, &event_properties, event_name_property](rocprofvis_dm_table_t table, uint64_t rows, uint64_t cols) -> rocprofvis_dm_result_t{
-                    rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
-                    if(rows > 0)
-                    {
-                        uint64_t invocations_total = 0;
-                        uint64_t exec_time_total = 0;
-                        output.SetUInt64(op_properties[kRPVAnalysisSummaryTopEventsMetricNumTopEvents], 0, rows);
-                        for(uint64_t i = 0; i < rows; i++)
+                dm_result = ExecuteTableQuery(
+                    dm_handle, query, future,
+                    [&output, &properties](rocprofvis_dm_table_t table, uint64_t rows,
+                                           uint64_t cols) -> rocprofvis_dm_result_t {
+                        rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
+                        if(rows > 0)
                         {
-                            rocprofvis_dm_table_row_t table_row = rocprofvis_dm_get_property_as_handle(table, kRPVDMExtTableRowHandleIndexed, i);
-                            if(table_row != nullptr)
+                            uint64_t invocations_total = 0;
+                            uint64_t exec_time_total   = 0;
+                            output.SetUInt64(
+                                properties
+                                    .ops[kRPVAnalysisSummaryTopEventsMetricNumTopEvents],
+                                0, rows);
+                            for(uint64_t i = 0; i < rows; i++)
                             {
-                                uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
-                                if(num_cells == cols)
+                                rocprofvis_dm_table_row_t table_row =
+                                    rocprofvis_dm_get_property_as_handle(
+                                        table, kRPVDMExtTableRowHandleIndexed, i);
+                                if(table_row != nullptr)
                                 {
-                                    for(uint64_t j = 0; j < num_cells; j++)
+                                    uint64_t num_cells =
+                                        rocprofvis_dm_get_property_as_uint64(
+                                            table_row, kRPVDMNumberOfTableRowCellsUInt64,
+                                            0);
+                                    if(num_cells == cols)
                                     {
-                                        char const* col_name = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableColumnNameCharPtrIndexed, j);
-                                        char const* value = rocprofvis_dm_get_property_as_charptr(table_row, kRPVDMExtTableRowCellValueCharPtrIndexed, j);
-                                        if(strcmp(col_name, "name") == 0)
+                                        for(uint64_t j = 0; j < num_cells; j++)
                                         {
-                                            output.SetString(event_name_property, i, value);
-                                        }
-                                        else if(strcmp(col_name, "num_invocations") == 0)
-                                        {
-                                            uint64_t num_invocations = strtoull(value, NULL, 10);
-                                            output.SetUInt64(event_properties[kRPVAnalysisSummaryTopEventMetricInvocations], i, num_invocations);
-                                            invocations_total += num_invocations;
-                                        }
-                                        else if(strcmp(col_name, "total_duration") == 0)
-                                        {
-                                            uint64_t total_duration = strtoull(value, NULL, 10);
-                                            output.SetUInt64(event_properties[kRPVAnalysisSummaryTopEventMetricDurationSum], i, total_duration);
-                                            exec_time_total += total_duration;
-                                        }
-                                        else if(strcmp(col_name, "min_duration") == 0)
-                                        {
-                                            output.SetUInt64(event_properties[kRPVAnalysisSummaryTopEventMetricDurationMin], i, strtoull(value, NULL, 10));
-                                        }
-                                        else if(strcmp(col_name, "max_duration") == 0)
-                                        {
-                                            output.SetUInt64(event_properties[kRPVAnalysisSummaryTopEventMetricDurationMax], i, strtoull(value, NULL, 10));
+                                            char const* col_name =
+                                                rocprofvis_dm_get_property_as_charptr(
+                                                    table,
+                                                    kRPVDMExtTableColumnNameCharPtrIndexed,
+                                                    j);
+                                            char const* value =
+                                                rocprofvis_dm_get_property_as_charptr(
+                                                    table_row,
+                                                    kRPVDMExtTableRowCellValueCharPtrIndexed,
+                                                    j);
+                                            if(strcmp(col_name, "name") == 0)
+                                            {
+                                                output.SetString(properties.name, i,
+                                                                 value);
+                                            }
+                                            else if(strcmp(col_name, "num_invocations") ==
+                                                    0)
+                                            {
+                                                uint64_t num_invocations =
+                                                    strtoull(value, NULL, 10);
+                                                output.SetUInt64(
+                                                    properties.events
+                                                        [kRPVAnalysisSummaryTopEventMetricInvocations],
+                                                    i, num_invocations);
+                                                invocations_total += num_invocations;
+                                            }
+                                            else if(strcmp(col_name, "total_duration") ==
+                                                    0)
+                                            {
+                                                uint64_t total_duration =
+                                                    strtoull(value, NULL, 10);
+                                                output.SetUInt64(
+                                                    properties.events
+                                                        [kRPVAnalysisSummaryTopEventMetricDurationSum],
+                                                    i, total_duration);
+                                                exec_time_total += total_duration;
+                                            }
+                                            else if(strcmp(col_name, "min_duration") == 0)
+                                            {
+                                                output.SetUInt64(
+                                                    properties.events
+                                                        [kRPVAnalysisSummaryTopEventMetricDurationMin],
+                                                    i, strtoull(value, NULL, 10));
+                                            }
+                                            else if(strcmp(col_name, "max_duration") == 0)
+                                            {
+                                                output.SetUInt64(
+                                                    properties.events
+                                                        [kRPVAnalysisSummaryTopEventMetricDurationMax],
+                                                    i, strtoull(value, NULL, 10));
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        if(invocations_total)
-                        {
-                            uint64_t total_duration = 0;
-                            for(uint64_t i = 0; i < rows; i++)
+                            if(invocations_total)
                             {
-                                if(kRocProfVisResultSuccess == output.GetUInt64(event_properties[kRPVAnalysisSummaryTopEventMetricDurationSum], i, &total_duration))
+                                uint64_t total_duration = 0;
+                                for(uint64_t i = 0; i < rows; i++)
                                 {
-                                    output.SetDouble(event_properties[kRPVAnalysisSummaryTopEventMetricDurationPct], i, exec_time_total ? (double)(total_duration) / exec_time_total : 0.0);
+                                    if(kRocProfVisResultSuccess ==
+                                       output.GetUInt64(
+                                           properties.events
+                                               [kRPVAnalysisSummaryTopEventMetricDurationSum],
+                                           i, &total_duration))
+                                    {
+                                        output.SetDouble(
+                                            properties.events
+                                                [kRPVAnalysisSummaryTopEventMetricDurationPct],
+                                            i,
+                                            exec_time_total ? (double) (total_duration) /
+                                                                  exec_time_total
+                                                            : 0.0);
+                                    }
                                 }
+                                output.SetUInt64(
+                                    properties.ops
+                                        [kRPVAnalysisSummaryTopEventsMetricInvocations],
+                                    0, invocations_total);
+                                output.SetUInt64(
+                                    properties.ops
+                                        [kRPVAnalysisSummaryTopEventsMetricDurationSum],
+                                    0, exec_time_total);
+                                result = kRocProfVisDmResultSuccess;
                             }
-                            output.SetUInt64(op_properties[kRPVAnalysisSummaryTopEventsMetricInvocations], 0, invocations_total);
-                            output.SetUInt64(op_properties[kRPVAnalysisSummaryTopEventsMetricDurationSum], 0, exec_time_total);
-                            result = kRocProfVisDmResultSuccess;
                         }
-                    }
-                    return result;
-                });
+                        return result;
+                    });
                 free(query);
             }
             result = (dm_result == kRocProfVisDmResultSuccess) ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;

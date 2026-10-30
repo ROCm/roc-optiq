@@ -3,10 +3,10 @@
 
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_analysis.h"
+#include "rocprofvis_controller_test_database.h"
 #include "system/rocprofvis_controller_track.h"
 
 #include <cfloat>
-#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -16,7 +16,7 @@
 
 struct SummaryFailureFixture
 {
-    std::filesystem::path path;
+    RocProfVis::Controller::Test::TemporaryDatabase database;
     std::string           broken_table;
     std::unique_ptr<rocprofvis_controller_t, decltype(&rocprofvis_controller_free)>
         controller{ nullptr, &rocprofvis_controller_free };
@@ -34,28 +34,14 @@ struct SummaryFailureFixture
         metrics.reset();
         args.reset();
         controller.reset();
-        std::error_code error;
-        std::filesystem::remove(path, error);
     }
 
-    void Execute(const std::string& sql)
-    {
-        sqlite3*  raw_db = nullptr;
-        const int opened = sqlite3_open(path.string().c_str(), &raw_db);
-        std::unique_ptr<sqlite3, decltype(&sqlite3_close)> db(raw_db, &sqlite3_close);
-        REQUIRE(opened == SQLITE_OK);
-        char*     error  = nullptr;
-        const int result = sqlite3_exec(db.get(), sql.c_str(), nullptr, nullptr, &error);
-        const std::string message = error ? error : "";
-        sqlite3_free(error);
-        INFO(message);
-        REQUIRE(result == SQLITE_OK);
-    }
+    void Execute(const std::string& sql) { database.Execute(sql); }
 
     void DropTable(const std::string& prefix)
     {
         sqlite3*  raw_db = nullptr;
-        const int opened = sqlite3_open(path.string().c_str(), &raw_db);
+        const int opened = sqlite3_open(database.Path().string().c_str(), &raw_db);
         std::unique_ptr<sqlite3, decltype(&sqlite3_close)> db(raw_db, &sqlite3_close);
         REQUIRE(opened == SQLITE_OK);
         std::string       table;
@@ -86,16 +72,11 @@ struct SummaryFailureFixture
 
     void Initialize()
     {
-        const std::string suffix =
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-        path = std::filesystem::temp_directory_path() /
-               ("roc-optiq-summary-" + suffix + ".db");
-        std::error_code error;
-        std::filesystem::copy_file(std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) /
-                                       "sample" / "rocpd-transpose.db",
-                                   path, error);
-        REQUIRE_FALSE(error);
-        controller.reset(rocprofvis_controller_alloc(path.string().c_str(), nullptr));
+        database.Copy(std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
+                          "rocpd-transpose.db",
+                      "roc-optiq-summary-");
+        controller.reset(
+            rocprofvis_controller_alloc(database.Path().string().c_str(), nullptr));
         REQUIRE(controller);
         std::unique_ptr<rocprofvis_controller_future_t,
                         decltype(&rocprofvis_controller_future_free)>

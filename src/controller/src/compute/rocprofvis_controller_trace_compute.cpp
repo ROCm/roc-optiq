@@ -467,20 +467,29 @@ ComputeTrace::FetchPcSamplingIsaData(rocprofvis_dm_database_t db, Future* future
                                      uint64_t kernel_id, PcSampling& output)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    if(!output.IsLoaded(PcSampling::kCodeObjectStore))
+    if(!output.m_code_object_store_loaded)
     {
         result = FetchCodeObjects(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.SetLoaded(PcSampling::kCodeObjectStore);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_code_object_store_loaded = true;
+        }
     }
-    if(result == kRocProfVisDmResultSuccess && !output.IsLoaded(PcSampling::kKernelSymbols))
+    if(result == kRocProfVisDmResultSuccess && !output.m_kernel_symbols_loaded)
     {
         result = FetchKernelSymbols(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.SetLoaded(PcSampling::kKernelSymbols);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_kernel_symbols_loaded = true;
+        }
     }
-    if(result == kRocProfVisDmResultSuccess && !output.IsLoaded(PcSampling::kInstructionLines))
+    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
     {
         result = FetchInstructionLines(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.SetLoaded(PcSampling::kInstructionLines);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_instruction_lines_loaded = true;
+        }
     }
     return result;
 }
@@ -491,17 +500,22 @@ ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* fut
                                         PcSampling& output)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    if(!output.IsLoaded(PcSampling::kSourceFiles))
+    if(!output.m_source_files_loaded)
     {
         result = FetchSourceFiles(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.SetLoaded(PcSampling::kSourceFiles);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_source_files_loaded = true;
+        }
     }
     if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
-    if(result == kRocProfVisDmResultSuccess && !output.IsLoaded(PcSampling::kInstructionSourceLines))
+    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_source_lines_loaded)
     {
         result = FetchInstructionSourceLines(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
-            output.SetLoaded(PcSampling::kInstructionSourceLines);
+        {
+            output.m_instruction_source_lines_loaded = true;
+        }
     }
     if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
 
@@ -524,22 +538,30 @@ ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* futu
                                        PcSampling& output)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    if(!output.IsLoaded(PcSampling::kPcSampleStates))
+    if(!output.m_pc_sample_states_loaded)
     {
         result = FetchPcSampleStates(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.SetLoaded(PcSampling::kPcSampleStates);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_pc_sample_states_loaded = true;
+        }
     }
-    if(result == kRocProfVisDmResultSuccess && !output.IsLoaded(PcSampling::kStalls))
+    if(result == kRocProfVisDmResultSuccess && !output.m_stalls_loaded)
     {
         result = FetchStalls(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.SetLoaded(PcSampling::kStalls);
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_stalls_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && include_instruction_samples &&
-       !output.IsLoaded(PcSampling::kInstructionSamples))
+       !output.m_instruction_samples_loaded)
     {
         result = FetchInstructionSamples(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
-            output.SetLoaded(PcSampling::kInstructionSamples);
+        {
+            output.m_instruction_samples_loaded = true;
+        }
     }
     return result;
 }
@@ -895,7 +917,7 @@ ComputeTrace::StoreInstructionTypeLookupMap(PcSampling& output,
         uint64_t instruction_type_uuid = 0;
         if(ParseUInt64(row[uuid_column->second.value()], instruction_type_uuid))
         {
-            output.m_instruction_type_lookup_map.insert_or_assign(
+            output.m_instruction_type_lookup_map.try_emplace(
                 instruction_type_uuid, row[text_column->second.value()]);
         }
     }

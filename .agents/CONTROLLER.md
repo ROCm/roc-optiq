@@ -789,13 +789,14 @@ matches no processor) or to a thread are not counted, and neither are
 nodes without processors or processes without threads. Progress is
 reported through `kRPVControllerFutureProgressPercentage`.
 
-`FetchTopEvents(ops, criteria, op_properties, event_properties,
-event_name_property, ...)` is the one top-events query for every
-category. `criteria` is the `rocprofvis_dm_query_criteria_t` for the
-level (node, plus agent / process / thread). The two property arrays
-map the shared metric enums (`..._top_events_metric_t`,
-`..._top_event_metric_t`) to the output property of the level's group,
-the same shape `DataProvider::CreateSummaryTopOpEventsData` reads back.
+`FetchTopEvents(ops, criteria, properties, ...)` is the one top-events query
+for every category. `criteria` is the `rocprofvis_dm_query_criteria_t` for the
+level (node, plus agent / process / thread). The internal
+`top_event_properties_t` bundles the operation-property array, event-property
+array and event-name property. Four immutable `constexpr` bundles describe GPU
+dispatch, GPU memory, CPU memory and thread launch events. They map the shared
+metric enums (`..._top_events_metric_t`, `..._top_event_metric_t`) to the output
+properties that `DataProvider::CreateSummaryTopOpEventsData` reads back.
 It reads the **full** per-name list, never a top-N.
 
 Every top-events and counter-statistics fetch in `FetchSummaryMetrics`
@@ -1106,12 +1107,13 @@ pane stays readable while source or stall data loads:
 | Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
 | Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
 
-Cached query-group bits in the atomic `m_loaded_flags`, accessed through `IsLoaded`
-and `SetLoaded` with the `LoadedFlag` enum, prevent repeated queries. Atomic loads
-and `fetch_or` preserve completion bits when independently locked layers finish
-concurrently. These operations use relaxed memory ordering because the per-layer
-mutexes protect and publish the corresponding data. The completion properties
-read the same `kPcSampleStates` and `kStalls` bits used by the fetchers.
+Each cached query group has a separate completion boolean guarded by its
+owning layer mutex. ISA owns the code-object, kernel-symbol and instruction-line
+flags; source owns the source-file and instruction-correlation flags; stalls
+owns the sample-state, stall-detail and instruction-sample flags. Distinct scalar
+booleans avoid shared read-modify-write state across independently locked layers.
+The completion properties read `m_pc_sample_states_loaded` and `m_stalls_loaded`
+under the same stalls mutex used by their fetchers.
 Row-count setters clear their destination vectors before resizing so a failed
 fetch followed by a retry cannot preserve fields from an earlier result.
 Read-only uint64 properties `kRPVControllerPCSamplingSampleStatesLoaded` and
@@ -1142,7 +1144,8 @@ nibbles: source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`.
 Instruction/source correlation properties include both source-line and owning
 source-file UUIDs. Each ISA instruction line stores its instruction-type UUID;
 the ISA load also builds a UUID-to-text map used to resolve the public
-instruction-type text property.
+instruction-type text property. Map construction inserts each UUID once, so
+repeated instruction types reuse their stored text.
 
 ### 6.8 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,
@@ -1499,8 +1502,18 @@ and exercises the public ABI. Missing state, reason, and lookup tables inject qu
 failures; tests verify group completion, retained counts, recovery, cache reuse on
 retry, and successful empty results. A concurrent ISA/source/stalls test removes
 the backing tables after loading and retries all layers to verify retained cache
-completion across layers. Changes to PC-sampling fetchers or their
-property bank should extend this coverage.
+completion across layers. Dedicated instruction-type scenarios synthesize ISA
+rows even when the input fixture predates ISA support. They check exact names for
+different and repeated lookup UUIDs, NULL type IDs, missing lookup rows, NULL
+lookup text, and successful all-unavailable results. Each ISA fetch checks the
+future's job result before reading its output. Changes to PC-sampling fetchers
+or their property bank should extend this coverage.
+
+`rocprofvis_controller_test_database.h` provides the shared `TemporaryDatabase`
+utility for PC-sampling and summary fixtures. It owns a copied database file,
+executes SQLite statements with diagnostics, and removes the copy on destruction.
+Declare it before controller handles so the file outlives their cleanup. Scenario
+schemas and failure injection remain in the individual fixtures.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.

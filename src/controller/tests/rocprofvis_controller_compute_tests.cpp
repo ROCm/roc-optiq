@@ -595,6 +595,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
 
     // Fetches ISA lines for schema-2.2 kernels and verifies that the resolved
     // instruction type is readable through each instruction-line property.
+    // Unavailable instruction types return empty text. Dedicated synthetic
+    // PC-sampling tests cover exact lookup names and unavailable values in CI.
     // Older compute fixtures have no ISA lines, so they do not enter this path.
     // Fixture Reads: m_controller, m_workloads[].kernels
     SECTION("Controller Load PC Sampling Instruction Types")
@@ -630,6 +632,11 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 REQUIRE(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_future_wait(future, FLT_MAX);
                 REQUIRE(result == kRocProfVisResultSuccess);
+                uint64_t future_result = 0;
+                result                 = rocprofvis_controller_get_uint64(
+                    future, kRPVControllerFutureResult, 0, &future_result);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(future_result == kRocProfVisResultSuccess);
 
                 uint64_t num_instruction_lines = 0;
                 result = rocprofvis_controller_get_uint64(
@@ -638,7 +645,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(num_instruction_lines > 0);
 
-                bool found_instruction_type = false;
                 for(uint64_t i = 0; i < num_instruction_lines; i++)
                 {
                     uint32_t length = 0;
@@ -654,10 +660,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                         kRPVControllerPCSamplingInstructionLineInstructionType, i,
                         instruction_type.data(), &length);
                     REQUIRE(result == kRocProfVisResultSuccess);
-                    found_instruction_type =
-                        found_instruction_type || !instruction_type.empty();
                 }
-                REQUIRE(found_instruction_type);
 
                 rocprofvis_controller_future_free(future);
                 rocprofvis_controller_arguments_free(args);

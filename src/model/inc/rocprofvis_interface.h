@@ -56,6 +56,16 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                     rocprofvis_dm_size_t);
 
 /****************************************************************************************************
+ * @brief Detects two databases written by the same profiling run, such as a file and a copy of it
+ *
+ * @param first path of the first database file
+ * @param second path of the second database file
+ * @return true when both databases hold data of the same run
+ *
+ ***************************************************************************************************/
+bool rocprofvis_db_same_run(rocprofvis_db_filename_t first, rocprofvis_db_filename_t second);
+
+/****************************************************************************************************
  * @brief Calculates size of memory used by database object
  * 
  * @param database database handle

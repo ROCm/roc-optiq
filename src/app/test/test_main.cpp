@@ -21,6 +21,7 @@
 #endif
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -35,6 +36,11 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);
+    result &= cli_parser.AddOption(
+        "s", "select-tests",
+        "With --run-tests, run only the tests matching this Test Engine filter "
+        "(e.g. \"compare_\")",
+        true);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -148,6 +154,9 @@ main(int argc, char** argv)
 
                 const bool run_tests_headless =
                     cli_parser.WasOptionFound("run-tests");
+                const std::string test_filter = cli_parser.WasOptionFound("select-tests")
+                                                    ? cli_parser.GetOptionValue("select-tests")
+                                                    : std::string();
                 bool headless_tests_queued = false;
                 int headless_settle_frames = 0;
                 // Upper bound (~50s @60fps), not a tuned value: a view that never
@@ -194,9 +203,10 @@ main(int argc, char** argv)
                                              "{} frames; queueing tests anyway",
                                              kHeadlessSettleFrameCap);
                             }
-                            // File load settled (or cap hit): queue every registered test.
+                            // File load settled (or cap hit): queue the registered tests.
                             ImGuiTestEngine_QueueTests(
-                                engine, ImGuiTestGroup_Tests, nullptr,
+                                engine, ImGuiTestGroup_Tests,
+                                test_filter.empty() ? nullptr : test_filter.c_str(),
                                 ImGuiTestRunFlags_RunFromCommandLine);
                             headless_tests_queued = true;
                         }
@@ -206,9 +216,18 @@ main(int argc, char** argv)
                             ImGuiTestEngine_GetTestList(engine, &tests);
                             int failed = 0;
                             int never_ran = 0;
-                            std::cout << "\n=== headless UI test results ===\n";
+                            int reported = 0;
+                            std::ostringstream report;
+                            report << "\n=== headless UI test results ===\n";
                             for(ImGuiTest* test : tests)
                             {
+                                // Tests the filter left out were never queued.
+                                if(!test_filter.empty() &&
+                                   test->Output.Status == ImGuiTestStatus_Unknown)
+                                {
+                                    continue;
+                                }
+                                ++reported;
                                 const char* status = "UNKNOWN";
                                 switch(test->Output.Status)
                                 {
@@ -219,13 +238,34 @@ main(int argc, char** argv)
                                     case ImGuiTestStatus_Queued:  status = "NOT RUN"; ++never_ran; break;
                                     default: break;
                                 }
-                                std::cout << "  [" << status << "] " << test->Category
-                                          << "/" << test->Name << "\n";
+                                report << "  [" << status << "] " << test->Category
+                                       << "/" << test->Name << "\n";
+                                // The engine logs each test's header as a warning;
+                                // skips and failed checks are the lines after it.
+                                ImGuiTextBuffer notes;
+                                if(test->Output.Log.ExtractLinesForVerboseLevels(
+                                       ImGuiTestVerboseLevel_Error,
+                                       ImGuiTestVerboseLevel_Warning, &notes) > 1)
+                                {
+                                    const std::string lines = notes.c_str();
+                                    report << lines.substr(lines.find('\n') + 1);
+                                }
                             }
-                            std::cout << "=== " << tests.Size << " tests, " << failed
-                                      << " failed, " << never_ran << " not run ===\n";
+                            // A filter that matches nothing runs nothing, which is no pass.
+                            const bool none_matched = !test_filter.empty() && reported == 0;
+                            if(none_matched)
+                            {
+                                report << "  No test matches \"" << test_filter << "\"\n";
+                            }
+                            report << "=== " << reported << " tests, " << failed
+                                   << " failed, " << never_ran << " not run ===\n";
+                            std::cout << report.str();
                             std::cout.flush();
-                            app_result_code = (failed > 0 || never_ran > 0) ? 1 : 0;
+                            // On Windows the app has freed its console by now, so
+                            // stdout goes nowhere; the application log keeps the report.
+                            spdlog::info(report.str());
+                            app_result_code =
+                                (failed > 0 || never_ran > 0 || none_matched) ? 1 : 0;
                             glfwSetWindowShouldClose(window, GLFW_TRUE);
                         }
                     }

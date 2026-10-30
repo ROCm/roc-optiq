@@ -7,6 +7,7 @@
 #include "rocprofvis_c_interface.h"
 #include <sstream>
 #include <cfloat>
+#include <set>
 #include <yaml-cpp/yaml.h>
 #include "json.h"
 
@@ -816,6 +817,45 @@ rocprofvis_db_type_t ProfileDatabase::Detect(rocprofvis_db_filename_t filename, 
 
     sqlite3_close(db);
     return rocprofvis_db_type_t::kAutodetect;
+}
+
+// Each profiling run writes a rocpd_info_node_<run GUID> table, and a copy of the file keeps it.
+static std::set<std::string>
+run_node_tables(rocprofvis_db_filename_t filename)
+{
+    std::set<std::string> tables;
+    sqlite3*              db = nullptr;
+    // Not read-only: a read-only connection leaves a WAL database's -wal and -shm files behind.
+    // No SQLITE_OPEN_CREATE either, so a missing file is not created.
+    if(sqlite3_open_v2(filename, &db, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK)
+    {
+        sqlite3_exec(
+            db,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name GLOB 'rocpd_info_node_*';",
+            [](void* data, int argc, char** argv, char** azColName) {
+                (void) argc;
+                (void) azColName;
+                static_cast<std::set<std::string>*>(data)->insert(argv[0]);
+                return 0;
+            },
+            &tables, nullptr);
+    }
+    sqlite3_close(db);
+    return tables;
+}
+
+bool
+ProfileDatabase::SameRun(rocprofvis_db_filename_t first, rocprofvis_db_filename_t second)
+{
+    std::set<std::string> second_tables = run_node_tables(second);
+    for(const std::string& table : run_node_tables(first))
+    {
+        if(second_tables.count(table) > 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 

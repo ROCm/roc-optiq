@@ -61,6 +61,12 @@ public:
     const CompareSourceInfo* GetCompareSource(size_t index) const;
     bool HasCompareSources() const { return !m_compare_sources.empty(); }
 
+    // Each compare source is summarized on its own, since a summary of the
+    // combined trace would add the two runs together. Null unless index is a
+    // compare source; single traces use GetSummary().
+    const SummaryModel* GetSourceSummary(size_t index) const;
+    SummaryModel*       GetSourceSummary(size_t index);
+
     // Build display name for a track from topology/timeline data
     std::string BuildTrackName(uint64_t track_id) const;
 
@@ -77,6 +83,9 @@ private:
 
     std::string m_trace_file_path;
     std::vector<CompareSourceInfo> m_compare_sources;
+    // Heap-held: a summary registers pointers into itself, so it must not move.
+    // Views keep references to them, so they are emptied but never destroyed.
+    std::vector<std::unique_ptr<SummaryModel>> m_source_summaries;
 };
 
 }  // namespace View

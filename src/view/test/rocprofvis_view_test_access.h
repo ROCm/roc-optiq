@@ -10,6 +10,9 @@
 
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_analysis_view.h"
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+#include "rocprofvis_compare_files_dialog.h"
+#endif
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_flame_track_item.h"
@@ -17,6 +20,7 @@
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_sidebar.h"
+#include "rocprofvis_summary_compare.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_timeline_view.h"
@@ -32,6 +36,9 @@
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
+
+#include <cstdlib>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -156,7 +163,25 @@ struct AppWindowTestPeer
 {
     AppWindow& v;
     TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    CompareFilesDialog* CompareFilesDialogPtr() const
+    {
+        return v.m_compare_files_dialog.get();
+    }
+#endif
 };
+
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+// The compare dialog's checks, read without going through the native file dialog.
+struct CompareFilesDialogTestPeer
+{
+    const CompareFilesDialog& v;
+    bool                      CanCompare() const { return v.CanCompare(); }
+    std::string               PairProblem() const { return v.PairProblem(); }
+    const std::string&        SlotPath(size_t slot) const { return v.m_slots[slot].path; }
+    const std::string& SlotProblem(size_t slot) const { return v.m_slots[slot].problem; }
+};
+#endif
 
 struct ComputeViewTestPeer
 {
@@ -274,6 +299,22 @@ struct EventSearchTestPeer
         const InfiniteScrollTable& t = v;
         return t.m_table_model().GetTableTotalRowCount(t.m_table_type);
     }
+    // Track of each result row loaded so far.
+    std::vector<uint64_t> LoadedRowTrackIds() const
+    {
+        const InfiniteScrollTable& t = v;
+        const size_t column = t.m_important_column_idxs[InfiniteScrollTable::kTrackId];
+        std::vector<uint64_t> ids;
+        for(const std::vector<std::string>& row :
+            t.m_table_model().GetTableData(t.m_table_type))
+        {
+            if(column < row.size())
+            {
+                ids.push_back(std::strtoull(row[column].c_str(), nullptr, 10));
+            }
+        }
+        return ids;
+    }
     bool RequestPending() const
     {
         const InfiniteScrollTable& t = v;
@@ -338,6 +379,12 @@ struct FlameTrackItemTestPeer
     }
 
     size_t ChartItemCount() const { return v.m_chart_items.size(); }
+    // Name of the first event drawn on the track, empty when there is none.
+    std::string FirstChartItemName() const
+    {
+        return v.m_chart_items.empty() ? std::string()
+                                       : v.m_chart_items.front().event.m_name;
+    }
 
     // Identity of the earliest event (smallest m_start_ts) in this track. Chart
     // item ordering is not guaranteed stable, so tests pick by timestamp rather
@@ -455,6 +502,32 @@ struct SummaryViewTestPeer
         return v.m_top_events[category].get();
     }
     TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
+    bool                     CompareMode() const { return v.m_compare_mode; }
+    bool                     Loading() const { return v.Loading(); }
+    SummaryCompareTopEvents* CompareTopEventsPtr(
+        rocprofvis_analysis_summary_category_t category) const
+    {
+        return v.m_compare_top_events[category].get();
+    }
+};
+
+// One category of the compare summary: the A/B rows and each source's instances
+// of the selected event.
+struct SummaryCompareTopEventsTestPeer
+{
+    SummaryCompareTopEvents& v;
+    size_t                   RowCount() const { return v.m_rows.size(); }
+    const SummaryEventDiff&  Row(size_t index) const { return v.m_rows[index]; }
+    void                     Select(const std::string& name) { v.SelectEvent(name); }
+    bool     Searched(size_t source) const { return v.m_instances[source]->Searched(); }
+    uint64_t InstanceCount(size_t source) const
+    {
+        return v.m_instances[source]->InstanceCount();
+    }
+    bool InstancesLoading(size_t source) const
+    {
+        return v.m_instances[source]->Loading();
+    }
 };
 
 // SummaryTopEvents drives the pie/bar/table top-event selection for one category.

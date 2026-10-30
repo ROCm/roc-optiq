@@ -131,6 +131,18 @@ public:
     virtual ~RequestParamsBase() = default;
 };
 
+// Which summary a kFetchSummary request fills: one compare source's, or the
+// whole trace's when no source is set.
+class SummaryRequestParams : public RequestParamsBase
+{
+public:
+    explicit SummaryRequestParams(std::optional<uint64_t> source)
+    : m_source(source)
+    {}
+
+    std::optional<uint64_t> m_source;
+};
+
 // Track request parameters
 class TrackRequestParams : public RequestParamsBase
 {

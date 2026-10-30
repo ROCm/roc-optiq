@@ -140,6 +140,12 @@ are experimental (loaded via their respective adapters).
 
 `rocprofvis_db_open_database_multi` opens multiple trace files as one
 combined database; used by the Compare workflow.
+`rocprofvis_db_same_run(first, second)` (`ProfileDatabase::SameRun`) tells
+whether two rocprof files share a run GUID, read from their
+`rocpd_info_node_<guid>` table names; a copy of a trace keeps them, and
+Compare refuses such a pair. It opens the files read-write but never
+creates one: a read-only connection would leave a WAL database's `-wal`
+and `-shm` files behind.
 
 ### 2.3 Future / async API (separate from controller futures)
 
@@ -1280,7 +1286,11 @@ Args passed all the way through:
   and each backend turns them into SQL in its
   `GetCriteriaSubquery` override (`QueryManager` returns an empty
   string, i.e. no filter). What each backend honours is listed under
-  it in section 4 and 7.
+  it in section 4 and 7. Its optional `file_id` is not a column:
+  `QueryManager::RestrictToSourceFile` drops every db instance of
+  another file from the query map before any SQL is built, so a
+  compare trace's table or search reads one source. It applies to
+  `BuildTableQuery` and `BuildEventSearchQuery`.
 - `filter`, `group`, `group_cols` - filter-row expression and
   grouping spec. The group spec is not SQL: the table processor parses
   it (`FilterExpression::ParseAggregationSpec`) and aggregates in C++,
@@ -1409,6 +1419,11 @@ Highlights:
   &tracks, &commands)` walks the SQL string for embedded
   `-- CMD: <name> <param>` directives and the explicit
   multi-track / multi-guid format used by combined views.
+  `queries` (`rocprofvis_db_compound_queries_t`) maps track id to SQL
+  text to `{track, guid_id}` through a multimap: the same text can run
+  on several db instances (a trace compared with a copy of itself
+  produces byte-identical per-instance SQL), and keying by text alone
+  would run only one of them.
 - **`ExecuteCompoundQuery(future, queries, tracks, commands,
   handle, type, query_updated)`** drives a multi-stage pipeline:
   run each per-node query in parallel into a `PackedTable`, merge
@@ -1816,7 +1831,8 @@ exploratory testing during development.
 - `rocprofvis_db_table_processor.h` -> `TableProcessor`,
   `RestartableTimer`, `rocprofvis_db_compound_table_type`,
   `rocprofvis_db_compound_query_command`,
-  `rocprofvis_db_compound_query`, `QUERY_COMMAND_TAG`.
+  `rocprofvis_db_compound_query_info`,
+  `rocprofvis_db_compound_queries_t`, `QUERY_COMMAND_TAG`.
 - `rocprofvis_db_cache.h` -> `TableCache`, `DatabaseCache`,
   `StringTable`.
 - `rocprofvis_db_track.h` -> `TrackLookup`, `TrackKey`, `TrackEntry`.

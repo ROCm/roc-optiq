@@ -5,6 +5,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_topology_model.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_render_scheduler.h"
@@ -737,6 +738,8 @@ SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
 
     if(track_info && !track_info->compare_source.id.empty())
     {
+        // The track name after it is a button.
+        ImGui::AlignTextToFramePadding();
         RenderCompareSourceBadge(track_info, m_settings);
         ImGui::SameLine();
     }

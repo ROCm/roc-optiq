@@ -46,12 +46,12 @@ AnalysisView::AnalysisView(DataProvider&                       dp,
             m_event_group,
             { TableType::kCompareEventTableA, TableType::kCompareEventTableB },
             kRPVControllerTableTypeEvents, RequestType::kFetchTrackEventTable,
-            "Event Table", "events", "compare_event_tab", timeline_selection);
+            "Event Table", "event", "compare_event_tab", timeline_selection);
         BuildCompareGroup(
             m_sample_group,
             { TableType::kCompareSampleTableA, TableType::kCompareSampleTableB },
             kRPVControllerTableTypeSamples, RequestType::kFetchTrackSampleTable,
-            "Sample Table", "samples", "compare_sample_tab", timeline_selection);
+            "Sample Table", "sample", "compare_sample_tab", timeline_selection);
     }
     else
     {
@@ -257,8 +257,8 @@ AnalysisView::BuildCompareGroup(CompareGroup&                                   
     {
         group.tables.push_back(std::make_shared<MultiTrackTable>(
             dp, types[source], request_table_type,
-            RequestIdBuilder::MakeClientRequestId(request_type,
-                                                  COMPARE_CLIENT_ID[source]),
+            RequestIdBuilder::MakeClientRequestId(
+                request_type, DataProvider::CompareSourceClientId(source)),
             [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
             [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); },
             timeline_selection, MultiTrackTable::FilterMode::kNone,
@@ -334,10 +334,11 @@ AnalysisView::RenderCompareSourceTitle(const CompareGroup& group, size_t source_
         return;
     }
 
-    const MultiTrackTable& table   = *group.tables[source_index];
-    const std::string      summary = std::to_string(table.GetTotalRowCount()) + " " +
-                                group.noun + SUMMARY_SEPARATOR +
-                                std::to_string(table.GetIncludedTrackCount()) + " tracks";
+    const MultiTrackTable& table       = *group.tables[source_index];
+    const std::string      noun_plural = group.noun + "s";
+    const std::string      summary =
+        CountLabel(table.GetTotalRowCount(), group.noun.c_str(), noun_plural.c_str()) +
+        SUMMARY_SEPARATOR + CountLabel(table.GetIncludedTrackCount(), "track", "tracks");
     RenderCompareCardTitle(*source, SettingsManager::GetInstance(), summary);
 }
 

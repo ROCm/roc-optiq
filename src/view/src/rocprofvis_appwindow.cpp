@@ -209,9 +209,13 @@ AppWindow::Init()
         spdlog::warn("Failed to initialize SettingsManager");
     }
 
+    WelcomePage::CompareFn on_compare = nullptr;
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    on_compare = [this]() { HandleCompareFiles(); };
+#endif
     m_welcome_page = std::make_unique<WelcomePage>(
         [this]() { HandleOpenFile(); },
-        [this](const std::string& file_path) { OpenFile(file_path); });
+        [this](const std::string& file_path) { OpenFile(file_path); }, on_compare);
 
     constexpr float initial_status_bar_height = 30.0f;
     LayoutItem status_bar_item(-1, initial_status_bar_height);
@@ -1124,7 +1128,8 @@ AppWindow::RenderFileMenu(Project* project)
 #endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
         // TEMPORARY (trace compare): remove guard when the feature graduates.
-        if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
+        if(ImGui::MenuItem("Compare Traces...", nullptr, false,
+                           !is_open_file_dialog_open))
         {
             HandleCompareFiles();
         }
@@ -1319,7 +1324,7 @@ AppWindow::RenderViewMenu(Project* project)
         {
             ApplyPanelVisibilitySettings();
         }
-        // Compare projects have no summary, so the toggle would do nothing there.
+        // A trace still loading has no summary yet, so the toggle would do nothing.
         bool           summary_supported = true;
         const TabItem* active_tab        = m_tab_container->GetActiveTab();
         if(active_tab)
@@ -1388,7 +1393,15 @@ AppWindow::HandleOpenFile()
 void
 AppWindow::HandleCompareFiles()
 {
-    m_compare_files_dialog->Show();
+    // The trace being looked at is the usual baseline, so it starts in the first slot.
+    std::string baseline;
+    Project*    project = GetCurrentProject();
+    if(project && project->GetTraceType() == Project::System &&
+       rocprofvis_controller_compare_supported(project->GetID().c_str()))
+    {
+        baseline = project->GetID();
+    }
+    m_compare_files_dialog->Show(baseline);
 }
 
 void

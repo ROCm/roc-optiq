@@ -23,8 +23,11 @@ class WelcomePage
 public:
     using OpenFileFn       = std::function<void()>;
     using OpenRecentFileFn = std::function<void(const std::string& file_path)>;
+    using CompareFn        = std::function<void()>;
 
-    WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recent);
+    // on_compare, when set, adds a Compare Traces action under Open Trace File.
+    WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recent,
+                CompareFn on_compare = nullptr);
 
     void Render();
 
@@ -35,6 +38,7 @@ private:
 
     OpenFileFn       m_on_open_file;
     OpenRecentFileFn m_on_open_recent;
+    CompareFn        m_on_compare;
 
     // Two-card body layout; left = Start + Recent, right = Resources.
     FlexContainer m_flex;

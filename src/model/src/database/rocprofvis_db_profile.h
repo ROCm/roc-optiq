@@ -67,6 +67,10 @@ class ProfileDatabase : public QueryManager
         // @param multinode_files - detected list of files from multi-node package
         static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename, std::vector<std::string> & multinode_files);
         static rocprofvis_dm_result_t  DetectMultiNode(rocprofvis_db_filename_t filename, std::vector<std::string> & db_files);
+        // method to detect two databases written by the same profiling run, such as a file and a copy of it
+        // @param first - full path to the first database file
+        // @param second - full path to the second database file
+        static bool SameRun(rocprofvis_db_filename_t first, rocprofvis_db_filename_t second);
 
      protected:
 

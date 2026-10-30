@@ -132,7 +132,19 @@ opaque handle and the runtime object type tag.
 `rocprofvis_controller_alloc_compare(filenames, count)` is the
 systems-trace comparison entry point (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
 It builds a `SystemTrace` from several rocprof SQLite files so each
-source's tracks carry a compare instance id.
+source's tracks carry a compare instance id. The sources share one
+merged topology (same node / process ids), so per-source questions are
+asked with a file id rather than a topology id:
+`kRPVControllerTableArgsFileId` for tables and searches, and
+`kRPVAnalysisSummaryArgsFileId` for summaries (sections 5.5 and 5.6).
+`rocprofvis_controller_compare_supported(file)` tells whether a file is a
+rocprofv3 trace, the only kind `alloc_compare` accepts; the Compare dialog
+asks it per pick. `rocprofvis_controller_compare_same_run(first, second)`
+tells whether two files were written by one profiling run
+(`rocprofvis_db_same_run`: they share a run GUID, as a copy of a trace
+does); the Compare dialog and a saved compare project turn such pairs
+away, while `alloc_compare` itself still accepts them, which is how the
+self-compare tests run.
 
 ### 2.3 Generic property accessors
 
@@ -272,9 +284,11 @@ UI:
   tables (paged via `rocprofvis_controller_arguments_t`).
 - `rocprofvis_analysis_fetch_summary` - fill a caller-allocated
   `rocprofvis_controller_summary_metrics_t` for a time range
-  (`kRPVAnalysisSummaryArgsStartTimestamp` / `EndTimestamp`). The
-  summary used to be its own `Summary` object on `SystemTrace`; it is
-  an analysis now (section 5.5).
+  (`kRPVAnalysisSummaryArgsStartTimestamp` / `EndTimestamp`), optionally
+  for one compare source (`kRPVAnalysisSummaryArgsFileId`) and with a
+  different top-events cut (`kRPVAnalysisSummaryArgsTopEventsLimit`,
+  default 10). The summary used to be its own `Summary` object on
+  `SystemTrace`; it is an analysis now (section 5.5).
 - `rocprofvis_analysis_get_summary_{kernel,memory,thread}_instance_table`
   - the Summary panel's instance tables, one per summary category
   (`kRPVControllerTableTypeSummary{Kernel,Memory,Thread}Instances`).
@@ -793,6 +807,12 @@ matches no processor) or to a thread are not counted, and neither are
 nodes without processors or processes without threads. Progress is
 reported through `kRPVControllerFutureProgressPercentage`.
 
+Given a file id (`kRPVAnalysisSummaryArgsFileId`), the walk is the same
+but every criteria carries `file_id`, so each query reads that compare
+source alone, and counters are kept only when their track came from it
+(`counter_in_source`, via the track's `kRPVDMTrackFileIdUInt64`). Without
+one, a compare trace's summary covers both sources together.
+
 `FetchTopEvents(ops, criteria, op_properties, event_properties,
 event_name_property, ...)` is the one top-events query for every
 category. `criteria` is the `rocprofvis_dm_query_criteria_t` for the
@@ -827,10 +847,11 @@ through merging.
 
 - Top events: every child's **full** list is merged by name
   (`AggregateTopEvents`), and only after the parent has merged them are
-  the children trimmed to the top 10 plus an `"Others"` remainder
-  (`PruneTopEvents` / `AppendTopEventsRemainder`). The trace level trims
-  itself last. Merging already-trimmed lists would drop names that are
-  small per child but large overall.
+  the children trimmed to the top N (`SetTopEventsLimit`, default
+  `DEFAULT_TOP_EVENTS_LIMIT` = 10, passed down to every child) plus an
+  `"Others"` remainder (`PruneTopEvents` / `AppendTopEventsRemainder`).
+  The trace level trims itself last. Merging already-trimmed lists
+  would drop names that are small per child but large overall.
 - Counters: merged by name / units / value type. Means and standard
   deviations are pooled with `Counter::duration`, the counter's active
   time in the range (`FetchCounterStatistics`'s `active_duration`, set
@@ -859,8 +880,10 @@ The Summary panel's instance tables
 column, sort order, filter/group strings, op-type filters,
 string-table filters, and the source filter: optional
 `kRPVControllerTableArgsNodeId` / `AgentId` / `ProcessId` /
-`ThreadId`, packed into a `rocprofvis_dm_query_criteria_t` that the
-model turns into SQL - there is no raw `where` string) into a `QueryArguments` struct, then queries
+`ThreadId` / `FileId`, packed by `SystemTable::UnpackSourceFilter`
+into a `rocprofvis_dm_query_criteria_t` that the model turns into SQL
+(the file id instead picks which compare source is read at all) -
+there is no raw `where` string) into a `QueryArguments` struct, then queries
 the model. `Fetch(index, count, ...)` returns a row range from
 `m_rows`. Argument property bank:
 `rocprofvis_controller_table_arguments_t` (`0xE0000000`).

@@ -3,6 +3,7 @@
 
 #include "rocprofvis_track_item.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
@@ -33,78 +34,6 @@ inline constexpr float    META_ITEM_SPACING_Y            = 3.0f;
 constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
-
-static ImU32
-CompareSourceColor(const CompareSourceInfo& source, SettingsManager& settings)
-{
-    const std::vector<ImU32>& wheel = settings.GetColorWheel();
-    if(wheel.empty())
-    {
-        return settings.GetColor(Colors::kTabAccent);
-    }
-    size_t idx = (source.id == "A") ? 0 : 1;
-    return wheel[idx % wheel.size()];
-}
-
-static float
-CompareSourceBadgeWidth(const CompareSourceInfo& source)
-{
-    if(source.id.empty())
-    {
-        return 0.0f;
-    }
-    return ImGui::CalcTextSize(source.id.c_str()).x +
-           2.0f * ImGui::GetStyle().FramePadding.x;
-}
-
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info)
-{
-    return track_info ? CompareSourceBadgeWidth(track_info->compare_source) : 0.0f;
-}
-
-void
-RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings)
-{
-    if(source.id.empty())
-    {
-        return;
-    }
-
-    ImU32 color = CompareSourceColor(source, settings);
-    float width = CompareSourceBadgeWidth(source);
-
-    ImGui::PushID("compare_source_badge");
-    ImGui::PushStyleColor(ImGuiCol_Button, color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
-    ImGui::Button(source.id.c_str(), ImVec2(width, 0.0f));
-    ImGui::PopStyleColor(4);
-    if(ImGui::IsItemHovered())
-    {
-        std::string tooltip = "Compare source " + source.id;
-        if(!source.name.empty())
-        {
-            tooltip += ": " + source.name;
-        }
-        if(!source.path.empty())
-        {
-            tooltip += "\n" + source.path;
-        }
-        SetTooltipStyled("%s", tooltip.c_str());
-    }
-    ImGui::PopID();
-}
-
-void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
-{
-    if(track_info)
-    {
-        RenderCompareSourceBadge(track_info->compare_source, settings);
-    }
-}
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,
                      std::shared_ptr<TimePixelTransform> tpt,
@@ -448,10 +377,12 @@ TrackItem::RenderMetaArea()
 
         UpdateMetaScaleAreaSize();
 
-        float compare_badge_width = CompareSourceBadgeWidth(m_track_metadata);
+        // The source badge heads the pill row below it, so it takes the pills' gap.
+        const float pill_gap            = m_settings.GetDefaultStyle().ItemSpacing.x;
+        float       compare_badge_width = CompareSourceBadgeWidth(m_track_metadata);
         if(compare_badge_width > 0.0f)
         {
-            compare_badge_width += ImGui::GetStyle().ItemSpacing.x;
+            compare_badge_width += pill_gap;
         }
         float available_for_text = content_size.x - m_meta_area_scale_width -
                                    m_reorder_grip_width - compare_badge_width -
@@ -470,7 +401,7 @@ TrackItem::RenderMetaArea()
         if(compare_badge_width > 0.0f)
         {
             RenderCompareSourceBadge(m_track_metadata, m_settings);
-            ImGui::SameLine();
+            ImGui::SameLine(0.0f, pill_gap);
         }
         if(available_for_text > 0.0f)
         {
@@ -495,11 +426,13 @@ TrackItem::RenderMetaArea()
         if(m_node_pill)
         {
             m_node_pill->SetVisible(m_has_node_color && m_settings.ShowNodeColors());
+            // Under a source badge it takes the badge's width, so the two line up.
+            m_node_pill->SetMinWidth(CompareSourceBadgeWidth(m_track_metadata));
         }
 
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
-        RenderPills(ImVec2(available_for_text, content_size.y));
+        RenderPills(ImVec2(available_for_text + compare_badge_width, content_size.y));
 
         ImGui::GetWindowDrawList()->AddLine(
             ImGui::GetWindowPos() + ImVec2(0.0f, ImGui::GetWindowSize().y),
@@ -1155,7 +1088,9 @@ TrackItem::RenderPills(ImVec2 region)
                 }
             }
         }
-        pill_x_pos = m_reorder_grip_width;
+        // Same left edge as the title row above.
+        const float pills_left = m_reorder_grip_width + m_metadata_padding.x;
+        pill_x_pos             = pills_left;
         for(size_t i = 0; i < m_pills.size(); i++)
         {
             if(m_pills[i]->Visible())
@@ -1168,8 +1103,7 @@ TrackItem::RenderPills(ImVec2 region)
                     pill_x_pos +=
                         m_pills[i]->Size().x + m_settings.GetDefaultStyle().ItemSpacing.x;
                 }
-                else if(pill_x_pos + m_pills[i]->CompactSize().x <
-                        region.x + m_reorder_grip_width)
+                else if(pill_x_pos + m_pills[i]->CompactSize().x < region.x + pills_left)
                 {
                     m_pills[i]->Render(
                         ImVec2(pill_x_pos, region.y - m_pills[i]->Size().y), m_settings,
@@ -1177,8 +1111,7 @@ TrackItem::RenderPills(ImVec2 region)
                     pill_x_pos +=
                         m_pills[i]->Size().x + m_settings.GetDefaultStyle().ItemSpacing.x;
                 }
-                else if(pill_x_pos + m_pills[i]->ElidedSize().x <
-                        region.x + m_reorder_grip_width)
+                else if(pill_x_pos + m_pills[i]->ElidedSize().x < region.x + pills_left)
                 {
                     m_pills[i]->Render(
                         ImVec2(pill_x_pos, region.y - m_pills[i]->Size().y), m_settings,
@@ -1253,6 +1186,16 @@ void
 Pill::SetTextColor(std::optional<Colors> color)
 {
     m_text_color = color;
+}
+
+void
+Pill::SetMinWidth(float width)
+{
+    if(width != m_min_width)
+    {
+        m_min_width = width;
+        CalculateSize();
+    }
 }
 
 void
@@ -1340,26 +1283,18 @@ Pill::Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing)
                                       : settings.GetColor(Colors::kTextDim),
                        m_height * 0.5f, 0, 1.0f);
 
-    ImVec2 text_pos = pos + ImVec2(m_padding_x, m_padding_y);
-    ImGui::SetCursorPos(text_pos);
-    switch(m_sizing)
+    const char* label = "...";
+    if(m_sizing == kCompact)
     {
-        case kElided:
-        {
-            ImGui::TextUnformatted("...");
-            break;
-        }
-        case kCompact:
-        {
-            ImGui::TextUnformatted(m_compact_label.c_str());
-            break;
-        }
-        case kExtended:
-        {
-            ImGui::TextUnformatted(m_ext_label.c_str());
-            break;
-        }
+        label = m_compact_label.c_str();
     }
+    else if(m_sizing == kExtended)
+    {
+        label = m_ext_label.c_str();
+    }
+    ImGui::SetCursorPos(
+        pos + ImVec2(0.5f * (Size().x - ImGui::CalcTextSize(label).x), m_padding_y));
+    ImGui::TextUnformatted(label);
     if(!m_tooltip.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     {
         SetTooltipStyled("%s", m_tooltip.c_str());
@@ -1380,11 +1315,13 @@ Pill::CalculateSize()
                     fonts.GetFontSize(FontSize::kSmall));
 
     m_widths[kElided]  = ImGui::CalcTextSize("...").x + 2 * m_padding_x;
-    m_widths[kCompact] = ImGui::CalcTextSize(m_compact_label.c_str()).x + 2 * m_padding_x;
+    m_widths[kCompact] = std::max(
+        m_min_width, ImGui::CalcTextSize(m_compact_label.c_str()).x + 2 * m_padding_x);
     m_widths[kExtended] =
         m_ext_label.empty()
             ? m_widths[kCompact]
-            : ImGui::CalcTextSize(m_ext_label.c_str()).x + 2 * m_padding_x;
+            : std::max(m_min_width,
+                       ImGui::CalcTextSize(m_ext_label.c_str()).x + 2 * m_padding_x);
     m_height = ImGui::GetTextLineHeight() + 2 * m_padding_y;
 
     ImGui::PopFont();

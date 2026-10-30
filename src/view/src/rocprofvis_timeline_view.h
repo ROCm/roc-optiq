@@ -5,6 +5,7 @@
 
 #include "imgui.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -14,6 +15,7 @@
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "widgets/rocprofvis_widget.h"
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -211,6 +213,8 @@ private:
         uint64_t streams              = 0;
         uint64_t counters             = 0;
         uint64_t other                = 0;
+        // Tracks of each compare source; all zero for a single trace.
+        std::array<uint64_t, COMPARE_SOURCE_COUNT> per_source = {};
 
         std::string              total_label;    // e.g. "12 Tracks"
         std::string              breakdown;      // e.g. "3 threads, 2 queues"

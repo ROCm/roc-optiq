@@ -121,7 +121,8 @@ CMake options worth knowing:
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
 - `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development systems
-  trace comparison UI (`File > Compare`, default off). Guarded with
+  trace comparison UI (`File > Compare Traces...` and the Welcome page
+  tile, default off). Guarded with
   `#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE` in code.
 - `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
   support (default off).
@@ -282,7 +283,12 @@ to the View. Specifically:
   `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
   `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Each executable's
   `parse_command_line_args` adds its own flags (`-r/--drag-repair` in Linux
-  multi-window builds, `-t/--run-tests` in the test harness). `-v` prints the
+  multi-window builds; `-t/--run-tests` and `-s/--select-tests <filter>`,
+  a Test Engine filter such as `compare_`, in the test harness). The
+  headless report lists each test with its skip and failure lines, and
+  also goes to the application log, because on Windows the harness has
+  freed its console by the time it prints. A filter that matches no test
+  fails the run. `-v` prints the
   version. `-v hash` also prints the
   git commit. Official builds print the hash alone. An unofficial build
   prints `unknown` and a line that the commit hash is not recorded. About
@@ -453,7 +459,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- (ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
-+-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
++-- CompareFilesDialog       : two-trace compare modal (File > Compare Traces..., ROCPROFVIS_ENABLE_TRACE_COMPARE)
 +-- m_settings_panel        : SettingsPanel (modal, opened via menu)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
@@ -481,9 +487,11 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   the Compare dialog is open (`ROCPROFVIS_ENABLE_TRACE_COMPARE`),
   dropped/opened files fill its slots instead of opening standalone tabs.
 - `void OpenCompare(base_path, target_path)` / `MakeCompareId(files)` -
-  creates a synthetic compare project containing two trace sources. The
-  `File > Compare` entry point, the dialog, and these methods are gated
-  behind `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
+  creates a synthetic compare project containing two trace sources.
+  `File > Compare Traces...` opens the dialog with the system trace on
+  screen (if it is a file) as the baseline. The menu item, the Welcome
+  tile, the dialog, and these methods are gated behind
+  `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
 - `void ShowConfirmationDialog(title, message, on_confirm)` /
   `ShowMessageDialog` - centralized modal dialogs. Always go through
   these, do not create your own popups for ok/cancel flows.
@@ -592,18 +600,30 @@ from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
 ### `WelcomePage` and compare projects
 
 - `WelcomePage` (`welcome/rocprofvis_welcome_page.{h,cpp}`) is the
-  no-tabs landing page. It renders Open Trace, recent files, and
-  resource links using `FlexContainer`; do not recreate an empty state
-  in `AppWindow`.
+  no-tabs landing page. It renders the Open Trace and (in compare
+  builds) Compare Traces action tiles, recent files, and resource links
+  using `FlexContainer`; do not recreate an empty state in `AppWindow`.
+  `DrawAction(..., primary)` draws a tile; only Open Trace is primary.
 - `CompareFilesDialog` (`rocprofvis_compare_files_dialog.{h,cpp}`)
-  collects base and target traces. `AppWindow::OpenCompare()` routes
-  them through `Project::OpenCompare()`,
-  `TraceDataModel::SetCompareSources()`, and per-track
-  `CompareSourceInfo` badges/colors. `FileSlot {kFirst, kSecond}`
-  identifies the two drop targets; while the dialog `IsOpen()`,
-  `AppWindow::OpenFile()` routes files into it via `AddDroppedFile()`,
-  and `Validate()` rejects picking the same file twice. The
-  `File > Compare` menu item, the dialog, and `OpenCompare` are behind
+  picks the baseline (A) and target (B) traces. `Show(baseline)` can
+  prefill A. `FileSlot {kFirst, kSecond}` identifies the two slots;
+  each takes a browsed file, a file dropped on the window (while the
+  dialog `IsOpen()`, `AppWindow::OpenFile()` routes files into it via
+  `AddDroppedFile()`), or a recent `.db` trace. A pick is described
+  once when set (`Describe`: name, folder, size and modified time, or
+  the `problem` that rules it out, such as a `.db` that
+  `rocprofvis_controller_compare_supported` refuses), and `PairProblem()`
+  rejects the same file twice and two copies of one trace (`CheckPair()`,
+  called from `Render()`, asks `rocprofvis_controller_compare_same_run`
+  once per pair of picks),
+  so `CanCompare()` gates the Compare button and the dialog says what
+  is wrong before anything opens.
+  `AppWindow::OpenCompare()` routes the pair through
+  `Project::OpenCompare()` and `TraceDataModel::SetCompareSources()`,
+  which give each track its `CompareSourceInfo`. A saved compare project
+  is held to the same rules when it loads (`saved_compare_problem` in
+  `rocprofvis_project.cpp`), since its file can be edited by hand. The menu item, the
+  Welcome tile, the dialog, and `OpenCompare` are behind
   `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
 
 ## 7. Widget Library Reference (`src/view/src/widgets/`)
@@ -787,8 +807,12 @@ Subclasses must override:
   `kStreamId`).
 - `void RowSelected(ImGuiMouseButton)` - what happens on row click.
 
+Optional hook: `RenderCellPrefix(row, column)` draws before a cell's
+text (`EventSearch` puts the compare source chip in front of the event
+id).
+
 Concrete subclasses already in the tree: `MultiTrackTable`,
-`EventSearch`, `SummaryTopEvents::InstanceTable`. **Add new event/sample tables by
+`EventSearch`, `SummaryInstanceTable`. **Add new event/sample tables by
 subclassing this; don't roll your own.**
 
 ### 7.10 `rocprofvis_query_builder.{h,cpp}` - 4-level metric picker
@@ -934,7 +958,10 @@ optional `show_node_colors` display preference.
 `class Pill` - the rounded label badge used inside meta areas.
 Use `SetLabel`, `SetExtendedLabel`, `SetTooltip`, `SetAccentColor`,
 `Activate/Deactivate`, `SetVisible`, and `Render`. `Sizing` supports
-`kElided`, `kCompact`, and `kExtended`.
+`kElided`, `kCompact`, and `kExtended`. The pill row starts at the
+title row's left edge; under a compare source badge the node pill takes
+the badge's width (`SetMinWidth`, label centered), so the two stack as
+one column.
 
 ### `FlameTrackItem` - flame-chart for events
 
@@ -1172,30 +1199,68 @@ event" routes through `TimelineSelection::NavigateToEvent`.
 The top-bar Summary panel. `SummaryView` fetches the summary when the
 panel is shown (and again when the topology revision changes), shows a
 progress bar fed by `kRequestProgressUpdate` while it loads, and then
-hosts a `TabContainer`:
+hosts a `TabContainer`. Tab labels and colors come from
+`SUMMARY_CATEGORY_DISPLAY`:
 
 - **Overview** (`SummaryOverview`) - tiles (trace span, tracked events,
-  nodes, GPUs, CPUs - the device counts come from `TopologyTree`), the
-  event-composition bar (`CompositionBar`, one `CompositionBarSegment`
-  per category), a preview tile per category whose Details button
-  switches to that tab, the system-topology composition table (one row
-  per node / processor / process / thread, with a button that loads its
-  counters), and the counters tile (mean tick, std-dev band, min/max).
+  nodes, GPUs, CPUs - the device counts come from `TopologyTree`), a
+  preview tile per category whose Details button switches to that tab,
+  and the `SummaryTopology` it is given: the event-composition bar
+  (`CompositionBar`, one `CompositionBarSegment` per category), the
+  system-topology composition table (one row per node / processor /
+  process / thread, with a button that loads its counters), and the
+  counters tile (mean tick, std-dev band, min/max). `SummaryTopology`
+  reads the `SummaryModel` it was built with, so the same widget shows
+  the trace or one compare source.
 - **One `SummaryTopEvents` tab per category** (kernel executions, memory
   operations, thread operations; `m_top_events` is indexed by
   `rocprofvis_analysis_summary_category_t`). Each has pie / bar / table
   modes plus a legend, cascading filter combos (node, then GPU /
   processor / process and thread) that both pick which
   `AggregateMetrics` to show and build the
-  `rocprofvis_dm_query_criteria_t` for instance lookups, and a nested
-  `InstanceTable` (an `InfiniteScrollTable`) that lists the selected
-  event's instances through the category's
+  `rocprofvis_dm_query_criteria_t` for instance lookups, and a
+  `SummaryInstanceTable` (an `InfiniteScrollTable`) that lists the
+  selected event's instances through the category's
   `kRPVControllerTableTypeSummary*Instances` table, scoped by the
   filters' criteria. The "Others" row / slice is the remainder bucket
   and cannot be selected.
 
-Both classes take test-peer friendship (`SummaryViewTestPeer`,
-`SummaryTopEventsTestPeer` in `src/view/test/`).
+**Compare mode** (`IsCompareTrace`; `rocprofvis_summary_compare.{h,cpp}`).
+The panel summarizes each source on its own rather than the pair:
+`UpdateFetch` issues `DataProvider::FetchSourceSummary(source)` for A,
+then B (one at a time, so they do not compete for the database), into
+`TraceDataModel::GetSourceSummary(source)`, with per-source progress.
+The tabs become:
+
+- **Overview** (`SummaryCompareOverview`) - built from the single
+  overview's pieces so the two read alike: the same borderless tiles
+  (Baseline and Target tiles with name, host and GPU; Trace Span and
+  Tracked Events tiles with both values and `RenderCompareChange`), the
+  Event Composition tile with one legend and each source's bar
+  (`SummaryTopology::CompositionBar`, unlabelled, since two labelled bars
+  stack their callouts), and per category a tile with each source's total
+  and the change. The events themselves are the category tab's.
+- **Topology** - the two sources' `SummaryTopology`s stacked
+  (`MakeCompareStack`); side by side squeezes their counters.
+- **One `SummaryCompareTopEvents` tab per category** - one table of
+  every event name in either source (`diff_top_events` pairs them into
+  `SummaryEventDiff` rows): calls, total and average for A and B, the
+  signed difference, and the relative change. Events only one source
+  has read "Only in" and that source's chip; an event hidden in the
+  other source's "Others" remainder is unknown, not absent, so it gets
+  no change. The same filter levels as the single view narrow both
+  sources, from a toolbar under the table where the single view keeps
+  its own, and the selected event's instances are listed per source in
+  two `SummaryInstanceTable`s built with that source, side by side.
+
+Source summaries keep 50 top events per list
+(`DataProvider::SOURCE_SUMMARY_TOP_EVENTS_LIMIT`, sent as
+`kRPVAnalysisSummaryArgsTopEventsLimit`) instead of the controller's
+default 10, so events rarely drop into "Others" on one side only.
+
+The classes take test-peer friendship (`SummaryViewTestPeer`,
+`SummaryTopEventsTestPeer`, `SummaryCompareTopEventsTestPeer` in
+`src/view/test/`).
 
 ### `AnalysisView` (`rocprofvis_analysis_view.{h,cpp}`)
 
@@ -1227,12 +1292,21 @@ The bottom-right tabbed panel. Hosts, in source order:
   renders each category header once with A/B tables side by side
   (per-source analysis-table slots `kAnalysisTop*TableB`). `EventsView`
   and `TrackDetails` partition their selected-item cards into A/B
-  columns by each item's `TrackInfo::file_id`. A/B routing uses distinct
-  client request IDs plus per-source `TablesModel` slots
+  columns by each item's `TrackInfo::file_id`; with one event selected
+  on each side, `EventsView::RenderComparison` adds a strip above the
+  cards with the two names and the change in duration. A/B routing uses
+  distinct client request IDs (`DataProvider::CompareSourceClientId(source)`,
+  clear of the assistant's) plus per-source `TablesModel` slots
   (`kCompareEventTableA/B`, `kCompareSampleTableA/B`); the two sources
   hit the same controller table type, so a fetch that loses the race is
   held in `InfiniteScrollTable::m_fetch_data` and reissued from
   `Update()` on a later frame.
+- Outside the analysis pane, compare shows up in the timeline header's
+  tooltip (per-source track counts; the header itself reads as for a
+  single trace), on each track and sidebar row
+  (`RenderCompareSourceBadge`), and in event search results
+  (`EventSearch` puts each row's source chip before its event id
+  through `RenderCellPrefix`).
 
 ### Compare panes (`rocprofvis_compare_panes.{h,cpp}`)
 
@@ -1241,11 +1315,31 @@ stay identical:
 
 - `COMPARE_SOURCE_A` / `COMPARE_SOURCE_B` / `COMPARE_SOURCE_COUNT` and
   `COMPARE_SOURCE_LABEL` - source order, which is also what
-  `TrackInfo::file_id` counts.
+  `TrackInfo::file_id` counts. `COMPARE_SOURCE_ROLE` names them
+  ("Baseline", "Target") wherever a source is introduced.
 - `IsCompareTrace(model)` - whether the trace was opened as an A/B
   project. Use it instead of probing `GetCompareSource()` twice.
+- `CompareSourceColor(source, settings)` - A and B take the compute
+  comparison's baseline/target colors (`kComparisonBase` /
+  `kComparisonTarget`), so both kinds of compare read the same way.
+- `RenderCompareSourceBadge` / `CompareSourceBadgeWidth` - the one
+  source marker: a small chip with the letter, sized and shaped like the
+  track pills and tinted with the source color (hover names the file).
+  It is laid out like text, one line tall, so it fits table cells and
+  centers on the text of its line; on a line of framed items (buttons,
+  frame-aligned `ElidedText`) call `ImGui::AlignTextToFramePadding()`
+  before it. The `TrackInfo*` forms are no-ops outside compare, for the
+  timeline and sidebar. Do not draw another A/B marker.
+- `RenderCompareChange(a, b, settings, difference)` - arrow, relative
+  change (`FormatRelativeChange`) and optional signed difference, in the
+  comparison's lesser/greater colors; "No change" / "New" when that is
+  what happened. Use it for any A-to-B figure.
 - `MakeCompareSplit(pane_a, pane_b)` - the even `HSplitContainer` with
   borderless, inset items, because each pane draws its own card.
+  `MakeCompareStack` is the `VSplitContainer` form, A above B, for
+  content too wide to share the width.
+- `CountLabel(count, singular, plural)` - "1 event" / "3 events"; use it
+  for any count shown next to a noun.
 - `BeginCompareCard` / `EndCompareCard` - the bordered, padded surface
   holding one source's content, styled like the panel it sits in (the
   dialog `BeginPanelCard` look does not fit here).
@@ -1999,8 +2093,9 @@ controller results.
   - `struct TrackInfo` (`index`, `id`, `track_type`, time/value ranges,
     source instance/file IDs, order/topology IDs, names/category,
     operations, `graph_handle`, and `CompareSourceInfo`).
-  - `struct CompareSourceInfo { id, name, path }` for base/target
-    provenance in compare projects.
+  - `struct CompareSourceInfo { id, name, path, index }` for
+    base/target provenance in compare projects; `index` is the
+    source's position, which `TrackInfo::file_id` also counts.
   - `union TraceEventId` - 52/8/4-bit packing for `(event_id,
     event_node, event_op)`.
   - `struct EventInfo` and its parts: `BasicEventData`, `EventArg`,
@@ -2033,6 +2128,8 @@ controller results.
   `DataProvider::DataModel()` to access it. Compare projects call
   `SetCompareSources()`; use `HasCompareSources()` /
   `GetCompareSource()` instead of inferring provenance from IDs.
+  `GetSourceSummary(index)` is one compare source's own `SummaryModel`
+  (null outside compare); `GetSummary()` stays the whole trace's.
 - `rocprofvis_topology_model.{h,cpp}` - **`TopologyTree`**: the system
   topology as an actual tree, mirrored from the controller's at load.
   `TopologyNode` is the base; `NodeInfo`, `ProcessorInfo`,
@@ -2084,7 +2181,9 @@ controller results.
   by it. The `*A/B` and `*TableB` slots hold the two compare sources'
   results so independent A/B tables never overwrite each other. The
   `kSummary*Table` slots live in `SummaryModel`'s own `TablesModel`.
-  The `kAssistant*` slots are Ask Optiq's, so its reads never touch a
+  A compare source's instance tables land in that source's
+  `SummaryModel` (`DataProvider` routes them by the request's
+  `file_id`). The `kAssistant*` slots are Ask Optiq's, so its reads never touch a
   table a tab is showing; the summary instance tables get one
   assistant slot per category because the assistant resolves sort
   columns by name from the header already in the slot, and the three
@@ -2341,6 +2440,8 @@ Use these instead of writing your own.
   minute_in_ns`.
 - `compact_number_format(double)` / `full_number_format(double)` -
   SI-style "1.2K"/"3.4M" and full-precision number formatting.
+- `format_local_time(seconds_since_epoch)` - a file time as local
+  "YYYY-MM-DD HH:MM" (remote browser, compare dialog).
 - `get_application_config_path(create_dirs)` /
   `get_application_log_path(create_dirs)` -> platform-appropriate
   per-user config and log directories (Windows `%LOCALAPPDATA%`, macOS
@@ -3286,6 +3387,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Track selection state (compute)               | `ComputeSelection`                                                                             |
 | Measure between timeline points/events        | Shared `MeasurementController`                                                                 |
 | Open a two-trace compare project (`ROCPROFVIS_ENABLE_TRACE_COMPARE`) | `CompareFilesDialog` -> `AppWindow::OpenCompare`                                               |
+| Show an A-to-B change or a source badge       | `RenderCompareChange`, `RenderCompareSourceBadge` (`rocprofvis_compare_panes.h`)              |
 | Find / scroll to a track                      | `TimelineView::ScrollToTrack(track_id)` or emit `ScrollToTrackEvent`                           |
 | Move/zoom the timeline                        | `TimelineView::MoveToPosition(start, end, y, center)` or `SetViewableRangeNS`                  |
 | Navigate to and highlight an event            | `TimelineSelection::NavigateToEvent(track_id, event_uuid, start_ns, dur_ns)`                   |
@@ -3408,8 +3510,9 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `WelcomePage` -> `welcome/rocprofvis_welcome_page.h` -> Empty-state
   landing page.
 - `CompareFilesDialog` -> `rocprofvis_compare_files_dialog.h` ->
-  Selects base/target traces for a compare project (`File > Compare`
-  entry point is behind `ROCPROFVIS_ENABLE_TRACE_COMPARE`).
+  Picks and checks the baseline/target traces of a compare project
+  (`File > Compare Traces...` and the Welcome tile are behind
+  `ROCPROFVIS_ENABLE_TRACE_COMPARE`).
 - `AppMonitor`, `MonitorOperation`, `MonitorOperationType` ->
   `rocprofvis_appmonitor.h` -> Background controller-operation polling
   and deferred teardown.
@@ -3451,8 +3554,6 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `TrackItem` -> `rocprofvis_track_item.h` -> Base for any timeline
   track (description + chart + resize handle).
 - `Pill` -> same -> The small badge label inside a track meta area.
-- `RenderCompareSourceBadge`, `CompareSourceBadgeWidth` -> same ->
-  Shared base/target badge helpers for timeline and sidebar.
 - `FlameTrackItem` -> `rocprofvis_flame_track_item.h` -> Flame chart
   for events; supports color modes and compact mode.
 - `LineTrackItem` -> `rocprofvis_line_track_item.h` -> Line/box-plot
@@ -3483,11 +3584,14 @@ For fast lookup. Each entry: class -> file -> one-line role.
   event/sample table.
 - `TopEventsView`, `TopEventsView::TopEventsTable` ->
   `rocprofvis_top_events_view.h` -> Category-specific top-event tables.
-- `IsCompareTrace`, `MakeCompareSplit`, `BeginCompareCard`,
+- `IsCompareTrace`, `CompareSourceColor`, `RenderCompareSourceBadge`,
+  `CompareSourceBadgeWidth`,
+  `FormatRelativeChange`, `RenderCompareChange`, `MakeCompareSplit`,
+  `MakeCompareStack`, `CountLabel`, `BeginCompareCard`,
   `EndCompareCard`, `RenderCompareCardTitle`,
   `BuildCompareGroupByChoices` ->
   `rocprofvis_compare_panes.h` -> Shared chrome of the A/B compare
-  layouts.
+  layouts: source badges and colors, A-to-B change, splits, cards.
 - `EventSearch` -> `rocprofvis_event_search.h` -> Toolbar event search.
 - `AnnotationView` -> `rocprofvis_annotation_view.h` -> Sticky-note
   list tab.
@@ -3498,12 +3602,20 @@ For fast lookup. Each entry: class -> file -> one-line role.
 ### Summary surface
 
 - `SummaryView` -> `rocprofvis_summary_view.h` -> The "Summary" panel:
-  loading progress, then the Overview tab plus one tab per category.
-- `SummaryOverview` -> same -> Tiles, composition bar and table,
-  category previews, counters.
+  loading progress, then the Overview tab plus one tab per category
+  (the compare widgets below for a compare trace).
+- `SummaryOverview` -> same -> Tiles and category previews around a
+  `SummaryTopology`.
+- `SummaryTopology` -> same -> Composition bar and table, counters, for
+  the `SummaryModel` it is given.
 - `SummaryTopEvents` -> same -> One category's top events (pie / bar /
-  table), scope filters, and its nested `InstanceTable`
-  (`InfiniteScrollTable` for that category's instances).
+  table), scope filters, and its `SummaryInstanceTable`.
+- `SummaryInstanceTable` -> same -> `InfiniteScrollTable` of one event's
+  instances, optionally of one compare source.
+- `SummaryCompareOverview`, `SummaryCompareTopEvents`,
+  `SummaryEventDiff` -> `rocprofvis_summary_compare.h`
+  -> The compare Summary: A/B figures and changes, and per category the
+  events of both sources paired by name.
 
 ### Settings, fonts, hotkeys, notifications
 

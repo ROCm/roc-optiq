@@ -62,7 +62,7 @@ private:
         std::vector<std::shared_ptr<MultiTrackTable>> tables;  // 1 pooled, or 2 (A/B)
         std::shared_ptr<HSplitContainer>              split;   // compare only
         std::shared_ptr<RocWidget>                    layout;  // compare only
-        std::string                                   noun;    // "events" / "samples"
+        std::string                                   noun;    // "event" / "sample"
     };
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);

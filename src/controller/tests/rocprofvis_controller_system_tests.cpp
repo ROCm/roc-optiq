@@ -3387,6 +3387,185 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     }
 }
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+// The input trace compared against a copy of itself. A summary scoped to one
+// source must reproduce the input's own figures and hold only that source's
+// counters, so the whole pair adds up to twice one source; and the top event
+// limit is honoured.
+TEST_CASE("Compare Source Summary")
+{
+    if(rocprofvis_db_identify_type(g_input_file.c_str()) != kRocprofSqlite)
+    {
+        WARN("Compare reads rocprof databases only; skipped for " << g_input_file);
+        return;
+    }
+    namespace fs = std::filesystem;
+    const fs::path source(g_input_file);
+    const fs::path copy = fs::temp_directory_path() / ("compare-copy-" + source.filename().string());
+    // The write-ahead log holds what has not been checkpointed into the trace yet.
+    fs::path source_wal = source;
+    fs::path copy_wal   = copy;
+    source_wal += "-wal";
+    copy_wal += "-wal";
+    std::error_code ec;
+    fs::copy_file(source, copy, fs::copy_options::overwrite_existing, ec);
+    REQUIRE(!ec);
+    if(fs::exists(source_wal, ec))
+    {
+        fs::copy_file(source_wal, copy_wal, fs::copy_options::overwrite_existing, ec);
+        REQUIRE(!ec);
+    }
+    else
+    {
+        fs::remove(copy_wal, ec);
+    }
+
+    const std::string paths[]   = { source.string(), copy.string() };
+    const char*       files[]   = { paths[0].c_str(), paths[1].c_str() };
+    rocprofvis_controller_t* controller = rocprofvis_controller_alloc_compare(files, 2);
+    REQUIRE(controller != nullptr);
+
+    rocprofvis_controller_future_t* load = rocprofvis_controller_future_alloc();
+    REQUIRE(load != nullptr);
+    REQUIRE(rocprofvis_controller_load_async(controller, load) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_future_wait(load, FLT_MAX) == kRocProfVisResultSuccess);
+    uint64_t load_result = 0;
+    REQUIRE(rocprofvis_controller_get_uint64(load, kRPVControllerFutureResult, 0,
+                                             &load_result) == kRocProfVisResultSuccess);
+    REQUIRE(load_result == kRocProfVisResultSuccess);
+    rocprofvis_controller_future_free(load);
+
+    rocprofvis_handle_t* timeline = nullptr;
+    REQUIRE(rocprofvis_controller_get_object(controller, kRPVControllerSystemTimeline, 0,
+                                             &timeline) == kRocProfVisResultSuccess);
+    double start_ts = 0.0;
+    double end_ts   = 0.0;
+    REQUIRE(rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMinTimestamp, 0,
+                                             &start_ts) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMaxTimestamp, 0,
+                                             &end_ts) == kRocProfVisResultSuccess);
+
+    struct Totals
+    {
+        uint64_t              dispatch_calls = 0;
+        uint64_t              dispatch_ns    = 0;
+        uint64_t              top_dispatches = 0;
+        std::vector<uint64_t> counter_ns;
+    };
+    // file_id < 0 summarizes the whole pair; a zero limit keeps the default.
+    auto fetch = [&](int64_t file_id, uint64_t limit, double end) -> Totals {
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+        REQUIRE(args != nullptr);
+        REQUIRE(rocprofvis_controller_set_double(args, kRPVAnalysisSummaryArgsStartTimestamp, 0,
+                                                 start_ts) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_set_double(args, kRPVAnalysisSummaryArgsEndTimestamp, 0,
+                                                 end) == kRocProfVisResultSuccess);
+        if(file_id >= 0)
+        {
+            REQUIRE(rocprofvis_controller_set_uint64(args, kRPVAnalysisSummaryArgsFileId, 0,
+                                                     static_cast<uint64_t>(file_id)) ==
+                    kRocProfVisResultSuccess);
+        }
+        if(limit > 0)
+        {
+            REQUIRE(rocprofvis_controller_set_uint64(args, kRPVAnalysisSummaryArgsTopEventsLimit,
+                                                     0, limit) == kRocProfVisResultSuccess);
+        }
+        rocprofvis_controller_summary_metrics_t* metrics =
+            rocprofvis_controller_summary_metrics_alloc();
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        REQUIRE(metrics != nullptr);
+        REQUIRE(future != nullptr);
+        REQUIRE(rocprofvis_analysis_fetch_summary(controller, args, future, metrics) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) == kRocProfVisResultSuccess);
+        uint64_t result = 0;
+        REQUIRE(rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+                                                 &result) == kRocProfVisResultSuccess);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        Totals totals;
+        rocprofvis_controller_get_uint64(metrics,
+                                         kRPVAnalysisSummaryGpuPropertyDispatchEventsInvocationsTotal,
+                                         0, &totals.dispatch_calls);
+        rocprofvis_controller_get_uint64(metrics,
+                                         kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal,
+                                         0, &totals.dispatch_ns);
+        rocprofvis_controller_get_uint64(metrics, kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents,
+                                         0, &totals.top_dispatches);
+        const rocprofvis_property_t counter_lists[][3] = {
+            { kRPVAnalysisSummaryGpuPropertyNumCounters, kRPVAnalysisSummaryGpuPropertyCounterIndexed,
+              kRPVAnalysisSummaryGpuPropertyCounterDurationIndexed },
+            { kRPVAnalysisSummaryCpuPropertyNumCounters, kRPVAnalysisSummaryCpuPropertyCounterIndexed,
+              kRPVAnalysisSummaryCpuPropertyCounterDurationIndexed }
+        };
+        for(const rocprofvis_property_t* list : counter_lists)
+        {
+            uint64_t count = 0;
+            rocprofvis_controller_get_uint64(metrics, list[0], 0, &count);
+            for(uint64_t i = 0; i < count; i++)
+            {
+                rocprofvis_handle_t* counter    = nullptr;
+                rocprofvis_handle_t* track      = nullptr;
+                uint64_t             track_file = 0;
+                uint64_t             duration   = 0;
+                REQUIRE(rocprofvis_controller_get_object(metrics, list[1], i, &counter) ==
+                        kRocProfVisResultSuccess);
+                REQUIRE(rocprofvis_controller_get_object(counter, kRPVControllerCounterTrack, 0,
+                                                         &track) == kRocProfVisResultSuccess);
+                REQUIRE(rocprofvis_controller_get_uint64(track, kRPVControllerTrackFileId, 0,
+                                                         &track_file) == kRocProfVisResultSuccess);
+                REQUIRE(rocprofvis_controller_get_uint64(metrics, list[2], i, &duration) ==
+                        kRocProfVisResultSuccess);
+                if(file_id >= 0)
+                {
+                    REQUIRE(track_file == static_cast<uint64_t>(file_id));
+                }
+                totals.counter_ns.push_back(duration);
+            }
+        }
+        std::sort(totals.counter_ns.begin(), totals.counter_ns.end());
+        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_summary_metric_free(metrics);
+        rocprofvis_controller_arguments_free(args);
+        return totals;
+    };
+
+    const Totals pair     = fetch(-1, 0, end_ts);
+    const Totals source_a = fetch(0, 0, end_ts);
+    const Totals source_b = fetch(1, 0, end_ts);
+    spdlog::info("Compare summary dispatches: pair {0}, A {1}, B {2}; counters per source {3}",
+                 pair.dispatch_calls, source_a.dispatch_calls, source_b.dispatch_calls,
+                 source_a.counter_ns.size());
+    REQUIRE(source_a.dispatch_calls > 0);
+    REQUIRE(source_a.dispatch_calls == source_b.dispatch_calls);
+    REQUIRE(source_a.dispatch_ns == source_b.dispatch_ns);
+    REQUIRE(pair.dispatch_calls == source_a.dispatch_calls + source_b.dispatch_calls);
+    REQUIRE(pair.dispatch_ns == source_a.dispatch_ns + source_b.dispatch_ns);
+    // The pair merges counters of the same name.
+    REQUIRE(source_a.counter_ns == source_b.counter_ns);
+    REQUIRE(pair.counter_ns.size() == source_a.counter_ns.size());
+
+    // A counter holds its last value only to the end of its own trace, however far
+    // past it the summary reaches.
+    REQUIRE(fetch(0, 0, end_ts * 2.0).counter_ns == fetch(0, 0, end_ts * 4.0).counter_ns);
+
+    // A limit of one keeps the top dispatch and folds the rest into "Others".
+    const Totals every_name = fetch(0, UINT64_MAX, end_ts);
+    const Totals limited    = fetch(0, 1, end_ts);
+    REQUIRE(limited.top_dispatches == (every_name.top_dispatches > 1 ? 2u : 1u));
+    REQUIRE(limited.dispatch_calls == source_a.dispatch_calls);
+
+    rocprofvis_controller_free(controller);
+    for(const char* suffix : { "", "-wal", "-shm" })
+    {
+        fs::path file = copy;
+        file += suffix;
+        fs::remove(file, ec);
+    }
+}
+#endif
+
 // Empty names are copied into the table. Distinct temporary buffers share one
 // id, and that pointer stays valid after the temporaries die.
 TEST_CASE("StringTable empty string is stored by value")

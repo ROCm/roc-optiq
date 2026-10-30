@@ -287,6 +287,10 @@ join_posix_path(const std::string& dir, const std::string& name);
 std::string
 format_byte_size(uint64_t bytes);
 
+// Formats a Unix epoch (seconds) as local "YYYY-MM-DD HH:MM"; "-" if zero.
+std::string
+format_local_time(uint64_t epoch_seconds);
+
 /**
  * @brief Detects whether the current process appears to be running in a remote
  *        session where xdg-desktop-portal file dialogs cannot reach the user.

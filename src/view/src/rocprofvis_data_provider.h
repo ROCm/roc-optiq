@@ -11,6 +11,7 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -92,6 +93,15 @@ public:
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
 #endif
+
+    /* Client id the views of one compare source tag their requests with, so the
+     * two sources' fetches of the same kind never share a request id. They sit
+     * past the assistant's id, whose requests are of the same kinds.
+     */
+    static constexpr uint64_t CompareSourceClientId(uint64_t source)
+    {
+        return ASSISTANT_CLIENT_ID + 1 + source;
+    }
 
     DataProvider();
     ~DataProvider();
@@ -208,7 +218,12 @@ public:
 
     bool FetchTable(const TableRequestParams& table_params);
 
+    // Summarizes the whole trace into DataModel().GetSummary().
     bool FetchSummary();
+    // Summarizes one compare source into DataModel().GetSourceSummary(source).
+    bool FetchSourceSummary(uint64_t source);
+    // Request id FetchSourceSummary uses for that source.
+    static uint64_t SourceSummaryRequestId(uint64_t source);
 
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
@@ -309,6 +324,7 @@ private:
 
     bool FetchTrackTable(const TrackTableRequestParams& table_params);
     bool FetchEventSearch(const EventSearchRequestParams& table_params);
+    bool IssueSummaryRequest(uint64_t request_id, std::optional<uint64_t> source);
 
     /*
      * The request id, table handle and model slot a table fetch should use.
@@ -322,6 +338,10 @@ private:
         rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+    // Holds an event detail fetch whose request id is in flight; true when held.
+    bool QueueEventFetch(RequestType type, uint64_t request_id, uint64_t event_id);
+    // Issues the next held fetch of a type once its request id is free again.
+    void IssueQueuedEventFetch(RequestType type);
 
     // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
@@ -376,25 +396,30 @@ private:
     void CreateRawEventData(const TrackRequestParams& params, const RequestInfo& req);
     void CreateRawSampleData(const TrackRequestParams& params,
                              const RequestInfo&    req);
-    void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
+    // The summary helpers fill, and register the values of, the model the
+    // request was made for: the trace's, or one compare source's.
+    void CreateSummaryData(SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
                            std::vector<size_t>& sub_metrics_idx);
-    void CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
-                              SummaryInfo::GPU&    output);
-    void CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
-                              SummaryInfo::CPU&    output);
-    void CreateSummaryProcessThreadData(rocprofvis_handle_t*           metrics_handle,
+    void CreateSummaryGPUData(SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::GPU& output);
+    void CreateSummaryCPUData(SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::CPU& output);
+    void CreateSummaryProcessThreadData(SummaryModel&                  summary,
+                                        rocprofvis_handle_t*           metrics_handle,
                                         SummaryInfo::AggregateMetrics& output);
-    void CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_handle,
+    void CreateSummaryTraceNodeData(SummaryModel&                  summary,
+                                    rocprofvis_handle_t*           metrics_handle,
                                     SummaryInfo::AggregateMetrics& output);
     void CreateSummaryTopOpEventsData(
-        rocprofvis_handle_t* metrics_handle,
+        SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
         std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>
             op_properties,
         std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>
                               event_properties,
         rocprofvis_property_t event_name_property, SummaryInfo::TopOpEvents& output);
     void CreateSummaryCountersData(
-        rocprofvis_handle_t* metrics_handle, rocprofvis_property_t num_counters_property,
+        SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+        rocprofvis_property_t num_counters_property,
         rocprofvis_property_t counter_property,
         std::array<rocprofvis_property_t, __kRPVAnalysisSummaryCounterMetricLast>
                                metric_properties,
@@ -532,6 +557,11 @@ private:
     // Stores a pending replacement submission for a PC sampling layer whose
     // in-flight request is being cancelled. Keyed by the per-layer request ID.
     std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
+
+    // Event detail requests share one id per type (the assistant waits on those
+    // ids), so details for a second event selected while the first are loading
+    // wait here instead of being dropped.
+    std::map<RequestType, std::deque<uint64_t>> m_queued_event_fetches;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,

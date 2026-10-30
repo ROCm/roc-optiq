@@ -276,7 +276,7 @@ namespace DataModel
                 },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
                 Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id"),
-                Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id AND NOT EXISTS (SELECT 1 FROM rocpd_kernel_dispatch_%GUID% KD WHERE KD.event_id = PMC_E.event_id AND KD.guid = PMC_E.guid)"),
                 } }));
         }
 
@@ -620,8 +620,8 @@ namespace DataModel
         {
             return Builder::Select(rocprofvis_db_sqlite_level_query_format(
                 { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                Builder::QParam("K.start", Builder::START_SERVICE_NAME),
-                Builder::QParam("K.end", Builder::END_SERVICE_NAME),
+                Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME),
+                Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
                 Builder::SpaceSaver(0),
                 Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
@@ -630,7 +630,8 @@ namespace DataModel
                 Builder::SpaceSaver(0)
                 },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
-                Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = PMC_E.event_id")
+                Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id")
                 } }));
         }
     }
@@ -671,7 +672,7 @@ namespace DataModel
                     },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
                 Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id"),
-                Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id AND NOT EXISTS (SELECT 1 FROM rocpd_kernel_dispatch_%GUID% KD WHERE KD.event_id = PMC_E.event_id AND KD.guid = PMC_E.guid)"),
                 } }));
         }
     }
@@ -952,9 +953,9 @@ namespace DataModel
         {
             return  Builder::Select(rocprofvis_db_sqlite_slice_query_format(
                 { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
+                Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
                 Builder::QParam("PMC_E.value", Builder::COUNTER_VALUE_SERVICE_NAME),
-                Builder::QParam("K.end", Builder::END_SERVICE_NAME),
+                Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
                 Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0),
                 Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
@@ -965,6 +966,7 @@ namespace DataModel
                 },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
                 Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id"),
                 } }));
         }
     }
@@ -1010,7 +1012,7 @@ namespace DataModel
                     },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
                 Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id"),
-                Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id AND NOT EXISTS (SELECT 1 FROM rocpd_kernel_dispatch_%GUID% KD WHERE KD.event_id = PMC_E.event_id AND KD.guid = PMC_E.guid)"),
                 } }));
         }
     }
@@ -1667,8 +1669,8 @@ namespace DataModel
             return  Builder::Select(rocprofvis_db_sqlite_sample_table_query_format(
                 {m_db,
                 { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
-                Builder::QParam("K.start", Builder::START_SERVICE_NAME), 
-                Builder::QParam("K.end", Builder::END_SERVICE_NAME),
+                Builder::QParam("S.timestamp", Builder::START_SERVICE_NAME), 
+                Builder::QParam("S.timestamp", Builder::END_SERVICE_NAME),
                 Builder::QParam("K.nid", Builder::NODE_ID_SERVICE_NAME),
                 Builder::QParam("K.agent_id", Builder::AGENT_ID_SERVICE_NAME),
                 Builder::QParam("PMC_I.id", Builder::COUNTER_ID_SERVICE_NAME),
@@ -1677,6 +1679,7 @@ namespace DataModel
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
                 Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id"),
                 Builder::InnerJoin("rocpd_kernel_dispatch", "K", "K.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id"),
                 } }));
         }
     }
@@ -1733,7 +1736,7 @@ namespace DataModel
                     },
                 { Builder::From("rocpd_pmc_event", "PMC_E"),
                 Builder::InnerJoin("rocpd_info_pmc", "PMC_I", "PMC_I.id = PMC_E.pmc_id"),
-                Builder::InnerJoin("rocpd_sample", "S", "S.event_id = PMC_E.event_id"),
+                Builder::InnerJoin("rocpd_sample", "S", "S.id = PMC_E.sample_id AND NOT EXISTS (SELECT 1 FROM rocpd_kernel_dispatch_%GUID% KD WHERE KD.event_id = PMC_E.event_id AND KD.guid = PMC_E.guid)"),
                 } }));
         }
     }

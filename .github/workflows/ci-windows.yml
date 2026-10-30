@@ -195,7 +195,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
           submodules: true
@@ -224,7 +224,7 @@ jobs:
 
       - name: Install Python
         if: env.ENABLE_SCRIPTING == 'ON' && env.VENDOR_PYTHON == 'OFF'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 

@@ -22,6 +22,12 @@ struct HeaderTooltipText
     const char* developer_information;
 };
 
+struct ColorLegendEntry
+{
+    const char* name;
+    Colors      color;
+};
+
 // Renders the same sampling-state column for ISA instructions and source lines.
 class SamplingStateRenderer
 {
@@ -46,6 +52,8 @@ public:
     static void RenderHeaderWithTooltip(int column, const char* label,
                                         const HeaderTooltipText& tooltip,
                                         void (*render_user_content)() = nullptr);
+    static void RenderColorLegend(const char* id, const ColorLegendEntry* entries,
+                                  size_t count);
 
     void SetupColumn();
     void SetLoadState(LoadState state) { m_load_state = state; }

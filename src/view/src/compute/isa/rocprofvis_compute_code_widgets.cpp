@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_code_widgets.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <utility>
 
@@ -17,6 +18,59 @@ namespace View
 constexpr const char* CODE_OBJECT_OFFSET_FORMAT        = "0x%llX";
 constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY = 19;
 
+struct InstructionPresentation
+{
+    IsaDataBuilder::InstructionKind kind;
+    Colors                          color;
+};
+
+constexpr InstructionPresentation INSTRUCTION_PRESENTATIONS[] = {
+    { IsaDataBuilder::InstructionKind::kInternal, Colors::kIsaInternal },
+    { IsaDataBuilder::InstructionKind::kMatrix, Colors::kIsaMatrix },
+    { IsaDataBuilder::InstructionKind::kScalar, Colors::kIsaScalar },
+    { IsaDataBuilder::InstructionKind::kBranch, Colors::kIsaBranch },
+    { IsaDataBuilder::InstructionKind::kValu, Colors::kIsaValu },
+    { IsaDataBuilder::InstructionKind::kFlat, Colors::kIsaFlat },
+    { IsaDataBuilder::InstructionKind::kLds, Colors::kIsaLds },
+    { IsaDataBuilder::InstructionKind::kBarrier, Colors::kIsaBarrier },
+    { IsaDataBuilder::InstructionKind::kUnknown, Colors::kTextMain }
+};
+static_assert(std::size(INSTRUCTION_PRESENTATIONS) ==
+              std::size(IsaDataBuilder::INSTRUCTION_TYPES) + 1);
+static_assert([] {
+    for(size_t i = 0; i < std::size(INSTRUCTION_PRESENTATIONS); ++i)
+    {
+        if(static_cast<size_t>(INSTRUCTION_PRESENTATIONS[i].kind) != i)
+        {
+            return false;
+        }
+    }
+    return true;
+}());
+
+static Colors
+instruction_color(IsaDataBuilder::InstructionKind kind)
+{
+    const size_t index = static_cast<size_t>(kind);
+    return index < std::size(INSTRUCTION_PRESENTATIONS)
+               ? INSTRUCTION_PRESENTATIONS[index].color
+               : Colors::kTextMain;
+}
+
+static void
+render_instruction_color_legend()
+{
+    std::array<ColorLegendEntry, std::size(INSTRUCTION_PRESENTATIONS)> entries{};
+    for(size_t i = 0; i < entries.size(); ++i)
+    {
+        const InstructionPresentation& presentation = INSTRUCTION_PRESENTATIONS[i];
+        entries[i] = { IsaDataBuilder::GetInstructionTypeName(presentation.kind),
+                       presentation.color };
+    }
+    SamplingStateRenderer::RenderColorLegend("##InstructionTypeColorLegend",
+                                             entries.data(), entries.size());
+}
+
 constexpr HeaderTooltipText SOURCE_CODE_HEADER_TOOLTIP{
     "Source text for this line from the selected source file.",
     "DB field: compute_source_line.content\n"
@@ -25,11 +79,13 @@ constexpr HeaderTooltipText SOURCE_CODE_HEADER_TOOLTIP{
 };
 
 constexpr HeaderTooltipText ISA_INSTRUCTION_HEADER_TOOLTIP{
-    "GPU instruction and its operands.",
-    "DB field: compute_instruction_line.instruction\n"
-    "Row key: compute_instruction_line.instruction_uuid\n"
-    "DB filter: compute_kernel_symbol.kernel_uuid = selected kernel\n"
-    "View filter: selected code object UUID"
+    nullptr, "DB field: compute_instruction_line.instruction\n"
+             "Type: compute_instruction_line.instruction_type_uuid -> "
+             "compute_instruction_type_lookup.text\n"
+             "Only the instruction mnemonic uses the recorded type's colour.\n"
+             "Row key: compute_instruction_line.instruction_uuid\n"
+             "DB filter: compute_kernel_symbol.kernel_uuid = selected kernel\n"
+             "View filter: selected code object UUID"
 };
 
 constexpr HeaderTooltipText CODE_OBJECT_OFFSET_HEADER_TOOLTIP{
@@ -464,7 +520,8 @@ IsaCodeWidget::RenderHeaders()
     SamplingStateRenderer::RenderHeaderWithTooltip(
         ColumnIndex(IsaColumn::kOffset), "Offset", CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(IsaColumn::kInstruction),
-                                                   "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
+                                                   "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP,
+                                                   render_instruction_color_legend);
 }
 
 void
@@ -497,8 +554,20 @@ IsaCodeWidget::RenderLine(uint32_t index)
     if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kInstruction)))
     {
         ImGui::PushID(static_cast<int>(index));
-        row_clicked |= CopyableTextUnformatted(isa_row.instruction.c_str(), "instruction",
-                                               COPY_DATA_NOTIFICATION, false, true);
+        const TextColorRange mnemonic_color{ isa_row.mnemonic_begin, isa_row.mnemonic_end,
+                                             m_settings.GetColor(instruction_color(
+                                                 isa_row.instruction_kind)) };
+        row_clicked |= CopyableTextUnformatted(
+            isa_row.instruction.c_str(), "instruction", COPY_DATA_NOTIFICATION, false,
+            true, nullptr,
+            isa_row.instruction_kind == IsaDataBuilder::InstructionKind::kUnknown
+                ? nullptr
+                : &mnemonic_color);
+        if(BeginItemTooltipStyled())
+        {
+            ImGui::Text("Instruction type: %s", isa_row.instruction_type_name.c_str());
+            EndTooltipStyled();
+        }
         ImGui::PopID();
     }
 

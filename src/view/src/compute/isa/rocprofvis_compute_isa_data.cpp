@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_isa_data.h"
 
 #include <algorithm>
+#include <cctype>
 #include <iterator>
 #include <utility>
 
@@ -14,6 +15,8 @@ namespace View
 
 static_assert(std::size(IsaDataBuilder::STALL_REASONS) ==
               static_cast<size_t>(IsaDataBuilder::StallReasonKind::kUnknown));
+static_assert(std::size(IsaDataBuilder::INSTRUCTION_TYPES) ==
+              static_cast<size_t>(IsaDataBuilder::InstructionKind::kUnknown));
 
 const CodeObjectStore*
 IsaDataBuilder::FindCodeObject(const PcSamplingData& data, uint64_t code_object_uuid)
@@ -391,6 +394,35 @@ IsaDataBuilder::GetStallReasonName(StallReasonKind kind)
     return "Unknown";
 }
 
+IsaDataBuilder::InstructionKind
+IsaDataBuilder::ResolveInstructionKind(std::string_view text)
+{
+    std::string name(text);
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
+    for(const InstructionTypeInfo& type : INSTRUCTION_TYPES)
+    {
+        if(name == type.name)
+        {
+            return type.kind;
+        }
+    }
+    return InstructionKind::kUnknown;
+}
+
+const char*
+IsaDataBuilder::GetInstructionTypeName(InstructionKind kind)
+{
+    for(const InstructionTypeInfo& type : INSTRUCTION_TYPES)
+    {
+        if(type.kind == kind)
+        {
+            return type.name;
+        }
+    }
+    return "Unknown / unavailable";
+}
+
 std::vector<IsaDataBuilder::IsaRow>
 IsaDataBuilder::BuildInstructions(const PcSamplingData& data, uint64_t code_object_uuid)
 {
@@ -400,12 +432,49 @@ IsaDataBuilder::BuildInstructions(const PcSamplingData& data, uint64_t code_obje
     {
         return rows;
     }
+    std::unordered_map<uint64_t, InstructionKind> instruction_kinds;
+    instruction_kinds.reserve(data.instruction_type_lookup_map.size());
+    for(const auto& [uuid, text] : data.instruction_type_lookup_map)
+    {
+        instruction_kinds.emplace(uuid, ResolveInstructionKind(text));
+    }
     for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
     {
         for(const InstructionLine& instruction : kernel_symbol.instruction_lines)
         {
             IsaRow row;
             row.instruction        = instruction.instruction;
+            const auto kind = instruction_kinds.find(instruction.instruction_type_uuid);
+            if(kind != instruction_kinds.end())
+            {
+                row.instruction_kind = kind->second;
+            }
+            row.instruction_type_name = GetInstructionTypeName(row.instruction_kind);
+            if(row.instruction_kind == InstructionKind::kUnknown)
+            {
+                const auto type = data.instruction_type_lookup_map.find(
+                    instruction.instruction_type_uuid);
+                if(type != data.instruction_type_lookup_map.end() &&
+                   !type->second.empty())
+                {
+                    row.instruction_type_name = type->second;
+                }
+            }
+            constexpr const char* WHITESPACE = " \t\r\n\f\v";
+            const size_t          begin = row.instruction.find_first_not_of(WHITESPACE);
+            if(begin != std::string::npos)
+            {
+                const size_t end = row.instruction.find_first_of(WHITESPACE, begin);
+                const size_t token_end =
+                    end == std::string::npos ? row.instruction.size() : end;
+                // Labels, directives, and standalone comments are not mnemonics.
+                if(row.instruction[begin] != ';' && row.instruction[begin] != '#' &&
+                   row.instruction[begin] != '.' && row.instruction[token_end - 1] != ':')
+                {
+                    row.mnemonic_begin = begin;
+                    row.mnemonic_end   = token_end;
+                }
+            }
             row.id                 = instruction.instruction_uuid;
             row.code_object_offset = instruction.code_object_offset;
             rows.push_back(std::move(row));

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -986,10 +987,11 @@ IconBeginMenu(const char* icon, const char* label)
 }
 
 bool
-CopyableTextUnformatted(
-    const char* text, std::string_view unique_id, std::string_view notification,
-    bool one_click_copy, bool context_menu,
-    std::function<void(const char* value_to_copy)> menu_func)
+CopyableTextUnformatted(const char* text, std::string_view unique_id,
+                        std::string_view notification, bool one_click_copy,
+                        bool                                           context_menu,
+                        std::function<void(const char* value_to_copy)> menu_func,
+                        const TextColorRange*                          color_range)
 {
     bool clicked = false;
     if(!unique_id.empty())
@@ -1038,8 +1040,32 @@ CopyableTextUnformatted(
         PopContextMenuStyles();
     }
 
-    ImGui::SetCursorScreenPos(text_position);
-    ImGui::TextUnformatted(text);
+    const size_t text_length = color_range ? std::strlen(text) : 0;
+    if(color_range && color_range->begin < color_range->end &&
+       color_range->end <= text_length)
+    {
+        // Retain TextUnformatted's layout, baseline, logging, and hover bounds.
+        ImGui::SetCursorScreenPos(text_position);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::TextUnformatted(text);
+        ImGui::PopStyleColor();
+        const ImVec2 draw_position = ImGui::GetItemRectMin();
+        ImDrawList*  draw_list     = ImGui::GetWindowDrawList();
+        const ImU32  text_color    = ImGui::GetColorU32(ImGuiCol_Text);
+        const char*  begin         = text + color_range->begin;
+        const char*  end           = text + color_range->end;
+        draw_list->AddText(draw_position, text_color, text, begin);
+        ImVec2 position(draw_position.x + ImGui::CalcTextSize(text, begin).x,
+                        draw_position.y);
+        draw_list->AddText(position, ImGui::GetColorU32(color_range->color), begin, end);
+        position.x += ImGui::CalcTextSize(begin, end).x;
+        draw_list->AddText(position, text_color, end, text + text_length);
+    }
+    else
+    {
+        ImGui::SetCursorScreenPos(text_position);
+        ImGui::TextUnformatted(text);
+    }
 
     if(one_click_copy)
     {

@@ -64,8 +64,8 @@ def clip_ids(clips, stem, texts):
 
 
 def script_stretches():
-    """(stem, id, text) for the lines of the videos' cards and every line of the chapter script, in order."""
-    yield from ((make_final.INTRO_STEM, line_id, text) for line_id, text in make_final.frame_lines())
+    """(stem, id, text) for the lines of the videos' cards and every line of the chapter scripts, in order."""
+    yield from make_final.frame_lines()
     for stem, texts in sorted(mm.script_lines().items()):
         yield from ((stem, f"{stem[:2]}_{n:02d}", text) for n, text in enumerate(texts, 1))
 

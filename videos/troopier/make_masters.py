@@ -22,12 +22,19 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-CHAPTERS_CPP = REPO / "src" / "app" / "test" / "tutorial_chapters.cpp"
 
 SAY = re.compile(r'\bSay\(\s*((?:"(?:[^"\\\n]|\\.)*"\s*)+)\)', re.S)
 LITERAL = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
-CHAPTER_FUNC = re.compile(r"^(chapter_\w+)\(ImGuiTestContext\* ctx\)", re.M)
-REGISTER = re.compile(r'register_chapter\(\s*engine,\s*"(\w+)",\s*(\w+)\s*\)')
+# The chapter scripts: each file, how its chapter functions start, and how it
+# names them.
+CHAPTER_SOURCES = [
+    (REPO / "src" / "app" / "test" / "tutorial_chapters.cpp",
+     re.compile(r"^(chapter_\w+)\(ImGuiTestContext\* ctx\)", re.M),
+     re.compile(r'register_chapter\(\s*engine,\s*"(\w+)",\s*(\w+)\s*\)')),
+    (HERE / "systems_chapters.py",
+     re.compile(r"^def (chapter_\w+)\(", re.M),
+     re.compile(r'\(\s*"(\w+)",\s*(chapter_\w+)\s*\)')),
+]
 
 VIDEO_ARGS = [
     "-vf", "scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int,"
@@ -58,6 +65,21 @@ SPOKEN = [
     # Said as one flowing name; as two words the voice stresses each like a separate name.
     (r"\bWimalasuriyan\b", "Wimala-suriyan"),
     (r"\bOptiq\b", "Optic"),
+    (r"\brocprof-sys\b", "rock-prof-sis"),
+    (r"\brocpd\b", "rock-P-D"),
+    (r"\btranspose\.inst\b", "transpose dot inst"),
+    (r"\bhipStreamSynchronize\b", "hip stream synchronize"),
+    (r"\bJSON\b", "jay-son"),
+    (r"\bsetup-env\b", "setup en-vee"),
+    (r"\bROCPROFSYS_CONFIG_FILE\b", "rock-prof-sis config file"),
+    (r"\bROCprofiler-SDK\b", "rock-profiler S-D-K"),
+    (r"\bROCTx\b|\broctx\b", "rock-T-X"),
+    (r"\bSMI\b", "S-M-I"),
+    (r"\bSQ_WAVES\b", "S-Q waves"),
+    (r"\btrace-gpu\b", "trace G-P-U"),
+    # Said as a lone letter, an o or an r runs into the word next to it.
+    (r"\b([Dd])ash o\b", r"\1ash oh"),
+    (r"\b([Dd])ash r\b", r"\1ash R"),
     (r"\bhipMemcpy\b", "hip mem copy"),
     (r"\bHIP\b", "hip"),
     (r"\bAPI\b", "A-P-I"),
@@ -112,15 +134,16 @@ def unescape(literal):
 
 
 def script_lines():
-    """Returns {chapter: [line, ...]} in the order the chapter script says them."""
-    code = CHAPTERS_CPP.read_text(encoding="utf-8")
-    stems = {func: stem for stem, func in REGISTER.findall(code)}
-    starts = [(m.start(), stems.get(m[1], m[1])) for m in CHAPTER_FUNC.finditer(code)]
+    """Returns {chapter: [line, ...]} in the order the chapter scripts say them."""
     lines = {}
-    for say in SAY.finditer(code):
-        chapter = next((stem for start, stem in reversed(starts) if start < say.start()), None)
-        if chapter:
-            lines.setdefault(chapter, []).append("".join(unescape(p) for p in LITERAL.findall(say[1])))
+    for source, chapter_func, register in CHAPTER_SOURCES:
+        code = source.read_text(encoding="utf-8")
+        stems = {func: stem for stem, func in register.findall(code)}
+        starts = [(m.start(), stems.get(m[1], m[1])) for m in chapter_func.finditer(code)]
+        for say in SAY.finditer(code):
+            chapter = next((stem for start, stem in reversed(starts) if start < say.start()), None)
+            if chapter:
+                lines.setdefault(chapter, []).append("".join(unescape(p) for p in LITERAL.findall(say[1])))
     return lines
 
 
@@ -162,6 +185,10 @@ def tools():
 def title_of(stem):
     number, _, name = stem.partition("_")
     words = name.replace("_", " ")
+    if number.startswith("s"):
+        # The ROCm Systems Profiler chapters are lettered sa, sb, ...
+        return f"ROCm Systems Profiler tutorial, chapter {ord(number[1]) - ord('a') + 1}: " \
+               f"{words[0].upper()}{words[1:]}"
     return f"ROCm Optiq tutorial {int(number)}: {words[0].upper()}{words[1:]}"
 
 

@@ -8,6 +8,11 @@ Test Engine test that drives the UI in cinematic mode and captures the Optiq
 window (1920x1080, 60 fps, lossless, no audio) straight from its back buffer
 into raw\, with timing files in raw\timing\.
 
+With -Series systems, it records the ROCm Optiq chapters of the ROCm Systems
+Profiler tutorials into raw-systems\, paced by voice-systems\. They open the
+runs systems_capture.sh profiled, from copies of the output folders those runs
+wrote (systems-capture\optiq\).
+
 Each chapter is paced by its narration: a line starts once the previous one
 has finished, using the lengths of the synthesized lines in voice\lines.tsv.
 Synthesize the narration first so the pacing matches the voice exactly;
@@ -33,11 +38,14 @@ runs. Do not click into the Optiq window while it records.
 .EXAMPLE
 .\record_tutorials.ps1
 .\record_tutorials.ps1 -Chapters "03_"
+.\record_tutorials.ps1 -Series systems -Chapters "sc_,sk_,sp_"
 #>
 param(
+    [ValidateSet("optiq", "systems")]
+    [string]$Series = "optiq",
     [string]$Chapters = "",
-    [string]$OutputDir = (Join-Path $PSScriptRoot "raw"),
-    [string]$Narration = (Join-Path $PSScriptRoot "voice"),
+    [string]$OutputDir = "",
+    [string]$Narration = "",
     [double]$UiScale = 1.25,
     [string]$Exe = "",
     [string]$Ffmpeg = ""
@@ -45,6 +53,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$suffix = if ($Series -eq "systems") { "-systems" } else { "" }
+if (-not $OutputDir) { $OutputDir = Join-Path $PSScriptRoot "raw$suffix" }
+if (-not $Narration) { $Narration = Join-Path $PSScriptRoot "voice$suffix" }
 
 if (-not $Exe) {
     $Exe = Join-Path $repo "build\x64-tutorial\Release\roc-optiq-tests.exe"
@@ -67,16 +78,28 @@ if (-not $Ffmpeg -or -not (Test-Path $Ffmpeg)) {
     throw "ffmpeg not found. Install it (winget install Gyan.FFmpeg) or pass -Ffmpeg."
 }
 
-$samples = Join-Path ([Environment]::GetFolderPath("CommonDocuments")) "ROCm Optiq Samples"
+$samplesName = if ($Series -eq "systems") { "Profiles" } else { "ROCm Optiq Samples" }
+$samples = Join-Path ([Environment]::GetFolderPath("CommonDocuments")) $samplesName
 if (Test-Path $samples) { Remove-Item $samples -Recurse -Force }
 New-Item -ItemType Directory -Path $samples | Out-Null
-foreach ($name in @("rocpd-transpose.db", "rocprof_compute_23ed6f36.db")) {
-    Copy-Item (Join-Path $repo "sample\$name") $samples
+if ($Series -eq "systems") {
+    # Each run's output folder, as a user copies it next to the others.
+    $runs = Join-Path $PSScriptRoot "systems-capture\optiq"
+    if (-not (Test-Path $runs)) {
+        throw "No captured runs in $runs (see systems_capture.sh)"
+    }
+    Get-ChildItem $runs -Directory | ForEach-Object {
+        Get-ChildItem $_.FullName -Directory | ForEach-Object { Copy-Item $_.FullName $samples -Recurse }
+    }
+} else {
+    foreach ($name in @("rocpd-transpose.db", "rocprof_compute_23ed6f36.db")) {
+        Copy-Item (Join-Path $repo "sample\$name") $samples
+    }
 }
 # The samples name the machines and people that captured them; the copies get
 # neutral names so none appear on screen.
 if (Get-Command py -ErrorAction SilentlyContinue) {
-    & py -3 (Join-Path $PSScriptRoot "anonymize_samples.py") (Get-ChildItem $samples -Filter *.db).FullName
+    & py -3 (Join-Path $PSScriptRoot "anonymize_samples.py") (Get-ChildItem $samples -Filter *.db -Recurse).FullName
 } else {
     Write-Warning "Python not found; the footage will show the host and user names stored in the samples."
 }

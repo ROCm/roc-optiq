@@ -1,10 +1,12 @@
-"""Builds the AMD ROCm Optiq tutorial playlist: a few videos of five to ten minutes,
-each a group of voiced chapters between a title card and a closing card, then the
-legal disclaimer and, when given, the AMD outro bumper. The parts are joined with
-short crossfades, and each video gets its YouTube timestamps.
+"""Builds the AMD ROCm tutorial videos: the ROCm Optiq playlist, a few videos of
+five to ten minutes, and the ROCm Systems Profiler video (--series systems).
+Each video is a group of voiced chapters between a title card and a closing
+card, then the legal disclaimer and, when given, the AMD outro bumper. The parts
+are joined with short crossfades, and each video gets its YouTube timestamps.
 
 The cards follow the AMD brand: white Klavika type on black (Arial where Klavika
-is not installed), the AMD ROCm Optiq lockup under the title, and the full
+is not installed), the AMD ROCm Optiq lockup under the title (the AMD logo alone,
+from the top of the lockup, on the Systems Profiler cards), and the full
 "AMD ROCm(TM)" name at the first mention of a ROCm product on every card.
 
   cards  renders every video's title and closing cards from the voiced lines
@@ -13,8 +15,9 @@ is not installed), the AMD ROCm Optiq lockup under the title, and the full
   join   joins each video's cards, chapters and disclaimer, then the outro
          bumper, and writes its timestamps.
 
-Usage: python make_final.py cards --clips <folder> --lockup <white lockup png> --out <folder>
+Usage: python make_final.py cards --clips <folder> --lockup <white lockup png> --out <folder> [--series systems]
        python make_final.py join --voiced <folder> --cards <folder> --out <folder> [--outro <video>]
+                             [--series systems]
 """
 
 import argparse
@@ -27,9 +30,8 @@ from pathlib import Path
 import make_masters as mm
 
 INTRO_STEM = "00_introduction"
+SYSTEMS_STEM = "s0_cards"
 TM = "\u2122"
-# The first mention on every card: the full product name with its mark.
-SERIES = f"AMD ROCm{TM} Optiq Tutorials"
 PRESENTER = "Sajeeth Wimalasuriyan"
 # The series introduction, said on the first video's title card.
 INTRO_LINES = [
@@ -71,6 +73,45 @@ VIDEOS = [
      "farewell": [CLOSING],
      "next": "Learn more in the ROCm Optiq documentation"},
 ]
+SYSTEMS_VIDEOS = [
+    {"title": ["Getting Started with", "ROCm Systems Profiler"], "file": "Getting Started",
+     "chapters": ["sa_what_it_does", "sb_your_first_profile", "sc_opening_the_trace_in_optiq"],
+     "welcome": ["Hi, I'm Sajeeth. In this series, we'll learn AMD ROCm Systems Profiler, from a first "
+                 "profile to tracing work on the GPU."],
+     "farewell": ["Thanks for watching. In the next video, we'll choose what ROCm Systems Profiler "
+                  "collects."],
+     "next": "Up next: Configuring ROCm Systems Profiler"},
+    {"title": ["Configuring", "ROCm Systems Profiler"], "file": "Configuring ROCm Systems Profiler",
+     "chapters": ["sd_presets", "se_saving_and_changing_settings", "sf_choosing_the_output"],
+     "welcome": ["Hi, I'm Sajeeth. In this video, we'll choose what AMD ROCm Systems Profiler collects, "
+                 "with presets, settings, and configuration files."],
+     "farewell": ["Thanks for watching. In the next video, we'll compare call-stack sampling with binary "
+                  "instrumentation."],
+     "next": "Up next: Sampling and Instrumentation"},
+    {"title": ["Sampling and", "Instrumentation"], "file": "Sampling and Instrumentation",
+     "chapters": ["sg_call_stack_sampling", "sh_runtime_instrumentation", "si_rewriting_a_binary",
+                  "sj_reading_the_profile", "sk_instrumented_calls_in_optiq"],
+     "welcome": ["Hi, I'm Sajeeth. In this video, we'll compare the two main ways AMD ROCm Systems "
+                 "Profiler measures a program: call-stack sampling, and binary instrumentation."],
+     "farewell": ["Thanks for watching. In the final video, we'll profile work on the GPU."],
+     "next": "Up next: Profiling GPU Applications"},
+    {"title": ["Profiling GPU", "Applications"], "file": "Profiling GPU Applications",
+     "chapters": ["sl_tracing_rocm_apis", "sm_gpu_metrics", "sn_gpu_hardware_counters",
+                  "so_marking_regions_with_roctx", "sp_roctx_ranges_in_optiq"],
+     "welcome": ["Hi, I'm Sajeeth. In this final video, we'll profile work on the GPU with AMD ROCm "
+                 "Systems Profiler."],
+     "farewell": ["Thanks for watching. To learn more, see the ROCm Systems Profiler documentation."],
+     "next": "Learn more in the ROCm Systems Profiler documentation"},
+]
+# The first mention on every card is the series label: the full product name
+# with its mark.
+SERIES = {
+    "optiq": {"label": f"AMD ROCm{TM} Optiq Tutorials", "name": "AMD ROCm Optiq Tutorial",
+              "cards": "part", "logo": "lockup", "videos": VIDEOS},
+    "systems": {"label": f"AMD ROCm{TM} Systems Profiler Tutorials",
+                "name": "AMD ROCm Systems Profiler Tutorial", "cards": "systems", "logo": "amd",
+                "videos": SYSTEMS_VIDEOS},
+}
 CHAPTER_TITLES = {
     "01_opening_a_trace": "Opening a Trace",
     "02_interface_tour": "Interface Tour",
@@ -86,6 +127,22 @@ CHAPTER_TITLES = {
     "12_compute_opening_and_summary": "Opening Compute Data and the Summary View",
     "13_compute_kernel_details": "Kernel Details",
     "14_compute_tables_workload_and_comparison": "Table View, Profile Details, and Baseline Comparison",
+    "sa_what_it_does": "What ROCm Systems Profiler Does",
+    "sb_your_first_profile": "Your First Profile",
+    "sc_opening_the_trace_in_optiq": "Opening the Trace in ROCm Optiq",
+    "sd_presets": "Presets",
+    "se_saving_and_changing_settings": "Saving and Changing Settings",
+    "sf_choosing_the_output": "Choosing the Output",
+    "sg_call_stack_sampling": "Call-Stack Sampling",
+    "sh_runtime_instrumentation": "Runtime Instrumentation",
+    "si_rewriting_a_binary": "Rewriting a Binary",
+    "sj_reading_the_profile": "Reading the Profile",
+    "sk_instrumented_calls_in_optiq": "Instrumented Calls in ROCm Optiq",
+    "sl_tracing_rocm_apis": "Tracing ROCm APIs",
+    "sm_gpu_metrics": "GPU Metrics",
+    "sn_gpu_hardware_counters": "GPU Hardware Counters",
+    "so_marking_regions_with_roctx": "Marking Regions with ROCTx",
+    "sp_roctx_ranges_in_optiq": "ROCTx Ranges in ROCm Optiq",
 }
 # The short-form disclaimer legal approved for the end of every video, alone on a
 # black frame before the outro bumper.
@@ -137,15 +194,36 @@ def font_path(weight):
 
 
 def frame_lines():
-    """(id, text) of every line the cards say: the series introduction as 00_NN,
-    then each other welcome and farewell as 90_NN, in order."""
-    lines = [(f"00_{n:02d}", text) for n, text in enumerate(INTRO_LINES, 1)]
-    others = []
-    for video in VIDEOS:
-        for text in video["welcome"] + video["farewell"]:
-            if text not in INTRO_LINES and text not in others:
-                others.append(text)
-    return lines + [(f"90_{n:02d}", text) for n, text in enumerate(others, 1)]
+    """(stem, id, text) of every line the cards say, each text once and in order:
+    the Optiq introduction as 00_NN and the other Optiq welcomes and farewells as
+    90_NN, then the Systems Profiler cards' new lines as s0_NN."""
+    lines, seen = [], set()
+
+    def add(stem, prefix, texts):
+        new = [text for text in dict.fromkeys(texts) if text not in seen]
+        seen.update(new)
+        lines.extend((stem, f"{prefix}_{n:02d}", text) for n, text in enumerate(new, 1))
+
+    add(INTRO_STEM, "00", INTRO_LINES)
+    add(INTRO_STEM, "90", [text for video in VIDEOS for text in video["welcome"] + video["farewell"]])
+    add(SYSTEMS_STEM, "s0", [text for video in SYSTEMS_VIDEOS for text in video["welcome"] + video["farewell"]])
+    return lines
+
+
+def amd_logo(lockup, out):
+    """Crops the AMD logo, the top row of the lockup, into `out`. Returns the
+    height that keeps it at the lockup's scale on the cards."""
+    from PIL import Image
+
+    image = Image.open(lockup).convert("RGBA")
+    alpha = image.getchannel("A")
+    filled = [alpha.crop((0, y, image.width, y + 1)).getbbox() is not None for y in range(image.height)]
+    top = filled.index(True)
+    bottom = filled.index(False, top)
+    logo = image.crop((0, top, image.width, bottom))
+    logo = logo.crop(logo.getchannel("A").getbbox())
+    logo.save(out)
+    return round(LOCKUP_H * logo.height / image.height)
 
 
 def video_codec_args():
@@ -163,30 +241,38 @@ def text_at(weight, text, size, color, y, start, centered=False):
             f"fontsize={size}:x={x}:y={y}:{fade}")
 
 
-def title_rows(video, part, parts):
-    """Rows of the title card, and the top of the lockup under them."""
-    rows = [("regular", SERIES, 38, GREY, 232, 0.5)]
+def title_rows(series, video, part):
+    """Rows of the title card, and the top of the lockup under them. A series of
+    one video has no part line."""
+    rows = [("regular", series["label"], 38, GREY, 232, 0.5)]
     y = 292
     for line in video["title"]:
         rows.append(("bold", line, 86, WHITE, y, 0.8))
         y += 104
-    rows.append(("light", f"Part {part} of {parts}", 40, GREY, y + 24, 1.1))
+    parts = len(series["videos"])
+    if parts > 1:
+        rows.append(("light", f"Part {part} of {parts}", 40, GREY, y + 24, 1.1))
+        y += 24 + 40
     rows.append(("light", "Presented by", 30, GREY, PRESENTER_Y, 1.4))
     rows.append(("medium", PRESENTER, 46, WHITE, PRESENTER_Y + 40, 1.4))
-    return rows, y + 24 + 40 + LOCKUP_GAP
+    return rows, y + LOCKUP_GAP
 
 
-def closing_rows(video, part, parts):
-    rows = [("regular", SERIES, 38, GREY, 232, 0.4),
-            ("bold", "Thanks for watching", 86, WHITE, 292, 0.6),
-            ("light", f"Part {part} of {parts}", 40, GREY, 420, 0.8),
-            ("regular", video["next"], 36, WHITE, 486, 1.0),
-            ("light", "Presented by", 30, GREY, PRESENTER_Y, 1.0),
-            ("medium", PRESENTER, 46, WHITE, PRESENTER_Y + 40, 1.0)]
-    return rows, 486 + 36 + LOCKUP_GAP
+def closing_rows(series, video, part):
+    rows = [("regular", series["label"], 38, GREY, 232, 0.4),
+            ("bold", "Thanks for watching", 86, WHITE, 292, 0.6)]
+    y = 420
+    parts = len(series["videos"])
+    if parts > 1:
+        rows.append(("light", f"Part {part} of {parts}", 40, GREY, y, 0.8))
+        y += 66
+    rows += [("regular", video["next"], 36, WHITE, y, 1.0),
+             ("light", "Presented by", 30, GREY, PRESENTER_Y, 1.0),
+             ("medium", PRESENTER, 46, WHITE, PRESENTER_Y + 40, 1.0)]
+    return rows, y + 36 + LOCKUP_GAP
 
 
-def render_card(ffmpeg, ffprobe, lockup, clips, rows, lockup_y, lockup_start, tail_s, out):
+def render_card(ffmpeg, ffprobe, lockup, lockup_h, clips, rows, lockup_y, lockup_start, tail_s, out):
     starts, t = [], LEAD_S
     for clip in clips:
         starts.append(t)
@@ -194,7 +280,7 @@ def render_card(ffmpeg, ffprobe, lockup, clips, rows, lockup_y, lockup_start, ta
     length = t - LINE_GAP_S + tail_s
     text = ",".join(text_at(*row) for row in rows)
     logo_fade = f"fade=t=in:st={lockup_start:.2f}:d=0.7:alpha=1"
-    video = (f"[0:v]{text}[base];[1:v]scale=-1:{LOCKUP_H}:flags=lanczos,format=rgba,{logo_fade}[logo];"
+    video = (f"[0:v]{text}[base];[1:v]scale=-1:{lockup_h}:flags=lanczos,format=rgba,{logo_fade}[logo];"
              f"[base][logo]overlay=x={TEXT_X}:y={lockup_y}:shortest=1,fade=t=in:st=0:d=1.0")
     delays = "".join(f"[{n + 2}:a]volume={mm.line_gain(ffmpeg, clip):.2f}dB,adelay=delays={int(s * 1000)}:all=1[a{n}];"
                      for n, (clip, s) in enumerate(zip(clips, starts)))
@@ -235,13 +321,18 @@ def render_legal(ffmpeg, out):
 
 
 def cards(args, ffmpeg, ffprobe):
-    ids = {text: line_id for line_id, text in frame_lines()}
+    series = SERIES[args.series]
+    ids = {text: line_id for _, line_id, text in frame_lines()}
     args.out.mkdir(parents=True, exist_ok=True)
     if not args.lockup.exists():
         sys.exit(f"no lockup image at {args.lockup}")
+    logo, logo_h = args.lockup, LOCKUP_H
+    if series["logo"] == "amd":
+        logo = args.out / "amd_logo.png"
+        logo_h = amd_logo(args.lockup, logo)
     if "legal" in args.kinds:
         render_legal(ffmpeg, args.out / "legal.mp4")
-    for part, video in enumerate(VIDEOS, 1):
+    for part, video in enumerate(series["videos"], 1):
         if args.part and part != args.part:
             continue
         for kind in ("welcome", "farewell"):
@@ -252,13 +343,13 @@ def cards(args, ffmpeg, ffprobe):
             if missing:
                 sys.exit(f"part {part} {kind}: missing voiced lines {', '.join(missing)}")
             if kind == "welcome":
-                rows, lockup_y = title_rows(video, part, len(VIDEOS))
-                render_card(ffmpeg, ffprobe, args.lockup, clips, rows, lockup_y, 1.2, TAIL_S,
-                            args.out / f"part{part}_welcome.mp4")
+                rows, lockup_y = title_rows(series, video, part)
+                render_card(ffmpeg, ffprobe, logo, logo_h, clips, rows, lockup_y, 1.2, TAIL_S,
+                            args.out / f"{series['cards']}{part}_welcome.mp4")
             else:
-                rows, lockup_y = closing_rows(video, part, len(VIDEOS))
-                render_card(ffmpeg, ffprobe, args.lockup, clips, rows, lockup_y, 1.0, FAREWELL_TAIL_S,
-                            args.out / f"part{part}_farewell.mp4")
+                rows, lockup_y = closing_rows(series, video, part)
+                render_card(ffmpeg, ffprobe, logo, logo_h, clips, rows, lockup_y, 1.0, FAREWELL_TAIL_S,
+                            args.out / f"{series['cards']}{part}_farewell.mp4")
 
 
 def has_audio(ffprobe, path):
@@ -273,17 +364,19 @@ def stamp(seconds):
 
 
 def join(args, ffmpeg, ffprobe):
+    series = SERIES[args.series]
     args.out.mkdir(parents=True, exist_ok=True)
     if args.outro and not args.outro.exists():
         sys.exit(f"no outro bumper at {args.outro}")
     if not args.outro:
         print("No outro bumper given: the videos end on the disclaimer. Pass --outro with the AMD "
               "bumper from the brand team to close them with it.")
-    for part, video in enumerate(VIDEOS, 1):
+    for part, video in enumerate(series["videos"], 1):
         if args.part and part != args.part:
             continue
-        parts = ([args.cards / f"part{part}_welcome.mp4"] + [args.voiced / f"{stem}.mp4" for stem in video["chapters"]]
-                 + [args.cards / f"part{part}_farewell.mp4", args.cards / "legal.mp4"])
+        card = f"{series['cards']}{part}"
+        parts = ([args.cards / f"{card}_welcome.mp4"] + [args.voiced / f"{stem}.mp4" for stem in video["chapters"]]
+                 + [args.cards / f"{card}_farewell.mp4", args.cards / "legal.mp4"])
         missing = [p.name for p in parts if not p.exists()]
         if missing:
             sys.exit(f"part {part}: missing {', '.join(missing)}")
@@ -317,7 +410,8 @@ def join(args, ffmpeg, ffprobe):
         # The crossfades work in 4:4:4; the video goes out in 4:2:0 like its parts.
         graph.append(f"{v}format=yuv420p[vout]")
         v = "[vout]"
-        name = f"AMD ROCm Optiq Tutorial {part} - {video['file']}"
+        number = f" {part}" if len(series["videos"]) > 1 else ""
+        name = f"{series['name']}{number} - {video['file']}"
         out = args.out / f"{name}.mp4"
         # The parts are already encoded at a high quality; this pass is fast,
         # at a CRF low enough that screen text stays crisp.
@@ -344,6 +438,8 @@ def main():
     parser.add_argument("--voiced", type=Path, help="voiced chapters (join)")
     parser.add_argument("--cards", type=Path, help="rendered cards (join)")
     parser.add_argument("--outro", type=Path, help="the AMD outro bumper video (join)")
+    parser.add_argument("--series", choices=sorted(SERIES), default="optiq",
+                        help="the ROCm Optiq playlist, or the ROCm Systems Profiler video")
     parser.add_argument("--part", type=int, default=0, help="only this video's cards or join")
     parser.add_argument("--kinds", nargs="+", default=["welcome", "farewell", "legal"],
                         choices=("welcome", "farewell", "legal"), help="which cards to render")

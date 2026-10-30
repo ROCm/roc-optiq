@@ -135,6 +135,8 @@ constexpr int   ROW_SUFFIX_SIZE     = 16;
 constexpr float FILE_DIALOG_WIDTH   = 0.6f;
 constexpr float FILE_DIALOG_HEIGHT  = 0.66f;
 constexpr float FILE_DIALOG_TIMEOUT_S = 10.0f;
+// How long a folder the dialog opened stays up before the next click.
+constexpr float DIALOG_STEP_S = 0.5f;
 // Right of the longest file name, where the pointer's tail misses the name in
 // the row below; file rows are selectable across their whole width.
 constexpr float FILE_NAME_GAP       = 40.0f;
@@ -666,7 +668,8 @@ pristine_samples_dir()
 
 // Optiq writes caches into a trace's database, and a copy that several chapters
 // had opened was once found corrupted, so each chapter opens a fresh copy of
-// the samples as they were before the first one ran. Call before any chapter.
+// the samples as they were before the first one ran: everything in the samples
+// folder, subfolders included. Call before any chapter.
 static void
 snapshot_samples()
 {
@@ -674,11 +677,10 @@ snapshot_samples()
     const std::filesystem::path dir = pristine_samples_dir();
     std::filesystem::remove_all(dir, ec);
     std::filesystem::create_directories(dir, ec);
-    for(const char* file_name : { SYSTEM_TRACE_FILE, COMPUTE_TRACE_FILE })
-    {
-        std::filesystem::copy_file(sample_path(file_name), dir / file_name,
-                                   std::filesystem::copy_options::overwrite_existing, ec);
-    }
+    std::filesystem::copy(GetConfig().samples_dir, dir,
+                          std::filesystem::copy_options::recursive |
+                              std::filesystem::copy_options::overwrite_existing,
+                          ec);
 }
 
 // Puts back the sample `file_name` as it was when the run started, with no
@@ -5292,6 +5294,329 @@ chapter_compute_tables_and_comparison(ImGuiTestContext* ctx)
 }
 
 // ---------------------------------------------------------------------------
+// The ROCm Systems Profiler tutorials: each of these chapters opens a run those
+// tutorials profiled, from the output folder the run wrote, as a user who copied
+// it over would. Their other chapters are terminal footage
+// (videos/troopier/systems_chapters.py).
+
+// A run's database inside the output folder ROCm Systems Profiler wrote for a
+// program: <program>-output/<time of the run>/rocpd-<pid>-0.db.
+struct ProfilerRun
+{
+    std::string output;
+    std::string time;
+    std::string database;
+};
+
+// The run in `output`, an output folder copied into the samples.
+static bool
+find_profiler_run(const char* output, ProfilerRun& run)
+{
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    for(const fs::directory_entry& time :
+        fs::directory_iterator(fs::path(GetConfig().samples_dir) / output, ec))
+    {
+        for(const fs::directory_entry& file : fs::directory_iterator(time.path(), ec))
+        {
+            const std::string name = file.path().filename().string();
+            if(name.rfind("rocpd-", 0) == 0 && file.path().extension() == ".db")
+            {
+                run = { output, time.path().filename().string(), name };
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Readies a chapter on the welcome page, with a fresh copy of the run in
+// `output`.
+static bool
+begin_profiler_run_chapter(ImGuiTestContext* ctx, const char* output, ProfilerRun& run)
+{
+    close_all_projects(ctx);
+    if(!find_profiler_run(output, run))
+    {
+        ctx->LogError("No rocpd database in the samples' %s folder", output);
+        return false;
+    }
+    restore_sample(ctx, (run.output + "/" + run.time + "/" + run.database).c_str());
+    // Opened with no folder, the dialog starts where it last opened a file. Each
+    // of these chapters starts where the output folders were copied to.
+    IGFD::FileDialogConfig config;
+    config.path = GetConfig().samples_dir;
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_KEY, "", ".*", config);
+    ImGuiFileDialog::Instance()->Close();
+    park_pointer(ctx, 0.62f, 0.72f);
+    return true;
+}
+
+// Clicks the file dialog row showing `entry`, "[Dir] <name>" or
+// "[File] <name>", on its name as the narration says `word`. A click on a
+// folder opens it; with no word to wait for, the new listing stays up a beat.
+static bool
+click_dialog_entry(Director& director, const std::string& entry, const char* word)
+{
+    const ImGuiTestItemInfo row =
+        await_item(director, find_file_dialog_window, entry.c_str(), false);
+    if(row.ID == 0)
+    {
+        return false;
+    }
+    director.PointAt(
+        ImVec2(row.RectFull.Min.x + ImGui::CalcTextSize(entry.c_str()).x * 0.6f,
+               row.RectFull.GetCenter().y),
+        word);
+    director.ClickHere();
+    if(word == nullptr)
+    {
+        director.Hold(DIALOG_STEP_S);
+    }
+    return true;
+}
+
+// The words a line says as the dialog opens a run's output folder, the run's
+// folder, its database, and then OK; null where the step follows the last.
+struct DialogWords
+{
+    const char* output   = nullptr;
+    const char* run      = nullptr;
+    const char* database = nullptr;
+    const char* ok       = nullptr;
+};
+
+// Opens `run` from the open file dialog: its output folder, the run's folder in
+// it, then its database.
+static TraceView*
+open_run_from_dialog(Director& director, const ProfilerRun& run, const DialogWords& words)
+{
+    ImGuiTestContext* ctx = director.Context();
+    if(!click_dialog_entry(director, "[Dir] " + run.output, words.output) ||
+       !click_dialog_entry(director, "[Dir] " + run.time, words.run) ||
+       !click_dialog_entry(director, "[File] " + run.database, words.database))
+    {
+        return nullptr;
+    }
+    const ImGuiTestItemInfo ok = find_item(ctx, find_file_dialog_window(), "OK");
+    if(ok.ID == 0)
+    {
+        ctx->LogError("File dialog has no OK button");
+        return nullptr;
+    }
+    director.PointAt(ok.RectFull.GetCenter(), words.ok);
+    director.ClickHere();
+    director.WaitFor([]() { return trace_view_ready(current_trace_view()); },
+                     VISIBLE_LOAD_S, LOAD_TIMEOUT_S);
+    settle(director);
+    TraceView* trace_view = current_trace_view();
+    if(trace_view == nullptr)
+    {
+        ctx->LogError("%s did not load", run.database.c_str());
+    }
+    rest_pointer(director, true);
+    return trace_view;
+}
+
+// Video 1: the first sampling run, and what Systems Profiler recorded in it.
+static void
+chapter_systems_first_trace(ImGuiTestContext* ctx)
+{
+    ProfilerRun run;
+    if(!begin_profiler_run_chapter(ctx, "rocprofsys-transpose-output", run))
+    {
+        return;
+    }
+    Director director(ctx, ctx->Test->Name);
+    if(!director.Start())
+    {
+        return;
+    }
+    ctx->SetRef(MAIN_WINDOW);
+    director.Say("If you profiled on another machine, copy the output folder to the one "
+                 "where you run ROCm Optiq. Then click Open Trace File.");
+    director.PointAtItem("**/open_trace/action", "Open");
+    click_to_open_file_dialog(director);
+    director.Say("Open the output folder, then the folder of the run, and pick its rocpd "
+                 "database.");
+    TraceView* trace_view =
+        open_run_from_dialog(director, run, { "output", "run", "pick", "database" });
+    if(trace_view == nullptr)
+    {
+        return;
+    }
+    director.Pause();
+
+    std::vector<TrackRow> rows    = wait_for_rows(ctx, trace_view, is_sampled_thread);
+    const TrackRow*       api     = find_row(rows, is_api_thread);
+    const TrackRow*       sampled = find_row(rows, is_sampled_thread);
+    const TrackRow*       queue   = find_row(rows, is_kernel_queue);
+    if(api == nullptr || sampled == nullptr || queue == nullptr)
+    {
+        ctx->LogError("No HIP API thread, sampled thread or GPU queue on screen");
+        return;
+    }
+    const TrackRow queue_row = *queue;
+    director.Say(
+        "Each thread of the program has a track of the HIP API calls it made, and "
+        "one of the call stacks Systems Profiler sampled.");
+    director.PointAt(track_meta_point(*api), "HIP");
+    director.PointAt(track_meta_point(*sampled), "call");
+    director.Hold(HOVER_S);
+    director.Say("The GPU queues show the kernels the program launched.");
+    director.PointAt(track_meta_point(queue_row), "queues");
+    director.Hold(HOVER_S);
+
+    // The GPU metrics sit below the threads and queues.
+    const auto gfx_busy = named_counter("GFX Busy");
+    director.Say(
+        "Further down are the GPU's activity, temperature, power, and memory use, "
+        "sampled in the background.");
+    const ImVec2 wheel_at = rect_point(queue_row.meta, 0.5f, 0.5f);
+    director.PointAt(wheel_at);
+    director.Caption("Mouse wheel", 2.5f);
+    for(int i = 0; i < 16 && !row_fully_shown(trace_view, gfx_busy); i++)
+    {
+        director.Wheel(wheel_at, -2.0f, 1, 0.15f);
+    }
+    settle(director);
+    rows                    = track_rows(trace_view);
+    const TrackRow* counter = find_row(rows, gfx_busy);
+    ImVec2          peak;
+    if(counter != nullptr && peak_sample_point(trace_view, *counter, peak))
+    {
+        director.PointAt(peak, "activity");
+        director.Hold(TOOLTIP_READ_S);
+    }
+    else
+    {
+        ctx->LogError("The GFX Busy counter never came on screen");
+    }
+    rest_pointer(director, true);
+    director.Pause();
+    director.Say("To learn how to explore a trace, see the ROCm Optiq tutorial series.");
+    director.Finish();
+}
+
+// Video 3: the instrumented run, where each call to an instrumented function is
+// an event of its own.
+static void
+chapter_systems_instrumented_trace(ImGuiTestContext* ctx)
+{
+    ProfilerRun run;
+    if(!begin_profiler_run_chapter(ctx, "rocprofsys-transpose.inst-output", run))
+    {
+        return;
+    }
+    Director director(ctx, ctx->Test->Name);
+    if(!director.Start())
+    {
+        return;
+    }
+    ctx->SetRef(MAIN_WINDOW);
+    director.Say("Open the instrumented run in ROCm Optiq the same way, from its output "
+                 "folder.");
+    director.PointAtItem("**/open_trace/action", "Open");
+    click_to_open_file_dialog(director);
+    TraceView* trace_view = open_run_from_dialog(director, run, { "output" });
+    if(trace_view == nullptr)
+    {
+        return;
+    }
+    director.Pause();
+
+    std::vector<TrackRow> rows   = wait_for_rows(ctx, trace_view, is_api_thread);
+    const TrackRow*       thread = find_row(rows, is_api_thread);
+    EventBar              call;
+    if(thread == nullptr || !pick_bar(ctx, dynamic_cast<FlameTrackItem*>(thread->track),
+                                      "run", 0.5f, graph_area(rows), call))
+    {
+        ctx->LogError("No instrumented call to run on screen");
+        return;
+    }
+    director.Say("Each call to an instrumented function is a bar on its thread's track, "
+                 "with the calls it made nested under it.");
+    director.PointAt(track_meta_point(*thread), "thread's");
+    director.PointAt(call.rect.GetCenter(), "nested");
+    director.Hold(HOVER_S);
+    director.Say("Unlike samples, these are exact: every call, with its real start and "
+                 "duration.");
+    director.WaitForVoice();
+    rest_pointer(director, true);
+    director.Pause();
+    director.Say("The HIP calls and the kernels are here too, as in a sampling run.");
+    if(const TrackRow* queue = find_row(rows, is_kernel_queue))
+    {
+        director.PointAt(track_meta_point(*queue), "kernels");
+        director.Hold(HOVER_S);
+    }
+    else
+    {
+        ctx->LogError("No GPU queue on screen");
+    }
+    rest_pointer(director, true);
+    director.Finish();
+}
+
+// Video 4: the ROCTx example's run, with its ranges on the threads that
+// marked them.
+static void
+chapter_systems_roctx_trace(ImGuiTestContext* ctx)
+{
+    ProfilerRun run;
+    if(!begin_profiler_run_chapter(ctx, "rocprofsys-roctx-output", run))
+    {
+        return;
+    }
+    Director director(ctx, ctx->Test->Name);
+    if(!director.Start())
+    {
+        return;
+    }
+    ctx->SetRef(MAIN_WINDOW);
+    director.Say("Open the run in ROCm Optiq, from the roctx output folder.");
+    director.PointAtItem("**/open_trace/action", "Open");
+    click_to_open_file_dialog(director);
+    TraceView* trace_view = open_run_from_dialog(director, run, { "output" });
+    if(trace_view == nullptr)
+    {
+        return;
+    }
+    director.Pause();
+
+    // The outermost range on the main thread; the ones nested in it run deeper
+    // than a track shows at its default height.
+    std::vector<TrackRow> rows   = wait_for_rows(ctx, trace_view, is_api_thread);
+    const TrackRow*       thread = find_row(rows, is_api_thread);
+    EventBar              range;
+    if(thread == nullptr ||
+       !pick_bar(ctx, dynamic_cast<FlameTrackItem*>(thread->track), "roctxRangePush_run",
+                 0.5f, graph_area(rows), range))
+    {
+        ctx->LogError("No ROCTx range on screen");
+        return;
+    }
+    director.Say(
+        "The ROCTx ranges are on the thread that marked them, with the HIP calls "
+        "they contain nested under them.");
+    director.PointAt(range.rect.GetCenter(), "ranges");
+    director.Hold(TOOLTIP_READ_S);
+    director.Say("And the kernels they launched are on the GPU queue.");
+    if(const TrackRow* queue = find_row(rows, is_kernel_queue))
+    {
+        director.PointAt(track_meta_point(*queue), "kernels");
+        director.Hold(HOVER_S);
+    }
+    else
+    {
+        ctx->LogError("No GPU queue on screen");
+    }
+    rest_pointer(director, true);
+    director.Pause();
+    director.Say("Ranges like these make it easy to find your own phases of work in a "
+                 "trace.");
+    director.Finish();
+}
 
 // Chapter functions by registration order; each test's ArgVariant indexes it.
 static std::vector<ImGuiTestTestFunc*> g_chapter_funcs;
@@ -5343,6 +5668,10 @@ RegisterChapters(ImGuiTestEngine* engine)
     register_chapter(engine, "13_compute_kernel_details", chapter_compute_kernel_details);
     register_chapter(engine, "14_compute_tables_workload_and_comparison",
                      chapter_compute_tables_and_comparison);
+    register_chapter(engine, "sc_opening_the_trace_in_optiq", chapter_systems_first_trace);
+    register_chapter(engine, "sk_instrumented_calls_in_optiq",
+                     chapter_systems_instrumented_trace);
+    register_chapter(engine, "sp_roctx_ranges_in_optiq", chapter_systems_roctx_trace);
 }
 
 }  // namespace Tutorial

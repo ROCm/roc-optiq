@@ -2,6 +2,7 @@
 raw*/
 voice*/
 scripts/
+systems-capture/
 *.mkv
 *.mp4
 __pycache__/

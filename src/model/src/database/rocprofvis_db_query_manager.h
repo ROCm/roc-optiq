@@ -368,6 +368,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
 
         RpvSqliteExecuteQueryCallback m_callback_add_any_record;
+        std::mutex                    m_histogram_lock;
 
     protected:
         TableProcessor m_table_processor[kRPVTableDataTypesNum];

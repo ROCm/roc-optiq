@@ -798,6 +798,12 @@ map the shared metric enums (`..._top_events_metric_t`,
 the same shape `DataProvider::CreateSummaryTopOpEventsData` reads back.
 It reads the **full** per-name list, never a top-N.
 
+Every top-events and counter-statistics fetch in `FetchSummaryMetrics`
+propagates a failure immediately, before a later topology getter can overwrite
+it. The async wrapper only publishes its temporary metrics on success; failed
+fetches leave the caller's output unchanged. Successful queries with no rows
+remain successful.
+
 Each `SummaryMetrics` carries:
 
 - `m_aggregation_level` (`kRPVAnalysisSummaryAggregationLevel{Trace,
@@ -1472,6 +1478,11 @@ Catch2 tests live in `src/controller/tests/`:
   the public ABI (alloc, load, fetch tracks / graphs / tables /
   summary, save trimmed trace, cleanup, queue utilization), the
   `MemoryManager` LRU eviction logic, and segment timeline behaviour.
+- `rocprofvis_controller_summary_tests.cpp` - part of the system test target.
+  Uses a private copy of `sample/rocpd-transpose.db` to inject top-event SQL
+  failures and a broken counter association. Checks the future result and that
+  failed requests do not publish partial metrics; also covers successful empty
+  time ranges.
 - `rocprofvis_controller_compute_tests.cpp` - runs against
   `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
   workload + kernel + roofline + metric-fetch + pivot-table flows.

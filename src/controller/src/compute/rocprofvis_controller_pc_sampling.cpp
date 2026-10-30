@@ -349,7 +349,8 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    const auto& issue_count = m_pc_sample_states[index].issue_count;
+                    const std::optional<uint64_t>& issue_count =
+                        m_pc_sample_states[index].issue_count;
                     if(issue_count)
                     {
                         *value = *issue_count;
@@ -366,7 +367,8 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    const auto& stall_count = m_pc_sample_states[index].stall_count;
+                    const std::optional<uint64_t>& stall_count =
+                        m_pc_sample_states[index].stall_count;
                     if(stall_count)
                     {
                         *value = *stall_count;

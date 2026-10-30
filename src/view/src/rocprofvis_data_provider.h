@@ -55,9 +55,6 @@ public:
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
-    static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
-    static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t CLEANUP_DATABASE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
@@ -322,6 +319,9 @@ private:
         rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+    // True when the request in flight under an event's request ID is for that event,
+    // so it already covers a new fetch.
+    bool IsPendingEventFetch(const RequestInfo& pending, uint64_t event_id) const;
 
     // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();

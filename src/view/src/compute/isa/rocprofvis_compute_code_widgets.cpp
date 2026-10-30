@@ -31,6 +31,8 @@ constexpr InstructionPresentation INSTRUCTION_PRESENTATIONS[] = {
     { IsaDataBuilder::InstructionKind::kBranch, Colors::kIsaBranch },
     { IsaDataBuilder::InstructionKind::kValu, Colors::kIsaValu },
     { IsaDataBuilder::InstructionKind::kFlat, Colors::kIsaFlat },
+    { IsaDataBuilder::InstructionKind::kLds, Colors::kIsaLds },
+    { IsaDataBuilder::InstructionKind::kBarrier, Colors::kIsaBarrier },
     { IsaDataBuilder::InstructionKind::kUnknown, Colors::kTextMain }
 };
 static_assert(std::size(INSTRUCTION_PRESENTATIONS) ==

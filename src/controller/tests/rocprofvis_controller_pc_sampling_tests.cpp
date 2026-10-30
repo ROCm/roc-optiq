@@ -3,10 +3,13 @@
 
 #include "rocprofvis_controller.h"
 
+#include <array>
+#include <cfloat>
 #include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <sqlite3.h>
@@ -198,4 +201,109 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
     CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
     CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
     CHECK(Get(kRPVControllerPCSamplingNumPcSampleStates) == 0);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "Concurrent PC sampling layers retain all completed query groups",
+                 "[pc-sampling][concurrency]")
+{
+    Initialize();
+    Execute(R"sql(
+        ALTER TABLE compute_kernel_symbol ADD COLUMN code_object_offset INTEGER;
+        UPDATE compute_kernel_symbol SET code_object_uuid = 1;
+        CREATE TABLE compute_code_object_store(code_object_uuid INTEGER,
+            workload_id INTEGER, pid INTEGER, code_object_id INTEGER, load_base INTEGER);
+        INSERT INTO compute_code_object_store VALUES(1, 1, 0, 1, 0);
+        ALTER TABLE compute_instruction_line ADD COLUMN instruction_type_uuid INTEGER;
+        ALTER TABLE compute_instruction_line ADD COLUMN code_object_offset INTEGER;
+        ALTER TABLE compute_instruction_line ADD COLUMN instruction TEXT;
+        UPDATE compute_instruction_line SET instruction_type_uuid = 1,
+            code_object_offset = 16, instruction = 's_nop 0';
+        CREATE TABLE compute_instruction_type_lookup(
+            instruction_type_lookup_uuid INTEGER, text TEXT);
+        INSERT INTO compute_instruction_type_lookup VALUES(1, 'INTERNAL');
+        CREATE TABLE compute_source_file(source_file_uuid INTEGER,
+            workload_id INTEGER, file_path TEXT, md5_checksum TEXT);
+        CREATE TABLE compute_source_line(source_line_uuid INTEGER,
+            source_file_uuid INTEGER, line_number INTEGER, content TEXT);
+        CREATE TABLE compute_instruction_source_line(instruction_source_line_uuid INTEGER,
+            instruction_uuid INTEGER, source_line_uuid INTEGER, frame_index INTEGER);
+    )sql");
+    REQUIRE(rocprofvis_controller_set_uint64(args.get(),
+                                             kRPVControllerPcSamplingArgsSourceFileUuid,
+                                             0, 0) == kRocProfVisResultSuccess);
+
+    const auto fetch_all_layers = [this]() {
+        using FetchFunction = rocprofvis_result_t (*)(
+            rocprofvis_controller_t*, rocprofvis_controller_arguments_t*,
+            rocprofvis_controller_future_t*, rocprofvis_handle_t*);
+        constexpr std::array<FetchFunction, 3> FETCHERS{
+            rocprofvis_controller_pc_sampling_fetch_isa_lines_async,
+            rocprofvis_controller_pc_sampling_fetch_source_async,
+            rocprofvis_controller_pc_sampling_fetch_stalls_async
+        };
+        using FuturePtr = std::unique_ptr<rocprofvis_controller_future_t,
+                                          decltype(&rocprofvis_controller_future_free)>;
+        std::vector<FuturePtr> futures;
+        futures.reserve(FETCHERS.size());
+        for(size_t i = 0; i < FETCHERS.size(); ++i)
+        {
+            futures.emplace_back(rocprofvis_controller_future_alloc(),
+                                 &rocprofvis_controller_future_free);
+            REQUIRE(futures.back());
+        }
+        std::array<rocprofvis_result_t, FETCHERS.size()> submissions{};
+        std::array<rocprofvis_result_t, FETCHERS.size()> waits{};
+        // Submit every layer before waiting, as the ISA view does on selection.
+        for(size_t i = 0; i < FETCHERS.size(); ++i)
+        {
+            submissions[i] =
+                FETCHERS[i](controller.get(), args.get(), futures[i].get(), sampling);
+        }
+        // Drain all submitted jobs before assertions can unwind their owners.
+        for(size_t i = 0; i < FETCHERS.size(); ++i)
+        {
+            if(submissions[i] == kRocProfVisResultSuccess)
+            {
+                waits[i] = rocprofvis_controller_future_wait(futures[i].get(), FLT_MAX);
+            }
+        }
+        for(size_t i = 0; i < FETCHERS.size(); ++i)
+        {
+            INFO("Layer index: " << i);
+            REQUIRE(submissions[i] == kRocProfVisResultSuccess);
+            REQUIRE(waits[i] == kRocProfVisResultSuccess);
+            uint64_t result = 0;
+            REQUIRE(rocprofvis_controller_get_uint64(
+                        futures[i].get(), kRPVControllerFutureResult, 0, &result) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(result == kRocProfVisResultSuccess);
+        }
+    };
+    fetch_all_layers();
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+
+    // With every table removed, retries succeed only if every completion bit survived.
+    Execute(R"sql(
+        DROP TABLE compute_code_object_store;
+        DROP TABLE compute_kernel_symbol;
+        DROP TABLE compute_instruction_line;
+        DROP TABLE compute_instruction_type_lookup;
+        DROP TABLE compute_source_file;
+        DROP TABLE compute_source_line;
+        DROP TABLE compute_instruction_source_line;
+        DROP TABLE compute_pc_sample_state;
+        DROP TABLE compute_pc_sample_stall_reason;
+        DROP TABLE compute_pc_sample_stall_reason_lookup;
+    )sql");
+    fetch_all_layers();
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumCodeObjects) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumKernelSymbols) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionLines) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumSourceFiles) == 0);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSourceLines) == 0);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateTotalCount) == 100);
 }

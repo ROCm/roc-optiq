@@ -162,6 +162,8 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(222, 199, 115, 255),  // Colors::kIsaBranch
     IM_COL32(114, 163, 240, 255),  // Colors::kIsaValu
     IM_COL32(220, 153, 120, 255),  // Colors::kIsaFlat
+    IM_COL32(99, 196, 215, 255),   // Colors::kIsaLds
+    IM_COL32(231, 166, 193, 255),  // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
 
@@ -300,6 +302,8 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(139, 110, 18, 255),   // Colors::kIsaBranch
     IM_COL32(40, 95, 178, 255),    // Colors::kIsaValu
     IM_COL32(163, 78, 43, 255),    // Colors::kIsaFlat
+    IM_COL32(21, 111, 132, 255),   // Colors::kIsaLds
+    IM_COL32(160, 65, 105, 255),   // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
 static_assert(DARK_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));

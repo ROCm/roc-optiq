@@ -1768,7 +1768,8 @@ and a semantic `InstructionKind` resolved once from the instruction-type lookup
 text. `INSTRUCTION_TYPES` is the canonical name/kind catalogue used by type
 resolution, line tooltips, and legend labels. It describes the compute database's
 `compute_instruction_type_lookup.text` categories: INTERNAL, MATRIX, SCALAR,
-BRANCH, VALU, and FLAT, in that legend order. Names are accepted case-insensitively;
+BRANCH, VALU, FLAT, LDS, and BARRIER, in that legend order. Names are accepted
+case-insensitively;
 UUIDs remain lookup keys and never select colours. Each category has a distinct
 `kIsa*` dark/light palette entry. Missing or unrecognised types use the current theme's regular text
 colour. Each row owns its display type name; unrecognised nonempty names retain
@@ -1777,7 +1778,7 @@ no coloured span. `IsaCodeWidget` resolves colours at render time, so theme chan
 do not rebuild rows. Operands, spacing, and trailing comments retain normal text
 colour.
 
-Hovering ISA text shows `Instruction type: <name>` through the themed item tooltip;
+Hovering ISA text shows `<name>` through the themed item tooltip;
 normal popup/window occlusion prevents tooltips over covered cells. The ISA header
 shows the full type palette plus Unknown / unavailable in regular text colour as compact swatches and
 labels, with no user-facing prose, grid, or column headings. The mnemonic and

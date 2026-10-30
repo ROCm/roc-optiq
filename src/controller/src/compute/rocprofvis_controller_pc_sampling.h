@@ -5,6 +5,7 @@
 
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface_types.h"
+#include <atomic>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -161,10 +162,17 @@ private:
         kInstructionSamples     = 1 << 7,
     };
 
-    bool    IsLoaded(LoadedFlag f) const { return (m_loaded_flags & f) != 0; }
-    void SetLoaded(LoadedFlag f)         { m_loaded_flags |= f; }
+    bool IsLoaded(LoadedFlag f) const
+    {
+        return (m_loaded_flags.load(std::memory_order_relaxed) & f) != 0;
+    }
+    void SetLoaded(LoadedFlag f)
+    {
+        m_loaded_flags.fetch_or(f, std::memory_order_relaxed);
+    }
 
-    uint8_t m_loaded_flags = 0;
+    // Layer mutexes publish the data; atomic updates preserve bits across layers.
+    std::atomic<uint8_t> m_loaded_flags{ 0 };
 
     // Fetches populate independent data sets. Layer-owned locks allow consumers
     // to read a completed layer while unrelated layers are still loading.

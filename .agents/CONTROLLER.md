@@ -1100,9 +1100,12 @@ pane stays readable while source or stall data loads:
 | Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
 | Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
 
-Cached query-group bits in `m_loaded_flags`, accessed through `IsLoaded` and
-`SetLoaded` with the `LoadedFlag` enum, prevent repeated queries. The completion
-properties read the same `kPcSampleStates` and `kStalls` bits used by the fetchers.
+Cached query-group bits in the atomic `m_loaded_flags`, accessed through `IsLoaded`
+and `SetLoaded` with the `LoadedFlag` enum, prevent repeated queries. Atomic loads
+and `fetch_or` preserve completion bits when independently locked layers finish
+concurrently. These operations use relaxed memory ordering because the per-layer
+mutexes protect and publish the corresponding data. The completion properties
+read the same `kPcSampleStates` and `kStalls` bits used by the fetchers.
 Row-count setters clear their destination vectors before resizing so a failed
 fetch followed by a retry cannot preserve fields from an earlier result.
 Read-only uint64 properties `kRPVControllerPCSamplingSampleStatesLoaded` and
@@ -1483,7 +1486,9 @@ Catch2 tests live in `src/controller/tests/`:
 It augments a private copy of the compute fixture with schema-2.2 sampling tables
 and exercises the public ABI. Missing state, reason, and lookup tables inject query
 failures; tests verify group completion, retained counts, recovery, cache reuse on
-retry, and successful empty results. Changes to PC-sampling fetchers or their
+retry, and successful empty results. A concurrent ISA/source/stalls test removes
+the backing tables after loading and retries all layers to verify retained cache
+completion across layers. Changes to PC-sampling fetchers or their
 property bank should extend this coverage.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).

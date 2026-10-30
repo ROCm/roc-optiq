@@ -37,6 +37,8 @@ public:
         kBranch,
         kValu,
         kFlat,
+        kLds,
+        kBarrier,
         kUnknown
     };
 
@@ -52,7 +54,9 @@ public:
         { InstructionKind::kScalar, "SCALAR" },
         { InstructionKind::kBranch, "BRANCH" },
         { InstructionKind::kValu, "VALU" },
-        { InstructionKind::kFlat, "FLAT" }
+        { InstructionKind::kFlat, "FLAT" },
+        { InstructionKind::kLds, "LDS" },
+        { InstructionKind::kBarrier, "BARRIER" }
     };
 
     enum class StallReasonKind : uint32_t

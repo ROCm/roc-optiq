@@ -1541,7 +1541,11 @@ There are two distinct flows:
   containing only the time range `[start, end]`. Tables marked
   `kRocOptiqTableCopyWhenTrimmed` are copied; those marked
   `kRocOptiqTableDisposeWhenTrimmed` are dropped from the new file
-  and rebuilt on next open.
+  and rebuilt on next open. `SaveTrimmedDataAsync` refuses a destination
+  that is one of the trace's own files (`IsSourceFile`), trims into a
+  temporary file beside the destination, and renames it over the
+  destination only on success. The per-subclass `SaveTrimmedData`
+  returns its result; the async wrapper sets the promise.
 
 ## 11. CFFI / Python Bindings
 

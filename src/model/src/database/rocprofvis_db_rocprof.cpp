@@ -1502,9 +1502,6 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     rocprofvis_db_sqlite_trim_parameters rocpd_trim_views;
     TemporaryDbInstance tmp_db_instance(0);
 
-
-    std::filesystem::remove(new_db_path);
-
     while (true) 
     {
         RocprofDatabase rpDb(new_db_path);
@@ -1801,12 +1798,12 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
         if (result != kRocProfVisDmResultSuccess) break;
 
         ShowProgress(100, "Trace trimmed successfully!", kRPVDbSuccess, future);
-        return future->SetPromise(result);
+        return result;
     }
 
 
     ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
-    return future->SetPromise(result);
+    return result;
 }
 
 void RocprofDatabase::BuildOpQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_event_operation_t op)

@@ -3,6 +3,8 @@
 
 #include "rocprofvis_db_query_manager.h"
 #include "rocprofvis_c_interface.h"
+#include <filesystem>
+#include <system_error>
 
 namespace RocProfVis
 {
@@ -226,6 +228,18 @@ rocprofvis_dm_event_operation_t QueryManager::GetTableQueryOperation(std::string
         return (rocprofvis_dm_event_operation_t)std::atol(query.substr(select_str.size(), 1).c_str());
     }
     return kRocProfVisDmOperationNoOp;
+}
+
+bool QueryManager::IsSourceFile(rocprofvis_dm_charptr_t path) {
+    std::error_code error;
+    for (const auto& node : m_db_nodes)
+    {
+        if (std::filesystem::equivalent(path, node->filepath, error))
+        {
+            return true;
+        }
+    }
+    return std::filesystem::equivalent(path, Path(), error);
 }
 
 bool QueryManager::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {

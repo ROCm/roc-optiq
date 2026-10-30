@@ -8,6 +8,8 @@
 #include <sstream>
 #include <cstring>
 #include <cfloat>
+#include <filesystem>
+#include <system_error>
 
 namespace RocProfVis
 {
@@ -169,24 +171,37 @@ SystemDatabase::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                 kRocProfVisDmResultInvalidParameter);
 
 
-            //check if a db file exists and if it does delete it (we will overwrite it)
-            std::ifstream file(new_db_path);
-            if(file.good())
+            // A trim over a file this trace reads would delete the trace itself.
+            if(IsSourceFile(new_db_path.c_str()))
             {
-                file.close();
-                int remove_result = std::remove(new_db_path.c_str());
-                if(remove_result != 0)
-                {
-                    spdlog::error("Failed to overwrite existing file: {}, code: {}", new_db_path,
-                        remove_result);
-
-                    ShowProgress(0, "Failed to trim track! Could not overwrite existing file.", kRPVDbError, future);
-                    future->SetPromise(kRocProfVisDmResultDbAccessFailed);
-                    return kRocProfVisDmResultDbAccessFailed;
-                }
+                spdlog::error("Cannot save a trimmed trace over the trace it reads: {}",
+                    new_db_path);
+                ShowProgress(0, "Failed to trim track! The destination is the open trace.", kRPVDbError, future);
+                return future->SetPromise(kRocProfVisDmResultInvalidParameter);
             }
 
-            return SaveTrimmedData(start, end, new_db_path.c_str(), future);
+            // Trim into a temporary file next to the destination and replace the
+            // destination only once that succeeded, so a failed trim leaves it intact.
+            const std::string temp_path = new_db_path + ".optiq-trim.tmp";
+            std::error_code   fs_error;
+            std::filesystem::remove(temp_path, fs_error);
+            rocprofvis_dm_result_t result = SaveTrimmedData(start, end, temp_path.c_str(), future);
+            if(result == kRocProfVisDmResultSuccess)
+            {
+                std::filesystem::rename(temp_path, new_db_path, fs_error);
+                if(fs_error)
+                {
+                    spdlog::error("Failed to overwrite existing file: {}, {}", new_db_path,
+                        fs_error.message());
+                    ShowProgress(0, "Failed to trim track! Could not overwrite existing file.", kRPVDbError, future);
+                    result = kRocProfVisDmResultDbAccessFailed;
+                }
+            }
+            if(result != kRocProfVisDmResultSuccess)
+            {
+                std::filesystem::remove(temp_path, fs_error);
+            }
+            return future->SetPromise(result);
             })));
     } catch(std::exception& ex)
     {

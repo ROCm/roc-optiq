@@ -304,11 +304,7 @@ TraceView::CreateView()
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection,
                                                              m_measurement, m_annotations);
-    if(!IsCompareTrace(m_data_provider.DataModel()))
-    {
-        m_summary_view =
-            std::make_shared<SummaryView>(m_data_provider, m_timeline_selection);
-    }
+    m_summary_view = std::make_shared<SummaryView>(m_data_provider, m_timeline_selection);
     m_event_search = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(

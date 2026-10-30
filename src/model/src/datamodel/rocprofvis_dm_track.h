@@ -56,6 +56,8 @@ public:
     rocprofvis_dm_timestamp_t                           MinTimestamp();
     // Return track maximum timestamp
     rocprofvis_dm_timestamp_t                           MaxTimestamp();
+    // Return end timestamp of the trace in the track's db instance
+    rocprofvis_dm_timestamp_t                           InstanceEndTimestamp();
     // Return track minimum level or value
     rocprofvis_dm_value_t                               MinValue() { return m_track_params->min_value; }
     // Return track maximum level or value

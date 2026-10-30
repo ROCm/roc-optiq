@@ -9,6 +9,7 @@
 #include "model/rocprofvis_topology_model.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_summary_compare.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -30,13 +31,11 @@ constexpr ImVec2      CHART_FIT_PADDING               = ImVec2(0.1f, 0.1f);
 constexpr float       FILTER_COMBO_RELATIVE_MIN_WIDTH = 17.0f;
 constexpr float       INITIAL_RELATIVE_SIZE           = 0.8f;
 constexpr float       INITIAL_RELATIVE_SIZE_LOADING   = 0.2f;
+constexpr float       PREFERRED_SIZE_SCALE            = 2.0f;
+constexpr float       COMPARE_PREFERRED_WIDTH_SCALE   = 2.8f;
 constexpr ImVec2      MIN_SIZE_RELATIVE               = ImVec2(34.0f, 12.0f);
 constexpr const char* SIGMA                           = u8"\u03C3";
-constexpr std::pair<const char*, size_t> DISPLAY_PROPS_EVENT_TYPES[] = {
-    { "Kernel Executions", 0 },
-    { "Memory Operations", 2 },
-    { "Thread Operations", 3 }
-};
+constexpr const auto& DISPLAY_PROPS_EVENT_TYPES       = SUMMARY_CATEGORY_DISPLAY;
 constexpr const char* DISPLAY_NAMES_TOP_EVENT_TYPES[] = {
     "Top Kernels by Execution Time", "Top Memory Operations by Execution Time",
     "Top Thread Operations by Execution Time"
@@ -44,12 +43,26 @@ constexpr const char* DISPLAY_NAMES_TOP_EVENT_TYPES[] = {
 constexpr const char* DISPLAY_NAMES_METRIC_TYPES[] = { "Trace", "Node", "Processor",
                                                        "Process", "Thread" };
 
+static bool
+has_counters(const SummaryModel& summary)
+{
+    const SummaryInfo::AggregateMetrics& metrics = summary.GetSummaryData();
+    return !metrics.gpu.counters.list.empty() || !metrics.cpu.counters.list.empty();
+}
+
 SummaryView::SummaryView(DataProvider&                      dp,
                          std::shared_ptr<TimelineSelection> timeline_selection)
 : m_tab_container(nullptr)
 , m_overview(nullptr)
 , m_topology(nullptr)
 , m_top_events({})
+, m_compare_mode(IsCompareTrace(dp.DataModel()))
+, m_compare_overview(nullptr)
+, m_source_topology({})
+, m_compare_topology(nullptr)
+, m_compare_top_events({})
+, m_source_fetched_revision({})
+, m_source_progress({})
 , m_fetched_revision(0)
 , m_data_changed(false)
 , m_init_window(true)
@@ -60,26 +73,98 @@ SummaryView::SummaryView(DataProvider&                      dp,
 , m_progress_token(EventManager::InvalidSubscriptionToken)
 {
     m_tab_container = std::make_unique<TabContainer>();
-    m_topology      = std::make_shared<SummaryTopology>(m_data_provider);
-    m_top_events[kRPVAnalysisSummaryCategoryKernel] = std::make_shared<SummaryTopEvents>(
-        m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
-        TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
-        DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID);
-    m_top_events[kRPVAnalysisSummaryCategoryMemory] = std::make_shared<SummaryTopEvents>(
-        m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryMemory,
-        TableType::kSummaryMemoryTable, kRPVControllerTableTypeSummaryMemoryInstances,
-        DataProvider::SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID);
-    m_top_events[kRPVAnalysisSummaryCategoryThread] = std::make_shared<SummaryTopEvents>(
-        m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
-        TableType::kSummaryThreadTable, kRPVControllerTableTypeSummaryThreadInstances,
-        DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID);
-    m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_topology,
-                                                   m_top_events, *m_tab_container.get());
+    // The tooltips would only repeat the tab ids.
+    m_tab_container->SetAllowToolTips(false);
+    if(m_compare_mode)
+    {
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            m_source_topology[source] = std::make_shared<SummaryTopology>(
+                m_data_provider, *m_data_provider.DataModel().GetSourceSummary(source));
+        }
+        m_compare_overview = std::make_shared<SummaryCompareOverview>(
+            m_data_provider, m_source_topology, *m_tab_container);
+        // Each topology splits its table from its counters, so the two stack
+        // rather than share the width.
+        m_compare_topology = MakeCompareStack(std::make_shared<RocCustomWidget>([this]() {
+                                                  RenderSourceTopology(COMPARE_SOURCE_A);
+                                              }),
+                                              std::make_shared<RocCustomWidget>([this]() {
+                                                  RenderSourceTopology(COMPARE_SOURCE_B);
+                                              }));
+        m_compare_top_events[kRPVAnalysisSummaryCategoryKernel] =
+            std::make_shared<SummaryCompareTopEvents>(
+                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
+                TableType::kSummaryKernelTable,
+                kRPVControllerTableTypeSummaryKernelInstances,
+                RequestType::kFetchSummaryKernelInstanceTable);
+        m_compare_top_events[kRPVAnalysisSummaryCategoryMemory] =
+            std::make_shared<SummaryCompareTopEvents>(
+                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryMemory,
+                TableType::kSummaryMemoryTable,
+                kRPVControllerTableTypeSummaryMemoryInstances,
+                RequestType::kFetchSummaryMemoryInstanceTable);
+        m_compare_top_events[kRPVAnalysisSummaryCategoryThread] =
+            std::make_shared<SummaryCompareTopEvents>(
+                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
+                TableType::kSummaryThreadTable,
+                kRPVControllerTableTypeSummaryThreadInstances,
+                RequestType::kFetchSummaryThreadInstanceTable);
+    }
+    else
+    {
+        m_topology = std::make_shared<SummaryTopology>(
+            m_data_provider, m_data_provider.DataModel().GetSummary());
+        m_top_events[kRPVAnalysisSummaryCategoryKernel] =
+            std::make_shared<SummaryTopEvents>(
+                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
+                TableType::kSummaryKernelTable,
+                kRPVControllerTableTypeSummaryKernelInstances,
+                DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID);
+        m_top_events[kRPVAnalysisSummaryCategoryMemory] =
+            std::make_shared<SummaryTopEvents>(
+                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryMemory,
+                TableType::kSummaryMemoryTable,
+                kRPVControllerTableTypeSummaryMemoryInstances,
+                DataProvider::SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID);
+        m_top_events[kRPVAnalysisSummaryCategoryThread] =
+            std::make_shared<SummaryTopEvents>(
+                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
+                TableType::kSummaryThreadTable,
+                kRPVControllerTableTypeSummaryThreadInstances,
+                DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID);
+        m_overview = std::make_shared<SummaryOverview>(
+            m_data_provider, m_topology, m_top_events, *m_tab_container.get());
+    }
     m_data_provider.SetSummaryDataReadyCallback([this]() {
-        m_topology->Fetched();
+        if(m_topology)
+        {
+            m_topology->Fetched();
+        }
         for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
         {
-            top_events->Fetched();
+            if(top_events)
+            {
+                top_events->Fetched();
+            }
+        }
+        if(m_compare_overview)
+        {
+            m_compare_overview->Fetched();
+        }
+        for(std::shared_ptr<SummaryTopology>& topology : m_source_topology)
+        {
+            if(topology)
+            {
+                topology->Fetched();
+            }
+        }
+        for(std::shared_ptr<SummaryCompareTopEvents>& top_events : m_compare_top_events)
+        {
+            if(top_events)
+            {
+                top_events->Fetched();
+            }
         }
         m_data_changed = true;
     });
@@ -88,10 +173,28 @@ SummaryView::SummaryView(DataProvider&                      dp,
         [this](std::shared_ptr<RocEvent> e) {
             (void) e;
             m_data_provider.DataModel().GetSummary().UpdateValueStrings();
-            m_topology->TimeFormatChanged();
+            if(m_topology)
+            {
+                m_topology->TimeFormatChanged();
+            }
             for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
             {
-                top_events->TimeFormatChanged();
+                if(top_events)
+                {
+                    top_events->TimeFormatChanged();
+                }
+            }
+            for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+            {
+                if(SummaryModel* summary =
+                       m_data_provider.DataModel().GetSourceSummary(source))
+                {
+                    summary->UpdateValueStrings();
+                }
+                if(m_source_topology[source])
+                {
+                    m_source_topology[source]->TimeFormatChanged();
+                }
             }
         });
     m_progress_token = EventManager::GetInstance()->Subscribe(
@@ -102,7 +205,16 @@ SummaryView::SummaryView(DataProvider&                      dp,
             if(event && event->GetRequestType() == RequestType::kFetchSummary &&
                event->GetSourceId() == m_data_provider.GetTraceFilePath())
             {
-                m_progress = event->GetProgressPercent() / 100.0f;
+                const float progress = event->GetProgressPercent() / 100.0f;
+                m_progress           = progress;
+                for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+                {
+                    if(event->GetRequestID() ==
+                       DataProvider::SourceSummaryRequestId(source))
+                    {
+                        m_source_progress[source] = progress;
+                    }
+                }
             }
         });
 }
@@ -116,12 +228,12 @@ SummaryView::~SummaryView()
 }
 
 void
-SummaryView::Update()
+SummaryView::UpdateFetch()
 {
-    if(m_data_provider.GetState() == ProviderState::kReady)
+    const uint64_t revision = m_data_provider.DataModel().GetTopology().GetRevision();
+    if(!m_compare_mode)
     {
-        if(m_settings.GetAppWindowSettings().show_summary &&
-           m_fetched_revision < m_data_provider.DataModel().GetTopology().GetRevision() &&
+        if(m_fetched_revision < revision &&
            !m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
         {
             if(m_fetched_revision <
@@ -132,42 +244,177 @@ SummaryView::Update()
             }
             else if(m_data_provider.FetchSummary())
             {
-                m_fetched_revision =
-                    m_data_provider.DataModel().GetTopology().GetRevision();
-                m_progress = 0.0f;
+                m_fetched_revision = revision;
+                m_progress         = 0.0f;
             }
         }
+        return;
+    }
+
+    for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+    {
+        if(m_data_provider.IsRequestPending(DataProvider::SourceSummaryRequestId(source)))
+        {
+            break;
+        }
+        if(m_source_fetched_revision[source] < revision)
+        {
+            if(m_data_provider.FetchSourceSummary(source))
+            {
+                m_source_fetched_revision[source] = revision;
+                m_source_progress[source]         = 0.0f;
+            }
+            break;
+        }
+    }
+    m_fetched_revision = *std::min_element(m_source_fetched_revision.begin(),
+                                           m_source_fetched_revision.end());
+}
+
+bool
+SummaryView::Loading() const
+{
+    bool loading =
+        m_fetched_revision < m_data_provider.DataModel().GetTopology().GetRevision();
+    if(m_compare_mode)
+    {
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            loading = loading || m_data_provider.IsRequestPending(
+                                     DataProvider::SourceSummaryRequestId(source));
+        }
+    }
+    else
+    {
+        loading =
+            loading || m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID);
+    }
+    return loading;
+}
+
+float
+SummaryView::Progress() const
+{
+    float progress = m_progress;
+    if(m_compare_mode)
+    {
+        // The sources load one after the other, each a share of the bar.
+        progress = 0.0f;
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            const bool done =
+                m_source_fetched_revision[source] >=
+                    m_data_provider.DataModel().GetTopology().GetRevision() &&
+                !m_data_provider.IsRequestPending(
+                    DataProvider::SourceSummaryRequestId(source));
+            progress += (done ? 1.0f : m_source_progress[source]) * COMPARE_EVEN_SPLIT;
+        }
+    }
+    return progress;
+}
+
+void
+SummaryView::RebuildTabs()
+{
+    while(!m_tab_container->GetTabs().empty())
+    {
+        m_tab_container->RemoveTab(0);
+    }
+    // Counters without events still fill the overview and the topology.
+    if(m_compare_mode)
+    {
+        bool any = false;
+        for(const std::shared_ptr<SummaryCompareTopEvents>& top_events :
+            m_compare_top_events)
+        {
+            any = any || !top_events->Empty();
+        }
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            const SummaryModel* summary =
+                m_data_provider.DataModel().GetSourceSummary(source);
+            any = any || (summary && has_counters(*summary));
+        }
+        if(any)
+        {
+            m_tab_container->AddTab(
+                RocWidget::CreateTabItem("Overview", "overview", m_compare_overview));
+            m_tab_container->AddTab(RocWidget::CreateTabItem(
+                "System Topology", "topology", m_compare_topology));
+            for(size_t i = 0; i < m_compare_top_events.size(); i++)
+            {
+                if(!m_compare_top_events[i]->Empty())
+                {
+                    m_tab_container->AddTab(RocWidget::CreateTabItem(
+                        DISPLAY_PROPS_EVENT_TYPES[i].first,
+                        DISPLAY_PROPS_EVENT_TYPES[i].first, m_compare_top_events[i]));
+                }
+            }
+        }
+        return;
+    }
+    bool any = has_counters(m_data_provider.DataModel().GetSummary());
+    for(const std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
+    {
+        any = any || (top_events && !top_events->Empty());
+    }
+    if(any && m_overview)
+    {
+        m_tab_container->AddTab(
+            RocWidget::CreateTabItem("Overview", "overview", m_overview));
+    }
+    if(any && m_topology)
+    {
+        m_tab_container->AddTab(
+            RocWidget::CreateTabItem("System Topology", "topology", m_topology));
+    }
+    for(size_t i = 0; i < m_top_events.size(); i++)
+    {
+        if(m_top_events[i] && !m_top_events[i]->Empty())
+        {
+            m_tab_container->AddTab(RocWidget::CreateTabItem(
+                DISPLAY_PROPS_EVENT_TYPES[i].first, DISPLAY_PROPS_EVENT_TYPES[i].first,
+                m_top_events[i]));
+        }
+    }
+}
+
+void
+SummaryView::RenderSourceTopology(size_t source)
+{
+    const CompareSourceInfo* info = m_data_provider.DataModel().GetCompareSource(source);
+    if(!info || !m_source_topology[source])
+    {
+        return;
+    }
+    BeginCompareCard("##source_topology", m_settings);
+    RenderCompareCardTitle(*info, m_settings);
+    m_source_topology[source]->Render();
+    EndCompareCard();
+}
+
+void
+SummaryView::Update()
+{
+    if(m_data_provider.GetState() == ProviderState::kReady &&
+       m_settings.GetAppWindowSettings().show_summary)
+    {
+        UpdateFetch();
     }
     if(m_data_changed)
     {
-        while(!m_tab_container->GetTabs().empty())
-        {
-            m_tab_container->RemoveTab(0);
-        }
-        for(size_t i = 0; i < m_top_events.size(); i++)
-        {
-            if(m_top_events[i] && !m_top_events[i]->Empty())
-            {
-                if(m_tab_container->GetTabs().empty())
-                {
-                    if(m_overview)
-                    {
-                        m_tab_container->AddTab(
-                            RocWidget::CreateTabItem("Overview", "overview", m_overview));
-                    }
-                    if(m_topology)
-                    {
-                        m_tab_container->AddTab(RocWidget::CreateTabItem(
-                            "System Topology", "topology", m_topology));
-                    }
-                }
-                m_tab_container->AddTab(RocWidget::CreateTabItem(
-                    DISPLAY_PROPS_EVENT_TYPES[i].first,
-                    DISPLAY_PROPS_EVENT_TYPES[i].first, m_top_events[i]));
-            }
-        }
+        RebuildTabs();
         m_init_window  = true;
         m_data_changed = false;
+    }
+    // The compare topology tab is a layout of these two, so they are not reached
+    // through the tab container.
+    for(std::shared_ptr<SummaryTopology>& topology : m_source_topology)
+    {
+        if(topology)
+        {
+            topology->Update();
+        }
     }
     if(m_tab_container)
     {
@@ -181,9 +428,7 @@ SummaryView::Render()
     if(SettingsManager::GetInstance().GetAppWindowSettings().show_summary &&
        m_tab_container)
     {
-        bool loading = m_fetched_revision <
-                           m_data_provider.DataModel().GetTopology().GetRevision() ||
-                       m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID);
+        const bool loading = Loading();
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
@@ -215,7 +460,7 @@ SummaryView::Render()
                 ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
                     ImGuiWindowFlags_NoResize);
-            ImGui::ProgressBar(m_progress, ImVec2(-FLT_MIN, -FLT_MIN), "");
+            ImGui::ProgressBar(Progress(), ImVec2(-FLT_MIN, -FLT_MIN), "");
             ImGui::SetCursorScreenPos(
                 ImGui::GetItemRectMin() +
                 ImVec2(0.0f, ImGui::GetItemRectSize().y * 0.5f - 5.0f));
@@ -233,9 +478,23 @@ SummaryView::Render()
             ImGui::BeginChild(
                 "summary_clamped_view", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-            if(m_tab_container->GetTabs().empty() ||
-               m_data_provider.DataModel().GetSummary().GetRevision() <
-                   m_data_provider.DataModel().GetTopology().GetRevision())
+            const uint64_t revision =
+                m_data_provider.DataModel().GetTopology().GetRevision();
+            bool stale = false;
+            if(m_compare_mode)
+            {
+                for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+                {
+                    const SummaryModel* summary =
+                        m_data_provider.DataModel().GetSourceSummary(source);
+                    stale = stale || !summary || summary->GetRevision() < revision;
+                }
+            }
+            else
+            {
+                stale = m_data_provider.DataModel().GetSummary().GetRevision() < revision;
+            }
+            if(m_tab_container->GetTabs().empty() || stale)
             {
                 ImGui::SetCursorPos((ImGui::GetContentRegionAvail() -
                                      ImGui::CalcTextSize("No data available.")) *
@@ -268,7 +527,10 @@ SummaryView::MinSize() const
 ImVec2
 SummaryView::PreferredSize() const
 {
-    return MinSize() * 2.0f;
+    // Compare puts two sources side by side, so it is given more width.
+    return MinSize() *
+           ImVec2(m_compare_mode ? COMPARE_PREFERRED_WIDTH_SCALE : PREFERRED_SIZE_SCALE,
+                  PREFERRED_SIZE_SCALE);
 }
 
 SummaryOverview::SummaryOverview(
@@ -453,13 +715,14 @@ SummaryOverview::Tile(ImGuiID id, ImVec2 size, std::function<void()> content) co
     ImGui::EndChild();
 }
 
-SummaryTopology::SummaryTopology(DataProvider& dp)
+SummaryTopology::SummaryTopology(DataProvider& dp, const SummaryModel& summary)
 : m_h_container(nullptr)
 , m_composition_table_headers({})
 , m_counters(nullptr)
 , m_data_changed(false)
 , m_timeformat_changed(true)
 , m_data_provider(dp)
+, m_summary(summary)
 , m_settings(SettingsManager::GetInstance())
 {
     LayoutItem::Ptr topology = LayoutItem::CreateFromWidget(
@@ -485,16 +748,10 @@ SummaryTopology::Update()
 {
     if(m_data_changed)
     {
-        m_counters     = m_data_provider.DataModel()
-                                     .GetSummary()
-                                     .GetSummaryData()
-                                     .gpu.counters.list.size() ||
-                                 m_data_provider.DataModel()
-                                     .GetSummary()
-                                     .GetSummaryData()
-                                     .cpu.counters.list.size()
-                             ? &m_data_provider.DataModel().GetSummary().GetSummaryData()
-                             : nullptr;
+        const SummaryInfo::AggregateMetrics& metrics = m_summary.GetSummaryData();
+        m_counters = metrics.gpu.counters.list.size() || metrics.cpu.counters.list.size()
+                         ? &metrics
+                         : nullptr;
         m_data_changed = false;
     }
     if(m_timeformat_changed)
@@ -553,8 +810,7 @@ bool
 SummaryTopology::RenderPreview() const
 {
     ImGui::TextUnformatted("Event Composition");
-    CompositionBar(ImGui::GetContentRegionAvail(),
-                   m_data_provider.DataModel().GetSummary().GetSummaryData(), true);
+    CompositionBar(ImGui::GetContentRegionAvail(), m_summary.GetSummaryData(), true);
     return false;
 }
 
@@ -562,7 +818,7 @@ void
 SummaryTopology::RenderTopology()
 {
     const ImGuiStyle&   style = m_settings.GetDefaultStyle();
-    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    const SummaryModel& model = m_summary;
     ImGui::TextUnformatted("System Topology");
     float legend_pos = ImGui::GetContentRegionMax().x;
     for(size_t i = 0; i < static_cast<size_t>(__kRPVAnalysisSummaryCategoryLast); i++)
@@ -691,7 +947,7 @@ SummaryTopology::CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics
                                 bool labels) const
 {
     const ImGuiStyle&   style = m_settings.GetDefaultStyle();
-    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    const SummaryModel& model = m_summary;
     uint64_t            total_duration =
         model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
             ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
@@ -797,6 +1053,13 @@ SummaryTopology::CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float se
                 ImGui::PopFont();
             }
         }
+        if(ImGui::IsMouseHoveringRect(
+               ImVec2(segment_x, bar_pos.y),
+               ImVec2(segment_x + segment_width, bar_pos.y + bar_size.y)))
+        {
+            SetTooltipStyled("%s  %.1f%%", DISPLAY_PROPS_EVENT_TYPES[category].first,
+                             100.0 * segment_pct);
+        }
     }
     segment_x += segment_width;
 }
@@ -805,7 +1068,7 @@ void
 SummaryTopology::CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
                                   float                                max_name_width)
 {
-    const SummaryModel& model = m_data_provider.DataModel().GetSummary();
+    const SummaryModel& model = m_summary;
     if((model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
             ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
             .numeric.uint +
@@ -941,44 +1204,32 @@ SummaryTopology::CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
             ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight()), metrics,
             false);
         ImGui::TableNextColumn();
-        if(m_data_provider.DataModel()
-               .GetSummary()
-               .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+        if(model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
                .numeric.uint)
         {
             ImGui::TextUnformatted(
-                m_data_provider.DataModel()
-                    .GetSummary()
-                    .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
+                model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryKernel)
                     ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
                     .str.c_str());
         }
         ImGui::TableNextColumn();
-        if(m_data_provider.DataModel()
-               .GetSummary()
-               .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+        if(model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
                .numeric.uint)
         {
             ImGui::TextUnformatted(
-                m_data_provider.DataModel()
-                    .GetSummary()
-                    .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
+                model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryMemory)
                     ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
                     .str.c_str());
         }
         ImGui::TableNextColumn();
-        if(m_data_provider.DataModel()
-               .GetSummary()
-               .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+        if(model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
                ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
                .numeric.uint)
         {
             ImGui::TextUnformatted(
-                m_data_provider.DataModel()
-                    .GetSummary()
-                    .TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
+                model.TopOpEvents(metrics, kRPVAnalysisSummaryCategoryThread)
                     ->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]
                     .str.c_str());
         }
@@ -1182,7 +1433,7 @@ SummaryTopEvents::SummaryTopEvents(DataProvider&                      dp,
                                    rocprofvis_controller_table_type_t request_table_type,
                                    uint64_t                           request_id)
 : m_v_container(nullptr)
-, m_instance_table(std::make_unique<InstanceTable>(
+, m_instance_table(std::make_unique<SummaryInstanceTable>(
       dp, timeline_selection, type, table_type, request_table_type, request_id))
 , m_op_events(nullptr)
 , m_filters()
@@ -2248,24 +2499,66 @@ SummaryTopEvents::ToggleSelectEvent(const size_t& idx)
     }
 }
 
-SummaryTopEvents::InstanceTable::InstanceTable(
+// The summary an instance table reads into: one compare source's, or the trace's.
+static SummaryModel&
+instance_summary(DataProvider& dp, std::optional<uint64_t> source)
+{
+    SummaryModel* summary =
+        source ? dp.DataModel().GetSourceSummary(source.value()) : nullptr;
+    ROCPROFVIS_ASSERT(!source || summary);
+    return summary ? *summary : dp.DataModel().GetSummary();
+}
+
+SummaryInstanceTable::SummaryInstanceTable(
     DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
     rocprofvis_analysis_summary_category_t type, TableType table_type,
-    rocprofvis_controller_table_type_t request_table_type, uint64_t request_id)
+    rocprofvis_controller_table_type_t request_table_type, uint64_t request_id,
+    std::optional<uint64_t> source)
 : InfiniteScrollTable(
       dp, table_type, request_table_type, request_id,
-      [&dp]() -> const TablesModel& { return dp.DataModel().GetSummary().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetSummary().GetTables(); },
+      [&dp, source]() -> const TablesModel& {
+          return instance_summary(dp, source).GetTables();
+      },
+      [&dp, source]() -> TablesModel& {
+          return instance_summary(dp, source).GetTables();
+      },
       timeline_selection)
 , m_type(type)
+, m_source(source)
 , m_source_filter(std::nullopt)
 , m_fetched(false)
 {
     m_widget_name = GenUniqueName("summary_top_event_instances");
+    // A compare source's table sits in a card that already draws the frame.
+    SetDrawBorder(!m_source.has_value());
+}
+
+bool
+SummaryInstanceTable::Searched() const
+{
+    return m_fetched;
+}
+
+bool
+SummaryInstanceTable::Loading() const
+{
+    return TableRequestInFlight();
+}
+
+uint64_t
+SummaryInstanceTable::InstanceCount() const
+{
+    return m_table_model().GetTableTotalRowCount(m_table_type);
 }
 
 void
-SummaryTopEvents::InstanceTable::Render()
+SummaryInstanceTable::RenderTable()
+{
+    InfiniteScrollTable::Render();
+}
+
+void
+SummaryInstanceTable::Render()
 {
     const ImGuiStyle& style = m_settings.GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
@@ -2274,8 +2567,15 @@ SummaryTopEvents::InstanceTable::Render()
     {
         ImGui::BeginChild("##status", ImVec2(0.0f, 0.0f),
                           ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-        ImGui::Text("Showing %llu invocation(s)",
-                    m_table_model().GetTableTotalRowCount(m_table_type));
+        if(Loading())
+        {
+            ImGui::TextUnformatted("Loading invocations...");
+        }
+        else
+        {
+            ImGui::Text("Showing %llu invocation(s)",
+                        m_table_model().GetTableTotalRowCount(m_table_type));
+        }
         ImGui::EndChild();
         InfiniteScrollTable::Render();
     }
@@ -2295,27 +2595,39 @@ SummaryTopEvents::InstanceTable::Render()
 }
 
 void
-SummaryTopEvents::InstanceTable::SearchInstances(
+SummaryInstanceTable::SearchInstances(
     const std::string&                            event_name,
     std::optional<rocprofvis_dm_query_criteria_t> source_filter)
 {
     m_event_name    = event_name;
     m_source_filter = source_filter;
+    if(m_source)
+    {
+        if(!m_source_filter)
+        {
+            m_source_filter = rocprofvis_dm_query_criteria_t{};
+        }
+        m_source_filter->file_id = m_source.value();
+    }
+    // The previous event's rows would otherwise show until this search lands, or stay
+    // if it fails.
+    m_table_model_mutable().ClearTable(m_table_type);
     RequestFetch();
     m_fetched = true;
 }
 
 void
-SummaryTopEvents::InstanceTable::Clear()
+SummaryInstanceTable::Clear()
 {
-    m_data_provider.CancelRequest(m_request_id);
+    // Also drops a search still waiting for the shared table, which would otherwise
+    // be sent after the selection is gone.
+    CancelFetch(true);
     m_table_model_mutable().ClearTable(m_table_type);
     m_fetched = false;
 }
 
 void
-SummaryTopEvents::InstanceTable::UpdateFetchParams(
-    std::shared_ptr<TableRequestParams>& params) const
+SummaryInstanceTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const
 {
     if(!params)
     {

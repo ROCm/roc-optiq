@@ -2035,7 +2035,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadStackTraceInfo(
                 query << " WHERE R.id = " << event_id.bitfield.event_id;
                 query << " UNION SELECT sc.depth + 1, " << callstack_params;
                 query << " FROM " << callstack_tables.str();
-                query << " JOIN stack_chain sc ON sc.parent_id = L.eid) ";
+                // A parent id of 0 means no parent. Joining it would recurse forever
+                // when the trace has an event with id 0, whose parent id is also 0.
+                query << " JOIN stack_chain sc ON sc.parent_id = L.eid AND sc.parent_id <> 0) ";
                 query << " SELECT sc.version, sc.id, sc.p1, sc.p2, sc.p3, S.string, sc.depth FROM stack_chain sc ";
                 query << " LEFT JOIN rocpd_string_%GUID% S ON S.id = sc.name_id ";
                 query << " ORDER BY depth DESC;";

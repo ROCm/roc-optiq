@@ -284,6 +284,9 @@ typedef enum rocprofvis_dm_track_property_t {
     kRPVDMTrackFileIdUInt64,
     // Track Order Ranking ID
     kRPVDMTrackOrderRankingUInt64,
+    // End timestamp of the trace in the track's db instance. Differs from the trace
+    // end time when several traces are open together, as in a compare.
+    kRPVDMTrackInstanceEndTimestampUInt64,
 } rocprofvis_dm_track_property_t;
 
 // Slice properties
@@ -451,6 +454,9 @@ typedef struct rocprofvis_dm_query_criteria_t
     c_optional_uint64_t agent_id;
     c_optional_uint64_t process_id;
     c_optional_uint64_t thread_id;
+    // Source file of a multi-file (compare) trace. Not a column like the ids
+    // above: it selects which of the files the query reads at all.
+    c_optional_uint64_t file_id;
 
 } rocprofvis_dm_query_criteria_t,  * rocprofvis_dm_query_criteria_ptr;
 
@@ -470,7 +476,8 @@ inline bool operator==(const rocprofvis_dm_query_criteria_t& lhs,
     return lhs.node_id == rhs.node_id &&
         lhs.agent_id == rhs.agent_id &&
         lhs.process_id == rhs.process_id &&
-        lhs.thread_id == rhs.thread_id;
+        lhs.thread_id == rhs.thread_id &&
+        lhs.file_id == rhs.file_id;
 }
 #endif
 

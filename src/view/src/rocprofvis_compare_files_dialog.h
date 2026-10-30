@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "imgui.h"
+
+#include <array>
 #include <functional>
 #include <string>
 
@@ -11,8 +14,15 @@ namespace RocProfVis
 namespace View
 {
 
+/* Picks the two traces of a compare project: the baseline (A) and the target (B)
+ * compared against it. Files are browsed for, dropped onto the window, or taken
+ * from the recent list, and are checked as they are picked so the dialog can say
+ * what is wrong before anything is opened.
+ */
 class CompareFilesDialog
 {
+    friend struct CompareFilesDialogTestPeer;
+
 public:
     enum class FileSlot
     {
@@ -26,7 +36,8 @@ public:
 
     CompareFilesDialog(BrowseCallback browse_callback, OpenCallback open_callback);
 
-    void Show();
+    // Opens the dialog, with baseline already in the first slot when given.
+    void Show(const std::string& baseline = "");
     void SetFilePath(FileSlot slot, const std::string& file_path);
     void Render();
 
@@ -37,17 +48,35 @@ public:
     void AddDroppedFile(const std::string& file_path);
 
 private:
-    // Validates the two selections, returns true and clears any error when they are a
-    // usable pair (both set and not the same file).
-    bool Validate();
+    // What a slot holds, read once when it is set rather than every frame.
+    struct SlotFile
+    {
+        std::string path;
+        std::string name;
+        std::string folder;
+        std::string details;  // Size and last modified time
+        std::string problem;  // Why the file cannot be compared; empty when it can
+    };
 
-    BrowseCallback m_browse_callback;
-    OpenCallback   m_open_callback;
-    bool           m_should_open = false;
-    bool           m_is_open     = false;
-    std::string    m_first_file;
-    std::string    m_second_file;
-    std::string    m_error_message;
+    static SlotFile Describe(const std::string& file_path);
+    void            RenderSlot(FileSlot slot, const ImVec2& size);
+    void            RenderRecent(FileSlot slot);
+    void            Close();
+    // Reads whether the two picks come from one profiling run, once per pair of picks:
+    // it opens both databases.
+    void CheckPair();
+    // Why the two picks cannot be compared together; empty when they can.
+    std::string PairProblem() const;
+    bool        CanCompare() const;
+
+    BrowseCallback             m_browse_callback;
+    OpenCallback               m_open_callback;
+    bool                       m_should_open = false;
+    bool                       m_is_open     = false;
+    std::array<SlotFile, 2>    m_slots;
+    std::array<std::string, 2> m_checked_picks;
+    // The checked picks are copies of one trace, which cannot be compared.
+    bool m_same_run = false;
 };
 
 }  // namespace View

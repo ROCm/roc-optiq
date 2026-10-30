@@ -26,14 +26,6 @@ class TimePixelTransform;
 class TimelineSelection;
 enum class Colors;
 
-// Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
-void
-RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings);
-void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings);
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info);
-
 enum class TrackDataRequestState
 {
     kIdle,
@@ -61,6 +53,9 @@ public:
     void   SetTooltip(std::string label);
     void   SetAccentColor(size_t accent_color);
     void   SetTextColor(std::optional<Colors> color);
+    // Widens the pill to at least width, with its label centered, so it can match a
+    // chip stacked above it.
+    void   SetMinWidth(float width);
     void   Activate();
     void   Deactivate();
     void   Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing = kCompact);
@@ -84,6 +79,7 @@ private:
     std::string                       m_tooltip;
     std::array<float, Sizing::kCount> m_widths;
     float                             m_height;
+    float                             m_min_width = 0.0f;
     const float                       m_padding_x = 8.0f;
     const float                       m_padding_y = 2.0f;
     EventManager::SubscriptionToken   m_font_changed_token;

@@ -141,6 +141,9 @@ protected:
     // Drops or rewrites filter fields that this table cannot send. Default is
     // a no-op so non-compare tables keep the values the user applied.
     virtual void AdjustFilterForRequest(FilterOptions&) const {}
+    // Draws ahead of a cell's text, on its line, e.g. the source of a compare
+    // row. Must keep to the text line height so rows stay one size.
+    virtual void RenderCellPrefix(int /*row*/, int /*column*/) {}
 
     // Filter row...
     const std::string& ActiveFilterRowClause() const;

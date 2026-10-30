@@ -33,6 +33,23 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
 */
 rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
                                                              uint64_t           count);
+
+/*
+* Checks whether two trace files were written by the same profiling run, such as a file and a
+* copy of it. Such a pair cannot be compared.
+* @param first Path of the first trace file.
+* @param second Path of the second trace file.
+* @returns True when both files hold the same run.
+*/
+bool rocprofvis_controller_compare_same_run(char const* first, char const* second);
+
+/*
+* Checks whether a trace file can be compared. Compare combines its inputs through the
+* rocprofv3 engine, so legacy rocpd, compute and other traces cannot be compared.
+* @param file Path of the trace file.
+* @returns True when the file is a rocprofv3 trace.
+*/
+bool rocprofvis_controller_compare_supported(char const* file);
 #endif
 
 /*

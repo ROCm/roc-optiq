@@ -200,6 +200,11 @@ typedef enum rocprofvis_analysis_summary_arguments_t : uint32_t
 {
     kRPVAnalysisSummaryArgsStartTimestamp = 0x12000000,
     kRPVAnalysisSummaryArgsEndTimestamp,
+    // Optional. Source file index of a compare trace: summarizes that source alone.
+    kRPVAnalysisSummaryArgsFileId,
+    // Optional. Events kept per top list before the rest fold into "Others"
+    // (10 when unset).
+    kRPVAnalysisSummaryArgsTopEventsLimit,
 } rocprofvis_analysis_summary_arguments_t;
 
 /*

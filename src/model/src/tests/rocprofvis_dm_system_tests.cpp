@@ -1445,3 +1445,12 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         rocprofvis_dm_delete_trace(m_trace);
     }
 }
+
+// Only the rocprof schema records run GUIDs. A file holds the same tables as a copy of it.
+TEST_CASE("Same Run Detection")
+{
+    const bool is_rocprof = rocprofvis_db_identify_type(g_input_file.c_str()) == kRocprofSqlite;
+    CHECK(rocprofvis_db_same_run(g_input_file.c_str(), g_input_file.c_str()) == is_rocprof);
+    CHECK_FALSE(rocprofvis_db_same_run(g_input_file.c_str(), "missing.db"));
+    CHECK_FALSE(std::filesystem::exists("missing.db"));
+}

@@ -37,35 +37,6 @@ namespace
     // Relative remote paths resolve against the home folder, so this lists it.
     constexpr const char* REMOTE_HOME_DIR = ".";
 
-    // Formats a Unix epoch (seconds) as local "YYYY-MM-DD HH:MM"; "-" if zero.
-    std::string format_file_time(uint64_t epoch_seconds)
-    {
-        if (epoch_seconds == 0)
-        {
-            return "-";
-        }
-
-        std::time_t t = static_cast<std::time_t>(epoch_seconds);
-        std::tm     tm_buf{};
-#ifdef _WIN32
-        if (localtime_s(&tm_buf, &t) != 0)
-        {
-            return "-";
-        }
-#else
-        if (localtime_r(&t, &tm_buf) == nullptr)
-        {
-            return "-";
-        }
-#endif
-        char buf[32];
-        if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm_buf) == 0)
-        {
-            return "-";
-        }
-        return std::string(buf);
-    }
-
     bool is_trace_file(const std::string& name)
     {
         const std::string ext = Core::String::to_lower_copy(posix_file_extension(name));
@@ -1114,7 +1085,7 @@ void RemoteFileBrowser::Render()
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TextUnformatted(type_label(f).c_str());
                 ImGui::TableSetColumnIndex(3);
-                ImGui::TextUnformatted(format_file_time(f.time).c_str());
+                ImGui::TextUnformatted(format_local_time(f.time).c_str());
 
                 if (inert)
                 {

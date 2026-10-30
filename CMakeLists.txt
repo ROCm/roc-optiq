@@ -193,6 +193,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_multi_track_table.cpp
     src/view/src/rocprofvis_event_search.cpp
     src/view/src/rocprofvis_summary_view.cpp
+    src/view/src/rocprofvis_summary_compare.cpp
+    src/view/src/rocprofvis_summary_compare.h
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/rocprofvis_presets.cpp

@@ -365,6 +365,10 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
         static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
         bool IsEmptyRange(uint32_t track, uint64_t start, uint64_t end);
+        // Drops the subqueries of every database instance outside the criteria's
+        // source file, so a compare trace can be queried one source at a time.
+        void RestrictToSourceFile(std::vector<slice_query_map_t>& slice_query_map_array,
+                                  rocprofvis_dm_query_criteria_ptr source_filter);
 
 
         RpvSqliteExecuteQueryCallback m_callback_add_any_record;

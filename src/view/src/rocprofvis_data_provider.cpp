@@ -19,6 +19,18 @@ namespace RocProfVis
 namespace View
 {
 
+// Events a compare source's summary keeps per top list (the trace summary keeps
+// the controller default).
+constexpr uint64_t SOURCE_SUMMARY_TOP_EVENTS_LIMIT = 50;
+
+static bool
+is_summary_instance_table(rocprofvis_controller_table_type_t table_type)
+{
+    return table_type == kRPVControllerTableTypeSummaryKernelInstances ||
+           table_type == kRPVControllerTableTypeSummaryMemoryInstances ||
+           table_type == kRPVControllerTableTypeSummaryThreadInstances;
+}
+
 const uint64_t DataProvider::EVENT_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchTrackEventTable);
 const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID =
@@ -142,6 +154,7 @@ DataProvider::FreeRequests()
     cleanup_work.requests        = std::move(m_requests);
     m_requests.clear();
     m_pc_sampling_replacements.clear();
+    m_queued_event_fetches.clear();
 
     CleanupDetachedResources(std::move(cleanup_work));
 }
@@ -175,6 +188,7 @@ DataProvider::DetachCleanupWork()
 
     m_requests.clear();
     m_pc_sampling_replacements.clear();
+    m_queued_event_fetches.clear();
     m_trace_controller = nullptr;
     m_trace_timeline   = nullptr;
     m_model.Clear();
@@ -1710,6 +1724,12 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                 args, kRPVControllerTableArgsThreadId, 0, source_filter.thread_id.value);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
+        if(source_filter.file_id.has_value)
+        {
+            result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsFileId,
+                                                      0, source_filter.file_id.value);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
     }
 
     result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0,
@@ -2367,6 +2387,10 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
     {
         request_id = ClientTableRequestId(table_params);
     }
+    else if(table_params.m_request_id != TableRequestParams::INFER_REQUEST_ID)
+    {
+        request_id = table_params.m_request_id;
+    }
     else
     {
         switch(table_params.m_table_type)
@@ -2398,6 +2422,13 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
                 return false;
             }
         }
+    }
+
+    // The UI shares one controller table per type, which two compare sources'
+    // summaries both read, so a request waits until that table is free.
+    if(table_params.m_client_id == 0 && IsTableRequestPending(table_params.m_table_type))
+    {
+        return false;
     }
 
     auto it = m_requests.find(request_id);
@@ -2579,13 +2610,33 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
 bool
 DataProvider::FetchSummary()
 {
+    return IssueSummaryRequest(SUMMARY_REQUEST_ID, std::nullopt);
+}
+
+bool
+DataProvider::FetchSourceSummary(uint64_t source)
+{
+    return m_model.GetSourceSummary(source) != nullptr &&
+           IssueSummaryRequest(SourceSummaryRequestId(source), source);
+}
+
+uint64_t
+DataProvider::SourceSummaryRequestId(uint64_t source)
+{
+    return RequestIdBuilder::MakeClientRequestId(RequestType::kFetchSummary,
+                                                 CompareSourceClientId(source));
+}
+
+bool
+DataProvider::IssueSummaryRequest(uint64_t request_id, std::optional<uint64_t> source)
+{
     if(m_state != ProviderState::kReady)
     {
         spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
                      static_cast<int>(m_state));
         return false;
     }
-    auto it = m_requests.find(SUMMARY_REQUEST_ID);
+    auto it = m_requests.find(request_id);
     if(it == m_requests.end())
     {
         rocprofvis_result_t                result = kRocProfVisResultUnknownError;
@@ -2599,6 +2650,18 @@ DataProvider::FetchSummary()
             args, kRPVAnalysisSummaryArgsEndTimestamp, 0,
             m_model.GetTimeline().GetEndTime());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(source)
+        {
+            result = rocprofvis_controller_set_uint64(args, kRPVAnalysisSummaryArgsFileId,
+                                                      0, source.value());
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            // Sources are diffed by event name, which is only exact for events
+            // both top lists still hold.
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVAnalysisSummaryArgsTopEventsLimit, 0,
+                SOURCE_SUMMARY_TOP_EVENTS_LIMIT);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        }
         rocprofvis_controller_summary_metrics_t* metrics =
             rocprofvis_controller_summary_metrics_alloc();
         ROCPROFVIS_ASSERT(metrics);
@@ -2606,10 +2669,15 @@ DataProvider::FetchSummary()
         ROCPROFVIS_ASSERT(future);
         result = rocprofvis_analysis_fetch_summary(m_trace_controller, args, future, metrics);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        m_requests.emplace(SUMMARY_REQUEST_ID,
-                           RequestInfo{ SUMMARY_REQUEST_ID, future, nullptr, metrics,
-                                        args, RequestState::kLoading,
-                                        RequestType::kFetchSummary });
+        RequestInfo request_info{ request_id,
+                                  future,
+                                  nullptr,
+                                  metrics,
+                                  args,
+                                  RequestState::kLoading,
+                                  RequestType::kFetchSummary };
+        request_info.custom_params = std::make_shared<SummaryRequestParams>(source);
+        m_requests.emplace(request_id, std::move(request_info));
         spdlog::debug("Fetching summary data");
         return true;
     }
@@ -2755,6 +2823,9 @@ DataProvider::HandleRequests()
 {
     if(m_requests.size() > 0)
     {
+        // Held fetches are issued after the loop, since a new request can rehash
+        // m_requests under the iterator.
+        std::vector<RequestType> freed_types;
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
             RequestInfo&        req = it->second;
@@ -2803,11 +2874,16 @@ DataProvider::HandleRequests()
                         }
                     }
                 }
+                freed_types.push_back(erased_type);
             }
             else
             {
                 ++it;
             }
+        }
+        for(RequestType type : freed_types)
+        {
+            IssueQueuedEventFetch(type);
         }
     }
 }
@@ -3426,13 +3502,20 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     if(req.request_obj_handle)
     {
         rocprofvis_controller_summary_metrics_t* metrics_handle = req.request_obj_handle;
-        if(req.response_code == kRocProfVisResultSuccess)
+        std::shared_ptr<SummaryRequestParams>    params =
+            std::dynamic_pointer_cast<SummaryRequestParams>(req.custom_params);
+        SummaryModel* summary = &m_model.GetSummary();
+        if(params && params->m_source)
         {
-            m_model.GetSummary().Clear();
-            m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
+            summary = m_model.GetSourceSummary(params->m_source.value());
+        }
+        if(req.response_code == kRocProfVisResultSuccess && summary)
+        {
+            summary->Clear();
+            summary->SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
-            CreateSummaryData(metrics_handle, scratch);
-            m_model.GetSummary().UpdateValueStrings();
+            CreateSummaryData(*summary, metrics_handle, scratch);
+            summary->UpdateValueStrings();
         }
         else
         {
@@ -3485,7 +3568,8 @@ DataProvider::ProcessAnalysisTrackStatisticsRequest(RequestInfo& req)
 }
 
 void
-DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
+DataProvider::CreateSummaryData(SummaryModel&        summary,
+                                rocprofvis_handle_t* metrics_handle,
                                 std::vector<size_t>& sub_metrics_idx)
 {
     if(metrics_handle)
@@ -3501,9 +3585,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
         rocprofvis_analysis_summary_aggregation_level_t aggregation_level =
             static_cast<rocprofvis_analysis_summary_aggregation_level_t>(uint64_data);
 
-        // Get reference to model's summary for modification
-        SummaryInfo::AggregateMetrics& root_summary =
-            m_model.GetSummary().GetSummaryData();
+        SummaryInfo::AggregateMetrics& root_summary = summary.GetSummaryData();
 
         if(aggregation_level == __kRPVAnalysisSummaryAggregationLevelFirst)
         {
@@ -3531,7 +3613,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
             {
                 case kRPVAnalysisSummaryAggregationLevelTrace:
                 {
-                    CreateSummaryTraceNodeData(metrics_handle, output);
+                    CreateSummaryTraceNodeData(summary, metrics_handle, output);
                     break;
                 }
                 case kRPVAnalysisSummaryAggregationLevelNode:
@@ -3541,7 +3623,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     output.info.node = m_model.GetTopology().GetNode(uint64_data);
                     ROCPROFVIS_ASSERT(output.info.node);
-                    CreateSummaryTraceNodeData(metrics_handle, output);
+                    CreateSummaryTraceNodeData(summary, metrics_handle, output);
                     break;
                 }
                 case kRPVAnalysisSummaryAggregationLevelProcessor:
@@ -3554,11 +3636,11 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                     ROCPROFVIS_ASSERT(output.info.processor);
                     if(output.info.processor->type == kRPVControllerProcessorTypeGPU)
                     {
-                        CreateSummaryGPUData(metrics_handle, output.gpu);
+                        CreateSummaryGPUData(summary, metrics_handle, output.gpu);
                     }
                     else if(output.info.processor->type == kRPVControllerProcessorTypeCPU)
                     {
-                        CreateSummaryCPUData(metrics_handle, output.cpu);
+                        CreateSummaryCPUData(summary, metrics_handle, output.cpu);
                     }
                     break;
                 }
@@ -3569,7 +3651,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                     output.info.process = m_model.GetTopology().GetProcess(uint64_data);
                     ROCPROFVIS_ASSERT(output.info.process);
-                    CreateSummaryProcessThreadData(metrics_handle, output);
+                    CreateSummaryProcessThreadData(summary, metrics_handle, output);
                     break;
                 }
                 case kRPVAnalysisSummaryAggregationLevelThread:
@@ -3586,7 +3668,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                                          ? ThreadInfo::Kind::kInstrumented
                                          : ThreadInfo::Kind::kSampled);
                     ROCPROFVIS_ASSERT(output.info.thread);
-                    CreateSummaryProcessThreadData(metrics_handle, output);
+                    CreateSummaryProcessThreadData(summary, metrics_handle, output);
                     break;
                 }
                 default:
@@ -3606,7 +3688,7 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                     metrics_handle, kRPVAnalysisSummaryMetricPropertySubMetricsIndexed,
                     j, &sub_metrics_handle);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                CreateSummaryData(sub_metrics_handle, sub_metrics_idx);
+                CreateSummaryData(summary, sub_metrics_handle, sub_metrics_idx);
                 sub_metrics_idx.pop_back();
             }
         }
@@ -3614,11 +3696,12 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
 }
 
 void
-DataProvider::CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
+DataProvider::CreateSummaryGPUData(SummaryModel&        summary,
+                                   rocprofvis_handle_t* metrics_handle,
                                    SummaryInfo::GPU&    output)
 {
     CreateSummaryTopOpEventsData(
-        metrics_handle,
+        summary, metrics_handle,
         { kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents,
           kRPVAnalysisSummaryGpuPropertyDispatchEventsInvocationsTotal,
           kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal },
@@ -3630,7 +3713,7 @@ DataProvider::CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
           kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationAvgIndexed },
         kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed, output.dispatch);
     CreateSummaryTopOpEventsData(
-        metrics_handle,
+        summary, metrics_handle,
         { kRPVAnalysisSummaryGpuPropertyNumTopMemoryEvents,
           kRPVAnalysisSummaryGpuPropertyMemoryEventsInvocationsTotal,
           kRPVAnalysisSummaryGpuPropertyMemoryEventsDurationTotal },
@@ -3641,7 +3724,8 @@ DataProvider::CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
           kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationPctIndexed,
           kRPVAnalysisSummaryGpuPropertyTopMemoryEventDurationAvgIndexed },
         kRPVAnalysisSummaryGpuPropertyTopMemoryEventNameIndexed, output.memory);
-    CreateSummaryCountersData(metrics_handle, kRPVAnalysisSummaryGpuPropertyNumCounters,
+    CreateSummaryCountersData(summary, metrics_handle,
+                              kRPVAnalysisSummaryGpuPropertyNumCounters,
                               kRPVAnalysisSummaryGpuPropertyCounterIndexed,
                               { kRPVAnalysisSummaryGpuPropertyCounterMinIndexed,
                                 kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed,
@@ -3651,11 +3735,12 @@ DataProvider::CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
 }
 
 void
-DataProvider::CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
+DataProvider::CreateSummaryCPUData(SummaryModel&        summary,
+                                   rocprofvis_handle_t* metrics_handle,
                                    SummaryInfo::CPU&    output)
 {
     CreateSummaryTopOpEventsData(
-        metrics_handle,
+        summary, metrics_handle,
         { kRPVAnalysisSummaryCpuPropertyNumTopMemoryEvents,
           kRPVAnalysisSummaryCpuPropertyMemoryEventsInvocationsTotal,
           kRPVAnalysisSummaryCpuPropertyMemoryEventsDurationTotal },
@@ -3666,7 +3751,8 @@ DataProvider::CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
           kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationPctIndexed,
           kRPVAnalysisSummaryCpuPropertyTopMemoryEventDurationAvgIndexed },
         kRPVAnalysisSummaryCpuPropertyTopMemoryEventNameIndexed, output.memory);
-    CreateSummaryCountersData(metrics_handle, kRPVAnalysisSummaryCpuPropertyNumCounters,
+    CreateSummaryCountersData(summary, metrics_handle,
+                              kRPVAnalysisSummaryCpuPropertyNumCounters,
                               kRPVAnalysisSummaryCpuPropertyCounterIndexed,
                               { kRPVAnalysisSummaryCpuPropertyCounterMinIndexed,
                                 kRPVAnalysisSummaryCpuPropertyCounterMaxIndexed,
@@ -3676,11 +3762,12 @@ DataProvider::CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
 }
 
 void
-DataProvider::CreateSummaryProcessThreadData(rocprofvis_handle_t* metrics_handle,
+DataProvider::CreateSummaryProcessThreadData(SummaryModel&        summary,
+                                             rocprofvis_handle_t* metrics_handle,
                                              SummaryInfo::AggregateMetrics& output)
 {
     CreateSummaryTopOpEventsData(
-        metrics_handle,
+        summary, metrics_handle,
         { kRPVAnalysisSummaryProcessThreadPropertyNumTopLaunchEvents,
           kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsInvocationsTotal,
           kRPVAnalysisSummaryProcessThreadPropertyLaunchEventsDurationTotal },
@@ -3690,16 +3777,16 @@ DataProvider::CreateSummaryProcessThreadData(rocprofvis_handle_t* metrics_handle
           kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationMaxIndexed,
           kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationPctIndexed,
           kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventDurationAvgIndexed },
-        kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventNameIndexed,
-        output.thread);
+        kRPVAnalysisSummaryProcessThreadPropertyTopLaunchEventNameIndexed, output.thread);
 }
 
 void
-DataProvider::CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_handle,
+DataProvider::CreateSummaryTraceNodeData(SummaryModel&                  summary,
+                                         rocprofvis_handle_t*           metrics_handle,
                                          SummaryInfo::AggregateMetrics& output)
 {
     CreateSummaryTopOpEventsData(
-        metrics_handle,
+        summary, metrics_handle,
         { kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents,
           kRPVAnalysisSummaryTraceNodePropertyMemoryEventsInvocationsTotal,
           kRPVAnalysisSummaryTraceNodePropertyMemoryEventsDurationTotal },
@@ -3710,14 +3797,14 @@ DataProvider::CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_
           kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationPctIndexed,
           kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationAvgIndexed },
         kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventNameIndexed, output.memory);
-    CreateSummaryGPUData(metrics_handle, output.gpu);
-    CreateSummaryCPUData(metrics_handle, output.cpu);
-    CreateSummaryProcessThreadData(metrics_handle, output);
+    CreateSummaryGPUData(summary, metrics_handle, output.gpu);
+    CreateSummaryCPUData(summary, metrics_handle, output.cpu);
+    CreateSummaryProcessThreadData(summary, metrics_handle, output);
 }
 
 void
 DataProvider::CreateSummaryTopOpEventsData(
-    rocprofvis_handle_t* metrics_handle,
+    SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
     std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>
         op_properties,
     std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>
@@ -3738,7 +3825,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         output.metrics[kRPVAnalysisSummaryTopEventsMetricNumTopEvents].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterEventValue(
+        summary.RegisterEventValue(
             output.metrics[kRPVAnalysisSummaryTopEventsMetricNumTopEvents]);
     }
     result = rocprofvis_controller_get_uint64(
@@ -3750,7 +3837,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         output.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterEventValue(
+        summary.RegisterEventValue(
             output.metrics[kRPVAnalysisSummaryTopEventsMetricInvocations]);
     }
     result = rocprofvis_controller_get_uint64(
@@ -3762,7 +3849,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         output.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterTimeunitValue(
+        summary.RegisterTimeunitValue(
             output.metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum]);
     }
     for(size_t i = 0; i < output.top.size(); i++)
@@ -3780,7 +3867,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterEventValue(
+        summary.RegisterEventValue(
             event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations]);
         result = rocprofvis_controller_get_uint64(
             metrics_handle,
@@ -3791,7 +3878,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterTimeunitValue(
+        summary.RegisterTimeunitValue(
             event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]);
         result = rocprofvis_controller_get_uint64(
             metrics_handle,
@@ -3802,7 +3889,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMin].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterTimeunitValue(
+        summary.RegisterTimeunitValue(
             event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMin]);
         result = rocprofvis_controller_get_uint64(
             metrics_handle,
@@ -3813,7 +3900,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             uint64_data;
         event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMax].type =
             SummaryInfo::Value::Type::UInt;
-        m_model.GetSummary().RegisterTimeunitValue(
+        summary.RegisterTimeunitValue(
             event.metrics[kRPVAnalysisSummaryTopEventMetricDurationMax]);
         result = rocprofvis_controller_get_double(
             metrics_handle,
@@ -3824,7 +3911,7 @@ DataProvider::CreateSummaryTopOpEventsData(
             static_cast<float>(double_data);
         event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct].type =
             SummaryInfo::Value::Type::Float;
-        m_model.GetSummary().RegisterEventValue(
+        summary.RegisterEventValue(
             event.metrics[kRPVAnalysisSummaryTopEventMetricDurationPct]);
         result = rocprofvis_controller_get_double(
             metrics_handle,
@@ -3835,14 +3922,15 @@ DataProvider::CreateSummaryTopOpEventsData(
             double_data;
         event.metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg].type =
             SummaryInfo::Value::Type::Double;
-        m_model.GetSummary().RegisterTimeunitValue(
+        summary.RegisterTimeunitValue(
             event.metrics[kRPVAnalysisSummaryTopEventMetricDurationAvg]);
     }
 }
 
 void
 DataProvider::CreateSummaryCountersData(
-    rocprofvis_handle_t* metrics_handle, rocprofvis_property_t num_counters_property,
+    SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+    rocprofvis_property_t num_counters_property,
     rocprofvis_property_t counter_handle_property,
     std::array<rocprofvis_property_t, __kRPVAnalysisSummaryCounterMetricLast>
                            counter_properties,
@@ -3875,7 +3963,7 @@ DataProvider::CreateSummaryCountersData(
                                                  &counter.metrics[j].numeric.dbl);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             counter.metrics[j].type = SummaryInfo::Value::Type::Double;
-            m_model.GetSummary().RegisterCounterValue(counter.metrics[j]);
+            summary.RegisterCounterValue(counter.metrics[j]);
         }
     }
 }
@@ -4188,6 +4276,18 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
            table_params->m_view_table_type != TableType::__kTableTypeCount)
         {
             table_type_enum = table_params->m_view_table_type;
+        }
+        // A compare source's summary keeps its instance tables in its own model;
+        // the source is the one the request was scoped to.
+        if(client_id == 0 && table_params && is_summary_instance_table(table_type) &&
+           table_params->m_source_filter &&
+           table_params->m_source_filter->file_id.has_value)
+        {
+            if(SummaryModel* source_summary =
+                   m_model.GetSourceSummary(table_params->m_source_filter->file_id.value))
+            {
+                table_model = &source_summary->GetTables();
+            }
         }
         ROCPROFVIS_ASSERT(table_model);
         TablesModel& tables = *table_model;
@@ -4712,6 +4812,63 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 }
 
 bool
+DataProvider::QueueEventFetch(RequestType type, uint64_t request_id, uint64_t event_id)
+{
+    if(m_requests.count(request_id) == 0)
+    {
+        return false;
+    }
+    m_queued_event_fetches[type].push_back(event_id);
+    return true;
+}
+
+void
+DataProvider::IssueQueuedEventFetch(RequestType type)
+{
+    auto queued = m_queued_event_fetches.find(type);
+    if(queued == m_queued_event_fetches.end())
+    {
+        return;
+    }
+    // Events deselected while they waited are skipped, since their details would be
+    // dropped on arrival. A fetch that fails to start moves on to the next one, or the
+    // rest would wait for a completion that never comes.
+    bool issued = false;
+    while(!issued && !queued->second.empty())
+    {
+        const uint64_t event_id = queued->second.front();
+        queued->second.pop_front();
+        if(m_model.GetEvents().GetEvent(event_id) == nullptr)
+        {
+            continue;
+        }
+        switch(type)
+        {
+            case RequestType::kFetchEventExtendedData:
+            {
+                issued = FetchEventExtData(event_id);
+                break;
+            }
+            case RequestType::kFetchEventFlowDetails:
+            {
+                issued = FetchEventFlowDetails(event_id);
+                break;
+            }
+            case RequestType::kFetchEventCallStack:
+            {
+                issued = FetchEventCallStackData(event_id);
+                break;
+            }
+            default:
+            {
+                issued = true;
+                break;
+            }
+        }
+    }
+}
+
+bool
 DataProvider::FetchEventExtData(uint64_t event_id)
 {
     if(m_state != ProviderState::kReady)
@@ -4719,6 +4876,11 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
         return false;
+    }
+    if(QueueEventFetch(RequestType::kFetchEventExtendedData,
+                       EVENT_EXTENDED_DATA_REQUEST_ID, event_id))
+    {
+        return true;
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4764,6 +4926,11 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
+    if(QueueEventFetch(RequestType::kFetchEventFlowDetails, EVENT_FLOW_DATA_REQUEST_ID,
+                       event_id))
+    {
+        return true;
+    }
 
     auto future   = rocprofvis_controller_future_alloc();
     auto outArray = rocprofvis_controller_array_alloc(0);
@@ -4807,6 +4974,11 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         spdlog::debug("Cannot fetch, provider not ready or error, state: {}",
                       static_cast<int>(m_state));
         return false;
+    }
+    if(QueueEventFetch(RequestType::kFetchEventCallStack,
+                       EVENT_CALL_STACK_DATA_REQUEST_ID, event_id))
+    {
+        return true;
     }
 
     auto future   = rocprofvis_controller_future_alloc();

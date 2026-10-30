@@ -3,6 +3,7 @@
 
 #include "rocprofvis_project.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_presets.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
@@ -17,6 +18,32 @@ namespace RocProfVis
 {
 namespace View
 {
+
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+// Why the traces a saved compare project lists cannot be opened together, or empty
+// when they can. A project file can be edited by hand, so it is held to the rules
+// the Compare dialog applies.
+static std::string
+saved_compare_problem(const std::vector<std::string>& files)
+{
+    std::string     problem;
+    std::error_code ec;
+    if(files.size() != COMPARE_SOURCE_COUNT)
+    {
+        problem = "A compare project must list exactly two trace files.";
+    }
+    else if(std::filesystem::equivalent(files[0], files[1], ec))
+    {
+        problem = "The project lists the same trace twice.";
+    }
+    else if(rocprofvis_controller_compare_same_run(files[0].c_str(), files[1].c_str()))
+    {
+        problem = "The project's two traces are copies of the same trace and cannot be "
+                  "compared.";
+    }
+    return problem;
+}
+#endif
 
 Project::Project()
 : m_view(nullptr)
@@ -152,15 +179,30 @@ Project::OpenProject(std::string& file_path)
             {
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
                 std::vector<std::string> files;
+                bool                     entries_valid = true;
                 for(jt::Json& entry : general[JSON_KEY_GENERAL_COMPARE_FILES].getArray())
                 {
-                    files.push_back(
-                        std::filesystem::weakly_canonical(
-                            project_dir / std::filesystem::path(entry.getString()))
-                            .string());
+                    // getString() aborts on any other type.
+                    entries_valid = entries_valid && entry.isString();
+                    if(entries_valid)
+                    {
+                        files.push_back(
+                            std::filesystem::weakly_canonical(
+                                project_dir / std::filesystem::path(entry.getString()))
+                                .string());
+                    }
                 }
+                const std::string problem =
+                    entries_valid
+                        ? saved_compare_problem(files)
+                        : std::string("The project file is invalid or corrupted.");
                 std::string compare_id = AppWindow::MakeCompareId(files);
-                if(AppWindow::GetInstance()->GetProject(compare_id))
+                if(!problem.empty())
+                {
+                    m_open_error_message =
+                        "Failed to load project:\n\n" + file_path + "\n\n" + problem;
+                }
+                else if(AppWindow::GetInstance()->GetProject(compare_id))
                 {
                     file_path = compare_id;
                     result    = Duplicate;
@@ -290,7 +332,7 @@ Project::OpenCompare(const std::string&              project_id,
                      const std::vector<std::string>& file_paths)
 {
     OpenResult result = Failed;
-    if(file_paths.size() < 2 || m_view)
+    if(file_paths.size() != COMPARE_SOURCE_COUNT || m_view)
     {
         return result;
     }
@@ -327,9 +369,10 @@ Project::OpenCompare(const std::string&              project_id,
             for(size_t i = 0; i < file_paths.size(); i++)
             {
                 CompareSourceInfo info;
-                info.id   = std::string(1, static_cast<char>('A' + i));
-                info.name = std::filesystem::path(file_paths[i]).stem().string();
-                info.path = file_paths[i];
+                info.id    = std::string(1, static_cast<char>('A' + i));
+                info.name  = std::filesystem::path(file_paths[i]).stem().string();
+                info.path  = file_paths[i];
+                info.index = i;
                 sources.push_back(std::move(info));
             }
             if(DataProvider* provider = trace_view->GetDataProvider())
@@ -353,7 +396,10 @@ Project::OpenCompare(const std::string&              project_id,
     if(result == Failed)
     {
         AppWindow::GetInstance()->ShowMessageDialog(
-            "Error", "The selected traces could not be opened for comparison.");
+            "Error",
+            "The selected traces could not be opened for comparison.\n\nCompare reads "
+            "ROCm Systems Profiler (rocprofv3) databases. Legacy rocpd databases and "
+            "ROCm Compute Profiler databases cannot be compared.");
     }
     return result;
 }

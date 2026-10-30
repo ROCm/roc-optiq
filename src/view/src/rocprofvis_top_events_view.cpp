@@ -48,7 +48,7 @@ TopEventsView::TopEventsView(DataProvider&                      data_provider,
 {
     // The categories in display order. Kept local because the request ids are
     // DataProvider constants, which are not ready before main() runs.
-    const CategoryDescription descriptions[CATEGORY_COUNT] = {
+    const CategoryDescription descriptions[] = {
         { { TableType::kAnalysisTopInstrumentedEventsTable,
             TableType::kAnalysisTopInstrumentedEventsTableB },
           kRPVControllerTableTypeInstrumentedEvents,
@@ -85,6 +85,8 @@ TopEventsView::TopEventsView(DataProvider&                      data_provider,
           kRocProfVisDmOperationLaunchSample,
           "Top Sampled Thread Events" },
     };
+    static_assert(sizeof(descriptions) / sizeof(descriptions[0]) == CATEGORY_COUNT,
+                  "Every category needs a description");
 
     m_widget_name  = GenUniqueName("Top Events View");
     m_compare_mode = IsCompareTrace(data_provider.DataModel());
@@ -109,8 +111,9 @@ TopEventsView::TopEventsView(DataProvider&                      data_provider,
             category.tables[source] = std::make_unique<TopEventsTable>(
                 data_provider, description.table_type[source],
                 description.request_table_type,
-                RequestIdBuilder::MakeClientRequestId(description.request_type,
-                                                      COMPARE_CLIENT_ID[source]),
+                RequestIdBuilder::MakeClientRequestId(
+                    description.request_type,
+                    DataProvider::CompareSourceClientId(source)),
                 timeline_selection, description.op, description.header, source);
             category.tables[source]->SetDisplaySummary(false);
             category.tables[source]->SetHeaderRenderer(

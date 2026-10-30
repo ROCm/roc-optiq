@@ -1482,14 +1482,10 @@ Track::FillBounds()
     if(dm_result == kRocProfVisDmResultSuccess &&
        GetTrackType() == kRPVControllerTrackTypeSamples)
     {
-        rocprofvis_dm_trace_t trace = nullptr;
-        dm_result = rocprofvis_dm_get_property_as_handle(
-            GetDmHandle(), kRPVDMTrackTraceHandle, 0, &trace);
-        if(dm_result == kRocProfVisDmResultSuccess)
-        {
-            dm_result = rocprofvis_dm_get_property_as_uint64(
-                trace, kRPVDMEndTimeUInt64, 0, &end_timestamp);
-        }
+        // A counter holds its last value to the end of its own trace, which in a
+        // compare is not the end of the longer one.
+        dm_result = rocprofvis_dm_get_property_as_uint64(
+            GetDmHandle(), kRPVDMTrackInstanceEndTimestampUInt64, 0, &end_timestamp);
     }
 
     rocprofvis_result_t result = kRocProfVisResultUnknownError;

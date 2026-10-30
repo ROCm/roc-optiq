@@ -39,6 +39,11 @@ private:
     void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
+    // Tags each result of a compare trace with the source it came from.
+    void RenderCellPrefix(int row, int column) override;
+
+    // Results of a compare trace mix both sources, and ids repeat across them.
+    const bool m_compare_mode;
 
     // Advanced options...
     bool m_show_options;

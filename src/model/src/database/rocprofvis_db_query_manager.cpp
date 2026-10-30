@@ -264,6 +264,42 @@ bool QueryManager::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {
     return true;
 }
 
+void
+QueryManager::RestrictToSourceFile(std::vector<slice_query_map_t>& slice_query_map_array,
+                                   rocprofvis_dm_query_criteria_ptr source_filter)
+{
+    if(source_filter && source_filter->file_id.has_value)
+    {
+        for(slice_query_map_t& query_map : slice_query_map_array)
+        {
+            for(auto it_query = query_map.begin(); it_query != query_map.end();)
+            {
+                for(auto it_instance = it_query->second.begin();
+                    it_instance != it_query->second.end();)
+                {
+                    DbInstance* db_inst = DbInstancePtrAt(it_instance->first);
+                    if(db_inst && db_inst->FileIndex() == source_filter->file_id.value)
+                    {
+                        ++it_instance;
+                    }
+                    else
+                    {
+                        it_instance = it_query->second.erase(it_instance);
+                    }
+                }
+                if(it_query->second.empty())
+                {
+                    it_query = query_map.erase(it_query);
+                }
+                else
+                {
+                    ++it_query;
+                }
+            }
+        }
+    }
+}
+
 
 rocprofvis_dm_result_t
 QueryManager::BuildCompoundQuery(
@@ -429,6 +465,7 @@ QueryManager::BuildTableQuery(
             BuildOpQueryMap(slice_query_map_array[i], (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(track));
         }
     }
+    RestrictToSourceFile(slice_query_map_array, source_filter);
     bool slice_query_map_empty = true;
     for(slice_query_map_t& query_map : slice_query_map_array)
     {
@@ -478,6 +515,7 @@ QueryManager::BuildEventSearchQuery(
             }
         }
     }
+    RestrictToSourceFile(slice_query_map_array, source_filter);
     bool slice_query_map_empty = true;
     for(slice_query_map_t& query_map : slice_query_map_array)
     {
@@ -508,7 +546,7 @@ rocprofvis_dm_result_t  QueryManager::ExecuteQuery(
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
         rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
         ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
+        rocprofvis_db_compound_queries_t queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
         if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
@@ -991,7 +1029,7 @@ rocprofvis_dm_result_t QueryManager::ExportTableCSV(rocprofvis_dm_charptr_t quer
     if (result == kRocProfVisDmResultSuccess)
     {
         rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
+        rocprofvis_db_compound_queries_t queries;
         std::vector<rocprofvis_db_compound_query_command> commands;
         std::set<uint32_t> tracks;
         TableProcessor::IsCompoundQuery(query, queries, tracks,  commands);

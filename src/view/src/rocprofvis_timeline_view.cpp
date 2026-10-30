@@ -2703,6 +2703,11 @@ TimelineView::CalculateTrackCounts()
         }
 
         ++m_track_counts.total;
+        if(!track->compare_source.id.empty() &&
+           track->compare_source.index < m_track_counts.per_source.size())
+        {
+            ++m_track_counts.per_source[track->compare_source.index];
+        }
         switch(track->topology.type)
         {
             case TrackInfo::TrackType::InstrumentedThread:
@@ -2771,6 +2776,15 @@ TimelineView::BuildTrackCountLabels()
     };
 
     m_track_counts.tooltip_lines.clear();
+    for(size_t source = 0; source < m_track_counts.per_source.size(); source++)
+    {
+        if(const CompareSourceInfo* info =
+               m_data_provider.DataModel().GetCompareSource(source))
+        {
+            append_row((info->id + ": " + info->name).c_str(),
+                       m_track_counts.per_source[source]);
+        }
+    }
     append_row("Instrumented threads", m_track_counts.instrumented_threads);
     append_row("Sampled threads", m_track_counts.sampled_threads);
     append_row("Queues", m_track_counts.queues);

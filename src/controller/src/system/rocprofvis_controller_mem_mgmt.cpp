@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_sample_lod.h"
 #include <chrono>
 #include <cmath>
+#include <new>
 #include "spdlog/spdlog.h"
 #if defined(_MSC_VER)
 #include <windows.h>
@@ -481,7 +482,17 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
 
     if(current_pool == nullptr)
     {
-        current_pool = new MemoryPool(static_cast<uint32_t>(size), type, m_mem_block_size);
+        try
+        {
+            current_pool =
+                new MemoryPool(static_cast<uint32_t>(size), type, m_mem_block_size);
+        }
+        catch(const std::bad_alloc&)
+        {
+            spdlog::error("Failed to allocate a memory pool of {} objects",
+                          m_mem_block_size);
+            return nullptr;
+        }
         auto& inner_map = m_object_pools[pool_idetifier];
         auto [inner_it, inserted] = inner_map.emplace(current_pool->m_base, current_pool);
         if(inserted)
@@ -492,6 +503,7 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
         }
         else
         {
+            delete current_pool;
             current_pool = nullptr;
         }
     }
@@ -501,7 +513,6 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
         current_pool->m_bitmask.Set(first_zero_bit);
         return ptr;
     }
-    throw std::runtime_error("Allocation problem!");
     return nullptr;
 }
 

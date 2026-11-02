@@ -711,9 +711,6 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
                 });
         }
     }
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                      result == kRocProfVisResultOutOfRange ||
-                      result == kRocProfVisResultCancelled);
     return result;
 }
 

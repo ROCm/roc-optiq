@@ -35,9 +35,6 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = graph.Fetch(pixels, start, end, array, index, future);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                              result == kRocProfVisResultOutOfRange ||
-                              result == kRocProfVisResultCancelled);
             return result;
         }, &future));
 
@@ -169,8 +166,12 @@ Timeline::SetNumberOfGraphs(uint64_t count)
     rocprofvis_result_t result = kRocProfVisResultMemoryAllocError;
     try
     {
+        bool shrinking = count < m_graphs.size();
         m_graphs.resize(count);
-        RecomputeBounds();
+        if(shrinking)
+        {
+            RecomputeBounds();
+        }
         result = kRocProfVisResultSuccess;
     } catch(std::exception const&)
     {
@@ -220,11 +221,17 @@ Timeline::SetGraph(uint64_t index, Graph* graph)
                 m_graphs.erase(existing);
                 m_graphs.insert(m_graphs.begin() + index, std::move(node));
             }
+            else if(m_graphs[index])
+            {
+                m_graphs[index].reset(graph);
+                RecomputeBounds();
+            }
             else
             {
                 m_graphs[index].reset(graph);
+                m_min_ts = m_min_ts ? std::min(min_ts, *m_min_ts) : min_ts;
+                m_max_ts = m_max_ts ? std::max(max_ts, *m_max_ts) : max_ts;
             }
-            RecomputeBounds();
             result = kRocProfVisResultSuccess;
         }
     }

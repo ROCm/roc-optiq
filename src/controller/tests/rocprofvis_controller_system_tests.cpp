@@ -4326,3 +4326,115 @@ TEST_CASE("JobSystem Job lost-wakeup stress repro")
         REQUIRE(successes.load(std::memory_order_relaxed) == pairs);
     }
 }
+
+TEST_CASE("Graph fetch propagates track errors without assertion failure")
+{
+    class ErrorTrack : public RocProfVis::Controller::Track
+    {
+    public:
+        ErrorTrack(RocProfVis::Controller::SystemTrace* trace, double lo, double hi)
+        : Track(kRPVControllerTrackTypeEvents, 1, nullptr, trace)
+        {
+            SetStartTimestamp(lo);
+            SetEndTimestamp(hi);
+        }
+        void SetResult(rocprofvis_result_t r) { m_result = r; }
+    protected:
+        rocprofvis_result_t FetchFromDataModel(
+            [[maybe_unused]] double start, [[maybe_unused]] double end,
+            [[maybe_unused]] RocProfVis::Controller::Future* future) override
+        {
+            return m_result;
+        }
+    private:
+        rocprofvis_result_t m_result = kRocProfVisResultUnknownError;
+    };
+
+    constexpr double duration = RocProfVis::Controller::kSegmentDuration;
+    RocProfVis::Controller::SystemTrace trace("graph-fetch-error-test", "");
+    ErrorTrack track(&trace, 0.0, duration);
+
+    RocProfVis::Controller::Graph graph(nullptr, kRPVControllerGraphTypeFlame, 1);
+    graph.SetTrack(&track);
+
+    RocProfVis::Controller::Array  array;
+    RocProfVis::Controller::Future future;
+    uint64_t                       index = 0;
+
+    SECTION("UnknownError propagates")
+    {
+        track.SetResult(kRocProfVisResultUnknownError);
+        REQUIRE(graph.Fetch(256, 0.0, duration, array, index, &future) ==
+                kRocProfVisResultUnknownError);
+    }
+    SECTION("NotLoaded propagates")
+    {
+        track.SetResult(kRocProfVisResultNotLoaded);
+        REQUIRE(graph.Fetch(256, 0.0, duration, array, index, &future) ==
+                kRocProfVisResultNotLoaded);
+    }
+}
+
+TEST_CASE("Timeline bounds update incrementally on graph insertion")
+{
+    class BoundsTrack : public RocProfVis::Controller::Track
+    {
+    public:
+        BoundsTrack(double lo, double hi)
+        : Track(kRPVControllerTrackTypeEvents, 0, nullptr, nullptr)
+        {
+            SetStartTimestamp(lo);
+            SetEndTimestamp(hi);
+        }
+    protected:
+        rocprofvis_result_t FetchFromDataModel(
+            [[maybe_unused]] double, [[maybe_unused]] double,
+            [[maybe_unused]] RocProfVis::Controller::Future*) override
+        {
+            return kRocProfVisResultUnknownError;
+        }
+    };
+
+    auto make_graph = [](uint64_t id, RocProfVis::Controller::Track* track) {
+        auto* g = new RocProfVis::Controller::Graph(
+            nullptr, kRPVControllerGraphTypeFlame, id);
+        g->SetTrack(track);
+        return g;
+    };
+
+    BoundsTrack t0(5.0, 15.0);
+    BoundsTrack t1(1.0, 20.0);
+    BoundsTrack t2(8.0, 12.0);
+
+    RocProfVis::Controller::Timeline timeline(1);
+    REQUIRE(timeline.SetNumberOfGraphs(3) == kRocProfVisResultSuccess);
+
+    double min_ts = 0.0, max_ts = 0.0;
+    REQUIRE(timeline.GetMinTimestamp(&min_ts) == kRocProfVisResultOutOfRange);
+    REQUIRE(timeline.GetMaxTimestamp(&max_ts) == kRocProfVisResultOutOfRange);
+
+    REQUIRE(timeline.SetGraph(0, make_graph(10, &t0)) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMinTimestamp(&min_ts) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMaxTimestamp(&max_ts) == kRocProfVisResultSuccess);
+    REQUIRE(min_ts == 5.0);
+    REQUIRE(max_ts == 15.0);
+
+    REQUIRE(timeline.SetGraph(1, make_graph(11, &t1)) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMinTimestamp(&min_ts) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMaxTimestamp(&max_ts) == kRocProfVisResultSuccess);
+    REQUIRE(min_ts == 1.0);
+    REQUIRE(max_ts == 20.0);
+
+    REQUIRE(timeline.SetGraph(2, make_graph(12, &t2)) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMinTimestamp(&min_ts) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMaxTimestamp(&max_ts) == kRocProfVisResultSuccess);
+    REQUIRE(min_ts == 1.0);
+    REQUIRE(max_ts == 20.0);
+
+    // Shrink removes the two wide graphs; only graph[0] (5.0-15.0) remains
+    REQUIRE(timeline.SetNumberOfGraphs(1) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMinTimestamp(&min_ts) == kRocProfVisResultSuccess);
+    REQUIRE(timeline.GetMaxTimestamp(&max_ts) == kRocProfVisResultSuccess);
+    REQUIRE(min_ts == 5.0);
+    REQUIRE(max_ts == 15.0);
+}

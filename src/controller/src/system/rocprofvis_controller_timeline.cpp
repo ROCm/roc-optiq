@@ -170,6 +170,7 @@ Timeline::SetNumberOfGraphs(uint64_t count)
     try
     {
         m_graphs.resize(count);
+        RecomputeBounds();
         result = kRocProfVisResultSuccess;
     } catch(std::exception const&)
     {

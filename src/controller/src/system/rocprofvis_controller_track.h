@@ -211,9 +211,11 @@ private:
     rocprofvis_result_t ProcessPmcSampleRecords(
         rocprofvis_dm_slice_t data, uint64_t num_records, Future* future);
 
-    rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);
-
     uint32_t GetNumberOfEventsForTimeRange(double start, double end);
+
+protected:
+    // Keep model reads overridable so fetch coordination can be tested with read failures.
+    virtual rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);
 };
 
 }

@@ -409,7 +409,10 @@ class Reference;
 
 Type-checked downcast helper. The C ABI receives a `rocprofvis_handle_t*`
 and the entry points create one of these to validate it actually points
-at the expected subclass via `GetType() == Enum` before dispatching. Every
+at the expected subclass via `GetType() == Enum` before dispatching. All type
+checks dispatch through `Handle*` before downcasting, including revalidation
+after `GetHandleAddress`. Calling through the requested derived type can bypass
+runtime validation when its `GetType` override is `final`. Every
 `extern "C"` function in `rocprofvis_controller.cpp` opens with one or
 more of:
 
@@ -689,6 +692,10 @@ released after processing, including cancellation/error paths.
 Read-request and segment-range loops preserve the first failure while releasing
 pending resources and processed flags. Cache traversal does not overwrite a
 failed model read with a successful partial result.
+`FetchFromDataModel` is a protected virtual read boundary so controller tests can
+inject deterministic read failures without changing fixture databases. The track
+fetch regression checks exact error preservation despite successful cache
+traversal, processed-flag cleanup, and retry of failed and skipped ranges.
 
 Track properties are exposed under
 `rocprofvis_controller_track_properties_t` (start at `0x30000000`):
@@ -716,9 +723,11 @@ Files: `rocprofvis_controller_event.h`, `rocprofvis_controller_sample.h`,
   dispatch through `Handle`. Internal callers use typed accessors for
   IDs, levels, timestamps, duration, names and string-table indexes.
   `SetLevel` accepts only 0..255 and returns `OutOfRange` without changing the
-  level for larger inputs. The C ABI setter propagates this result. Track loads
-  log the rejected level with event/track IDs, release the rejected event, and
-  propagate the failure; LOD generation also checks level-setting results.
+  level for larger inputs. The C ABI setter propagates this result. During event
+  fetching, `Track::ProcessEventRecords` logs unsupported levels with event/track
+  IDs, releases each rejected event, and continues processing the slice. This
+  rejection alone does not fail the fetch; levels are never truncated to fit.
+  LOD generation propagates level-setting failures.
   `GetChildId` / `SetChildId` and `SetNumberOfChildren` preserve indexed
   child bounds and allocation errors; `GetInclusiveMemoryUsage` includes
   the child array and only writes the output on success. Names returned by
@@ -809,6 +818,8 @@ empty slots as well as invalid indexes, leaving the output unchanged. Lookup
 and memory accounting skip
 unpopulated slots. Typed timestamp getters retain `OutOfRange` for an
 empty timeline, and memory getters preserve the existing accounting.
+Resizing the graph list recomputes timestamp bounds, clearing them when no
+populated graphs remain.
 
 ### 5.5 `Summary` and `SummaryMetrics`
 Files: `rocprofvis_controller_summary.{h,cpp}`,

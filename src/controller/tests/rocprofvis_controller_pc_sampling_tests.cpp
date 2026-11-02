@@ -304,7 +304,7 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
     AddIsaTables();
     Execute(R"sql(
         INSERT INTO compute_instruction_type_lookup VALUES
-            (42, 'SCALAR'), (7, 'VALU'), (81, NULL);
+            (0, 'FLAT'), (42, 'SCALAR'), (7, 'VALU'), (81, NULL);
         INSERT INTO compute_instruction_line(instruction_uuid, kernel_symbol_uuid,
             instruction_type_uuid, code_object_offset, instruction) VALUES
             (20, 1, 42, 20, 's_add_u32 s0, s1, s2'),
@@ -312,7 +312,8 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
             (40, 1, 42, 28, 's_mov_b32 s0, 0'),
             (50, 1, NULL, 32, 's_nop 0'),
             (60, 1, 99, 36, 's_nop 1'),
-            (70, 1, 81, 40, 's_endpgm');
+            (70, 1, 81, 40, 's_endpgm'),
+            (80, 1, 0, 44, 'flat_load_dword v1, v2');
     )sql");
 
     bool all_unavailable = false;
@@ -340,15 +341,17 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
     struct ExpectedInstruction
     {
         uint64_t    instruction_uuid;
+        bool        type_present;
         uint64_t    type_uuid;
         const char* type_name;
     };
     // UUIDs deliberately differ from type ordering. Repeated types must retain
-    // the same name, and absent lookup data must not drop an ISA instruction.
+    // the same name. A NULL type stays unset and does not share lookup id 0.
     constexpr ExpectedInstruction EXPECTED[] = {
-        { 10, 1, "INTERNAL" }, { 20, 42, "SCALAR" }, { 30, 7, "VALU" },
-        { 40, 42, "SCALAR" },  { 50, 0, "" },        { 60, 99, "" },
-        { 70, 81, "" }
+        { 10, true, 1, "INTERNAL" }, { 20, true, 42, "SCALAR" },
+        { 30, true, 7, "VALU" },     { 40, true, 42, "SCALAR" },
+        { 50, false, 0, "" },        { 60, true, 99, "" },
+        { 70, true, 81, "" },        { 80, true, 0, "FLAT" }
     };
     REQUIRE(Get(kRPVControllerPCSamplingNumInstructionLines) == std::size(EXPECTED));
     for(size_t i = 0; i < std::size(EXPECTED); i++)
@@ -357,8 +360,19 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
         INFO("Instruction UUID: " << expected.instruction_uuid);
         CHECK(Get(kRPVControllerPCSamplingInstructionLineUuid, i) ==
               expected.instruction_uuid);
-        CHECK(Get(kRPVControllerPCSamplingInstructionLineInstructionTypeUuid, i) ==
-              (all_unavailable ? 0 : expected.type_uuid));
+        uint64_t                  type_uuid   = 99;
+        const rocprofvis_result_t type_result = rocprofvis_controller_get_uint64(
+            sampling, kRPVControllerPCSamplingInstructionLineInstructionTypeUuid, i,
+            &type_uuid);
+        if(!all_unavailable && expected.type_present)
+        {
+            CHECK(type_result == kRocProfVisResultSuccess);
+            CHECK(type_uuid == expected.type_uuid);
+        }
+        else
+        {
+            CHECK(type_result == kRocProfVisResultNotLoaded);
+        }
         uint32_t length = 0;
         REQUIRE(rocprofvis_controller_get_string(
                     sampling, kRPVControllerPCSamplingInstructionLineInstructionType, i,

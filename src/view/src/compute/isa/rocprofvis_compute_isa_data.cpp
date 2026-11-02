@@ -443,17 +443,22 @@ IsaDataBuilder::BuildInstructions(const PcSamplingData& data, uint64_t code_obje
         for(const InstructionLine& instruction : kernel_symbol.instruction_lines)
         {
             IsaRow row;
-            row.instruction        = instruction.instruction;
-            const auto kind = instruction_kinds.find(instruction.instruction_type_uuid);
-            if(kind != instruction_kinds.end())
+            row.instruction = instruction.instruction;
+            if(instruction.instruction_type_uuid)
             {
-                row.instruction_kind = kind->second;
+                const auto kind =
+                    instruction_kinds.find(*instruction.instruction_type_uuid);
+                if(kind != instruction_kinds.end())
+                {
+                    row.instruction_kind = kind->second;
+                }
             }
             row.instruction_type_name = GetInstructionTypeName(row.instruction_kind);
-            if(row.instruction_kind == InstructionKind::kUnknown)
+            if(row.instruction_kind == InstructionKind::kUnknown &&
+               instruction.instruction_type_uuid)
             {
                 const auto type = data.instruction_type_lookup_map.find(
-                    instruction.instruction_type_uuid);
+                    *instruction.instruction_type_uuid);
                 if(type != data.instruction_type_lookup_map.end() &&
                    !type->second.empty())
                 {

@@ -16,7 +16,9 @@ make_isa_data()
 {
     PcSamplingData data;
     data.code_objects = {
-        { 1, { { 1, 1, { { 10, 0, 0x40, "s_nop 0" }, { 20, 0, 0x44, "s_endpgm" } } } } }
+        { 1,
+          { { 1, 1, { { 10, std::nullopt, 0x40, "s_nop 0" },
+                      { 20, std::nullopt, 0x44, "s_endpgm" } } } } }
     };
     return data;
 }

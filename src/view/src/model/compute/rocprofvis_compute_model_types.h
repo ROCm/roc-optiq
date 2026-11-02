@@ -94,10 +94,11 @@ struct InstructionSourceLine
 
 struct InstructionLine
 {
-    uint64_t    instruction_uuid      = 0;
-    uint64_t    instruction_type_uuid = 0;
-    uint64_t    code_object_offset    = 0;
-    std::string instruction;
+    uint64_t                instruction_uuid = 0;
+    // Unset when the database type is NULL. Zero remains a real lookup id.
+    std::optional<uint64_t> instruction_type_uuid;
+    uint64_t                code_object_offset = 0;
+    std::string             instruction;
 };
 
 struct KernelSymbol

@@ -1142,10 +1142,13 @@ Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 `__kRPVControllerPCSamplingPropertiesLast`). Its three groups have fixed high
 nibbles: source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`.
 Instruction/source correlation properties include both source-line and owning
-source-file UUIDs. Each ISA instruction line stores its instruction-type UUID;
-the ISA load also builds a UUID-to-text map used to resolve the public
-instruction-type text property. Map construction inserts each UUID once, so
-repeated instruction types reuse their stored text.
+source-file UUIDs. Each ISA instruction line stores its instruction-type UUID
+as `std::optional<uint64_t>`. A NULL database value returns
+`kRocProfVisResultNotLoaded`; a stored zero returns success with zero. The ISA
+load builds a UUID-to-text map from present ids only, inserting each UUID once
+so repeated types reuse their stored text and a missing type does not share
+lookup id 0. The type-text getter returns an empty string when the UUID is
+unset.
 
 ### 6.8 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,

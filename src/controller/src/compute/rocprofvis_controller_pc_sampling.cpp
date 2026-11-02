@@ -254,8 +254,17 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_instruction_lines.size())
                 {
-                    *value = m_instruction_lines[index].instruction_type_uuid;
-                    result = kRocProfVisResultSuccess;
+                    const std::optional<uint64_t>& instruction_type_uuid =
+                        m_instruction_lines[index].instruction_type_uuid;
+                    if(instruction_type_uuid)
+                    {
+                        *value = *instruction_type_uuid;
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultNotLoaded;
+                    }
                 }
                 break;
             }
@@ -1080,11 +1089,16 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
             {
                 if(index < m_instruction_lines.size())
                 {
-                    const uint64_t instruction_type_uuid =
-                        m_instruction_lines[index].instruction_type_uuid;
-                    const auto lookup =
-                        m_instruction_type_lookup_map.find(instruction_type_uuid);
                     static const std::string empty;
+                    const std::optional<uint64_t>& instruction_type_uuid =
+                        m_instruction_lines[index].instruction_type_uuid;
+                    if(!instruction_type_uuid)
+                    {
+                        result = GetStdStringImpl(value, length, empty);
+                        break;
+                    }
+                    const auto lookup =
+                        m_instruction_type_lookup_map.find(*instruction_type_uuid);
                     result = GetStdStringImpl(
                         value, length,
                         lookup != m_instruction_type_lookup_map.end()
@@ -1174,12 +1188,11 @@ rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64
         }
         case kRPVControllerPCSamplingInstructionLineInstructionType:
         {
-            if(index < m_instruction_lines.size())
+            if(index < m_instruction_lines.size() &&
+               m_instruction_lines[index].instruction_type_uuid)
             {
-                const uint64_t instruction_type_uuid =
-                    m_instruction_lines[index].instruction_type_uuid;
                 m_instruction_type_lookup_map.insert_or_assign(
-                    instruction_type_uuid, value);
+                    *m_instruction_lines[index].instruction_type_uuid, value);
                 result = kRocProfVisResultSuccess;
             }
             break;

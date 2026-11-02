@@ -476,7 +476,7 @@ namespace DataModel
 				query_out =
 					"SELECT il.instruction_uuid AS instruction_line_uuid, "
 					"il.kernel_symbol_uuid AS instruction_line_kernel_symbol_uuid, "
-					"COALESCE(il.instruction_type_uuid, 0) AS instruction_line_instruction_type_uuid, "
+					"il.instruction_type_uuid AS instruction_line_instruction_type_uuid, "
 					"COALESCE(il.code_object_offset, 0) AS instruction_line_code_object_offset, "
 					"COALESCE(il.instruction, '') AS instruction_line_instruction, "
 					"COALESCE(it.text, '') AS instruction_line_instruction_type "

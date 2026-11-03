@@ -536,6 +536,16 @@ namespace Controller
 
         libssh2_session_set_blocking(connection->GetSession(), 1);
 
+        // Delayed zlib only. The legacy "zlib" method compresses userauth,
+        // including the password. "none" stays so a server with compression
+        // disabled can still complete the handshake.
+        libssh2_session_flag(connection->GetSession(), LIBSSH2_FLAG_COMPRESS, 1);
+        const char* compression_prefs = "zlib@openssh.com,none";
+        libssh2_session_method_pref(
+            connection->GetSession(), LIBSSH2_METHOD_COMP_CS, compression_prefs);
+        libssh2_session_method_pref(
+            connection->GetSession(), LIBSSH2_METHOD_COMP_SC, compression_prefs);
+
         if (libssh2_session_handshake(connection->GetSession(), connection->GetSocket()))
         {
             char* msg = nullptr;
@@ -545,6 +555,19 @@ namespace Controller
             connection->GetSshBridge()->SaveError(err);
             connection->Disconnect();
             return SshClient::Result::HandshakeError;
+        }
+
+        const char* comp_cs = libssh2_session_methods(
+            connection->GetSession(), LIBSSH2_METHOD_COMP_CS);
+        const char* comp_sc = libssh2_session_methods(
+            connection->GetSession(), LIBSSH2_METHOD_COMP_SC);
+        const char* delayed = "zlib@openssh.com";
+        if (!comp_cs || std::strcmp(comp_cs, delayed) != 0 ||
+            !comp_sc || std::strcmp(comp_sc, delayed) != 0)
+        {
+            spdlog::info("[ssh] compression unavailable: client-to-server={} server-to-client={}",
+                comp_cs ? comp_cs : "(unset)",
+                comp_sc ? comp_sc : "(unset)");
         }
 
         if (IsCancelRequested(connection, future))

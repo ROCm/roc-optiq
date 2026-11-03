@@ -645,7 +645,7 @@ RocprofDatabase::CreateIndexes()
 }
 
 
-std::string RocprofDatabase::GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
+std::string RocprofDatabase::GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
 {
     std::string where_str;
     if(source_filter)
@@ -656,6 +656,14 @@ std::string RocprofDatabase::GetProcessorIDSubquery(rocprofvis_dm_query_criteria
             if(source_filter->agent_id.has_value)
             {
                 where_str += std::string(" AND ") + Builder::AGENT_ID_SERVICE_NAME + " = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
+            }
+            if(source_filter->process_id.has_value)
+            {
+                where_str += std::string(" AND ") + Builder::PROCESS_ID_SERVICE_NAME + " = " + std::to_string(source_filter->process_id.value & TOPOLOGY_ID_MASK);
+            }
+            if(source_filter->thread_id.has_value)
+            {
+                where_str += std::string(" AND ") + Builder::THREAD_ID_SERVICE_NAME + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
             }
         }
     }
@@ -1799,6 +1807,18 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 
     ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
     return future->SetPromise(result);
+}
+
+void RocprofDatabase::BuildOpQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_event_operation_t op)
+{
+    QueryManager::BuildOpQueryMap(slice_query_map, op);
+    if(op == kRocProfVisDmOperationLaunch && slice_query_map.count(GetEventOperationQuery(op)))
+    {
+        for(std::pair<std::uint32_t const, std::string>& query : slice_query_map.at(GetEventOperationQuery(op)))
+        {
+            query.second = " WHERE (SAMPLE.id IS NULL";
+        }
+    }
 }
 
 rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 

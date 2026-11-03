@@ -322,7 +322,7 @@ TopologyNode::GetObject(rocprofvis_property_t property, uint64_t index,
         break;
         case kRPVControllerCounterProcess:
         {
-            result = kRocProfVisResultNotLoaded;
+            result = kRocProfVisResultSuccess;
             *value = nullptr;
             uint64_t counter_pid;
             if (kRocProfVisResultSuccess == GetUInt64(kRPVControllerCounterProcess, 0, &counter_pid))
@@ -338,15 +338,12 @@ TopologyNode::GetObject(rocprofvis_property_t property, uint64_t index,
                             if (process_id == counter_pid)
                             {
                                 *value = (rocprofvis_handle_t*)process;
-                                result = kRocProfVisResultSuccess;
                                 break;
                             }
                         }
                     }
                 }
             }
-            *value = nullptr;
-            result = kRocProfVisResultSuccess;
         }
         break;
         default:

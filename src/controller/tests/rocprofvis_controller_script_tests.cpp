@@ -785,6 +785,33 @@ TEST_CASE("Script table.fetch does not use the UI event table")
     rocprofvis_controller_free(controller);
 }
 
+// Every cell is stored as text; numeric columns, grouped aggregates included,
+// still have to reach Python as numbers.
+TEST_CASE("Script table.fetch returns numbers for numeric columns")
+{
+    rocprofvis_controller_t* controller = load_sample_controller();
+    REQUIRE(controller);
+
+    char const* source =
+        "event_tracks = [t for t in optiq.trace.tracks if t.type == optiq.TRACK_TYPE_EVENTS]\n"
+        "t = optiq.table()\n"
+        "rows = []\n"
+        "for tr in event_tracks:\n"
+        "    rows = t.fetch(tracks=[tr], start=tr.min_time, end=tr.max_time, count=8)\n"
+        "    if rows:\n"
+        "        break\n"
+        "print(all(isinstance(rows[0][k], int) for k in ('start', 'end', 'duration')))\n"
+        "grouped = t.fetch(tracks=[tr], start=tr.min_time, end=tr.max_time, group='name',\n"
+        "                  count=8)\n"
+        "print(isinstance(grouped[0]['num_invocations'], int))\n"
+        "text_rows = t.fetch(tracks=[tr], start=tr.min_time, end=tr.max_time,\n"
+        "                    count=8, text=True)\n"
+        "print(all(isinstance(v, str) for v in text_rows[0].values()))\n";
+    REQUIRE(run_script_text_on(controller, source) == "True\nTrue\nTrue");
+
+    rocprofvis_controller_free(controller);
+}
+
 // The interpreter outlives every run, so a script can keep an optiq object
 // past the end of its own: parked on an allowlisted module, which stays in
 // sys.modules for the life of the process and which the teardown hook cannot

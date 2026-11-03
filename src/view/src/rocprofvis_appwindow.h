@@ -16,7 +16,7 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
-// TEMPORARY (remote/SSH): the SSH test dialog is a remote-only dev aid.
+// TEMPORARY (remote/SSH): the SSH test dialog backs File > Open Remote.
 // Remove this guard when the remote feature graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_test_dialog.h"
@@ -157,6 +157,9 @@ private:
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleFontChanged();
     void HandleOpenFile();
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    void HandleTestRemoteSSH();
+#endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     void HandleCompareFiles();
     void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
@@ -203,9 +206,6 @@ private:
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
     void RenderDeveloperMenu();
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    void HandleTestRemoteSSH();
-#endif
     bool         m_show_metrics;
     bool         m_show_debug_window;
     DataProvider m_test_data_provider;

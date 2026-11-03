@@ -97,7 +97,7 @@ Roofline::Roofline(DataProvider& data_provider, Mode mode)
 , m_requested_kernel_secondary_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_menus(true)
 , m_menus_mode(Legend)
-, m_menus_placement(InsideTopRight)
+, m_menus_placement(Outside)
 , m_scale_intensity(true)
 , m_line_thickness(LINE_THICKNESS_DEFAULT)
 , m_ceiling_labels(true)
@@ -554,14 +554,32 @@ Roofline::Render()
                                 else if(m_items[i].type ==
                                             ItemModel::Type::CeilingBandwidth &&
                                         m_items[i].info.ceiling->position.p2.x >
-                                            ImPlot::GetPlotLimits().X.Min)
+                                            ImPlot::GetPlotLimits().X.Min &&
+                                        m_items[i].info.ceiling->position.p2.y >
+                                            ImPlot::GetPlotLimits().Y.Min)
                                 {
-                                    ImPlot::Annotation(
-                                        ImPlot::GetPlotLimits().X.Min,
-                                        m_items[i].info.ceiling->throughput *
+                                    if(m_items[i].info.ceiling->throughput *
+                                           ImPlot::GetPlotLimits().X.Min >
+                                       ImPlot::GetPlotLimits().Y.Min)
+                                    {
+                                        ImPlot::Annotation(
                                             ImPlot::GetPlotLimits().X.Min,
-                                        ImPlot::GetLastItemColor(), ImVec2(1.0f, 0.0f),
-                                        false, m_items[i].label.c_str());
+                                            m_items[i].info.ceiling->throughput *
+                                                ImPlot::GetPlotLimits().X.Min,
+                                            ImPlot::GetLastItemColor(),
+                                            ImVec2(1.0f, 0.0f), false,
+                                            m_items[i].label.c_str());
+                                    }
+                                    else
+                                    {
+                                        ImPlot::Annotation(
+                                            ImPlot::GetPlotLimits().Y.Min /
+                                                m_items[i].info.ceiling->throughput,
+                                            ImPlot::GetPlotLimits().Y.Min,
+                                            ImPlot::GetLastItemColor(),
+                                            ImVec2(0.0f, -1.0f), false,
+                                            m_items[i].label.c_str());
+                                    }
                                 }
                             }
                             break;
@@ -1194,7 +1212,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                       bool& item_hovered, bool& plot_hovered)
 {
     plot_pos -= ImGui::GetWindowPos();
-    float menus_width      = region.x * 0.25f;
+    float menus_width      = region.x * 0.25f - plot_style.PlotPadding.x;
     float button_size      = ImGui::GetFrameHeight();
     float max_menus_height = plot_size.y - plot_style.PlotPadding.y * 2.0f - button_size;
 
@@ -1283,7 +1301,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
             ImGui::SetCursorPos(plot_pos + ImVec2(plot_size.x, 0.0f));
             ImGui::GetWindowDrawList()->AddRectFilled(
                 ImGui::GetCursorScreenPos(),
-                ImGui::GetCursorScreenPos() + ImVec2(menus_width, plot_size.y),
+                ImGui::GetCursorScreenPos() + ImVec2(region.x * 0.25f, plot_size.y),
                 m_settings.GetColor(Colors::kBgFrame));
         }
         ImGui::SetCursorPos(button_pos +

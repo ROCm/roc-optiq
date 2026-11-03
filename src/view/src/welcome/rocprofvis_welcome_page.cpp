@@ -492,11 +492,13 @@ WelcomePage::RenderHeader()
     ImGui::TextUnformatted("Welcome to ROCm Optiq");
     ImGui::PopFont();
 
+    // First mention of each profiler on this page carries the trademark.
     DrawDimParagraph(
         settings,
-        "Unified visualization and analysis for ROCm Systems Profiler traces and "
-        "ROCm Compute Profiler data. Identify bottlenecks, understand hardware "
-        "utilization, and optimize GPU workloads.",
+        settings.GetFontManager().TrademarkText(
+            "Unified visualization and analysis for ROCm\u2122 Systems Profiler traces "
+            "and ROCm\u2122 Compute Profiler data. Identify bottlenecks, understand "
+            "hardware utilization, and optimize GPU workloads."),
         content_width);
 
     ImGui::Dummy(ImVec2(0.0f, font_size * WELCOME_SECTION_GAP_EM));

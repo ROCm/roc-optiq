@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_imgui_backend.h"
+#include "rocprofvis_app_shell.h"
 #include "rocprofvis_view_module.h"
 #include "spdlog/spdlog.h"
 #include <GLFW/glfw3.h>
@@ -22,6 +23,7 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow*
                                 int width, int height, const char* title)
 {
     glfwDefaultWindowHints();
+    RocProfVis::Platform::set_window_class_hints(RocProfVis::App::APP_NAME_ASCII);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
 #if defined(GLFW_SCALE_TO_MONITOR)
     glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
@@ -31,7 +33,7 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow*
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #else
     // GL 3.0 + GLSL 130
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);

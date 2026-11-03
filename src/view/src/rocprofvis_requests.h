@@ -31,6 +31,8 @@ enum class RequestType
     kFetchTrackSampleTable,
     kFetchEventSearchTable,
     kFetchSummaryKernelInstanceTable,
+    kFetchSummaryMemoryInstanceTable,
+    kFetchSummaryThreadInstanceTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
@@ -45,7 +47,6 @@ enum class RequestType
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
-    kFetchAnalysisTopHipEventsTable,
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
@@ -422,6 +423,7 @@ struct RequestInfo
     std::shared_ptr<RequestParamsBase>    custom_params;  // custom request parameters
     std::chrono::steady_clock::time_point request_time;  // time when the request was made
     uint64_t                              response_code;  // response code for the request
+    std::string                           error_message;  // message the controller left for the user, if any
     uint64_t                              request_progress; // progress percentage of the request 
 };
 

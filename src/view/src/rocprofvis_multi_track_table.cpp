@@ -18,11 +18,7 @@ namespace View
 
 constexpr const char* NO_DATA_TEXT =
     "No data available for the selected tracks or filters.";
-constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
-constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME        = "__uuid";
-constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
-constexpr const char* FOUND_ENTRIES_TEXT    = "Found %llu item(s) on %llu track(s)";
+constexpr const char* FOUND_ENTRIES_TEXT = "Found %llu item(s) on %llu track(s)";
 
 constexpr const char* SHARED_APPLY_LABEL    = "Apply to Both";
 constexpr const char* SHARED_GROUP_BY_LABEL = "Group by";
@@ -680,59 +676,10 @@ MultiTrackTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) 
 }
 
 void
-MultiTrackTable::FormatData() const
-{
-    std::vector<FormattedColumnInfo>& formatted_column_data =
-        m_table_model_mutable().GetMutableFormattedTableData(m_table_type);
-
-    // clear previous formatting info
-    formatted_column_data.clear();
-    formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
-    InfiniteScrollTable::FormatTimeColumns();
-}
-
-void
 MultiTrackTable::IndexColumns()
 {
-    const std::vector<std::string>& column_names =
-        m_table_model().GetTableHeader(m_table_type);
-    // remember column index positions
-    m_important_column_idxs =
-        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
-    for(size_t i = 0; i < column_names.size(); i++)
-    {
-        const auto& col = column_names[i];
-        if(!col.empty())
-        {
-            if(col == TRACK_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kTrackId] = i;
-            }
-            else if(col == STREAM_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kStreamId] = i;
-            }
-            else if(col == ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kUUId] = i;
-            }
-            else if(col == EVENT_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kDbEventId] = i;
-            }
-        }
-    }
     InfiniteScrollTable::IndexColumns();
-}
-
-void
-MultiTrackTable::RowSelected(const ImGuiMouseButton mouse_button)
-{
-    if(mouse_button == ImGuiMouseButton_Right)
-    {
-        InfiniteScrollTable::SelectedRowContextMenu();
-    }
-    InfiniteScrollTable::RowSelected(mouse_button);
+    m_important_column_idxs[kDbEventId] = ColumnIndexOf(EVENT_ID_COLUMN_NAME);
 }
 
 void

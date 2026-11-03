@@ -247,6 +247,13 @@ IconMenuItem(const char* icon, const char* label, bool enabled = true,
 bool
 IconBeginMenu(const char* icon, const char* label);
 
+// Applies the standard padding and row colors around an arbitrary context popup.
+void
+PushContextMenuStyles();
+
+void
+PopContextMenuStyles();
+
 // Identifies the row/column of the cell whose right-click opened a table's copy
 // context menu. Reusable by any table that wants the shared full-row right-click
 // hit-box plus copy menu (see RenderRowHitbox / AddCopyRowCellMenuItems).

@@ -1433,14 +1433,22 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 struct FilterCase
                 {
                     const char* expression;
-                    bool        valid;
+                    const char* error;  // null when nothing is reported
                 };
-                // Invalid filters are listed twice: the model returns a table it
-                // already holds for the same query without running it again.
+                // An invalid filter succeeds with every column and no rows, and is
+                // reported. Invalid filters are listed twice: the model would serve a
+                // table it already holds for the same query without running it, or
+                // reporting the filter, again.
                 const FilterCase filter_cases[] = {
-                    { "5", false },
-                    { "5", false },
-                    { "> 0", true },
+                    { "5", "Could not apply filter: Expected an operator after "
+                           "\"duration_ns_sum\", but found \"5\"" },
+                    { "5", "Could not apply filter: Expected an operator after "
+                           "\"duration_ns_sum\", but found \"5\"" },
+                    { "> no_such_column",
+                      "Could not apply filter: Unknown column \"no_such_column\"" },
+                    { "> no_such_column",
+                      "Could not apply filter: Unknown column \"no_such_column\"" },
+                    { "> 0", nullptr },
                 };
                 const uint64_t duration_sum_column = 2;
                 for(const FilterCase& filter_case : filter_cases)
@@ -1480,17 +1488,37 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                         filter_future, kRPVControllerFutureResult, 0, &filter_result);
                     spdlog::info("Pivot table fetch result: {0}", filter_result);
                     REQUIRE(result == kRocProfVisResultSuccess);
-                    REQUIRE((filter_result == kRocProfVisResultSuccess) ==
-                            filter_case.valid);
-                    if(filter_case.valid)
+                    REQUIRE(filter_result == kRocProfVisResultSuccess);
+
+                    uint32_t error_length = 0;
+                    result = rocprofvis_controller_get_string(
+                        filter_future, kRPVControllerFutureLastErrorMessage, 0, nullptr,
+                        &error_length);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    std::string error(error_length, '\0');
+                    if(error_length > 0)
                     {
-                        uint64_t filtered_rows = 0;
-                        result = rocprofvis_controller_get_uint64(
-                            (rocprofvis_handle_t*) filter_array,
-                            kRPVControllerArrayNumEntries, 0, &filtered_rows);
+                        result = rocprofvis_controller_get_string(
+                            filter_future, kRPVControllerFutureLastErrorMessage, 0,
+                            error.data(), &error_length);
                         REQUIRE(result == kRocProfVisResultSuccess);
-                        REQUIRE(filtered_rows == num_rows);
                     }
+                    spdlog::info("Pivot table filter error message: {0}", error);
+                    REQUIRE(error == (filter_case.error ? filter_case.error : ""));
+
+                    uint64_t filtered_columns = 0;
+                    result = rocprofvis_controller_get_uint64(
+                        (rocprofvis_handle_t*) table_handle, kRPVControllerTableNumColumns,
+                        0, &filtered_columns);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE(filtered_columns == num_columns);
+
+                    uint64_t filtered_rows = 0;
+                    result = rocprofvis_controller_get_uint64(
+                        (rocprofvis_handle_t*) filter_array, kRPVControllerArrayNumEntries,
+                        0, &filtered_rows);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE(filtered_rows == (filter_case.error ? 0 : num_rows));
 
                     rocprofvis_controller_array_free(filter_array);
                     rocprofvis_controller_future_free(filter_future);

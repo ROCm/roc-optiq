@@ -201,6 +201,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                 // Wait for query completion
                 future->AddDependentFuture(db_future);
                 dm_result = rocprofvis_db_future_wait(db_future, UINT64_MAX);
+                future->KeepErrorMessage(db_future);
 
                 uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(
                     dm_handle, kRPVDMNumberOfTablesUInt64, 0);

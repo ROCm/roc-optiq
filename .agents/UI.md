@@ -1567,7 +1567,9 @@ bar-chart columns. Public:
   `SetExternalQuery(metric_id, value_name)` for the "Add Metric" flow
   (driven by `QueryBuilder`).
 - Per-column filters (`ColumnFilter`) with `ApplyFilters` /
-  `ClearAllFilters` / `ValidateFilterExpression`.
+  `ClearAllFilters`. Filters are not validated in the view: the model
+  returns every column and no rows for a filter it can't apply, and
+  `ComputeKernelDetailsView` shows the `TableDataEvent` error message.
 - Bar-chart columns (`m_bar_chart_columns`) computed via
   `ComputeColumnMaxValues`.
 - Persistent state via the nested `Preset : PresetComponent`.

@@ -90,5 +90,17 @@ bool CheckArrayLength(const std::vector<jt::Json>& entries,
 void SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
                              double& end_ns);
 
+// Finds the link a model-supplied ref names among this trace's links: a group
+// id first, then the other trace's file name or role when only one matches. An
+// empty ref picks the only link there is. Writes the reason to error_out on
+// failure, listing what is linked.
+bool
+ResolveAssistantLink(const AssistantToolContext& context, const std::string& ref,
+                     TraceLink& link_out, std::string& error_out);
+
+// Why a linked trace cannot be read right now, or empty when it can.
+std::string
+LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link);
+
 }  // namespace View
 }  // namespace RocProfVis

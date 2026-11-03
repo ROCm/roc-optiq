@@ -97,6 +97,7 @@ const uint64_t DataProvider::FETCH_PC_SAMPLING_STALLS_REQUEST_ID =
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
+, m_summary_fetch_failed(false)
 , m_trace_controller(nullptr)
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
@@ -2588,6 +2589,7 @@ DataProvider::FetchSummary()
     auto it = m_requests.find(SUMMARY_REQUEST_ID);
     if(it == m_requests.end())
     {
+        m_summary_fetch_failed                    = false;
         rocprofvis_result_t                result = kRocProfVisResultUnknownError;
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
@@ -2618,6 +2620,12 @@ DataProvider::FetchSummary()
         spdlog::debug("Request for summary is already pending");
         return false;
     }
+}
+
+bool
+DataProvider::SummaryFetchFailed() const
+{
+    return m_summary_fetch_failed;
 }
 
 bool
@@ -3428,14 +3436,22 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
         rocprofvis_controller_summary_metrics_t* metrics_handle = req.request_obj_handle;
         if(req.response_code == kRocProfVisResultSuccess)
         {
+            m_summary_fetch_failed = false;
             m_model.GetSummary().Clear();
             m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
             CreateSummaryData(metrics_handle, scratch);
             m_model.GetSummary().UpdateValueStrings();
         }
+        else if(req.response_code == kRocProfVisResultCancelled)
+        {
+            // Cancellation is user intent (Clear or closing a trace), not a
+            // failed summary. A later comparison may request it again.
+            spdlog::debug("Summary request cancelled");
+        }
         else
         {
+            m_summary_fetch_failed = true;
             spdlog::warn("Summary request failed with code {}", req.response_code);
         }
         rocprofvis_controller_summary_metric_free(metrics_handle);

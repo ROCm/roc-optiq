@@ -48,6 +48,7 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "measure", "Measuring..." },
     { "reset_view", "Resetting the view..." },
     { "offer_next_steps", "Offering next steps..." },
+    { "compare_traces", "Comparing the linked runs..." },
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     { "run_analysis_script", "Running an analysis script..." },
 #endif
@@ -141,6 +142,15 @@ AddQueryParams(jt::Json& params)
              "Optional column to aggregate rows by, e.g. name.");
 }
 
+// The linked trace a read tool can look at instead of this one.
+void
+AddTraceParam(jt::Json& params)
+{
+    AddParam(params, "trace", "string",
+             "Optional ref of a linked trace, from linked_traces, to read that trace "
+             "instead of this one. Omit to read this trace.");
+}
+
 }  // namespace
 
 // Every registered tool name, for telling the model when it invents one.
@@ -180,6 +190,7 @@ MakeAssistantToolsJson()
         MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
     AddParam(summary_params, "id", "integer",
              "Sub-metric id from the same sub_metrics line as level.");
+    AddTraceParam(summary_params);
     AddTool(tools, 0, "get_summary",
             "Load the prebuilt trace summary for one scope: the top kernels, memory "
             "operations and thread (CPU) operations by total time - each with "
@@ -205,6 +216,7 @@ MakeAssistantToolsJson()
                          "sampled" });
     AddScopeParams(top_params);
     AddQueryParams(top_params);
+    AddTraceParam(top_params);
     top_params["required"][0] = "category";
     AddTool(tools, 1, "top_events",
             "Rank the hottest event names of one category, optionally narrowed to "
@@ -233,6 +245,7 @@ MakeAssistantToolsJson()
              "Sub-metric id from a get_summary sub_metrics line, paired with level.");
     AddScopeParams(inst_params);
     AddQueryParams(inst_params);
+    AddTraceParam(inst_params);
     inst_params["required"][0] = "name";
     AddTool(tools, 2, "event_instances",
             "List individual events for one name - kernel dispatches, memory "
@@ -259,6 +272,7 @@ MakeAssistantToolsJson()
         MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
     AddParam(metrics_params, "id", "integer",
              "Sub-metric id from a get_summary sub_metrics line, paired with level.");
+    AddTraceParam(metrics_params);
     AddTool(tools, 3, "get_summary_event_metrics",
             "Return duration and call statistics for one kernel, memory operation "
             "or thread operation from the summary, at the trace or at one "
@@ -269,6 +283,7 @@ MakeAssistantToolsJson()
             metrics_params);
 
     jt::Json tracks_params = ObjectParams();
+    AddTraceParam(tracks_params);
     AddTool(tools, 4, "list_tracks",
             "List timeline tracks with ids, names, and event families. Use before goto "
             "if you need a track_id.",
@@ -319,6 +334,7 @@ MakeAssistantToolsJson()
     jt::Json track_events_params = ObjectParams();
     AddScopeParams(track_events_params);
     AddQueryParams(track_events_params);
+    AddTraceParam(track_events_params);
     AddTool(tools, 6, "track_events",
             "Read raw events off specific timeline tracks. This is the closest thing "
             "to querying the database: pick tracks with track_ids, a window with "
@@ -329,6 +345,7 @@ MakeAssistantToolsJson()
     jt::Json track_samples_params = ObjectParams();
     AddScopeParams(track_samples_params);
     AddQueryParams(track_samples_params);
+    AddTraceParam(track_samples_params);
     AddTool(tools, 7, "track_samples",
             "Read counter/PMC samples off specific counter tracks over a window. "
             "Use track_ids from list_tracks where type=Counter. Same filtering, "
@@ -343,6 +360,7 @@ MakeAssistantToolsJson()
              "silently asks about a different event.");
     AddParam(event_details_params, "track_id", "integer",
              "Optional owning track id, which fills in the event name and duration.");
+    AddTraceParam(event_details_params);
     event_details_params["required"][0] = "event_uuid";
     AddTool(tools, 8, "event_details",
             "Drill into one event: its arguments, extended data, flow links to and "
@@ -357,6 +375,7 @@ MakeAssistantToolsJson()
     AddParam(track_stats_params, "start_ns", "number",
              "Window start in nanoseconds. Defaults to the selection or whole trace.");
     AddParam(track_stats_params, "end_ns", "number", "Window end in nanoseconds.");
+    AddTraceParam(track_stats_params);
     track_stats_params["required"][0] = "track_id";
     AddTool(tools, 9, "track_statistics",
             "Compute statistics for one track over a window: queue busy percentage "
@@ -387,6 +406,7 @@ MakeAssistantToolsJson()
              "Window start in nanoseconds. Defaults to the whole trace.");
     AddParam(search_params, "end_ns", "number", "Window end in nanoseconds.");
     AddQueryParams(search_params);
+    AddTraceParam(search_params);
     search_params["required"][0] = "terms";
     AddTool(tools, 10, "search_events",
             "Search the whole trace by event name, the same as the search box in "
@@ -400,6 +420,7 @@ MakeAssistantToolsJson()
              "Optional: profile one track instead of the whole trace.");
     AddParam(overview_params, "bins", "integer",
              "Time buckets to report (default 32).");
+    AddTraceParam(overview_params);
     AddTool(tools, 11, "trace_overview",
             "Preliminary analysis. Reads the timeline histogram and minimap that "
             "Optiq already built: where activity is concentrated in time, the "
@@ -422,8 +443,8 @@ MakeAssistantToolsJson()
 
     jt::Json tab_params = ObjectParams();
     AddParam(tab_params, "name", "string",
-             "Tab to switch to. Part of the name is enough. Omit to list every "
-             "tab that is available.");
+             "Tab to switch to. Use its tab_ ref when listed; a unique part of "
+             "its name also works. Omit to list every tab that is available.");
     AddTool(tools, 13, "switch_tab",
             "Switch tabs among open traces or the details panel. Only call this "
             "when the user asked you to change tabs. Call with no name to list "
@@ -532,6 +553,7 @@ MakeAssistantToolsJson()
              "Names to list when no name is given (default 20, max 200).");
     AddParam(counter_params, "offset", "integer",
              "Names to skip. Use with limit to page through a long counter list.");
+    AddTraceParam(counter_params);
     AddTool(tools, 20, "get_summary_counter_stats",
             "Read the summarized hardware counters at the trace, one node or one "
             "device (GPU/CPU) - processes and threads have none: mean, min, max "
@@ -544,6 +566,26 @@ MakeAssistantToolsJson()
             "track_samples.",
             counter_params);
 
+    jt::Json compare_params = ObjectParams();
+    AddParam(compare_params, "with", "string",
+             "Ref of the linked trace to compare against, from linked_traces. May be "
+             "omitted when exactly one trace is linked.");
+    AddParam(compare_params, "category", "string",
+             "One event family to compare. Omit to compare all three.");
+    compare_params["properties"]["category"]["enum"] =
+        MakeStringEnum({ "kernel", "memory", "thread" });
+    AddParam(compare_params, "limit", "integer",
+             "Names to list per family, largest change first (default 10, max 50).");
+    AddTool(tools, 21, "compare_traces",
+            "Compare this trace with a linked run, baseline against target, from the two "
+            "traces' summaries. No query is run. Returns each run's span and each event "
+            "family's total, then the names whose time changed most with calls and "
+            "totals for both runs, the time per call when the call counts differ, and "
+            "names that are new in the target, gone from it, or hidden in one run's "
+            "Others row so their change is unknown. The arithmetic is done for you: "
+            "quote these figures rather than working out your own.",
+            compare_params);
+
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     // This description is the only account the model gets of what a script may
     // use. Anything left out of it gets invented, so it names the whole surface
@@ -553,7 +595,7 @@ MakeAssistantToolsJson()
              "Python source, shown to the user before it runs. Report findings "
              "with optiq.result.text(...); nothing else is returned.");
     script_params["required"][0] = "script";
-    AddTool(tools, 21, "run_analysis_script",
+    AddTool(tools, 22, "run_analysis_script",
             "Offer a Python script that analyses this trace. It does not run on "
             "its own: the editor opens with your source and the user presses Run "
             "or Reject, so write it to be read as well as executed - clear names, "

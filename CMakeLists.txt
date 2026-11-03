@@ -322,6 +322,10 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tools.h
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_links.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
     # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
@@ -507,6 +511,20 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
+
+    # The trace link store and run diff behind compare_traces need no GPU,
+    # trace, UI, endpoint, or feature define, so every test build covers them.
+    set(ASSISTANT_TEST_NAME ${TARGET_NAME}-assistant-tests)
+    add_executable(${ASSISTANT_TEST_NAME}
+        src/view/test/rocprofvis_ai_assistant_tests.cpp
+        src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
+        src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+        src/view/src/rocprofvis_json_utils.cpp)
+    target_include_directories(${ASSISTANT_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${ASSISTANT_TEST_NAME} PRIVATE json spdlog
+                          Catch2::Catch2WithMain)
+    add_test(NAME ${ASSISTANT_TEST_NAME} COMMAND ${ASSISTANT_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)

@@ -2412,7 +2412,48 @@ the trace summary, so `StartAssistantTool` turns a compute trace away once
 for it. The panel is a singleton shared across tabs, which is what makes
 that guard necessary rather than cosmetic: the user can open it on a
 system trace and then bring a compute tab to the front. `ComputeView`
-does not offer the toolbar button.
+does not offer the toolbar button. Compare tabs are turned away the same
+way: they hold two runs in one provider, and every tool reads a provider
+as one trace, so their totals would add the runs together. Two runs are
+compared by linking their own tabs instead (below).
+
+**One conversation per trace, one turn at a time.** The panel keeps a
+`Conversation` (transcript, API history, next steps, composer draft) per
+`Project::GetID()` and shows the one for the tab in front, so nothing said
+about one trace is ever sent with a question about another. The tab in
+front is read in `RenderDocked()`, after the tab bar has drawn: a
+`TabContainer` applies a selection when it next renders, so during
+`Update()` the active tab can still be the one the user just left. A turn
+is pinned to the trace it was asked on (`m_turn_project_id`); its tools
+read that trace and its replies go to that conversation whichever tab is
+in front, which works because `TabContainer::Update()` drives every tab's
+provider. UI and script tools refuse to act when the pinned trace is not
+in front, rather than rearrange a tab the user cannot see. The main tab
+bar's `kTabClosed` cancels a turn pinned to that trace and drops its
+conversation; other tab bars send the same event, so it is filtered on
+`GetMainTabSourceName()`.
+
+**Linked traces.** The user links two open system traces as baseline and
+target with the **Link runs** button in the panel header.
+`rocprofvis_ai_trace_links.{h,cpp}` (`TraceLinkStore`) persists the groups
+in `{config}/trace_links.json`, written to a temporary file and atomically
+replaced (`MoveFileExW` on Windows, `rename` elsewhere); a file from a newer
+build is read but never written, and
+group ids are never reused, since a model can still hold an old one. Each
+member records a fingerprint read from the trace (span and track count),
+not the file, because Optiq writes into the database it opens. The link
+block goes in the user message - with the briefing, then whenever it
+changes - never the system prompt, which must stay identical across
+rounds for prompt caching. Every single-trace data tool accepts an optional
+`trace` ref (`compare_traces` uses `with`); the dispatcher resolves it
+against the conversation's links, builds
+a fresh context with `MakeAssistantToolContext(id)`, refuses closed,
+loading, compute, or compare targets, rejects it on UI and script tools,
+and labels the result with the trace it came from. `compare_traces` diffs
+the two runs' summaries through `rocprofvis_ai_trace_compare.{h,cpp}`, a
+pure module (Catch2 target `roc-optiq-assistant-tests`) that matches names,
+signs every change, separates per-call time when call counts differ, and
+reports a name hidden in one run's "Others" row as unknown, not gone.
 
 **Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
 same way remote and profiler launch are gated. Everything in
@@ -2543,11 +2584,11 @@ unknown tool. The label list at the top of the schema file has to grow
 with it, since that is what `AssistantToolNameList` reports and what the
 panel shows as a status line.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
-  singleton like `LogViewer`. Owns the transcript, the docked column,
-  and the turn loop. The composer shows **Explain this view** on an
-  empty chat, then replaces it with up to three stacked next-step
-  buttons from `offer_next_steps`. Clicking a step sends that text as
-  the next user message.
+  singleton like `LogViewer`. Owns the per-trace conversations, the
+  docked column, and the turn loop. The composer shows **Explain this
+  view** on an empty chat, then replaces it with up to three stacked
+  next-step buttons from `offer_next_steps`. Clicking a step sends that
+  text as the next user message.
 
 Integration points:
 
@@ -2668,13 +2709,30 @@ Rules that are easy to get wrong here:
   against the original timeout deadline. It returns a timeout rather
   than treating the other query's rows as its own.
 - **HTTP runs on a worker via `std::async`, and must stay cancellable.**
-  `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
-  is what lets the panel be destroyed without blocking on a
-  two-minute read timeout.
-- **The tool context is rebuilt every call** (`MakeToolContext()`) from
-  `AppWindow::GetCurrentProject()`, so it never holds a dead provider.
-  The flip side is that the trace in front can change mid-turn, which
-  is what `m_turn_project_id` detects.
+  `AssistantChatCall::Cancel()` closes the socket. Clear and tab close move
+  the cancelled future to `m_abandoned`, which `Update()` reaps when ready,
+  rather than destroy a `std::async` future and block the UI; final panel
+  destruction cancels and joins every remaining worker.
+- **The tool context is rebuilt every call**, by id
+  (`MakeAssistantToolContext(m_turn_project_id)` through
+  `AppWindow::GetProject()`), so it never holds a dead provider: a closed
+  trace comes back empty. Never cache a `Project*`, `DataProvider*`, or
+  `TraceView*` across frames.
+- **A parked fetch names its provider.** Request ids repeat in every
+  `DataProvider`, so polling the wrong one would format another trace's
+  rows as this tool's answer. The dispatcher stamps
+  `AssistantFetchState::project_id`, and the panel polls and formats
+  against that trace - the linked one after a `trace` read.
+- **`switch_tab` reports the tab it matched.** The select calls return
+  the matched label because the tab bar only switches when it next
+  draws. Switching traces moves the user, not the turn: the turn stays
+  pinned and says where the user went.
+- **`ASSISTANT_CLIENT_ID` is 3.** The compare panes build their event,
+  sample, and top-events request ids from client ids 1 and 2, the same
+  request types the assistant reads; a `static_assert` in
+  `rocprofvis_compare_panes.cpp` keeps them apart. `IdGenerator` starts at
+  `RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID` (4), so widget-owned clients
+  cannot enter the reserved 0-3 band.
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
@@ -3566,12 +3624,20 @@ All under `agenticprofiling/`, compiled only with
 `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`.
 
 - `AssistantPanel` -> `agenticprofiling/rocprofvis_ai_assistant.h` ->
-  Docked chat panel and turn loop.
+  Docked chat panel, one conversation per trace, and the turn loop.
 - `OptiqActions`, `OptiqPanel` ->
   `agenticprofiling/rocprofvis_ai_actions.h` -> The only code that
   mutates the UI on the assistant's behalf.
+- `TraceLinkStore`, `TraceLinkGroup`, `TraceLinkMember`, `TraceLink`,
+  `TraceFingerprint` -> `agenticprofiling/rocprofvis_ai_trace_links.h` ->
+  Baseline/target links between traces, persisted in
+  `{config}/trace_links.json`. `AssistantTraceLinks()` is the instance.
+- `DiffRunCategory`, `FormatRunChange`, `FormatRunCategory` ->
+  `agenticprofiling/rocprofvis_ai_trace_compare.h` -> The arithmetic
+  behind `compare_traces`, free of the data model.
 - `AssistantToolContext`, `AssistantFetchState`,
   `AssistantToolStartResult`, `StartAssistantTool`,
+  `MakeAssistantToolContext`, `BuildAssistantLinkBlock`,
   `FinishAssistantFetch`, `BuildAssistantBriefing` ->
   `agenticprofiling/rocprofvis_ai_tools.h`. The dispatcher lives in
   `rocprofvis_ai_tools.cpp`; the bodies are split by what they touch

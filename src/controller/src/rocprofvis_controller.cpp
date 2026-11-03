@@ -793,10 +793,15 @@ void rocprofvis_controller_future_free(rocprofvis_controller_future_t* object)
 }
 void rocprofvis_controller_free(rocprofvis_controller_t* object)
 {
-    RocProfVis::Controller::SystemTraceRef trace(object);
-    if (trace.IsValid())
+    RocProfVis::Controller::SystemTraceRef system_trace(object);
+    RocProfVis::Controller::ComputeTraceRef compute_trace(object);
+    if(system_trace.IsValid())
     {
-        delete trace.Get();
+        delete system_trace.Get();
+    }
+    else if(compute_trace.IsValid())
+    {
+        delete compute_trace.Get();
     }
 }
 

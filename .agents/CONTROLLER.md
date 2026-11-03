@@ -130,6 +130,10 @@ void                      rocprofvis_controller_free(rocprofvis_controller_t*);
 caller treats both the same way - everything dispatches through the
 opaque handle and the runtime object type tag.
 
+`rocprofvis_controller_free` validates both `SystemTrace` and `ComputeTrace`
+handles and deletes the matching type. Both paths release the owned data-model
+trace through the virtual `Trace` destructor; null and unrelated handles are ignored.
+
 `rocprofvis_controller_alloc_compare(filenames, count)` is the
 systems-trace comparison entry point (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
 It builds a `SystemTrace` from several rocprof SQLite files so each
@@ -1481,7 +1485,8 @@ Catch2 tests live in `src/controller/tests/`:
   `MemoryManager` LRU eviction logic, and segment timeline behaviour.
 - `rocprofvis_controller_compute_tests.cpp` - runs against
   `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
-  workload + kernel + roofline + metric-fetch + pivot-table flows.
+  workload + kernel + roofline + metric-fetch + pivot-table flows, and verifies
+  that the public free function invokes the compute controller's destructor.
 - `rocprofvis_controller_script_tests.cpp` - built only with
   `ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0: execute a source string
   and read `optiq.result.text`. Phase 1: load

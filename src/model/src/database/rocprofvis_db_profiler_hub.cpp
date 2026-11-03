@@ -4,15 +4,20 @@
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
 
 #include "rocprofvis_db_profiler_hub.h"
+#include <profiler-hub/c/profiler_hub_trim.h>
 #include "rocprofvis_db_profiler_hub_ext.h"
 #include "rocprofvis_db_query_builder.h"
 #include "rocprofvis_db_table_processor.h"
+#include <yaml-cpp/yaml.h>
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <vector>
 // #include "json.h"
 
 namespace RocProfVis
@@ -84,9 +89,79 @@ ProfilerHub::TableColumnDouble(void* func, void* handle, char** azColName, int i
     return (double) cell->number;
 }
 
+static bool
+path_has_extension(const std::string& path, const char* extension)
+{
+    const size_t length = std::char_traits<char>::length(extension);
+    return path.size() >= length &&
+           path.compare(path.size() - length, length, extension) == 0;
+}
+
+bool
+ProfilerHub::HubYamlFiles(const std::string& filename, std::vector<std::string>& files)
+{
+    files.clear();
+    if(!path_has_extension(filename, ".yaml") && !path_has_extension(filename, ".yml"))
+    {
+        return false;
+    }
+    try
+    {
+        std::filesystem::path safe_path;
+        if(!SystemDatabase::SanitizeFilePath(filename, safe_path))
+        {
+            return false;
+        }
+        const YAML::Node config   = YAML::LoadFile(safe_path.string());
+        const YAML::Node db_files = config["rocprofiler-sdk"]["rocpd"]["files"];
+        if(!db_files || !db_files.IsSequence() || db_files.size() == 0)
+        {
+            return false;
+        }
+        std::string directory = filename;
+        const size_t slash    = directory.find_last_of("/\\");
+        if(slash == std::string::npos)
+        {
+            directory.clear();
+        }
+        else
+        {
+            directory.resize(slash);
+        }
+        for(const YAML::Node& file : db_files)
+        {
+            const std::string name = file.as<std::string>();
+            const std::string dbfile =
+                directory.empty() ? name : directory + "/" + name;
+            ph_file_probe_t probe{};
+            if(ph_probe_file(dbfile.c_str(), &probe) != PH_RESULT_SUCCESS)
+            {
+                files.clear();
+                return false;
+            }
+            files.push_back(dbfile);
+        }
+    }
+    catch(const std::exception&)
+    {
+        files.clear();
+        return false;
+    }
+    return !files.empty();
+}
+
 rocprofvis_db_type_t
 ProfilerHub::Detect(rocprofvis_db_filename_t filename)
 {
+    std::vector<std::string> files;
+    if(HubYamlFiles(filename, files))
+    {
+        return kProfilerHub;
+    }
+    if(path_has_extension(filename, ".yaml") || path_has_extension(filename, ".yml"))
+    {
+        return kAutodetect;
+    }
     ph_file_probe_t probe_result;
     if(PH_RESULT_SUCCESS == ph_probe_file(filename, &probe_result)) return kProfilerHub;
     return kAutodetect;
@@ -318,8 +393,6 @@ ProfilerHub::ProcessTrack(rocprofvis_dm_track_params_t& track_params)
     return kRocProfVisDmResultNotLoaded;
 }
 
-static constexpr uint32_t kHubCatalogIndex = 0;
-
 static std::string
 catalog_text(const InformationCatalog& catalog, const char* table, uint64_t row_id,
              const char* column)
@@ -345,7 +418,7 @@ rocprofvis_dm_result_t
 ProfilerHub::AddTrack(ph_track_t& track, DbInstance* instance)
 {
     rocprofvis_dm_track_params_t track_params;
-    const InformationCatalog&    catalog = CachedTables(kHubCatalogIndex)->Catalog();
+    const InformationCatalog&    catalog = CachedTables(instance->GuidIndex())->Catalog();
     rocprofvis_dm_string_t*      names   = track_params.track_indentifiers.name;
     track_params.track_indentifiers.db_instance               = instance;
     uint32_t db_instance                                      = instance->GuidIndex();
@@ -505,7 +578,6 @@ ProfilerHub::AddTrack(ph_track_t& track, DbInstance* instance)
 
     track_params.order_id = track.id;
     if(DbInstances().empty()) return kRocProfVisDmResultInvalidParameter;
-    track_params.track_indentifiers.db_instance = DbInstancePtrAt(0);
 
     rocprofvis_dm_result_t result = ProcessTrack(track_params);
     if(result != kRocProfVisDmResultSuccess) return result;
@@ -628,9 +700,9 @@ stream_hardware_operation(ph_track_category_t category)
 }
 
 void
-ProfilerHub::LoadInformationCatalog(const ph_node_t& node)
+ProfilerHub::LoadInformationCatalog(const ph_node_t& node, uint32_t source_index)
 {
-    InformationCatalog& catalog = CachedTables(kHubCatalogIndex)->Catalog();
+    InformationCatalog& catalog = CachedTables(source_index)->Catalog();
     const uint64_t      node_id = node.info.id;
 
     catalog.SetInt("Node", node_id, "id", static_cast<int64_t>(node_id));
@@ -839,11 +911,18 @@ ProfilerHub::ReadTraceMetadata(Future* future)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties,
                                     ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
-        TraceProperties()->trace_duration   = 0;
-        TraceProperties()->num_db_instances = 1;
-        TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
-        TraceProperties()->db_inst_end_time.push_back(0);
-        DbInstances().push_back({ SingleNodeDbInstance(), "" });
+        TraceProperties()->trace_duration = 0;
+        std::vector<std::string> files;
+        if(!HubYamlFiles(Path(), files))
+        {
+            files.push_back(Path());
+        }
+        std::vector<const char*> paths;
+        paths.reserve(files.size());
+        for(const std::string& file : files)
+        {
+            paths.push_back(file.c_str());
+        }
 
         ph_future_t hub_future = future->AddProfilerHubFuture(Path());
         if(hub_future == nullptr)
@@ -851,7 +930,9 @@ ProfilerHub::ReadTraceMetadata(Future* future)
             break;
         }
         ShowProgress(1, "Call profiler hub to read trace metadata", kRPVDbBusy, future);
-        ph_result_t hub_result = ph_ctx_create(&m_ph_trace, Path(), hub_future);
+        ph_result_t hub_result =
+            ph_ctx_create_files(&m_ph_trace, paths.data(),
+                                static_cast<uint32_t>(paths.size()), hub_future);
         if(hub_result != PH_RESULT_SUCCESS)
         {
             future->DeleteProfilerHubFuture(hub_future);
@@ -864,21 +945,68 @@ ProfilerHub::ReadTraceMetadata(Future* future)
             break;
         }
 
-        ph_node_t node = {};
-        hub_result     = ph_get_node(m_ph_trace, &node, NULL);
+        uint32_t source_count = 0;
+        hub_result            = ph_get_trace_source_count(m_ph_trace, &source_count);
+        if(hub_result != PH_RESULT_SUCCESS || source_count == 0)
+        {
+            break;
+        }
+        TraceProperties()->num_db_instances = source_count;
+        std::unordered_map<std::string, uint32_t> file_of_path;
+        for(uint32_t source = 0; source < source_count; ++source)
+        {
+            ph_trace_source_t trace_source{};
+            hub_result = ph_get_trace_source(m_ph_trace, source, &trace_source);
+            if(hub_result != PH_RESULT_SUCCESS || trace_source.path == nullptr)
+            {
+                source_count = 0;
+                break;
+            }
+            const std::string path = trace_source.path;
+            const auto        inserted =
+                file_of_path.emplace(path, static_cast<uint32_t>(file_of_path.size()));
+            const uint32_t file_index = inserted.first->second;
+            DbInstances().push_back(
+                { DbInstance(file_index, source),
+                  trace_source.guid == nullptr ? "" : trace_source.guid });
+            TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
+            TraceProperties()->db_inst_end_time.push_back(0);
+
+            ph_node_t node{};
+            hub_result = ph_get_source_node(m_ph_trace, source, &node, NULL);
+            if(hub_result != PH_RESULT_SUCCESS)
+            {
+                source_count = 0;
+                break;
+            }
+            LoadInformationCatalog(node, source);
+            if(LoadStringCatalog(source) != kRocProfVisDmResultSuccess)
+            {
+                source_count = 0;
+                break;
+            }
+        }
+        if(source_count == 0)
+        {
+            break;
+        }
+
+        ph_track_list_t track_list{};
+        hub_result = ph_get_track_list(m_ph_trace, &track_list, NULL);
         if(hub_result != PH_RESULT_SUCCESS)
         {
             break;
         }
         ShowProgress(1, "Load information catalog", kRPVDbBusy, future);
-        LoadInformationCatalog(node);
         bool tracks_added = true;
-        if(node.track_list.tracks != nullptr)
+        if(track_list.tracks != nullptr)
         {
-            for(uint32_t i = 0; i < node.track_list.list_size; i++)
+            for(uint32_t i = 0; i < track_list.list_size; i++)
             {
-                if(AddTrack(node.track_list.tracks[i], DbInstancePtrAt(0)) !=
-                   kRocProfVisDmResultSuccess)
+                ph_track_t& track = track_list.tracks[i];
+                if(track.source_index >= DbInstances().size() ||
+                   AddTrack(track, DbInstancePtrAt(track.source_index)) !=
+                       kRocProfVisDmResultSuccess)
                 {
                     tracks_added = false;
                     break;
@@ -903,9 +1031,6 @@ ProfilerHub::ReadTraceMetadata(Future* future)
         if(result != kRocProfVisDmResultSuccess) break;
 
         if(BuildHistogram(future) != kRocProfVisDmResultSuccess) break;
-
-        const uint32_t guid_index = DbInstancePtrAt(0)->GuidIndex();
-        if(LoadStringCatalog(guid_index) != kRocProfVisDmResultSuccess) break;
 
         TraceProperties()->metadata_loaded = true;
         BindObject()->FuncMetadataLoaded(BindObject()->trace_object);
@@ -1671,7 +1796,7 @@ open_event_query(ph_ctx_t ctx, bool has_time, uint64_t start, uint64_t end, bool
                  uint32_t track_count, const uint32_t* event_types,
                  uint32_t event_type_count, const std::vector<std::string>& filters,
                  bool include_substring, bool include_category, bool partial_matching,
-                 ph_event_query_t& query)
+                 bool has_source, uint32_t source_index, ph_event_query_t& query)
 {
     std::vector<const char*> texts;
     texts.reserve(filters.size());
@@ -1702,6 +1827,8 @@ open_event_query(ph_ctx_t ctx, bool has_time, uint64_t start, uint64_t end, bool
     filter.string_filter.include_substring    = include_substring ? 1u : 0u;
     filter.string_filter.include_category     = include_category ? 1u : 0u;
     filter.string_filter.partial_matching     = partial_matching ? 1u : 0u;
+    filter.has_source                         = has_source ? 1u : 0u;
+    filter.source_index                       = source_index;
     return hub_query_result(ph_event_query_create(ctx, &filter, &query));
 }
 
@@ -2332,11 +2459,15 @@ ProfilerHub::GetEventTablesAsync(
         }
 
         ph_event_query_t event_query = nullptr;
+        const bool     has_source =
+            query.first != nullptr && DbInstances().size() > 1;
+        const uint32_t source_index = has_source ? query.first->GuidIndex() : 0;
         rocprofvis_dm_result_t opened = open_event_query(
             m_ph_trace, has_time, start, end, has_node, node, has_agent, agent, has_process,
             process_id, has_thread, thread_id, has_track ? &hub_track : nullptr,
             has_track ? 1u : 0u, event_types.data(), (uint32_t) event_types.size(), filters,
-            include_substring, include_category, partial_matching, event_query);
+            include_substring, include_category, partial_matching, has_source, source_index,
+            event_query);
         if(opened != kRocProfVisDmResultSuccess)
         {
             free_event_queries(event_queries);
@@ -2532,7 +2663,8 @@ ProfilerHub::LoadStringCatalog(uint32_t node)
         return kRocProfVisDmResultNotSupported;
     }
 
-    if(BindObject()->FuncAddString(BindObject()->trace_object, "") == INVALID_INDEX)
+    if(node == 0 &&
+       BindObject()->FuncAddString(BindObject()->trace_object, "") == INVALID_INDEX)
     {
         return kRocProfVisDmResultAllocFailure;
     }
@@ -2540,16 +2672,16 @@ ProfilerHub::LoadStringCatalog(uint32_t node)
     string_catalog_import_t import = { this, node,
                                        rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory,
                                        false };
-    ph_result_t visited = ph_visit_text(m_ph_trace, PH_TEXT_KIND_STRING, ImportCatalogText,
-                                        &import);
+    ph_result_t visited = ph_visit_source_text(m_ph_trace, node, PH_TEXT_KIND_STRING,
+                                              ImportCatalogText, &import);
     if(visited != PH_RESULT_SUCCESS || import.failed)
     {
         return kRocProfVisDmResultDbAccessFailed;
     }
 
     import.type = rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol;
-    visited     = ph_visit_text(m_ph_trace, PH_TEXT_KIND_KERNEL_SYMBOL, ImportCatalogText,
-                                &import);
+    visited     = ph_visit_source_text(m_ph_trace, node, PH_TEXT_KIND_KERNEL_SYMBOL,
+                                      ImportCatalogText, &import);
     if(visited != PH_RESULT_SUCCESS || import.failed)
     {
         return kRocProfVisDmResultDbAccessFailed;

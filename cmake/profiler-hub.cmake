@@ -2,7 +2,7 @@ set(PROFILER_HUB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(PROFILER_HUB_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 set(PROFILER_HUB_FETCH_DEPENDENCIES ON CACHE BOOL "" FORCE)
 set(PROFILER_HUB_REPO    "git@github.com:ROCm/rocm-systems.git")
-set(PROFILER_HUB_TAG     "vs-profiler-hub-tables")
+set(PROFILER_HUB_TAG     "develop-optiq")
 set(PROFILER_HUB_SUBDIR  "profilers/profiler-hub")
 
 find_package(Git REQUIRED)

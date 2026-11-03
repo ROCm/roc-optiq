@@ -378,6 +378,17 @@ rocprofvis_dm_result_t TopologyNodeRoot::AddNode(rocprofvis_dm_track_identifiers
 }
 
 
+bool TopologyNodeSystemNode::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers)
+{
+	bool result = TopologyNode::DoesThisNodeMatchIdentifiers(track_identifiers);
+	if (result)
+	{
+		// Per-rank files often store node id 0. The source keeps those nodes apart.
+		result = m_db_instance == track_identifiers->db_instance;
+	}
+	return result;
+}
+
 rocprofvis_dm_result_t TopologyNodeSystemNode::AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers)
 {
 	if (TopologyNode* node = FindNodeMatchingIdentifiers(track_identifiers))

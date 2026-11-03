@@ -11,6 +11,8 @@
 #include "rocprofvis_db_table_processor.h"
 #include <profiler-hub/c/profiler_hub.h>
 #include <profiler-hub/c/profiler_hub_types.h>
+#include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -54,7 +56,6 @@ public:
     static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
 
 protected:
-
     rocprofvis_dm_result_t BuildTableQuery(
         rocprofvis_dm_table_use_case_enum_t use_case, rocprofvis_dm_timestamp_t start,
         rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num,
@@ -137,11 +138,12 @@ protected:
                               int index) override;
 
 private:
+    static bool HubYamlFiles(const std::string& filename, std::vector<std::string>& files);
     void IdentificatorNamesUpdate(rocprofvis_dm_track_params_t& track_params);
     static bool RegionTracks(rocprofvis_dm_track_category_t category);
     static bool GpuTracks(rocprofvis_dm_track_category_t category);
     static bool GpuAndPMCTracks(rocprofvis_dm_track_category_t category);
-    void LoadInformationCatalog(const ph_node_t& node);
+    void LoadInformationCatalog(const ph_node_t& node, uint32_t source_index);
     rocprofvis_dm_result_t LoadStringCatalog(uint32_t node);
     static void ImportCatalogText(uint64_t id, const char* text, void* user_data);
     rocprofvis_dm_result_t BuildHistogram(Future* future);

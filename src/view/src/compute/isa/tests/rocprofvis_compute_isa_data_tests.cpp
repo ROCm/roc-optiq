@@ -88,8 +88,7 @@ TEST_CASE("ISA instruction colours follow type names independently of database U
         { 4, "branch", Kind::kBranch, "BRANCH" },
         { 7, "FUTURE_INSTRUCTION_TYPE", Kind::kUnknown, "FUTURE_INSTRUCTION_TYPE" },
         { 8, "NO_INST", Kind::kUnknown, "NO_INST" },
-        { 9, "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU", Kind::kUnknown,
-          "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_VALU" },
+        { 9, "UNRECOGNIZED_TYPE", Kind::kUnknown, "UNRECOGNIZED_TYPE" },
         { 0, "", Kind::kUnknown, "Unknown / unavailable" }
     };
     for(const Case& entry : cases)

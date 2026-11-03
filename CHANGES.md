@@ -67,6 +67,7 @@ These features are in progress and available for preview only (build from source
 - Fixed a crash when a table filter could not be parsed.
 - Fixed a macOS hang in the job system: a worker could signal a job after that job had already been freed.
 - Fixed a leaked row-count query when a table had nothing to count.
+- Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
 
 ## ROCm Optiq 1.1.0
 

@@ -1668,6 +1668,12 @@ The ISA implementation is organized as follows:
   `SampleCounts::invalid_counts` preserves invalid contributors and saturated
   overflow through every grouping stage; percentages and bar shares stay unavailable
   when that flag is set. Known invalid counts take precedence over missing fields.
+  Sampled wave occupancy and active-thread measurements have independent
+  `PercentageSummary` values on `SamplingRow`. `SamplePercentage` retains each
+  metric's unrounded weighted sum, sample count, and missing/invalid flags in
+  `PreparedSamplingData::metrics_by_instruction`. Both instruction and source
+  grouping reuse the same checked accumulator; progress-count validity does not
+  determine whether either sampled metric is available.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
   without a database or GPU.
 
@@ -1937,9 +1943,23 @@ Returning to a cached file recomputes source-line grouping from the prepared
 sampling snapshot and current source correlations.
 Source and ISA row sampling fields share `SamplingRow`; ISA keeps instruction,
 offset, and correlation fields, while source keeps text and line numbers.
-Instruction-sample metadata, active-thread percentage, wave-occupancy
-percentage, and dispatch UUID are available on the controller handle but are
-not currently represented in `PcSamplingData` or rendered by `ComputeIsaView`.
+`PcSampleState` represents wave-occupancy and active-thread percentages as nullable
+doubles. `IsaDataBuilder` accepts finite values in [0, 100], including genuine
+zero, and computes sample-count-weighted means: `sum(total_count * percent) /
+sum(total_count)`. Zero-sample states contribute neither values nor missing/invalid
+flags; a row without observations has missing metrics. Any positive-sample
+contributor with a missing metric makes that metric unavailable; any invalid
+contributor or weight overflow makes it invalid, taking precedence over missing.
+The two metrics are validated independently of each other and of issued/stalled
+counts. Source grouping merges the unrounded numerators and weights using the
+existing primary mappings, rather than averaging instruction-level display values.
+Keep full precision in the projection; presentation should use one decimal place
+and show an em dash for unavailable values, preserving measured `0.0%`.
+These sampled percentages are separate from issued/stalled sample shares; no
+resource-pressure or divergence classification is inferred from them.
+`DataProvider` does not yet copy the two percentage properties from the controller,
+and `ComputeIsaView` does not yet render them. Instruction-sample metadata and
+dispatch UUID remain available only on the controller handle.
 
 PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
 its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected

@@ -3,6 +3,8 @@
 
 #include "compute/isa/rocprofvis_compute_isa_data.h"
 
+#include <limits>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -370,6 +372,235 @@ make_source_sampling_data()
         { 1, 1, 85 }, { 1, 2, 15 }, { 2, 2, 30 }, { 2, 3, 10 }, { 3, 3, 50 }
     };
     return data;
+}
+
+TEST_CASE("Sampled percentages validate each metric independently of progress counts",
+          "[isa][sample-metrics]")
+{
+    using Availability = IsaDataBuilder::SamplingAvailability;
+    struct Case
+    {
+        std::optional<double> percent;
+        Availability          expected;
+    };
+    const Case cases[] = {
+        { std::nullopt, Availability::kMissing },
+        { 0.0, Availability::kValid },
+        { 49.401407527783604, Availability::kValid },
+        { 100.0, Availability::kValid },
+        { -0.1, Availability::kInvalid },
+        { 100.1, Availability::kInvalid },
+        { std::numeric_limits<double>::quiet_NaN(), Availability::kInvalid },
+        { std::numeric_limits<double>::infinity(), Availability::kInvalid },
+        { -std::numeric_limits<double>::infinity(), Availability::kInvalid }
+    };
+    for(const Case& entry : cases)
+    {
+        PcSamplingData data   = make_isa_data();
+        data.pc_sample_states = {
+            { 1, 10, 100, std::nullopt, std::nullopt, entry.percent, 50.0 },
+            { 2, 20, 100, std::nullopt, std::nullopt, 50.0, entry.percent }
+        };
+        auto rows = IsaDataBuilder::BuildInstructions(data, 1);
+        IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+        CHECK(rows[0].sampling.availability == Availability::kMissing);
+        CHECK(rows[0].wave_occupancy.availability == entry.expected);
+        CHECK(rows[1].active_threads.availability == entry.expected);
+        CHECK(rows[0].active_threads.availability == Availability::kValid);
+        CHECK(rows[1].wave_occupancy.availability == Availability::kValid);
+        CHECK(rows[0].active_threads.percent == 50.0);
+        CHECK(rows[1].wave_occupancy.percent == 50.0);
+        if(entry.expected == Availability::kValid)
+        {
+            CHECK(rows[0].wave_occupancy.percent == Catch::Approx(*entry.percent));
+            CHECK(rows[1].active_threads.percent == Catch::Approx(*entry.percent));
+        }
+        else
+        {
+            CHECK(rows[0].wave_occupancy.percent == 0.0);
+            CHECK(rows[1].active_threads.percent == 0.0);
+        }
+    }
+}
+
+TEST_CASE("Reported hotspot percentages retain database precision",
+          "[isa][sample-metrics]")
+{
+    PcSamplingData data   = make_isa_data();
+    data.pc_sample_states = { { 1, 10, 9538, 2012, 7526, 49.401407527783604, 100.0 },
+                              { 2, 20, 1901, 252, 1649, 24.710678590215675, 100.0 } };
+    auto rows             = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    CHECK(rows[0].wave_occupancy.percent == Catch::Approx(49.401407527783604));
+    CHECK(rows[1].wave_occupancy.percent == Catch::Approx(24.710678590215675));
+    CHECK(rows[0].active_threads.percent == 100.0);
+    CHECK(rows[1].active_threads.percent == 100.0);
+    CHECK(rows[0].sample_counts.total_count == 9538);
+    CHECK(rows[0].sample_counts.issue_count == 2012);
+    CHECK(rows[0].sample_counts.stall_count == 7526);
+}
+
+TEST_CASE("ISA and source percentages use sample weights through primary mappings",
+          "[isa][source][sample-metrics]")
+{
+    using Availability    = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data   = make_source_sampling_data();
+    data.pc_sample_states = {
+        { 1, 10, 100, 0, 100, 40.0, 100.0 },  { 2, 10, 300, 300, 0, 80.0, 0.0 },
+        { 3, 20, 100, 100, 0, 10.0, 60.0 },   { 4, 30, 75, 0, 75, 20.0, 100.0 },
+        { 5, 40, 1000, 0, 1000, 90.0, 10.0 }, { 6, 999, 5000, 5000, 0, 100.0, 100.0 }
+    };
+    SECTION("Valid progress counts") {}
+    SECTION("Malformed progress does not invalidate independent percentages")
+    {
+        data.pc_sample_states[0].issue_count = 101;
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa_rows = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(isa_rows, prepared);
+    CHECK(isa_rows[0].wave_occupancy.availability == Availability::kValid);
+    CHECK(isa_rows[0].wave_occupancy.percent == Catch::Approx(70.0));
+    CHECK(isa_rows[0].active_threads.percent == Catch::Approx(25.0));
+
+    // The snapshot owns its values, and source projection needs no ISA text.
+    data.pc_sample_states.clear();
+    data.code_objects.clear();
+    auto rows = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, prepared);
+    CHECK(rows[0].wave_occupancy.availability == Availability::kValid);
+    CHECK(rows[0].active_threads.availability == Availability::kValid);
+    CHECK(rows[0].wave_occupancy.percent == Catch::Approx(58.0));
+    CHECK(rows[0].active_threads.percent == Catch::Approx(32.0));
+    CHECK(rows[1].wave_occupancy.percent == Catch::Approx(20.0));
+    CHECK(rows[2].wave_occupancy.availability == Availability::kMissing);
+    CHECK(rows[2].active_threads.availability == Availability::kMissing);
+    auto other_rows = IsaDataBuilder::BuildSourceLines(data, 12);
+    IsaDataBuilder::UpdateSourceSampling(other_rows, data, 12, prepared);
+    CHECK(other_rows[0].wave_occupancy.percent == Catch::Approx(90.0));
+    CHECK(other_rows[0].active_threads.percent == Catch::Approx(10.0));
+}
+
+TEST_CASE("Missing and invalid percentages propagate without masking other metrics",
+          "[isa][source][sample-metrics]")
+{
+    using Availability                    = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data                   = make_source_sampling_data();
+    data.pc_sample_states                 = { { 1, 10, 100, 100, 0, 40.0, 100.0 },
+                                              { 2, 10, 200, 200, 0, std::nullopt, 0.0 },
+                                              { 3, 20, 100, 100, 0, 80.0, 100.0 } };
+    Availability instruction_availability = Availability::kMissing;
+    Availability source_availability      = Availability::kMissing;
+    SECTION("Missing measurement with nonzero samples") {}
+    SECTION("An invalid contributor remains invalid after averaging")
+    {
+        data.pc_sample_states[1].wave_occupancy_percent = -1.0;
+        instruction_availability                        = Availability::kInvalid;
+        source_availability                             = Availability::kInvalid;
+    }
+    SECTION("An invalid instruction takes precedence over a missing measurement")
+    {
+        data.pc_sample_states[2].wave_occupancy_percent =
+            std::numeric_limits<double>::quiet_NaN();
+        source_availability = Availability::kInvalid;
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa_rows = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(isa_rows, prepared);
+    CHECK(isa_rows[0].wave_occupancy.availability == instruction_availability);
+    CHECK(isa_rows[0].active_threads.availability == Availability::kValid);
+    CHECK(isa_rows[0].active_threads.percent == Catch::Approx(100.0 / 3.0));
+    auto rows = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, prepared);
+    CHECK(rows[0].wave_occupancy.availability == source_availability);
+    CHECK(rows[0].active_threads.availability == Availability::kValid);
+    CHECK(rows[0].active_threads.percent == Catch::Approx(50.0));
+    CHECK(rows[0].sampling.availability == Availability::kValid);
+    CHECK(rows[0].sample_counts.total_count == 400);
+}
+
+TEST_CASE("Zero-sample states do not contribute to sampled percentages",
+          "[isa][source][sample-metrics]")
+{
+    using Availability    = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data   = make_source_sampling_data();
+    data.pc_sample_states = { { 1, 10, 100, 100, 0, 40.0, 50.0 },
+                              { 2, 10, 0, 0, 0, std::nullopt, std::nullopt },
+                              { 3, 10, 0, 0, 0, -1.0,
+                                std::numeric_limits<double>::quiet_NaN() },
+                              { 4, 20, 0, 0, 0, 100.0, 0.0 } };
+    const auto prepared   = IsaDataBuilder::PrepareSampling(data);
+    auto       isa_rows   = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(isa_rows, prepared);
+    CHECK(isa_rows[0].wave_occupancy.availability == Availability::kValid);
+    CHECK(isa_rows[0].wave_occupancy.percent == 40.0);
+    CHECK(isa_rows[0].active_threads.availability == Availability::kValid);
+    CHECK(isa_rows[0].active_threads.percent == 50.0);
+    CHECK(isa_rows[1].wave_occupancy.availability == Availability::kMissing);
+    CHECK(isa_rows[1].active_threads.availability == Availability::kMissing);
+    auto rows = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, prepared);
+    CHECK(rows[0].wave_occupancy.percent == 40.0);
+    CHECK(rows[0].active_threads.percent == 50.0);
+}
+
+TEST_CASE("Sample weight overflow invalidates percentages at either grouping stage",
+          "[isa][source][sample-metrics]")
+{
+    using Availability    = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data   = make_source_sampling_data();
+    data.pc_sample_states = { { 1, 10, UINT64_MAX, UINT64_MAX, 0, 100.0, 0.0 } };
+    auto isa_rows         = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(isa_rows, IsaDataBuilder::PrepareSampling(data));
+    CHECK(isa_rows[0].wave_occupancy.availability == Availability::kValid);
+    CHECK(isa_rows[0].wave_occupancy.percent == 100.0);
+    CHECK(isa_rows[0].active_threads.availability == Availability::kValid);
+    CHECK(isa_rows[0].active_threads.percent == 0.0);
+    SECTION("Overflow while merging states for one instruction")
+    {
+        data.pc_sample_states.push_back({ 2, 10, 1, 1, 0, 50.0, 50.0 });
+    }
+    SECTION("Overflow while merging instructions for one source line")
+    {
+        data.pc_sample_states.push_back({ 2, 20, 1, 1, 0, 50.0, 50.0 });
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    IsaDataBuilder::UpdateSampling(isa_rows, prepared);
+    CHECK(isa_rows[0].wave_occupancy.availability ==
+          (data.pc_sample_states[1].instruction_uuid == 10 ? Availability::kInvalid
+                                                           : Availability::kValid));
+    auto rows = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, prepared);
+    CHECK(rows[0].wave_occupancy.availability == Availability::kInvalid);
+    CHECK(rows[0].active_threads.availability == Availability::kInvalid);
+}
+
+TEST_CASE("Sampling updates clear stale percentages and reuse current source mappings",
+          "[isa][source][sample-metrics]")
+{
+    using Availability    = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data   = make_source_sampling_data();
+    data.pc_sample_states = { { 1, 10, 100, 100, 0, 49.4, 100.0 } };
+    const auto prepared   = IsaDataBuilder::PrepareSampling(data);
+    auto       isa_rows   = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       rows       = IsaDataBuilder::BuildSourceLines(data, 11);
+    const auto mappings   = data.instruction_source_lines;
+    data.instruction_source_lines.clear();
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, prepared);
+    CHECK(rows[0].wave_occupancy.availability == Availability::kMissing);
+    data.instruction_source_lines = mappings;
+    IsaDataBuilder::UpdateSampling(isa_rows, prepared);
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, prepared);
+    CHECK(rows[0].wave_occupancy.availability == Availability::kValid);
+    CHECK(rows[0].wave_occupancy.percent == Catch::Approx(49.4));
+    CHECK(rows[0].active_threads.percent == 100.0);
+    IsaDataBuilder::UpdateSampling(isa_rows, {});
+    IsaDataBuilder::UpdateSourceSampling(rows, data, 11, {});
+    CHECK(isa_rows[0].wave_occupancy.availability == Availability::kMissing);
+    CHECK(isa_rows[0].active_threads.availability == Availability::kMissing);
+    CHECK(rows[0].wave_occupancy.availability == Availability::kMissing);
+    CHECK(rows[0].active_threads.availability == Availability::kMissing);
+    CHECK(rows[0].wave_occupancy.percent == 0.0);
+    CHECK(rows[0].content == "first();");
 }
 
 TEST_CASE("Source sampling combines primary ISA mappings and normalizes before summing",

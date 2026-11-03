@@ -64,7 +64,6 @@ TEST_CASE("Free compute controller invokes its destructor", "[controller][lifecy
 
     bool destroyed = false;
     DestructionTrackedComputeTrace* trace = new DestructionTrackedComputeTrace(destroyed);
-    REQUIRE(trace != nullptr);
     rocprofvis_controller_free((rocprofvis_controller_t*) trace);
     CHECK(destroyed);
     if(!destroyed)

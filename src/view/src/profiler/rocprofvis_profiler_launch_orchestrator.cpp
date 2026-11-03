@@ -391,9 +391,9 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
     }
 
     // The badge reflects the workflow phase, not just the profiler state, so the
-    // user sees connect/auth/profile/download progress. The session's status
-    // message (e.g. "Downloading (/path)") is the detail.
-    out_detail = m_remote_session->GetStatusMessage();
+    // user sees connect/auth/profile/download progress. The label says it all
+    // for those phases; only a failure carries a detail (its reason).
+    out_detail.clear();
     switch(m_remote_session->GetPhase())
     {
         case RemoteProfilerSession::Phase::Connecting:
@@ -417,8 +417,9 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
             out_level = ConsoleStatusLevel::kSuccess;
             break;
         case RemoteProfilerSession::Phase::Failed:
-            out_label = "Failed";
-            out_level = ConsoleStatusLevel::kError;
+            out_label  = "Failed";
+            out_level  = ConsoleStatusLevel::kError;
+            out_detail = m_remote_session->GetStatusMessage();
             break;
         case RemoteProfilerSession::Phase::Idle:
         default:

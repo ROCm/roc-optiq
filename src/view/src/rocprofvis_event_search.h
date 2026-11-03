@@ -37,7 +37,6 @@ public:
 private:
     void ResetOptions();
     void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
-    void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
 

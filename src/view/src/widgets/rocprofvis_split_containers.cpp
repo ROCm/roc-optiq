@@ -84,7 +84,8 @@ VFixedContainer::Render()
 void SplitContainerBase::Render()
 {
     ImVec2 total_size = ImGui::GetContentRegionAvail();
-    ImVec2 window_pos = ImGui::GetWindowPos();
+    ImVec2 window_pos = ImGui::GetCursorScreenPos();
+    ImVec2 first_max  = window_pos;
 
     float available_size = GetAvailableSize(total_size);
 
@@ -103,6 +104,7 @@ void SplitContainerBase::Render()
         if(m_first->m_item)
             m_first->m_item->Render();
         ImGui::EndChild();
+        first_max      = ImGui::GetItemRectMax();
         m_optimal_size = GetItemSize();
         if(!m_first->m_inherit_bg_color)
         {
@@ -129,8 +131,8 @@ void SplitContainerBase::Render()
         }
         if(ImGui::IsItemActive())
         {
-            ImVec2 mouse_pos = ImGui::GetMousePos();
-            UpdateSplitRatio(mouse_pos, window_pos, available_size);
+            UpdateSplitRatio(ImGui::GetMousePos() - (splitter_min - first_max),
+                             window_pos, available_size);
             fill_active = true;
         }
         const SettingsManager& settings = SettingsManager::GetInstance();
@@ -297,7 +299,7 @@ HSplitContainer::GetSplitterSize(const ImVec2& total_size)
 void
 HSplitContainer::AddSameLine()
 {
-    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::SameLine(0.0f, m_split_spacing);
 };
 
 float
@@ -395,6 +397,14 @@ ImVec2
 VSplitContainer::GetSplitterSize(const ImVec2& total_size)
 {
     return ImVec2(total_size.x, m_resize_grip_size);
+}
+
+void
+VSplitContainer::AddSameLine()
+{
+    ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, m_split_spacing);
+    ImGui::Spacing();
+    ImGui::PopStyleVar();
 }
 
 float

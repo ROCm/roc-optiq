@@ -1,72 +1,72 @@
 {
-    "version": 1,
-    "blocks": [
-        { "id": "kernel", "column": 0, "title": "Kernel", "content": [] },
+ "version": 1,
+ "blocks": [
+ { "id": "kernel", "column": 0, "title": "Kernel", "content": [] },
 
-        { "id": "vl1d", "column": 1, "order": 0, "title": "VL1D", "content": [
-            { "metric": "3.1.31", "title": "Hit", "category": "hit", "unit": "%" }
-        ]},
-        { "id": "lds", "column": 1, "order": 1, "title": "LDS", "content": [
-            { "metric": "3.1.23", "title": "Util", "category": "util", "unit": "%" }
-        ]},
-        { "id": "sl1d", "column": 1, "order": 2, "title": "sL1D", "content": [
-            { "metric": "3.1.42", "title": "Hit", "category": "hit", "unit": "%" }
-        ]},
-        { "id": "l1i", "column": 1, "order": 3, "title": "L1I", "content": [
-            { "metric": "3.1.49", "title": "Hit", "category": "hit", "unit": "%" }
-        ]},
+ { "id": "vl1d", "column": 1, "order": 0, "title": "VL1D", "content": [
+ { "metric": "3.1.31", "metric_name": "VL1 Hit", "title": "Hit", "category": "hit", "unit": "%" }
+ ]},
+ { "id": "lds", "column": 1, "order": 1, "title": "LDS", "content": [
+ { "metric": "3.1.23", "metric_name": "LDS Util", "title": "Util", "category": "util", "unit": "%" }
+ ]},
+ { "id": "sl1d", "column": 1, "order": 2, "title": "sL1D", "content": [
+ { "metric": "3.1.42", "metric_name": "sL1D Hit", "title": "Hit", "category": "hit", "unit": "%" }
+ ]},
+ { "id": "l1i", "column": 1, "order": 3, "title": "L1I", "content": [
+ { "metric": "3.1.49", "metric_name": "IL1 Hit", "title": "Hit", "category": "hit", "unit": "%" }
+ ]},
 
-        { "id": "l2", "column": 2, "title": "L2", "content": [
-            { "metric": "3.1.56", "title": "Hit", "category": "hit", "unit": "%" }
-        ]},
+ { "id": "l2", "column": 2, "title": "L2", "content": [
+ { "metric": "3.1.56", "metric_name": "L2 Hit", "title": "Hit", "category": "hit", "unit": "%" }
+ ]},
 
-        { "id": "data_fabric", "column": 3, "title": "Data Fabric", "content": [] },
-        { "id": "mall",        "column": 4, "title": "MALL",        "content": [] },
-        { "id": "umc",         "column": 5, "title": "UMC",         "content": [] },
-        { "id": "hbm",         "column": 6, "title": "HBM",         "content": [
-            { "metric": "3.1.69", "title": "Read BW",   "category": "read" },
-            { "metric": "3.1.70", "title": "Write BW",  "category": "write" },
-            { "metric": "3.1.71", "title": "Atomic BW", "category": "atomic" }
-        ]},
+ { "id": "data_fabric", "column": 3, "title": "Data Fabric", "content": [] },
+ { "id": "mall", "column": 4, "title": "MALL", "content": [] },
+ { "id": "umc", "column": 5, "title": "UMC", "content": [] },
+ { "id": "hbm", "column": 6, "title": "HBM", "content": [
+ { "metric": "3.1.69", "metric_name": "HBM Read BW", "title": "Read BW", "category": "read" },
+ { "metric": "3.1.70", "metric_name": "HBM Write BW", "title": "Write BW",  "category": "write" },
+ { "metric": "3.1.71", "metric_name": "HBM Atomic BW", "title": "Atomic BW", "category": "atomic" }
+ ]},
 
-        { "id": "xgmi", "column": 3, "row": -1, "title": "xGMI", "content": [] },
-        { "id": "pcie", "column": 3, "row": 1,  "title": "PCIe", "content": [] }
-    ],
-    "arrows": [
-        { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
-        { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.17", "title": "Flat Write",    "category": "write" },
-        { "from": "kernel", "to": "vl1d", "direction": "both",     "metric": "3.1.18", "title": "Flat Atomic",   "category": "atomic" },
-        { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.19", "title": "Buffer Read",   "category": "read" },
-        { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.20", "title": "Buffer Write",  "category": "write" },
-        { "from": "kernel", "to": "vl1d", "direction": "both",     "metric": "3.1.21", "title": "Buffer Atomic", "category": "atomic" },
+ { "id": "xgmi", "column": 3, "row": -1, "title": "xGMI", "content": [] },
+ { "id": "pcie", "column": 3, "row": 1,  "title": "PCIe", "content": [] }
+ ],
+ "arrows": [
+ { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.16", "metric_name": "Flat Read", "title": "Flat Read", "category": "read" },
+ { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.17", "metric_name": "Flat Write", "title": "Flat Write", "category": "write" },
+ { "from": "kernel", "to": "vl1d", "direction": "both", "metric": "3.1.18", "metric_name": "Flat Atomic", "title": "Flat Atomic", "category": "atomic" },
+ { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.19", "metric_name": "Buffer Read", "title": "Buffer Read", "category": "read" },
+ { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.20", "metric_name": "Buffer Write", "title": "Buffer Write",  "category": "write" },
+ { "from": "kernel", "to": "vl1d", "direction": "both", "metric": "3.1.21", "metric_name": "Buffer Atomic", "title": "Buffer Atomic", "category": "atomic" },
 
-        { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.22", "title": "Req",        "category": "read" },
-        { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.25", "title": "LDS Read",   "category": "read" },
-        { "from": "kernel", "to": "lds", "direction": "forward",  "metric": "3.1.26", "title": "LDS Write",  "category": "write" },
-        { "from": "kernel", "to": "lds", "direction": "both",     "metric": "3.1.27", "title": "LDS Atomic", "category": "atomic" },
+ { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.22", "metric_name": "LDS Req", "title": "Req", "category": "read" },
+ { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.25", "metric_name": "LDS Read", "title": "LDS Read", "category": "read" },
+ { "from": "kernel", "to": "lds", "direction": "forward",  "metric": "3.1.26", "metric_name": "LDS Write", "title": "LDS Write",  "category": "write" },
+ { "from": "kernel", "to": "lds", "direction": "both", "metric": "3.1.27", "metric_name": "LDS Atomic", "title": "LDS Atomic", "category": "atomic" },
 
-        { "from": "kernel", "to": "sl1d", "direction": "backward", "metric": "3.1.41", "title": "Rd",    "category": "read" },
-        { "from": "kernel", "to": "l1i",  "direction": "backward", "metric": "3.1.48", "title": "Fetch", "category": "read" },
+ { "from": "kernel", "to": "sl1d", "direction": "backward", "metric": "3.1.41", "metric_name": "sL1D Rd", "title": "Rd", "category": "read" },
+ { "from": "kernel", "to": "l1i",  "direction": "backward", "metric": "3.1.48", "metric_name": "IL1 Fetch", "title": "Fetch", "category": "read" },
 
-        { "from": "vl1d", "to": "l2", "direction": "backward", "metric": "3.1.38", "title": "Rd",     "category": "read" },
-        { "from": "vl1d", "to": "l2", "direction": "forward",  "metric": "3.1.39", "title": "Wr",     "category": "write" },
-        { "from": "vl1d", "to": "l2", "direction": "both",     "metric": "3.1.40", "title": "Atomic", "category": "atomic" },
-        { "from": "sl1d", "to": "l2", "direction": "backward", "metric": "3.1.47", "title": "Rd",     "category": "read" },
-        { "from": "l1i",  "to": "l2", "direction": "backward", "metric": "3.1.52", "title": "Rd",     "category": "read" },
+ { "from": "vl1d", "to": "l2", "direction": "backward", "metric": "3.1.38", "metric_name": "VL1_L2 Read BW", "title": "Rd", "category": "read" },
+ { "from": "vl1d", "to": "l2", "direction": "forward",  "metric": "3.1.39", "metric_name": "VL1_L2 Write BW", "title": "Wr", "category": "write" },
+ { "from": "vl1d", "to": "l2", "direction": "both", "metric": "3.1.40", "metric_name": "VL1_L2 Atomic BW", "title": "Atomic", "category": "atomic" },
+ { "from": "sl1d", "to": "l2", "direction": "backward", "metric": "3.1.47", "metric_name": "sL1D_L2 Read BW", "title": "Rd", "category": "read" },
+ { "from": "l1i",  "to": "l2", "direction": "backward", "metric": "3.1.52", "metric_name": "IL1_L2 Read BW", "title": "Rd", "category": "read" },
 
-        { "from": "l2", "to": "data_fabric", "direction": "backward", "metric": "3.1.62", "title": "Rd",        "category": "read" },
-        { "from": "l2", "to": "data_fabric", "direction": "forward",  "metric": "3.1.63", "title": "Wr+Atomic", "category": "write" },
+ { "from": "l2", "to": "data_fabric", "direction": "backward", "metric": "3.1.62", "metric_name": "L2-Fabric Read BW", "title": "Rd", "category": "read" },
+ { "from": "l2", "to": "data_fabric", "direction": "forward",  "metric": "3.1.63", "metric_name": "L2-Fabric Write and Atomic BW", "title": "Wr+Atomic", "category": "write" },
 
-        { "from": "data_fabric", "to": "xgmi", "direction": "backward", "metric": "3.1.72", "title": "Read BW",   "category": "read" },
-        { "from": "data_fabric", "to": "xgmi", "direction": "forward",  "metric": "3.1.73", "title": "Write BW",  "category": "write" },
-        { "from": "data_fabric", "to": "xgmi", "direction": "both",     "metric": "3.1.74", "title": "Atomic BW", "category": "atomic" },
+ { "from": "data_fabric", "to": "xgmi", "direction": "backward", "metric": "3.1.72", "metric_name": "xGMI Read BW", "title": "Read BW", "category": "read" },
+ { "from": "data_fabric", "to": "xgmi", "direction": "forward",  "metric": "3.1.73", "metric_name": "xGMI Write BW", "title": "Write BW",  "category": "write" },
+ { "from": "data_fabric", "to": "xgmi", "direction": "both", "metric": "3.1.74", "metric_name": "xGMI Atomic BW", "title": "Atomic BW", "category": "atomic" },
 
-        { "from": "data_fabric", "to": "pcie", "direction": "backward", "metric": "3.1.75", "title": "Read BW",   "category": "read" },
-        { "from": "data_fabric", "to": "pcie", "direction": "forward",  "metric": "3.1.76", "title": "Write BW",  "category": "write" },
-        { "from": "data_fabric", "to": "pcie", "direction": "both",     "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" },
+ { "from": "data_fabric", "to": "pcie", "direction": "backward", "metric": "3.1.75", "metric_name": "PCIe Read BW", "title": "Read BW", "category": "read" },
+ { "from": "data_fabric", "to": "pcie", "direction": "forward",  "metric": "3.1.76", "metric_name": "PCIe Write BW", "title": "Write BW",  "category": "write" },
+ { "from": "data_fabric", "to": "pcie", "direction": "both", "metric": "3.1.77", "metric_name": "PCIe Atomic BW", "title": "Atomic BW", "category": "atomic" },
 
-        { "from": "data_fabric", "to": "mall", "direction": "both" },
-        { "from": "mall",        "to": "umc",  "direction": "both" },
-        { "from": "umc",         "to": "hbm",  "direction": "both" }
-    ]
+ { "from": "data_fabric", "to": "mall", "direction": "both" },
+ { "from": "mall", "to": "umc",  "direction": "both" },
+ { "from": "umc", "to": "hbm",  "direction": "both" }
+ ]
 }

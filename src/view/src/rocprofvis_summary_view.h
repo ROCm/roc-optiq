@@ -3,9 +3,13 @@
 
 #pragma once
 
+#include "model/rocprofvis_model_types.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
-#include "widgets/rocprofvis_split_containers.h"
+#include "widgets/rocprofvis_tab_container.h"
+#include "widgets/rocprofvis_widget.h"
+#include <functional>
+#include <optional>
 
 struct ImPlotStyle;
 
@@ -15,77 +19,127 @@ namespace View
 {
 
 class DataProvider;
+class HSplitContainer;
 class SettingsManager;
-class KernelInstanceTable;
-class HWUtilization;
-class TopKernels;
+class SummaryOverview;
+class SummaryTopEvents;
+class SummaryTopology;
 class TimelineSelection;
+class VSplitContainer;
 enum class TimeFormat;
 
 class SummaryView : public RocWidget
 {
+    friend struct SummaryViewTestPeer;
+
 public:
     SummaryView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
+    ~SummaryView();
     void Update() override;
     void Render() override;
 
 private:
-    friend struct SummaryViewTestPeer;
+    ImVec2 MinSize() const;
+    ImVec2 PreferredSize() const;
+
+    std::unique_ptr<TabContainer>    m_tab_container;
+    std::shared_ptr<SummaryOverview> m_overview;
+    std::shared_ptr<SummaryTopology> m_topology;
+    std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>
+        m_top_events;
+
+    uint64_t m_fetched_revision;
+    bool     m_data_changed;
+    bool     m_init_window;
+    float    m_progress;
+
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;
 
-    std::unique_ptr<HSplitContainer>     m_h_container;
-    std::shared_ptr<VSplitContainer>     m_v_container;
-    std::shared_ptr<KernelInstanceTable> m_kernel_instance_table;
-    std::shared_ptr<HWUtilization>       m_hw_utilization;
-    std::shared_ptr<TopKernels>          m_top_kernels;
-
-    LayoutItem::Ptr m_hw_utilization_item;
-    LayoutItem::Ptr m_top_kernels_item;
-    LayoutItem::Ptr m_kernel_instance_table_item;
-
-    bool m_open;
-    bool m_fetched;
+    EventManager::SubscriptionToken m_time_format_changed_token;
+    EventManager::SubscriptionToken m_progress_token;
 };
 
-class HWUtilization : public RocWidget
+class SummaryOverview : public RocWidget
 {
 public:
-    HWUtilization(DataProvider& dp);
-    void Update() override;
+    SummaryOverview(DataProvider& dp, std::shared_ptr<SummaryTopology> topology,
+                    const std::array<std::shared_ptr<SummaryTopEvents>,
+                                     __kRPVAnalysisSummaryCategoryLast>& top_events,
+                    TabContainer&                                        tab_container);
     void Render() override;
-
-    float MinWidth() const;
 
 private:
-    std::string MemoryString(float mb);
-    void        AlignedBar(const SummaryInfo::AggregateMetrics& info,
-                           const std::optional<float>& value, const char* overlay = nullptr);
+    void Tile(ImGuiID id, ImVec2 size, const char* header, const char* body,
+              std::function<void()> footer) const;
+    void Tile(ImGuiID id, ImVec2 size, std::function<void()> content) const;
+
+    TabContainer&                    m_tab_container;
+    std::shared_ptr<SummaryTopology> m_topology;
+    std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>
+        m_top_events;
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;
-
-    bool  m_aligned_bar_dirty;
-    float m_aligned_bar_position;
-    float m_min_width;
 };
 
-class TopKernels : public RocWidget
+class SummaryTopology : public RocWidget
 {
-    friend struct TopKernelsTestPeer;
-
 public:
-    TopKernels(DataProvider& dp,
-               std::function<void(const char* kernel_name, const uint64_t* node_id,
-                                  const uint64_t* device_id)>
-                                     selection_callback   = nullptr,
-               std::function<void()> unselection_callback = nullptr);
-    virtual ~TopKernels();
+    SummaryTopology(DataProvider& dp);
     void Update() override;
     void Render() override;
 
-    float MinWidth() const;
-    float MinHeight() const;
+    void TimeFormatChanged();
+    void Fetched();
+
+    bool RenderPreview() const;
+
+private:
+    void RenderTopology();
+    void RenderCounters() const;
+
+    void CompositionBar(ImVec2 size, const SummaryInfo::AggregateMetrics& metrics,
+                        bool labels) const;
+    void CompositionBarSegment(ImVec2 bar_pos, ImVec2 bar_size, float segment_pct,
+                               rocprofvis_analysis_summary_category_t category,
+                               bool labels, float& segment_x) const;
+    void CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
+                          float                                max_name_width);
+    void Counters() const;
+    void Counter(const SummaryInfo::Counters::Counter& counter, ImU32 color) const;
+
+    std::unique_ptr<HSplitContainer> m_h_container;
+
+    std::array<std::string, __kRPVAnalysisSummaryCategoryLast + 3>
+                                         m_composition_table_headers;
+    const SummaryInfo::AggregateMetrics* m_counters;
+
+    bool m_data_changed;
+    bool m_timeformat_changed;
+
+    DataProvider&    m_data_provider;
+    SettingsManager& m_settings;
+};
+
+class SummaryTopEvents : public RocWidget
+{
+    friend struct SummaryTopEventsTestPeer;
+
+public:
+    SummaryTopEvents(DataProvider&                          dp,
+                     std::shared_ptr<TimelineSelection>     timeline_selection,
+                     rocprofvis_analysis_summary_category_t type, TableType table_type,
+                     rocprofvis_controller_table_type_t request_table_type,
+                     uint64_t                           request_id);
+    void Update() override;
+    void Render() override;
+
+    void TimeFormatChanged();
+    void Fetched();
+
+    bool Empty() const;
+    bool RenderPreview() const;
 
 private:
     enum DisplayMode
@@ -94,21 +148,16 @@ private:
         Bar,
         Table,
     };
-    struct NodeFilterComboModel
+    struct FilterModel
     {
-        std::vector<const SummaryInfo::AggregateMetrics*> info;
-        std::vector<const char*>                          labels;
-        int                                               selected_idx;
+        const char*                                                name;
+        int                                                        selected_idx;
+        const SummaryInfo::AggregateMetrics*                       parent_info;
+        std::vector<const SummaryInfo::AggregateMetrics*>          info;
+        std::vector<std::string>                                   labels;
+        std::vector<std::optional<rocprofvis_dm_query_criteria_t>> query;
     };
-    struct GPUFilterComboModel
-    {
-        std::vector<const SummaryInfo::AggregateMetrics*> info;
-        std::list<std::string>                            labels;
-        std::vector<const char*>                          labels_ptr;
-        int                                               selected_idx;
-        const SummaryInfo::AggregateMetrics*              parent_info;
-    };
-    struct KernelPieModel
+    struct PieModel
     {
         struct Slice
         {
@@ -116,72 +165,72 @@ private:
             float size_angle;
         };
         std::vector<const char*> labels;
-        std::vector<float>       exec_time_pct;
+        std::vector<float>       duration_pct_of_total;
         std::vector<Slice>       slices;
     };
+    class InstanceTable : public InfiniteScrollTable
+    {
+    public:
+        InstanceTable(DataProvider&                          dp,
+                      std::shared_ptr<TimelineSelection>     timeline_selection,
+                      rocprofvis_analysis_summary_category_t type, TableType table_type,
+                      rocprofvis_controller_table_type_t request_table_type,
+                      uint64_t                           request_id);
+        void Render() override;
+        void SearchInstances(const std::string&                            event_name,
+                             std::optional<rocprofvis_dm_query_criteria_t> source_filter);
+        void Clear();
 
-    void RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
+    private:
+        void UpdateFetchParams(
+            std::shared_ptr<TableRequestParams>& params) const override;
+
+        const rocprofvis_analysis_summary_category_t  m_type;
+        std::string                                   m_event_name;
+        std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
+        bool                                          m_fetched;
+    };
+
+    void RenderTopEvents();
+    void RenderEventInstances();
+    void RenderPieChart(const ImVec2 region, const ImGuiStyle& style,
+                        const ImPlotStyle& plot_style, int& hovered_idx);
+    void RenderBarChart(const ImVec2 region, const ImGuiStyle& style,
+                        const ImPlotStyle& plot_style, TimeFormat time_format,
                         int& hovered_idx);
-    void RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
-                        TimeFormat time_format, int& hovered_idx);
-    void RenderTable(const ImPlotStyle& plot_style, TimeFormat time_format);
+    void RenderTable(const ImPlotStyle& plot_style);
     void RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                       const ImPlotStyle& plot_style, int& hovered_idx);
 
     // Input handling...
     int  PlotHoverIdx() const;
     void PlotInputHandler();
-    void ToggleSelectKernel(const size_t& idx);
+    void ToggleSelectEvent(const size_t& idx);
 
-    // Interfaces...
-    DataProvider&    m_data_provider;
-    SettingsManager& m_settings;
-    std::function<void(const char* kernel_name, const uint64_t* node_id,
-                       const uint64_t* device_id)>
-                          m_selection_callback;
-    std::function<void()> m_unselection_callback;
+    std::unique_ptr<VSplitContainer> m_v_container;
+    std::unique_ptr<InstanceTable>   m_instance_table;
 
     // Widget models...
-    NodeFilterComboModel m_node_combo;
-    GPUFilterComboModel  m_gpu_combo;
-    KernelPieModel       m_kernel_pie;
+    const SummaryInfo::TopOpEvents*                                      m_op_events;
+    std::vector<FilterModel>                                             m_filters;
+    PieModel                                                             m_pie;
+    std::array<std::string, __kRPVAnalysisSummaryTopEventMetricLast + 1> m_table_headers;
 
     // Widget state/properties...
-    const std::vector<SummaryInfo::KernelMetrics>* m_kernels;
-    DisplayMode                                    m_display_mode;
-    bool                                           m_show_legend;
-    std::optional<size_t>                          m_hovered_idx;
-    std::optional<size_t>                          m_selected_idx;
+    const rocprofvis_analysis_summary_category_t m_type;
+    DisplayMode                                  m_display_mode;
+    bool                                         m_show_legend;
+    std::optional<size_t>                        m_hovered_idx;
+    std::optional<size_t>                        m_selected_idx;
     std::optional<size_t> m_padded_idx;  // Position of "Others" slice
-    ImVec2                m_min_size;
 
-    // Update flags.
-    bool m_data_dirty;
-    bool m_filter_dirty;
-};
+    // Update flags...
+    bool m_data_changed;
+    bool m_filter_changed;
+    bool m_timeformat_changed;
 
-class KernelInstanceTable : public InfiniteScrollTable
-{
-public:
-    KernelInstanceTable(DataProvider&                      dp,
-                        std::shared_ptr<TimelineSelection> timeline_selection);
-    void Render() override;
-
-    void  ToggleSelectKernel(const std::string& kernel_name, const uint64_t* node_id,
-                             const uint64_t* device_id);
-    void  Clear();
-    float MinHeight() const;
-
-private:
-    void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
-    void FormatData() const override;
-    void IndexColumns() override;
-    void RowSelected(const ImGuiMouseButton mouse_button) override;
-
-    std::string m_kernel_name;
-    std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
-
-    bool m_fetched;
+    DataProvider&    m_data_provider;
+    SettingsManager& m_settings;
 };
 
 }  // namespace View

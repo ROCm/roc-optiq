@@ -609,6 +609,31 @@ namespace RocProfVis
         return kRocProfVisDmResultSuccess;
     }
 
+    std::string GoogleTraceProcessor::GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
+    {
+        std::string where_str;
+        if(source_filter)
+        {
+            if(source_filter->process_id.has_value)
+            {
+                std::string upid = std::to_string(source_filter->process_id.value & TOPOLOGY_ID_MASK);
+                where_str = std::string(Builder::TRACK_ID_SERVICE_NAME) + " IN (" +
+                    "SELECT id FROM process_track WHERE upid = " + upid +
+                    " UNION SELECT id FROM process_counter_track WHERE upid = " + upid +
+                    " UNION SELECT TT.id FROM thread_track TT JOIN __intrinsic_thread T ON T.id = TT.utid WHERE T.upid = " + upid + ")";
+            }
+            if(source_filter->thread_id.has_value)
+            {
+                if(!where_str.empty())
+                {
+                    where_str += " AND ";
+                }
+                where_str += std::string(Builder::TRACK_ID_SERVICE_NAME) + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
+            }
+        }
+        return where_str;
+    }
+
     rocprofvis_dm_result_t GoogleTraceProcessor::LoadInformationTables(Future* future) {
 
         std::vector<std::thread> threads;

@@ -73,20 +73,26 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
-    bool input_changed = InputTextString(id, str, flags);
-    if(str.empty())
+    // ImGui draws the hint inside the field, so the field stays the last item:
+    // SameLine() and tooltips after this call line up against the field itself
+    // rather than against a separate overlay.
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    bool input_changed = ImGui::InputTextWithHint(
+        id, hint ? hint : "", str.data(), str.capacity() + 1,
+        flags | ImGuiInputTextFlags_CallbackResize, StringResizeCallback,
+        static_cast<void*>(&str));
+
+    // A hint wider than the field is clipped. Offer it whole on hover, but not
+    // while the field is focused, where the tooltip would cover the caret.
+    if(str.empty() && hint && hint[0] && !ImGui::IsItemActive())
     {
-        const float& padding = ImGui::GetStyle().FramePadding.x;
-        ImGui::BeginDisabled();
-        ImGui::SetCursorScreenPos(
-            ImVec2(ImGui::GetItemRectMin().x + padding, ImGui::GetItemRectMin().y));
-        if(ElidedText(hint, ImGui::GetItemRectSize().x - 2.0f * padding, 0.0f,
-                   Alignment_Left, true) && BeginItemTooltipStyled())
+        const float pad   = ImGui::GetStyle().FramePadding.x;
+        const float avail = ImGui::GetItemRectSize().x - 2.0f * pad;
+        if(ImGui::CalcTextSize(hint).x > avail && BeginItemTooltipStyled())
         {
             ImGui::TextUnformatted(hint);
             EndTooltipStyled();
         }
-        ImGui::EndDisabled();
     }
     return input_changed;
 }
@@ -434,7 +440,8 @@ ElidedText(const char* text, float available_width, float tooltip_width,
                                                   ? ImGui::GetFrameHeight()
                                                   : ImGui::GetTextLineHeight()),
                       ImGuiChildFlags_None,
-                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs |
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     if(imgui_AlignTextToFramePadding)
     {
@@ -747,7 +754,7 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
+    popup_style.CenterPopup(ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
     ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
@@ -781,13 +788,11 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
             ImGui::Spacing();
             if(total > 0)
             {
-                float frac = static_cast<float>(downloaded) / static_cast<float>(total);
-                if(frac > 1.0f)
-                {
-                    frac = 1.0f;
-                }
-                std::string label = std::to_string(downloaded / 1024) + " / " +
-                                    std::to_string(total / 1024) + " KiB";
+                const float frac =
+                    std::min(1.0f, static_cast<float>(downloaded) / static_cast<float>(total));
+                const std::string label = format_byte_size(downloaded) + " of " +
+                                          format_byte_size(total) + "  (" +
+                                          std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
                 ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
             }
             else
@@ -895,7 +900,7 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
 inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
-static void
+void
 PushContextMenuStyles()
 {
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -910,7 +915,7 @@ PushContextMenuStyles()
                           settings.GetColor(Colors::kAccent));
 }
 
-static void
+void
 PopContextMenuStyles()
 {
     ImGui::PopStyleColor(3);

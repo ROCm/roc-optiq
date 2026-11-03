@@ -105,6 +105,10 @@ public:
                                            rocprofvis_dm_charptr_t new_db_path,
                                            Future* future) override;
 
+    virtual void BuildOpQueryMap(
+                                 slice_query_map_t& slice_query_map,
+                                 rocprofvis_dm_event_operation_t op) override;
+
     rocprofvis_dm_result_t BuildTableStringIdFilter( 
                                         rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
                                         rocprofvis_dm_string_table_filters_t string_table_filters,
@@ -125,7 +129,7 @@ protected:
 
     uint64_t GetMemoryActivityTableSchemaHash();
     std::string GetLevelSchemaHashStr();
-    std::string GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter) override;
+    std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) override;
 
 private:
 

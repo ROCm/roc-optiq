@@ -12,6 +12,7 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr const char* SIGMA = u8"\u03C3";
 // Name, compact name, accent color index
 constexpr std::array<std::tuple<const char*, const char*, size_t>,
                      AnalysisTrackStatistics::Queue::kQueueCount>
@@ -21,7 +22,7 @@ constexpr std::array<std::tuple<const char*, const char*, size_t>,
     DISPLAY_PROPS_COUNTER = { { { "Minimum", "Min", 0 },
                                 { "Maximum", "Max", 5 },
                                 { "Mean", "Avg", 3 },
-                                { "Standard Deviation", "Std Dev", 8 } } };
+                                { "Standard Deviation", SIGMA, 8 } } };
 
 AnalysisModel::AnalysisModel(const TopologyTree& topology)
 : m_analysis_range_start_ns(0.0)

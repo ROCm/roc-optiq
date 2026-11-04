@@ -67,10 +67,11 @@ These features are in progress and available for preview only (build from source
 - Fixed a crash when a table filter could not be parsed.
 - Fixed a macOS hang in the job system: a worker could signal a job after that job had already been freed.
 - Fixed a leaked row-count query when a table had nothing to count.
-- Fixed invalid table filters reporting Found 0 item(s). The table now shows an error that names the column and the unexpected token.
+- Fixed invalid table filter feedback. Improved error notifications when table filters are invalid.
 - Fixed the kernel selection table disappearing when a filter matches no rows.
 - Fixed Linux tarball extracts at the install prefix. It no longer wraps its contents in a `<package>-<version>-<system>/` directory, matching the .deb and .rpm layout.
-- Fixed missing dependencies in debian packages.
+- Fixed missing dependencies in Debian packages.
+- Fixed commit hash missing from Linux builds.
 
 ## ROCm Optiq 1.1.0
 

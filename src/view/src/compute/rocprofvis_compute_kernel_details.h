@@ -91,6 +91,9 @@ public:
     void Render() override;
     void Update() override;
 
+    // The Layout combo and Panels checklist, for ComputeView's toolbar.
+    void RenderLayoutControls();
+
     friend struct ComputeKernelDetailsViewTestPeer;
 
 private:
@@ -174,7 +177,6 @@ private:
     void            SetKernelRailTableMode(bool table);
 
     // Drawing.
-    void RenderToolbar();
     void RenderLayoutMenu();
     void RenderPanelsMenu();
     // Title (a drag handle for box `slot` when `draggable`, followed by the

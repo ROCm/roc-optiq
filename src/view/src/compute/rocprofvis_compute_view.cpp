@@ -437,6 +437,11 @@ ComputeView::RenderToolbar()
     ImGui::AlignTextToFramePadding();
 
     // Kernels (and so workloads) are chosen in Kernel Details' kernel list only.
+    if(m_kernel_details)
+    {
+        m_kernel_details->RenderLayoutControls();
+        VerticalSeparator(&m_settings_manager);
+    }
     if(m_toolbar_available_width != 0.0)
     {
         ImGui::Dummy(

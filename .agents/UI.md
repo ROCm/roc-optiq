@@ -1513,8 +1513,10 @@ handle (ImGui drag-drop payload `PANE_DRAG_PAYLOAD`; `HandleSlotDrop` highlights
 the box under the cursor and swaps on drop), the arrow opens the panel picker,
 then maximize / restore (maximize fills the tab and hides the kernel rail;
 double-clicking the title toggles it) and hide (empties the box). Empty boxes
-offer the panels not shown. The toolbar has the Layout combo (thumbnails,
-Reset layout) and the Panels checklist. The nested `Preset` saves the layout
+offer the panels not shown. `RenderLayoutControls()` draws the Layout combo
+(thumbnails, Reset layout) and the Panels checklist; `ComputeView::RenderToolbar()`
+puts them at the left of the app toolbar, on the same row as Presets (right-aligned),
+so the workspace has no toolbar row of its own. The nested `Preset` saves the layout
 with user presets (`PresetManager::ComputeKernelDetailsLayout`). Each leaf pane
 comes from `MakeRenderPane()`: the pane itself carries zero item spacing (a
 `VSplitContainer` advances past each pane with the pane's spacing, which

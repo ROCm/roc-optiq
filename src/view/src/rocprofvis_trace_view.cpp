@@ -1182,7 +1182,7 @@ TraceView::RenderEventSearch()
                    ICON_ELLIPSIS, settings.GetFontManager().GetFont(FontType::kIcon),
                    ImVec2(0, ImGui::GetFrameHeightWithSpacing()),
                    m_event_search->Advanced() ? "Advanced (Active)" : "Advanced", false,
-                   m_settings_manager.GetDefaultStyle().FramePadding,
+                   ImGui::GetStyle().FramePadding,
                    settings.GetColor(m_event_search->Advanced() ? Colors::kAccent
                                                                 : Colors::kBgMain),
                    settings.GetColor(m_event_search->Advanced() ? Colors::kAccentHover

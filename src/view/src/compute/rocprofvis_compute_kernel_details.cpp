@@ -53,6 +53,7 @@ constexpr float PANELS_COMBO_WIDTH_FRAMES = 9.0f;
 constexpr float LAYOUT_ROW_HEIGHT_FRAMES  = 1.35f;
 constexpr float THUMBNAIL_ASPECT          = 1.6f;
 constexpr float THUMBNAIL_INSET           = 3.0f;
+constexpr float THUMBNAIL_LABEL_GAP       = 8.0f;
 constexpr float THUMBNAIL_GAP             = 1.0f;
 constexpr float THUMBNAIL_ROUNDING        = 1.5f;
 constexpr float THUMBNAIL_FILL_ALPHA      = 0.3f;
@@ -843,12 +844,17 @@ ComputeKernelDetailsView::SetKernelRailTableMode(bool table)
 }
 
 void
-ComputeKernelDetailsView::RenderToolbar()
+ComputeKernelDetailsView::RenderLayoutControls()
 {
+    // The app toolbar has no item spacing; the labels, combos and their
+    // dropdowns need the app's default.
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        SettingsManager::GetInstance().GetDefaultStyle().ItemSpacing);
     RenderLayoutMenu();
     ImGui::SameLine();
     VerticalSeparator();
     RenderPanelsMenu();
+    ImGui::PopStyleVar();
 }
 
 void
@@ -886,7 +892,7 @@ ComputeKernelDetailsView::RenderLayoutMenu()
                                 selected ? accent : dim);
             const char* name = TemplateInfo(layout).name;
             draw_list->AddText(
-                ImVec2(thumb_min.x + thumb_w + THUMBNAIL_INSET * 2.0f,
+                ImVec2(thumb_min.x + thumb_w + THUMBNAIL_LABEL_GAP,
                        row_min.y + (row_h - ImGui::GetTextLineHeight()) * 0.5f),
                 settings.GetColor(Colors::kTextMain), name);
             ImGui::PopID();
@@ -905,7 +911,7 @@ ComputeKernelDetailsView::RenderLayoutMenu()
         ImGui::Dummy(ImVec2(thumb_h * THUMBNAIL_ASPECT, thumb_h));
         DrawLayoutThumbnail(ImGui::GetWindowDrawList(), pos,
                             ImVec2(thumb_h * THUMBNAIL_ASPECT, thumb_h), current, dim);
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, THUMBNAIL_LABEL_GAP);
         ImGui::TextUnformatted(TemplateInfo(current).name);
         ImGui::EndComboPreview();
     }
@@ -2208,7 +2214,6 @@ ComputeKernelDetailsView::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, WORKSPACE_SCROLLBAR_SIZE);
     ImGui::BeginChild("kernel_details", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    RenderToolbar();
     // Splits size their children from the space left, so no spacing may be added
     // between a child and its gutter.
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));

@@ -72,6 +72,7 @@ These features are in progress and available for preview only (build from source
 - Fixed Linux tarball extracts at the install prefix. It no longer wraps its contents in a `<package>-<version>-<system>/` directory, matching the .deb and .rpm layout.
 - Fixed missing dependencies in Debian packages.
 - Fixed commit hash missing from Linux builds.
+- Fixed process id not read correctly in some trace files.
 
 ## ROCm Optiq 1.1.0
 

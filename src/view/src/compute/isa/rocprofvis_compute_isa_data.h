@@ -211,6 +211,8 @@ public:
     [[nodiscard]] static const char*     GetInstructionTypeName(InstructionKind kind);
     [[nodiscard]] static double      CalculatePercentage(uint64_t value, uint64_t total);
     [[nodiscard]] static std::string FormatSampleCount(uint64_t value);
+    [[nodiscard]] static std::string     FormatSamplePercentage(
+            const PercentageSummary& value);
 
 private:
     static constexpr double MAX_PERCENTAGE = 100.0;

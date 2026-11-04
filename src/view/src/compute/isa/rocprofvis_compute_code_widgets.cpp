@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <utility>
 
+#include "imgui_internal.h"
+
 #include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
@@ -15,8 +17,9 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr const char* CODE_OBJECT_OFFSET_FORMAT        = "0x%llX";
-constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY = 19;
+constexpr const char* CODE_OBJECT_OFFSET_FORMAT           = "0x%llX";
+constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY    = 19;
+constexpr float       CODE_COLUMN_MIN_WIDTH_IN_CHARACTERS = 40.0f;
 
 struct InstructionPresentation
 {
@@ -105,7 +108,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable |
                     ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_BordersInnerV |
-                    ImGuiTableFlags_ScrollY;
+                    ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
 }
 
 void
@@ -176,6 +179,26 @@ BaseCodeWidget::CalculateLineNumberWidth(size_t count)
 
     m_line_num_width =
         ImGui::CalcTextSize("0").x * static_cast<float>(m_line_num_digits + 1);
+}
+
+float
+BaseCodeWidget::CalculateTableInnerWidth() const
+{
+    return std::max(ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ScrollbarSize,
+                    ImGui::CalcTextSize("0").x * m_minimum_table_width_in_characters);
+}
+
+void
+BaseCodeWidget::UpdateTableInnerWidth(int code_column)
+{
+    const ImGuiTable* table           = ImGui::GetCurrentTable();
+    const float       character_width = ImGui::CalcTextSize("0").x;
+    // Use the resolved visible column widths on the next frame, including saved
+    // resize/hide choices. Store font-relative units so font changes also scale it.
+    m_minimum_table_width_in_characters =
+        (table->ColumnsGivenWidth - table->Columns[code_column].WidthGiven) /
+            character_width +
+        CODE_COLUMN_MIN_WIDTH_IN_CHARACTERS;
 }
 
 bool
@@ -316,7 +339,8 @@ SourceCodeWidget::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
     if(!ImGui::BeginTable("SourceCodeSamplingMetrics", columns_count,
-                          m_table_flags | ImGuiTableFlags_Reorderable))
+                          m_table_flags | ImGuiTableFlags_Reorderable, ImVec2(0.0f, 0.0f),
+                          CalculateTableInnerWidth()))
     {
         ImGui::PopStyleVar();
         return;
@@ -324,6 +348,7 @@ SourceCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
+    UpdateTableInnerWidth(ColumnIndex(SourceColumn::kSourceText));
     RenderTableContextMenu();
 
     const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
@@ -400,17 +425,20 @@ SourceCodeWidget::RenderLine(uint32_t index)
     ImGui::PushID(static_cast<int>(index));
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSamplingState)))
     {
-        row_clicked |= m_sampling_renderer.RenderCell(source_row, m_hottest_samples);
+        row_clicked |= m_sampling_renderer.RenderCell(
+            source_row, m_hottest_samples, SamplingStateRenderer::CodePane::kSource);
     }
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kWaveOccupancy)))
     {
         row_clicked |= m_sampling_renderer.RenderMetricCell(
-            source_row, SamplingStateRenderer::Metric::kWaveOccupancy);
+            source_row, SamplingStateRenderer::Metric::kWaveOccupancy,
+            SamplingStateRenderer::CodePane::kSource);
     }
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kActiveThreads)))
     {
         row_clicked |= m_sampling_renderer.RenderMetricCell(
-            source_row, SamplingStateRenderer::Metric::kActiveThreads);
+            source_row, SamplingStateRenderer::Metric::kActiveThreads,
+            SamplingStateRenderer::CodePane::kSource);
     }
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSourceText)))
     {
@@ -476,7 +504,8 @@ IsaCodeWidget::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
     if(!ImGui::BeginTable("IsaCodeSamplingMetrics", columns_count,
-                          m_table_flags | ImGuiTableFlags_Reorderable))
+                          m_table_flags | ImGuiTableFlags_Reorderable, ImVec2(0.0f, 0.0f),
+                          CalculateTableInnerWidth()))
     {
         ImGui::PopStyleVar();
         return;
@@ -485,6 +514,7 @@ IsaCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
+    UpdateTableInnerWidth(ColumnIndex(IsaColumn::kInstruction));
     RenderTableContextMenu();
 
     const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);

@@ -1638,6 +1638,9 @@ The ISA implementation is organized as follows:
   `SourceCodeWidget`, `IsaCodeWidget`, their shared `LineSelection`, and
   `CodeLoadState` (not loaded, loading, loaded, or failed).
   `BaseCodeWidget` shares row layout, selection, hover, and cached scroll navigation.
+  Both tables scroll horizontally when the visible fixed columns plus a 40-character
+  code column exceed the pane width. The minimum follows resolved column visibility,
+  saved widths, and the current font; code stretches to fill wider panes.
   Each widget delegates sampling cells and headers to its composed
   `SamplingStateRenderer`; the cell returns clicks to the widget's row selection.
   Each widget directly balances table begin/end and style pushes, including
@@ -1652,6 +1655,14 @@ The ISA implementation is organized as follows:
   measurement uses an em dash. Metric cells forward clicks to row selection even
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
+  Metric cells and the Sampling State tooltip share `RenderMetricValue` and
+  `GetMetricTooltipText`, including loading, failure, invalid, no-sample, and
+  unrecorded statuses. `CodePane` selects instruction or source aggregation text
+  for cell tooltips as well as headers. Valid metric-cell tooltips show the sample
+  count weighting the mean; source cells explicitly identify the mean over mapped
+  instructions. `IsaDataBuilder::FormatSamplePercentage` shares one-decimal
+  formatting between cells and tooltips, preserves measured zero, and returns an
+  em dash for missing/invalid summaries.
   Each hovered valid cell builds one local list of tooltip rows (label, color,
   formatted count, formatted percentage), ordered as issued, stall reasons,
   unclassified stalls, and unclassified progress. Layout and drawing consume that
@@ -1698,8 +1709,8 @@ indices; `SetupColumns` and `RenderHeaders` keep registration and header renderi
 from the clipped row loop. `SamplingStateRenderer` keeps tooltip summary, table,
 footer, and size measurement separate, with one prepared tooltip-row list for
 both measurement and drawing. `SamplingStateRenderer::CodePane` identifies the
-header's ISA/source context explicitly. Single-argument widget constructors are
-explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
+headers' and cell tooltips' ISA/source context explicitly. Single-argument widget
+constructors are explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
 Source selection is shared through `LineSelection`, with no unused forwarding getters.
 Source-file dropdown items use the complete source UUID in their ImGui ID scope,
 so equal basenames remain independently selectable without truncating 64-bit IDs.
@@ -1864,6 +1875,17 @@ progress rows explain gray portions. The issued row remains available when no
 stalled samples exist, including genuine zero counts. Counts use separators.
 Cell tooltips have no title or verbose reason descriptions and retain mismatch
 warnings. These are sample observations, not cycle latency.
+
+The Sampling State tooltip also includes a compact wave-occupancy / active-thread
+summary outside the scrollable reason list, regardless of metric-column visibility.
+Values use the same one-decimal formatter as the columns. Unavailable values carry
+brief loading, load-failed, invalid, no-sample, or unrecorded labels; invalid metrics
+also explain the supported percentage/count range. Source summaries identify the
+sample-weighted mean over mapped instructions. Retained metrics remain visible when
+issued/stalled counts or stall details are unavailable. Metric headers explain the
+profiler-reported measurements, their own 0-100% scale, and aggregation; active-thread
+percent is explicitly separate from issued/stalled sample shares. Database field
+names, grouping keys, source-mapping details, and formulas remain developer-only.
 
 The Sampling State column fits its header and the widest displayed name, capped by the character limit
 and viewport width. All legend columns receive explicit fixed widths with

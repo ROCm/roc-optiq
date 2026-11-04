@@ -70,9 +70,10 @@ public:
     void RenderMetricHeader(int column, Metric metric, CodePane pane = CodePane::kIsa);
     // Returns whether the cell was clicked, for the owning widget's row selection.
     [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
-                                  uint64_t                           hottest_samples);
+                                  uint64_t                           hottest_samples,
+                                  CodePane pane = CodePane::kIsa);
     [[nodiscard]] bool RenderMetricCell(const IsaDataBuilder::SamplingRow& row,
-                                        Metric                             metric);
+                                        Metric metric, CodePane pane = CodePane::kIsa);
 
 private:
     using SamplingRow          = IsaDataBuilder::SamplingRow;
@@ -91,6 +92,12 @@ private:
     };
     using TooltipRows = std::vector<TooltipRow>;
 
+    struct MetricTooltipText
+    {
+        const char* status;
+        const char* description;
+    };
+
     struct TooltipTableLayout
     {
         ImVec2 size;
@@ -106,7 +113,12 @@ private:
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
                             float mouse_wheel);
-    void RenderTooltip(const SamplingRow& row, double bar_percent);
+    MetricTooltipText GetMetricTooltipText(const SamplingRow& row, Metric metric) const;
+    void              RenderMetricValue(const SamplingRow& row, Metric metric);
+    void RenderMetricTooltip(const SamplingRow& row, Metric metric, CodePane pane);
+    void RenderMetricsSummary(const SamplingRow& row, CodePane pane);
+    void RenderMetricAggregation(CodePane pane);
+    void RenderTooltip(const SamplingRow& row, double bar_percent, CodePane pane);
     void RenderSummary(const SamplingRow& row);
     void RenderFooter(const SamplingRow& row);
     void DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,

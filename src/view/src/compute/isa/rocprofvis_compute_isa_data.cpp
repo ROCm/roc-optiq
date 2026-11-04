@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <iterator>
 #include <utility>
 
@@ -396,6 +397,20 @@ IsaDataBuilder::FormatSampleCount(uint64_t value)
     }
     std::reverse(formatted_count.begin(), formatted_count.end());
     return formatted_count;
+}
+
+std::string
+IsaDataBuilder::FormatSamplePercentage(const PercentageSummary& value)
+{
+    if(value.availability != SamplingAvailability::kValid)
+    {
+        return u8"\u2014";
+    }
+    constexpr size_t TEXT_CAPACITY       = 32;
+    char             text[TEXT_CAPACITY] = {};
+    std::snprintf(text, sizeof(text), "%.1f%%",
+                  value.percent == 0.0 ? 0.0 : value.percent);
+    return text;
 }
 
 IsaDataBuilder::SamplingSummary

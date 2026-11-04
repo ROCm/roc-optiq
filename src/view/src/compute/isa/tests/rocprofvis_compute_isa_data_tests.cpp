@@ -374,6 +374,32 @@ make_source_sampling_data()
     return data;
 }
 
+TEST_CASE("Percentage display preserves zero and identifies unavailable measurements",
+          "[isa][sample-metrics]")
+{
+    using Availability = IsaDataBuilder::SamplingAvailability;
+    struct Case
+    {
+        IsaDataBuilder::PercentageSummary value;
+        const char*                       expected;
+    };
+    const Case cases[] = { { { Availability::kValid, 49.401407527783604 }, "49.4%" },
+                           { { Availability::kValid, 24.710678590215675 }, "24.7%" },
+                           { { Availability::kValid, 43.75 }, "43.8%" },
+                           { { Availability::kValid, 100.0 }, "100.0%" },
+                           { { Availability::kValid, 0.0 }, "0.0%" },
+                           { { Availability::kValid, -0.0 }, "0.0%" },
+                           { { Availability::kMissing, 0.0 }, u8"\u2014" },
+                           { { Availability::kMissing, 49.4 }, u8"\u2014" },
+                           { { Availability::kInvalid,
+                               std::numeric_limits<double>::quiet_NaN() },
+                             u8"\u2014" } };
+    for(const Case& entry : cases)
+    {
+        CHECK(IsaDataBuilder::FormatSamplePercentage(entry.value) == entry.expected);
+    }
+}
+
 TEST_CASE("Sampled percentages validate each metric independently of progress counts",
           "[isa][sample-metrics]")
 {

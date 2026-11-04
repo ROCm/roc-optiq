@@ -776,10 +776,12 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         }
         case TrackInfo::TrackType::InstrumentedThread:
         {
+            const ProcessInfo* process_info =
+                tdm.GetProcess(track_info->topology.process_id);
             if(const ThreadInfo* thread_info =
                    tdm.GetThread(track_info->topology.id.value,
                                  ThreadInfo::Kind::kInstrumented);
-               thread_info && thread_info->tid == track_info->topology.process_id)
+               thread_info && process_info && thread_info->tid == process_info->pid)
             {
                 pill->Activate();
                 pill->SetLabel("MAIN THREAD");
@@ -830,7 +832,9 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
     TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    std::string process_id_str = std::to_string(track_info->topology.process_id);
+    const ProcessInfo* process_info = tdm.GetProcess(track_info->topology.process_id);
+    std::string        process_id_str =
+        process_info ? std::to_string(process_info->pid) : std::string("N/A");
 
     bool show_process_id = tdm.ProcessCount() > 1;
 
@@ -848,9 +852,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::SampledThread:
         {
             std::string process_name_path;
-            if(const ProcessInfo* process_info =
-                   tdm.GetProcess(track_info->topology.process_id);
-               process_info)
+            if(process_info)
             {
                 process_name_path += process_info->command;
             }

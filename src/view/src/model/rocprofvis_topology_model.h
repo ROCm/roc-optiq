@@ -135,10 +135,14 @@ struct ProcessInfo : public TopologyNode
 {
     explicit ProcessInfo(uint64_t id)
     : TopologyNode(TopologyNodeType::kProcess, id)
+    , pid(0)
     , start_time(0.0)
     , end_time(0.0)
     {}
 
+    // OS process id, for display. GetId() is the topology id, which is not an OS
+    // pid for every source format.
+    uint64_t    pid;
     double      start_time;
     double      end_time;
     std::string command;

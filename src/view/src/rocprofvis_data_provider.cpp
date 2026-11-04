@@ -1058,12 +1058,18 @@ DataProvider::ParseProcessData(rocprofvis_handle_t* process_handle,
     result = rocprofvis_controller_get_double(
         process_handle, kRPVControllerProcessEndTime, 0, &process_info.end_time);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    result = rocprofvis_controller_get_uint64(process_handle, kRPVControllerProcessPid, 0,
+                                              &process_info.pid);
+    if(result != kRocProfVisResultSuccess)
+    {
+        process_info.pid = process_info.GetId() & TOPOLOGY_ID_MASK;
+    }
     process_info.command = GetString(process_handle, kRPVControllerProcessCommand, 0);
     process_info.environment =
         GetString(process_handle, kRPVControllerProcessEnvironment, 0);
     process_info.SetName(process_info.command);
     process_info.SetHeader(process_info.command + " (" +
-                           std::to_string(process_info.GetId()) + ")");
+                           std::to_string(process_info.pid) + ")");
 }
 
 void

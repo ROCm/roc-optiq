@@ -373,7 +373,7 @@ SummaryScopeLabel(const SummaryInfo::AggregateMetrics& metrics)
         {
             if(metrics.info.process)
             {
-                label = "process " + std::to_string(metrics.info.process->GetId()) +
+                label = "process " + std::to_string(metrics.info.process->pid) +
                         ": " + metrics.info.process->command;
             }
             break;

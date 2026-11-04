@@ -105,7 +105,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable |
                     ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_BordersInnerV |
-                    ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoSavedSettings;;
+                    ImGuiTableFlags_ScrollY;
 }
 
 void
@@ -315,7 +315,7 @@ SourceCodeWidget::Render()
     CalculateLineNumberWidth(static_cast<size_t>(m_largest_line_number));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
-    if(!ImGui::BeginTable("SourceCodeSamplingState", columns_count,
+    if(!ImGui::BeginTable("SourceCodeSamplingMetrics", columns_count,
                           m_table_flags | ImGuiTableFlags_Reorderable))
     {
         ImGui::PopStyleVar();
@@ -359,6 +359,8 @@ SourceCodeWidget::SetupColumns()
                             m_line_num_width);
 
     m_sampling_renderer.SetupColumn();
+    m_sampling_renderer.SetupMetricColumn(SamplingStateRenderer::Metric::kWaveOccupancy);
+    m_sampling_renderer.SetupMetricColumn(SamplingStateRenderer::Metric::kActiveThreads);
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_NoHide |
                                                ImGuiTableColumnFlags_WidthStretch);
 }
@@ -374,6 +376,12 @@ SourceCodeWidget::RenderHeaders()
     }
     m_sampling_renderer.RenderHeader(ColumnIndex(SourceColumn::kSamplingState),
                                      SamplingStateRenderer::CodePane::kSource);
+    m_sampling_renderer.RenderMetricHeader(ColumnIndex(SourceColumn::kWaveOccupancy),
+                                           SamplingStateRenderer::Metric::kWaveOccupancy,
+                                           SamplingStateRenderer::CodePane::kSource);
+    m_sampling_renderer.RenderMetricHeader(ColumnIndex(SourceColumn::kActiveThreads),
+                                           SamplingStateRenderer::Metric::kActiveThreads,
+                                           SamplingStateRenderer::CodePane::kSource);
     SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(SourceColumn::kSourceText),
                                                    "Source code",
                                                    SOURCE_CODE_HEADER_TOOLTIP);
@@ -393,6 +401,16 @@ SourceCodeWidget::RenderLine(uint32_t index)
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSamplingState)))
     {
         row_clicked |= m_sampling_renderer.RenderCell(source_row, m_hottest_samples);
+    }
+    if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kWaveOccupancy)))
+    {
+        row_clicked |= m_sampling_renderer.RenderMetricCell(
+            source_row, SamplingStateRenderer::Metric::kWaveOccupancy);
+    }
+    if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kActiveThreads)))
+    {
+        row_clicked |= m_sampling_renderer.RenderMetricCell(
+            source_row, SamplingStateRenderer::Metric::kActiveThreads);
     }
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSourceText)))
     {
@@ -451,13 +469,13 @@ IsaCodeWidget::Render()
     }
 
     constexpr int columns_count = ColumnIndex(IsaColumn::kCount);
-    static_assert(columns_count == 4);
+    static_assert(columns_count == 6);
     CalculateLineNumberWidth(m_entries.size());
 
-    // Keep the table ID stable to preserve users' column preferences.
+    // A new layout ID prevents older column indices from restoring onto the metrics.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
-    if(!ImGui::BeginTable("IsaCodeSamplingState", columns_count,
+    if(!ImGui::BeginTable("IsaCodeSamplingMetrics", columns_count,
                           m_table_flags | ImGuiTableFlags_Reorderable))
     {
         ImGui::PopStyleVar();
@@ -496,6 +514,8 @@ IsaCodeWidget::SetupColumns()
                             m_line_num_width);
 
     m_sampling_renderer.SetupColumn();
+    m_sampling_renderer.SetupMetricColumn(SamplingStateRenderer::Metric::kWaveOccupancy);
+    m_sampling_renderer.SetupMetricColumn(SamplingStateRenderer::Metric::kActiveThreads);
     char largest_offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
     std::snprintf(largest_offset_text, sizeof(largest_offset_text),
                   CODE_OBJECT_OFFSET_FORMAT,
@@ -517,6 +537,10 @@ IsaCodeWidget::RenderHeaders()
         ImGui::TableHeader("#");
     }
     m_sampling_renderer.RenderHeader(ColumnIndex(IsaColumn::kSamplingState));
+    m_sampling_renderer.RenderMetricHeader(ColumnIndex(IsaColumn::kWaveOccupancy),
+                                           SamplingStateRenderer::Metric::kWaveOccupancy);
+    m_sampling_renderer.RenderMetricHeader(ColumnIndex(IsaColumn::kActiveThreads),
+                                           SamplingStateRenderer::Metric::kActiveThreads);
     SamplingStateRenderer::RenderHeaderWithTooltip(
         ColumnIndex(IsaColumn::kOffset), "Offset", CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(IsaColumn::kInstruction),
@@ -537,6 +561,16 @@ IsaCodeWidget::RenderLine(uint32_t index)
     if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kSamplingState)))
     {
         row_clicked |= m_sampling_renderer.RenderCell(isa_row, m_hottest_samples);
+    }
+    if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kWaveOccupancy)))
+    {
+        row_clicked |= m_sampling_renderer.RenderMetricCell(
+            isa_row, SamplingStateRenderer::Metric::kWaveOccupancy);
+    }
+    if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kActiveThreads)))
+    {
+        row_clicked |= m_sampling_renderer.RenderMetricCell(
+            isa_row, SamplingStateRenderer::Metric::kActiveThreads);
     }
     ImGui::PopID();
 

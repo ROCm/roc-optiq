@@ -102,6 +102,8 @@ private:
     {
         kLineNumber,
         kSamplingState,
+        kWaveOccupancy,
+        kActiveThreads,
         kSourceText,
         kCount
     };
@@ -141,6 +143,8 @@ private:
     {
         kLineNumber,
         kSamplingState,
+        kWaveOccupancy,
+        kActiveThreads,
         kOffset,
         kInstruction,
         kCount

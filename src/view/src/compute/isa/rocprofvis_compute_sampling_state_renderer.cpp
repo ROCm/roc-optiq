@@ -24,6 +24,52 @@ constexpr const char* SAMPLING_STATE_COLUMN_LABEL                     = "Samplin
 constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
 constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
 constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES               = 3.0f;
+constexpr float       SAMPLE_METRIC_BAR_HEIGHT_FRACTION               = 0.12f;
+constexpr float       SAMPLE_METRIC_TRACK_ALPHA                       = 0.15f;
+constexpr float       SAMPLE_METRIC_BAR_ALPHA                         = 0.6f;
+constexpr double      SAMPLE_METRIC_PERCENT_SCALE                     = 100.0;
+constexpr const char* SAMPLE_METRIC_UNAVAILABLE_TEXT                  = u8"\u2014";
+
+struct SampleMetricPresentation
+{
+    const char* label;
+    const char* title;
+    const char* isa_description;
+    const char* source_description;
+    const char* developer_information;
+};
+
+static const SampleMetricPresentation&
+get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
+{
+    static constexpr SampleMetricPresentation OCCUPANCY{
+        "Wave occ. %", "Wave occupancy",
+        "Wave occupancy recorded in PC samples. Sample-weighted mean for this "
+        "instruction.",
+        "Wave occupancy recorded in PC samples. Sample-weighted mean across this source "
+        "line's mapped instructions.",
+        "DB: compute_pc_sample_state.wave_occupancy_percent\n"
+        "SUM(total_count * percent) / SUM(total_count), ignoring zero-sample states.\n"
+        "Missing measurements propagate; invalid values or weight overflow are "
+        "unavailable.\n"
+        "Bar scale: 0-100%, independent of sample hotness."
+    };
+    static constexpr SampleMetricPresentation ACTIVE_THREADS{
+        "Active threads %", "Active threads",
+        "Active-thread percentage recorded in PC samples. Sample-weighted mean for this "
+        "instruction, separate from issued/stalled sample shares.",
+        "Active-thread percentage recorded in PC samples. Sample-weighted mean across "
+        "this "
+        "source line's mapped instructions, separate from issued/stalled sample shares.",
+        "DB: compute_pc_sample_state.active_thread_percent\n"
+        "SUM(total_count * percent) / SUM(total_count), ignoring zero-sample states.\n"
+        "Missing measurements propagate; invalid values or weight overflow are "
+        "unavailable.\n"
+        "Bar scale: 0-100%, independent of sample hotness."
+    };
+    return metric == SamplingStateRenderer::Metric::kWaveOccupancy ? OCCUPANCY
+                                                                   : ACTIVE_THREADS;
+}
 
 struct StallReasonPresentation
 {
@@ -302,6 +348,108 @@ bool
 SamplingStateRenderer::IsDisabled() const
 {
     return m_load_state == LoadState::kLoading || m_load_state == LoadState::kFailed;
+}
+
+void
+SamplingStateRenderer::SetupMetricColumn(Metric metric)
+{
+    const char* label = get_sample_metric_presentation(metric).label;
+    const float width =
+        std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);
+    ImGui::TableSetupColumn(label, ImGuiTableColumnFlags_WidthFixed, width);
+}
+
+void
+SamplingStateRenderer::RenderMetricHeader(int column, Metric metric, CodePane pane)
+{
+    const SampleMetricPresentation& presentation = get_sample_metric_presentation(metric);
+    const HeaderTooltipText tooltip{ IsDisabled() ? (m_load_state == LoadState::kLoading
+                                                         ? SAMPLING_STATE_LOADING_TOOLTIP
+                                                         : SAMPLING_STATE_FAILED_TOOLTIP)
+                                                  : (pane == CodePane::kSource
+                                                         ? presentation.source_description
+                                                         : presentation.isa_description),
+                                     presentation.developer_information };
+    if(IsDisabled())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+    }
+    RenderHeaderWithTooltip(column, presentation.label, tooltip);
+    if(IsDisabled())
+    {
+        ImGui::PopStyleColor();
+    }
+}
+
+bool
+SamplingStateRenderer::RenderMetricCell(const SamplingRow& row, Metric metric)
+{
+    const SampleMetricPresentation& presentation = get_sample_metric_presentation(metric);
+    const IsaDataBuilder::PercentageSummary& summary =
+        metric == Metric::kWaveOccupancy ? row.wave_occupancy : row.active_threads;
+    const bool valid =
+        !IsDisabled() && summary.availability == SamplingAvailability::kValid;
+    const CodeCellBounds cell                            = get_code_cell_bounds();
+    char                 value_text[SHARE_TEXT_CAPACITY] = {};
+    const char*          text                            = SAMPLE_METRIC_UNAVAILABLE_TEXT;
+    if(valid)
+    {
+        std::snprintf(value_text, sizeof(value_text), "%.1f%%",
+                      summary.percent == 0.0 ? 0.0 : summary.percent);
+        text = value_text;
+    }
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->PushClipRect(cell.start, cell.End(), true);
+    if(valid)
+    {
+        const float  height = cell.size.y * SAMPLE_METRIC_BAR_HEIGHT_FRACTION;
+        const ImVec2 start(cell.start.x, cell.End().y - height);
+        draw_list->AddRectFilled(
+            start, cell.End(),
+            ImGui::GetColorU32(
+                ThemeColor(m_settings, Colors::kTextDim, SAMPLE_METRIC_TRACK_ALPHA)));
+        const float width = cell.size.x * static_cast<float>(summary.percent /
+                                                             SAMPLE_METRIC_PERCENT_SCALE);
+        if(width > 0.0f)
+        {
+            draw_list->AddRectFilled(
+                start, ImVec2(start.x + width, cell.End().y),
+                ImGui::GetColorU32(
+                    ThemeColor(m_settings, Colors::kAccent, SAMPLE_METRIC_BAR_ALPHA)));
+        }
+    }
+    const float text_width = ImGui::CalcTextSize(text).x;
+    draw_list->AddText(
+        ImVec2(cell.start.x + std::max(0.0f, cell.size.x - text_width), cell.start.y),
+        m_settings.GetColor(valid ? Colors::kTextMain : Colors::kTextDim), text);
+    draw_list->PopClipRect();
+    // Missing metrics remain selectable, just like the other code-row cells.
+    const CodeCellInteraction interaction = finish_code_cell(cell, presentation.label);
+    if(interaction.hovered)
+    {
+        if(valid)
+        {
+            const std::string samples =
+                IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
+            SetTooltipStyled("%s: %s\nSamples: %s", presentation.title, text,
+                             samples.c_str());
+        }
+        else
+        {
+            const char* reason =
+                IsDisabled() ? (m_load_state == LoadState::kLoading
+                                    ? SAMPLING_STATE_LOADING_TOOLTIP
+                                    : SAMPLING_STATE_FAILED_TOOLTIP)
+                : summary.availability == SamplingAvailability::kInvalid
+                    ? "Invalid measurement or sample-count overflow."
+                : row.sample_counts.total_count == 0
+                    ? SAMPLING_STATE_NO_SAMPLES_TOOLTIP
+                    : "No measurement recorded for one or more contributing samples.";
+            SetTooltipStyled("%s\n%s", presentation.title, reason);
+        }
+    }
+    return interaction.clicked;
 }
 
 bool

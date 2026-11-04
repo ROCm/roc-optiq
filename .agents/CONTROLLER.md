@@ -1526,6 +1526,9 @@ or their property bank should extend this coverage.
 Percentage scenarios cover the reported hotspot values, measured zero, independent
 NULLs, row replacement, invalid getter arguments, and retained metrics across a
 stall-detail failure and retry.
+Additional schema scenarios remove either or both percentage columns before
+controller loading and verify that sample counts, stall details, and any remaining
+metric are still loaded successfully.
 
 `rocprofvis_controller_test_database.h` provides the shared `TemporaryDatabase`
 utility for PC-sampling and summary fixtures. It owns a copied database file,

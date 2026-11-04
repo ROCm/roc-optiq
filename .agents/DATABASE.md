@@ -622,6 +622,11 @@ databases:
   callback represents NULL as an empty cell, so the controller can distinguish
   unavailable measurements from measured zero. `total_count` remains coalesced
   to zero.
+  Metadata loading probes the two percentage columns independently with
+  `pragma_table_info`. The query substitutes `NULL` under the existing column alias
+  for a physically absent percentage column, preserving sample counts and the
+  other available metric. These flags reset before every metadata probe and default
+  to unavailable if the probe returns no column. No schema migration is required.
 - `CallbackParseMetadata` reads only `schema_version` from
   `compute_metadata` to select the query dialect. The full row
   (`compute_version`, `git_version`, `schema_version`) is served to the

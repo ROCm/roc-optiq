@@ -38,6 +38,12 @@ public:
         kSource
     };
 
+    enum class Metric : uint32_t
+    {
+        kWaveOccupancy,
+        kActiveThreads
+    };
+
     enum class LoadState : uint32_t
     {
         kReady,
@@ -56,13 +62,17 @@ public:
                                   size_t count);
 
     void SetupColumn();
+    void SetupMetricColumn(Metric metric);
     void SetLoadState(LoadState state) { m_load_state = state; }
     // Extends the native column menu; returns whether sampling should be retried.
     [[nodiscard]] bool RenderTableContextMenu();
     void RenderHeader(int column, CodePane pane = CodePane::kIsa);
+    void RenderMetricHeader(int column, Metric metric, CodePane pane = CodePane::kIsa);
     // Returns whether the cell was clicked, for the owning widget's row selection.
     [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
                                   uint64_t                           hottest_samples);
+    [[nodiscard]] bool RenderMetricCell(const IsaDataBuilder::SamplingRow& row,
+                                        Metric                             metric);
 
 private:
     using SamplingRow          = IsaDataBuilder::SamplingRow;

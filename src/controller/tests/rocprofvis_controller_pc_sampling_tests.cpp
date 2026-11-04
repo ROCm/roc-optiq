@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <catch2/catch_approx.hpp>
@@ -51,7 +52,8 @@ struct PcSamplingFailureFixture
         return value;
     }
 
-    void Initialize(const std::string& broken_table = "")
+    void Initialize(const std::string& broken_table   = "",
+                    const std::string& schema_changes = "")
     {
         database.Copy(std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
                           "rocprof_compute_23ed6f36.db",
@@ -78,6 +80,10 @@ struct PcSamplingFailureFixture
             INSERT INTO compute_pc_sample_stall_reason_lookup VALUES(1, 'WAITCNT');
         )sql");
 
+        if(!schema_changes.empty())
+        {
+            Execute(schema_changes);
+        }
         if(!broken_table.empty())
         {
             Execute("ALTER TABLE " + broken_table + " RENAME TO failed_query;");
@@ -165,6 +171,51 @@ struct PcSamplingFailureFixture
         return static_cast<rocprofvis_result_t>(result);
     }
 };
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "PC sampling loads counts when optional percentage columns are absent",
+                 "[pc-sampling][sample-metrics]")
+{
+    bool occupancy_present      = true;
+    bool active_threads_present = true;
+    SECTION("Wave occupancy column absent") { occupancy_present = false; }
+    SECTION("Active thread column absent") { active_threads_present = false; }
+    SECTION("Both percentage columns absent")
+    {
+        occupancy_present      = false;
+        active_threads_present = false;
+    }
+    std::string schema_changes;
+    if(!occupancy_present)
+    {
+        schema_changes +=
+            "ALTER TABLE compute_pc_sample_state DROP COLUMN wave_occupancy_percent;";
+    }
+    if(!active_threads_present)
+    {
+        schema_changes +=
+            "ALTER TABLE compute_pc_sample_state DROP COLUMN active_thread_percent;";
+    }
+    Initialize("", schema_changes);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateTotalCount) == 100);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateIssueCount) == 30);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateStallCount) == 70);
+    const std::pair<rocprofvis_property_t, bool> metrics[] = {
+        { kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent, occupancy_present },
+        { kRPVControllerPCSamplingPcSampleStateActiveThreadPercent,
+          active_threads_present }
+    };
+    for(const auto& [property, present] : metrics)
+    {
+        double value = -1.0;
+        CHECK(rocprofvis_controller_get_double(sampling, property, 0, &value) ==
+              (present ? kRocProfVisResultSuccess : kRocProfVisResultNotLoaded));
+        CHECK(value == (present ? 0.0 : -1.0));
+    }
+}
 
 TEST_CASE_METHOD(PcSamplingFailureFixture,
                  "PC sampling loads nullable percentages independently and retains zero",

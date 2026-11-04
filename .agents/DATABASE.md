@@ -617,10 +617,11 @@ databases:
   resolved through `ColumnNameToEnum`, and the resulting model `Table` stores
   each column's `rocprofvis_db_compute_column_enum_t` plus raw string cells.
   The controller later converts that temporary table into typed `PcSampling`
-  vectors. The PC-sample-state projection preserves SQL NULL for `issue_count`
-  and `stall_count`; the generic callback represents NULL as an empty cell, so
-  the controller can distinguish host-trap's unavailable progress data from a
-  stochastic sample's measured zero. `total_count` remains coalesced to zero.
+  vectors. The PC-sample-state projection preserves SQL NULL for `issue_count`,
+  `stall_count`, `wave_occupancy_percent`, and `active_thread_percent`. The generic
+  callback represents NULL as an empty cell, so the controller can distinguish
+  unavailable measurements from measured zero. `total_count` remains coalesced
+  to zero.
 - `CallbackParseMetadata` reads only `schema_version` from
   `compute_metadata` to select the query dialect. The full row
   (`compute_version`, `git_version`, `schema_version`) is served to the
@@ -1735,9 +1736,11 @@ Two Catch2 binaries live in `src/model/src/tests/` (built when
   compute metadata, top kernels, kernel + metric matrix, roofline
   ceilings, metric values, and the pivot table flow.
 
-The compute model test currently does not cover the schema-2.2 PC-sampling
-query use cases. Changes to those queries should add a matching fixture and
-exercise both query construction and generic-table results.
+The compute model test covers the PC-sample-state query for schema 2.2 and 2.3.
+CTE fixtures exercise the real query factory, kernel filtering, and generic-table
+results without modifying the input database. They distinguish NULL percentages,
+measured zero, independent metric availability, and populated hotspot values.
+Other PC-sampling query use cases still need matching fixtures when changed.
 
 Both accept `--input_file <path>` (Catch2 + Clara). When you add a
 new public ABI surface or a new database adapter, add a matching

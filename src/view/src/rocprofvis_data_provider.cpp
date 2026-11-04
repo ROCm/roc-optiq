@@ -5646,6 +5646,8 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
             &state.total_count);
         state.issue_count.reset();
         state.stall_count.reset();
+        state.wave_occupancy_percent.reset();
+        state.active_thread_percent.reset();
         uint64_t count = 0;
         if(rocprofvis_controller_get_uint64(
                pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
@@ -5658,6 +5660,19 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
                &count) == kRocProfVisResultSuccess)
         {
             state.stall_count = count;
+        }
+        double percent = 0.0;
+        if(rocprofvis_controller_get_double(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent, i,
+               &percent) == kRocProfVisResultSuccess)
+        {
+            state.wave_occupancy_percent = percent;
+        }
+        if(rocprofvis_controller_get_double(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateActiveThreadPercent, i,
+               &percent) == kRocProfVisResultSuccess)
+        {
+            state.active_thread_percent = percent;
         }
     }
 }

@@ -1739,10 +1739,10 @@ independent layers:
   of column visibility. The View asks the controller for PC sample states plus stall-reason
   rows and lookups, explicitly excluding instruction-sample metadata that this
   view does not consume. The projection uses each state's UUID, instruction
-  UUID and total count, plus nullable issued and stall counts, together with
-  the stall-reason rows and lookup text. A controller getter returns
-  `kRocProfVisResultNotLoaded` for a nullable count that was not measured, and
-  `DataProvider` preserves that distinction with `std::optional`.
+  UUID and total count, plus nullable issued/stall counts and wave-occupancy /
+  active-thread percentages, together with the stall-reason rows and lookup text.
+  A controller getter returns `kRocProfVisResultNotLoaded` for an unmeasured count
+  or percentage, and `DataProvider` preserves that distinction with `std::optional`.
 
 `FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
 use distinct `DataProvider` request IDs and may be in flight together. A newer
@@ -1957,9 +1957,13 @@ Keep full precision in the projection; presentation should use one decimal place
 and show an em dash for unavailable values, preserving measured `0.0%`.
 These sampled percentages are separate from issued/stalled sample shares; no
 resource-pressure or divergence classification is inferred from them.
-`DataProvider` does not yet copy the two percentage properties from the controller,
-and `ComputeIsaView` does not yet render them. Instruction-sample metadata and
-dispatch UUID remain available only on the controller handle.
+`DataProvider::LoadPcSamplingStates` copies both percentages through the existing
+double properties, resetting the optional fields before every read. Missing values
+remain unset and measured zero remains present. The fields travel with completed
+sample states even when stall details fail, and the shared prepared snapshot feeds
+both ISA and source rows. `ComputeIsaView` does not yet render these metrics.
+Instruction-sample metadata and dispatch UUID remain available only on the
+controller handle.
 
 PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
 its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected

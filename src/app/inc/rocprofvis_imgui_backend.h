@@ -1,5 +1,6 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
+#pragma once
 #include "imgui.h"
 #include <stdint.h>
 

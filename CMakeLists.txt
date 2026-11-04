@@ -8,9 +8,9 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 1)
-set(PROJECT_VERSION_MINOR 1)
+set(PROJECT_VERSION_MINOR 2)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 0)
+set(PROJECT_VERSION_BUILD 1)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -19,6 +19,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
+
+# /Zi stores every file's debug info in one PDB. A parallel build runs many
+# cl.exe processes against that file, and without /FS they fail with C1041.
+if(MSVC)
+    add_compile_options(/FS)
+endif()
 set(BUILD_SHARED_LIBS OFF)
 
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
@@ -37,6 +43,12 @@ option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
 option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
 option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
+# Only meaningful with scripting: downloads a pinned CPython and ships it with
+# the app. OFF builds against this machine's Python, which then only runs here.
+include(CMakeDependentOption)
+cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
+    "Vendor a pinned CPython for embedded Python analysis scripts" ON
+    "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -83,6 +95,17 @@ else()
     set(GLFW_LIBRARY_TYPE "SHARED" CACHE STRING "GLFW library type" FORCE)
 endif()
 
+# Where an install puts the executable and its notices. Windows installs flat,
+# the layout the MSI and the CI zip ship as is; elsewhere GNUInstallDirs.
+include(GNUInstallDirs)
+if(WIN32)
+    set(ROCPROFVIS_INSTALL_BINDIR ".")
+    set(ROCPROFVIS_INSTALL_DOCDIR ".")
+else()
+    set(ROCPROFVIS_INSTALL_BINDIR "${CMAKE_INSTALL_BINDIR}")
+    set(ROCPROFVIS_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
+endif()
+
 # Enable testing if BUILD_TESTING is ON
 if(BUILD_TESTING)
     enable_testing()
@@ -106,6 +129,21 @@ add_subdirectory(src/controller)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
 find_package(Vulkan REQUIRED)
+
+# ISA implementation files live together in the compute/isa directory.
+set(ISA_VIEW_FILES
+    src/view/src/compute/isa/rocprofvis_compute_isa_view.cpp
+    src/view/src/compute/isa/rocprofvis_compute_isa_view.h
+    src/view/src/compute/isa/rocprofvis_compute_code_widgets.cpp
+    src/view/src/compute/isa/rocprofvis_compute_code_widgets.h
+    src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
+    src/view/src/compute/isa/rocprofvis_compute_isa_data.h
+    src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.cpp
+    src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.h
+)
+set(ISA_VIEW_TEST_FILES
+    src/view/src/compute/isa/tests/rocprofvis_compute_isa_data_tests.cpp
+)
 
 # View related src files
 set(VIEW_FILES
@@ -186,7 +224,7 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
-    src/view/src/compute/rocprofvis_compute_isa_view.cpp
+    ${ISA_VIEW_FILES}
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -285,6 +323,8 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
+    # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
+    thirdparty/ImGuiTextSelect/textselect.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
@@ -304,6 +344,8 @@ list(APPEND VIEW_FILES
     src/view/src/widgets/rocprofvis_script_editor.h
 )
 endif()
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/capture_git_commit.cmake)
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
@@ -327,7 +369,8 @@ set(APP_FILES
     src/app/src/rocprofvis_imgui_backend.cpp
     src/app/src/rocprofvis_imgui_vulkan.cpp
     src/app/src/rocprofvis_imgui_opengl.cpp
-    src/app/src/glfw_util.cpp
+    src/app/src/rocprofvis_glfw_util.cpp
+    src/app/src/rocprofvis_app_shell.cpp
     src/app/src/rocprofvis_cli_parser.cpp
     src/app/src/rocprofvis_platform_helpers.cpp)
 if(APPLE)
@@ -360,6 +403,14 @@ endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
 add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
+# UI strings carry U+2122 and go to GLFW and ImGui as UTF-8. MSVC otherwise
+# encodes narrow string literals in the system code page.
+target_compile_options(${TARGET_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+
+# Before the macOS codesign step below, which has to see the staged runtime.
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    rocprofvis_python_vendor_deploy(${TARGET_NAME})
+endif()
 
 if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -399,6 +450,10 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+target_include_directories(${TARGET_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 # TEMPORARY (profiler launch): remove when the profiler feature graduates.
 if(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -439,6 +494,18 @@ if(BUILD_TESTING)
     target_include_directories(${MEMCHART_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
     target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
     add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
+
+    # ISA sampling interpretation is independent of ImGui, a database, and a GPU.
+    set(ISA_DATA_TEST_NAME ${TARGET_NAME}-isa-data-tests)
+    add_executable(${ISA_DATA_TEST_NAME}
+        ${ISA_VIEW_TEST_FILES}
+        src/view/src/compute/isa/rocprofvis_compute_isa_data.cpp
+        src/view/src/compute/isa/rocprofvis_compute_isa_data.h)
+    target_include_directories(${ISA_DATA_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
+    target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+    add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
@@ -482,6 +549,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
     add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
+    target_compile_options(${TEST_TARGET} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
@@ -500,6 +568,10 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
     )
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    target_include_directories(${TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
+    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     # TEMPORARY (profiler launch): remove when the profiler feature graduates.
     if(ROCPROFVIS_ENABLE_PROFILER)
     target_include_directories(${TEST_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -821,6 +893,9 @@ set(EXTENDED_PACKAGE_DESCRIPTION
 include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
+# Archive generators wrap the prefix in <package>-<version>-<system>/. DEB and
+# RPM do not. Leave it off so the tarball extracts onto / at the install prefix.
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 
 set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
 # Detect Linux distro for additional package types
@@ -859,7 +934,7 @@ set(CPACK_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 # License file
 install(FILES ${LICENSE_FILE}
-       DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
+       DESTINATION ${ROCPROFVIS_INSTALL_DOCDIR} RENAME LICENSE.txt
        COMPONENT ${RUNTIME_COMP_TYPE} )
 
 # Install Instruction for Files included in  Package Component
@@ -867,16 +942,32 @@ if(APPLE)
     install(TARGETS ${TARGET_NAME}
             BUNDLE DESTINATION .
             COMPONENT ${RUNTIME_COMP_TYPE})
+elseif(WIN32)
+    # The target, not a path: Visual Studio puts the .exe in a per-config
+    # directory. The DLLs it loads at startup go beside it; OpenSSL's are
+    # installed where they are found, below.
+    install(TARGETS ${TARGET_NAME}
+            RUNTIME DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE})
+    install(FILES $<TARGET_RUNTIME_DLLS:${TARGET_NAME}>
+            DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+            COMPONENT ${RUNTIME_COMP_TYPE})
 else()
     install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    rocprofvis_python_vendor_install(${TARGET_NAME} ${RUNTIME_COMP_TYPE})
+endif()
+
+# Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
+set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
-set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 # Set package version to 1 
 if(NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
@@ -884,8 +975,15 @@ endif()
 message(STATUS "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}")
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(DEB_DEPENDS_LIST "libvulkan1")
+# libGL.so.1 and libOpenGL.so.0 (libglvnd). RPM picks these up via
+# AUTOREQPROV; DEB depends are listed explicitly.
+list(APPEND DEB_DEPENDS_LIST "libgl1" "libopengl0")
 if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
+endif()
+# libdbus-1.so.3 from the xdg-desktop-portal file dialog.
+if(USE_NATIVE_FILE_DIALOG AND NFD_PORTAL)
+    list(APPEND DEB_DEPENDS_LIST "libdbus-1-3")
 endif()
 # DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
 # OpenSSL runtime only when remote or Ask Optiq is built against OpenSSL.
@@ -902,11 +1000,25 @@ set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
 # RPM package specific variables
-if(NOT APPLE)
+# A vendored Python needs a runpath, so roc-optiq gets only $ORIGIN-relative
+# entries instead (rocprofvis_python_vendor_install).
+if(NOT APPLE AND NOT ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     set(CMAKE_SKIP_RPATH TRUE)
 endif()
+# The vendored interpreter is private to roc-optiq. Left alone, RPM would
+# advertise its libpython to the whole system, require it from the system,
+# and byte-compile or rewrite its standard library with the host's Python.
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    set(CPACK_RPM_SPEC_MORE_DEFINE
+"%global __provides_exclude_from ^.*/roc-optiq/python/.*$
+%global __requires_exclude_from ^.*/roc-optiq/python/.*$
+%global __requires_exclude ^libpython3[.][0-9]+[.]so.*$
+%global __brp_mangle_shebangs_exclude_from ^.*/roc-optiq/python/.*$
+%global __brp_python_bytecompile %{nil}
+%global _python_bytecompile_extra 0")
+endif()
 set(CPACK_RPM_COMPONENT_INSTALL ON)
-set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 
 # Set package version to 1 
 if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
@@ -949,18 +1061,31 @@ if(WIN32)
     set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
     set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
     set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+    set(_wix_payload "${CMAKE_BINARY_DIR}/roc-optiq-payload.wxs")
+    # The MSI ships the install tree of the runtime component, so it holds
+    # exactly what cmake --install and CPack put in a package.
+    set(_wix_stage "${CMAKE_BINARY_DIR}/wix_stage")
     add_custom_target(PACKAGE_WIX
+      COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_wix_stage}"
+      COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --config $<CONFIG>
+        --component ${RUNTIME_COMP_TYPE} --prefix "${_wix_stage}"
+      COMMAND "${CMAKE_COMMAND}"
+        "-DSTAGE_DIR=${_wix_stage}"
+        "-DEXE_NAME=$<TARGET_FILE_NAME:${TARGET_NAME}>"
+        "-DOUTPUT=${_wix_payload}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/rocprofvis_wix_payload.cmake"
       COMMAND "${WIX_EXECUTABLE}" build
         -arch x64
         -d "Version=${_wix_version}"
-        -d "ExeFile=$<TARGET_FILE:${TARGET_NAME}>"
-        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
-        -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
-        -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
+        -d "ExeFile=${_wix_stage}/$<TARGET_FILE_NAME:${TARGET_NAME}>"
+        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/wix/License_Public.rtf"
+        -d "BannerBmp=${CMAKE_SOURCE_DIR}/wix/banner.bmp"
+        -d "DialogBmp=${CMAKE_SOURCE_DIR}/wix/main.bmp"
         -d "IconFile=${CMAKE_SOURCE_DIR}/resources/ROCm_Optiq.ico"
         -ext WixToolset.UI.wixext
         -out "${_wix_out}"
         "${_wix_src}"
+        "${_wix_payload}"
       DEPENDS ${TARGET_NAME}
       COMMENT "Building WiX MSI installer: ${_wix_out}"
       VERBATIM
@@ -1049,6 +1174,9 @@ if(WIN32)
                     COMMENT "Copying OpenSSL runtime DLL ${_ossl_dll} to executable directory"
                 )
             endforeach()
+            install(FILES ${_ossl_dlls}
+                    DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+                    COMPONENT ${RUNTIME_COMP_TYPE})
         else()
             message(WARNING
                 "CRYPTO_BACKEND=OpenSSL: could not locate libssl/libcrypto DLLs to "

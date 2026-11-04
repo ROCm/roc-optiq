@@ -747,13 +747,13 @@ rocprofvis_result_t Event::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerEventName:
             {
-                m_name = StringTable::Get().AddString(value, *value != 0);
+                m_name = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerEventCategory:
             {
-                m_category = StringTable::Get().AddString(value, *value != 0);
+                m_category = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
                 break;
             }

@@ -9,7 +9,6 @@
 #include "rocprofvis_controller_graph.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_sample.h"
-#include "rocprofvis_controller_summary.h"
 #include "rocprofvis_controller_summary_metrics.h"
 #include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_table_system_search.h"
@@ -53,7 +52,6 @@ SystemTrace::SystemTrace(const std::string& filename, const std::string& config_
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
 , m_search_table(nullptr)
-, m_summary(nullptr)
 , m_mem_mgmt(nullptr)
 , m_topology_root(nullptr)
 , m_config_path(config_path)
@@ -68,7 +66,6 @@ SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
 , m_event_table(nullptr)
 , m_sample_table(nullptr)
 , m_search_table(nullptr)
-, m_summary(nullptr)
 , m_mem_mgmt(nullptr)
 , m_topology_root(nullptr)
 {
@@ -83,7 +80,6 @@ SystemTrace::~SystemTrace()
     delete m_event_table;
     delete m_sample_table;
     delete m_search_table;
-    delete m_summary;
     delete m_topology_root;
     for (Track* track : m_tracks)
     {
@@ -99,7 +95,6 @@ rocprofvis_result_t SystemTrace::Init()
         m_event_table = new SystemTable(0);
         m_sample_table = new SystemTable(1);
         m_search_table = new EventSearchTable(2);
-        m_summary = new Summary(this);
         SetMemoryManager(new MemoryManager(m_id));
 
         result = kRocProfVisResultSuccess;
@@ -110,7 +105,6 @@ rocprofvis_result_t SystemTrace::Init()
         delete m_event_table;  m_event_table  = nullptr;
         delete m_sample_table; m_sample_table = nullptr;
         delete m_search_table; m_search_table = nullptr;
-        delete m_summary;      m_summary      = nullptr;
         delete GetMemoryManager();
         SetMemoryManager(nullptr);
         result = kRocProfVisResultMemoryAllocError;
@@ -367,6 +361,7 @@ SystemTrace::LoadRocpdTracks(size_t& trace_size)
             dm_track_type == kRocProfVisDmKernelDispatchTrack ||
             dm_track_type == kRocProfVisDmMemoryAllocationTrack ||
             dm_track_type == kRocProfVisDmMemoryCopyTrack ||
+            dm_track_type == kRocProfVisDmHipEventTrack ||
             dm_track_type == kRocProfVisDmStreamTrack ||
             dm_track_type == kRocProfVisDmPmcTrack;
         if(!supported_track)
@@ -429,6 +424,7 @@ SystemTrace::ValidateRocpdTrackTopology() const
             case kRocProfVisDmKernelDispatchTrack:
             case kRocProfVisDmMemoryAllocationTrack:
             case kRocProfVisDmMemoryCopyTrack:
+            case kRocProfVisDmHipEventTrack:
             {
                 linked        = track->GetQueue() != nullptr;
                 expected_link = "queue";
@@ -733,26 +729,7 @@ rocprofvis_result_t SystemTrace::TableExportCSV(Table& table, Arguments& args, F
     return error;
 }
 
-rocprofvis_result_t SystemTrace::AsyncFetch(Summary& summary, Arguments& args, Future& future, SummaryMetrics& output)
-{
-    rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = GetDMHandle();
-
-    future.Set(JobSystem::Get().IssueJob([&summary, dm_handle, &args, &output](Future* future) -> rocprofvis_result_t {
-            rocprofvis_result_t result = kRocProfVisResultUnknownError;
-            result = summary.Fetch(dm_handle, args, output, future);
-            return result;
-        }, &future));
-
-    if(future.IsValid())
-    {
-        error = kRocProfVisResultSuccess;
-    }
-
-    return error;
-}
-
-rocprofvis_controller_object_type_t SystemTrace::GetType(void) 
+rocprofvis_controller_object_type_t SystemTrace::GetType(void)
 {
     return kRPVControllerObjectTypeControllerSystem;
 }
@@ -915,12 +892,6 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
             case kRPVControllerSystemNodeIndexed:         
             {
                 result = m_topology_root->GetObject(kRPVControllerSystemNodeIndexed, index, value);
-                break;
-            }
-            case kRPVControllerSystemSummary:
-            {
-                *value = (rocprofvis_handle_t*)m_summary;
-                result = kRocProfVisResultSuccess;
                 break;
             }
             default:

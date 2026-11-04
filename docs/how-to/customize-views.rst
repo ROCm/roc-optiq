@@ -21,7 +21,7 @@ Customize ROCm Optiq
 .. |overwrite| image:: ../images/overwrite.png
 .. |delete| image:: ../images/delete.png
 
-You can customize display settings, filters, bookmarks, and more in your ROCm Optiq projects.
+You can customize display settings, filters, bookmarks, and more in ROCm Optiq.
 
 .. _change-settings:
 
@@ -33,7 +33,7 @@ You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profi
 Use the **Edit** > **Preferences** menu to open the **Settings** dialog. The following settings can be adjusted: 
 
 - The application theme (Light or Dark).
-- The multi-node decorators visibility. This controls whether to enable node colors in the:ref:`topology` view and node labels in the track descriptions.
+- The multi-node decorators visibility. This controls whether to enable node colors in the :ref:`topology` view and node labels in the track descriptions.
 - The topology sidebar icon button visibility. This controls whether the |eye| (show/hide track) and |scroll| (go to track) icon buttons display in the sidebar of the :ref:`topology`.
 - The font size.
 
@@ -144,6 +144,7 @@ Customize timeline display options
 
 Customize display options for each track by right clicking the **Description** area to open the track's context menu. Select **Track Options** to customize the track's display options.
 
+- Select which tracks **Track Options** apply to by selecting **Current Track**, **Selected Track(s)**, or the track type label (**Queue Tracks**, **Stream Tracks**, **Thread Tracks**).
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
   - **Color by Name**: All events with the same name share a color. 
@@ -201,6 +202,8 @@ Fan mode shows events in a fan-out style, highlighting parallelism and branching
 .. note::
 
   Chain mode and Fan mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
+
+.. _save-project:
 
 Save a project file
 -------------------

@@ -105,6 +105,16 @@ void rocprofvis_db_future_free(rocprofvis_db_future_t);
 void rocprofvis_db_future_cancel(rocprofvis_db_future_t);
 
 /****************************************************************************************************
+ * @brief Gets the message the last operation left for the user, such as a table filter that
+ *        could not be applied
+ *
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @return message owned by the future, empty when there is none
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_charptr_t rocprofvis_db_future_get_error_message(rocprofvis_db_future_t);
+
+/****************************************************************************************************
  * @brief Asynchronous call to read data model metadata 
  *              (static objects residing in trace class memory until trace is deleted)
  * 
@@ -192,7 +202,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num,
     rocprofvis_db_track_selection_t tracks, 
-    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_query_criteria_ptr source_filter,
     rocprofvis_dm_charptr_t filter, 
     rocprofvis_dm_charptr_t group, 
     rocprofvis_dm_charptr_t group_cols, 
@@ -212,7 +222,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
     rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num,
     rocprofvis_db_track_selection_t ops,
-    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_query_criteria_ptr source_filter,
+    rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
     rocprofvis_dm_string_table_filters_t string_table_filters,
     bool include_substring,

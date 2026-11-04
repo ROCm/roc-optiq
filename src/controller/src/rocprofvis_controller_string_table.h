@@ -21,14 +21,13 @@ public:
     StringTable();
     ~StringTable();
 
-    size_t AddString(const char* string, bool store);
+    size_t AddString(const char* string);
     char const* GetString(size_t id);
 
     static StringTable& Get();
 
 private:
     std::unordered_map<std::string, size_t> m_string_entries;
-    std::unordered_map<const char*, size_t> m_charptr_entries;
     std::vector<const char*> m_strings;
     std::shared_mutex m_mutex;
     static StringTable s_self;

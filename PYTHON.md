@@ -152,7 +152,6 @@ Keyword arguments:
 | `tracks` | all matching tracks | Sequence of `optiq.Track`. Only tracks whose type matches the table type are used. |
 | `start` | timeline min | Query start timestamp. |
 | `end` | timeline max | Query end timestamp. |
-| `where` | `""` | SQL-shaped `WHERE` fragment (same language as the Event / Sample Table). Passed to the query layer as written - see the note below. |
 | `filter` | `""` | Expression filter string. |
 | `group` | `""` | Group-by expression. |
 | `group_columns` | `""` | Grouped column list. |
@@ -161,11 +160,12 @@ Keyword arguments:
 | `start_index` | `0` | First row to return. |
 | `count` | `10000` | Maximum rows to return. |
 | `type` | `"events"` | `"events"` / `"samples"`, or `TABLE_TYPE_EVENTS` / `TABLE_TYPE_SAMPLES`. |
+| `text` | `False` | Return every cell as `str`, including empty cells. Skips numeric conversion and `ValueError`. |
 
 At least one track of the matching type is required. Otherwise
 `RuntimeError` is raised.
 
-`where`, `filter`, `group` and `group_columns` are handed to the query
+`filter`, `group` and `group_columns` are handed to the query
 layer exactly as you write them - they are a query language, not
 validated input. That is deliberate, so hand-written analysis is not
 limited to a fixed column list, and it is safe for the same reason the
@@ -177,8 +177,14 @@ Each row is a dict keyed by **column header** strings. The column
 headers come from the generated query, so they vary by table type and
 trace source. Inspect `sorted(rows[0].keys())` to see them.
 
-System-trace tables declare every column as text, so cell values arrive
-as `str`. Convert before doing math (`float(row['Duration'])`).
+Each cell follows the column's declared type. Text columns are `str`.
+Integer columns (`start`, `end`, `duration`, and `COUNT`) are `int`.
+Floating-point columns (`value`, and `AVG` / `MIN` / `MAX` / `SUM`) are
+`float`. An empty numeric cell is `None`. Text that is not a complete
+value of that type raises `ValueError` and stops the fetch: `"12.5"`
+in an integer column is an error, not `12`. Pass `text=True` to skip
+conversion and get every cell as `str`, which is how to inspect a file
+whose cells may not match the column type.
 
 ```python
 table = optiq.table()
@@ -540,6 +546,9 @@ optiq.result.text(str(len(rows)))
 - Controller failures surface as `RuntimeError` with a short message
   and a numeric result code, for example
   `track_fetch_async failed (3)`.
+- A numeric cell that is not empty and not a complete value of its
+  column type raises `ValueError`. The message names the row index in
+  the fetch result and the column.
 - A disallowed `import` raises `ImportError`.
 - Cancel (Stop in the editor) interrupts the interpreter. In-flight
   fetches are cancelled between wait slices. Cancel is best-effort;

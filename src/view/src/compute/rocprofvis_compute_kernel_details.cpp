@@ -3,7 +3,7 @@
 
 #include "rocprofvis_compute_kernel_details.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "rocprofvis_compute_isa_view.h"
+#include "isa/rocprofvis_compute_isa_view.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
 #include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_selection.h"

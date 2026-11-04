@@ -14,6 +14,7 @@ namespace View
 class DataProvider;
 class ComputeSelection;
 class HSplitContainer;
+struct AnalysisInfo;
 struct WorkloadInfo;
 
 // The Workload Details panel of Kernel Details: system information and profiling
@@ -39,9 +40,11 @@ protected:
 
     void CreateLayout();
 
+    void RenderAnalysisInfo(const AnalysisInfo& analysis_info);
     void RenderProfilingConfig(const WorkloadInfo& workload_info);
     void RenderSystemInfo(const WorkloadInfo& workload_info);
 
+    void RenderInfoRow(int row_id, const char* name, const char* value);
     void RenderUnavailableMessage(const char* label);
 
     std::unique_ptr<HSplitContainer> m_content_container;

@@ -316,13 +316,14 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::Spacing();
         ImGui::SameLine();
         ImGui::PushFont(preview_font, preview_size);
+        const char* preview_text = m_fonts.TrademarkText("AMD ROCm\u2122 Optiq");
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
-            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm(TM) Optiq") +
+            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize(preview_text) +
                 ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
             ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
             style.FrameRounding);
-        ImGui::Text("AMD ROCm(TM) Optiq");
+        ImGui::TextUnformatted(preview_text);
         ImGui::PopFont();
     }
 }

@@ -147,6 +147,23 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(235, 195, 90, 255),   // Colors::kLogWarning
     IM_COL32(235, 110, 110, 255),  // Colors::kLogError
     IM_COL32(255, 80, 80, 255),    // Colors::kLogCritical
+    IM_COL32(231, 196, 65, 255),   // Colors::kPcSamplingInstructionFetch
+    IM_COL32(114, 123, 240, 255),  // Colors::kPcSamplingAluDependency
+    IM_COL32(184, 139, 226, 255),  // Colors::kPcSamplingWaitcnt
+    IM_COL32(190, 160, 130, 255),  // Colors::kPcSamplingInternalInstruction
+    IM_COL32(215, 95, 165, 255),   // Colors::kPcSamplingBarrier
+    IM_COL32(106, 164, 232, 255),  // Colors::kPcSamplingArbiter
+    IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
+    IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
+    IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
+    IM_COL32(184, 183, 204, 255),  // Colors::kIsaInternal
+    IM_COL32(188, 145, 235, 255),  // Colors::kIsaMatrix
+    IM_COL32(108, 203, 173, 255),  // Colors::kIsaScalar
+    IM_COL32(222, 199, 115, 255),  // Colors::kIsaBranch
+    IM_COL32(114, 163, 240, 255),  // Colors::kIsaValu
+    IM_COL32(220, 153, 120, 255),  // Colors::kIsaFlat
+    IM_COL32(99, 196, 215, 255),   // Colors::kIsaLds
+    IM_COL32(231, 166, 193, 255),  // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
 
@@ -270,8 +287,28 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(170, 120, 0, 255),    // Colors::kLogWarning
     IM_COL32(190, 40, 40, 255),    // Colors::kLogError
     IM_COL32(200, 0, 0, 255),      // Colors::kLogCritical
+    IM_COL32(177, 130, 0, 255),    // Colors::kPcSamplingInstructionFetch
+    IM_COL32(75, 80, 188, 255),    // Colors::kPcSamplingAluDependency
+    IM_COL32(124, 78, 190, 255),   // Colors::kPcSamplingWaitcnt
+    IM_COL32(130, 100, 70, 255),   // Colors::kPcSamplingInternalInstruction
+    IM_COL32(175, 45, 120, 255),   // Colors::kPcSamplingBarrier
+    IM_COL32(54, 132, 214, 255),   // Colors::kPcSamplingArbiter
+    IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
+    IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
+    IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
+    IM_COL32(108, 105, 131, 255),  // Colors::kIsaInternal
+    IM_COL32(126, 77, 170, 255),   // Colors::kIsaMatrix
+    IM_COL32(25, 120, 92, 255),    // Colors::kIsaScalar
+    IM_COL32(139, 110, 18, 255),   // Colors::kIsaBranch
+    IM_COL32(40, 95, 178, 255),    // Colors::kIsaValu
+    IM_COL32(163, 78, 43, 255),    // Colors::kIsaFlat
+    IM_COL32(21, 111, 132, 255),   // Colors::kIsaLds
+    IM_COL32(160, 65, 105, 255),   // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
+static_assert(DARK_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));
+static_assert(LIGHT_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));
+
 // Same hue order as origin/main, desaturated for the redesign.
 const std::vector<ImU32> DARK_FLAME_COLORS = {
     IM_COL32(82, 154, 210, 220),  IM_COL32(72, 174, 156, 220),
@@ -309,6 +346,8 @@ inline constexpr const char* SETTINGS_FILE_NAME           = "settings_applicatio
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
 inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
 inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
+inline constexpr float       COMPACT_SCROLLBAR_SIZE      = 10.0f;
+inline constexpr float       COMPACT_SCROLLBAR_ROUNDING  = 5.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -698,8 +737,10 @@ SettingsManager::InitStyling()
     style.GrabRounding      = 6.0f;
     style.TabRounding       = 6.0f;
     style.WindowRounding    = 12.0f;
-    style.ScrollbarRounding = 8.0f;
-    style.ScrollbarSize     = 14.0f;
+    // Keep scrollbars compact so they support navigation without competing
+    // with the trace and analysis content for visual attention.
+    style.ScrollbarRounding = COMPACT_SCROLLBAR_ROUNDING;
+    style.ScrollbarSize     = COMPACT_SCROLLBAR_SIZE;
     style.FramePadding      = ImVec2(12, 6);
     style.ItemSpacing       = ImVec2(10, 8);
     style.ItemInnerSpacing  = ImVec2(8, 6);

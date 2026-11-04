@@ -80,13 +80,13 @@ namespace DataModel
             throw std::out_of_range("Column out of range");
     }
 
-    DbInstance* PackedTable::GetDbInstanceForRow(QueryManager * db, int row_index)
+    DbInstance* PackedTable::GetDbInstanceForRow(SystemDatabase * db, int row_index)
     {
         ROCPROFVIS_ASSERT_MSG_RETURN(row_index < m_rows.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
         return GetDbInstanceForRow(db, m_rows[row_index].get());
     }
 
-    DbInstance* PackedTable::GetDbInstanceForRow(QueryManager * db, PackedRow* row)
+    DbInstance* PackedTable::GetDbInstanceForRow(SystemDatabase * db, PackedRow* row)
     {
         auto columns = GetMergedColumns();
         uint8_t op = row->Get<uint8_t>(0);
@@ -146,9 +146,8 @@ namespace DataModel
         return  m_rows[row]->Get<uint8_t>(0);
     }
 
-    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, QueryManager* requestor) const
+    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col) const
     {
-        (void) requestor;
         if (row >= m_rows.size() || col >= m_merged_columns.size())
             throw std::out_of_range("Row/Column out of range");
 
@@ -172,7 +171,7 @@ namespace DataModel
     }
 
 
-    const char* PackedTable::ConvertSqlStringReference(QueryManager* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
+    const char* PackedTable::ConvertSqlStringReference(SystemDatabase* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
         numeric_string = false;
         uint64_t string_index = 0;
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
@@ -199,7 +198,7 @@ namespace DataModel
         {
             return db->CachedTables(node_id)->GetTableCell("Stream", value, "name");
         } else
-        if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME)
+        if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME || column_index == Builder::SCHEMA_INDEX_SRC_QUEUE)
         {
             return db->CachedTables(node_id)->GetTableCell("Queue", value, "name");
         } else
@@ -285,7 +284,7 @@ namespace DataModel
         std::map<std::string, ColumnAggr> result;
         for (auto & map : m_aggregation.aggregation_maps)
         {
-            for (auto [key, val] : map)
+            for (auto & [key, val] : map)
             {
                 auto it = result.find(val.name);
                 if (it == result.end())
@@ -305,7 +304,7 @@ namespace DataModel
                 } else
                 { 
                     it->second.count+=val.count;
-                    for (auto param : m_aggregation.agg_params)
+                    for (auto & param : m_aggregation.agg_params)
                     {
                         auto it_dst = it->second.result.find(param.public_name);
                         auto it_src = val.result.find(param.public_name);
@@ -318,7 +317,7 @@ namespace DataModel
                                 it_dst->second.numeric.data.u64 += it_src->second.numeric.data.u64;
                                 break;
                             case FilterExpression::SqlCommand::Avg:
-                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) / it->second.count;
+                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) * val.count / it->second.count;
                                 break;
                             case FilterExpression::SqlCommand::Min:
                                 it_dst->second.numeric.data.d = std::min(it_src->second.numeric.data.d, it_dst->second.numeric.data.d);
@@ -357,8 +356,7 @@ namespace DataModel
         m_aggregation.m_string_data.Clear();
     }
 
-    void PackedTable::SortAggregationByColumn(QueryManager* db, std::string sort_column, bool sort_order) {
-        (void) db;
+    void PackedTable::SortAggregationByColumn(std::string sort_column, bool sort_order) {
 
         if (m_aggregation.agg_params[0].public_name == sort_column)
         {
@@ -385,7 +383,7 @@ namespace DataModel
         
     }
 
-    void PackedTable::AggregateRow(QueryManager* db, int row_index, int map_index)
+    void PackedTable::AggregateRow(SystemDatabase* db, int row_index, int map_index)
     {
         // Aggregate a single packed row into the target aggregation map.
         // High-level flow:
@@ -486,7 +484,7 @@ namespace DataModel
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Max:
-                        it->second.result[param.public_name].numeric.data.d = DBL_MIN;
+                        it->second.result[param.public_name].numeric.data.d = -DBL_MAX;
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Sum:
@@ -542,7 +540,7 @@ namespace DataModel
         }
     }
 
-    void PackedTable::SortByColumn(QueryManager* db, std::string column, bool ascending)
+    void PackedTable::SortByColumn(SystemDatabase* db, std::string column, bool ascending)
     {
         auto it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [column](MergedColumnDef& cdef) { return cdef.m_name == column; });
         if (it != m_merged_columns.end())

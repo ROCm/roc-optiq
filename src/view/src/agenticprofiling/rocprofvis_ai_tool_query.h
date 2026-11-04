@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -16,28 +17,33 @@ namespace View
 {
 
 /**
- * @brief Turns the query-shaped arguments of a tool call into the SQL fragments
- * the data provider takes.
+ * @brief Turns the query-shaped arguments of a tool call into the table filter
+ * and grouping the data provider takes.
  *
  * These arguments come from the model, so everything here treats them as
  * hostile input. Column names and operators are checked against fixed
  * whitelists rather than escaped, string values are quoted, and LIKE patterns
  * have their wildcards escaped so a value cannot silently widen the match. The
- * result is appended to a query the caller built, so no function here emits the
- * WHERE keyword itself.
+ * filter is written in the same expression language as a table's filter row,
+ * and the table applies it to every row before grouping and paging.
  *
  * This lives apart from the tool bodies because it is the one place a bad
- * argument could turn into bad SQL, and because it can be exercised on its own.
+ * argument could turn into a bad filter, and because it can be exercised on its
+ * own.
  */
 
 // Longest filter list a single call may carry.
 constexpr size_t ASSISTANT_MAX_FILTERS = 8;
 
-// Builds the boolean fragment for a tool's "filters" argument, or an empty
+// Builds the filter expression for a tool's "filters" argument, or an empty
 // string when there are none. Writes to error_out and returns empty when an
 // argument is malformed; callers must check error_out rather than the return
 // value, since no filters is also a valid empty result.
-std::string BuildAssistantWhereClause(const jt::Json& args, std::string& error_out);
+std::string BuildAssistantFilterExpression(const jt::Json& args, std::string& error_out);
+
+// The column each entry of a valid "filters" argument names, in order. Only
+// meaningful once BuildAssistantFilterExpression has accepted the same args.
+std::vector<std::string> AssistantFilterColumns(const jt::Json& args);
 
 // Reads the "group_by" argument, checked against the same column whitelist as
 // the filters. Empty when absent. Leaves error_out alone unless the column is

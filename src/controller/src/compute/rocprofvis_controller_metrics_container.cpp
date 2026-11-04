@@ -250,7 +250,7 @@ rocprofvis_result_t MetricsContainer::SetString(rocprofvis_property_t property, 
         {
             if(index < m_container.size())
             {
-                m_container[index].id_idx = StringTable::Get().AddString(value, true);
+                m_container[index].id_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -263,7 +263,7 @@ rocprofvis_result_t MetricsContainer::SetString(rocprofvis_property_t property, 
         {
             if(index < m_container.size())
             {
-                m_container[index].name_idx = StringTable::Get().AddString(value, true);
+                m_container[index].name_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -276,7 +276,7 @@ rocprofvis_result_t MetricsContainer::SetString(rocprofvis_property_t property, 
         {
             if(index < m_container.size())
             {
-                m_container[index].value_name_idx = StringTable::Get().AddString(value, true);
+                m_container[index].value_name_idx = StringTable::Get().AddString(value);
                 result = kRocProfVisResultSuccess;
             }
             else

@@ -11,6 +11,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace RocProfVis
@@ -73,9 +75,19 @@ protected:
         std::string filter;
     };
 
+    // Header names of the id columns the controller adds to event and sample rows.
+    static constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
+    static constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
+    static constexpr const char* ID_COLUMN_NAME        = "__uuid";
+    static constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
+
     virtual void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const;
+    // Default formats the start/end/duration columns found by IndexColumns.
     virtual void FormatData() const;
+    // Default locates the time columns and the track, stream and uuid columns.
+    // Overrides call it first, then index their own columns.
     virtual void IndexColumns();
+    // Default opens the row context menu on right-click.
     virtual void RowSelected(const ImGuiMouseButton mouse_button);
 
     uint64_t                      SelectedRowToTrackID(size_t track_id_column_index,
@@ -91,8 +103,11 @@ protected:
     void RequestFetch();
     void RequestFilter();
 
-    void FormatTimeColumns() const;
-    void ExportToFile() const;
+    // Clears the formatted-cell cache and sizes it to the current header, so a
+    // FormatData override only fills the columns it formats.
+    std::vector<FormattedColumnInfo>& ResetFormattedData() const;
+    void                              FormatTimeColumns() const;
+    void                              ExportToFile() const;
     /* Whether this table is waiting on data: either a request is out with the
      * controller, or one is held until the controller table frees up.
      */
@@ -172,13 +187,27 @@ private:
         std::string                            column_name;
         rocprofvis_controller_primitive_type_t column_type;
         std::string                            input;
-        const char*                            tooltip;
+        bool                                   is_time;  // Value is a timestamp (ns).
     };
 
     void FetchData();
-    void RenderCell(const std::string* cell_text, int row, int column);
+    // Draws a table cell, eliding to the column width. tooltip_extra (e.g. a time
+    // column's raw ns value) is appended to the same hover tooltip as elided text.
+    void RenderCell(const std::string* cell_text, int row, int column,
+                    const std::string* tooltip_extra = nullptr);
     void RenderContextMenu();
     void ProcessSortOrFilterRequest(uint64_t frame_count);
+
+    // Hover tooltip explaining how to filter a column, with an example.
+    void RenderFilterHelpTooltip(const FilterInput& input) const;
+
+    // Sizes non-user-resized columns to their widest loaded value, clamped to
+    // [MIN_COLUMN_WIDTH_EM, MAX_COLUMN_FIT_WIDTH_EM]. With grow_only, columns only
+    // grow (scroll page-in); otherwise they fit fresh. Call while the table is active.
+    void FitColumnsToContent(bool grow_only);
+
+    // Flags columns the user manually resized so FitColumnsToContent skips them.
+    void DetectUserColumnResizes();
 
     int      m_fetch_pad_items;
     int      m_fetch_threshold_items;
@@ -189,13 +218,20 @@ private:
     bool m_filter_requested;
 
     // Internal state flags below
-    bool                               m_open_context_menu;
-    bool                               m_skip_data_fetch;
-    bool                               m_pending_sort;
-    std::string                        m_pending_sort_column;
-    rocprofvis_controller_sort_order_t m_pending_sort_order;
-    uint64_t                           m_last_total_row_count;
-    ImVec2                             m_last_table_size;
+    bool                                   m_open_context_menu;
+    bool                                   m_skip_data_fetch;
+    bool                                   m_pending_sort;
+    std::string                            m_pending_sort_column;
+    rocprofvis_controller_sort_order_t     m_pending_sort_order;
+    bool     m_refit_pending;    // Fresh content-change data is loaded; re-fit columns.
+    bool     m_refit_requested;  // A content change (filter/selection) is in flight.
+    bool     m_grow_pending;     // A scroll page loaded; grow columns to fit it.
+    bool     m_columns_emptied;  // Table went empty; the next fit forgets manual sizes.
+    // Keyed by column name so adding/removing columns never disturbs existing sizing.
+    std::unordered_set<std::string>        m_user_sized_columns;  // User-resized columns.
+    std::unordered_map<std::string, float> m_column_fit_widths;   // Last auto-fit width.
+    uint64_t                               m_last_total_row_count;
+    ImVec2                                 m_last_table_size;
 
     // Filter row...
     bool                                         m_display_filter_row;

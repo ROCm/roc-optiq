@@ -597,7 +597,7 @@ KernelMetricTable::Render()
                          ImVec2(0, m_fill_parent ? 0.0f : total_table_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
-        if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
+        if(!header.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
         {
             // Stays sortable while a fetch runs: dropping the flag would make ImGui
             // rebuild the sort specs, losing the chosen sort.
@@ -778,9 +778,11 @@ KernelMetricTable::Render()
 
                 if(data.empty())
                 {
+                    // The ID column is hidden, so the note goes under Name.
                     ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    ImGui::TextDisabled("None");
+                    ImGui::TableSetColumnIndex(NAME_COLUMN_INDEX);
+                    ImGui::TextDisabled(active_count > 0 ? "No kernels match the applied filters"
+                                                         : "None");
                 }
 
                 // Get sort specs

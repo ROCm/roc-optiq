@@ -154,13 +154,14 @@ class ProfileDatabase : public QueryManager
         uint64_t GetHistogramQueryAndSchemaHash();
 
         // get indeces of colums representing track identifiers
-        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) override;
+        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_track_descriptor_t& track_ids_indices) override;
 
         // process track discovery data and populate track parameters
         virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries) = 0;
 
         // Find track essential identifiers
         bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
+        bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, const char* id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
 
     protected:
     // offset of kernel symbols in string table

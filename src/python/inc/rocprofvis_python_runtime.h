@@ -62,9 +62,11 @@ typedef void (*rocprofvis_python_done_t)(void* user, rocprofvis_python_result_t 
 
 /*
  * Starts the dedicated interpreter thread and initializes CPython with
- * an isolated config. runtime_root may be null to use the compile-time
- * Python prefix. Safe to call once; a second call is success if already
- * initialized.
+ * an isolated config. runtime_root names a Python prefix: the directory
+ * holding lib/pythonX.Y, or Lib on Windows. Null uses the runtime shipped
+ * beside the executable, then the build machine's Python when the build
+ * did not vendor one. Safe to call once; a second call is success if
+ * already initialized.
  */
 rocprofvis_python_result_t rocprofvis_python_init(char const* runtime_root);
 

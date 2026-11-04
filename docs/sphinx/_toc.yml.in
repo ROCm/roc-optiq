@@ -4,6 +4,11 @@ defaults:
 root: index
 
 subtrees:
+
+- entries:
+    - file: release-notes.rst
+      title: Release notes
+
 - caption: At a glance
   entries:
   - file: what-is-optiq.rst

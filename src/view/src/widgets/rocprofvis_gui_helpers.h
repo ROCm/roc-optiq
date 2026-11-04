@@ -3,6 +3,7 @@
 
 #pragma once
 #include "imgui.h"
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -119,15 +120,19 @@ enum Alignment
     Alignment_Right,
 };
 
+// Ellipsis appended to shortened text, so every caller renders the same marker.
+inline constexpr const char* TEXT_ELLIPSIS = "...";
+
 bool
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
-// Trims text to a single line fitting max_width (and max_chars), appending "..."
-// when shortened. Uses the current font for measurement.
+// Trims text to fit max_width (current font), appending TEXT_ELLIPSIS when
+// shortened. max_chars optionally caps the character count.
 std::string
-ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars);
+ElideWithEllipsis(const std::string& text, float max_width,
+                  size_t max_chars = std::string::npos);
 
 void
 CenterNextTextItem(const char* text);
@@ -218,16 +223,27 @@ TableRowHeight();
 inline constexpr std::string_view COPY_DATA_NOTIFICATION     = "Cell data was copied";
 inline constexpr std::string_view COPY_ROW_DATA_NOTIFICATION = "Row data copied to clipboard";
 
+// An optional coloured byte range within single-line copyable text.
+struct TextColorRange
+{
+    size_t begin = 0;
+    size_t end   = 0;
+    ImU32  color = 0;
+};
+
 // Similar to ImGui::TextUnformatted(), but allows copying the text to the clipboard
 // via left-click or a context menu.
 // If multiple instances with the same text can appear within the same frame,
 // the caller must provide a unique, stable identifier to avoid ID collisions.
 // For items created in loops, the loop index or iterator is typically sufficient.
+// A custom menu callback runs while the identified interaction item is current;
+// it remains responsible for beginning and ending its context popup.
 bool
 CopyableTextUnformatted(
     const char* text, std::string_view unique_id = "", std::string_view notification = "",
     bool one_click_copy = false, bool context_menu = false,
-    std::function<void(const char* value_to_copy)> menu_func = nullptr);
+    std::function<void(const char* value_to_copy)> menu_func   = nullptr,
+    const TextColorRange*                          color_range = nullptr);
 
 // Renders a selectable menu item with an icon (from the icon font) followed by a text label.
 // Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
@@ -240,6 +256,13 @@ IconMenuItem(const char* icon, const char* label, bool enabled = true,
 // Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.
 bool
 IconBeginMenu(const char* icon, const char* label);
+
+// Applies the standard padding and row colors around an arbitrary context popup.
+void
+PushContextMenuStyles();
+
+void
+PopContextMenuStyles();
 
 // Identifies the row/column of the cell whose right-click opened a table's copy
 // context menu. Reusable by any table that wants the shared full-row right-click
@@ -265,7 +288,7 @@ RenderRowHitbox(const char* hitbox_id, int row, int column_count,
                 CellMenuTarget& target, bool& open);
 
 // Records a right-click that landed on the cell content just submitted (the
-// copyable text/button steals hover from the row hit-box over its own area).
+// copyable text interaction target steals hover from the row hit-box over its area).
 // Call immediately after rendering a cell's content.
 void
 CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open);

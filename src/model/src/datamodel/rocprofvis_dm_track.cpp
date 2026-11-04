@@ -168,6 +168,7 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
         case kRocProfVisDmKernelDispatchTrack: return "GPU Queue";
         case kRocProfVisDmMemoryAllocationTrack: return "Memory allocation";
         case kRocProfVisDmMemoryCopyTrack: return "Memory copy";
+        case kRocProfVisDmHipEventTrack: return "Hip event";
         case kRocProfVisDmSQTTTrack: return "Shader Execution";
         case kRocProfVisDmNICTrack: return "Network Activity";
         case kRocProfVisDmStreamTrack: return "GPU Stream";

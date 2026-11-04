@@ -6,7 +6,7 @@
 What is ROCm Optiq?
 *******************
 
-ROCm Optiq is a unified visualization and analysis tool for performance data collected by ROCm profiling tools. It reads trace databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and analysis databases produced by `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_, and renders both in a single interactive interface.
+ROCm Optiq is a unified visualization and analysis tool for performance data collected by ROCm profiling tools. It reads profiling databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCprofiler-SDK <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_, as well as analysis databases produced by `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_, and renders them in a unified interactive interface.
 
 ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis files can be visualized on any machine running a supported Windows, Linux, or macOS operating system, independent of where the data was collected.
 
@@ -67,6 +67,10 @@ Supported data sources
    * - ROCm Systems Profiler database
      - ``.db``
      - `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_
+     - ROCm 7.1.0 or later
+   * - rocprofv3 database
+     - ``.db``
+     - `rocprofv3 <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_
      - ROCm 7.1.0 or later
    * - ROCm Compute Profiler analysis database
      - ``.db``

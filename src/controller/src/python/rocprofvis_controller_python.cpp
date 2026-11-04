@@ -3,7 +3,9 @@
 
 #include "python/rocprofvis_controller_python.h"
 
+#include <cerrno>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -225,6 +227,74 @@ py_handle_double(rocprofvis_handle_t* object, rocprofvis_property_t property)
     double value = 0.0;
     rocprofvis_controller_get_double(object, property, 0, &value);
     return PyFloat_FromDouble(value);
+}
+
+PyObject*
+py_unicode(std::string const& text)
+{
+    return PyUnicode_FromStringAndSize(text.data(), static_cast<Py_ssize_t>(text.size()));
+}
+
+// Cells are stored as text. The column schema decides the Python type, so a
+// caller can add a numeric column without checking each cell. An empty
+// numeric cell is a missing value: merged tables write "" when a column does
+// not apply to that row. Anything else must be the whole token for that type.
+// "12.5" in an integer column is not 12, and it is not a float either.
+// as_text skips that check and returns the stored characters, so a file with
+// a bad cell can still be inspected.
+PyObject*
+py_table_text_cell(std::string const& text, uint64_t column_type, char const* column,
+                   uint64_t row, bool as_text)
+{
+    bool const numeric = column_type == kRPVControllerPrimitiveTypeUInt64 ||
+                         column_type == kRPVControllerPrimitiveTypeDouble;
+    if(as_text || !numeric)
+    {
+        return py_unicode(text);
+    }
+    if(text.empty())
+    {
+        Py_RETURN_NONE;
+    }
+
+    char const* begin = text.c_str();
+    char*       end   = nullptr;
+    errno             = 0;
+    char const* name  = column != nullptr ? column : "";
+    if(column_type == kRPVControllerPrimitiveTypeUInt64)
+    {
+        // A leading minus is a signed value. strtoull would accept it and wrap.
+        if(*begin == '-')
+        {
+            long long value = std::strtoll(begin, &end, 10);
+            if(errno == 0 && end != begin && *end == '\0')
+            {
+                return PyLong_FromLongLong(value);
+            }
+        }
+        else
+        {
+            unsigned long long value = std::strtoull(begin, &end, 10);
+            if(errno == 0 && end != begin && *end == '\0')
+            {
+                return PyLong_FromUnsignedLongLong(value);
+            }
+        }
+        return PyErr_Format(PyExc_ValueError,
+                            "could not convert table cell at row %llu, column '%s' "
+                            "to integer: '%s'",
+                            static_cast<unsigned long long>(row), name, text.c_str());
+    }
+
+    double value = std::strtod(begin, &end);
+    if(errno == 0 && end != begin && *end == '\0')
+    {
+        return PyFloat_FromDouble(value);
+    }
+    return PyErr_Format(PyExc_ValueError,
+                        "could not convert table cell at row %llu, column '%s' "
+                        "to float: '%s'",
+                        static_cast<unsigned long long>(row), name, text.c_str());
 }
 
 struct uint64_arg_t
@@ -557,7 +627,8 @@ copy_event(rocprofvis_handle_t* entry, uint64_t track_type)
 }
 
 PyObject*
-copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_array_t* array)
+copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_array_t* array,
+               bool as_text)
 {
     uint64_t            num_columns = 0;
     uint64_t            num_rows    = 0;
@@ -618,8 +689,13 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
             uint64_t column_type = kRPVControllerPrimitiveTypeString;
             rocprofvis_controller_get_uint64(table, kRPVControllerTableColumnTypeIndexed,
                                              j, &column_type);
+            // Rows hold text even in columns the table declares numeric, so the
+            // cell's own type decides how it is read.
+            uint64_t cell_type = kRPVControllerPrimitiveTypeString;
+            rocprofvis_controller_get_uint64(row_array, kRPVControllerArrayEntryTypeIndexed,
+                                             j, &cell_type);
             PyObject* cell = nullptr;
-            switch(column_type)
+            switch(cell_type)
             {
                 case kRPVControllerPrimitiveTypeUInt64:
                 {
@@ -628,7 +704,8 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
                                                         kRPVControllerArrayEntryIndexed, j,
                                                         &value) == kRocProfVisResultSuccess)
                     {
-                        cell = PyLong_FromUnsignedLongLong(value);
+                        cell = as_text ? py_unicode(std::to_string(value))
+                                       : PyLong_FromUnsignedLongLong(value);
                     }
                     break;
                 }
@@ -639,7 +716,8 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
                                                         kRPVControllerArrayEntryIndexed, j,
                                                         &value) == kRocProfVisResultSuccess)
                     {
-                        cell = PyFloat_FromDouble(value);
+                        cell = as_text ? py_unicode(std::to_string(value))
+                                       : PyFloat_FromDouble(value);
                     }
                     break;
                 }
@@ -659,8 +737,15 @@ copy_table_rows(rocprofvis_controller_table_t* table, rocprofvis_controller_arra
                                 row_array, kRPVControllerArrayEntryIndexed, j, text.data(),
                                 &length);
                         }
-                        cell = PyUnicode_FromStringAndSize(
-                            text.data(), static_cast<Py_ssize_t>(text.size()));
+                        cell = py_table_text_cell(text, column_type,
+                                                  headers[static_cast<size_t>(j)].c_str(), i,
+                                                  as_text);
+                        if(!cell)
+                        {
+                            Py_DECREF(row);
+                            Py_DECREF(rows);
+                            return nullptr;
+                        }
                     }
                     break;
                 }
@@ -1164,7 +1249,6 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     static char tracks_key[]        = "tracks";
     static char start_key[]         = "start";
     static char end_key[]           = "end";
-    static char where_key[]         = "where";
     static char filter_key[]        = "filter";
     static char group_key[]         = "group";
     static char group_columns_key[] = "group_columns";
@@ -1173,15 +1257,15 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     static char start_index_key[]   = "start_index";
     static char count_key[]         = "count";
     static char type_key[]          = "type";
-    static char* keywords[]         = {tracks_key,        start_key,       end_key,
-                               where_key,         filter_key,      group_key,
-                               group_columns_key, sort_column_key, sort_order_key,
-                               start_index_key,   count_key,       type_key,
+    static char text_key[]          = "text";
+    static char* keywords[]         = {tracks_key,       start_key,      end_key,
+                               filter_key,       group_key,      group_columns_key,
+                               sort_column_key,  sort_order_key, start_index_key,
+                               count_key,        type_key,       text_key,
                                nullptr};
     PyObject*    tracks_obj         = Py_None;
     PyObject*    start_obj          = Py_None;
     PyObject*    end_obj            = Py_None;
-    char const*  where_text         = "";
     char const*  filter_text        = "";
     char const*  group_text         = "";
     char const*  group_columns_text = "";
@@ -1190,11 +1274,12 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     unsigned long long start_index  = 0;
     unsigned long long count        = DEFAULT_TABLE_FETCH_COUNT;
     PyObject*          type_obj     = Py_None;
-    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOOzzzzKKKKO:fetch", keywords,
-                                    &tracks_obj, &start_obj, &end_obj, &where_text,
+    int                as_text      = 0;
+    if(!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOOzzzKKKKOp:fetch", keywords,
+                                    &tracks_obj, &start_obj, &end_obj,
                                     &filter_text, &group_text, &group_columns_text,
                                     &sort_column, &sort_order, &start_index, &count,
-                                    &type_obj))
+                                    &type_obj, &as_text))
     {
         return nullptr;
     }
@@ -1276,7 +1361,6 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     const double_arg_t double_args[] = {{kRPVControllerTableArgsStartTime, start},
                                         {kRPVControllerTableArgsEndTime, end}};
     const string_arg_t string_args[] = {
-        {kRPVControllerTableArgsWhere, where_text},
         {kRPVControllerTableArgsFilter, filter_text},
         {kRPVControllerTableArgsGroup, group_text},
         {kRPVControllerTableArgsGroupColumns, group_columns_text}};
@@ -1326,7 +1410,7 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
         return raise_result("table fetch",
                             static_cast<rocprofvis_result_t>(future_result));
     }
-    PyObject* rows = copy_table_rows(self->table, array);
+    PyObject* rows = copy_table_rows(self->table, array, as_text != 0);
     rocprofvis_controller_array_free(array);
     rocprofvis_controller_future_free(future);
     rocprofvis_controller_arguments_free(fetch_args);

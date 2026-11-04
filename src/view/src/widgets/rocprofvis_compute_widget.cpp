@@ -188,10 +188,18 @@ FillCompareCells(MetricTableBase::Row& row, const std::string& value_name, const
 MetricTableBase::MetricTableBase(std::string event_source_id)
 : m_max_rows_in_table(0)
 , m_event_source_id(std::move(event_source_id))
-, m_table_title("")
 , m_last_column_index(0)
 {
     m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+    SetTableTitle("");
+}
+
+void
+MetricTableBase::SetTableTitle(std::string title)
+{
+    m_table_title = std::move(title);
+    m_panel_id_str = GenUniqueName("##" + m_table_title + "_panel_");
+    m_table_id_str = GenUniqueName("##" + m_table_title + "_table");
 }
 
 void
@@ -234,15 +242,13 @@ MetricTableBase::Render()
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
-        const std::string panel_id = "##" + m_table_title + "_panel_";
         ImGuiChildFlags panel_flags =
             ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding;
         if(!m_fill_parent)
         {
             panel_flags |= ImGuiChildFlags_AutoResizeY;
         }
-        ImGui::BeginChild(RocWidget::GenUniqueName(panel_id).c_str(), ImVec2(0, 0),
-                          panel_flags);
+        ImGui::BeginChild(m_panel_id_str.c_str(), ImVec2(0, 0), panel_flags);
     }
 
     auto pop_panel = [paint_panel]() {
@@ -300,10 +306,8 @@ MetricTableBase::Render()
     {
         table_h = 0.0f;
     }
-    const std::string table_id   = "##" + m_table_title + "_table";
-    const ImVec2      table_size = { 0, table_h };
-    if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
-                         table_flags, table_size))
+    const ImVec2 table_size = { 0, table_h };
+    if(ImGui::BeginTable(m_table_id_str.c_str(), num_columns, table_flags, table_size))
     {
         ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
 
@@ -636,7 +640,7 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
 {
     m_table_flags &= ~(ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit);
     FillDefaultColumns(m_columns, m_last_column_index);
-    m_table_title = table.name;
+    SetTableTitle(table.name);
 
     if(table.value_names.empty())
     {
@@ -708,7 +712,7 @@ MetricTable::PopulateComparison(uint32_t category_id, const AvailableMetrics::Ta
     // past the frozen id and name.
     m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit;
     FillDefaultColumns(m_columns, m_last_column_index);
-    m_table_title = named->name;
+    SetTableTitle(named->name);
 
     const std::vector<std::string> value_names = CompareValueNames(a_table, b_table);
     for(const std::string& value_name : value_names)
@@ -828,7 +832,7 @@ PinnedMetricTable::PinnedMetricTable(DataProvider&                     data_prov
 {
     FillDefaultColumns(m_columns, m_last_column_index);
     m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
-    m_table_title       = "Pinned Metrics";
+    SetTableTitle("Pinned Metrics");
     m_max_rows_in_table = 7;
     m_freezed_columns = 3;
     m_freezed_rows = 1;

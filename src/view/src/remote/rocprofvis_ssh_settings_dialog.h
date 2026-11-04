@@ -7,6 +7,7 @@
 #include "rocprofvis_ssh_connection_store.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace RocProfVis
@@ -14,10 +15,16 @@ namespace RocProfVis
 namespace View
 {
 
+class RemoteTraceOrchestrator;
+class RemoteUri;
+
 // Transient modal dialog for managing named SSH connection profiles. It edits a
 // working copy of the selected connection (host, port, user, password, key,
 // passphrase, plus an editable display name) and supports selecting, creating,
-// saving, and deleting profiles against a SshConnectionStore.
+// saving, and deleting profiles against a SshConnectionStore. "Test" connects
+// and authenticates with the working copy, unsaved edits included. Its verdict
+// is dropped when the profile changes or when any field other than the display
+// name changes, so a result is never shown for a different connection.
 //
 // On OK the working copy is saved into the store and the selected connection's
 // id is reported back via the on_commit callback so the owner can bind it to
@@ -45,10 +52,20 @@ public:
 private:
     void SelectConnection(const std::string& id);
     void BeginNewConnection();
+    void StartConnectionTest();
+    // Drops an in-flight test and any finished verdict.
+    void ClearConnectionTest();
 
     SshConnectionStore&                     m_store;
     SshConnectionConfig                     m_working;
     std::function<void(const std::string&)> m_on_commit;
+
+    std::shared_ptr<RemoteUri>               m_test_uri;
+    std::unique_ptr<RemoteTraceOrchestrator> m_test;
+    std::string                              m_test_result;
+    bool                                     m_test_ok;
+    // Queried once: on Linux the check is a blocking D-Bus round trip.
+    bool                                     m_secrets_persist;
 
     bool m_show_password;
     bool m_show_passphrase;

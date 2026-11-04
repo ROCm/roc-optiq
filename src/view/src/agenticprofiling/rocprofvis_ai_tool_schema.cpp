@@ -30,8 +30,9 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "trace_overview", "Reading the timeline overview..." },
     { "get_summary", "Loading summary..." },
     { "top_events", "Querying top events..." },
-    { "kernel_instances", "Loading kernel dispatches..." },
-    { "kernel_metrics", "Loading kernel metrics..." },
+    { "event_instances", "Loading event instances..." },
+    { "get_summary_event_metrics", "Loading event metrics..." },
+    { "get_summary_counter_stats", "Reading counter statistics..." },
     { "list_tracks", "Listing tracks..." },
     { "search_events", "Searching the trace..." },
     { "track_events", "Reading track events..." },
@@ -172,9 +173,29 @@ MakeAssistantToolsJson()
     jt::Json tools;
 
     jt::Json summary_params = ObjectParams();
+    AddParam(summary_params, "level", "string",
+             "Sub-metric level to drill into, from a sub_metrics list. Omit for the "
+             "trace-wide summary.");
+    summary_params["properties"]["level"]["enum"] =
+        MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
+    AddParam(summary_params, "id", "integer",
+             "Sub-metric id from the same sub_metrics line as level.");
     AddTool(tools, 0, "get_summary",
-            "Load named GPU summary stats and the top kernels by execution time. "
-            "Call this first when the briefing is empty or kernel_exec_time_total_ns is 0.",
+            "Load the prebuilt trace summary for one scope: the top kernels, memory "
+            "operations and thread (CPU) operations by total time - each with "
+            "share of the category, calls and total - plus how many hardware "
+            "counters were summarized; read those with get_summary_counter_stats. "
+            "For one name's average, min and max duration, call "
+            "get_summary_event_metrics.\n"
+            "With no arguments this is the trace-wide roll-up, which is only the "
+            "top of the summary. Every result ends with a sub_metrics list - the "
+            "nodes, then the GPUs/CPUs and processes under a node, then the "
+            "threads under a process - each with its own totals. Call again with "
+            "that line's level and id to see the same breakdown for one device, "
+            "process or thread, without running a query.\n"
+            "Each top list keeps only the busiest names plus an Others row; use "
+            "top_events for a full ranking. Call this first when the briefing is "
+            "empty or its totals are 0.",
             summary_params);
 
     jt::Json top_params = ObjectParams();
@@ -193,30 +214,58 @@ MakeAssistantToolsJson()
             "DurationAvg, DurationMin, DurationMax. It does NOT return __uuid or "
             "__trackId, so its rows cannot be passed to goto or event_details. "
             "Use it to find which name is worth chasing, then call "
-            "kernel_instances or search_events on that name to get a real event.",
+            "event_instances or search_events on that name to get a real event.",
             top_params);
 
     jt::Json inst_params = ObjectParams();
-    AddParam(inst_params, "kernel_name", "string",
-             "Exact or unique kernel name from get_summary / top_events.");
+    AddParam(inst_params, "name", "string",
+             "Exact or unique event name from get_summary / top_events.");
+    AddParam(inst_params, "category", "string",
+             "Event family the name belongs to. Defaults to kernel.");
+    inst_params["properties"]["category"]["enum"] =
+        MakeStringEnum({ "kernel", "memory", "thread" });
+    AddParam(inst_params, "level", "string",
+             "Summary scope, as in get_summary, to search only that node, device, "
+             "process or thread. Omit to search the whole trace.");
+    inst_params["properties"]["level"]["enum"] =
+        MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
+    AddParam(inst_params, "id", "integer",
+             "Sub-metric id from a get_summary sub_metrics line, paired with level.");
     AddScopeParams(inst_params);
     AddQueryParams(inst_params);
-    inst_params["required"][0] = "kernel_name";
-    AddTool(tools, 2, "kernel_instances",
-            "List individual GPU dispatches for one kernel name, with the "
-            "__uuid, __trackId and timestamps that goto needs to select one. "
-            "This is how you get from a name in the summary to a real event. "
-            "Searches the whole trace unless you pass start_ns/end_ns, so it "
-            "finds instances wherever they ran; sort by duration to put the "
-            "slowest first.",
+    inst_params["required"][0] = "name";
+    AddTool(tools, 2, "event_instances",
+            "List individual events for one name - kernel dispatches, memory "
+            "copies/allocations, or thread (CPU) operations - with the __uuid, "
+            "__trackId and timestamps that goto needs to select one. This is how "
+            "you get from a name in the summary to a real event. Pass the same "
+            "level and id you read it at in get_summary to keep the instances "
+            "in that node, device, process or thread. Searches the whole trace "
+            "unless you pass start_ns/end_ns, so it finds instances wherever "
+            "they ran; sort by duration to put the slowest first.",
             inst_params);
 
     jt::Json metrics_params = ObjectParams();
-    AddParam(metrics_params, "kernel_name", "string",
-             "Summary kernel name, from get_summary or top_events.");
-    AddTool(tools, 3, "kernel_metrics",
-            "Return duration and call statistics for one kernel from the trace "
-            "summary: invocations, total, min, max, and share of GPU time.",
+    AddParam(metrics_params, "name", "string",
+             "Event name, exact or a unique substring, from get_summary or "
+             "top_events. Empty lists every name the summary kept.");
+    AddParam(metrics_params, "category", "string",
+             "Event family the name belongs to. Defaults to kernel.");
+    metrics_params["properties"]["category"]["enum"] =
+        MakeStringEnum({ "kernel", "memory", "thread" });
+    AddParam(metrics_params, "level", "string",
+             "Summary scope, as in get_summary. Omit for the trace-wide summary.");
+    metrics_params["properties"]["level"]["enum"] =
+        MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
+    AddParam(metrics_params, "id", "integer",
+             "Sub-metric id from a get_summary sub_metrics line, paired with level.");
+    AddTool(tools, 3, "get_summary_event_metrics",
+            "Return duration and call statistics for one kernel, memory operation "
+            "or thread operation from the summary, at the trace or at one "
+            "node/device/process/thread scope: invocations, total, average, min, "
+            "max, and share of that category's time at that scope. No query is "
+            "run. Only covers the names the summary kept at that scope; use "
+            "top_events to rank the rest.",
             metrics_params);
 
     jt::Json tracks_params = ObjectParams();
@@ -288,7 +337,7 @@ MakeAssistantToolsJson()
 
     jt::Json event_details_params = ObjectParams();
     AddParam(event_details_params, "event_uuid", "string",
-             "Event uuid from the __uuid column of track_events, kernel_instances "
+             "Event uuid from the __uuid column of track_events, event_instances "
              "or search_events, copied digit for digit as a quoted string. These "
              "run to 19 digits and lose their low bits if sent as a number, which "
              "silently asks about a different event.");
@@ -468,6 +517,33 @@ MakeAssistantToolsJson()
             "offer.",
             next_params);
 
+    jt::Json counter_params = ObjectParams();
+    AddParam(counter_params, "name", "string",
+             "Counter name, exact or a substring. Omit to page through every "
+             "counter.");
+    AddParam(counter_params, "level", "string",
+             "Summary scope, as in get_summary. Counters only exist at trace, node "
+             "and processor scope. Omit for the trace-wide summary.");
+    counter_params["properties"]["level"]["enum"] =
+        MakeStringEnum({ "trace", "node", "processor" });
+    AddParam(counter_params, "id", "integer",
+             "Sub-metric id from a get_summary sub_metrics line, paired with level.");
+    AddParam(counter_params, "limit", "integer",
+             "Names to list when no name is given (default 20, max 200).");
+    AddParam(counter_params, "offset", "integer",
+             "Names to skip. Use with limit to page through a long counter list.");
+    AddTool(tools, 20, "get_summary_counter_stats",
+            "Read the summarized hardware counters at the trace, one node or one "
+            "device (GPU/CPU) - processes and threads have none: mean, min, max "
+            "and std_dev over the "
+            "trace, with units and whether it is a GPU or CPU counter. No query is "
+            "run. Without a name it pages through every counter with its "
+            "statistics, so one call both shows what exists and gives the "
+            "numbers; pass a name to pick out specific counters. This is the "
+            "summary statistic; for the raw samples over time use "
+            "track_samples.",
+            counter_params);
+
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     // This description is the only account the model gets of what a script may
     // use. Anything left out of it gets invented, so it names the whole surface
@@ -477,7 +553,7 @@ MakeAssistantToolsJson()
              "Python source, shown to the user before it runs. Report findings "
              "with optiq.result.text(...); nothing else is returned.");
     script_params["required"][0] = "script";
-    AddTool(tools, 20, "run_analysis_script",
+    AddTool(tools, 21, "run_analysis_script",
             "Offer a Python script that analyses this trace. It does not run on "
             "its own: the editor opens with your source and the user presses Run "
             "or Reject, so write it to be read as well as executed - clear names, "
@@ -500,11 +576,13 @@ MakeAssistantToolsJson()
             "optiq.TRACK_TYPE_SAMPLES, optiq.SORT_ASCENDING, "
             "optiq.SORT_DESCENDING.\n"
             "fetch takes twelve keyword arguments and nothing else. In order: "
-            "tracks (list of Track), start (float), end (float), where (str), "
-            "filter (str), group (str), group_columns (str), sort_column (int - a "
+            "tracks (list of Track), start (float), end (float), filter (str), "
+            "group (str), group_columns (str), sort_column (int - a "
             "zero-based column index, NOT a column name), sort_order (int - use "
             "optiq.SORT_ASCENDING or optiq.SORT_DESCENDING), start_index (int), "
-            "count (int), type ('events' or 'samples'). Always call it with "
+            "count (int), type ('events' or 'samples'), text (bool, default False). "
+            "text=True returns every cell as str and does not raise ValueError. "
+            "Always call it with "
             "keyword arguments: passing positionally shifts every later argument "
             "because filter and group_columns sit in the middle, and an int "
             "parameter that receives a string fails with 'an integer is "
@@ -512,13 +590,17 @@ MakeAssistantToolsJson()
             "Exact types, because guessing these is what fails first. tracks= "
             "takes Track objects straight from optiq.trace.tracks or "
             "optiq.selection.tracks, never their ids - a list of ints raises "
-            "TypeError. where=, group= and sort_column= are single strings or "
+            "TypeError. filter=, group= and sort_column= are single strings or "
             "None, never lists or dicts. fetch also drops any track whose type "
             "does not match type=, so passing sample tracks with type='events' "
-            "ends in 'fetch requires at least one matching track'. Row values are "
-            "typed per column and a column you expect to be a number is often "
-            "str, so call float(...) or int(...) before any arithmetic rather "
-            "than adding a cell directly. track.name, track.sub_name, event.name "
+            "ends in 'fetch requires at least one matching track'. Row values follow "
+            "the declared column type: text is str, integer columns (start, end, "
+            "duration, COUNT) are int, and floating-point columns (value, AVG, "
+            "MIN, MAX, SUM) are float. An empty numeric cell is None. A non-empty "
+            "value that is not a complete token of that type raises ValueError "
+            "and stops the fetch - '12.5' in an integer column is an error, not "
+            "12 and not a float. Skip None before arithmetic; do not wrap a "
+            "numeric cell in int() or float(). track.name, track.sub_name, event.name "
             "and event.category are free-form strings that came out of this "
             "trace, and none of them is guaranteed to equal the label shown in "
             "the UI or the name list_tracks gave you. Never write a script whose "

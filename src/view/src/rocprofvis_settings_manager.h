@@ -283,6 +283,27 @@ enum class Colors
     kLogError,
     kLogCritical,
 
+    // PC-sampling stall-reason palette
+    kPcSamplingInstructionFetch,
+    kPcSamplingAluDependency,
+    kPcSamplingWaitcnt,
+    kPcSamplingInternalInstruction,
+    kPcSamplingBarrier,
+    kPcSamplingArbiter,
+    kPcSamplingPipelineStall,
+    kPcSamplingOtherWait,
+    kPcSamplingSleeping,
+
+    // ISA mnemonic palette; operands retain the normal text colour.
+    kIsaInternal,
+    kIsaMatrix,
+    kIsaScalar,
+    kIsaBranch,
+    kIsaValu,
+    kIsaFlat,
+    kIsaLds,
+    kIsaBarrier,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };

@@ -19,6 +19,8 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <new>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -3504,6 +3506,81 @@ TEST_CASE("JobSystem Job polling contract unchanged")
     job.Execute();
     REQUIRE(job.Wait(0.0f) == kRocProfVisResultSuccess);
     REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+}
+
+TEST_CASE("CallCatchingExceptions turns exceptions into results")
+{
+    using RocProfVis::Controller::CallCatchingExceptions;
+
+    REQUIRE(CallCatchingExceptions([]() { return kRocProfVisResultCancelled; }) ==
+            kRocProfVisResultCancelled);
+    REQUIRE(CallCatchingExceptions([]() -> rocprofvis_result_t {
+                throw std::bad_alloc();
+            }) == kRocProfVisResultMemoryAllocError);
+    REQUIRE(CallCatchingExceptions([]() -> rocprofvis_result_t {
+                throw std::out_of_range("test");
+            }) == kRocProfVisResultUnknownError);
+    REQUIRE(CallCatchingExceptions([]() -> rocprofvis_result_t { throw 42; }) ==
+            kRocProfVisResultUnknownError);
+}
+
+// An exception thrown by a job body must fail the job instead of terminating the
+// process.
+TEST_CASE("JobSystem Job exception fails the job")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+    using RocProfVis::Controller::JobSystem;
+
+    SECTION("standard exception")
+    {
+        Job job([](Future*) -> rocprofvis_result_t { throw std::runtime_error("test"); },
+                nullptr);
+        job.Execute();
+        REQUIRE(job.GetResult() == kRocProfVisResultUnknownError);
+    }
+
+    SECTION("out of memory")
+    {
+        Job job([](Future*) -> rocprofvis_result_t { throw std::bad_alloc(); }, nullptr);
+        job.Execute();
+        REQUIRE(job.GetResult() == kRocProfVisResultMemoryAllocError);
+    }
+
+    SECTION("non-standard exception")
+    {
+        Job job([](Future*) -> rocprofvis_result_t { throw 42; }, nullptr);
+        job.Execute();
+        REQUIRE(job.GetResult() == kRocProfVisResultUnknownError);
+    }
+
+    // Every worker thread gets a throwing job, and a later job must still run.
+    SECTION("worker threads keep running")
+    {
+        const unsigned num_jobs = std::max(1u, std::thread::hardware_concurrency()) * 2;
+        std::vector<Job*> jobs;
+        for(unsigned i = 0; i < num_jobs; i++)
+        {
+            jobs.push_back(JobSystem::Get().IssueJob(
+                [](Future*) -> rocprofvis_result_t { throw std::runtime_error("test"); },
+                nullptr));
+        }
+        for(Job* job : jobs)
+        {
+            REQUIRE(job != nullptr);
+            REQUIRE(job->Wait(FLT_MAX) == kRocProfVisResultSuccess);
+            REQUIRE(job->GetResult() == kRocProfVisResultUnknownError);
+            delete job;
+        }
+
+        Job* job = JobSystem::Get().IssueJob(
+            [](Future*) -> rocprofvis_result_t { return kRocProfVisResultSuccess; },
+            nullptr);
+        REQUIRE(job != nullptr);
+        REQUIRE(job->Wait(FLT_MAX) == kRocProfVisResultSuccess);
+        REQUIRE(job->GetResult() == kRocProfVisResultSuccess);
+        delete job;
+    }
 }
 
 // Lost-wakeup stress test for Job::Wait(FLT_MAX). Races many worker/waiter

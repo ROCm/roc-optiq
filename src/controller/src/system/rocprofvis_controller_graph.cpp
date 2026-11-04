@@ -254,6 +254,10 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
         Event* event = m_ctx->GetMemoryManager()->NewEvent(
             event_id, event_min, event_max,
             &m_lods[lod_to_generate]);
+        if(event == nullptr)
+        {
+            return kRocProfVisResultMemoryAllocError;
+        }
         ROCPROFVIS_ASSERT(level != UINT64_MAX);
         event->SetUInt64(kRPVControllerEventLevel, 0, level);
         event->SetString(kRPVControllerEventName, 0, combined_name.c_str());
@@ -321,7 +325,11 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 }
                 if(event_level != level)
                 {
-                    GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
+                    result = GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
+                    if(result != kRocProfVisResultSuccess)
+                    {
+                        return result;
+                    }
                     events.clear();
                     min_ts = start_ts;
                     max_ts = start_ts + scale;
@@ -366,7 +374,11 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                         double sample_start = event_start;
 
                         // Generate the stub event for any populated events.
-                        GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
+                        result = GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
+                        if(result != kRocProfVisResultSuccess)
+                        {
+                            return result;
+                        }
 
                         // Create a new event & increment the search
                         while(max_ts < sample_start && min_ts < end_ts)
@@ -386,7 +398,11 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                 }
             }
         }
-        GenerateLODEvent(events, lod_to_generate, static_cast<uint32_t>(level), event_min, event_max);
+        rocprofvis_result_t result = GenerateLODEvent(events, lod_to_generate, static_cast<uint32_t>(level), event_min, event_max);
+        if(result != kRocProfVisResultSuccess)
+        {
+            return result;
+        }
     }
     else
     {
@@ -444,6 +460,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                             SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                                 (rocprofvis_controller_primitive_type_t)type, 0,
                                 sample_insert_ts, samples, &m_lods[lod_to_generate]);
+                            if(new_sample == nullptr)
+                            {
+                                return kRocProfVisResultMemoryAllocError;
+                            }
                             new_sample->SetDouble(
                                 kRPVControllerSampleEndTimestamp, 0, sample_last_ts);
                             Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
@@ -471,6 +491,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                 (rocprofvis_controller_primitive_type_t)type, 0,
                 sample_insert_ts, samples, &m_lods[lod_to_generate]);
+            if(new_sample == nullptr)
+            {
+                return kRocProfVisResultMemoryAllocError;
+            }
             new_sample->SetDouble(
                 kRPVControllerSampleEndTimestamp, 0, sample_last_ts);
             Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
@@ -582,29 +606,34 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                     	args.m_lru_params.m_ctx      = (SystemTrace*)m_track->GetContext();
                         args.m_lru_params.m_array_id = array_id;
 
-                        m_track->GetSegments()->AddActiveArray(array_id);
+                        // The processed flags below must be cleared even if this
+                        // throws, or later fetches of these segments wait forever.
+                        result = CallCatchingExceptions([&]() {
+                            m_track->GetSegments()->AddActiveArray(array_id);
 
-                        result = m_track->FetchSegments(
-                            fetch_start, fetch_end, &args, future,
-                            [](double start, double end, Segment& segment,
-                                void*            user_ptr,
-                                SegmentTimeline* owner) -> rocprofvis_result_t {
-                                FetchTrackSegmentArgs* args =
-                                    (FetchTrackSegmentArgs*) user_ptr;
-                                rocprofvis_result_t result = kRocProfVisResultSuccess;
-                                args->m_lru_params.m_owner = owner;
-                                result = segment.Fetch(start, end, args->m_entries,
-                                                        args->m_index, nullptr,
-                                                        &args->m_lru_params);
-                                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                                return result;
-                            });
+                            rocprofvis_result_t fetch_result = m_track->FetchSegments(
+                                fetch_start, fetch_end, &args, future,
+                                [](double start, double end, Segment& segment,
+                                    void*            user_ptr,
+                                    SegmentTimeline* owner) -> rocprofvis_result_t {
+                                    FetchTrackSegmentArgs* args =
+                                        (FetchTrackSegmentArgs*) user_ptr;
+                                    rocprofvis_result_t result = kRocProfVisResultSuccess;
+                                    args->m_lru_params.m_owner = owner;
+                                    result = segment.Fetch(start, end, args->m_entries,
+                                                            args->m_index, nullptr,
+                                                            &args->m_lru_params);
+                                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                                    return result;
+                                });
 
-                        if(result == kRocProfVisResultSuccess)
-                        {
-                            result = GenerateLOD(lod_to_generate, fetch_start, fetch_end,
-                                                 args.m_entries, future);                            
-                        }
+                            if(fetch_result == kRocProfVisResultSuccess)
+                            {
+                                fetch_result = GenerateLOD(lod_to_generate, fetch_start,
+                                                           fetch_end, args.m_entries, future);
+                            }
+                            return fetch_result;
+                        });
                         {
                             std::unique_lock lock(*it->second.GetMutex());
                             for(uint32_t i = range.first; i <= range.second; i++)

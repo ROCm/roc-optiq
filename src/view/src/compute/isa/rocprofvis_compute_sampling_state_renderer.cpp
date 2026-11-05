@@ -19,7 +19,6 @@ namespace View
 {
 
 constexpr float       SAMPLING_STATE_BAR_HEIGHT_FRACTION              = 0.5f;
-constexpr float       SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS       = 14.0f;
 constexpr const char* SAMPLING_STATE_COLUMN_LABEL                     = "Sampling State";
 constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
 constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
@@ -43,7 +42,7 @@ static const SampleMetricPresentation&
 get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
 {
     static constexpr SampleMetricPresentation OCCUPANCY{
-        "Wave occ. %", "Wave occupancy",
+        "Wave occupancy %", "Wave occupancy",
         "Wave occupancy (%) reported by the profiler at sampled PCs.\n"
         "Sample-weighted mean for this instruction.\n"
         "Bar scale: 0-100%, independent of the hottest instruction.",
@@ -76,6 +75,20 @@ get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
     };
     return metric == SamplingStateRenderer::Metric::kWaveOccupancy ? OCCUPANCY
                                                                    : ACTIVE_THREADS;
+}
+
+constexpr SamplingStateRenderer::Metric SAMPLING_COLUMN_METRICS[] = {
+    SamplingStateRenderer::Metric::kSamplingState,
+    SamplingStateRenderer::Metric::kWaveOccupancy,
+    SamplingStateRenderer::Metric::kActiveThreads
+};
+
+static const char*
+get_sampling_column_label(SamplingStateRenderer::Metric metric)
+{
+    return metric == SamplingStateRenderer::Metric::kSamplingState
+               ? SAMPLING_STATE_COLUMN_LABEL
+               : get_sample_metric_presentation(metric).label;
 }
 
 static const IsaDataBuilder::PercentageSummary&
@@ -346,6 +359,13 @@ SamplingStateRenderer::RenderHeaderWithTooltip(int column, const char* label,
         return;
     }
     ImGui::TableHeader(label);
+    RenderHeaderTooltip(tooltip, render_user_content);
+}
+
+void
+SamplingStateRenderer::RenderHeaderTooltip(const HeaderTooltipText& tooltip,
+                                           void (*render_user_content)())
+{
     if(!ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
     {
         return;
@@ -374,37 +394,6 @@ bool
 SamplingStateRenderer::IsDisabled() const
 {
     return m_load_state == LoadState::kLoading || m_load_state == LoadState::kFailed;
-}
-
-void
-SamplingStateRenderer::SetupMetricColumn(Metric metric)
-{
-    const char* label = get_sample_metric_presentation(metric).label;
-    const float width =
-        std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);
-    ImGui::TableSetupColumn(label, ImGuiTableColumnFlags_WidthFixed, width);
-}
-
-void
-SamplingStateRenderer::RenderMetricHeader(int column, Metric metric, CodePane pane)
-{
-    const SampleMetricPresentation& presentation = get_sample_metric_presentation(metric);
-    const HeaderTooltipText tooltip{ IsDisabled() ? (m_load_state == LoadState::kLoading
-                                                         ? SAMPLING_STATE_LOADING_TOOLTIP
-                                                         : SAMPLING_STATE_FAILED_TOOLTIP)
-                                                  : (pane == CodePane::kSource
-                                                         ? presentation.source_description
-                                                         : presentation.isa_description),
-                                     presentation.developer_information };
-    if(IsDisabled())
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-    }
-    RenderHeaderWithTooltip(column, presentation.label, tooltip);
-    if(IsDisabled())
-    {
-        ImGui::PopStyleColor();
-    }
 }
 
 bool
@@ -565,6 +554,10 @@ bool
 SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples,
                                   CodePane pane)
 {
+    if(m_selected_metric != Metric::kSamplingState)
+    {
+        return RenderMetricCell(row, m_selected_metric, pane);
+    }
     const SampleCounts&  counts     = row.sample_counts;
     const CodeCellBounds cell       = get_code_cell_bounds();
     const float          bar_height = cell.size.y * SAMPLING_STATE_BAR_HEIGHT_FRACTION;
@@ -915,11 +908,19 @@ SamplingStateRenderer::SetupColumn()
 {
     // Reuse ImGui's column menu and append the layer retry action after the headers.
     ImGui::GetCurrentTable()->DisableDefaultContextMenu = true;
-    const float sampling_state_column_width =
-        std::max(ImGui::CalcTextSize(SAMPLING_STATE_COLUMN_LABEL).x,
-                 ImGui::CalcTextSize("0").x * SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS);
-    ImGui::TableSetupColumn(SAMPLING_STATE_COLUMN_LABEL, ImGuiTableColumnFlags_WidthFixed,
-                            sampling_state_column_width);
+    float label_width                                   = 0.0f;
+    for(const Metric metric : SAMPLING_COLUMN_METRICS)
+    {
+        label_width = std::max(label_width,
+                               ImGui::CalcTextSize(get_sampling_column_label(metric)).x);
+    }
+    const float width = label_width + ImGui::GetStyle().FramePadding.x * 2.0f +
+                        ImGui::GetTextLineHeight();
+    ImGui::TableSetupColumn("Sampling metric",
+                            ImGuiTableColumnFlags_WidthFixed |
+                                ImGuiTableColumnFlags_NoHide |
+                                ImGuiTableColumnFlags_NoReorder,
+                            width);
 }
 
 bool
@@ -943,23 +944,61 @@ SamplingStateRenderer::RenderTableContextMenu()
 void
 SamplingStateRenderer::RenderHeader(int column, CodePane pane)
 {
-    const HeaderTooltipText& pane_tooltip = pane == CodePane::kSource
-                                               ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
-                                               : SAMPLING_STATE_HEADER_TOOLTIP;
-    if(IsDisabled())
+    if(!ImGui::TableSetColumnIndex(column))
     {
-        const HeaderTooltipText tooltip{
-            m_load_state == LoadState::kLoading ? SAMPLING_STATE_LOADING_TOOLTIP
-                                                : SAMPLING_STATE_FAILED_TOOLTIP,
-            pane_tooltip.developer_information
-        };
-        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-        RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, tooltip);
-        ImGui::PopStyleColor();
         return;
     }
-    RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, pane_tooltip,
-                            render_sampling_state_color_legend);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                        ImVec2(ImGui::GetStyle().FramePadding.x, 0.0f));
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    const bool open = ImGui::BeginCombo("##sampling_metric",
+                                        get_sampling_column_label(m_selected_metric));
+    if(open)
+    {
+        for(const Metric metric : SAMPLING_COLUMN_METRICS)
+        {
+            const bool selected = metric == m_selected_metric;
+            if(ImGui::Selectable(get_sampling_column_label(metric), selected))
+            {
+                m_selected_metric = metric;
+            }
+            if(selected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    else
+    {
+        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
+        {
+            ImGui::TableOpenContextMenu(column);
+        }
+        HeaderTooltipText tooltip = pane == CodePane::kSource
+                                        ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
+                                        : SAMPLING_STATE_HEADER_TOOLTIP;
+        if(m_selected_metric != Metric::kSamplingState)
+        {
+            const SampleMetricPresentation& presentation =
+                get_sample_metric_presentation(m_selected_metric);
+            tooltip = { pane == CodePane::kSource ? presentation.source_description
+                                                  : presentation.isa_description,
+                        presentation.developer_information };
+        }
+        if(IsDisabled())
+        {
+            tooltip.user_description = m_load_state == LoadState::kLoading
+                                           ? SAMPLING_STATE_LOADING_TOOLTIP
+                                           : SAMPLING_STATE_FAILED_TOOLTIP;
+        }
+        RenderHeaderTooltip(tooltip,
+                            m_selected_metric == Metric::kSamplingState && !IsDisabled()
+                                ? render_sampling_state_color_legend
+                                : nullptr);
+    }
+    ImGui::PopStyleVar();
 }
 
 }  // namespace View

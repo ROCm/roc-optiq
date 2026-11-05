@@ -28,7 +28,7 @@ struct ColorLegendEntry
     Colors      color;
 };
 
-// Renders the same sampling-state column for ISA instructions and source lines.
+// Renders a selectable sampling metric for ISA instructions and source lines.
 class SamplingStateRenderer
 {
 public:
@@ -40,6 +40,7 @@ public:
 
     enum class Metric : uint32_t
     {
+        kSamplingState,
         kWaveOccupancy,
         kActiveThreads
     };
@@ -62,18 +63,14 @@ public:
                                   size_t count);
 
     void SetupColumn();
-    void SetupMetricColumn(Metric metric);
     void SetLoadState(LoadState state) { m_load_state = state; }
     // Extends the native column menu; returns whether sampling should be retried.
     [[nodiscard]] bool RenderTableContextMenu();
     void RenderHeader(int column, CodePane pane = CodePane::kIsa);
-    void RenderMetricHeader(int column, Metric metric, CodePane pane = CodePane::kIsa);
     // Returns whether the cell was clicked, for the owning widget's row selection.
     [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
                                   uint64_t                           hottest_samples,
                                   CodePane pane = CodePane::kIsa);
-    [[nodiscard]] bool RenderMetricCell(const IsaDataBuilder::SamplingRow& row,
-                                        Metric metric, CodePane pane = CodePane::kIsa);
 
 private:
     using SamplingRow          = IsaDataBuilder::SamplingRow;
@@ -108,6 +105,10 @@ private:
     };
 
     static const char* GetUnavailableSamplingTooltip(const SamplingRow& row);
+    static void        RenderHeaderTooltip(const HeaderTooltipText& tooltip,
+                                           void (*render_user_content)());
+    [[nodiscard]] bool RenderMetricCell(const SamplingRow& row, Metric metric,
+                                        CodePane pane);
     [[nodiscard]] bool IsDisabled() const;
     static TooltipRows BuildTooltipRows(const SamplingRow& row);
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
@@ -126,6 +127,7 @@ private:
 
     SettingsManager& m_settings;
     LoadState        m_load_state = LoadState::kReady;
+    Metric           m_selected_metric = Metric::kSamplingState;
 };
 
 }  // namespace View

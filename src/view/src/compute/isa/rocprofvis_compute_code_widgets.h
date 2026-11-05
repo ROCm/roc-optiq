@@ -104,9 +104,7 @@ private:
     enum class SourceColumn : int32_t
     {
         kLineNumber,
-        kSamplingState,
-        kWaveOccupancy,
-        kActiveThreads,
+        kSamplingMetric,
         kSourceText,
         kCount
     };
@@ -145,9 +143,7 @@ private:
     enum class IsaColumn : int32_t
     {
         kLineNumber,
-        kSamplingState,
-        kWaveOccupancy,
-        kActiveThreads,
+        kSamplingMetric,
         kOffset,
         kInstruction,
         kCount

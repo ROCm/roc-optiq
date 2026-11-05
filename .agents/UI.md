@@ -1958,12 +1958,15 @@ submit cancels the request in flight, and the view would then wait forever
 for a reply it goes on to drop. And its requests carry generation
 `UINT32_MAX`, which `OnPcSamplingReady` never matches, so the view ignores
 their completions while the model data they load stays shared. The tool
-counts stall reasons the way the Stall % tooltip does: a sample state without
+counts stall reasons the way `IsaDataBuilder` does: a sample state without
 measured issued and stall counts contributes none, the `OTHER_WAIT`
-contribution of issued samples is dropped, and a lookup with no text is named
+contribution of issued samples is dropped under the same names
+(`ResolveStallReasonKind`), and a lookup with no text is named
 `Unknown stall reason (lookup ID n)`. An instruction with any unmeasured
 sample state reports its issued and stalled counts as `n/a`, and the
-kernel-wide totals leave it out.
+kernel-wide totals leave it out. A stalls read that failed after its
+sample counts landed still answers from those counts, and says the stall
+reasons could not be read.
 
 PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
 its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected
@@ -2622,7 +2625,9 @@ Layered, transport at the bottom and the panel at the top:
   schema predates PC sampling (`kUnsupported`) is also reported as having
   none. A read that failed, whether it was this tool's or the ISA View's,
   or a submit that did not start, is reported as a failed read and not
-  as a capture without samples. A failed layer is retried at most once
+  as a capture without samples - unless its sample counts landed, which
+  are then reported with a note that the stall reasons could not be
+  read. A failed layer is retried at most once
   per call, and only a read the call actually submitted counts as that
   retry. There is no flag for it: PC sampling is a separate
   rocprof-compute capture, so a trace simply has it or not. It reads a

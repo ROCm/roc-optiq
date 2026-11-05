@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <string>
@@ -30,6 +31,7 @@
 
 #include "json.h"
 
+#include "compute/isa/rocprofvis_compute_isa_data.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -1431,10 +1433,15 @@ struct PcInstructionSamples
 };
 
 // Stochastic profiles store an issued sample's unused stall reason as
-// OTHER_WAIT. The ISA View's stall tooltip drops that issued contribution
-// when a state's reason rows cover every sample; this does the same so the
-// two readings of one kernel agree.
-constexpr const char* ASSISTANT_OTHER_WAIT_REASON = "OTHER_WAIT";
+// OTHER_WAIT. IsaDataBuilder drops that issued contribution when a state's
+// reason rows cover every sample; this does the same, under the same names
+// for OTHER_WAIT, so the two readings of one kernel agree.
+bool
+IsOtherWait(const std::string& reason)
+{
+    return IsaDataBuilder::ResolveStallReasonKind(reason) ==
+           IsaDataBuilder::StallReasonKind::kOtherWait;
+}
 
 void
 DropIssuedOtherWait(const PcSampleState& state, std::map<std::string, uint64_t>& reasons)
@@ -1458,16 +1465,31 @@ DropIssuedOtherWait(const PcSampleState& state, std::map<std::string, uint64_t>&
     {
         return;
     }
-    const std::map<std::string, uint64_t>::iterator other_wait =
-        reasons.find(ASSISTANT_OTHER_WAIT_REASON);
-    if(other_wait == reasons.end() || other_wait->second < issue_count)
+    uint64_t other_wait_total = 0;
+    for(const std::pair<const std::string, uint64_t>& reason : reasons)
+    {
+        if(IsOtherWait(reason.first))
+        {
+            other_wait_total += reason.second;
+        }
+    }
+    if(other_wait_total < issue_count)
     {
         return;
     }
-    other_wait->second -= issue_count;
-    if(other_wait->second == 0)
+    uint64_t remaining = issue_count;
+    for(std::map<std::string, uint64_t>::iterator reason = reasons.begin();
+        reason != reasons.end() && remaining > 0;)
     {
-        reasons.erase(other_wait);
+        if(!IsOtherWait(reason->first))
+        {
+            ++reason;
+            continue;
+        }
+        const uint64_t removed = std::min(reason->second, remaining);
+        reason->second -= removed;
+        remaining -= removed;
+        reason = reason->second == 0 ? reasons.erase(reason) : std::next(reason);
     }
 }
 
@@ -1939,6 +1961,12 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
             << (any_progress ? ", and the totals above leave those instructions out.\n"
                              : ", so those totals are omitted.\n");
     }
+    if(!data.stall_details_loaded)
+    {
+        out << "note: the stall reasons could not be read, so samples are counted but "
+               "no reasons are listed. That is a failed read, not samples without a "
+               "reason.\n";
+    }
     if(data.isa_state != PcSamplingLayerState::kRead)
     {
         out << "note: the ISA text could not be read, so instructions show as ?.\n";
@@ -2032,7 +2060,9 @@ ToolKernelPcSamples(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult(ASSISTANT_PC_SAMPLES_UNSUPPORTED, "No PC samples");
     }
-    if(data.stalls_state == PcSamplingLayerState::kFailed)
+    // A stalls read can fail after its sample counts landed; those stay
+    // readable, so only a read that brought back no counts is a failure here.
+    if(data.stalls_state == PcSamplingLayerState::kFailed && !data.sample_states_loaded)
     {
         return DoneResult(
             "The PC samples for that kernel could not be read. That is an error "

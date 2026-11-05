@@ -74,6 +74,8 @@ private:
     void FinishFetchCycle();
     // A Workload column (in place of the hidden id) when there are several.
     bool ShowsWorkloadColumn() const;
+    // Empty for an unknown workload.
+    const std::string& WorkloadName(uint32_t workload_id) const;
     void RenderColumnFilter(int column_index);
     void ApplyFilters();
     bool ValidateFilterExpression(const char* expr, bool is_numeric_column);
@@ -108,6 +110,7 @@ private:
         bool is_active;         // Has content
 
         ColumnFilter() : filter_text{0}, is_active(false) {}
+        bool IsSet() const { return is_active && filter_text[0] != '\0'; }
     };
 
     std::vector<MetricInfo>  m_metrics_info;

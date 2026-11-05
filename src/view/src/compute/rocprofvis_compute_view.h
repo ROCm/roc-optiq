@@ -46,12 +46,6 @@ private:
     void CreateKernelDetails();
     void RenderToolbar();
     void RenderPresets();
-    // Floating "Summary" window, toggled by View > Show Summary.
-    void RenderSummaryWindow();
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    // Floating "Compute Tester" window, toggled from Developer Options.
-    void RenderComputeTesterWindow();
-#endif
     void QueueDatabaseErrorDialog(const std::string& file_path,
                                   const std::string& message);
     void ShowPendingDatabaseErrorDialog();
@@ -70,11 +64,12 @@ private:
     std::shared_ptr<ComputeSelection>   m_compute_selection;
     std::unique_ptr<PresetBrowser>      m_preset_browser;
     std::shared_ptr<ComputeSummaryView> m_summary_view;
+    std::string                         m_summary_window_title;
 
-    // The whole compute UI: one workspace, so no tab bar.
     std::shared_ptr<ComputeKernelDetailsView> m_kernel_details;
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     std::shared_ptr<ComputeTester> m_compute_tester;
+    std::string                    m_tester_window_title;
 #endif
 
     struct popup_info_t

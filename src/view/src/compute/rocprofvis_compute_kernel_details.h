@@ -13,7 +13,6 @@
 #include <array>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -148,6 +147,8 @@ private:
 
     // Panels and boxes.
     bool           IsPaneAvailable(ComputePane pane) const;
+    // The available panel a stored pane value names, or kCount.
+    ComputePane    AvailablePane(int32_t value) const;
     bool&          PaneVisibleSetting(ComputePane pane) const;
     const char*    PaneTitle(ComputePane pane) const;
     ComputeLayoutTemplate CurrentTemplate() const;
@@ -161,6 +162,8 @@ private:
     void           PlacePane(ComputePane pane);
     void           SetTemplate(ComputeLayoutTemplate layout);
     void           ResetLayout();
+    // A and B share one Fit setting, so switching sides keeps the view.
+    void           SetMemoryChartFit(bool fit);
     // Applies Panels / View-menu toggles to the boxes, then mirrors the boxes
     // back into the toggles.
     void           SyncPanelToggles();
@@ -192,15 +195,19 @@ private:
     void RenderPaneBody(ComputePane pane, int32_t slot);
     // Which side a panel shows while comparing; null for panels that show both.
     CompareSide* PaneSide(ComputePane pane);
+    // What a panel set to `side` shows: `side` while comparing, else A.
+    CompareSide  ShownSide(CompareSide side) const;
     void RenderEmptySlot(int32_t slot);
     void HandleSlotDrop(int32_t slot, const ImVec2& slot_min, const ImVec2& slot_max);
     void RenderKernelRail();
     void RenderKernelList();
     // The kernel table's sort and filters, when they reorder or narrow the list.
     void RenderKernelListOrder();
-    // `workload_label` names the workload on the tab when headers cannot.
+    // `can_compare` is CanCompare(); `workload_label` names the workload on the
+    // tab when headers cannot.
     void RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id, bool selected,
-                         float total_duration, const char* workload_label);
+                         bool can_compare, float total_duration,
+                         const char* workload_label);
     void RefreshKernelList();
 
     // Comparison.

@@ -213,17 +213,23 @@ ComputeTableView::FetchCompareMetrics()
     m_compare_loading       = false;
     const WorkloadInfo* workload =
         m_data_provider.ComputeModel().GetWorkload(m_compare_workload_id);
-    if(!m_compare_active || !workload ||
-       m_compare_kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    if(m_compare_active && workload &&
+       m_compare_kernel_id != ComputeSelection::INVALID_SELECTION_ID)
     {
-        return;
+        RequestAllTables(*workload, m_compare_kernel_id, m_compare_client_id,
+                         m_compare_loading, m_compare_fetch_pending);
     }
+}
 
-    // Every table, as for A, so showing another needs no extra round trip.
-    std::vector<uint32_t>                       kernel_ids = { m_compare_kernel_id };
+void
+ComputeTableView::RequestAllTables(const WorkloadInfo& workload, uint32_t kernel_id,
+                                   uint64_t client_id, bool& loading, bool& pending)
+{
+    // Every table is fetched, not just the shown ones, so turning a table on
+    // (or showing a pin from a hidden table) needs no extra round trip.
     std::vector<MetricsRequestParams::MetricID> metric_ids;
     for(const AvailableMetrics::Category* category :
-        workload->available_metrics.ordered_categories)
+        workload.available_metrics.ordered_categories)
     {
         for(const AvailableMetrics::Table* table : category->ordered_tables)
         {
@@ -234,45 +240,29 @@ ComputeTableView::FetchCompareMetrics()
     {
         return;
     }
-    m_compare_loading = true;
-    if(!m_data_provider.FetchMetrics(MetricsRequestParams(workload->id, kernel_ids,
-                                                          metric_ids, m_compare_client_id)))
+    loading = true;
+    if(!m_data_provider.FetchMetrics(
+           MetricsRequestParams(workload.id, { kernel_id }, metric_ids, client_id)))
     {
-        m_compare_fetch_pending = true;
+        pending = true;
     }
 }
 
-std::vector<ComputeTableView::ListedTable>
-ComputeTableView::ListedTables(const WorkloadInfo& workload) const
+void
+ComputeTableView::ListTables(const WorkloadInfo&       workload,
+                             std::vector<ListedTable>& listed) const
 {
+    listed.clear();
     const WorkloadInfo* b_workload =
         m_compare_active ? m_data_provider.ComputeModel().GetWorkload(m_compare_workload_id)
                          : nullptr;
-    auto find_table = [](const WorkloadInfo* source, uint32_t category_id,
-                         uint32_t table_id) -> const AvailableMetrics::Table* {
-        if(!source)
-        {
-            return nullptr;
-        }
-        std::unordered_map<uint32_t, AvailableMetrics::Category>::const_iterator category =
-            source->available_metrics.tree.find(category_id);
-        if(category == source->available_metrics.tree.end())
-        {
-            return nullptr;
-        }
-        std::unordered_map<uint32_t, AvailableMetrics::Table>::const_iterator table =
-            category->second.tables.find(table_id);
-        return table != category->second.tables.end() ? &table->second : nullptr;
-    };
-
-    std::vector<ListedTable> listed;
     for(const AvailableMetrics::Category* category :
         workload.available_metrics.ordered_categories)
     {
         for(const AvailableMetrics::Table* table : category->ordered_tables)
         {
             listed.push_back({ category->id, &category->name, table,
-                               find_table(b_workload, category->id, table->id) });
+                               FindMetricTable(b_workload, category->id, table->id) });
         }
     }
     // Tables only B's workload has (e.g. another GPU architecture) come last.
@@ -283,14 +273,13 @@ ComputeTableView::ListedTables(const WorkloadInfo& workload) const
         {
             for(const AvailableMetrics::Table* table : category->ordered_tables)
             {
-                if(!find_table(&workload, category->id, table->id))
+                if(!FindMetricTable(&workload, category->id, table->id))
                 {
                     listed.push_back({ category->id, &category->name, nullptr, table });
                 }
             }
         }
     }
-    return listed;
 }
 
 void
@@ -303,8 +292,7 @@ ComputeTableView::ResetWorkloadData()
 void
 ComputeTableView::FetchAllMetrics()
 {
-    m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
-    m_table_widgets.clear();
+    ResetWorkloadData();
     m_fetch_pending   = false;
     m_metrics_loading = false;
 
@@ -321,30 +309,8 @@ ComputeTableView::FetchAllMetrics()
     if(!workload)
         return;
 
-    // Every table is fetched, not just the shown ones, so turning a table on
-    // (or showing a pin from a hidden table) needs no extra round trip.
-    std::vector<uint32_t>                   kernel_ids = { kernel_id };
-    std::vector<MetricsRequestParams::MetricID> metric_ids;
-    for(const auto* cat : workload->available_metrics.ordered_categories)
-    {
-        for(const auto* tbl : cat->ordered_tables)
-            metric_ids.push_back({ cat->id, tbl->id, std::nullopt });
-    }
-
-    if(metric_ids.empty())
-    {
-        return;
-    }
-
-    m_metrics_loading = true;
-
-    bool success = m_data_provider.FetchMetrics(
-        MetricsRequestParams(workload->id, kernel_ids, metric_ids, m_client_id));
-
-    if(!success)
-    {
-        m_fetch_pending = true;
-    }
+    RequestAllTables(*workload, kernel_id, m_client_id, m_metrics_loading,
+                     m_fetch_pending);
 }
 
 void
@@ -392,9 +358,10 @@ ComputeTableView::Render()
     }
     else
     {
-        RenderToolbar(*workload);
+        ListTables(*workload, m_listed_tables);
+        RenderToolbar(m_listed_tables);
         ImGui::BeginChild("metric_tables_scroll", ImVec2(0, 0));
-        RenderTables(*workload);
+        RenderTables(m_listed_tables);
         ImGui::EndChild();
     }
 
@@ -404,13 +371,13 @@ ComputeTableView::Render()
 }
 
 void
-ComputeTableView::RenderToolbar(const WorkloadInfo& workload)
+ComputeTableView::RenderToolbar(const std::vector<ListedTable>& listed)
 {
     SettingsManager&  settings  = SettingsManager::GetInstance();
     const ImGuiStyle& style     = settings.GetDefaultStyle();
     ImFont*           icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
 
-    RenderTablePicker(workload);
+    RenderTablePicker(listed);
     if(m_compare_active)
     {
         ImGui::SameLine();
@@ -433,32 +400,30 @@ ComputeTableView::RenderToolbar(const WorkloadInfo& workload)
     ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
                                   ImGui::GetCursorPosX() +
                                       ImGui::GetContentRegionAvail().x - buttons_w));
+    const ImU32 transparent = settings.GetColor(Colors::kTransparent);
+    const ImU32 hovered     = settings.GetColor(Colors::kButtonHovered);
+
+    auto header_button = [&](const char* icon, const char* tooltip,
+                             HeaderRequest request) {
+        if(IconButton(icon, icon_font, ImVec2(0, 0), tooltip, false, style.FramePadding,
+                      transparent, hovered, transparent))
+        {
+            m_header_request = request;
+        }
+    };
     const bool nothing_listed = m_enabled_tables.empty() && m_pinned_metrics.empty();
     ImGui::BeginDisabled(nothing_listed);
-    if(IconButton(ICON_ARROWS_EXPAND, icon_font, ImVec2(0, 0), "Expand all tables", false,
-                  style.FramePadding, settings.GetColor(Colors::kTransparent),
-                  settings.GetColor(Colors::kButtonHovered),
-                  settings.GetColor(Colors::kTransparent)))
-    {
-        m_header_request = HeaderRequest::kExpandAll;
-    }
+    header_button(ICON_ARROWS_EXPAND, "Expand all tables", HeaderRequest::kExpandAll);
     ImGui::SameLine();
-    if(IconButton(ICON_ARROWS_SHRINK, icon_font, ImVec2(0, 0), "Collapse all tables",
-                  false, style.FramePadding, settings.GetColor(Colors::kTransparent),
-                  settings.GetColor(Colors::kButtonHovered),
-                  settings.GetColor(Colors::kTransparent)))
-    {
-        m_header_request = HeaderRequest::kCollapseAll;
-    }
+    header_button(ICON_ARROWS_SHRINK, "Collapse all tables", HeaderRequest::kCollapseAll);
     ImGui::EndDisabled();
     ImGui::Spacing();
 }
 
 void
-ComputeTableView::RenderTablePicker(const WorkloadInfo& workload)
+ComputeTableView::RenderTablePicker(const std::vector<ListedTable>& listed)
 {
-    const std::vector<ListedTable> listed = ListedTables(workload);
-    size_t                         shown  = 0;
+    size_t shown = 0;
     for(const ListedTable& table : listed)
     {
         if(m_enabled_tables.count(table.Key()) > 0)
@@ -496,8 +461,7 @@ ComputeTableView::RenderTablePicker(const WorkloadInfo& workload)
         const std::string* last_category = nullptr;
         for(const ListedTable& table : listed)
         {
-            const AvailableMetrics::Table& named = table.a ? *table.a : *table.b;
-            const std::string label = TableLabel(table.category_id, named);
+            const std::string label = TableLabel(table.category_id, table.Named());
             if(!ContainsIgnoreCase(*table.category_name, m_picker_filter) &&
                !ContainsIgnoreCase(label, m_picker_filter))
             {
@@ -551,7 +515,7 @@ ComputeTableView::RenderCompareOptions()
     constexpr const char* COLUMN_LABELS[] = { "A (baseline)", "B (target)",
                                               "\xCE\x94 (B - A)", "\xCE\x94% (of A)" };
     static_assert(sizeof(COLUMN_LABELS) / sizeof(COLUMN_LABELS[0]) ==
-                      static_cast<size_t>(MetricCompareColumn::kCount),
+                      METRIC_COMPARE_COLUMN_COUNT,
                   "one label per MetricCompareColumn");
     constexpr float HIGHLIGHT_DRAG_SPEED = 0.5f;
     constexpr float HIGHLIGHT_MAX_PCT    = 100.0f;
@@ -562,8 +526,7 @@ ComputeTableView::RenderCompareOptions()
     if(ImGui::BeginCombo("##metric_compare_options", "Compare"))
     {
         ImGui::TextDisabled("Columns per value");
-        for(size_t column = 0; column < static_cast<size_t>(MetricCompareColumn::kCount);
-            ++column)
+        for(size_t column = 0; column < METRIC_COMPARE_COLUMN_COUNT; ++column)
         {
             bool on = m_compare_options.columns.test(column);
             // At least one column stays on.
@@ -576,7 +539,8 @@ ComputeTableView::RenderCompareOptions()
             ImGui::EndDisabled();
         }
         ImGui::Separator();
-        changed |= ImGui::Checkbox("Metrics only one side has", &m_compare_options.show_unmatched);
+        changed |= ImGui::Checkbox("Metrics only one side has",
+                                   &m_compare_options.show_unmatched);
         if(ImGui::IsItemHovered())
         {
             SetTooltipStyled("Listed dimmed, e.g. architecture-specific metrics when A and B\n"
@@ -613,12 +577,12 @@ ComputeTableView::ApplyHeaderRequest()
 }
 
 void
-ComputeTableView::RenderTables(const WorkloadInfo& workload)
+ComputeTableView::RenderTables(const std::vector<ListedTable>& listed)
 {
-    bool listed = false;
+    bool any_shown = false;
     if(!m_pinned_metrics.empty())
     {
-        listed = true;
+        any_shown = true;
         ApplyHeaderRequest();
         if(ImGui::CollapsingHeader("Pinned Metrics###pinned_metrics",
                                    ImGuiTreeNodeFlags_DefaultOpen))
@@ -628,17 +592,17 @@ ComputeTableView::RenderTables(const WorkloadInfo& workload)
         }
     }
 
-    for(const ListedTable& table : ListedTables(workload))
+    for(const ListedTable& table : listed)
     {
         const uint64_t key = table.Key();
         if(m_enabled_tables.count(key) == 0)
         {
             continue;
         }
-        listed = true;
+        any_shown = true;
 
         // "###" keeps the header's open state keyed by table, not by label.
-        std::string label = TableLabel(table.category_id, table.a ? *table.a : *table.b);
+        std::string label = TableLabel(table.category_id, table.Named());
         if(m_compare_active && (!table.a || !table.b))
         {
             label += table.a ? "  (A only)" : "  (B only)";
@@ -667,7 +631,7 @@ ComputeTableView::RenderTables(const WorkloadInfo& workload)
     }
     m_header_request = HeaderRequest::kNone;
 
-    if(!listed)
+    if(!any_shown)
     {
         RenderEmptyState();
     }
@@ -702,7 +666,9 @@ ComputeTableView::RebuildTableDataCache()
     if(!workload)
         return;
 
-    for(const ListedTable& table : ListedTables(*workload))
+    std::vector<ListedTable> listed;
+    ListTables(*workload, listed);
+    for(const ListedTable& table : listed)
     {
         AddTable(table);
     }
@@ -804,9 +770,10 @@ ComputeTableView::Preset::ToJson(jt::Json& json)
         }
     }
     const MetricCompareOptions& compare = m_widget.m_compare_options;
+    jt::Json&                   columns = json[JSON_KEY_COMPARE_COLUMNS];
     for(size_t column = 0; column < compare.columns.size(); ++column)
     {
-        json[JSON_KEY_COMPARE_COLUMNS][column] = compare.columns.test(column);
+        columns[column] = compare.columns.test(column);
     }
     json[JSON_KEY_COMPARE_UNMATCHED] = compare.show_unmatched;
     json[JSON_KEY_COMPARE_HIGHLIGHT] = static_cast<double>(compare.highlight_pct);
@@ -887,7 +854,8 @@ ComputeTableView::Preset::FromJson(jt::Json& json)
                 }
             }
         }
-        if(json.contains(JSON_KEY_COMPARE_UNMATCHED) && json[JSON_KEY_COMPARE_UNMATCHED].isBool())
+        if(json.contains(JSON_KEY_COMPARE_UNMATCHED) &&
+           json[JSON_KEY_COMPARE_UNMATCHED].isBool())
         {
             compare.show_unmatched = json[JSON_KEY_COMPARE_UNMATCHED].getBool();
         }
@@ -911,13 +879,6 @@ ComputeTableView::Preset::FromJson(jt::Json& json)
 void
 ComputeTableView::Preset::Reset()
 {
-    for(const MetricId& id : m_widget.m_pinned_metrics)
-    {
-        if(m_widget.m_table_widgets.count(id.GetTableKey()) > 0)
-        {
-            m_widget.m_table_widgets.at(id.GetTableKey()).ChangePinState(id);
-        }
-    }
     m_widget.m_pinned_metrics.clear();
     m_widget.m_enabled_tables  = { DEFAULT_SHOWN_TABLE };
     m_widget.m_compare_options = MetricCompareOptions();

@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <numeric>
 
 namespace RocProfVis
 {
@@ -90,6 +91,15 @@ KernelMetricTable::ShowsWorkloadColumn() const
     return m_data_provider.ComputeModel().GetWorkloadList().size() > 1;
 }
 
+const std::string&
+KernelMetricTable::WorkloadName(uint32_t workload_id) const
+{
+    static const std::string NO_NAME;
+    const WorkloadInfo*      workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
+    return workload ? workload->name : NO_NAME;
+}
+
 bool
 KernelMetricTable::IsDefaultSort() const
 {
@@ -128,7 +138,7 @@ KernelMetricTable::GetActiveFilterCount() const
     size_t count = 0;
     for(const ColumnFilter& filter : m_column_filters)
     {
-        if(filter.is_active && strlen(filter.filter_text) > 0)
+        if(filter.IsSet())
         {
             count++;
         }
@@ -142,12 +152,12 @@ KernelMetricTable::KernelMetricTable(DataProvider&                     data_prov
 , m_data_provider(data_provider)
 , m_fetch_requested(false)
 , m_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_selected_workload_id_local(ComputeSelection::INVALID_SELECTION_ID)
-, m_marked_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_marked_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_sort_column_index(DURATION_COLUMN_INDEX)
 , m_sort_order(kRPVControllerSortOrderDescending)
 , m_selected_row(-1)
+, m_selected_workload_id_local(ComputeSelection::INVALID_SELECTION_ID)
+, m_marked_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_marked_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_compute_selection(compute_selection)
 , m_selected_kernel_id_local(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_kernel_table(true)
@@ -231,9 +241,9 @@ KernelMetricTable::RequestWorkloadRows(uint32_t workload_id)
     for(size_t i = 0; i < m_column_filters.size(); i++)
     {
         const ColumnFilter& filter = m_column_filters[i];
-        if(filter.is_active && strlen(filter.filter_text) > 0)
+        if(filter.IsSet())
         {
-            filter_map[i] = std::string(filter.filter_text);
+            filter_map[i] = filter.filter_text;
         }
     }
 
@@ -262,12 +272,11 @@ KernelMetricTable::HandleNewData(bool success)
     {
         ComputeKernelSelectionTable& table =
             m_data_provider.ComputeModel().GetKernelSelectionTable();
+        const std::vector<std::vector<std::string>>& rows = table.GetTableData();
         m_pending_header = table.GetTableHeader();
-        for(const std::vector<std::string>& row : table.GetTableData())
-        {
-            m_pending_rows.push_back(row);
-            m_pending_row_workloads.push_back(m_fetch_workloads[m_fetch_index]);
-        }
+        m_pending_rows.insert(m_pending_rows.end(), rows.begin(), rows.end());
+        m_pending_row_workloads.insert(m_pending_row_workloads.end(), rows.size(),
+                                       m_fetch_workloads[m_fetch_index]);
     }
     ++m_fetch_index;
     if(m_fetch_index < m_fetch_workloads.size())
@@ -287,26 +296,18 @@ KernelMetricTable::FinishFetchCycle()
 
     // Each workload came back sorted; order them together the same way. Values
     // that are not numbers (N/A) go last either way.
-    const ComputeDataModel& model     = m_data_provider.ComputeModel();
-    const int               column    = m_sort_column_index;
-    const bool              ascending = m_sort_order == kRPVControllerSortOrderAscending;
-    const bool              workloads = ShowsWorkloadColumn();
-    auto workload_name = [&model](uint32_t id) -> std::string {
-        const WorkloadInfo* workload = model.GetWorkload(id);
-        return workload ? workload->name : std::string();
-    };
+    const int           column    = m_sort_column_index;
+    const bool          ascending = m_sort_order == kRPVControllerSortOrderAscending;
+    const bool          workloads = ShowsWorkloadColumn();
     std::vector<size_t> order(m_pending_rows.size());
-    for(size_t i = 0; i < order.size(); ++i)
-    {
-        order[i] = i;
-    }
+    std::iota(order.begin(), order.end(), static_cast<size_t>(0));
     std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
         const std::vector<std::string>& row_a = m_pending_rows[a];
         const std::vector<std::string>& row_b = m_pending_rows[b];
         if(column == ID_COLUMN_INDEX && workloads)
         {
-            const std::string name_a = workload_name(m_pending_row_workloads[a]);
-            const std::string name_b = workload_name(m_pending_row_workloads[b]);
+            const std::string& name_a = WorkloadName(m_pending_row_workloads[a]);
+            const std::string& name_b = WorkloadName(m_pending_row_workloads[b]);
             return ascending ? name_a < name_b : name_a > name_b;
         }
         if(column < 0 || column >= static_cast<int>(row_a.size()) ||
@@ -357,7 +358,8 @@ KernelMetricTable::FinishFetchCycle()
     m_pending_row_workloads.clear();
     if(!m_pending_header.empty())
     {
-        m_header = m_pending_header;
+        m_header = std::move(m_pending_header);
+        m_pending_header.clear();
     }
 
     // Metric columns are those after the permanent ones.
@@ -833,6 +835,7 @@ KernelMetricTable::Render()
                 {
                     clipper.IncludeItemByIndex(m_selected_row);
                 }
+                const std::string marked_kernel_id = std::to_string(m_marked_kernel_id);
                 while(clipper.Step())
                 {
                     for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
@@ -850,26 +853,21 @@ KernelMetricTable::Render()
                         }
                         // The compare target's row.
                         if(row_workload == m_marked_workload_id &&
-                           data[row][ID_COLUMN_INDEX] == std::to_string(m_marked_kernel_id))
+                           data[row][ID_COLUMN_INDEX] == marked_kernel_id)
                         {
                             ImGui::TableSetBgColor(
                                 ImGuiTableBgTarget_RowBg1,
                                 ApplyAlpha(settings.GetColor(Colors::kComparisonTarget),
                                            MARKED_ROW_ALPHA));
                         }
-                        std::string workload_label;
-                        if(workload_column)
-                        {
-                            const WorkloadInfo* workload =
-                                m_data_provider.ComputeModel().GetWorkload(row_workload);
-                            workload_label = workload ? workload->name : std::string();
-                        }
+                        const std::string* workload_label =
+                            workload_column ? &WorkloadName(row_workload) : nullptr;
 
                         for(int col = 0; col < data[row].size(); col++)
                         {
-                            const std::string& cell = col == ID_COLUMN_INDEX && workload_column
-                                                          ? workload_label
-                                                          : data[row][col];
+                            const std::string& cell =
+                                (workload_label && col == ID_COLUMN_INDEX) ? *workload_label
+                                                                           : data[row][col];
                             ImGui::TableNextColumn();
 
                             // Track hover using the current table cell bounds instead of

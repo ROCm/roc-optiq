@@ -35,6 +35,7 @@ constexpr float WORKSPACE_SCROLLBAR_SIZE = 8.0f;
 
 // Share of the large box in the "main" templates, and the kernel rail's share.
 constexpr float MAIN_SPLIT_RATIO = 0.62f;
+constexpr float HALF             = 0.5f;
 constexpr float THIRD            = 1.0f / 3.0f;
 constexpr float TWO_THIRDS       = 2.0f / 3.0f;
 constexpr float RAIL_LIST_RATIO  = 0.17f;  // kernel tabs | workspace
@@ -57,6 +58,8 @@ constexpr float THUMBNAIL_LABEL_GAP       = 8.0f;
 constexpr float THUMBNAIL_GAP             = 1.0f;
 constexpr float THUMBNAIL_ROUNDING        = 1.5f;
 constexpr float THUMBNAIL_FILL_ALPHA      = 0.3f;
+// The Panels combo's "N of M panels" preview.
+constexpr size_t PANELS_PREVIEW_SIZE = 32;
 
 // Box title handle and drop feedback.
 constexpr const char* PANE_DRAG_PAYLOAD      = "COMPUTE_PANE_BOX";
@@ -76,6 +79,8 @@ constexpr float  KERNEL_TAB_ROUNDING     = 4.0f;
 constexpr float  KERNEL_TAB_TRACK_ALPHA  = 0.6f;
 constexpr float  KERNEL_TOOLTIP_WIDTH    = 480.0f;
 constexpr size_t KERNEL_NAME_MAX_CHARS   = 512;
+// Anti-aliased edges reach this far past a tab's rect.
+constexpr float  KERNEL_TAB_CULL_MARGIN  = 1.0f;
 // The tab's stats line, which may lead with the workload's name.
 constexpr size_t KERNEL_TAB_STATS_SIZE   = 256;
 
@@ -115,15 +120,15 @@ struct LayoutTemplateInfo
 static const LayoutTemplateInfo LAYOUT_TEMPLATES[] = {
     { "Main + Two Below", 3,
       { { 0, 0, 1, MAIN_SPLIT_RATIO },
-        { 0, MAIN_SPLIT_RATIO, 0.5f, 1 },
-        { 0.5f, MAIN_SPLIT_RATIO, 1, 1 } } },
+        { 0, MAIN_SPLIT_RATIO, HALF, 1 },
+        { HALF, MAIN_SPLIT_RATIO, 1, 1 } } },
     { "Single", 1, { { 0, 0, 1, 1 } } },
-    { "Side by Side", 2, { { 0, 0, 0.5f, 1 }, { 0.5f, 0, 1, 1 } } },
-    { "Stacked", 2, { { 0, 0, 1, 0.5f }, { 0, 0.5f, 1, 1 } } },
+    { "Side by Side", 2, { { 0, 0, HALF, 1 }, { HALF, 0, 1, 1 } } },
+    { "Stacked", 2, { { 0, 0, 1, HALF }, { 0, HALF, 1, 1 } } },
     { "Main + Two Right", 3,
       { { 0, 0, MAIN_SPLIT_RATIO, 1 },
-        { MAIN_SPLIT_RATIO, 0, 1, 0.5f },
-        { MAIN_SPLIT_RATIO, 0.5f, 1, 1 } } },
+        { MAIN_SPLIT_RATIO, 0, 1, HALF },
+        { MAIN_SPLIT_RATIO, HALF, 1, 1 } } },
     { "Three Columns", 3,
       { { 0, 0, THIRD, 1 }, { THIRD, 0, TWO_THIRDS, 1 }, { TWO_THIRDS, 0, 1, 1 } } },
     { "Main + Three Below", 4,
@@ -132,7 +137,10 @@ static const LayoutTemplateInfo LAYOUT_TEMPLATES[] = {
         { THIRD, MAIN_SPLIT_RATIO, TWO_THIRDS, 1 },
         { TWO_THIRDS, MAIN_SPLIT_RATIO, 1, 1 } } },
     { "2 x 2 Grid", 4,
-      { { 0, 0, 0.5f, 0.5f }, { 0.5f, 0, 1, 0.5f }, { 0, 0.5f, 0.5f, 1 }, { 0.5f, 0.5f, 1, 1 } } },
+      { { 0, 0, HALF, HALF },
+        { HALF, 0, 1, HALF },
+        { 0, HALF, HALF, 1 },
+        { HALF, HALF, 1, 1 } } },
 };
 static_assert(sizeof(LAYOUT_TEMPLATES) / sizeof(LAYOUT_TEMPLATES[0]) ==
                   static_cast<size_t>(ComputeLayoutTemplate::kCount),
@@ -146,6 +154,8 @@ static const ComputeLayoutTemplate LAYOUT_MENU_ORDER[] = {
     ComputeLayoutTemplate::kMainThreeBelow, ComputeLayoutTemplate::kGrid,
 };
 
+constexpr int32_t PANE_COUNT = static_cast<int32_t>(ComputePane::kCount);
+
 static const LayoutTemplateInfo&
 TemplateInfo(ComputeLayoutTemplate layout)
 {
@@ -156,6 +166,26 @@ static ComputePane
 PaneAt(int32_t index)
 {
     return static_cast<ComputePane>(index);
+}
+
+static bool
+IsSlotIndex(int32_t slot)
+{
+    return slot >= 0 && slot < COMPUTE_LAYOUT_MAX_SLOTS;
+}
+
+static AppWindowSettings&
+WindowSettings()
+{
+    return SettingsManager::GetInstance().GetAppWindowSettings();
+}
+
+// The kernel rail's share of the tab; the full table needs far more width than
+// the tab list.
+static float
+RailSplitRatio(bool table)
+{
+    return table ? RAIL_TABLE_RATIO : RAIL_LIST_RATIO;
 }
 
 static bool
@@ -279,6 +309,41 @@ Badge(const char* text, Colors color, const char* tooltip)
     }
 }
 
+static ImFont*
+IconFont()
+{
+    return SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+}
+
+static float
+IconWidth(const char* icon)
+{
+    ImGui::PushFont(IconFont(), 0.0f);
+    const float width = ImGui::CalcTextSize(icon).x;
+    ImGui::PopFont();
+    return width;
+}
+
+// An icon button with frame padding, on `bg`, in the app's hover / press colors.
+static bool
+FramedIconButton(const char* icon, const char* tooltip, ImU32 bg)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    return IconButton(icon, IconFont(), ImVec2(0, 0), tooltip, false,
+                      settings.GetDefaultStyle().FramePadding, bg,
+                      settings.GetColor(Colors::kButtonHovered),
+                      settings.GetColor(Colors::kButtonActive));
+}
+
+// Continues the line so that `width` worth of items ends at the right edge.
+static void
+SameLineRightAligned(float width)
+{
+    ImGui::SameLine();
+    const float x = ImGui::GetCursorPosX();
+    ImGui::SetCursorPosX(std::max(x, x + ImGui::GetContentRegionAvail().x - width));
+}
+
 ComputeKernelDetailsView::ComputeKernelDetailsView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
     bool has_available_metrics, bool has_isa_lines)
@@ -373,10 +438,7 @@ ComputeKernelDetailsView::CreatePanes()
     m_rail_pane = MakeRenderPane([this]() { RenderKernelRail(); });
 
     m_root_split = std::make_shared<HSplitContainer>(m_rail_pane, nullptr);
-    m_root_split->SetSplit(
-        SettingsManager::GetInstance().GetAppWindowSettings().compute_kernel_list_table
-            ? RAIL_TABLE_RATIO
-            : RAIL_LIST_RATIO);
+    m_root_split->SetSplit(RailSplitRatio(WindowSettings().compute_kernel_list_table));
     m_root_split->SetSplitterSize(PANE_GUTTER);
 }
 
@@ -490,10 +552,7 @@ ComputeKernelDetailsView::Update()
     {
         m_kernel_metric_table->Update();
     }
-    if(m_table_view)
-    {
-        m_table_view->Update();
-    }
+    m_table_view->Update();
     if(m_isa_view)
     {
         m_isa_view->Update();
@@ -507,10 +566,18 @@ ComputeKernelDetailsView::IsPaneAvailable(ComputePane pane) const
     return pane != ComputePane::kCount && (pane != ComputePane::kIsa || m_isa_view != nullptr);
 }
 
+ComputePane
+ComputeKernelDetailsView::AvailablePane(int32_t value) const
+{
+    const ComputePane pane = value >= 0 && value < PANE_COUNT ? PaneAt(value)
+                                                              : ComputePane::kCount;
+    return IsPaneAvailable(pane) ? pane : ComputePane::kCount;
+}
+
 bool&
 ComputeKernelDetailsView::PaneVisibleSetting(ComputePane pane) const
 {
-    AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+    AppWindowSettings& settings = WindowSettings();
     switch(pane)
     {
         case ComputePane::kRoofline: return settings.show_compute_roofline;
@@ -541,8 +608,7 @@ ComputeKernelDetailsView::PaneTitle(ComputePane pane) const
 ComputeLayoutTemplate
 ComputeKernelDetailsView::CurrentTemplate() const
 {
-    const int32_t value =
-        SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_template;
+    const int32_t value = WindowSettings().compute_layout_template;
     return value >= 0 && value < static_cast<int32_t>(ComputeLayoutTemplate::kCount)
                ? static_cast<ComputeLayoutTemplate>(value)
                : ComputeLayoutTemplate::kMainBelow;
@@ -557,18 +623,8 @@ ComputeKernelDetailsView::ActiveSlotCount() const
 ComputePane
 ComputeKernelDetailsView::SlotPane(int32_t slot) const
 {
-    ComputePane pane = ComputePane::kCount;
-    if(slot >= 0 && slot < COMPUTE_LAYOUT_MAX_SLOTS)
-    {
-        const int32_t value =
-            SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots[slot];
-        if(value >= 0 && value < static_cast<int32_t>(ComputePane::kCount) &&
-           IsPaneAvailable(PaneAt(value)))
-        {
-            pane = PaneAt(value);
-        }
-    }
-    return pane;
+    return IsSlotIndex(slot) ? AvailablePane(WindowSettings().compute_layout_slots[slot])
+                             : ComputePane::kCount;
 }
 
 int32_t
@@ -588,25 +644,20 @@ ComputeKernelDetailsView::ActiveSlotOf(ComputePane pane) const
 ComputePane
 ComputeKernelDetailsView::MaximizedPane() const
 {
-    const AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
-    const int32_t            value    = settings.compute_maximized_pane;
-    if(settings.compute_maximized && value >= 0 &&
-       value < static_cast<int32_t>(ComputePane::kCount) && IsPaneAvailable(PaneAt(value)))
-    {
-        return PaneAt(value);
-    }
-    return ComputePane::kCount;
+    const AppWindowSettings& settings = WindowSettings();
+    return settings.compute_maximized ? AvailablePane(settings.compute_maximized_pane)
+                                      : ComputePane::kCount;
 }
 
 void
 ComputeKernelDetailsView::AssignSlot(int32_t slot, ComputePane pane)
 {
-    if(slot < 0 || slot >= COMPUTE_LAYOUT_MAX_SLOTS)
+    if(!IsSlotIndex(slot))
     {
         return;
     }
     // A panel lives in one box at most: taking it from another box swaps the two.
-    int32_t*      slots = SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots;
+    int32_t*      slots = WindowSettings().compute_layout_slots;
     const int32_t value = static_cast<int32_t>(pane);
     for(int32_t other = 0; other < COMPUTE_LAYOUT_MAX_SLOTS; ++other)
     {
@@ -622,11 +673,9 @@ ComputeKernelDetailsView::AssignSlot(int32_t slot, ComputePane pane)
 void
 ComputeKernelDetailsView::SwapSlots(int32_t a, int32_t b)
 {
-    if(a >= 0 && a < COMPUTE_LAYOUT_MAX_SLOTS && b >= 0 && b < COMPUTE_LAYOUT_MAX_SLOTS &&
-       a != b)
+    if(IsSlotIndex(a) && IsSlotIndex(b) && a != b)
     {
-        int32_t* slots =
-            SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots;
+        int32_t* slots = WindowSettings().compute_layout_slots;
         std::swap(slots[a], slots[b]);
     }
 }
@@ -634,11 +683,11 @@ ComputeKernelDetailsView::SwapSlots(int32_t a, int32_t b)
 void
 ComputeKernelDetailsView::ClearSlot(int32_t slot)
 {
-    if(slot < 0 || slot >= COMPUTE_LAYOUT_MAX_SLOTS)
+    if(!IsSlotIndex(slot))
     {
         return;
     }
-    AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+    AppWindowSettings& settings = WindowSettings();
     if(settings.compute_maximized &&
        settings.compute_maximized_pane == settings.compute_layout_slots[slot])
     {
@@ -666,7 +715,7 @@ ComputeKernelDetailsView::PlacePane(ComputePane pane)
 void
 ComputeKernelDetailsView::SetTemplate(ComputeLayoutTemplate layout)
 {
-    AppWindowSettings& settings      = SettingsManager::GetInstance().GetAppWindowSettings();
+    AppWindowSettings& settings      = WindowSettings();
     settings.compute_layout_template = static_cast<int32_t>(layout);
     settings.compute_maximized       = false;
     // Boxes keep their panels in order; empty boxes take panels not yet shown, so
@@ -678,11 +727,12 @@ ComputeKernelDetailsView::SetTemplate(ComputeLayoutTemplate layout)
         {
             continue;
         }
-        for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+        for(int32_t i = 0; i < PANE_COUNT; ++i)
         {
-            if(IsPaneAvailable(PaneAt(i)) && ActiveSlotOf(PaneAt(i)) < 0)
+            const ComputePane pane = PaneAt(i);
+            if(IsPaneAvailable(pane) && ActiveSlotOf(pane) < 0)
             {
-                AssignSlot(slot, PaneAt(i));
+                AssignSlot(slot, pane);
                 break;
             }
         }
@@ -692,23 +742,29 @@ ComputeKernelDetailsView::SetTemplate(ComputeLayoutTemplate layout)
 void
 ComputeKernelDetailsView::ResetLayout()
 {
-    AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+    AppWindowSettings& settings      = WindowSettings();
     settings.compute_layout_template = static_cast<int32_t>(ComputeLayoutTemplate::kMainBelow);
     for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
     {
-        settings.compute_layout_slots[slot] =
-            slot < static_cast<int32_t>(ComputePane::kCount) ? slot : EMPTY_SLOT_VALUE;
+        settings.compute_layout_slots[slot] = slot < PANE_COUNT ? slot : EMPTY_SLOT_VALUE;
     }
     settings.compute_maximized        = false;
     settings.show_compute_kernel_list = true;
     SetKernelRailTableMode(false);
-    m_memory_chart.SetFitToView(false);
+    SetMemoryChartFit(false);
+}
+
+void
+ComputeKernelDetailsView::SetMemoryChartFit(bool fit)
+{
+    m_memory_chart.SetFitToView(fit);
+    m_memory_chart_b.SetFitToView(fit);
 }
 
 void
 ComputeKernelDetailsView::SyncPanelToggles()
 {
-    for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+    for(int32_t i = 0; i < PANE_COUNT; ++i)
     {
         const ComputePane pane = PaneAt(i);
         if(!IsPaneAvailable(pane))
@@ -729,13 +785,13 @@ ComputeKernelDetailsView::SyncPanelToggles()
             }
         }
     }
-    for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+    for(int32_t i = 0; i < PANE_COUNT; ++i)
     {
         const ComputePane pane = PaneAt(i);
         if(IsPaneAvailable(pane))
         {
-            const bool shown                           = ActiveSlotOf(pane) >= 0;
-            PaneVisibleSetting(pane)                   = shown;
+            const bool shown                         = ActiveSlotOf(pane) >= 0;
+            PaneVisibleSetting(pane)                 = shown;
             m_synced_toggles[static_cast<size_t>(i)] = shown;
         }
     }
@@ -748,7 +804,7 @@ ComputeKernelDetailsView::CurrentLayoutState() const
     LayoutState state;
     state.layout      = CurrentTemplate();
     state.maximized   = MaximizedPane() != ComputePane::kCount;
-    state.kernel_rail = SettingsManager::GetInstance().GetAppWindowSettings().show_compute_kernel_list;
+    state.kernel_rail = WindowSettings().show_compute_kernel_list;
     return state;
 }
 
@@ -794,32 +850,31 @@ ComputeKernelDetailsView::BuildTemplate(ComputeLayoutTemplate layout)
     switch(layout)
     {
         case ComputeLayoutTemplate::kSingle: return box[0];
-        case ComputeLayoutTemplate::kSideBySide: return HSplitPane(box[0], box[1], 0.5f);
-        case ComputeLayoutTemplate::kStacked: return VSplitPane(box[0], box[1], 0.5f);
+        case ComputeLayoutTemplate::kSideBySide: return HSplitPane(box[0], box[1], HALF);
+        case ComputeLayoutTemplate::kStacked: return VSplitPane(box[0], box[1], HALF);
         case ComputeLayoutTemplate::kMainRight:
-            return HSplitPane(box[0], VSplitPane(box[1], box[2], 0.5f), MAIN_SPLIT_RATIO);
+            return HSplitPane(box[0], VSplitPane(box[1], box[2], HALF), MAIN_SPLIT_RATIO);
         case ComputeLayoutTemplate::kThreeColumns:
-            return HSplitPane(box[0], HSplitPane(box[1], box[2], 0.5f), THIRD);
+            return HSplitPane(box[0], HSplitPane(box[1], box[2], HALF), THIRD);
         case ComputeLayoutTemplate::kMainThreeBelow:
             return VSplitPane(
-                box[0], HSplitPane(box[1], HSplitPane(box[2], box[3], 0.5f), THIRD),
+                box[0], HSplitPane(box[1], HSplitPane(box[2], box[3], HALF), THIRD),
                 MAIN_SPLIT_RATIO);
         case ComputeLayoutTemplate::kGrid:
-            return VSplitPane(HSplitPane(box[0], box[1], 0.5f), HSplitPane(box[2], box[3], 0.5f),
-                              0.5f);
+            return VSplitPane(HSplitPane(box[0], box[1], HALF),
+                              HSplitPane(box[2], box[3], HALF), HALF);
         case ComputeLayoutTemplate::kMainBelow:
         case ComputeLayoutTemplate::kCount: break;
     }
-    return VSplitPane(box[0], HSplitPane(box[1], box[2], 0.5f), MAIN_SPLIT_RATIO);
+    return VSplitPane(box[0], HSplitPane(box[1], box[2], HALF), MAIN_SPLIT_RATIO);
 }
 
 void
 ComputeKernelDetailsView::UpdatePaneMinSizes()
 {
-    const AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
-    const float              frame_h  = ImGui::GetFrameHeightWithSpacing();
-    const float              em       = ImGui::GetFontSize();
-    m_root_split->SetMinLeftWidth(em * (settings.compute_kernel_list_table
+    const float frame_h = ImGui::GetFrameHeightWithSpacing();
+    const float em      = ImGui::GetFontSize();
+    m_root_split->SetMinLeftWidth(em * (WindowSettings().compute_kernel_list_table
                                             ? RAIL_TABLE_MIN_WIDTH_EMS
                                             : RAIL_LIST_MIN_WIDTH_EMS));
     m_root_split->SetMinRightWidth(em * WORKSPACE_MIN_WIDTH_EMS);
@@ -838,9 +893,8 @@ ComputeKernelDetailsView::UpdatePaneMinSizes()
 void
 ComputeKernelDetailsView::SetKernelRailTableMode(bool table)
 {
-    SettingsManager::GetInstance().GetAppWindowSettings().compute_kernel_list_table = table;
-    // The full table needs far more width than the tab list.
-    m_root_split->SetSplit(table ? RAIL_TABLE_RATIO : RAIL_LIST_RATIO);
+    WindowSettings().compute_kernel_list_table = table;
+    m_root_split->SetSplit(RailSplitRatio(table));
 }
 
 void
@@ -907,10 +961,10 @@ ComputeKernelDetailsView::RenderLayoutMenu()
     if(ImGui::BeginComboPreview())
     {
         const float  thumb_h = ImGui::GetTextLineHeight();
-        const ImVec2 pos     = ImGui::GetCursorScreenPos();
-        ImGui::Dummy(ImVec2(thumb_h * THUMBNAIL_ASPECT, thumb_h));
-        DrawLayoutThumbnail(ImGui::GetWindowDrawList(), pos,
-                            ImVec2(thumb_h * THUMBNAIL_ASPECT, thumb_h), current, dim);
+        const ImVec2 thumb_size(thumb_h * THUMBNAIL_ASPECT, thumb_h);
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImGui::Dummy(thumb_size);
+        DrawLayoutThumbnail(ImGui::GetWindowDrawList(), pos, thumb_size, current, dim);
         ImGui::SameLine(0.0f, THUMBNAIL_LABEL_GAP);
         ImGui::TextUnformatted(TemplateInfo(current).name);
         ImGui::EndComboPreview();
@@ -927,29 +981,30 @@ ComputeKernelDetailsView::RenderLayoutMenu()
 void
 ComputeKernelDetailsView::RenderPanelsMenu()
 {
-    AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
-    int32_t            shown    = 0;
-    int32_t            total    = 0;
-    for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+    int32_t shown = 0;
+    int32_t total = 0;
+    for(int32_t i = 0; i < PANE_COUNT; ++i)
     {
-        if(IsPaneAvailable(PaneAt(i)))
+        const ComputePane pane = PaneAt(i);
+        if(IsPaneAvailable(pane))
         {
             total++;
-            shown += ActiveSlotOf(PaneAt(i)) >= 0 ? 1 : 0;
+            shown += ActiveSlotOf(pane) >= 0 ? 1 : 0;
         }
     }
-    const std::string preview =
-        std::to_string(shown) + " of " + std::to_string(total) + " panels";
+    char preview[PANELS_PREVIEW_SIZE];
+    std::snprintf(preview, sizeof(preview), "%d of %d panels", static_cast<int>(shown),
+                  static_cast<int>(total));
 
     ImGui::TextUnformatted("Panels:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * PANELS_COMBO_WIDTH_FRAMES);
     PushComboStyles();
-    if(ImGui::BeginCombo("##compute_panels", preview.c_str()))
+    if(ImGui::BeginCombo("##compute_panels", preview))
     {
-        ImGui::Checkbox("Kernels", &settings.show_compute_kernel_list);
+        ImGui::Checkbox("Kernels", &WindowSettings().show_compute_kernel_list);
         ImGui::Separator();
-        for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+        for(int32_t i = 0; i < PANE_COUNT; ++i)
         {
             const ComputePane pane = PaneAt(i);
             if(IsPaneAvailable(pane))
@@ -970,7 +1025,6 @@ ComputeKernelDetailsView::RenderPaneHeader(const char* title, int32_t slot, bool
 {
     SettingsManager&  settings   = SettingsManager::GetInstance();
     const ImGuiStyle& style      = settings.GetDefaultStyle();
-    ImFont*           icon_font  = settings.GetFontManager().GetFont(FontType::kIcon);
     ImFont*           title_font = settings.GetFontManager().GetFont(FontType::kDefault);
     const float       title_px   = settings.GetFontManager().GetFontSize(FontSize::kMedLarge);
     const float       button_gap = style.ItemSpacing.x * 0.5f;
@@ -1022,10 +1076,8 @@ ComputeKernelDetailsView::RenderPaneHeader(const char* title, int32_t slot, bool
     if(pickable)
     {
         ImGui::SameLine(0.0f, button_gap);
-        if(IconButton(ICON_CHEVRON_DOWN, icon_font, ImVec2(0, 0), "Choose this box's panel",
-                      false, style.FramePadding, settings.GetColor(Colors::kTransparent),
-                      settings.GetColor(Colors::kButtonHovered),
-                      settings.GetColor(Colors::kButtonActive)))
+        if(FramedIconButton(ICON_CHEVRON_DOWN, "Choose this box's panel",
+                            settings.GetColor(Colors::kTransparent)))
         {
             ImGui::OpenPopup("panel_picker");
         }
@@ -1039,47 +1091,34 @@ ComputeKernelDetailsView::RenderPaneHeader(const char* title, int32_t slot, bool
         float buttons_w = button_gap * static_cast<float>(count - 1);
         for(int i = 0; i < count; ++i)
         {
-            if(buttons[i].icon)
-            {
-                ImGui::PushFont(icon_font, 0.0f);
-                buttons_w += ImGui::CalcTextSize(buttons[i].icon).x;
-                ImGui::PopFont();
-            }
-            else
-            {
-                buttons_w += ImGui::CalcTextSize(buttons[i].label).x;
-            }
+            buttons_w += buttons[i].icon ? IconWidth(buttons[i].icon)
+                                         : ImGui::CalcTextSize(buttons[i].label).x;
             buttons_w += style.FramePadding.x * 2.0f;
         }
-        ImGui::SameLine();
-        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
-                                      ImGui::GetCursorPosX() +
-                                          ImGui::GetContentRegionAvail().x - buttons_w));
+        SameLineRightAligned(buttons_w);
         for(int i = 0; i < count; ++i)
         {
+            const HeaderButton& button = buttons[i];
             if(i > 0)
             {
                 ImGui::SameLine(0.0f, button_gap);
             }
             const ImU32 bg =
-                settings.GetColor(buttons[i].active ? Colors::kButton : Colors::kTransparent);
+                settings.GetColor(button.active ? Colors::kButton : Colors::kTransparent);
             ImGui::PushID(i);
             bool pressed = false;
-            if(buttons[i].icon)
+            if(button.icon)
             {
-                pressed = IconButton(buttons[i].icon, icon_font, ImVec2(0, 0),
-                                     buttons[i].tooltip, false, style.FramePadding, bg,
-                                     settings.GetColor(Colors::kButtonHovered),
-                                     settings.GetColor(Colors::kButtonActive));
+                pressed = FramedIconButton(button.icon, button.tooltip, bg);
             }
             else
             {
                 ImGui::PushStyleColor(ImGuiCol_Button, bg);
-                pressed = ImGui::Button(buttons[i].label);
+                pressed = ImGui::Button(button.label);
                 ImGui::PopStyleColor();
-                if(buttons[i].tooltip && ImGui::IsItemHovered())
+                if(button.tooltip && ImGui::IsItemHovered())
                 {
-                    SetTooltipStyled("%s", buttons[i].tooltip);
+                    SetTooltipStyled("%s", button.tooltip);
                 }
             }
             ImGui::PopID();
@@ -1106,7 +1145,7 @@ ComputeKernelDetailsView::RenderPanelPicker(int32_t slot)
     ImGui::TextDisabled("Show in this box");
     ImGui::Separator();
     const ComputePane current = SlotPane(slot);
-    for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+    for(int32_t i = 0; i < PANE_COUNT; ++i)
     {
         const ComputePane pane = PaneAt(i);
         if(!IsPaneAvailable(pane))
@@ -1213,66 +1252,73 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
         kHide,
     };
 
-    AppWindowSettings& settings  = SettingsManager::GetInstance().GetAppWindowSettings();
+    AppWindowSettings& settings  = WindowSettings();
     const bool         maximized = slot == MAXIMIZED_SLOT;
 
     HeaderButton buttons[MAX_PANE_HEADER_BUTTONS];
     HeaderAction actions[MAX_PANE_HEADER_BUTTONS];
-    int          count = 0;
+    int          count      = 0;
+    auto         add_button = [&buttons, &actions, &count](const HeaderButton& button,
+                                                         HeaderAction        action) {
+        IM_ASSERT(count < MAX_PANE_HEADER_BUTTONS);
+        buttons[count] = button;
+        actions[count] = action;
+        count++;
+    };
     // While comparing, the memory chart, ISA and workload details show one side
     // at a time.
-    const CompareSide* sided = m_compare.enabled ? PaneSide(pane) : nullptr;
-    if(sided)
+    CompareSide* side = m_compare.enabled ? PaneSide(pane) : nullptr;
+    if(side)
     {
-        const CompareSide side      = *sided;
-        const bool        workload  = pane == ComputePane::kWorkloadDetails;
-        const char*       b_tooltip = "Show B (the compare target)";
+        const bool  workload  = pane == ComputePane::kWorkloadDetails;
+        const bool  delta     = pane == ComputePane::kMemoryChart && DeltaAvailable();
+        const char* b_tooltip = "Show B (the compare target)";
         if(workload)
         {
             b_tooltip = "Show B's workload (the compare target's)";
         }
-        else if(pane == ComputePane::kMemoryChart && !DeltaAvailable())
+        else if(pane == ComputePane::kMemoryChart && !delta)
         {
             b_tooltip = "Show B (the compare target). B - A needs A and B on the\n"
                         "same GPU architecture.";
         }
-        buttons[count] = { nullptr, "A",
-                           workload ? "Show A's workload (the selected kernel's)"
-                                    : "Show A (the selected kernel)",
-                           side == CompareSide::kA };
-        actions[count++] = HeaderAction::kShowA;
-        buttons[count]   = { nullptr, "B", b_tooltip, side == CompareSide::kB };
-        actions[count++] = HeaderAction::kShowB;
-        if(pane == ComputePane::kMemoryChart && DeltaAvailable())
+        add_button({ nullptr, "A",
+                     workload ? "Show A's workload (the selected kernel's)"
+                              : "Show A (the selected kernel)",
+                     *side == CompareSide::kA },
+                   HeaderAction::kShowA);
+        add_button({ nullptr, "B", b_tooltip, *side == CompareSide::kB },
+                   HeaderAction::kShowB);
+        if(delta)
         {
-            buttons[count] = { nullptr, "\xCE\x94", "Show B - A (how B differs from A)",
-                               side == CompareSide::kDelta };
-            actions[count++] = HeaderAction::kShowDelta;
+            add_button({ nullptr, "\xCE\x94", "Show B - A (how B differs from A)",
+                         *side == CompareSide::kDelta },
+                       HeaderAction::kShowDelta);
         }
     }
     // A compact (overview) chart is always fitted, so Fit only applies at size.
     if(pane == ComputePane::kMemoryChart && !DisplayedMemoryChart().IsCompact())
     {
-        buttons[count] = { nullptr, "Fit",
-                           "Shrink the whole chart to fit the box (off: actual size, scroll)",
-                           m_memory_chart.GetFitToView() };
-        actions[count++] = HeaderAction::kFit;
+        add_button({ nullptr, "Fit",
+                     "Shrink the whole chart to fit the box (off: actual size, scroll)",
+                     m_memory_chart.GetFitToView() },
+                   HeaderAction::kFit);
     }
     if(maximized)
     {
-        buttons[count]   = { ICON_ARROWS_SHRINK, nullptr, "Restore the layout", false };
-        actions[count++] = HeaderAction::kRestore;
+        add_button({ ICON_ARROWS_SHRINK, nullptr, "Restore the layout", false },
+                   HeaderAction::kRestore);
     }
     else
     {
-        buttons[count] = { ICON_ARROWS_EXPAND, nullptr,
-                           "Maximize: fill the tab, hiding the other boxes and kernels",
-                           false };
-        actions[count++] = HeaderAction::kMaximize;
+        add_button({ ICON_ARROWS_EXPAND, nullptr,
+                     "Maximize: fill the tab, hiding the other boxes and kernels",
+                     false },
+                   HeaderAction::kMaximize);
     }
-    buttons[count]   = { ICON_X_CIRCLED, nullptr,
-                         "Hide (empties the box; turn it back on from Panels)", false };
-    actions[count++] = HeaderAction::kHide;
+    add_button({ ICON_X_CIRCLED, nullptr,
+                 "Hide (empties the box; turn it back on from Panels)", false },
+               HeaderAction::kHide);
 
     BeginPaneCard("pane_card");
     bool      title_double_clicked = false;
@@ -1310,26 +1356,17 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
         case HeaderAction::kShowA:
         case HeaderAction::kShowB:
         case HeaderAction::kShowDelta:
-        {
-            const CompareSide chosen = action == HeaderAction::kShowA   ? CompareSide::kA
-                                       : action == HeaderAction::kShowB ? CompareSide::kB
-                                                                        : CompareSide::kDelta;
-            CompareSide* side = PaneSide(pane);
             if(side)
             {
-                *side = chosen;
+                *side = action == HeaderAction::kShowA   ? CompareSide::kA
+                        : action == HeaderAction::kShowB ? CompareSide::kB
+                                                         : CompareSide::kDelta;
                 ApplyCompare(false);
             }
             break;
-        }
         case HeaderAction::kFit:
-        {
-            // A and B keep one fit setting, so switching sides keeps the view.
-            const bool fit = !m_memory_chart.GetFitToView();
-            m_memory_chart.SetFitToView(fit);
-            m_memory_chart_b.SetFitToView(fit);
+            SetMemoryChartFit(!m_memory_chart.GetFitToView());
             break;
-        }
         case HeaderAction::kNone: break;
     }
 }
@@ -1358,7 +1395,7 @@ ComputeKernelDetailsView::RenderPaneBody(ComputePane pane, int32_t slot)
             break;
         case ComputePane::kWorkloadDetails:
             // B of A's workload shows the same details, so say it is not stale.
-            if(m_compare.enabled && m_workload_side == CompareSide::kB &&
+            if(ShownSide(m_workload_side) == CompareSide::kB &&
                m_compare.workload_id == m_compute_selection->GetSelectedWorkload())
             {
                 ImGui::TextDisabled("A and B are in the same workload.");
@@ -1384,6 +1421,12 @@ ComputeKernelDetailsView::PaneSide(ComputePane pane)
     return nullptr;
 }
 
+CompareSide
+ComputeKernelDetailsView::ShownSide(CompareSide side) const
+{
+    return m_compare.enabled ? side : CompareSide::kA;
+}
+
 void
 ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
 {
@@ -1393,29 +1436,33 @@ ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
 
     ImGui::BeginChild("empty_body", ImVec2(0, 0));
     // Offer the panels not shown anywhere as one-click choices, centred.
-    std::vector<ComputePane> unshown;
-    for(int32_t i = 0; i < static_cast<int32_t>(ComputePane::kCount); ++i)
+    std::array<ComputePane, static_cast<size_t>(ComputePane::kCount)> unshown{};
+    size_t                                                            unshown_count = 0;
+    for(int32_t i = 0; i < PANE_COUNT; ++i)
     {
-        if(IsPaneAvailable(PaneAt(i)) && ActiveSlotOf(PaneAt(i)) < 0)
+        const ComputePane pane = PaneAt(i);
+        if(IsPaneAvailable(pane) && ActiveSlotOf(pane) < 0)
         {
-            unshown.push_back(PaneAt(i));
+            unshown[unshown_count] = pane;
+            unshown_count++;
         }
     }
     const ImGuiStyle& style = ImGui::GetStyle();
-    const char*       hint  = unshown.empty() ? "Drag a panel's title here to move it."
-                                              : "Drag a panel here, or show:";
+    const char*       hint  = unshown_count == 0 ? "Drag a panel's title here to move it."
+                                                 : "Drag a panel here, or show:";
     ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeight()));
     CenterNextTextItem(hint);
     ImGui::TextDisabled("%s", hint);
-    if(!unshown.empty())
+    if(unshown_count > 0)
     {
-        float row_w = style.ItemSpacing.x * static_cast<float>(unshown.size() - 1);
-        for(ComputePane pane : unshown)
+        float row_w = style.ItemSpacing.x * static_cast<float>(unshown_count - 1);
+        for(size_t i = 0; i < unshown_count; ++i)
         {
-            row_w += ImGui::CalcTextSize(PaneTitle(pane)).x + style.FramePadding.x * 2.0f;
+            row_w += ImGui::CalcTextSize(PaneTitle(unshown[i])).x +
+                     style.FramePadding.x * 2.0f;
         }
         CenterNextItem(row_w);
-        for(size_t i = 0; i < unshown.size(); ++i)
+        for(size_t i = 0; i < unshown_count; ++i)
         {
             if(i > 0)
             {
@@ -1434,8 +1481,13 @@ ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
 void
 ComputeKernelDetailsView::RenderKernelRail()
 {
-    AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
-    const bool         table    = settings.compute_kernel_list_table;
+    // Indices of the header buttons below.
+    constexpr int LIST_BUTTON  = 0;
+    constexpr int TABLE_BUTTON = 1;
+    constexpr int HIDE_BUTTON  = 2;
+
+    AppWindowSettings& settings  = WindowSettings();
+    const bool         table     = settings.compute_kernel_list_table;
     const HeaderButton buttons[] = {
         { nullptr, "List", "Kernels as tabs, by total duration", !table },
         { nullptr, "Table", "Full kernel table: sort, filter and add metric columns",
@@ -1465,15 +1517,15 @@ ComputeKernelDetailsView::RenderKernelRail()
     ImGui::EndChild();
     EndPaneCard();
 
-    if(clicked == 0 && table)
+    if(clicked == LIST_BUTTON && table)
     {
         SetKernelRailTableMode(false);
     }
-    else if(clicked == 1 && !table)
+    else if(clicked == TABLE_BUTTON && !table)
     {
         SetKernelRailTableMode(true);
     }
-    else if(clicked == 2)
+    else if(clicked == HIDE_BUTTON)
     {
         settings.show_compute_kernel_list = false;
     }
@@ -1521,15 +1573,14 @@ ComputeKernelDetailsView::RenderKernelList()
     const bool scroll_to_selected = selected_kernel != m_kernel_list_selection ||
                                     selected_workload != m_kernel_list_selection_workload;
 
-    const std::vector<ListedKernel> listed = ListedKernels();
-    std::vector<const ListedKernel*> shown;
-    for(const ListedKernel& item : listed)
-    {
-        if(ContainsIgnoreCase(item.kernel->name, m_kernel_filter))
-        {
-            shown.push_back(&item);
-        }
-    }
+    std::vector<ListedKernel> shown      = ListedKernels();
+    const bool                any_listed = !shown.empty();
+    shown.erase(std::remove_if(shown.begin(), shown.end(),
+                               [this](const ListedKernel& item) {
+                                   return !ContainsIgnoreCase(item.kernel->name,
+                                                              m_kernel_filter);
+                               }),
+                shown.end());
     // Several workloads get a header per workload while the order keeps each
     // workload's kernels together; a sort that mixes them names the workload
     // on each tab instead.
@@ -1538,8 +1589,8 @@ ComputeKernelDetailsView::RenderKernelList()
     std::vector<uint32_t> seen_workloads;
     for(size_t i = 0; grouped && i < shown.size(); ++i)
     {
-        const uint32_t workload_id = shown[i]->workload->id;
-        if(i > 0 && shown[i - 1]->workload->id == workload_id)
+        const uint32_t workload_id = shown[i].workload->id;
+        if(i > 0 && shown[i - 1].workload->id == workload_id)
         {
             continue;
         }
@@ -1552,20 +1603,22 @@ ComputeKernelDetailsView::RenderKernelList()
         seen_workloads.push_back(workload_id);
     }
 
-    uint32_t header_workload = ComputeSelection::INVALID_SELECTION_ID;
-    for(const ListedKernel* item : shown)
+    const bool can_compare     = CanCompare();
+    uint32_t   header_workload = ComputeSelection::INVALID_SELECTION_ID;
+    for(const ListedKernel& item : shown)
     {
-        const uint32_t workload_id = item->workload->id;
+        const uint32_t workload_id = item.workload->id;
         if(grouped && !mixed && workload_id != header_workload)
         {
-            ImGui::SeparatorText(item->workload->name.c_str());
+            ImGui::SeparatorText(item.workload->name.c_str());
             header_workload = workload_id;
         }
-        const bool selected = workload_id == selected_workload &&
-                              item->kernel->id == selected_kernel;
+        const bool selected =
+            workload_id == selected_workload && item.kernel->id == selected_kernel;
         ImGui::PushID(static_cast<int>(workload_id));
-        RenderKernelTab(*item->kernel, workload_id, selected, item->workload_duration,
-                        mixed ? item->workload->name.c_str() : nullptr);
+        RenderKernelTab(*item.kernel, workload_id, selected, can_compare,
+                        item.workload_duration,
+                        mixed ? item.workload->name.c_str() : nullptr);
         ImGui::PopID();
         if(selected && scroll_to_selected)
         {
@@ -1576,9 +1629,9 @@ ComputeKernelDetailsView::RenderKernelList()
     {
         const bool filtered =
             m_kernel_metric_table && m_kernel_metric_table->GetActiveFilterCount() > 0;
-        ImGui::TextDisabled("%s", !listed.empty() ? "No kernels match the search."
-                                  : filtered      ? "No kernels match the Table's filters."
-                                                  : "No kernels.");
+        ImGui::TextDisabled("%s", any_listed ? "No kernels match the search."
+                                  : filtered ? "No kernels match the Table's filters."
+                                             : "No kernels.");
     }
     m_kernel_list_selection          = m_compute_selection->GetSelectedKernel();
     m_kernel_list_selection_workload = m_compute_selection->GetSelectedWorkload();
@@ -1668,7 +1721,8 @@ ComputeKernelDetailsView::ListedKernels() const
 
 void
 ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id,
-                                          bool selected, float total_duration,
+                                          bool selected, bool can_compare,
+                                          float total_duration,
                                           const char* workload_label)
 {
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -1686,7 +1740,7 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
     const float  slot_w     = std::min(badge_size.x + KERNEL_TAB_PAD * 2.0f,
                                        width * KERNEL_TAB_SLOT_MAX_SHARE);
     const float  body_w     = std::max(width - slot_w, 1.0f);
-    const bool   can_be_b   = !selected && CanCompare();
+    const bool   can_be_b   = !selected && can_compare;
 
     const ImVec2 min = ImGui::GetCursorScreenPos();
     const ImVec2 max(min.x + width, min.y + height);
@@ -1712,8 +1766,31 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
     const bool slot_clicked = ImGui::InvisibleButton("##kernel_b_slot", ImVec2(slot_w, height));
     const bool slot_hovered = ImGui::IsItemHovered();
     ImGui::PopID();
-    const bool hovered = body_hovered || slot_hovered;
 
+    if(slot_clicked)
+    {
+        if(is_b)
+        {
+            DisableCompare();
+        }
+        else if(can_be_b)
+        {
+            SetCompareTarget(workload_id, kernel.id);
+        }
+    }
+    if(clicked && !selected)
+    {
+        m_compute_selection->Select(workload_id, kernel.id);
+    }
+    // The rest only draws, so a tab scrolled out of view stops here.
+    if(!ImGui::IsRectVisible(
+           ImVec2(min.x - KERNEL_TAB_CULL_MARGIN, min.y - KERNEL_TAB_CULL_MARGIN),
+           ImVec2(max.x + KERNEL_TAB_CULL_MARGIN, max.y + KERNEL_TAB_CULL_MARGIN)))
+    {
+        return;
+    }
+
+    const bool  hovered   = body_hovered || slot_hovered;
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     if(selected || hovered)
     {
@@ -1801,24 +1878,6 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
                                : is_b ? "B: compared with A. Click to stop comparing."
                                       : "Compare with this kernel (B)");
     }
-
-    if(slot_clicked)
-    {
-        if(is_b)
-        {
-            DisableCompare();
-        }
-        else if(can_be_b)
-        {
-            SetCompareTarget(workload_id, kernel.id);
-        }
-    }
-    if(clicked && !selected)
-    {
-        m_kernel_list_selection          = kernel.id;
-        m_kernel_list_selection_workload = workload_id;
-        m_compute_selection->Select(workload_id, kernel.id);
-    }
 }
 
 bool
@@ -1879,8 +1938,8 @@ ComputeKernelDetailsView::DeltaAvailable() const
 ComputeMemoryChartView&
 ComputeKernelDetailsView::DisplayedMemoryChart()
 {
-    return m_compare.enabled && m_memory_chart_side == CompareSide::kB ? m_memory_chart_b
-                                                                        : m_memory_chart;
+    return ShownSide(m_memory_chart_side) == CompareSide::kB ? m_memory_chart_b
+                                                              : m_memory_chart;
 }
 
 void
@@ -2007,46 +2066,43 @@ ComputeKernelDetailsView::OnBaselineChanged()
 void
 ComputeKernelDetailsView::ApplyCompare(bool target_changed)
 {
-    if(!m_compare.enabled)
+    const uint32_t workload_id = m_compare.workload_id;
+    const uint32_t kernel_id   = m_compare.kernel_id;
+    if(m_compare.enabled)
+    {
+        m_roofline->SetMode(Roofline::Compare);
+        m_table_view->SetCompareTarget(workload_id, kernel_id);
+        m_kernel_metric_table->SetMarkedKernel(workload_id, kernel_id);
+        if(target_changed)
+        {
+            m_roofline->SetCompareTarget(workload_id, kernel_id);
+            if(workload_id != m_memory_chart_b_workload)
+            {
+                m_memory_chart_b.LoadWorkloadLayout(workload_id);
+                m_memory_chart_b_workload = workload_id;
+            }
+            m_memory_chart_b.SetSource(workload_id, kernel_id);
+            m_memory_chart_b.FetchMemChartMetrics();
+        }
+        if(m_memory_chart_side == CompareSide::kDelta && !DeltaAvailable())
+        {
+            m_memory_chart_side = CompareSide::kA;
+        }
+    }
+    else
     {
         m_roofline->SetMode(Roofline::SingleKernel);
         m_table_view->ClearCompareTarget();
-        m_memory_chart.SetDeltaTarget(nullptr);
         m_kernel_metric_table->SetMarkedKernel(ComputeSelection::INVALID_SELECTION_ID,
                                                ComputeSelection::INVALID_SELECTION_ID);
-        if(m_isa_view)
-        {
-            m_isa_view->FollowSelection();
-        }
-        m_workload_view->FollowSelection();
-        return;
     }
 
-    const uint32_t workload_id = m_compare.workload_id;
-    const uint32_t kernel_id   = m_compare.kernel_id;
-    m_roofline->SetMode(Roofline::Compare);
-    m_table_view->SetCompareTarget(workload_id, kernel_id);
-    m_kernel_metric_table->SetMarkedKernel(workload_id, kernel_id);
-    if(target_changed)
-    {
-        m_roofline->SetCompareTarget(workload_id, kernel_id);
-        if(workload_id != m_memory_chart_b_workload)
-        {
-            m_memory_chart_b.LoadWorkloadLayout(workload_id);
-            m_memory_chart_b_workload = workload_id;
-        }
-        m_memory_chart_b.SetSource(workload_id, kernel_id);
-        m_memory_chart_b.FetchMemChartMetrics();
-    }
-    if(m_memory_chart_side == CompareSide::kDelta && !DeltaAvailable())
-    {
-        m_memory_chart_side = CompareSide::kA;
-    }
-    m_memory_chart.SetDeltaTarget(m_memory_chart_side == CompareSide::kDelta ? &m_memory_chart_b
-                                                                             : nullptr);
+    m_memory_chart.SetDeltaTarget(ShownSide(m_memory_chart_side) == CompareSide::kDelta
+                                      ? &m_memory_chart_b
+                                      : nullptr);
     if(m_isa_view)
     {
-        if(m_isa_side == CompareSide::kB)
+        if(ShownSide(m_isa_side) == CompareSide::kB)
         {
             m_isa_view->ShowKernel(workload_id, kernel_id);
         }
@@ -2055,7 +2111,7 @@ ComputeKernelDetailsView::ApplyCompare(bool target_changed)
             m_isa_view->FollowSelection();
         }
     }
-    if(m_workload_side == CompareSide::kB)
+    if(ShownSide(m_workload_side) == CompareSide::kB)
     {
         m_workload_view->ShowWorkload(workload_id);
     }
@@ -2068,10 +2124,9 @@ ComputeKernelDetailsView::ApplyCompare(bool target_changed)
 void
 ComputeKernelDetailsView::RenderCompareCard()
 {
-    SettingsManager&        settings  = SettingsManager::GetInstance();
-    const ImGuiStyle&       style     = settings.GetDefaultStyle();
-    ImFont*                 icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
-    const ComputeDataModel& model     = m_data_provider.ComputeModel();
+    SettingsManager&        settings      = SettingsManager::GetInstance();
+    const ImGuiStyle&       style         = settings.GetDefaultStyle();
+    const ComputeDataModel& model         = m_data_provider.ComputeModel();
     const uint32_t          a_workload_id = m_compute_selection->GetSelectedWorkload();
     const KernelInfo*       a_kernel =
         model.GetKernelInfo(a_workload_id, m_compute_selection->GetSelectedKernel());
@@ -2119,38 +2174,35 @@ ComputeKernelDetailsView::RenderCompareCard()
     side_row("B", Colors::kComparisonTarget, "B: compared with A", b_kernel, b_workload,
              "Pick B with the B beside a kernel");
 
-    const bool follow = m_compare.follow_by_name;
-    if(IconButton(ICON_CHAIN, icon_font, ImVec2(0, 0),
-                  follow ? "Follow A: on. Selecting another A moves B to the kernel of the same\n"
-                           "name in B's workload (when B's workload is not A's)."
-                         : "Follow A: off. B stays put when A changes.",
-                  false, style.FramePadding,
-                  settings.GetColor(follow ? Colors::kButton : Colors::kTransparent),
-                  settings.GetColor(Colors::kButtonHovered),
-                  settings.GetColor(Colors::kButtonActive)))
+    const bool  follow         = m_compare.follow_by_name;
+    const char* follow_tooltip =
+        follow ? "Follow A: on. Selecting another A moves B to the kernel of the same\n"
+                 "name in B's workload (when B's workload is not A's)."
+               : "Follow A: off. B stays put when A changes.";
+    const ImU32 follow_bg =
+        settings.GetColor(follow ? Colors::kButton : Colors::kTransparent);
+    if(FramedIconButton(ICON_CHAIN, follow_tooltip, follow_bg))
     {
         m_compare.follow_by_name = !follow;
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!b_kernel);
-    if(IconButton(ICON_ARROWS_CYCLE, icon_font, ImVec2(0, 0),
-                  "Swap A and B (B becomes the selected kernel)", false, style.FramePadding,
-                  settings.GetColor(Colors::kTransparent),
-                  settings.GetColor(Colors::kButtonHovered),
-                  settings.GetColor(Colors::kButtonActive)))
+    if(FramedIconButton(ICON_ARROWS_CYCLE, "Swap A and B (B becomes the selected kernel)",
+                        settings.GetColor(Colors::kTransparent)))
     {
         SwapCompare();
     }
     ImGui::EndDisabled();
 
-    // Architecture: B - A and like-for-like metrics need A and B on the same GPU.
+    // Architecture: B - A and like-for-like metrics need A and B on the same GPU
+    // (what DeltaAvailable() checks).
     const std::string a_arch = ComputeMemoryChartView::WorkloadArch(a_workload);
     const std::string b_arch = ComputeMemoryChartView::WorkloadArch(b_workload);
     if(!a_arch.empty() || !b_arch.empty())
     {
         ImGui::SameLine();
         ImGui::AlignTextToFramePadding();
-        if(DeltaAvailable())
+        if(a_arch == b_arch)
         {
             ImGui::TextDisabled("%s", a_arch.c_str());
         }
@@ -2170,17 +2222,9 @@ ComputeKernelDetailsView::RenderCompareCard()
     }
 
     // Stop comparing, right-aligned on the controls' row.
-    ImGui::PushFont(icon_font, 0.0f);
-    const float stop_w = ImGui::CalcTextSize(ICON_X_CIRCLED).x + style.FramePadding.x * 2.0f;
-    ImGui::PopFont();
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetCursorPosX() +
-                                                              ImGui::GetContentRegionAvail().x -
-                                                              stop_w));
-    if(IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Stop comparing", false,
-                  style.FramePadding, settings.GetColor(Colors::kTransparent),
-                  settings.GetColor(Colors::kButtonHovered),
-                  settings.GetColor(Colors::kButtonActive)))
+    SameLineRightAligned(IconWidth(ICON_X_CIRCLED) + style.FramePadding.x * 2.0f);
+    if(FramedIconButton(ICON_X_CIRCLED, "Stop comparing",
+                        settings.GetColor(Colors::kTransparent)))
     {
         DisableCompare();
     }
@@ -2232,8 +2276,8 @@ ComputeKernelDetailsView::Preset::Preset(ComputeKernelDetailsView& widget)
 bool
 ComputeKernelDetailsView::Preset::ToJson(jt::Json& json)
 {
-    const AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
-    json[JSON_KEY_LAYOUT_TEMPLATE] = settings.compute_layout_template;
+    const AppWindowSettings& settings = WindowSettings();
+    json[JSON_KEY_LAYOUT_TEMPLATE]    = settings.compute_layout_template;
     for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
     {
         json[JSON_KEY_LAYOUT_SLOTS][static_cast<size_t>(slot)] =
@@ -2255,7 +2299,7 @@ ComputeKernelDetailsView::Preset::FromJson(jt::Json& json)
     {
         return false;
     }
-    AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+    AppWindowSettings& settings = WindowSettings();
     bool               result   = true;
     auto read_bool = [&json, &result](const char* key, bool& out) {
         if(json.contains(key))
@@ -2305,8 +2349,7 @@ ComputeKernelDetailsView::Preset::FromJson(jt::Json& json)
     m_widget.SetKernelRailTableMode(table);
     bool fit = m_widget.m_memory_chart.GetFitToView();
     read_bool(JSON_KEY_LAYOUT_FIT_MEMORY_CHART, fit);
-    m_widget.m_memory_chart.SetFitToView(fit);
-    m_widget.m_memory_chart_b.SetFitToView(fit);
+    m_widget.SetMemoryChartFit(fit);
     read_bool(JSON_KEY_COMPARE_FOLLOW_BY_NAME, m_widget.m_compare.follow_by_name);
     return result;
 }

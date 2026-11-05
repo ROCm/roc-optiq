@@ -359,6 +359,26 @@ struct ComputePanelsGuard
     }
 };
 
+// Stops comparing when it goes out of scope, so a failed check cannot leave
+// compare mode on for the next test.
+struct CompareGuard
+{
+    ComputeKernelDetailsViewTestPeer& peer;
+    ~CompareGuard() { peer.StopCompare(); }
+};
+
+// A and B fetch separately, so polls until both have landed and the metric
+// tables carry computed B - A percentages.
+void WaitForCompareDeltas(ImGuiTestContext* ctx, const ComputeTableViewTestPeer& peer)
+{
+    for (int i = 0; i < 300; i++)
+    {
+        if (!peer.CompareLoading() && !peer.FetchPending() && peer.DeltaPctCellCount() > 0)
+            break;
+        ctx->Yield(2);
+    }
+}
+
 // Restores the tab set and active tab that existed when constructed, so a test
 // that opens extra dbs (sys_shared_db_open_dedups_and_switches) doesn't leave
 // stray tabs and a changed current project for the next test. The kTabClosed
@@ -854,12 +874,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return;
         }
 
-        // Comparing stays off for the next test whatever the outcome.
-        struct CompareGuard
-        {
-            ComputeKernelDetailsViewTestPeer& peer;
-            ~CompareGuard() { peer.StopCompare(); }
-        } compare_guard{ kd_peer };
+        CompareGuard       compare_guard{ kd_peer };
         ComputePanelsGuard panels_guard;
         ctx->Yield(3);
 
@@ -870,15 +885,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(kd_peer.CompareKernelId() == target_kernel);
         IM_CHECK(table_peer.IsComparing());
 
-        // A and B fetch separately, so poll the end state: both landed and the
-        // tables carry computed B - A percentages.
-        for (int i = 0; i < 300; i++)
-        {
-            if (!table_peer.CompareLoading() && !table_peer.FetchPending() &&
-                table_peer.DeltaPctCellCount() > 0)
-                break;
-            ctx->Yield(2);
-        }
+        WaitForCompareDeltas(ctx, table_peer);
         IM_CHECK(table_peer.DeltaPctCellCount() > 0);
 
         // The roofline plots A and B from the first frames on.
@@ -995,11 +1002,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         const uint32_t target_kernel = other->ordered_kernels.front()->id;
 
-        struct CompareGuard
-        {
-            ComputeKernelDetailsViewTestPeer& peer;
-            ~CompareGuard() { peer.StopCompare(); }
-        } compare_guard{ kd_peer };
+        CompareGuard       compare_guard{ kd_peer };
         ComputePanelsGuard panels_guard;
         ctx->Yield(3);
 
@@ -1034,13 +1037,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeTableViewTestPeer table_peer{*tbl};
         if (table_peer.HasAvailableMetrics())
         {
-            for (int i = 0; i < 300; i++)
-            {
-                if (!table_peer.CompareLoading() && !table_peer.FetchPending() &&
-                    table_peer.DeltaPctCellCount() > 0)
-                    break;
-                ctx->Yield(2);
-            }
+            WaitForCompareDeltas(ctx, table_peer);
             IM_CHECK(table_peer.DeltaPctCellCount() > 0);
         }
         ctx->Yield(5);
@@ -2331,11 +2328,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return;
         }
 
-        struct CompareGuard
-        {
-            ComputeKernelDetailsViewTestPeer& peer;
-            ~CompareGuard() { peer.StopCompare(); }
-        } compare_guard{ kd_peer };
+        CompareGuard       compare_guard{ kd_peer };
         ComputePanelsGuard panels_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots[3] =
             static_cast<int32_t>(ComputePane::kWorkloadDetails);

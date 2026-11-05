@@ -66,6 +66,29 @@ HasIsaLines(const std::vector<const WorkloadInfo*>& workloads)
         });
 }
 
+// Placed on first use relative to the main viewport's work area.
+static void
+RenderFloatingWindow(const std::string& title, bool* open, ImVec2 relative_pos,
+                     float relative_size, ImGuiWindowFlags extra_flags, RocWidget& widget)
+{
+    if(!*open)
+    {
+        return;
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos + viewport->WorkSize * relative_pos,
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(viewport->WorkSize * relative_size, ImGuiCond_FirstUseEver);
+    if(ImGui::Begin(title.c_str(), open,
+                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                        extra_flags))
+    {
+        widget.Render();
+    }
+    ImGui::End();
+}
+
 ComputeView::ComputeView()
 : m_view_created(false)
 , m_error_dialog_state(ErrorDialogState::kNone)
@@ -77,6 +100,12 @@ ComputeView::ComputeView()
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
+    // Titled like the system-trace summary; the "###" ids give each compute
+    // project its own window placement.
+    m_summary_window_title = "Summary###" + m_widget_name + "_summary";
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_tester_window_title = "Compute Tester###" + m_widget_name + "_tester";
+#endif
 
     m_data_provider.SetTraceLoadedCallback([this](const std::string& trace_path,
                                                   uint64_t           response_code) {
@@ -213,6 +242,9 @@ ComputeView::CreateView()
     m_summary_view =
         std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection);
     CreateKernelDetails();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_compute_tester = std::make_shared<ComputeTester>(m_data_provider, m_compute_selection);
+#endif
 }
 
 const WorkloadInfo*
@@ -261,13 +293,8 @@ ComputeView::CreateKernelDetails()
     const bool database_has_metrics   = HasAvailableMetrics(workloads);
     const bool database_has_isa_lines = HasIsaLines(workloads);
 
-    // Summary lives in its own window (RenderSummaryWindow); metric tables, ISA,
-    // workload details and comparing two kernels are part of Kernel Details.
     m_kernel_details = std::make_shared<ComputeKernelDetailsView>(
         m_data_provider, m_compute_selection, database_has_metrics, database_has_isa_lines);
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-    m_compute_tester = std::make_shared<ComputeTester>(m_data_provider, m_compute_selection);
-#endif
 }
 
 void
@@ -313,66 +340,24 @@ ComputeView::Render()
         {
             m_kernel_details->Render();
         }
-        RenderSummaryWindow();
+        if(m_summary_view)
+        {
+            RenderFloatingWindow(
+                m_summary_window_title, &m_settings_manager.GetAppWindowSettings().show_summary,
+                SUMMARY_WINDOW_RELATIVE_POS, SUMMARY_WINDOW_RELATIVE_SIZE,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse,
+                *m_summary_view);
+        }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-        RenderComputeTesterWindow();
+        if(m_compute_tester)
+        {
+            RenderFloatingWindow(m_tester_window_title, ComputeTester::VisiblePtr(),
+                                 TESTER_WINDOW_RELATIVE_POS, TESTER_WINDOW_RELATIVE_SIZE,
+                                 ImGuiWindowFlags_None, *m_compute_tester);
+        }
 #endif
     }
 }
-
-void
-ComputeView::RenderSummaryWindow()
-{
-    AppWindowSettings& app_settings = m_settings_manager.GetAppWindowSettings();
-    if(!m_summary_view || !app_settings.show_summary)
-    {
-        return;
-    }
-
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos +
-                                viewport->WorkSize * SUMMARY_WINDOW_RELATIVE_POS,
-                            ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(viewport->WorkSize * SUMMARY_WINDOW_RELATIVE_SIZE,
-                             ImGuiCond_FirstUseEver);
-    // Titled "Summary" like the system-trace one; the "###" id gives each compute
-    // project its own window placement.
-    const std::string title = "Summary###" + m_widget_name + "_summary";
-    if(ImGui::Begin(title.c_str(), &app_settings.show_summary,
-                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
-                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
-    {
-        m_summary_view->Render();
-    }
-    ImGui::End();
-}
-
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-void
-ComputeView::RenderComputeTesterWindow()
-{
-    bool* visible = ComputeTester::VisiblePtr();
-    if(!m_compute_tester || !*visible)
-    {
-        return;
-    }
-
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos +
-                                viewport->WorkSize * TESTER_WINDOW_RELATIVE_POS,
-                            ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(viewport->WorkSize * TESTER_WINDOW_RELATIVE_SIZE,
-                             ImGuiCond_FirstUseEver);
-    // One window per compute project, like Summary.
-    const std::string title = "Compute Tester###" + m_widget_name + "_tester";
-    if(ImGui::Begin(title.c_str(), visible,
-                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings))
-    {
-        m_compute_tester->Render();
-    }
-    ImGui::End();
-}
-#endif
 
 void
 ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
@@ -436,7 +421,6 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
-    // Kernels (and so workloads) are chosen in Kernel Details' kernel list only.
     if(m_kernel_details)
     {
         m_kernel_details->RenderLayoutControls();

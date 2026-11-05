@@ -58,7 +58,7 @@ static constexpr float AUTO_COMPACT_MIN_WIDTH_SHARE  = 0.6f;
 static constexpr float AUTO_COMPACT_MIN_HEIGHT_SHARE = 0.5f;
 // Kept free around a chart sized to its space (stretched or fitted), so float
 // rounding can never tip it or its parent into showing a scrollbar.
-static constexpr float FILL_HEIGHT_SLACK = 1.0f;
+static constexpr float FILL_SLACK = 1.0f;
 
 static constexpr const char* CHART_UNAVAILABLE_TEXT =
     "Memory chart is N/A for this workload.";
@@ -361,12 +361,17 @@ FormatSignedValue(double delta)
     return delta > 0.0 ? "+" + text : text;
 }
 
+// " (+12.5%)": the change from `a` to `b` relative to `a`; empty when `a` is 0.
 static std::string
-FormatSignedPercent(double pct)
+FormatChangeSuffix(double a, double b)
 {
+    if(a == 0.0)
+    {
+        return std::string();
+    }
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%+.1f%%", pct);
-    return std::string(buf);
+    std::snprintf(buf, sizeof(buf), "%+.1f%%", (b - a) / std::fabs(a) * PERCENT);
+    return " (" + std::string(buf) + ")";
 }
 
 void
@@ -1192,17 +1197,14 @@ ComputeMemoryChartView::MetricValueText(const MemChartMetricRef& ref, bool inclu
 {
     const MetricValue* metric = ResolveMetric(ref);
     if(!metric || metric->values.empty()) return UNAVAILABLE_METRIC_TEXT;
-    std::string text = FormatMetricValue(metric->values.begin()->second);
-    if(m_delta_target)
+    double a = 0.0;
+    double b = 0.0;
+    if(m_delta_target && !DeltaValues(ref, a, b))
     {
-        double a = 0.0;
-        double b = 0.0;
-        if(!DeltaValues(ref, a, b))
-        {
-            return UNAVAILABLE_METRIC_TEXT;
-        }
-        text = FormatSignedValue(b - a);
+        return UNAVAILABLE_METRIC_TEXT;
     }
+    std::string text = m_delta_target ? FormatSignedValue(b - a)
+                                      : FormatMetricValue(metric->values.begin()->second);
     if(include_unit && IsAvailableMetricText(text))
     {
         // The layout's unit takes priority; otherwise use the metric entry's unit
@@ -1216,11 +1218,9 @@ ComputeMemoryChartView::MetricValueText(const MemChartMetricRef& ref, bool inclu
             text += unit;
         }
         // Block rows have room for the change relative to A too; arrow labels do not.
-        double a = 0.0;
-        double b = 0.0;
-        if(DeltaValues(ref, a, b) && a != 0.0)
+        if(m_delta_target)
         {
-            text += " (" + FormatSignedPercent((b - a) / std::fabs(a) * PERCENT) + ")";
+            text += FormatChangeSuffix(a, b);
         }
     }
     return text;
@@ -1699,6 +1699,7 @@ ComputeMemoryChartView::ComputeLayout(float available_width, float extra_height)
             cursor_x += column_widths[i] + (i < col_gaps.size() ? col_gaps[i] : 0.0f);
         }
     }
+
     // Natural stacked height of one (row, column) cell.
     auto cell_stack_height = [](const std::vector<MemChartBlock*>& blocks) -> float {
         float sum = static_cast<float>(std::max<int>(blocks.size(), 1) - 1) * BLOCK_GAP;
@@ -1969,8 +1970,8 @@ ComputeMemoryChartView::Render()
                    (avail.x < m_natural_canvas_w * AUTO_COMPACT_MIN_WIDTH_SHARE ||
                     avail.y < m_natural_canvas_h * AUTO_COMPACT_MIN_HEIGHT_SHARE);
     const bool  fit    = m_fit_to_view || m_is_compact;
-    const float fill_w = avail.x - FILL_HEIGHT_SLACK;
-    const float fill_h = avail.y - FILL_HEIGHT_SLACK;
+    const float fill_w = avail.x - FILL_SLACK;
+    const float fill_h = avail.y - FILL_SLACK;
 
     // Actual size: stretch the columns down to the space given instead of leaving
     // it empty under the chart (a chart taller than that still scrolls). The
@@ -2915,16 +2916,8 @@ ComputeMemoryChartView::ShowDeltaValues(const MemChartMetricRef& ref) const
     }
     ImGui::Text("A: %s", FormatMetricValueRaw(a).c_str());
     ImGui::Text("B: %s", FormatMetricValueRaw(b).c_str());
-    std::string delta = FormatMetricValueRaw(b - a);
-    if(b > a)
-    {
-        delta.insert(0, "+");
-    }
-    if(a != 0.0)
-    {
-        delta += " (" + FormatSignedPercent((b - a) / std::fabs(a) * PERCENT) + ")";
-    }
-    ImGui::Text("B - A: %s", delta.c_str());
+    ImGui::Text("B - A: %s%s%s", b > a ? "+" : "", FormatMetricValueRaw(b - a).c_str(),
+                FormatChangeSuffix(a, b).c_str());
 }
 
 void

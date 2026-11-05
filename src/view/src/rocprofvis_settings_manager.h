@@ -138,17 +138,18 @@ typedef struct AppWindowSettings
     // Compute profiler "Kernel Details" layout. Template and pane values are
     // ComputeLayoutTemplate / ComputePane (rocprofvis_compute_kernel_details.h);
     // all-zero / in-order values are the default arrangement.
-    bool    show_compute_kernel_list;
-    bool    show_compute_memory_chart;   // Mirrors whether the pane is in a box.
-    bool    show_compute_roofline;
-    bool    show_compute_metric_tables;
-    bool    show_compute_isa;
-    bool    show_compute_workload_details;
-    int32_t compute_layout_template;
-    int32_t compute_layout_slots[COMPUTE_LAYOUT_MAX_SLOTS];  // Pane per box; -1 = empty.
-    bool    compute_maximized;           // compute_maximized_pane fills the tab.
-    int32_t compute_maximized_pane;
-    bool    compute_kernel_list_table;   // Kernel rail shows the full metric table.
+    bool    show_compute_kernel_list      = true;
+    bool    show_compute_memory_chart     = true;  // Mirrors whether the pane is in a box.
+    bool    show_compute_roofline         = true;
+    bool    show_compute_metric_tables    = true;
+    bool    show_compute_isa              = true;
+    bool    show_compute_workload_details = false;
+    int32_t compute_layout_template       = 0;
+    // Pane per box; -1 = empty.
+    int32_t compute_layout_slots[COMPUTE_LAYOUT_MAX_SLOTS] = { 0, 1, 2, 3 };
+    bool    compute_maximized             = false;  // compute_maximized_pane fills the tab.
+    int32_t compute_maximized_pane        = 0;
+    bool    compute_kernel_list_table     = false;  // Kernel rail shows the full metric table.
 } AppWindowSettings;
 
 enum class Colors

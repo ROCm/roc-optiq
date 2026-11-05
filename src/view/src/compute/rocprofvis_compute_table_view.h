@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -60,22 +61,28 @@ private:
         const std::string*             category_name;
         const AvailableMetrics::Table* a;
         const AvailableMetrics::Table* b;
-        uint64_t                       Key() const
-        {
-            return MetricId::GetTableKey(category_id, a ? a->id : b->id);
-        }
+        // A's table, else B's.
+        const AvailableMetrics::Table& Named() const { return a ? *a : *b; }
+        uint64_t Key() const { return MetricId::GetTableKey(category_id, Named().id); }
     };
 
-    std::vector<ListedTable> ListedTables(const WorkloadInfo& workload) const;
-    void RenderToolbar(const WorkloadInfo& workload);
-    void RenderTablePicker(const WorkloadInfo& workload);
+    // Fills `listed` with the tables of `workload` (A's), then those only B's
+    // workload has.
+    void ListTables(const WorkloadInfo& workload, std::vector<ListedTable>& listed) const;
+    void RenderToolbar(const std::vector<ListedTable>& listed);
+    void RenderTablePicker(const std::vector<ListedTable>& listed);
     void RenderCompareOptions();
-    void RenderTables(const WorkloadInfo& workload);
+    void RenderTables(const std::vector<ListedTable>& listed);
     void RenderEmptyState();
     void ApplyHeaderRequest();
     void ResetWorkloadData();
     void FetchAllMetrics();
     void FetchCompareMetrics();
+    // Requests every table of `workload` for `kernel_id` under `client_id`.
+    // `loading` is set once a request is made, and `pending` too when it is
+    // refused (to be retried).
+    void RequestAllTables(const WorkloadInfo& workload, uint32_t kernel_id,
+                          uint64_t client_id, bool& loading, bool& pending);
     void RebuildTableDataCache();
     void AddTable(const ListedTable& listed);
     void RestoreMetricPining();
@@ -113,6 +120,8 @@ private:
     std::string        m_picker_filter;
     HeaderRequest      m_header_request = HeaderRequest::kNone;
     bool               m_chromeless     = false;
+    // Render's listing, refilled every frame: it points into the model.
+    std::vector<ListedTable> m_listed_tables;
 
     // Compare target (B) and its metrics, fetched under their own client id.
     bool                 m_compare_active = false;

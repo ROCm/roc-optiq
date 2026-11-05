@@ -1400,7 +1400,7 @@ The compute analogue of `TraceView`. Owns:
   browser shared across compute sub-views.
 - `m_summary_view` (`ComputeSummaryView`) - workload-wide overview (top
   kernels, workload SOL, workload roofline), rendered by
-  `RenderSummaryWindow()` in a floating "Summary" window toggled by
+  `RenderFloatingWindow()` in a floating "Summary" window toggled by
   View > Show Summary (`AppWindowSettings::show_summary`, shared with the
   system-trace summary). Its `###` window id is per project.
 - `m_kernel_details` (`ComputeKernelDetailsView`) - the whole compute UI,
@@ -1409,7 +1409,7 @@ The compute analogue of `TraceView`. Owns:
   (`ComputeWorkloadView`) panes, and comparing the selected kernel with a
   second one.
 - `m_compute_tester` (`ComputeTester`) - dev-mode scratchpad
-  (`#ifdef ROCPROFVIS_DEVELOPER_MODE`), drawn by `RenderComputeTesterWindow()`
+  (`#ifdef ROCPROFVIS_DEVELOPER_MODE`), drawn by `RenderFloatingWindow()`
   in a floating window per project while Developer Options > Show Compute
   Tester (`ComputeTester::VisiblePtr()`, one toggle for all projects) is on.
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1712,8 +1712,9 @@ compare options).
 
 Comparing (`SetCompareTarget` / `ClearCompareTarget`, driven by Kernel
 Details): B's metrics are fetched under `m_compare_client_id`
-(`FetchCompareMetrics`, every table like A). `ListedTables()` lists A's tables
-paired with B's of the same key, then tables only B's workload has; the picker
+(`FetchCompareMetrics`, every table like A). `ListTables()` lists A's tables
+paired with B's of the same key, then tables only B's workload has, once per
+frame into `m_listed_tables` for the toolbar, picker and tables; the picker
 and headers tag one-sided tables "A only" / "B only". Each table is built with
 `MetricTable::PopulateComparison` and the pins with
 `PinnedMetricTable::SetCompareSource`: per value the `MetricCompareOptions`
@@ -1721,7 +1722,9 @@ columns (A, B, delta, delta % of A; default A, B, delta %), metrics paired by
 id then by name (ids can shift between architectures; unpaired ones dimmed,
 B-only rows unpinnable and keyed with `COMPARE_B_ONLY_ENTRY_BIT`, hidden with
 "Metrics only one side has" off) and delta cells shaded by direction with an
-alpha that grows with the change, from `highlight_pct` up. The Compare combo
+alpha that grows with the change, from `highlight_pct` up. Deltas are taken
+from the values as printed (two decimals), so a change too small to show is
+no change. The Compare combo
 next to the Tables picker edits the options.
 
 ### `ComputeSummaryView` and `ComputeTopKernels` (`rocprofvis_compute_summary.{h,cpp}`)

@@ -30,7 +30,7 @@ class ComputeSelection;
 // Renders the compute kernel-details "Memory Chart" from a relational layout
 // (MemChartLayout): generic blocks arranged in columns, connected by arrows.
 // Metric ids/names referenced by the layout are resolved against the compute
-// metric table for the selected kernel.
+// metric table for the selected kernel (or the one given to SetSource).
 class ComputeMemoryChartView
 {
 public:
@@ -46,7 +46,8 @@ public:
     // used and its metric ids are remapped. With neither, the chart is N/A.
     void LoadWorkloadLayout(uint32_t workload_id);
 
-    // Fetch every metric in the layout's source category for the selected kernel.
+    // Fetch every metric in the layout's source category for the selected kernel
+    // (or the one given to SetSource).
     void FetchMemChartMetrics();
 
     void UpdateMetrics();
@@ -175,7 +176,7 @@ private:
 
     // `extra_height` is added to the common column height, stretching every
     // column (used to fill a pane taller than the chart's natural height).
-    void ComputeLayout(float available_width, float extra_height = 0.0f);
+    void ComputeLayout(float available_width, float extra_height);
     // Layout + arrow routing into m_routes, and the canvas size they cover.
     void LayoutCanvas(float available_width, float extra_height);
     void MeasureBlock(MemChartBlock& block) const;

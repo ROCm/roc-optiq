@@ -34,12 +34,14 @@ enum class MetricCompareColumn : uint32_t
     kDeltaPct,
     kCount
 };
+inline constexpr size_t METRIC_COMPARE_COLUMN_COUNT =
+    static_cast<size_t>(MetricCompareColumn::kCount);
 
 struct MetricCompareOptions
 {
     MetricCompareOptions();
 
-    std::bitset<static_cast<size_t>(MetricCompareColumn::kCount)> columns;
+    std::bitset<METRIC_COMPARE_COLUMN_COUNT> columns;
     // Also list metrics found on only one side (e.g. across GPU architectures).
     bool show_unmatched = true;
     // Shade the difference cells of values that changed by at least this many
@@ -51,6 +53,11 @@ struct MetricCompareOptions
         return columns.test(static_cast<size_t>(column));
     }
 };
+
+// `workload`'s table `table_id` of category `category_id`; null when the workload
+// is null or lacks it.
+const AvailableMetrics::Table*
+FindMetricTable(const WorkloadInfo* workload, uint32_t category_id, uint32_t table_id);
 
 class MetricTableBase : public RocWidget
 {
@@ -64,8 +71,8 @@ public:
     struct Row
     {
         std::map<uint32_t, RowValue> values;
-        bool                         pinned   = false;
-        bool                         pinnable = true;
+        bool                         pinned    = false;
+        bool                         pinnable  = true;
         // A metric found on only one side of a comparison.
         bool                         unmatched = false;
     };
@@ -78,12 +85,6 @@ public:
     // Drop the card, title and inner scrolling, for a table listed under its
     // container's own (collapsible) header; the container scrolls instead.
     void SetEmbedded(bool embedded);
-    // Stretch the card and table to the parent's height (e.g. a resizable pane);
-    // rows scroll inside the table.
-    void SetFillParent(bool fill);
-    // Drop the card and title but keep the table's own scrolling, for a
-    // container that draws its own pane header.
-    void SetChromeless(bool chromeless);
 protected:
     virtual void ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row);
@@ -112,10 +113,8 @@ protected:
     ImGuiTableFlags           m_table_flags;
     uint32_t                  m_max_rows_in_table;
     // Suppress the outer card when an embedding container paints its own.
-    bool                      m_no_panel    = false;
-    bool                      m_hide_title  = false;
-    bool                      m_embedded    = false;
-    bool                      m_fill_parent = false;
+    bool                      m_no_panel = false;
+    bool                      m_embedded = false;
 
     uint32_t m_freezed_columns = 0;
     uint32_t m_freezed_rows    = 0;
@@ -156,6 +155,8 @@ private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
     virtual void RenderEmptyTable() override;
+    // The id, name and unit cells every row starts with.
+    static void FillEntryCells(const AvailableMetrics::Entry& entry, Row& row);
 };
 
 class PinnedMetricTable: public MetricTableBase
@@ -181,8 +182,7 @@ private:
         uint32_t             kernel_id;
         MetricCompareOptions options;
     };
-    void FillCompareRow(const MetricId& metric_id, const AvailableMetrics::Table& table,
-                        std::map<uint32_t, std::string>& columns,
+    void FillCompareRow(const MetricId& metric_id, std::map<uint32_t, std::string>& columns,
                         uint32_t& last_column_index, std::map<MetricId, Row>& rows);
 
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
@@ -227,8 +227,6 @@ public:
     virtual void FetchMetrics();
     virtual void UpdateTable();
     void         Clear();
-    void         SetFillParent(bool fill) { m_table.SetFillParent(fill); }
-    void         SetChromeless(bool chromeless) { m_table.SetChromeless(chromeless); }
     uint64_t     GetClientId() const { return m_client_id; }
 
 protected:

@@ -1,7 +1,9 @@
 set(PROFILER_HUB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(PROFILER_HUB_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 set(PROFILER_HUB_FETCH_DEPENDENCIES ON CACHE BOOL "" FORCE)
-set(PROFILER_HUB_REPO    "git@github.com:ROCm/rocm-systems.git")
+# HTTPS so anonymous clones work on CI runners, which have no SSH key.
+set(PROFILER_HUB_REPO    "https://github.com/ROCm/rocm-systems.git" CACHE STRING
+    "Git URL for rocm-systems (override with an SSH URL if preferred)")
 set(PROFILER_HUB_TAG     "develop-optiq")
 set(PROFILER_HUB_SUBDIR  "profilers/profiler-hub")
 

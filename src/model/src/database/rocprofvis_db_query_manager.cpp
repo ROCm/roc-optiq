@@ -60,7 +60,25 @@ int QueryManager::CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_st
     uint32_t bucket_number = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
     uint32_t event_count = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
     double bucket_value = db->Sqlite3ColumnDouble(func, stmt, azColName, 2);
-    db->TrackPropertiesAt(index)->histogram[bucket_number] = std::make_pair(event_count, bucket_value);
+    rocprofvis_dm_track_params_t* track = db->TrackPropertiesAt(index);
+    {
+        // Split threads of one track report a shared bucket separately: counts and
+        // durations add up, and counter averages are weighted by their sample counts.
+        std::lock_guard<std::mutex> lock(db->m_histogram_lock);
+        std::pair<uint32_t, double>& bucket = track->histogram[bucket_number];
+        const uint32_t total_count = bucket.first + event_count;
+        if(track->track_indentifiers.category == kRocProfVisDmPmcTrack)
+        {
+            bucket.second = total_count > 0 ? (bucket.second * bucket.first +
+                                               bucket_value * event_count) / total_count
+                                            : bucket_value;
+        }
+        else
+        {
+            bucket.second += bucket_value;
+        }
+        bucket.first = total_count;
+    }
     callback_params->future->CountThisRow();
     return 0;
 }
@@ -901,7 +919,7 @@ QueryManager::GetEventTablesAsync(
 std::string QueryManager::GetHistogramQueryPrefix(uint64_t bucket_size)
 {
     const char* start_time_substring = "%START_TIME%";
-    const char* histogram_content_version = "4";
+    const char* histogram_content_version = "5";
 
     std::string histogram_query_prefix = "WITH params AS ( SELECT ";
     histogram_query_prefix += start_time_substring;

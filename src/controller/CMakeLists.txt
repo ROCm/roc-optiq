@@ -135,6 +135,10 @@ if(ROCPROFVIS_ENABLE_SCRIPTING)
     target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../python/inc)
 endif()
 
+if(PROFILER_HUB_BUILD)
+    target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_PROFILER_HUB_ENABLED)
+endif()
+
 if(BUILD_TESTING)
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)
 	set(COMPUTE_TEST_NAME ${PROJECT_NAME}-compute-tests)

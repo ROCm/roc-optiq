@@ -1,6 +1,10 @@
 set(PROFILER_HUB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(PROFILER_HUB_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 set(PROFILER_HUB_FETCH_DEPENDENCIES ON CACHE BOOL "" FORCE)
+# Download the prebuilt SQLite3 amalgamation; generating it from git needs tclsh,
+# which the Linux CI runners don't have.
+set(PROFILER_HUB_SQLITE3_FROM_GIT OFF CACHE BOOL
+    "Generate the SQLite3 amalgamation from git (needs git, make, and tclsh)")
 # HTTPS so anonymous clones work on CI runners, which have no SSH key.
 set(PROFILER_HUB_REPO    "https://github.com/ROCm/rocm-systems.git" CACHE STRING
     "Git URL for rocm-systems (override with an SSH URL if preferred)")

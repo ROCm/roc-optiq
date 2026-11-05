@@ -18,15 +18,13 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float       SAMPLING_STATE_BAR_HEIGHT_FRACTION              = 0.5f;
+constexpr float       SAMPLING_BAR_HEIGHT_FRACTION                    = 0.9f;
 constexpr const char* SAMPLING_STATE_COLUMN_LABEL                     = "Sampling State";
 constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
 constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
 constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES               = 3.0f;
-constexpr float       SAMPLE_METRIC_BAR_HEIGHT_FRACTION               = 0.12f;
-constexpr float       SAMPLE_METRIC_TRACK_ALPHA                       = 0.15f;
-constexpr float       SAMPLE_METRIC_BAR_ALPHA                         = 0.6f;
-constexpr double      SAMPLE_METRIC_PERCENT_SCALE                     = 100.0;
+constexpr float       SAMPLING_BAR_TEXT_PADDING_IN_CHARACTERS         = 0.35f;
+constexpr double      SAMPLING_BAR_PERCENT_SCALE                      = 100.0;
 constexpr float       SAMPLE_METRIC_TOOLTIP_WIDTH_IN_CHARACTERS       = 64.0f;
 
 struct SampleMetricPresentation
@@ -396,51 +394,97 @@ SamplingStateRenderer::IsDisabled() const
     return m_load_state == LoadState::kLoading || m_load_state == LoadState::kFailed;
 }
 
-bool
-SamplingStateRenderer::RenderMetricCell(const SamplingRow& row, Metric metric,
-                                        CodePane pane)
+void
+SamplingStateRenderer::DrawBarValue(const BarPresentation& bar, const ImVec2& cell_start,
+                                    const ImVec2& cell_size, float bar_width)
 {
-    const SampleMetricPresentation& presentation = get_sample_metric_presentation(metric);
-    const IsaDataBuilder::PercentageSummary& summary =
-        get_sample_metric_summary(row, metric);
-    const bool valid =
-        !IsDisabled() && summary.availability == SamplingAvailability::kValid;
-    const CodeCellBounds cell = get_code_cell_bounds();
-    const std::string    text = IsaDataBuilder::FormatSamplePercentage(
-        IsDisabled() ? IsaDataBuilder::PercentageSummary{} : summary);
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->PushClipRect(cell.start, cell.End(), true);
-    if(valid)
+    const std::string text = IsaDataBuilder::FormatSamplePercentage(
+        { bar.available ? SamplingAvailability::kValid : SamplingAvailability::kMissing,
+          bar.percent });
+    const ImVec2 cell_end(cell_start.x + cell_size.x, cell_start.y + cell_size.y);
+    ImDrawList*  draw_list = ImGui::GetWindowDrawList();
+    const float  text_padding =
+        ImGui::CalcTextSize("0").x * SAMPLING_BAR_TEXT_PADDING_IN_CHARACTERS;
+    ImVec2 text_start(cell_start.x + text_padding, cell_start.y);
+    ImU32  text_color      = m_settings.GetColor(Colors::kTextDim);
+    float  filled_text_end = cell_start.x;
+    if(bar.available)
     {
-        const float  height = cell.size.y * SAMPLE_METRIC_BAR_HEIGHT_FRACTION;
-        const ImVec2 start(cell.start.x, cell.End().y - height);
-        draw_list->AddRectFilled(
-            start, cell.End(),
-            ImGui::GetColorU32(
-                ThemeColor(m_settings, Colors::kTextDim, SAMPLE_METRIC_TRACK_ALPHA)));
-        const float width = cell.size.x * static_cast<float>(summary.percent /
-                                                             SAMPLE_METRIC_PERCENT_SCALE);
-        if(width > 0.0f)
+        const float text_width     = ImGui::CalcTextSize(text.c_str()).x;
+        const bool  text_fits_fill = bar_width >= text_width + text_padding * 2.0f;
+        text_color = m_settings.GetColor(text_fits_fill ? Colors::kTextOnAccent
+                                                        : Colors::kTextMain);
+        if(!text_fits_fill)
         {
-            draw_list->AddRectFilled(
-                start, ImVec2(start.x + width, cell.End().y),
-                ImGui::GetColorU32(
-                    ThemeColor(m_settings, Colors::kAccent, SAMPLE_METRIC_BAR_ALPHA)));
+            if(cell_size.x - bar_width >= text_width + text_padding * 2.0f)
+            {
+                // Keep short-fill values fully outside the bar, including zero.
+                text_start.x += bar_width;
+            }
+            else
+            {
+                // Narrow columns may split the value across filled and empty space.
+                filled_text_end = cell_start.x + bar_width;
+            }
         }
     }
-    const float text_width = ImGui::CalcTextSize(text.c_str()).x;
-    draw_list->AddText(
-        ImVec2(cell.start.x + std::max(0.0f, cell.size.x - text_width), cell.start.y),
-        m_settings.GetColor(valid ? Colors::kTextMain : Colors::kTextDim), text.c_str());
-    draw_list->PopClipRect();
-    // Missing metrics remain selectable, just like the other code-row cells.
-    const CodeCellInteraction interaction = finish_code_cell(cell, presentation.label);
-    if(interaction.hovered)
+    if(filled_text_end > cell_start.x)
     {
-        RenderMetricTooltip(row, metric, pane);
+        draw_list->PushClipRect(ImVec2(filled_text_end, cell_start.y), cell_end, true);
+        draw_list->AddText(text_start, text_color, text.c_str());
+        draw_list->PopClipRect();
+        draw_list->PushClipRect(cell_start, ImVec2(filled_text_end, cell_end.y), true);
+        draw_list->AddText(text_start, m_settings.GetColor(Colors::kTextOnAccent),
+                           text.c_str());
+        draw_list->PopClipRect();
     }
-    return interaction.clicked;
+    else
+    {
+        draw_list->AddText(text_start, text_color, text.c_str());
+    }
+}
+
+void
+SamplingStateRenderer::DrawBar(const BarPresentation& bar, const ImVec2& cell_start,
+                               const ImVec2& cell_size)
+{
+    const ImVec2 cell_end(cell_start.x + cell_size.x, cell_start.y + cell_size.y);
+    const float  bar_height = cell_size.y * SAMPLING_BAR_HEIGHT_FRACTION;
+    const float  bar_width =
+        bar.available
+             ? cell_size.x * static_cast<float>(bar.percent / SAMPLING_BAR_PERCENT_SCALE)
+             : 0.0f;
+    const ImVec2 start(cell_start.x, cell_start.y + (cell_size.y - bar_height) * 0.5f);
+    const ImVec2 end(start.x + bar_width, start.y + bar_height);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->PushClipRect(cell_start, cell_end, true);
+    if(bar_width > 0.0f)
+    {
+        draw_list->AddRectFilled(start, end, m_settings.GetColor(bar.color));
+        if(bar.breakdown)
+        {
+            const float issue_width =
+                bar_width * static_cast<float>(bar.breakdown->sampling.issue_percent /
+                                               SAMPLING_BAR_PERCENT_SCALE);
+            const float stall_width =
+                bar_width * static_cast<float>(bar.breakdown->sampling.stall_percent /
+                                               SAMPLING_BAR_PERCENT_SCALE);
+            const ImVec2 issue_end(start.x + issue_width, end.y);
+            if(issue_width > 0.0f)
+            {
+                draw_list->AddRectFilled(start, issue_end,
+                                         m_settings.GetColor(Colors::kTextSuccess));
+            }
+            DrawStallReasonSegments(*bar.breakdown, ImVec2(issue_end.x, start.y),
+                                    ImVec2(issue_end.x + stall_width, end.y));
+        }
+        draw_list->AddRect(start, end, m_settings.GetColor(Colors::kBorderGray));
+    }
+    if(bar.show_value)
+    {
+        DrawBarValue(bar, cell_start, cell_size, bar_width);
+    }
+    draw_list->PopClipRect();
 }
 
 SamplingStateRenderer::MetricTooltipText
@@ -554,51 +598,46 @@ bool
 SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples,
                                   CodePane pane)
 {
-    if(m_selected_metric != Metric::kSamplingState)
+    const bool      state_metric = m_selected_metric == Metric::kSamplingState;
+    BarPresentation bar;
+    bar.show_value = !state_metric;
+    if(state_metric)
     {
-        return RenderMetricCell(row, m_selected_metric, pane);
-    }
-    const SampleCounts&  counts     = row.sample_counts;
-    const CodeCellBounds cell       = get_code_cell_bounds();
-    const float          bar_height = cell.size.y * SAMPLING_STATE_BAR_HEIGHT_FRACTION;
-    const ImVec2         bar_start(cell.start.x,
-                                   cell.start.y + (cell.size.y - bar_height) * 0.5f);
-    const double         bar_percent =
-        row.sampling.availability == SamplingAvailability::kInvalid
-            ? 0.0
-            : IsaDataBuilder::CalculatePercentage(counts.total_count, hottest_samples);
-    const float  bar_width = cell.size.x * static_cast<float>(bar_percent / 100.0);
-    const ImVec2 bar_end(bar_start.x + bar_width, bar_start.y + bar_height);
-    if(!IsDisabled() && bar_width > 0.0f)
-    {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->PushClipRect(cell.start, cell.End(), true);
-        draw_list->AddRectFilled(bar_start, bar_end,
-                                 m_settings.GetColor(Colors::kTextDim));
+        bar.available =
+            !IsDisabled() && row.sampling.availability != SamplingAvailability::kInvalid;
+        bar.percent = row.sampling.availability == SamplingAvailability::kInvalid
+                          ? 0.0
+                          : IsaDataBuilder::CalculatePercentage(
+                                row.sample_counts.total_count, hottest_samples);
         if(m_load_state == LoadState::kReady &&
            row.sampling.availability == SamplingAvailability::kValid)
         {
-            const float issue_width =
-                bar_width * static_cast<float>(row.sampling.issue_percent / 100.0);
-            const float stall_width =
-                bar_width * static_cast<float>(row.sampling.stall_percent / 100.0);
-            const ImVec2 issue_end(bar_start.x + issue_width, bar_end.y);
-            if(issue_width > 0.0f)
-            {
-                draw_list->AddRectFilled(bar_start, issue_end,
-                                         m_settings.GetColor(Colors::kTextSuccess));
-            }
-            DrawStallReasonSegments(row, ImVec2(issue_end.x, bar_start.y),
-                                    ImVec2(issue_end.x + stall_width, bar_end.y));
+            bar.breakdown = &row;
         }
-        draw_list->AddRect(bar_start, bar_end, m_settings.GetColor(Colors::kBorderGray));
-        draw_list->PopClipRect();
     }
+    else
+    {
+        const IsaDataBuilder::PercentageSummary& summary =
+            get_sample_metric_summary(row, m_selected_metric);
+        bar.available =
+            !IsDisabled() && summary.availability == SamplingAvailability::kValid;
+        bar.percent = summary.percent;
+        bar.color   = Colors::kPcSamplingMetricBar;
+    }
+    const CodeCellBounds cell = get_code_cell_bounds();
+    DrawBar(bar, cell.start, cell.size);
     const CodeCellInteraction interaction =
-        finish_code_cell(cell, "##sampling_state_cell", IsDisabled());
+        finish_code_cell(cell, "##sampling_bar_cell", state_metric && IsDisabled());
     if(interaction.hovered)
     {
-        RenderTooltip(row, bar_percent, pane);
+        if(state_metric)
+        {
+            RenderTooltip(row, bar.percent, pane);
+        }
+        else
+        {
+            RenderMetricTooltip(row, m_selected_metric, pane);
+        }
     }
     return interaction.clicked;
 }

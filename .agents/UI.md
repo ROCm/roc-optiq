@@ -1652,12 +1652,22 @@ The ISA implementation is organized as follows:
   Its `Metric` enum selects Sampling State, wave occupancy, or active threads.
   Each renderer owns an independent header-combo selection, initially Sampling State,
   retained across kernel/source changes for the widget's lifetime. `RenderCell`
-  dispatches to the existing state-bar or percentage renderer without reaggregation.
+  builds a stack-local `BarPresentation` and uses one `DrawBar` path for all modes,
+  without reaggregation. The presentation carries the fill percentage, color,
+  availability, and a `show_value` option. Only a stacked state bar borrows its input
+  row through `breakdown` for the duration of drawing; no per-row segment allocation
+  or retained row pointer is needed.
   The line numbers and always-visible sampling column use `NoReorder` so they stay
   first and second. The header remains selectable during loading/failure and shares
   the existing header-tooltip content through `RenderHeaderTooltip`. Percentages use one
-  decimal place with a thin theme-accent bar on a fixed 0-100% scale; an unavailable
-  measurement uses an em dash. Metric cells forward clicks to row selection even
+  decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
+  All modes share rectangular geometry, the `kBorderGray` outline around the filled
+  extent, clipping, and value-label layout. Sampling State uses `show_value = false`;
+  the two percentage modes use `true`. `DrawBarValue` uses `kTextOnAccent` inside
+  fills that fit the label, or `kTextMain` beside short fills. Narrow columns that
+  cannot fit either segment clip the same label in both colors at the fill boundary.
+  Measured zero has no fill and shows `0.0%`; unavailable percentages show only a
+  dim em dash. All modes share cell hit testing and forward clicks to row selection even
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
   Metric cells and the Sampling State tooltip share `RenderMetricValue` and
@@ -1827,8 +1837,9 @@ uppercase hexadecimal, not an absolute runtime address. Right-clicking an offset
 ISA instruction, or source-code line opens its copy context menu. Offset and `#`
 use `NoResize` so their calculated widths follow data and font changes. The `#`
 width is measured with the active code font during rendering. ISA and Sampling
-State remain resizable; Sampling State and Offset are hideable through the header
-context menu. The source table supports the same native column menu. Both menus
+State remain resizable; Offset is hideable through the header context menu, while the
+sampling selector stays beside the line numbers. The source table supports the same
+native column menu. Both menus
 use the application's default window padding, matching event-table menus.
 
 Sampling State consumes the prepared `SamplingSummary` from
@@ -1839,7 +1850,9 @@ count does not exceed total samples. Genuine zero total/issued/stalled counts
 remain valid. Mismatched reason classifications are reported separately and retain
 bounded normalization when the progress counts themselves are valid.
 
-Sampling State draws a thin stacked bar: issued observations come first in the
+The common `DrawBar` draws Sampling State as a stacked bar using `SAMPLING_BAR_HEIGHT_FRACTION`
+as both percentage modes (90% of the text-line height), centered within the row.
+Issued observations come first in the
 success green, followed by every stall reason in descending count and then name
 order. Total bar length is normalized to the hottest displayed instruction.
 The issued portion uses issued samples over that maximum. Reason segments divide

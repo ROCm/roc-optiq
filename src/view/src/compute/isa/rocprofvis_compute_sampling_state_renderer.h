@@ -78,6 +78,16 @@ private:
     using StallReason          = IsaDataBuilder::StallReason;
     using SamplingAvailability = IsaDataBuilder::SamplingAvailability;
 
+    struct BarPresentation
+    {
+        double percent    = 0.0;
+        Colors color      = Colors::kTextDim;
+        bool   available  = false;
+        bool   show_value = false;
+        // Borrow the row only while drawing an optional stacked breakdown.
+        const SamplingRow* breakdown = nullptr;
+    };
+
     static constexpr size_t SHARE_TEXT_CAPACITY = 32;
     struct TooltipRow
     {
@@ -107,8 +117,10 @@ private:
     static const char* GetUnavailableSamplingTooltip(const SamplingRow& row);
     static void        RenderHeaderTooltip(const HeaderTooltipText& tooltip,
                                            void (*render_user_content)());
-    [[nodiscard]] bool RenderMetricCell(const SamplingRow& row, Metric metric,
-                                        CodePane pane);
+    void               DrawBar(const BarPresentation& bar, const ImVec2& cell_start,
+                               const ImVec2& cell_size);
+    void               DrawBarValue(const BarPresentation& bar, const ImVec2& cell_start,
+                                    const ImVec2& cell_size, float bar_width);
     [[nodiscard]] bool IsDisabled() const;
     static TooltipRows BuildTooltipRows(const SamplingRow& row);
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);

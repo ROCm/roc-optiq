@@ -4,6 +4,7 @@
 #include "rocprofvis_db_information_catalog.h"
 
 #include <charconv>
+#include <mutex>
 #include <system_error>
 #include <utility>
 

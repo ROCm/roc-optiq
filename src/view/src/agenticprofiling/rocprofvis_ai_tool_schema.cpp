@@ -594,22 +594,22 @@ MakeAssistantToolsJson()
     return tools;
 }
 
-// Which workload and kernel a compute tool is talking about. Every one of them
-// takes these and defaults to what the user has selected, so the model can
-// start asking without an id in hand.
+// Which workload and kernel a compute tool is talking about. Neither defaults
+// to the toolbar's selection, which the combo sets on open whether or not the
+// user chose it.
 void
 AddComputeScopeParams(jt::Json& params, bool with_kernel)
 {
     AddParam(params, "workload_id", "integer",
-             "Workload from compute_overview. Defaults to the one the user has "
-             "selected, and most traces only have one.");
+             "Workload from compute_overview. Needed only when the trace has more "
+             "than one; compute_overview with no arguments lists them.");
     if(!with_kernel)
     {
         return;
     }
     AddParam(params, "kernel_id", "integer",
-             "Kernel id from list_kernels. Defaults to the kernel the user has "
-             "selected in the toolbar.");
+             "Kernel id from compute_overview or list_kernels. Needed unless the "
+             "workload has only one kernel - the toolbar selection is never used.");
     AddParam(params, "kernel_name", "string",
              "Alternative to kernel_id. An exact name, or a fragment that picks out "
              "exactly one kernel - an ambiguous fragment is refused rather than "
@@ -740,9 +740,9 @@ MakeAssistantComputeToolsJson()
              "listing its entries. Names are not accepted - pass the ids.");
     get_metrics_params["properties"]["metrics"]["items"]["type"] = "string";
     AddParam(get_metrics_params, "scope", "string",
-             "kernel (default) reads one kernel's values - the one named, else the "
-             "one the user has selected. workload reads the workload's own values "
-             "and takes no kernel_id or kernel_name.");
+             "kernel (default) reads the kernel named by kernel_id or kernel_name. "
+             "workload reads the workload's own values and takes no kernel_id or "
+             "kernel_name.");
     get_metrics_params["properties"]["scope"]["enum"] =
         MakeStringEnum({ "kernel", "workload" });
     get_metrics_params["required"][0] = "metrics";

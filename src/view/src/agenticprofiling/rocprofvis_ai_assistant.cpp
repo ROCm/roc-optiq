@@ -16,7 +16,6 @@
 #include "imgui.h"
 #include "spdlog/spdlog.h"
 
-#include "compute/rocprofvis_compute_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
 #include "rocprofvis_ai_prompts.h"
@@ -215,17 +214,6 @@ AssistantPanel::MakeToolContext() const
             context.timeline_selection = trace_view->GetTimelineSelection().get();
         }
     }
-    else if(project->GetTraceType() == Project::Compute)
-    {
-        // A compute trace has no timeline, so what stands in for "where the
-        // user is looking" is the workload and kernel the toolbar combos
-        // picked. The tools read it and never set it.
-        ComputeView* compute_view = dynamic_cast<ComputeView*>(project->GetView().get());
-        if(compute_view != nullptr)
-        {
-            context.compute_selection = compute_view->GetComputeSelection();
-        }
-    }
     return context;
 }
 
@@ -290,10 +278,12 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
     }
     else if(context.is_compute)
     {
-        // Names the free tools, so the button costs one cheap round rather than
-        // a metric query the user did not ask for.
-        out << "Explain this view. Call compute_overview and kernel_roofline so the "
-               "explanation uses real kernel names and numbers, stay on the tools "
+        // Names the free tools, so the button never spends a metric query the
+        // user did not ask for. kernel_roofline follows compute_overview
+        // because, with several kernels, it needs the id that call hands back.
+        out << "Explain this view. Call compute_overview, then kernel_roofline with "
+               "the kernel_id of the kernel that owns the most time, so the "
+               "explanation uses real kernel names and numbers. Stay on the tools "
                "that need no query, and offer the deeper dives as next steps.\n";
     }
     else

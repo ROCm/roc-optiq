@@ -20,7 +20,6 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeSelection;
 class DataProvider;
 class TimelineSelection;
 class TraceView;
@@ -69,20 +68,19 @@ enum class AssistantFetchKind
 // What the tools may touch on the trace in front. Rebuilt for every call, so it
 // is never held across a frame.
 //
-// The view pointers are mutually exclusive: a system trace fills trace_view and
-// timeline_selection, a compute trace fills compute_selection, and is_compute
-// says which set to read. data_provider is filled either way - it comes from
-// RootView - but note that DataModel() is the system model and is merely empty
+// A system trace fills trace_view and timeline_selection. A compute trace sets
+// is_compute and data_provider only: its tools name the workload and kernel
+// they read, and the toolbar is not an input. data_provider comes from
+// RootView either way, but DataModel() is the system model and is merely empty
 // on a compute trace, so a tool that reads it without checking is_compute
 // reports a trace with no tracks rather than failing.
 struct AssistantToolContext
 {
-    DataProvider*           data_provider      = nullptr;
-    TimelineSelection*      timeline_selection = nullptr;
-    TraceView*              trace_view         = nullptr;
-    const ComputeSelection* compute_selection  = nullptr;
-    bool                    is_compute         = false;
-    std::string             trace_name;
+    DataProvider*      data_provider      = nullptr;
+    TimelineSelection* timeline_selection = nullptr;
+    TraceView*         trace_view         = nullptr;
+    bool               is_compute         = false;
+    std::string        trace_name;
 };
 
 // Stands in for a kernel id when a compute metric fetch asked for the

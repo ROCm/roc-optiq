@@ -30,7 +30,6 @@
 
 #include "json.h"
 
-#include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -291,11 +290,11 @@ HasArg(const jt::Json& args, const char* key)
 /*
  * Which workload a tool is talking about.
  *
- * An explicit workload_id wins, then whichever one the toolbar has selected,
- * then the only one there is. Most traces carry a single workload, so falling
- * through to the first keeps every tool callable with no arguments at all. An
- * id that was passed but names nothing is refused rather than replaced by the
- * selection, which would answer about a workload nobody asked for.
+ * An explicit workload_id wins. With none, the only workload in the trace is
+ * used, which is the usual case and keeps every tool callable without one. A
+ * trace with several workloads has to be told which: the toolbar is not an
+ * input, and taking the first would answer about a workload nobody asked for.
+ * An id that was passed but names nothing is refused for the same reason.
  */
 const WorkloadInfo*
 ResolveWorkload(const AssistantToolContext& context, const jt::Json& args,
@@ -317,21 +316,14 @@ ResolveWorkload(const AssistantToolContext& context, const jt::Json& args,
         return workload;
     }
 
-    if(context.compute_selection != nullptr)
-    {
-        const uint32_t selected = context.compute_selection->GetSelectedWorkload();
-        if(selected != ComputeSelection::INVALID_SELECTION_ID)
-        {
-            const WorkloadInfo* workload = model.GetWorkload(selected);
-            if(workload != nullptr)
-            {
-                return workload;
-            }
-        }
-    }
-
     const std::vector<const WorkloadInfo*>& workloads = model.GetWorkloadList();
-    if(workloads.empty())
+    if(workloads.size() > 1)
+    {
+        error_out = "This trace has more than one workload. Pass workload_id - "
+                    "compute_overview with no arguments lists them.";
+        return nullptr;
+    }
+    if(workloads.empty() || workloads.front() == nullptr)
     {
         error_out = "This compute trace has no workloads in it.";
         return nullptr;
@@ -376,14 +368,14 @@ KernelByName(const WorkloadInfo& workload, const std::string& name, bool& ambigu
 }
 
 /*
- * Which kernel a tool is talking about: the one it names, else the one the
- * toolbar has selected.
+ * Which kernel a tool is talking about: the one the call names, else the
+ * workload's only kernel. The toolbar is not an input - its combo picks the
+ * first kernel on open whether or not the user did.
  *
- * named_out separates "no kernel was named and none is selected" from "a kernel
- * was named and does not exist", which the caller has to report differently. A
- * kernel_id that cannot be read - a name passed in the id field, say - counts as
- * named: falling back to the selection would answer about a kernel the model
- * did not ask for.
+ * named_out separates "no kernel was named" from "a kernel was named and does
+ * not exist", which the caller has to report differently. A kernel_id that
+ * cannot be read - a name passed in the id field, say - counts as named, so it
+ * is refused rather than ignored.
  */
 const KernelInfo*
 ResolveKernel(const AssistantToolContext& context, const WorkloadInfo& workload,
@@ -428,13 +420,9 @@ ResolveKernel(const AssistantToolContext& context, const WorkloadInfo& workload,
         return kernel;
     }
 
-    if(context.compute_selection != nullptr)
+    if(workload.ordered_kernels.size() == 1)
     {
-        const uint32_t selected = context.compute_selection->GetSelectedKernel();
-        if(selected != ComputeSelection::INVALID_SELECTION_ID)
-        {
-            return Model(context).GetKernelInfo(workload.id, selected);
-        }
+        return workload.ordered_kernels.front();
     }
     return nullptr;
 }
@@ -739,13 +727,6 @@ AssistantToolStartResult
 ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
                     const std::string&)
 {
-    std::string         error;
-    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
-    if(workload == nullptr)
-    {
-        return DoneResult(error, "Unknown workload");
-    }
-
     const std::vector<const WorkloadInfo*>& workloads = Model(context).GetWorkloadList();
     std::ostringstream                      out;
     out << "workload_count: " << workloads.size() << "\n";
@@ -761,6 +742,21 @@ ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
                     << "\"\n";
             }
         }
+    }
+
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
+    if(workload == nullptr)
+    {
+        // With several workloads and none named, the list is the overview:
+        // every other compute tool's error sends the model here for it.
+        if(workloads.size() > 1 && !HasArg(args, "workload_id"))
+        {
+            out << "note: call compute_overview again with one of these "
+                   "workload_id values to read that workload.\n";
+            return DoneResult(TrimComputeResult(out.str()), "Listed the workloads");
+        }
+        return DoneResult(error, "Unknown workload");
     }
 
     out << "workload_id: " << workload->id << "\n";
@@ -961,8 +957,8 @@ ToolKernelSummary(const AssistantToolContext& context, const jt::Json& args,
     if(kernel == nullptr)
     {
         return DoneResult(named ? error
-                                : "kernel_summary needs a kernel_id or kernel_name, and "
-                                  "no kernel is selected. Call list_kernels first.",
+                                : "kernel_summary needs a kernel_id or kernel_name. "
+                                  "Call list_kernels for the ids.",
                           "No kernel");
     }
 
@@ -1228,9 +1224,8 @@ ToolKernelRoofline(const AssistantToolContext& context, const jt::Json& args,
     }
     else
     {
-        out << "note: no kernel was named and none is selected, so only the "
-               "workload's ceilings are shown. Pass kernel_id to place a kernel "
-               "against them.\n";
+        out << "note: no kernel was named, so only the workload's ceilings are "
+               "shown. Pass kernel_id to place a kernel against them.\n";
     }
 
     return DoneResult(TrimComputeResult(out.str()), "Read the roofline");
@@ -1349,8 +1344,8 @@ ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
     if(kernel == nullptr)
     {
         return DoneResult(named ? error
-                                : "kernel_triage needs a kernel_id or kernel_name, and "
-                                  "no kernel is selected. Call list_kernels first.",
+                                : "kernel_triage needs a kernel_id or kernel_name. "
+                                  "Call list_kernels for the ids.",
                           "No kernel");
     }
 
@@ -1386,10 +1381,8 @@ ToolGetMetrics(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult(error, "Bad metrics");
     }
 
-    // Asked for by name rather than by leaving the kernel out: selecting a
-    // workload also selects its first kernel, so "no kernel given" would always
-    // land on the toolbar's kernel and the workload's own values would be out
-    // of reach.
+    // Workload scope is asked for by name, so a kernel read that forgot its
+    // kernel_id is refused rather than quietly answered with workload values.
     const std::string scope =
         Core::String::to_lower_copy(JsonUtils::GetString(args, "scope", "kernel"));
     if(scope == "workload")
@@ -1415,9 +1408,9 @@ ToolGetMetrics(const AssistantToolContext& context, const jt::Json& args,
     if(kernel == nullptr)
     {
         return DoneResult(named ? error
-                                : "get_metrics needs a kernel_id or kernel_name, and no "
-                                  "kernel is selected. Call list_kernels, or pass "
-                                  "scope=\"workload\" for the workload's own values.",
+                                : "get_metrics needs a kernel_id or kernel_name. Call "
+                                  "list_kernels, or pass scope=\"workload\" for the "
+                                  "workload's own values.",
                           "No kernel");
     }
     return StartComputeMetricsFetch(context, *workload, kernel, selectors,
@@ -2009,8 +2002,8 @@ ToolKernelPcSamples(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult(named
                               ? error
-                              : "kernel_pc_samples needs a kernel_id or kernel_name, and "
-                                "no kernel is selected. Call list_kernels first.",
+                              : "kernel_pc_samples needs a kernel_id or kernel_name. "
+                                "Call list_kernels for the ids.",
                           "No kernel");
     }
 
@@ -2258,8 +2251,9 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
  * The short compute description the model sees before it asks anything.
  *
  * Deliberately incomplete in the same way the system briefing is: it carries
- * the shape of the trace and what the user is looking at, but no kernel names
- * and no metric values, so answering from it alone is visibly guessing.
+ * the shape of the trace, but no kernel names and no metric values, so
+ * answering from it alone is visibly guessing. The toolbar selection is left
+ * out: the combo picks the first kernel on open whether or not the user did.
  */
 std::string
 BuildAssistantComputeBriefing(const AssistantToolContext& context)
@@ -2269,22 +2263,36 @@ BuildAssistantComputeBriefing(const AssistantToolContext& context)
     std::ostringstream out;
     out << "trace_name: " << context.trace_name << "\n";
     out << "kind: compute_trace\n";
-    out << "workload_count: " << model.GetWorkloadList().size() << "\n";
 
-    // The same workload the tools fall back to with no workload_id, so the
-    // briefing and the first answer describe one workload.
-    jt::Json no_args;
-    no_args.setObject();
-    std::string         no_workload;
-    const WorkloadInfo* workload = ResolveWorkload(context, no_args, no_workload);
+    const std::vector<const WorkloadInfo*>& workloads = model.GetWorkloadList();
+    out << "workload_count: " << workloads.size() << "\n";
+    if(workloads.size() > 1)
+    {
+        out << "workloads:\n";
+        for(const WorkloadInfo* listed : workloads)
+        {
+            if(listed != nullptr)
+            {
+                out << "  workload_id=" << listed->id << " kernels="
+                    << listed->ordered_kernels.size() << " name=\"" << listed->name
+                    << "\"\n";
+            }
+        }
+        out << "note: pass workload_id on every call. Kernel names and metric values "
+               "are NOT in this briefing - compute_overview with a workload_id shows "
+               "them.\n";
+        return out.str();
+    }
+
+    const WorkloadInfo* workload = workloads.empty() ? nullptr : workloads.front();
     if(workload == nullptr)
     {
         out << "note: no workload is loaded yet.\n";
         return out.str();
     }
 
-    out << "selected_workload_id: " << workload->id << "\n";
-    out << "selected_workload_name: " << workload->name << "\n";
+    out << "workload_id: " << workload->id << "\n";
+    out << "workload_name: " << workload->name << "\n";
     out << "kernel_count: " << workload->ordered_kernels.size() << "\n";
     out << "metric_count: " << workload->available_metrics.list.size() << "\n";
 
@@ -2302,20 +2310,6 @@ BuildAssistantComputeBriefing(const AssistantToolContext& context)
             {
                 out << "  " << workload->system_info[0][i] << ": "
                     << workload->system_info[1][i] << "\n";
-            }
-        }
-    }
-
-    if(context.compute_selection != nullptr)
-    {
-        const uint32_t kernel_id = context.compute_selection->GetSelectedKernel();
-        if(kernel_id != ComputeSelection::INVALID_SELECTION_ID)
-        {
-            const KernelInfo* kernel = model.GetKernelInfo(workload->id, kernel_id);
-            out << "selected_kernel_id: " << kernel_id << "\n";
-            if(kernel != nullptr)
-            {
-                out << "selected_kernel_name: " << ShortKernelName(kernel->name) << "\n";
             }
         }
     }

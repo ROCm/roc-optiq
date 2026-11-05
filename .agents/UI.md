@@ -2129,11 +2129,12 @@ memory - a compute trace loads its whole
 workload/kernel/metric-catalogue/roofline tree at open - and the other
 three, `kernel_triage`, `get_metrics`, and `kernel_pc_samples`, are the
 ones that query.
-`ComputeView` exposes
-`GetComputeSelection()` under the agentic guard so the tools can read
-which workload and kernel the user picked, and nothing writes it:
-selecting a kernel on the user's behalf would be an `OptiqActions`
-capability, which compute does not have yet. There is no compute
+The tools do not read the compute toolbar, whose combo picks the first
+kernel on open whether or not the user did. A kernel tool takes its
+`kernel_id` or `kernel_name`, or the workload's only kernel; otherwise
+`kernel_roofline` prints the ceilings alone and the others refuse.
+`workload_id` is needed only when the trace has more than one workload,
+and `compute_overview` with no arguments lists them. There is no compute
 equivalent of `goto`, no compute toolbar button, and no compute
 scripting (`optiq.table` positively requires a system controller).
 
@@ -2247,10 +2248,10 @@ Layered, transport at the bottom and the panel at the top:
   Metric ids are checked against the workload's catalogue before any
   query, so a wrong id comes back as wrong rather than as missing. A
   `workload_id` or `kernel_id` that was passed but cannot be resolved
-  is an error, never a quiet fall back to the toolbar's selection. And
-  since selecting a workload also selects its first kernel, leaving the
-  kernel out always means the toolbar's kernel: `get_metrics` reads the
-  workload's own values only when asked with `scope="workload"`.
+  is an error. A kernel read that names no kernel is also an error unless
+  the workload has only one: the toolbar selection is never a default.
+  `get_metrics` reads the workload's own values only when asked with
+  `scope="workload"`.
   `kernel_pc_samples` reads one kernel's PC samples - instructions ranked
   by samples, issued against stalled, the profiler's reasons, and the
   `frame_index == 0` source line the ISA View would show - or says none
@@ -3246,10 +3247,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `TraceView` -> `rocprofvis_trace_view.h` -> System-profile workspace.
 - `SystemTraceProjectSettings` -> same -> Persists bookmarks.
 - `ComputeView` -> `compute/rocprofvis_compute_view.h` -> Compute
-  workspace. `GetComputeSelection()` is exposed under
-  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` so Ask Optiq can read which
-  workload and kernel the user picked; it returns a const pointer, so
-  it is read-only by type.
+  workspace. Ask Optiq does not read its toolbar selection.
 
 ### Timeline surface
 

@@ -284,7 +284,7 @@ namespace DataModel
         std::map<std::string, ColumnAggr> result;
         for (auto & map : m_aggregation.aggregation_maps)
         {
-            for (auto [key, val] : map)
+            for (auto & [key, val] : map)
             {
                 auto it = result.find(val.name);
                 if (it == result.end())
@@ -304,7 +304,7 @@ namespace DataModel
                 } else
                 { 
                     it->second.count+=val.count;
-                    for (auto param : m_aggregation.agg_params)
+                    for (auto & param : m_aggregation.agg_params)
                     {
                         auto it_dst = it->second.result.find(param.public_name);
                         auto it_src = val.result.find(param.public_name);
@@ -317,7 +317,7 @@ namespace DataModel
                                 it_dst->second.numeric.data.u64 += it_src->second.numeric.data.u64;
                                 break;
                             case FilterExpression::SqlCommand::Avg:
-                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) / it->second.count;
+                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) * val.count / it->second.count;
                                 break;
                             case FilterExpression::SqlCommand::Min:
                                 it_dst->second.numeric.data.d = std::min(it_src->second.numeric.data.d, it_dst->second.numeric.data.d);
@@ -484,7 +484,7 @@ namespace DataModel
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Max:
-                        it->second.result[param.public_name].numeric.data.d = DBL_MIN;
+                        it->second.result[param.public_name].numeric.data.d = -DBL_MAX;
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Sum:

@@ -3,13 +3,14 @@
 
 #pragma once
 
+#include "rocprofvis_c_interface_types.h"
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
-#include "rocprofvis_c_interface_types.h"
-
+#include <array>
 #include <memory>
-#include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -19,7 +20,12 @@ namespace View
 {
 
 // Forward declarations
+class CounterInfo;
 class TableRequestParams;
+struct NodeInfo;
+struct ProcessorInfo;
+struct ProcessInfo;
+struct ThreadInfo;
 
 struct CompareSourceInfo
 {
@@ -157,37 +163,70 @@ struct EventInfo
 // Summary Information
 struct SummaryInfo
 {
-    struct KernelMetrics
+    struct Value
     {
-        std::string name;
-        uint64_t    invocations;
-        double      exec_time_sum;
-        double      exec_time_min;
-        double      exec_time_max;
-        float       exec_time_pct;
+        enum Type
+        {
+            UInt,
+            Double,
+            Float,
+        };
+        union Numeric
+        {
+            uint64_t uint;
+            double   dbl;
+            float    flt;
+        };
+        Type        type;
+        Numeric     numeric;
+        std::string str;
     };
-
-    struct GPUMetrics
+    struct TopOpEvents
     {
-        std::optional<float>       gfx_utilization;
-        std::optional<float>       mem_utilization;
-        std::vector<KernelMetrics> top_kernels;
-        double                     kernel_exec_time_total;
+        struct Event
+        {
+            std::string                                                name;
+            std::array<Value, __kRPVAnalysisSummaryTopEventMetricLast> metrics;
+        };
+        std::vector<Event>                                          top;
+        std::array<Value, __kRPVAnalysisSummaryTopEventsMetricLast> metrics;
     };
-
-    struct CPUMetrics
-    {};
-
+    struct Counters
+    {
+        struct Counter
+        {
+            const CounterInfo*                                        info;
+            std::array<Value, __kRPVAnalysisSummaryCounterMetricLast> metrics;
+        };
+        std::vector<Counter>                                 list;
+    };
+    struct GPU
+    {
+        TopOpEvents dispatch;
+        TopOpEvents memory;
+        Counters    counters;
+    };
+    struct CPU
+    {
+        TopOpEvents memory;
+        Counters    counters;
+    };
     struct AggregateMetrics
     {
-        rocprofvis_controller_summary_aggregation_level_t     type;
-        std::optional<uint64_t>                               id;
-        std::optional<std::string>                            name;
-        std::optional<rocprofvis_controller_processor_type_t> device_type;
-        std::optional<uint64_t>                               device_type_index;
-        GPUMetrics                                            gpu;
-        CPUMetrics                                            cpu;
-        std::vector<AggregateMetrics>                         sub_metrics;
+        rocprofvis_analysis_summary_aggregation_level_t type;
+        union
+        {
+            const NodeInfo* node;  // kRPVAnalysisSummaryAggregationLevelNode
+            const ProcessorInfo*
+                               processor;  // kRPVAnalysisSummaryAggregationLevelProcessor
+            const ProcessInfo* process;    // kRPVAnalysisSummaryAggregationLevelProcess
+            const ThreadInfo*  thread;     // kRPVAnalysisSummaryAggregationLevelThread
+        } info;
+        GPU                           gpu;
+        CPU                           cpu;
+        TopOpEvents                   thread;
+        TopOpEvents                   memory;
+        std::vector<AggregateMetrics> sub_metrics;
     };
 };
 

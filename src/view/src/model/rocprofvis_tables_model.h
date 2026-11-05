@@ -23,6 +23,8 @@ enum class TableType
     kCompareSampleTableB,
     kEventSearchTable,
     kSummaryKernelTable,
+    kSummaryMemoryTable,
+    kSummaryThreadTable,
     kAnalysisTopInstrumentedEventsTable,
     kAnalysisTopDispatchEventsTable,
     kAnalysisTopMemoryAllocationEventsTable,
@@ -46,6 +48,8 @@ enum class TableType
     kAssistantSearchTable,
     kAssistantSummaryKernelTable,
     kAssistantTopEventsTable,
+    kAssistantSummaryMemoryTable,
+    kAssistantSummaryThreadTable,
     __kTableTypeCount
 };
 

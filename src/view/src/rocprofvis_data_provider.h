@@ -55,21 +55,19 @@ public:
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
-    static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
-    static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t CLEANUP_DATABASE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
     static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
-    static const uint64_t ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_ISA_REQUEST_ID;
@@ -98,7 +96,7 @@ public:
     static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
     static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
     static const uint64_t ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
@@ -245,8 +243,11 @@ public:
 
     void SetTrackMetadataChangedCallback(
         const std::function<void(const std::string&)>& callback);
+    // Called with the trace path, request id, response code and any error message the
+    // controller left for the user.
     void SetTableDataReadyCallback(
-        const std::function<void(const std::string&, uint64_t, uint64_t)>& callback);
+        const std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>&
+            callback);
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
@@ -330,11 +331,13 @@ private:
      */
     uint64_t             ClientTableRequestId(const TableRequestParams& table_params) const;
     rocprofvis_handle_t* ClientTableHandle(const TableRequestParams& table_params);
-    static TableType     ClientTableSlot(rocprofvis_controller_table_type_t table_type,
-                                         uint64_t                          client_id,
-                                         bool&                             is_analysis_model);
+    std::pair<TablesModel*, TableType> ClientTableSlot(
+        rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+    // True when the request in flight under an event's request ID is for that event,
+    // so it already covers a new fetch.
+    bool IsPendingEventFetch(const RequestInfo& pending, uint64_t event_id) const;
 
     // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
@@ -391,6 +394,27 @@ private:
                              const RequestInfo&    req);
     void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                            std::vector<size_t>& sub_metrics_idx);
+    void CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::GPU&    output);
+    void CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::CPU&    output);
+    void CreateSummaryProcessThreadData(rocprofvis_handle_t*           metrics_handle,
+                                        SummaryInfo::AggregateMetrics& output);
+    void CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_handle,
+                                    SummaryInfo::AggregateMetrics& output);
+    void CreateSummaryTopOpEventsData(
+        rocprofvis_handle_t* metrics_handle,
+        std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>
+            op_properties,
+        std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>
+                              event_properties,
+        rocprofvis_property_t event_name_property, SummaryInfo::TopOpEvents& output);
+    void CreateSummaryCountersData(
+        rocprofvis_handle_t* metrics_handle, rocprofvis_property_t num_counters_property,
+        rocprofvis_property_t counter_property,
+        std::array<rocprofvis_property_t, __kRPVAnalysisSummaryCounterMetricLast>
+                               metric_properties,
+        SummaryInfo::Counters& output);
 
     rocprofvis_result_t GetString(rocprofvis_handle_t*  handle,
                                   rocprofvis_property_t property, uint64_t index,
@@ -413,7 +437,8 @@ private:
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when table data has changed
-    std::function<void(const std::string&, uint64_t, uint64_t)> m_table_data_ready_callback;
+    std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>
+        m_table_data_ready_callback;
     // Called when new track data is ready
     std::function<void(uint64_t, const std::string&, const RequestInfo&)>
         m_track_data_ready_callback;
@@ -472,9 +497,11 @@ private:
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle,
                                           uint64_t refreshed_source_file_uuid);
-    inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
-                                      rocprofvis_handle_t* pc_handle,
-                                      uint64_t             index);
+    inline void LoadPcSamplingInstructionLine(
+        InstructionLine&                          instruction_line,
+        std::unordered_map<uint64_t, std::string>& instruction_type_lookup_map,
+        rocprofvis_handle_t*                       pc_handle,
+        uint64_t                                   index);
     inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
                                          rocprofvis_handle_t* pc_handle,
                                          uint64_t             index);

@@ -1,0 +1,61 @@
+{
+ "version": 1,
+ "blocks": [
+ { "id": "kernel", "column": 0, "title": "Kernel", "content": [] },
+
+ { "id": "lds", "column": 1, "order": 0, "title": "LDS", "content": [
+ { "metric": "3.4.1", "metric_name": "LDS Utilization", "title": "Util", "category": "util", "unit": "%" },
+ { "metric": "3.4.3", "metric_name": "LDS Estimated Bandwidth", "title": "BW", "category": "misc" },
+ { "metric": "3.4.2", "metric_name": "LDS Bank Conflict Rate", "title": "Bank Conflict", "category": "stall", "unit": "%" }
+ ]},
+ { "id": "gl0_tcp", "column": 1, "order": 1, "title": "GL0 (TCP Cache)", "content": [
+ { "metric": "3.3.2", "metric_name": "GL0 Cache Hit Rate (TCP Cache)", "title": "Hit Rate", "category": "hit", "unit": "%" },
+ { "metric": "3.3.3", "metric_name": "GL0 Cache BW (TCP Cache)", "title": "BW", "category": "misc" }
+ ]},
+ { "id": "sqc", "column": 1, "order": 2, "title": "SQC", "content": [
+ { "metric": "3.1.1", "metric_name": "ICache Hit Rate", "title": "ICache Hit Rate", "category": "hit", "unit": "%" },
+ { "metric": "3.2.1", "metric_name": "DCache Hit Rate", "title": "DCache Hit Rate", "category": "hit", "unit": "%" }
+ ]},
+
+ { "id": "gl1", "column": 2, "title": "GL1 Cache", "content": [
+ { "metric": "3.6.0", "metric_name": "GL1 Cache Utilization", "title": "Util", "category": "util", "unit": "%" },
+ { "metric": "3.6.1", "metric_name": "GL1 Cache Hit Rate", "title": "Hit Rate", "category": "hit", "unit": "%" },
+ { "metric": "3.6.2", "metric_name": "GL1 Cache Stall GL2 Backpressure", "title": "GL2 Stall", "category": "stall", "unit": "%" }
+ ]},
+
+ { "id": "gl2", "column": 3, "title": "GL2 Cache", "content": [
+ { "metric": "3.8.0", "metric_name": "GL2 Cache Utilization", "title": "Util", "category": "util", "unit": "%" },
+ { "metric": "3.8.1", "metric_name": "GL2 Cache Hit Rate", "title": "Hit Rate", "category": "hit", "unit": "%" }
+ ]},
+
+ { "id": "gcea", "column": 4, "title": "GCEA", "content": [
+ { "metric": "3.9.0", "metric_name": "SysArb Utilization", "title": "SysArb Util", "category": "util", "unit": "%" },
+ { "metric": "3.9.1", "metric_name": "SysArb Stall Rate", "title": "SysArb Stall", "category": "stall", "unit": "%" }
+ ]},
+
+ { "id": "dram", "column": 5, "title": "DRAM", "content": [] }
+ ],
+ "arrows": [
+ { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.4.0", "metric_name": "LDS Req", "title": "Request", "category": "read" },
+
+ { "from": "kernel", "to": "gl0_tcp", "direction": "backward", "metric": "3.3.0", "metric_name": "TCP Read Requests", "title": "Read", "category": "read" },
+ { "from": "kernel", "to": "gl0_tcp", "direction": "forward",  "metric": "3.3.1", "metric_name": "TCP Write Requests", "title": "Write", "category": "write" },
+
+ { "from": "kernel", "to": "sqc", "direction": "backward", "metric": "3.1.0", "metric_name": "ICache Requests", "title": "ICache Read", "category": "read" },
+ { "from": "kernel", "to": "sqc", "direction": "backward", "metric": "3.2.0", "metric_name": "DCache Requests", "title": "DCache Read", "category": "read" },
+
+ { "from": "gl0_tcp", "to": "gl1", "direction": "backward", "metric": "3.5.0", "metric_name": "TCP-GL1 Read Bandwidth", "title": "Read BW", "category": "read" },
+ { "from": "gl0_tcp", "to": "gl1", "direction": "forward",  "metric": "3.5.1", "metric_name": "TCP-GL1 Write Bandwidth", "title": "Write BW", "category": "write" },
+ { "from": "sqc", "to": "gl1", "direction": "backward", "metric": "3.1.2", "metric_name": "ICache-GL1 Read Bandwidth", "title": "ICache Read BW", "category": "read" },
+ { "from": "sqc", "to": "gl1", "direction": "backward", "metric": "3.2.2", "metric_name": "DCache-GL1 Read Bandwidth", "title": "DCache Read BW", "category": "read" },
+
+ { "from": "gl1", "to": "gl2", "direction": "backward", "metric": "3.7.0", "metric_name": "GL1-GL2 Read Bandwidth", "title": "Read BW", "category": "read" },
+ { "from": "gl1", "to": "gl2", "direction": "forward",  "metric": "3.7.1", "metric_name": "GL1-GL2 Write Bandwidth", "title": "Write BW", "category": "write" },
+
+ { "from": "gl2", "to": "gcea", "direction": "backward", "metric": "3.8.2", "metric_name": "GL2-Fabric Read BW", "title": "Read BW", "category": "read" },
+ { "from": "gl2", "to": "gcea", "direction": "forward",  "metric": "3.8.3", "metric_name": "GL2-Fabric Write BW", "title": "Write BW", "category": "write" },
+
+ { "from": "gcea", "to": "dram", "direction": "backward", "metric": "3.9.2", "metric_name": "DRAM Read Bandwidth", "title": "Read BW", "category": "read" },
+ { "from": "gcea", "to": "dram", "direction": "forward",  "metric": "3.9.3", "metric_name": "DRAM Write Bandwidth", "title": "Write BW", "category": "write" }
+ ]
+}

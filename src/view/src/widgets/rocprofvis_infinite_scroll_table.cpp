@@ -325,6 +325,11 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
     if(table_event && table_event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
        table_event->GetRequestID() == m_request_id)
     {
+        if(!table_event->GetErrorMessage().empty())
+        {
+            NotificationManager::GetInstance().Show(table_event->GetErrorMessage(),
+                                                    NotificationLevel::Error);
+        }
         m_data_changed      = true;
         m_update_filter_row = m_display_filter_row;
         IndexColumns();
@@ -410,10 +415,14 @@ InfiniteScrollTable::Render()
 
     bool sort_requested = false;
 
+    // No saved settings: the table ID is derived from m_widget_name, which embeds
+    // the widget address, so ini entries never match across runs and a recycled
+    // address would hand this table another table's columns.
     ImGuiTableFlags table_flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                                   ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollX |
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
+                                  ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable |
+                                  ImGuiTableFlags_NoSavedSettings;
 
     if(!TableRequestInFlight())
     {
@@ -447,7 +456,9 @@ InfiniteScrollTable::Render()
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
-        if(column_names.size())
+        // Filter row is enabled: render when columns are present regardless of data.
+        // Filter row is disabled: render when data is present.
+        if(m_display_filter_row && column_names.size() || table_data.size())
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",
@@ -513,6 +524,12 @@ InfiniteScrollTable::Render()
                 // table that cannot sort ignore this, so hold it until it can land.
                 if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
                 {
+                    // TableSetColumnSortDirection() walks every column, but ImGui
+                    // defers TableSetupColumn() to the layout whenever the column
+                    // set changed, so lock the layout first or it reads columns
+                    // that have no sort directions assigned yet.
+                    ImGui::TableGetSortSpecs();
+
                     // Resolved against the same header that set the columns up
                     // above, so the index handed to ImGui is always one it owns.
                     const size_t column = ColumnIndexOf(m_pending_sort_column);
@@ -1169,8 +1186,17 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(uint64_t frame_count)
                         }
                         case kRPVControllerPrimitiveTypeString:
                         {
+                            std::string escaped_input;
+                            for(char c : filter->input)
+                            {
+                                escaped_input += c;
+                                if(c == '\'')
+                                {
+                                    escaped_input += '\'';
+                                }
+                            }
                             m_active_filter_row_clause +=
-                                filter->column_name + " LIKE '%" + filter->input + "%'";
+                                filter->column_name + " LIKE '%" + escaped_input + "%'";
                             m_active_filter_row_inputs.insert(filter);
                             break;
                         }

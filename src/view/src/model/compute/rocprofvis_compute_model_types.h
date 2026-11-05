@@ -94,9 +94,11 @@ struct InstructionSourceLine
 
 struct InstructionLine
 {
-    uint64_t    instruction_uuid   = 0;
-    uint64_t    code_object_offset = 0;
-    std::string instruction;
+    uint64_t                instruction_uuid = 0;
+    // Unset when the database type is NULL. Zero remains a real lookup id.
+    std::optional<uint64_t> instruction_type_uuid;
+    uint64_t                code_object_offset = 0;
+    std::string             instruction;
 };
 
 struct KernelSymbol
@@ -140,12 +142,16 @@ enum class PcSamplingLayerState : uint32_t
 
 struct PcSamplingData
 {
-    std::vector<CodeObjectStore>           code_objects;
-    std::vector<SourceFile>                source_files;
-    std::vector<InstructionSourceLine>     instruction_source_lines;
-    std::vector<PcSampleState>             pc_sample_states;
-    std::vector<PcSampleStallReason>       pc_sample_stall_reasons;
-    std::vector<PcSampleStallReasonLookup> pc_sample_stall_reason_lookups;
+    std::vector<CodeObjectStore>            code_objects;
+    std::unordered_map<uint64_t, std::string> instruction_type_lookup_map;
+    std::vector<SourceFile>                 source_files;
+    std::vector<InstructionSourceLine>      instruction_source_lines;
+    std::vector<PcSampleState>              pc_sample_states;
+    std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
+    // Completion is independent of row count: an empty successful query is loaded.
+    bool sample_states_loaded = false;
+    bool stall_details_loaded = false;
     PcSamplingLayerState isa_state    = PcSamplingLayerState::kNotRead;
     PcSamplingLayerState source_state = PcSamplingLayerState::kNotRead;
     PcSamplingLayerState stalls_state = PcSamplingLayerState::kNotRead;

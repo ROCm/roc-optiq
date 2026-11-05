@@ -55,6 +55,12 @@ bool sync_fullscreen_state(GLFWwindow* window, int width, int height, Fullscreen
 // Check if the window is currently in fullscreen mode
 bool is_fullscreen_active(GLFWwindow* window);
 
+// Sets the X11 WM_CLASS of the next glfwCreateWindow(). Without it GLFW copies
+// the title into WM_CLASS, which is Latin-1, so a UTF-8 title shows up as
+// garbage in Linux docks and app switchers. name must be ASCII. Call again
+// after glfwDefaultWindowHints(); other platforms ignore these hints.
+void set_window_class_hints(const char* name);
+
 }  // namespace Platform
 }  // namespace RocProfVis
 

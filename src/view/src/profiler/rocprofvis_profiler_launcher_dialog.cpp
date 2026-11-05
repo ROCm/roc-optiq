@@ -712,6 +712,13 @@ void ProfilerLauncherDialog::RenderMainContent()
             ImGui::EndTabBar();
         }
     }
+    EndLaunchCard();
+
+    BeginLaunchCard("card_inputs");
+    LaunchCardHeader(ICON_LIST, "Arguments & Environment");
+    RenderArgsEnvPanel();
+    EndLaunchCard();
+
     if (!advanced_tabs.empty())
     {
         ImGui::Spacing();
@@ -729,7 +736,6 @@ void ProfilerLauncherDialog::RenderMainContent()
         ImGui::Unindent(adv_indent);
         ImGui::Spacing();
     }
-    EndLaunchCard();
 
     ImGui::EndChild();
 
@@ -890,16 +896,6 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                     ImGui::PopStyleColor(2);
                     ImGui::EndTabItem();
                 }
-            }
-            if (ImGui::BeginTabItem("Overrides"))
-            {
-                PushSlimScrollbarStyle();
-                ImGui::BeginChild("adv_overrides_scroll", ImVec2(0.0f, 0.0f),
-                                  ImGuiChildFlags_None);
-                PopSlimScrollbarStyle();
-                RenderArgsEnvPanel();
-                ImGui::EndChild();
-                ImGui::EndTabItem();
             }
             ImGui::EndTabBar();
         }

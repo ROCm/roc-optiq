@@ -240,7 +240,8 @@ void BeginPresetLockedSection(std::string const& preset)
     {
         ImGui::TextColored(kPresetLockColor,
                            "Preset \"%s\" controls these settings.", preset.c_str());
-        ImGui::TextDisabled("Clear the preset, or set values in the Overrides tab.");
+        ImGui::TextDisabled(
+            "Clear the preset, or set values under Arguments & Environment.");
         ImGui::Spacing();
     }
     ImGui::BeginDisabled(has_preset);

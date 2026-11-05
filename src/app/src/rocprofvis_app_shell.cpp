@@ -78,7 +78,7 @@ enable_application_log()
 static void
 print_version(bool include_commit)
 {
-    std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
+    std::cout << APP_NAME_ASCII << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
               << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
               << ROCPROFVIS_VERSION_BUILD;
     if(include_commit)
@@ -95,7 +95,7 @@ print_version(bool include_commit)
 bool
 add_common_cli_options(CLIParser& cli_parser)
 {
-    cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
+    cli_parser.SetAppDescription(APP_NAME_ASCII, "A visualizer for profiling ROCm Data");
     bool result = true;
     result &= cli_parser.AddOption(
         "v", "version",

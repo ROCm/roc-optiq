@@ -334,9 +334,12 @@ rocprofvis_dm_size_t Trace::GetMemoryFootprint(){
     {
         size+=m_tables[i].get()->GetMemoryFootprint();
     }
-    for (int i=0; i < m_strings.size(); i++)
     {
-        size+=m_strings[i].length()+1;
+        std::shared_lock<std::shared_mutex> lock(m_string_lock);
+        for(size_t i = 0; i < m_strings.size(); i++)
+        {
+            size += m_strings[i].length() + 1;
+        }
     }
     return size;
 }
@@ -379,21 +382,41 @@ rocprofvis_dm_result_t Trace::AddRecord(const rocprofvis_dm_slice_t object, rocp
 
 rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  const char* stringValue){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, INVALID_INDEX);
-    Trace* trace = (Trace*)object;
-    rocprofvis_dm_index_t current_index = (rocprofvis_dm_index_t)trace->m_strings.size();
-    try{
-        trace->m_strings.push_back(std::string(stringValue));
+    Trace*      trace = (Trace*) object;
+    const char* text  = stringValue != nullptr ? stringValue : "";
+    std::unique_lock<std::shared_mutex> lock(trace->m_string_lock);
+    std::unordered_map<std::string, uint32_t>::iterator found =
+        trace->m_string_to_index.find(text);
+    if(found != trace->m_string_to_index.end())
+    {
+        return found->second;
+    }
+    try
+    {
+        uint32_t index = static_cast<uint32_t>(trace->m_strings.size());
+        trace->m_strings.emplace_back(text);
+        try
+        {
+            trace->m_string_to_index.emplace(text, index);
+        }
+        catch(const std::exception&)
+        {
+            trace->m_strings.pop_back();
+            throw;
+        }
+        return index;
     }
     catch(const std::exception&)
     {
-        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN( "Error! Failure allocating string memory", INVALID_INDEX);
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failure allocating string memory",
+                                            INVALID_INDEX);
     }
-    return current_index;
 }
 
 const char* Trace::GetString(const rocprofvis_dm_trace_t object, uint32_t index) {
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
+    std::shared_lock<std::shared_mutex> lock(trace->m_string_lock);
     ROCPROFVIS_ASSERT_MSG_RETURN(index < trace->m_strings.size(), ERROR_INDEX_OUT_OF_RANGE , nullptr);
     return trace->m_strings[index].c_str();
 }
@@ -413,6 +436,11 @@ void Trace::BuildStringsOrderArray() {
 const size_t Trace::GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index) {
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, 0);
     Trace* trace = (Trace*)object;
+    std::unique_lock<std::shared_mutex> lock(trace->m_string_lock);
+    if(trace->m_sorted_strings_lookup_array.size() != trace->m_strings.size())
+    {
+        trace->BuildStringsOrderArray();
+    }
     ROCPROFVIS_ASSERT_MSG_RETURN(index < trace->m_strings.size(), ERROR_INDEX_OUT_OF_RANGE , 0);
     return trace->m_sorted_strings_lookup_array[index];
 }
@@ -434,6 +462,7 @@ void Trace::MetadataLoaded(const rocprofvis_dm_trace_t object)
 {
     ROCPROFVIS_ASSERT_MSG(object, ERROR_TRACE_CANNOT_BE_NULL);
     Trace* trace = (Trace*)object;
+    std::unique_lock<std::shared_mutex> lock(trace->m_string_lock);
     trace->BuildStringsOrderArray();
 }
 
@@ -770,6 +799,7 @@ rocprofvis_dm_result_t Trace::CheckTableExists(
 
 rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, nullptr);
+    std::shared_lock<std::shared_mutex> lock(m_string_lock);
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_strings.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
     return m_strings[index].c_str();
 }
@@ -777,6 +807,7 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
 rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, bool partial_matching, std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, kRocProfVisDmResultNotLoaded);
+    std::shared_lock<std::shared_mutex> lock(m_string_lock);
     for(int i = 0; i < num; i ++)
     {
         ROCPROFVIS_ASSERT_RETURN(targets[i], kRocProfVisDmResultInvalidParameter);

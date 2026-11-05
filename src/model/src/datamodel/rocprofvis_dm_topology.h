@@ -129,6 +129,7 @@ public:
         TopologyNode(kRPVControllerTopologyNodeSytemNode, track_identifiers->id[TRACK_ID_NODE], ctx, track_identifiers->db_instance) {};
     ~TopologyNodeSystemNode() {};
     rocprofvis_dm_result_t AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
+    bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     std::string GetNodeName() override;
 private:
     const std::map<std::string, uint32_t>* GetPropertiesMap() override { return &s_columns_ids; }

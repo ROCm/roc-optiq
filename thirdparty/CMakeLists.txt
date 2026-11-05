@@ -4,7 +4,18 @@
 find_package(Vulkan REQUIRED)
 set(VULKAN_LIB "Vulkan::Vulkan")
 
-add_subdirectory(spdlog)
+option(PROFILER_HUB_BUILD "Build RocOptiq interface library" ON)
+
+if(PROFILER_HUB_BUILD)
+    message(STATUS "Enable profiler hub support")
+
+include(${CMAKE_SOURCE_DIR}/cmake/profiler-hub.cmake)
+
+endif()
+
+if(NOT TARGET spdlog)
+    add_subdirectory(spdlog)
+endif()
 add_subdirectory(catch2)
 
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")

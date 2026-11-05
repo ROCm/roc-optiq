@@ -3,15 +3,18 @@
 
 #pragma once
 
-#include "rocprofvis_db_systems.h"
+#include "rocprofvis_db.h"
 #include "json.h"
+#include <mutex>
+#include <variant>
+#include <functional>
 
 namespace RocProfVis
 {
 namespace DataModel
 {
 
-    class Database;
+    class SystemDatabase;
 
     typedef enum rocprofvis_dm_track_search_id_t
     {
@@ -81,6 +84,14 @@ namespace DataModel
             m_cv.notify_all();
         }
 
+        // An action already in flight runs with m_mutex released, so pause()
+        // cannot stop it. Actions that take a lock of their own call this
+        // after acquiring it to drop work a pause() or restart() cancelled.
+        bool paused() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_paused || m_pending;
+        }
+
         void stop() {
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
@@ -138,6 +149,21 @@ namespace DataModel
         jt::Json obj_;
     public:
         ParamSerializer() { obj_.setObject(); }
+
+        explicit ParamSerializer(const std::string& text)
+        {
+            auto [status, json] = jt::Json::parse(text);
+            if(status != jt::Json::success)
+            {
+                throw std::runtime_error(std::string("JSON parse error: ") +
+                    jt::Json::StatusToString(status));
+            }
+            if(!json.isObject())
+            {
+                throw std::runtime_error("Expected JSON object");
+            }
+            obj_ = std::move(json);
+        }
 
         template<typename T>
         void set(const std::string& tag, const T& val) {
@@ -239,6 +265,7 @@ namespace DataModel
 
             m_timer.setAction([this] {
                 std::lock_guard<std::mutex> lock(m_lock);
+                if (m_timer.paused()) return;
                 this->m_merged_table.Clear();
                 this->m_tracks.clear();
                 });
@@ -271,6 +298,7 @@ namespace DataModel
         void SaveCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries) { m_current_queries = queries; };
         bool IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries);
         rocprofvis_dm_result_t ExportToCSV(rocprofvis_dm_charptr_t file_path);
+        uint32_t AddPackedTable();
         static int CallbackRunCompoundQuery(void* data, int argc, void* stmt, char** azColName);
 
     private:

@@ -6,31 +6,30 @@
 What is ROCm Optiq?
 *******************
 
-ROCm Optiq is a unified visualization and analysis tool for performance data collected by ROCm profiling tools. It reads profiling databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCprofiler-SDK <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_, as well as analysis databases produced by `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_, and renders them in a unified interactive interface.
+ROCm Optiq is a unified visualization and analysis tool for performance data collected by ROCm profiling tools. It reads profiling databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCprofiler-SDK (rocprofv3) <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_, as well as analysis databases produced by `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_, and renders them in a unified interactive interface.
 
 ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis files can be visualized on any machine running a supported Windows, Linux, or macOS operating system, independent of where the data was collected.
 
 .. _trace-file:
 
-Visualize ROCm Systems Profiler traces
-======================================
+Visualize ROCm Systems Profiler and ROCprofiler-SDK traces
+==========================================================
 
-Use ROCm Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry data for applications running on the ROCm stack. 
+ROCm Optiq opens trace databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCprofiler-SDK (rocprofv3) <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_ in the same trace views. Use these views to inspect CPU and GPU activity, ROCm API calls, kernel dispatches, and memory operations recorded for an application running on the ROCm stack.
 
 .. image:: /images/optiq-systems.png
    :width: 800
    :align: center
-   :alt: ROCm Optiq timeline view showing CPU and GPU activity tracks for a ROCm Systems Profiler trace
+   :alt: ROCm Optiq timeline view showing CPU and GPU activity tracks for a trace database
 
-ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. 
-It correlates GPU workloads with in-application CPU events and performance with hardware resource usage, providing a holistic view for optimization. 
+ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. It shows GPU work alongside the CPU API calls that submitted it, so you can relate kernel execution to the application behavior that produced it.
 
-Key views include: 
+Key views include:
 
 - :ref:`topology`: Displays hardware (processors, queues, counters) and software hierarchy (processes, streams, threads, sampled threads), enabling clear navigation and correlation between application execution and hardware resources.
 - :ref:`timeline`: Displays CPU and GPU activities, events, and performance metrics in chronological order. It supports tools for zooming, filtering, and bookmarking for detailed analysis.
 - :ref:`advanced`: Provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. This section provides a unified interface for multiple data perspectives, offering granular insights.
-- :ref:`summary-view`: Displays the top 10 kernels by execution time using pie charts, bar charts, or tables.
+- :ref:`summary-view`: Summarizes kernel executions, memory operations, and thread operations, and shows the system topology and counters.
 - :ref:`minimap`: Provides a compact overview of event density and counter values across the entire trace, enabling rapid navigation of large datasets.
 
 Analyze ROCm Compute Profiler data
@@ -48,7 +47,7 @@ Key features include:
 - :ref:`analysis-summary`: High-level overview of the captured compute profiling data. 
 - :ref:`kernel-details`: Focuses on individual kernels.  
 - :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
-- :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 
+- :ref:`analysis-workload`: The ROCm Compute Profiler version and database schema that produced the analysis, plus system information and profiling configuration. 
 - :ref:`baseline-comparison`: A side-by-side view that compares two workload measurements (baseline vs. target) to quickly identify and assess performance regressions or improvements. 
 
 .. _glance-data-sources:
@@ -68,9 +67,9 @@ Supported data sources
      - ``.db``
      - `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_
      - ROCm 7.1.0 or later
-   * - rocprofv3 database
+   * - ROCprofiler-SDK database
      - ``.db``
-     - `rocprofv3 <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_
+     - `ROCprofiler-SDK (rocprofv3) <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_
      - ROCm 7.1.0 or later
    * - ROCm Compute Profiler analysis database
      - ``.db``

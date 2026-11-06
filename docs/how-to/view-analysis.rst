@@ -116,7 +116,8 @@ Showing where kernels are positioned relative to these rooflines helps determine
 - Click |gear| in the menu to adjust your view:
 
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
-  - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration. 
+  - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration.
+  - Under **Options**, select **Show peak labels** to show or hide the hardware-peak labels on the chart. 
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
 - Use the filter dropdowns at the top of the **Roofline Analysis** pane to show or hide groups of chart elements together, instead of toggling them one by one in the **Custom** section of the |gear| menu:
 
@@ -131,6 +132,8 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - Inside, Bottom Left
   - Inside, Bottom Right
   - Outside (which pushes the legend outside of the plot area)
+
+The roofline menu opens outside the plot by default. Use the **Legend/Menu position** control to move it.
 
   .. image:: ../images/Roofline-legend.png
      :width: 400
@@ -175,7 +178,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
   - For all other columns, use ``>``, ``<``, ``=``, ``>=``, ``<=``, or ``!=``, followed by a number. For example, ``metricA>threshold``.
   - Combine multiple filters to narrow the analysis.
 
-  Click **Apply Filters**.
+  Click **Apply Filters**. If a filter matches no kernels, the **Kernel Selection Table** stays visible and shows no rows.
 
 - Click a column header to sort the table by that column. Click the same header again to toggle between ascending and descending order.
 - Select a kernel in the **Kernel Selection Table** or the **Kernel** dropdown to update the **Memory Chart**, **System Speed-of-Light**,
@@ -192,7 +195,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 Kernel Details -- Memory Chart
 ------------------------------
 
-The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, gfx940 and gfx950 series).
+The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, gfx950, gfx94x including gfx940, and gfx115x). The chart can be panned with the scroll wheel or a trackpad.
 
 Each cache or memory block presents its associated counter values and derived metrics, helping you understand memory behavior across the hardware memory hierarchy.
 
@@ -220,9 +223,19 @@ Kernel Details -- Kernel Roofline Chart
 
 The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, which helps you determine whether the kernel is compute-bound or memory-bound. 
 
-- Click |gear| to show or hide rooflines or arithmetic intensity points. 
+- Click |gear| to show or hide rooflines or arithmetic intensity points.
+- Under **Options**, select **Show peak labels** to show or hide the hardware-peak labels on the chart. The menu opens outside the plot by default.
 - Hold your cursor over a dot to view detailed information of the kernel. 
 - Use the **Menu** position control to choose options to reposition the Roofline Legend/Menu.
+
+.. _isa-view:
+
+ISA View
+========
+
+**ISA View** is in **Tech Preview**, and its functionality may change.
+
+**ISA View** lists the instructions of the selected kernel's code object, with PC-sampling counts for each instruction. Select an instruction to see its type and stall reasons. When source file information is available, the view also shows the matching source lines.
 
 .. _analysis-table:
 
@@ -268,18 +281,19 @@ The following example shows the context menu for adding a metric to the Kernel S
 
 .. _analysis-workload:
 
-Workload Details 
-================
+Profile Details
+===============
 
-**Workload Details** provides contextual information about the workload, such as:
+**Profile Details** provides contextual information about the workload:
 
-- **System information**: Hardware details of the system at the time the profiling data was collected. 
-- **Profiling configuration**: ROCm Compute Profiler parameters and settings used when the data was captured. 
+* **Analysis Tool**: The ROCm Compute Profiler version, Git revision, and database schema version that produced the file. If the database does not contain these fields, the panel shows **Analysis Tool Information Unavailable**.
+* **System information**: Hardware details of the system at the time the profiling data was collected.
+* **Profiling configuration**: ROCm Compute Profiler parameters and settings used when the data was captured.
 
 .. image:: ../images/workload-details.png
    :width: 800
    :align: center
-   :alt: Workload Details panel showing system hardware information and ROCm Compute Profiler configuration settings
+   :alt: Profile Details panel showing the Analysis Tool panel, system hardware information, and ROCm Compute Profiler configuration settings
 
 .. _baseline-comparison:
 
@@ -325,6 +339,8 @@ You can configure a delta-threshold for comparison metrics to suppress the noise
    :width: 800
    :align: center
    :alt: Baseline Comparison delta-threshold control showing a numeric input field for suppressing minor metric deviations
+
+**Baseline Comparison** can also compare rooflines for two kernels in the same ROCm Compute Profiler database, including a kernel from another workload. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, **Peak Source** chooses the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
 
 .. note::
 

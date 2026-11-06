@@ -22,7 +22,7 @@ subtrees:
 - caption: How to
   entries:
   - file: how-to/view-trace
-    title: View ROCm Systems Profiler trace data in ROCm Optiq
+    title: View ROCm Systems Profiler and ROCprofiler-SDK trace data in ROCm Optiq
   - file: how-to/view-analysis
     title: View ROCm Compute Profiler analysis data in ROCm Optiq
   - file: how-to/customize-views

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_model.h"
+#include "rocprofvis_core_assert.h"
+#ifndef ROCPROFVIS_HEADLESS
 #include "rocprofvis_track_item.h"
+#endif
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -146,6 +149,7 @@ TimelineModel::SetMiniMap(std::map<uint64_t, std::vector<double>>&& mini_map)
     m_mini_map = std::move(mini_map);
 }
 
+#ifndef ROCPROFVIS_HEADLESS
 void
 TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
 {
@@ -224,6 +228,7 @@ TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
         NormalizeHistogram();
     }
 }
+#endif
 
 void
 TimelineModel::NormalizeHistogram()

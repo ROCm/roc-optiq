@@ -33,6 +33,8 @@ option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui fi
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
+option(ROCPROFVIS_ENABLE_GUI "Build the desktop app and its Dear ImGui, GLFW and Vulkan dependencies" ON)
+option(ROCPROFVIS_ENABLE_WEB_SERVER "Build the DataProvider JSON layer and the HTTP server that serves it" ON)
 
 # TEMPORARY: gate the in-development profiler-launch and remote/SSH features
 # until they ship. Both default OFF so release builds exclude the UI, the
@@ -127,6 +129,14 @@ endif()
 add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+
+if(ROCPROFVIS_ENABLE_WEB_SERVER)
+    add_subdirectory(src/server)
+endif()
+
+# Everything from here to the end of the file is the desktop app: its sources,
+# executable, tests, packaging and installers.
+if(ROCPROFVIS_ENABLE_GUI)
 
 find_package(Vulkan REQUIRED)
 
@@ -1229,3 +1239,5 @@ endif()
 if(PERFETTO_AVAILABLE)
 	perfetto_copy_dll_to(${TARGET_NAME})
 endif()
+
+endif(ROCPROFVIS_ENABLE_GUI)

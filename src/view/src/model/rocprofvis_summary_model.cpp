@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_summary_model.h"
+#ifndef ROCPROFVIS_HEADLESS
 #include "../rocprofvis_settings_manager.h"
+#endif
 #include "../rocprofvis_utils.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_topology_model.h"
@@ -162,8 +164,13 @@ SummaryModel::UpdateValueStrings()
             }
         }
     }
+#ifdef ROCPROFVIS_HEADLESS
+    // No user settings without the app, so use its default.
+    TimeFormat timeformat = TimeFormat::kTimecode;
+#else
     TimeFormat timeformat =
         SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
+#endif
     for(SummaryInfo::Value* value : m_timeunit_values)
     {
         switch(value->type)

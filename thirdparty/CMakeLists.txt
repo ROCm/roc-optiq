@@ -1,8 +1,10 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
+if(ROCPROFVIS_ENABLE_GUI)
 find_package(Vulkan REQUIRED)
 set(VULKAN_LIB "Vulkan::Vulkan")
+endif()
 
 add_subdirectory(spdlog)
 add_subdirectory(catch2)
@@ -211,6 +213,7 @@ set(BUILD_EXAMPLES ${_prev_build_examples})
 
 endif() # ROCPROFVIS_ENABLE_REMOTE
 
+if(ROCPROFVIS_ENABLE_GUI)
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_draw.cpp
@@ -265,6 +268,7 @@ add_library(ImGuiFileDialog STATIC
 target_compile_definitions(ImGuiFileDialog PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiFileDialog)
+endif(ROCPROFVIS_ENABLE_GUI)
 
 # Add double-conversion library
 add_library(double-conversion STATIC
@@ -286,6 +290,7 @@ add_library(json STATIC
 target_link_libraries(json PRIVATE double-conversion)
 target_include_directories(json PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp)
 
+if(ROCPROFVIS_ENABLE_GUI)
 add_executable(imgui_binary_to_compressed_c
 	imgui/misc/fonts/binary_to_compressed_c.cpp
 )
@@ -313,3 +318,4 @@ option(GLFW_DOCUMENT_INTERNALS "Include internals in documentation" OFF)
 add_subdirectory(${GLFW_DIR})
 include_directories(${GLFW_DIR}/include)
 include_directories(${GLFW_DIR}/deps)
+endif(ROCPROFVIS_ENABLE_GUI)

@@ -1621,6 +1621,16 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                     return a < b; 
                 });
 
+            std::string hip_event_table;
+            for (const std::string& table : sorted_tables)
+            {
+                if (table.find("rocpd_hip_event") != std::string::npos)
+                {
+                    hip_event_table = table;
+                    break;
+                }
+            }
+
             ShowProgress(0, "Attaching old DB to new", kRPVDbBusy, future);
 
             rocprofvis_dm_timestamp_t fecth_start = start + TraceProperties()->db_inst_start_time[guid_info.first.GuidIndex()];
@@ -1648,7 +1658,8 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                             if (strstr(table.c_str(), "rocpd_kernel_dispatch") ||
                                 strstr(table.c_str(), "rocpd_memory_allocate") ||
                                 strstr(table.c_str(), "rocpd_memory_copy") ||
-                                strstr(table.c_str(), "rocpd_region"))
+                                strstr(table.c_str(), "rocpd_region") ||
+                                strstr(table.c_str(), "rocpd_hip_event"))
                             {
                                 query = "INSERT INTO ";
                                 query += table;
@@ -1728,7 +1739,18 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                                 query += " R ON E.id = R.event_id  LEFT JOIN oldDb.";
                                 query += sorted_tables[kSampleTable];
                                 query += " S ON E.id = S.event_id ";
-                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL;";
+                                if (!hip_event_table.empty())
+                                {
+                                    query += " LEFT JOIN oldDb.";
+                                    query += hip_event_table;
+                                    query += " HE ON E.id = HE.event_id ";
+                                }
+                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL";
+                                if (!hip_event_table.empty())
+                                {
+                                    query += " OR HE.event_id IS NOT NULL";
+                                }
+                                query += ";";
                             }
                             else if (strstr(table.c_str(), "rocpd_arg") ||
                                 strstr(table.c_str(), "rocpd_pmc_event"))

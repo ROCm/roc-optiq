@@ -38,6 +38,11 @@ public:
     void SetWorkload(uint32_t id);
     void SetKernel(uint32_t id);
     void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
+    // Switch what is plotted (e.g. one kernel, or it against the compare
+    // target) without losing the plot's options.
+    void SetMode(Mode mode);
+    // Skip the card and title, for a container that draws its own pane header.
+    void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
 
 private:
     enum MenusMode
@@ -173,6 +178,10 @@ private:
     std::vector<FilterModel> m_filters_intensity_kernel;
     std::vector<FilterModel> m_filters_intensity_bandwidth;
 
+    bool               m_chromeless = false;
+    // Seed of the plot's id, independent of the window drawing it.
+    ImGuiID            m_plot_id    = 0;
+
     // User options...
     uint32_t       m_requested_primary_workload_id;
     uint32_t       m_requested_secondary_workload_id;
@@ -213,6 +222,8 @@ private:
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;
+
+    friend struct RooflineTestPeer;
 };
 
 }  // namespace View

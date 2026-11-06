@@ -14,7 +14,6 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
 {
@@ -38,30 +37,6 @@ pc_sampling_request_id(PcSamplingLayer layer)
     }
     ROCPROFVIS_ASSERT(false);
     return DataProvider::FETCH_PC_SAMPLING_ISA_REQUEST_ID;
-}
-
-constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
-    "This database file has no ISA lines, so ISA View is inactive.";
-
-TabItem
-ComputeIsaView::CreateTabItem(DataProvider& data_provider)
-{
-    return RocWidget::CreateTabItem("ISA View", TAB_ID,
-                                    std::make_shared<ComputeIsaView>(data_provider));
-}
-
-TabItem
-ComputeIsaView::CreateTabItem(DataProvider& data_provider, bool has_isa_lines)
-{
-    if(has_isa_lines)
-    {
-        return CreateTabItem(data_provider);
-    }
-
-    TabItem tab            = RocWidget::CreateTabItem("ISA View", TAB_ID, nullptr);
-    tab.m_enabled          = false;
-    tab.m_disabled_tooltip = ISA_VIEW_DISABLED_TOOLTIP;
-    return tab;
 }
 
 ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
@@ -113,7 +88,11 @@ ComputeIsaView::SubscribeToEvents()
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            SelectWorkload(event->GetId());
+            m_selected_workload_id = event->GetId();
+            if(m_follow_selection)
+            {
+                SelectWorkload(event->GetId());
+            }
         }
     };
     m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
@@ -123,11 +102,40 @@ ComputeIsaView::SubscribeToEvents()
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            LoadData(event->GetId());
+            m_selected_kernel_id = event->GetId();
+            if(m_follow_selection)
+            {
+                LoadData(event->GetId());
+            }
         }
     };
     m_kernel_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged), kernel_changed);
+}
+
+void
+ComputeIsaView::ShowKernel(uint32_t workload_id, uint32_t kernel_id)
+{
+    const bool showing = !m_follow_selection && workload_id == m_current_workload_id &&
+                         kernel_id == m_current_kernel_id;
+    m_follow_selection = false;
+    if(!showing)
+    {
+        SelectWorkload(workload_id);
+        LoadData(kernel_id);
+    }
+}
+
+void
+ComputeIsaView::FollowSelection()
+{
+    if(m_follow_selection)
+    {
+        return;
+    }
+    m_follow_selection = true;
+    SelectWorkload(m_selected_workload_id);
+    LoadData(m_selected_kernel_id);
 }
 
 void

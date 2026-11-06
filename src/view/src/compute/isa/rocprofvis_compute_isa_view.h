@@ -19,23 +19,26 @@ namespace View
 {
 
 class DataProvider;
-struct TabItem;
 enum class PcSamplingLayer : uint32_t;
 
+// Source/ISA correlation with PC-sampling counts, shown as a pane of
+// ComputeKernelDetailsView when the database has ISA lines.
 class ComputeIsaView : public RocWidget
 {
 public:
-    static constexpr const char* TAB_ID = "isa_view";
-
-    [[nodiscard]] static TabItem CreateTabItem(DataProvider& data_provider);
-    [[nodiscard]] static TabItem CreateTabItem(DataProvider& data_provider,
-                                               bool          has_isa_lines);
-
     explicit ComputeIsaView(DataProvider& data_provider);
     ~ComputeIsaView() override;
 
     void Update() override;
     void Render() override;
+
+    // Show this kernel (e.g. a compare target) instead of the selected one until
+    // FollowSelection(). One view serves both: the data provider has a single
+    // PC-sampling callback.
+    void ShowKernel(uint32_t workload_id, uint32_t kernel_id);
+    void FollowSelection();
+
+    friend struct ComputeIsaViewTestPeer;
 
 private:
     struct PcSamplingFetchState
@@ -114,6 +117,10 @@ private:
 
     uint32_t             m_current_kernel_id   = ComputeSelection::INVALID_SELECTION_ID;
     uint32_t             m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+    // The selection as last announced, shown whenever the view follows it.
+    uint32_t             m_selected_kernel_id   = ComputeSelection::INVALID_SELECTION_ID;
+    uint32_t             m_selected_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+    bool                 m_follow_selection     = true;
     uint32_t             m_fetch_generation    = 0;
     uint64_t             m_next_request_token  = 0;
     IsaPane              m_isa;

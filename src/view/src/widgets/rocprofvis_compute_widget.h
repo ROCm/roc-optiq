@@ -5,6 +5,7 @@
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_widget.h"
 
+#include <bitset>
 #include <map>
 #include <set>
 #include <limits>
@@ -22,6 +23,42 @@ inline constexpr uint32_t METRIC_TABLE_SOL     = 1;
 class DataProvider;
 class ComputeSelection;
 
+// Columns a two-kernel comparison can show for each metric value: A (the
+// baseline), B (the compare target), their difference B - A, and it as a
+// percentage of A.
+enum class MetricCompareColumn : uint32_t
+{
+    kA,
+    kB,
+    kDelta,
+    kDeltaPct,
+    kCount
+};
+inline constexpr size_t METRIC_COMPARE_COLUMN_COUNT =
+    static_cast<size_t>(MetricCompareColumn::kCount);
+
+struct MetricCompareOptions
+{
+    MetricCompareOptions();
+
+    std::bitset<METRIC_COMPARE_COLUMN_COUNT> columns;
+    // Also list metrics found on only one side (e.g. across GPU architectures).
+    bool show_unmatched = true;
+    // Shade the difference cells of values that changed by at least this many
+    // percent of A.
+    float highlight_pct = 0.0f;
+
+    bool Shows(MetricCompareColumn column) const
+    {
+        return columns.test(static_cast<size_t>(column));
+    }
+};
+
+// `workload`'s table `table_id` of category `category_id`; null when the workload
+// is null or lacks it.
+const AvailableMetrics::Table*
+FindMetricTable(const WorkloadInfo* workload, uint32_t category_id, uint32_t table_id);
+
 class MetricTableBase : public RocWidget
 {
 public:
@@ -29,11 +66,15 @@ public:
     {
         std::string value;
         std::string tooltip;
+        ImU32       bg_color = 0;  // Cell shading; 0 for none.
     };
     struct Row
     {
         std::map<uint32_t, RowValue> values;
-        bool                         pinned = false;
+        bool                         pinned    = false;
+        bool                         pinnable  = true;
+        // A metric found on only one side of a comparison.
+        bool                         unmatched = false;
     };
     explicit MetricTableBase(std::string event_source_id = {});
     virtual ~MetricTableBase() = default;
@@ -41,6 +82,9 @@ public:
     void ChangePinState(const MetricId& metric_id);
     bool IsMetricPinned(MetricId metric_id);
     void SetPinMetricCallback(std::function<void(MetricId)> callback);
+    // Drop the card, title and inner scrolling, for a table listed under its
+    // container's own (collapsible) header; the container scrolls instead.
+    void SetEmbedded(bool embedded);
 protected:
     virtual void ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row);
@@ -70,6 +114,7 @@ protected:
     uint32_t                  m_max_rows_in_table;
     // Suppress the outer card when an embedding container paints its own.
     bool                      m_no_panel = false;
+    bool                      m_embedded = false;
 
     uint32_t m_freezed_columns = 0;
     uint32_t m_freezed_rows    = 0;
@@ -81,6 +126,8 @@ private:
     std::string m_table_title;
     std::string m_panel_id_str;
     std::string m_table_id_str;
+
+    friend struct MetricTableTestPeer;
 };
 
 
@@ -96,11 +143,20 @@ public:
     bool Empty() const;
     void Populate(const AvailableMetrics::Table& table,
                   const MetricValueLookup&       get_value);
+    // One table compared across two kernels: `a_table` from A's workload and
+    // `b_table` from B's (either may be null when only one workload has it).
+    // Metrics pair up by id, else by name; B-only metrics follow A's.
+    void PopulateComparison(uint32_t category_id, const AvailableMetrics::Table* a_table,
+                            const AvailableMetrics::Table* b_table,
+                            const MetricValueLookup& get_a, const MetricValueLookup& get_b,
+                            const MetricCompareOptions& options);
 
 private:
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
     virtual void RenderEmptyTable() override;
+    // The id, name and unit cells every row starts with.
+    static void FillEntryCells(const AvailableMetrics::Entry& entry, Row& row);
 };
 
 class PinnedMetricTable: public MetricTableBase
@@ -112,8 +168,23 @@ public:
     void Update() override;
     void AddRow(MetricId metric_id);
     void RefillTable(const std::set<MetricId>& pinned_ids);
+    // Compare each pin with B: `client_id`'s fetched metrics for the kernel.
+    // Takes effect with the next RefillTable.
+    void SetCompareSource(uint64_t client_id, uint32_t workload_id, uint32_t kernel_id,
+                          const MetricCompareOptions& options);
+    void ClearCompareSource();
 
 private:
+    struct CompareSource
+    {
+        uint64_t             client_id;
+        uint32_t             workload_id;
+        uint32_t             kernel_id;
+        MetricCompareOptions options;
+    };
+    void FillCompareRow(const MetricId& metric_id, std::map<uint32_t, std::string>& columns,
+                        uint32_t& last_column_index, std::map<MetricId, Row>& rows);
+
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
                      std::pair<const MetricId, Row>& row) override;
     bool HasMetricInCurrentWorkload(const MetricId& metric_id) const;
@@ -141,6 +212,7 @@ private:
     DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
     uint64_t                          m_client_id;
+    std::optional<CompareSource>      m_compare;
 };
 
 class MetricTableWidget : public RocWidget

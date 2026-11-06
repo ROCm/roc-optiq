@@ -23,13 +23,14 @@ namespace View
 {
 
 struct MetricValue;
+struct WorkloadInfo;
 class DataProvider;
 class ComputeSelection;
 
 // Renders the compute kernel-details "Memory Chart" from a relational layout
 // (MemChartLayout): generic blocks arranged in columns, connected by arrows.
 // Metric ids/names referenced by the layout are resolved against the compute
-// metric table for the selected kernel.
+// metric table for the selected kernel (or the one given to SetSource).
 class ComputeMemoryChartView
 {
 public:
@@ -45,12 +46,38 @@ public:
     // used and its metric ids are remapped. With neither, the chart is N/A.
     void LoadWorkloadLayout(uint32_t workload_id);
 
-    // Fetch every metric in the layout's source category for the selected kernel.
+    // Fetch every metric in the layout's source category for the selected kernel
+    // (or the one given to SetSource).
     void FetchMemChartMetrics();
 
     void UpdateMetrics();
 
     uint64_t GetClientId() const { return m_client_id; }
+
+    // Fit: scale the chart down (never above actual size) so all of it shows in
+    // the space it is given. Off: draw at actual size and scroll.
+    void SetFitToView(bool fit) { m_fit_to_view = fit; }
+    bool GetFitToView() const { return m_fit_to_view; }
+    // Auto-compact: when the space given would show too little of the chart at
+    // actual size, fit it (however small) as an overview instead. Overrides
+    // SetFitToView and never stretches.
+    void SetAutoCompact(bool enabled) { m_auto_compact = enabled; }
+    // Whether the last frame was drawn compact.
+    bool IsCompact() const { return m_is_compact; }
+
+    // Chart this kernel (e.g. a compare target) instead of the selected one;
+    // the caller loads its workload's layout and fetches.
+    void SetSource(uint32_t workload_id, uint32_t kernel_id);
+    // Delta mode: every value reads B - A, B being `target`'s metrics (a chart
+    // of the same layout, i.e. the same GPU architecture); nullptr shows this
+    // chart's own values.
+    void SetDeltaTarget(const ComputeMemoryChartView* target);
+    // Re-read the shown values, e.g. after the delta target's metrics arrive.
+    void RefreshValues();
+
+    // GPU architecture (e.g. "gfx950") from a workload's system info; empty
+    // when unknown.
+    static std::string WorkloadArch(const WorkloadInfo* workload);
 
 private:
     // A fully computed arrow, ready to draw. Produced by BuildArrowRoutes so
@@ -147,7 +174,11 @@ private:
     // blocks. Judged from row and stack order, so it holds before positions exist.
     bool StackedBetween(const MemChartBlock& a, const MemChartBlock& b) const;
 
-    void ComputeLayout(float available_width);
+    // `extra_height` is added to the common column height, stretching every
+    // column (used to fill a pane taller than the chart's natural height).
+    void ComputeLayout(float available_width, float extra_height);
+    // Layout + arrow routing into m_routes, and the canvas size they cover.
+    void LayoutCanvas(float available_width, float extra_height);
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
     // ancestor's box edges (passed unchanged into children) so arrows terminate
@@ -185,6 +216,15 @@ private:
     void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                            const MemChartMetricRef& ref, bool show_description,
                            bool show_raw_value);
+    // A value and B value of a metric in delta mode; false unless both exist.
+    bool DeltaValues(const MemChartMetricRef& ref, double& a, double& b) const;
+    void ShowDeltaValues(const MemChartMetricRef& ref) const;
+    uint32_t SourceWorkload() const;
+    uint32_t SourceKernel() const;
+    // Blocks and labels are laid out at actual size, then scaled into view about
+    // this frame's origin; hit tests map through the same transform.
+    ImVec2 ToScreen(ImVec2 unscaled) const;
+    bool   IsHoveringChartRect(ImVec2 unscaled_min, ImVec2 unscaled_max) const;
     void DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, uint32_t color,
                              const char* text, const MemChartMetricRef& ref,
                              bool show_description, bool show_raw_value);
@@ -193,6 +233,23 @@ private:
     std::shared_ptr<ComputeSelection> m_compute_selection;
 
     uint64_t m_client_id;
+
+    // Explicit source (SetSource) instead of the selection.
+    bool     m_follow_selection = true;
+    uint32_t m_source_workload_id;
+    uint32_t m_source_kernel_id;
+    // A fetch refused while this chart's previous one was in flight; retried
+    // when that one lands.
+    bool     m_fetch_pending = false;
+
+    const ComputeMemoryChartView* m_delta_target = nullptr;
+
+    bool  m_fit_to_view   = false;
+    bool  m_auto_compact  = false;
+    bool  m_is_compact    = false;
+    float m_view_scale    = 1.0f;
+    float m_view_origin_x = 0.0f;
+    float m_view_origin_y = 0.0f;
 
     struct ChartColors
     {
@@ -210,6 +267,8 @@ private:
         uint32_t hit        = 0;
         uint32_t stall      = 0;
         uint32_t shadow     = 0;
+        uint32_t delta_up   = 0;  // B above A.
+        uint32_t delta_down = 0;
     };
     ChartColors m_colors;
 
@@ -244,11 +303,16 @@ private:
     // something that affects it changes - the panel width, the font, or the
     // metric strings/colors (which flip m_layout_dirty). Drawing still happens
     // every frame from these cached results.
+    // The natural (unstretched) canvas is cached separately: stretching to fill
+    // the pane only re-lays out when the fill height changes.
     std::vector<ArrowRoute> m_routes;
     float                   m_cached_layout_width = -1.0f;
     float                   m_cached_font_size    = -1.0f;
     float                   m_canvas_w            = 0.0f;
     float                   m_canvas_h            = 0.0f;
+    float                   m_natural_canvas_w    = 0.0f;
+    float                   m_natural_canvas_h    = 0.0f;
+    float                   m_layout_extra_height = 0.0f;
     bool                    m_layout_dirty        = true;
 };
 

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <numeric>
 
 namespace RocProfVis
 {
@@ -38,6 +39,8 @@ constexpr float            COL_FILTER_CHAR_LIMIT      = static_cast<float>(
     std::max(FILTER_TEXT_HINT_STR.length(), FILTER_TEXT_HINT_NUMERICAL.length()));
 
 constexpr float COL_NAME_CHAR_LIMIT       = 40.0f;
+constexpr float COL_NAME_MIN_CHARS        = 12.0f;
+constexpr float FROZEN_NAME_MAX_SHARE     = 0.5f;
 constexpr float COL_DEFAULT_CHAR_LIMIT    = 30.0f;
 constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
@@ -49,6 +52,98 @@ constexpr const char* JSON_KEY_SELECTION_NAME       = "name";
 constexpr const char* JSON_KEY_SELECTION_VALUE_NAME = "value";
 
 constexpr const char* CELL_CONTEXT_MENU_ID = "##kernel_table_cell_menu";
+// Tint of the compare target's row.
+constexpr float MARKED_ROW_ALPHA = 0.25f;
+
+// Kernel id of a row's ID cell. strtoul, not stoul: a non-numeric cell must not
+// throw (project rule: no C++ exceptions).
+static uint32_t
+ParseKernelId(const std::string& cell)
+{
+    if(cell.empty())
+    {
+        return ComputeSelection::INVALID_SELECTION_ID;
+    }
+    char*               parse_end = nullptr;
+    const unsigned long value     = std::strtoul(cell.c_str(), &parse_end, 10);
+    return parse_end != cell.c_str() ? static_cast<uint32_t>(value)
+                                     : ComputeSelection::INVALID_SELECTION_ID;
+}
+
+void
+KernelMetricTable::SetCompareCallback(
+    std::function<void(uint32_t workload_id, uint32_t kernel_id)> callback)
+{
+    m_compare_callback = std::move(callback);
+}
+
+void
+KernelMetricTable::SetMarkedKernel(uint32_t workload_id, uint32_t kernel_id)
+{
+    m_marked_workload_id = workload_id;
+    m_marked_kernel_id   = kernel_id;
+}
+
+bool
+KernelMetricTable::ShowsWorkloadColumn() const
+{
+    return m_data_provider.ComputeModel().GetWorkloadList().size() > 1;
+}
+
+const std::string&
+KernelMetricTable::WorkloadName(uint32_t workload_id) const
+{
+    static const std::string NO_NAME;
+    const WorkloadInfo*      workload =
+        m_data_provider.ComputeModel().GetWorkload(workload_id);
+    return workload ? workload->name : NO_NAME;
+}
+
+bool
+KernelMetricTable::IsDefaultSort() const
+{
+    return m_sort_column_index == DURATION_COLUMN_INDEX &&
+           m_sort_order == kRPVControllerSortOrderDescending;
+}
+
+bool
+KernelMetricTable::IsSortAscending() const
+{
+    return m_sort_order == kRPVControllerSortOrderAscending;
+}
+
+std::string
+KernelMetricTable::GetSortColumnName() const
+{
+    if(m_sort_column_index == ID_COLUMN_INDEX && ShowsWorkloadColumn())
+    {
+        return "Workload";
+    }
+    if(m_sort_column_index >= 0 && m_sort_column_index < PERMANENT_COLUMN_COUNT)
+    {
+        return m_permanent_column_names[m_sort_column_index];
+    }
+    const int metric = m_sort_column_index - PERMANENT_COLUMN_COUNT;
+    if(metric >= 0 && metric < static_cast<int>(m_metrics_column_names.size()))
+    {
+        return m_metrics_column_names[metric];
+    }
+    return std::string();
+}
+
+size_t
+KernelMetricTable::GetActiveFilterCount() const
+{
+    size_t count = 0;
+    for(const ColumnFilter& filter : m_column_filters)
+    {
+        if(filter.IsSet())
+        {
+            count++;
+        }
+    }
+    return count;
+}
 
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
@@ -59,12 +154,14 @@ KernelMetricTable::KernelMetricTable(DataProvider&                     data_prov
 , m_sort_column_index(DURATION_COLUMN_INDEX)
 , m_sort_order(kRPVControllerSortOrderDescending)
 , m_selected_row(-1)
+, m_selected_workload_id_local(ComputeSelection::INVALID_SELECTION_ID)
+, m_marked_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_marked_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_compute_selection(compute_selection)
 , m_selected_kernel_id_local(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_kernel_table(true)
 , m_update_table_selection(false)
 , m_allow_deselect(false)
-, m_sort_specs_initialized(false)
 , m_permanent_column_names({ "ID", "Name", "Duration (ns)", "Invocations" })
 {
     m_widget_name = GenUniqueName("KernelMetricTable");
@@ -91,22 +188,204 @@ KernelMetricTable::FetchData(uint32_t workload_id)
         return;
     }
     m_query_builder.SetWorkload(m_data_provider.ComputeModel().GetWorkload(workload_id));
-    m_fetch_requested = true;
+    if(m_rows.empty() && !m_cycle_active)
+    {
+        m_fetch_requested = true;
+    }
 }
 
 void
-KernelMetricTable::HandleNewData()
+KernelMetricTable::StartFetchCycle()
 {
-    // update column names based on current metric params
-    ComputeKernelSelectionTable& table =
-        m_data_provider.ComputeModel().GetKernelSelectionTable();
-    std::shared_ptr<RocProfVis::View::ComputeTableRequestParams> request_params =
-        table.GetTableInfo().table_params;
+    // Metric columns are named from the selection's workload.
+    const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(m_workload_id);
+    if(workload)
+    {
+        for(MetricInfo& metric : m_metrics_info)
+        {
+            if(const AvailableMetrics::Entry* entry = ComputeDataModel::GetMetricInfo(
+                   *workload, metric.entry.category_id, metric.entry.table_id,
+                   metric.entry.id))
+            {
+                metric.entry = *entry;
+            }
+        }
+    }
 
+    m_fetch_workloads.clear();
+    for(const WorkloadInfo* candidate : m_data_provider.ComputeModel().GetWorkloadList())
+    {
+        if(candidate && !candidate->kernels.empty())
+        {
+            m_fetch_workloads.push_back(candidate->id);
+        }
+    }
+    m_fetch_index    = 0;
+    m_fetch_failures = 0;
+    m_fetch_next     = false;
+    m_pending_header.clear();
+    m_pending_rows.clear();
+    m_pending_row_workloads.clear();
+    m_cycle_active = !m_fetch_workloads.empty();
+    if(m_cycle_active)
+    {
+        RequestWorkloadRows(m_fetch_workloads.front());
+    }
+}
+
+void
+KernelMetricTable::RequestWorkloadRows(uint32_t workload_id)
+{
+    // Build filter map from vector - only include active filters
+    std::unordered_map<uint64_t, std::string> filter_map;
+    for(size_t i = 0; i < m_column_filters.size(); i++)
+    {
+        const ColumnFilter& filter = m_column_filters[i];
+        if(filter.IsSet())
+        {
+            filter_map[i] = filter.filter_text;
+        }
+    }
+
+    ComputeTableRequestParams params(
+        workload_id, m_metrics_params, m_sort_column_index,
+        static_cast<rocprofvis_controller_sort_order_t>(m_sort_order), filter_map);
+    spdlog::debug("Requesting kernel selection table for workload {}: column {}, order {}, "
+                  "filters {}",
+                  workload_id, m_sort_column_index,
+                  m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC",
+                  filter_map.size());
+    if(!m_data_provider.FetchMetricPivotTable(params))
+    {
+        m_cycle_active = false;
+    }
+}
+
+void
+KernelMetricTable::HandleNewData(bool success, const std::string& error_message)
+{
+    if(!m_cycle_active || m_fetch_index >= m_fetch_workloads.size())
+    {
+        return;
+    }
+    if(!success)
+    {
+        // One query runs per workload, so an invalid filter fails each of them;
+        // report it once.
+        if(m_fetch_failures == 0 && !error_message.empty())
+        {
+            NotificationManager::GetInstance().Show(error_message, NotificationLevel::Error);
+        }
+        ++m_fetch_failures;
+    }
+    else
+    {
+        ComputeKernelSelectionTable& table =
+            m_data_provider.ComputeModel().GetKernelSelectionTable();
+        const std::vector<std::vector<std::string>>& rows = table.GetTableData();
+        m_pending_header = table.GetTableHeader();
+        m_pending_rows.insert(m_pending_rows.end(), rows.begin(), rows.end());
+        m_pending_row_workloads.insert(m_pending_row_workloads.end(), rows.size(),
+                                       m_fetch_workloads[m_fetch_index]);
+    }
+    ++m_fetch_index;
+    if(m_fetch_index < m_fetch_workloads.size())
+    {
+        m_fetch_next = true;
+    }
+    else if(m_fetch_failures == m_fetch_workloads.size())
+    {
+        m_cycle_active = false;
+        m_pending_header.clear();
+        m_pending_rows.clear();
+        m_pending_row_workloads.clear();
+    }
+    else
+    {
+        FinishFetchCycle();
+    }
+}
+
+void
+KernelMetricTable::FinishFetchCycle()
+{
+    m_cycle_active = false;
+
+    // Each workload came back sorted; order them together the same way. Values
+    // that are not numbers (N/A) go last either way.
+    const int           column    = m_sort_column_index;
+    const bool          ascending = m_sort_order == kRPVControllerSortOrderAscending;
+    const bool          workloads = ShowsWorkloadColumn();
+    std::vector<size_t> order(m_pending_rows.size());
+    std::iota(order.begin(), order.end(), static_cast<size_t>(0));
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        const std::vector<std::string>& row_a = m_pending_rows[a];
+        const std::vector<std::string>& row_b = m_pending_rows[b];
+        if(column == ID_COLUMN_INDEX && workloads)
+        {
+            const std::string& name_a = WorkloadName(m_pending_row_workloads[a]);
+            const std::string& name_b = WorkloadName(m_pending_row_workloads[b]);
+            return ascending ? name_a < name_b : name_a > name_b;
+        }
+        if(column < 0 || column >= static_cast<int>(row_a.size()) ||
+           column >= static_cast<int>(row_b.size()))
+        {
+            return false;
+        }
+        const std::string& cell_a = row_a[column];
+        const std::string& cell_b = row_b[column];
+        if(column == NAME_COLUMN_INDEX)
+        {
+            return ascending ? cell_a < cell_b : cell_a > cell_b;
+        }
+        char*        end_a   = nullptr;
+        char*        end_b   = nullptr;
+        const double value_a = std::strtod(cell_a.c_str(), &end_a);
+        const double value_b = std::strtod(cell_b.c_str(), &end_b);
+        const bool   number_a = end_a != cell_a.c_str() && !std::isnan(value_a);
+        const bool   number_b = end_b != cell_b.c_str() && !std::isnan(value_b);
+        if(number_a != number_b)
+        {
+            return number_a;
+        }
+        if(!number_a)
+        {
+            return false;
+        }
+        return ascending ? value_a < value_b : value_a > value_b;
+    });
+
+    m_rows.clear();
+    m_row_workloads.clear();
+    m_shown_kernels.clear();
+    m_rows.reserve(order.size());
+    m_row_workloads.reserve(order.size());
+    m_shown_kernels.reserve(order.size());
+    for(size_t index : order)
+    {
+        const std::vector<std::string>& row = m_pending_rows[index];
+        m_shown_kernels.push_back(
+            { m_pending_row_workloads[index],
+              row.empty() ? ComputeSelection::INVALID_SELECTION_ID
+                          : ParseKernelId(row[ID_COLUMN_INDEX]) });
+        m_rows.push_back(std::move(m_pending_rows[index]));
+        m_row_workloads.push_back(m_pending_row_workloads[index]);
+    }
+    m_pending_rows.clear();
+    m_pending_row_workloads.clear();
+    if(!m_pending_header.empty())
+    {
+        m_header = std::move(m_pending_header);
+        m_pending_header.clear();
+    }
+
+    // Metric columns are those after the permanent ones.
     m_metrics_column_names.clear();
-
     ROCPROFVIS_ASSERT(m_metrics_params.size() == m_metrics_info.size());
-    size_t metric_count = request_params->m_metric_selectors.size();
+    const size_t metric_count =
+        m_header.size() > PERMANENT_COLUMN_COUNT
+            ? std::min(m_header.size() - PERMANENT_COLUMN_COUNT, m_metrics_info.size())
+            : 0;
     for(size_t i = 0; i < metric_count; i++)
     {
         m_metrics_column_names.push_back(
@@ -116,9 +395,10 @@ KernelMetricTable::HandleNewData()
                  : " (" + m_metrics_info[i].entry.unit + ")"));
     }
 
-    ComputeColumnMaxValues(table.GetTableData());
-
-    m_update_table_selection = true; 
+    ComputeColumnMaxValues(m_rows);
+    m_update_table_selection = true;
+    // A new order or query moves the selected kernel; bring it back into view.
+    m_scroll_to_selected = true;
 }
 
 void
@@ -127,65 +407,30 @@ KernelMetricTable::Update()
     bool request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
+    // A new query or sort restarts the cycle once the request in flight is done.
     if(!request_pending && m_fetch_requested)
     {
-        const WorkloadInfo* workload =
-            m_data_provider.ComputeModel().GetWorkload(m_workload_id);
-        if(workload)
-        {
-            // Update selected entries for new workload
-            for(MetricInfo& metric : m_metrics_info)
-            {
-                if(workload->available_metrics.tree.count(metric.entry.category_id) > 0 &&
-                   workload->available_metrics.tree.at(metric.entry.category_id)
-                           .tables.count(metric.entry.table_id) > 0 &&
-                   workload->available_metrics.tree.at(metric.entry.category_id)
-                           .tables.at(metric.entry.table_id)
-                           .entries.count(metric.entry.id) > 0)
-                {
-                    metric.entry =
-                        workload->available_metrics.tree.at(metric.entry.category_id)
-                            .tables.at(metric.entry.table_id)
-                            .entries.at(metric.entry.id);
-                }
-            }
-        }
-
-        // Build filter map from vector - only include active filters
-        std::unordered_map<uint64_t, std::string> filter_map;
-
-        for(size_t i = 0; i < m_column_filters.size(); i++)
-        {
-            const ColumnFilter& filter = m_column_filters[i];
-            if(filter.is_active && strlen(filter.filter_text) > 0)
-            {
-                filter_map[i] = std::string(filter.filter_text);
-            }
-        }
-
-        ComputeTableRequestParams params(
-            m_workload_id,
-            m_metrics_params,
-            m_sort_column_index,
-            static_cast<rocprofvis_controller_sort_order_t>(m_sort_order),
-            filter_map  // Pass filters by column index
-        );
-
-        spdlog::debug("Requesting kernel selection table: column {}, order {}, filters {}",
-                      m_sort_column_index,
-                      m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC",
-                      filter_map.size());
-        m_data_provider.FetchMetricPivotTable(params);
-
         m_fetch_requested = false;
+        StartFetchCycle();
+    }
+    else if(!request_pending && m_fetch_next)
+    {
+        m_fetch_next = false;
+        if(m_cycle_active && m_fetch_index < m_fetch_workloads.size())
+        {
+            RequestWorkloadRows(m_fetch_workloads[m_fetch_index]);
+        }
     }
 
     // check if kernel selection has changed and update selection if needed
-    uint32_t selected_kernel_id = m_compute_selection->GetSelectedKernel();
+    const uint32_t selected_kernel_id   = m_compute_selection->GetSelectedKernel();
+    const uint32_t selected_workload_id = m_compute_selection->GetSelectedWorkload();
 
-    if(m_selected_kernel_id_local != selected_kernel_id)
+    if(m_selected_kernel_id_local != selected_kernel_id ||
+       m_selected_workload_id_local != selected_workload_id)
     {
-        m_selected_kernel_id_local = selected_kernel_id;
+        m_selected_kernel_id_local   = selected_kernel_id;
+        m_selected_workload_id_local = selected_workload_id;
         if(m_selected_kernel_id_local == ComputeSelection::INVALID_SELECTION_ID)
         {
             m_selected_row = -1;
@@ -196,23 +441,23 @@ KernelMetricTable::Update()
         }
     }
 
-    if(m_update_table_selection) {
-        // Find the row with the selected kernel ID and update selection
-        ComputeKernelSelectionTable& table =
-            m_data_provider.ComputeModel().GetKernelSelectionTable();
-        const std::vector<std::vector<std::string>>& data = table.GetTableData();
-        // reset selection (filter may have removed the selected kernel from the table)
-        m_selected_row = -1;
-        for(size_t row = 0; row < data.size(); row++)
+    if(m_update_table_selection)
+    {
+        // The selection's row, if a filter has not hidden it.
+        m_selected_row             = -1;
+        const std::string kernel_id = std::to_string(selected_kernel_id);
+        for(size_t row = 0; row < m_rows.size(); row++)
         {
-            // TODO: add "Important Column" for indentifying id column instead of
-            // assuming index 0?
-            if(!data[row].empty() &&
-            data[row][ID_COLUMN_INDEX] == std::to_string(selected_kernel_id))
+            if(!m_rows[row].empty() && m_row_workloads[row] == selected_workload_id &&
+               m_rows[row][ID_COLUMN_INDEX] == kernel_id)
             {
                 m_selected_row = static_cast<int>(row);
                 break;
             }
+        }
+        if(m_selected_row < 0)
+        {
+            m_scroll_to_selected = false;
         }
         m_update_table_selection = false;
     }
@@ -229,20 +474,30 @@ KernelMetricTable::Render()
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          settings.GetColor(m_chromeless ? Colors::kTransparent
+                                                         : Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
-    ImGui::BeginChild("kernel_metric_table_card", ImVec2(0, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
-                          ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGuiChildFlags card_flags =
+        m_chromeless ? ImGuiChildFlags_None
+                     : ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding;
+    if(!m_fill_parent)
+    {
+        card_flags |= ImGuiChildFlags_AutoResizeY;
+    }
+    ImGui::BeginChild("kernel_metric_table_card", ImVec2(0, 0), card_flags);
 
-    SectionTitle("Kernel Selection Table");
+    if(!m_chromeless)
+    {
+        SectionTitle("Kernel Selection Table");
+    }
 
-    ComputeKernelSelectionTable& table =
-        m_data_provider.ComputeModel().GetKernelSelectionTable();
-    const std::vector<std::string>&              header = table.GetTableHeader();
-    const std::vector<std::vector<std::string>>& data   = table.GetTableData();
+    // The merged rows of every workload, replaced only once a fetch cycle is done.
+    const std::vector<std::string>&              header = m_header;
+    const std::vector<std::vector<std::string>>& data   = m_rows;
+    const bool                                   workload_column = ShowsWorkloadColumn();
 
     // Toolbar row.
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
@@ -251,27 +506,34 @@ KernelMetricTable::Render()
                       ImGuiChildFlags_AutoResizeY);
 
     ImGui::AlignTextToFramePadding();
-    const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
-    
-    ImGui::PushFont(icon_font, 0.0f);
-    ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); // use larger icon for consistent spacing
-    ImGui::PopFont();
-
-    if(IconButton(icon, icon_font,
-                  ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
-                         icon_size.y + style.FramePadding.y * 2.0f),
-                  m_show_kernel_table ? "Hide Table" : "Show Table", false,
-                  style.FramePadding,
-                  SettingsManager::GetInstance().GetColor(Colors::kTransparent),
-                  SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
-                  SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
+    if(m_fill_parent)
     {
-        m_show_kernel_table = !m_show_kernel_table;
+        m_show_kernel_table = true;
     }
+    else
+    {
+        const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
 
-    ImGui::SameLine(); //No spacing on purpose
-    ImGui::TextUnformatted("Table");
-    VerticalSeparator();
+        ImGui::PushFont(icon_font, 0.0f);
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); // use larger icon for consistent spacing
+        ImGui::PopFont();
+
+        if(IconButton(icon, icon_font,
+                      ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                             icon_size.y + style.FramePadding.y * 2.0f),
+                      m_show_kernel_table ? "Hide Table" : "Show Table", false,
+                      style.FramePadding,
+                      SettingsManager::GetInstance().GetColor(Colors::kTransparent),
+                      SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
+                      SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
+        {
+            m_show_kernel_table = !m_show_kernel_table;
+        }
+
+        ImGui::SameLine(); //No spacing on purpose
+        ImGui::TextUnformatted("Table");
+        VerticalSeparator();
+    }
 
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
@@ -318,14 +580,7 @@ KernelMetricTable::Render()
     }
 
     // Show active filter count
-    size_t active_count = 0;
-    for(const auto& filter : m_column_filters)
-    {
-        if(filter.is_active && strlen(filter.filter_text) > 0)
-        {
-            active_count++;
-        }
-    }
+    const size_t active_count = GetActiveFilterCount();
     if(active_count > 0)
     {
         ImGui::SameLine(0.0f, style.ItemSpacing.x);
@@ -356,20 +611,20 @@ KernelMetricTable::Render()
 
     if(m_show_kernel_table)
     {
-    // Set a fixed height for the table container
-    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, total_table_height),
+    // Fixed height from the row count, or the rest of the pane in fill mode.
+    if(ImGui::BeginChild("kernel_metric_table_cont",
+                         ImVec2(0, m_fill_parent ? 0.0f : total_table_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
         if(!header.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
         {
+            // Stays sortable while a fetch runs: dropping the flag would make ImGui
+            // rebuild the sort specs, losing the chosen sort.
             ImGuiTableFlags table_flags =
                 ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX |
                 ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings;
-            if(!request_pending)
-            {
-                table_flags = table_flags | ImGuiTableFlags_Sortable;
-            }
+                ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings |
+                ImGuiTableFlags_Sortable;
 
             int column_count = static_cast<int>(header.size());
             ImVec2 outer_size = ImVec2(ImGui::GetContentRegionAvail());
@@ -377,33 +632,63 @@ KernelMetricTable::Render()
             if(ImGui::BeginTable("kernel_selection_table", column_count, table_flags,
                                  outer_size))
             {
-                ImGui::TableSetupScrollFreeze(1, 2);  // Freeze Name column and header+filter rows
+                // Freeze the name (and workload) columns and the header + filter rows.
+                ImGui::TableSetupScrollFreeze(workload_column ? 2 : 1, 2);
 
-                // Calculate minimum column widths based on character counts
-                float name_min_width = char_width * COL_NAME_CHAR_LIMIT;
+                // Calculate minimum column widths based on character counts. The
+                // frozen name leaves at least half the table for the columns that
+                // scroll past it.
+                float name_min_width = std::min(char_width * COL_NAME_CHAR_LIMIT,
+                                                std::max(outer_size.x * FROZEN_NAME_MAX_SHARE,
+                                                         char_width * COL_NAME_MIN_CHARS));
                 float default_min_width = char_width * COL_DEFAULT_CHAR_LIMIT;
                 float invocation_min_width = char_width * COL_INVOCATION_CHAR_LIMIT;
 
                 for(int col = 0; col < column_count; col++)
                 {
                     ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_WidthFixed;
+                    // ImGui rebuilds the sort specs whenever the columns change (a
+                    // metric added or removed), so the current sort is the default.
+                    if(col == m_sort_column_index)
+                    {
+                        col_flags |= ImGuiTableColumnFlags_DefaultSort |
+                                     (m_sort_order == kRPVControllerSortOrderAscending
+                                          ? ImGuiTableColumnFlags_PreferSortAscending
+                                          : ImGuiTableColumnFlags_PreferSortDescending);
+                    }
+                    else
+                    {
+                        col_flags |= ImGuiTableColumnFlags_PreferSortDescending;
+                    }
                     if(col < PERMANENT_COLUMN_COUNT)
                     {
-                        if(!header[col].empty() && header[col][0] == '_')
+                        // The id column shows each row's workload when there are several.
+                        const bool shows_workload = col == ID_COLUMN_INDEX && workload_column;
+                        if(!shows_workload && !header[col].empty() && header[col][0] == '_')
                         {
                             col_flags |= ImGuiTableColumnFlags_DefaultHide |
                                         ImGuiTableColumnFlags_Disabled;
                         }
-                        if(!m_sort_specs_initialized && col == DURATION_COLUMN_INDEX)
-                        {
-                            col_flags |= ImGuiTableColumnFlags_DefaultSort;
-                            m_sort_specs_initialized = true;
-                        }
-                        col_flags |= ImGuiTableColumnFlags_PreferSortDescending;
 
                         // Set minimum width based on column type
                         float min_width = default_min_width;
-                        if(col == NAME_COLUMN_INDEX)
+                        if(shows_workload)
+                        {
+                            // Frozen with the name, so only as wide as its longest
+                            // workload name.
+                            min_width = ImGui::CalcTextSize("Workload").x;
+                            for(const WorkloadInfo* workload :
+                                m_data_provider.ComputeModel().GetWorkloadList())
+                            {
+                                if(workload)
+                                {
+                                    min_width = std::max(
+                                        min_width, ImGui::CalcTextSize(workload->name.c_str()).x);
+                                }
+                            }
+                            min_width += cell_padding + char_width;
+                        }
+                        else if(col == NAME_COLUMN_INDEX)
                         {
                             min_width = name_min_width;
                         }
@@ -412,7 +697,10 @@ KernelMetricTable::Render()
                             min_width = invocation_min_width;
                         }
 
-                        ImGui::TableSetupColumn(m_permanent_column_names[col].c_str(), col_flags, min_width);
+                        ImGui::TableSetupColumn(shows_workload
+                                                    ? "Workload"
+                                                    : m_permanent_column_names[col].c_str(),
+                                                col_flags, min_width);
                     }
                     else
                     {
@@ -429,16 +717,13 @@ KernelMetricTable::Render()
 
                             column_size = std::max(column_size, default_min_width);
 
-                            ImGui::TableSetupColumn(
-                                m_metrics_column_names[index].c_str(),
-                                ImGuiTableColumnFlags_WidthFixed,
-                                column_size);
-                            }
+                            ImGui::TableSetupColumn(m_metrics_column_names[index].c_str(),
+                                                    col_flags, column_size);
+                        }
                         else
                         {
                             ImGui::TableSetupColumn(
-                                ("Metric " + std::to_string(index + 1)).c_str(),
-                                ImGuiTableColumnFlags_WidthFixed,
+                                ("Metric " + std::to_string(index + 1)).c_str(), col_flags,
                                 default_min_width);
                         }
                     }
@@ -450,17 +735,23 @@ KernelMetricTable::Render()
                 {
                     ImGui::TableSetColumnIndex(col);
 
+                    // Headers are keyed by column as in ImGui::TableHeadersRow, so
+                    // columns of one name stay apart.
                     // Skip X for non-removable columns (like ID, Name)
                     if(col < PERMANENT_COLUMN_COUNT)
                     {
+                        ImGui::PushID(col);
                         ImGui::TableHeader(ImGui::TableGetColumnName(col));
+                        ImGui::PopID();
                         RenderBarChartContextMenu(col);
                         continue;
                     }
 
                     // Sortable header with X button
                     const char* name = ImGui::TableGetColumnName(col);
+                    ImGui::PushID(col);
                     ImGui::TableHeader(name);
+                    ImGui::PopID();
                     bool header_hovered = ImGui::IsItemHovered();
                     RenderBarChartContextMenu(col);
                     ImVec2 text_size = ImGui::CalcTextSize(name);
@@ -494,11 +785,12 @@ KernelMetricTable::Render()
                     ImGui::PopID();
                 }
 
-                // Filter row
+                // Filter row. The workload column has no filter: its data is the id.
                 ImGui::TableNextRow();
                 for(int col = 0; col < column_count; col++)
                 {
-                    if(!ImGui::TableSetColumnIndex(col))
+                    if(!ImGui::TableSetColumnIndex(col) ||
+                       (col == ID_COLUMN_INDEX && workload_column))
                         continue;
                     RenderColumnFilter(col);
                 }
@@ -552,6 +844,15 @@ KernelMetricTable::Render()
 
                 ImGuiListClipper clipper;
                 clipper.Begin(static_cast<int>(data.size()));
+                // The selection's row is submitted even when clipped, to scroll to it.
+                const bool scroll_to_selected =
+                    m_scroll_to_selected && !m_update_table_selection && m_selected_row >= 0 &&
+                    m_selected_row < static_cast<int>(data.size());
+                if(scroll_to_selected)
+                {
+                    clipper.IncludeItemByIndex(m_selected_row);
+                }
+                const std::string marked_kernel_id = std::to_string(m_marked_kernel_id);
                 while(clipper.Step())
                 {
                     for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
@@ -561,10 +862,29 @@ KernelMetricTable::Render()
 
                         bool is_selected       = (m_selected_row == row);
                         bool selectable_placed = false;
+                        const uint32_t row_workload = m_row_workloads[row];
+                        if(is_selected && scroll_to_selected)
+                        {
+                            ImGui::SetScrollHereY(0.5f);
+                            m_scroll_to_selected = false;
+                        }
+                        // The compare target's row.
+                        if(row_workload == m_marked_workload_id &&
+                           data[row][ID_COLUMN_INDEX] == marked_kernel_id)
+                        {
+                            ImGui::TableSetBgColor(
+                                ImGuiTableBgTarget_RowBg1,
+                                ApplyAlpha(settings.GetColor(Colors::kComparisonTarget),
+                                           MARKED_ROW_ALPHA));
+                        }
+                        const std::string* workload_label =
+                            workload_column ? &WorkloadName(row_workload) : nullptr;
 
                         for(int col = 0; col < data[row].size(); col++)
                         {
-                            const std::string& cell = data[row][col];
+                            const std::string& cell =
+                                (workload_label && col == ID_COLUMN_INDEX) ? *workload_label
+                                                                           : data[row][col];
                             ImGui::TableNextColumn();
 
                             // Track hover using the current table cell bounds instead of
@@ -606,14 +926,12 @@ KernelMetricTable::Render()
                                     }
                                     else
                                     {
-                                        m_selected_row = row;
-                                        m_selected_kernel_id_local =
-                                            data[row][0].empty()
-                                                ? ComputeSelection::INVALID_SELECTION_ID
-                                                : std::stoul(data[row][0]);
+                                        m_selected_row               = row;
+                                        m_selected_kernel_id_local   = ParseKernelId(data[row][0]);
+                                        m_selected_workload_id_local = row_workload;
 
-                                        m_compute_selection->SelectKernel(
-                                            m_selected_kernel_id_local);
+                                        m_compute_selection->Select(row_workload,
+                                                                    m_selected_kernel_id_local);
                                     }
                                 }
                                 selectable_placed = true;
@@ -726,6 +1044,22 @@ KernelMetricTable::Render()
                         AddCopyRowCellMenuItems(row_cells.data(),
                                                 static_cast<int>(row_cells.size()),
                                                 cell_index);
+                        if(m_compare_callback)
+                        {
+                            const uint32_t kernel_id   = ParseKernelId(menu_row[0]);
+                            const uint32_t workload_id = m_row_workloads[m_cell_menu.row];
+                            const bool     is_a =
+                                workload_id == m_compute_selection->GetSelectedWorkload() &&
+                                kernel_id == m_compute_selection->GetSelectedKernel();
+                            ImGui::Separator();
+                            if(ImGui::MenuItem(
+                                   "Compare with this kernel (B)", nullptr, false,
+                                   kernel_id != ComputeSelection::INVALID_SELECTION_ID &&
+                                       !is_a))
+                            {
+                                m_compare_callback(workload_id, kernel_id);
+                            }
+                        }
                     }
                     EndCellContextMenu();
                 }
@@ -783,6 +1117,18 @@ KernelMetricTable::Render()
         for(int c : m_bar_chart_columns)
             adjusted.insert(c > removed_col ? c - 1 : c);
         m_bar_chart_columns = adjusted;
+
+        // The sort follows its column; sorting by the removed one falls back to
+        // the default.
+        if(m_sort_column_index == removed_col)
+        {
+            m_sort_column_index = DURATION_COLUMN_INDEX;
+            m_sort_order        = kRPVControllerSortOrderDescending;
+        }
+        else if(m_sort_column_index > removed_col)
+        {
+            m_sort_column_index--;
+        }
 
         m_fetch_requested = true;
         spdlog::debug("Removed metric column at index {}", remove_index);
@@ -966,10 +1312,7 @@ KernelMetricTable::RenderBarChartContextMenu(int col)
             else
             {
                 m_bar_chart_columns.insert(col);
-                ComputeColumnMaxValues(
-                    m_data_provider.ComputeModel()
-                        .GetKernelSelectionTable()
-                        .GetTableData());
+                ComputeColumnMaxValues(m_rows);
             }
         }
         ImGui::EndPopup();

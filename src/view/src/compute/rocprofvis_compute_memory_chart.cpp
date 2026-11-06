@@ -46,6 +46,20 @@ static constexpr bool kRemapFallbackMemoryChartMetricIds = true;
 // template can be tuned without a rebuild. Remove once template selection is stable.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
+// Smallest scale fit-to-view shrinks to; below it text stops being legible, so
+// the chart scrolls instead.
+static constexpr float MIN_FIT_SCALE = 0.4f;
+// Compact (overview) mode fits however small the pane is; this only keeps the
+// scale positive.
+static constexpr float COMPACT_MIN_SCALE = 0.05f;
+// Auto-compact kicks in when actual size would show less than these shares of
+// the chart's width or height.
+static constexpr float AUTO_COMPACT_MIN_WIDTH_SHARE  = 0.6f;
+static constexpr float AUTO_COMPACT_MIN_HEIGHT_SHARE = 0.5f;
+// Kept free around a chart sized to its space (stretched or fitted), so float
+// rounding can never tip it or its parent into showing a scrollbar.
+static constexpr float FILL_SLACK = 1.0f;
+
 static constexpr const char* CHART_UNAVAILABLE_TEXT =
     "Memory chart is N/A for this workload.";
 
@@ -203,6 +217,7 @@ static constexpr float ROW_LABEL_INDENT    = 7.0f;   // Metric-row label indent 
 static constexpr float BLOCK_CONTENT_EXTRA_W = 12.0f;   // Slack added to a leaf block's content width.
 static constexpr float CANVAS_BOTTOM_PAD     = 6.0f;    // Padding below the lowest route/label.
 static constexpr float TOOLTIP_MAX_WIDTH     = 300.0f;  // Max width of a metric tooltip.
+static constexpr double PERCENT              = 100.0;
 
 // Missing `order` sorts after any explicit value; stable_sort keeps declaration
 // order among siblings that omit the field.
@@ -335,6 +350,28 @@ FormatMetricValueRaw(double value)
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.2f", value);
     return std::string(buf);
+}
+
+// A difference with its sign: "+1.2K", "-35", "0".
+static std::string
+FormatSignedValue(double delta)
+{
+    if(std::isnan(delta)) return UNAVAILABLE_METRIC_TEXT;
+    const std::string text = compact_number_format(delta);
+    return delta > 0.0 ? "+" + text : text;
+}
+
+// " (+12.5%)": the change from `a` to `b` relative to `a`; empty when `a` is 0.
+static std::string
+FormatChangeSuffix(double a, double b)
+{
+    if(a == 0.0)
+    {
+        return std::string();
+    }
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%+.1f%%", (b - a) / std::fabs(a) * PERCENT);
+    return " (" + std::string(buf) + ")";
 }
 
 void
@@ -489,13 +526,27 @@ ComputeMemoryChartView::DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y
     ImVec2 pos(origin.x + CHART_PADDING, origin.y + y);
     draw_list->AddText(pos, m_colors.text_dim, "Legend:");
     pos.x += ImGui::CalcTextSize("Legend:").x + LEGEND_LABEL_GAP;
-    for(const LegendItem& item : legend)
+    auto draw_items = [&](const LegendItem* items, size_t count) {
+        for(size_t i = 0; i < count; ++i)
+        {
+            draw_list->AddRectFilled({pos.x, pos.y + LEGEND_SWATCH_TOP},
+                                     {pos.x + LEGEND_SWATCH_WIDTH, pos.y + LEGEND_SWATCH_BOTTOM},
+                                     items[i].color, LEGEND_SWATCH_ROUNDING);
+            draw_list->AddText({pos.x + LEGEND_TEXT_GAP, pos.y}, m_colors.text_dim,
+                               items[i].text);
+            pos.x += LEGEND_TEXT_GAP + ImGui::CalcTextSize(items[i].text).x + LEGEND_ITEM_GAP;
+        }
+    };
+    draw_items(legend, IM_ARRAYSIZE(legend));
+    if(m_delta_target)
     {
-        draw_list->AddRectFilled({pos.x, pos.y + LEGEND_SWATCH_TOP},
-                                 {pos.x + LEGEND_SWATCH_WIDTH, pos.y + LEGEND_SWATCH_BOTTOM},
-                                 item.color, LEGEND_SWATCH_ROUNDING);
-        draw_list->AddText({pos.x + LEGEND_TEXT_GAP, pos.y}, m_colors.text_dim, item.text);
-        pos.x += LEGEND_TEXT_GAP + ImGui::CalcTextSize(item.text).x + LEGEND_ITEM_GAP;
+        constexpr const char* DELTA_LABEL = "Values: B - A";
+        const LegendItem      delta[]     = { { "B higher", m_colors.delta_up },
+                                              { "B lower", m_colors.delta_down } };
+        pos.x += LEGEND_ITEM_GAP;
+        draw_list->AddText(pos, m_colors.text_dim, DELTA_LABEL);
+        pos.x += ImGui::CalcTextSize(DELTA_LABEL).x + LEGEND_LABEL_GAP;
+        draw_items(delta, IM_ARRAYSIZE(delta));
     }
 }
 
@@ -504,6 +555,8 @@ ComputeMemoryChartView::ComputeMemoryChartView(
 : m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_source_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_source_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 {
     RefreshPalette();
     m_theme_changed_token = EventManager::GetInstance()->Subscribe(
@@ -558,10 +611,10 @@ EmbeddedLayoutForArch(const std::string& arch)
     return family;
 }
 
-// GPU arch (e.g. "gfx950") from the workload's system info. The controller
-// surfaces keys with underscores as spaces ("gpu_arch" -> "gpu arch").
-static std::string
-WorkloadArch(const WorkloadInfo* workload)
+// The controller surfaces system-info keys with underscores as spaces
+// ("gpu_arch" -> "gpu arch").
+std::string
+ComputeMemoryChartView::WorkloadArch(const WorkloadInfo* workload)
 {
     if(!workload || workload->system_info.size() < 2) return "";
     const std::vector<std::string>& names  = workload->system_info[0];
@@ -897,6 +950,55 @@ ComputeMemoryChartView::RefreshPalette()
     m_colors.hit        = s.GetColor(Colors::kMemChartHit);
     m_colors.stall      = s.GetColor(Colors::kMemChartStall);
     m_colors.shadow     = s.GetColor(Colors::kMemChartShadow);
+    m_colors.delta_up   = s.GetColor(Colors::kComparisonGreater);
+    m_colors.delta_down = s.GetColor(Colors::kComparisonLesser);
+}
+
+void
+ComputeMemoryChartView::SetSource(uint32_t workload_id, uint32_t kernel_id)
+{
+    m_follow_selection   = false;
+    m_source_workload_id = workload_id;
+    m_source_kernel_id   = kernel_id;
+}
+
+void
+ComputeMemoryChartView::SetDeltaTarget(const ComputeMemoryChartView* target)
+{
+    if(target == m_delta_target)
+    {
+        return;
+    }
+    m_delta_target = target;
+    RefreshMetricStrings();
+}
+
+void
+ComputeMemoryChartView::RefreshValues()
+{
+    RefreshMetricStrings();
+}
+
+uint32_t
+ComputeMemoryChartView::SourceWorkload() const
+{
+    if(!m_follow_selection)
+    {
+        return m_source_workload_id;
+    }
+    return m_compute_selection ? m_compute_selection->GetSelectedWorkload()
+                               : ComputeSelection::INVALID_SELECTION_ID;
+}
+
+uint32_t
+ComputeMemoryChartView::SourceKernel() const
+{
+    if(!m_follow_selection)
+    {
+        return m_source_kernel_id;
+    }
+    return m_compute_selection ? m_compute_selection->GetSelectedKernel()
+                               : ComputeSelection::INVALID_SELECTION_ID;
 }
 
 void
@@ -965,15 +1067,19 @@ CollectTables(const std::vector<MemChartBlock>&        blocks,
 void
 ComputeMemoryChartView::FetchMemChartMetrics()
 {
+    m_fetch_pending = false;
     m_ptr_by_metric_id.clear();
     RefreshMetricStrings();  // values -> N/A until the fetch completes
 
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
-    if(!m_compute_selection) return;
-
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    uint32_t workload_id = SourceWorkload();
+    uint32_t kernel_id   = SourceKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
 
     // Fetch only the specific (category, table) pairs the layout references, not
     // whole categories - these charts are sparse (a handful of metrics per table).
@@ -994,33 +1100,36 @@ ComputeMemoryChartView::FetchMemChartMetrics()
         metric_ids.push_back({ct.first, ct.second, std::nullopt});
     }
 
-    m_data_provider.FetchMetrics(
+    m_fetch_pending = !m_data_provider.FetchMetrics(
         MetricsRequestParams(workload_id, kernel_ids, metric_ids, m_client_id));
 }
 
 void
 ComputeMemoryChartView::UpdateMetrics()
 {
+    if(m_fetch_pending)
+    {
+        // What landed was for an earlier kernel; ask again for the current one.
+        FetchMemChartMetrics();
+        return;
+    }
     m_ptr_by_metric_id.clear();
 
-    if(m_compute_selection)
+    const uint32_t kernel_id = SourceKernel();
+    if(kernel_id != ComputeSelection::INVALID_SELECTION_ID)
     {
-        uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-        if(kernel_id != ComputeSelection::INVALID_SELECTION_ID)
+        const std::vector<std::shared_ptr<MetricValue>>* metrics =
+            m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id, kernel_id);
+        if(metrics)
         {
-            const std::vector<std::shared_ptr<MetricValue>>* metrics =
-                m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id, kernel_id);
-            if(metrics)
+            for(const std::shared_ptr<MetricValue>& metric : *metrics)
             {
-                for(const std::shared_ptr<MetricValue>& metric : *metrics)
-                {
-                    if(!metric || !metric->entry) continue;
-                    // Index each fetched metric by its full dotted id.
-                    std::string full_id = std::to_string(metric->entry->category_id) + "." +
-                                          std::to_string(metric->entry->table_id) + "." +
-                                          std::to_string(metric->entry->id);
-                    m_ptr_by_metric_id[full_id] = metric.get();
-                }
+                if(!metric || !metric->entry) continue;
+                // Index each fetched metric by its full dotted id.
+                std::string full_id = std::to_string(metric->entry->category_id) + "." +
+                                      std::to_string(metric->entry->table_id) + "." +
+                                      std::to_string(metric->entry->id);
+                m_ptr_by_metric_id[full_id] = metric.get();
             }
         }
     }
@@ -1064,13 +1173,38 @@ ComputeMemoryChartView::MetricLabel(const MemChartMetricRef& ref,
     return "";
 }
 
+bool
+ComputeMemoryChartView::DeltaValues(const MemChartMetricRef& ref, double& a, double& b) const
+{
+    if(!m_delta_target)
+    {
+        return false;
+    }
+    const MetricValue* metric_a = ResolveMetric(ref);
+    const MetricValue* metric_b = m_delta_target->ResolveMetric(ref);
+    if(!metric_a || metric_a->values.empty() || !metric_b || metric_b->values.empty())
+    {
+        return false;
+    }
+    a = metric_a->values.begin()->second;
+    b = metric_b->values.begin()->second;
+    return !std::isnan(a) && !std::isnan(b);
+}
+
 std::string
 ComputeMemoryChartView::MetricValueText(const MemChartMetricRef& ref, bool include_unit,
                                         const std::string& unit_override) const
 {
     const MetricValue* metric = ResolveMetric(ref);
     if(!metric || metric->values.empty()) return UNAVAILABLE_METRIC_TEXT;
-    std::string text = FormatMetricValue(metric->values.begin()->second);
+    double a = 0.0;
+    double b = 0.0;
+    if(m_delta_target && !DeltaValues(ref, a, b))
+    {
+        return UNAVAILABLE_METRIC_TEXT;
+    }
+    std::string text = m_delta_target ? FormatSignedValue(b - a)
+                                      : FormatMetricValue(metric->values.begin()->second);
     if(include_unit && IsAvailableMetricText(text))
     {
         // The layout's unit takes priority; otherwise use the metric entry's unit
@@ -1082,6 +1216,11 @@ ComputeMemoryChartView::MetricValueText(const MemChartMetricRef& ref, bool inclu
         {
             text += " ";
             text += unit;
+        }
+        // Block rows have room for the change relative to A too; arrow labels do not.
+        if(m_delta_target)
+        {
+            text += FormatChangeSuffix(a, b);
         }
     }
     return text;
@@ -1314,7 +1453,7 @@ ComputeMemoryChartView::PackSkipLanes(std::vector<SkipSpan>& spans)
 }
 
 void
-ComputeMemoryChartView::ComputeLayout(float available_width)
+ComputeMemoryChartView::ComputeLayout(float available_width, float extra_height)
 {
     m_group_boxes.clear();
 
@@ -1571,8 +1710,9 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         return sum;
     };
 
-    // Row 0 is the tall main band (floored at MIN_TARGET_HEIGHT, later stretched
-    // to fill); other rows hug their natural content height.
+    // Row 0 is the tall main band (floored at MIN_TARGET_HEIGHT, grown by
+    // `extra_height`, and its stacks stretched to fill); other rows hug their
+    // natural content height.
     std::map<int32_t, float> row_height;
     for(std::pair<const int32_t, std::map<int32_t, std::vector<MemChartBlock*>>>& row : cells)
     {
@@ -1581,7 +1721,10 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         {
             natural = std::max(natural, cell_stack_height(cell.second));
         }
-        row_height[row.first] = (row.first == 0) ? std::max(natural, MIN_TARGET_HEIGHT) : natural;
+        row_height[row.first] =
+            (row.first == 0)
+                ? std::max(natural, MIN_TARGET_HEIGHT) + std::max(extra_height, 0.0f)
+                : natural;
     }
 
     // Skip-column highways run just below their own row band, so the corridor
@@ -1758,6 +1901,46 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
 }
 
 void
+ComputeMemoryChartView::LayoutCanvas(float available_width, float extra_height)
+{
+    ComputeLayout(available_width, extra_height);
+    // Skip-lanes and labels sit below the blocks, and gutter lanes and labels
+    // right of the last column, so the routes count toward the canvas extents.
+    BuildArrowRoutes(m_routes);
+    ResolveLabelOverlaps(m_routes);
+
+    float max_right  = 0.0f;
+    float max_bottom = 0.0f;
+    for(const MemChartBlock& block : m_layout.blocks)
+    {
+        max_right  = std::max(max_right, block.Right());
+        max_bottom = std::max(max_bottom, block.Bottom());
+    }
+    for(const MemChartGroupBox& box : m_group_boxes)
+    {
+        max_right  = std::max(max_right, box.x + box.w);
+        max_bottom = std::max(max_bottom, box.y + box.h);
+    }
+    for(const ArrowRoute& route : m_routes)
+    {
+        for(const std::pair<float, float>& p : route.points)
+        {
+            max_right  = std::max(max_right, p.first + ARROW_HEAD_SIZE);
+            max_bottom = std::max(max_bottom, p.second + CANVAS_BOTTOM_PAD);
+        }
+        if(!route.label.empty())
+        {
+            max_right = std::max(max_right, route.label_x + route.label_w + LABEL_PAD_X);
+        }
+        max_bottom = std::max(max_bottom, route.label_y + route.label_h + CANVAS_BOTTOM_PAD);
+    }
+
+    m_canvas_w            = max_right + CHART_PADDING;
+    m_canvas_h            = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
+    m_layout_extra_height = extra_height;
+}
+
+void
 ComputeMemoryChartView::Render()
 {
     if(m_layout.blocks.empty())
@@ -1766,89 +1949,144 @@ ComputeMemoryChartView::Render()
         return;
     }
 
-    float available_width = ImGui::GetContentRegionAvail().x;
-    float font_size       = ImGui::GetFontSize();
+    const ImVec2 avail     = ImGui::GetContentRegionAvail();
+    const float  font_size = ImGui::GetFontSize();
 
     // Recompute geometry only when an input to it changes; otherwise reuse the
     // cached blocks/routes/canvas from the last frame and just redraw them.
-    if(m_layout_dirty || available_width != m_cached_layout_width ||
+    if(m_layout_dirty || avail.x != m_cached_layout_width ||
        font_size != m_cached_font_size)
     {
-        ComputeLayout(available_width);
-        BuildArrowRoutes(m_routes);
-        ResolveLabelOverlaps(m_routes);
-
-        float max_right  = 0.0f;
-        float max_bottom = 0.0f;
-        for(const MemChartBlock& block : m_layout.blocks)
-        {
-            max_right  = std::max(max_right, block.Right());
-            max_bottom = std::max(max_bottom, block.Bottom());
-        }
-        for(const MemChartGroupBox& box : m_group_boxes)
-        {
-            max_right  = std::max(max_right, box.x + box.w);
-            max_bottom = std::max(max_bottom, box.y + box.h);
-        }
-        // Skip-lanes and labels sit below the blocks, and gutter lanes and labels
-        // right of the last column, so fold routes into both extents.
-        for(const ArrowRoute& route : m_routes)
-        {
-            for(const std::pair<float, float>& p : route.points)
-            {
-                max_right  = std::max(max_right, p.first + ARROW_HEAD_SIZE);
-                max_bottom = std::max(max_bottom, p.second + CANVAS_BOTTOM_PAD);
-            }
-            if(!route.label.empty())
-            {
-                max_right = std::max(max_right, route.label_x + route.label_w + LABEL_PAD_X);
-            }
-            max_bottom = std::max(max_bottom, route.label_y + route.label_h + CANVAS_BOTTOM_PAD);
-        }
-
-        m_canvas_w            = max_right + CHART_PADDING;
-        m_canvas_h            = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
-        m_cached_layout_width = available_width;
+        LayoutCanvas(avail.x, 0.0f);
+        m_natural_canvas_w    = m_canvas_w;
+        m_natural_canvas_h    = m_canvas_h;
+        m_cached_layout_width = avail.x;
         m_cached_font_size    = font_size;
         m_layout_dirty        = false;
     }
 
-    float canvas_w = m_canvas_w;
-    float canvas_h = m_canvas_h;
+    m_is_compact = m_auto_compact && m_natural_canvas_w > 0.0f &&
+                   m_natural_canvas_h > 0.0f &&
+                   (avail.x < m_natural_canvas_w * AUTO_COMPACT_MIN_WIDTH_SHARE ||
+                    avail.y < m_natural_canvas_h * AUTO_COMPACT_MIN_HEIGHT_SHARE);
+    const bool  fit    = m_fit_to_view || m_is_compact;
+    const float fill_w = avail.x - FILL_SLACK;
+    const float fill_h = avail.y - FILL_SLACK;
+
+    // Actual size: stretch the columns down to the space given instead of leaving
+    // it empty under the chart (a chart taller than that still scrolls). The
+    // extra height grows the canvas one-for-one.
+    const float extra_height =
+        (!fit && fill_h > m_natural_canvas_h) ? fill_h - m_natural_canvas_h : 0.0f;
+    if(extra_height != m_layout_extra_height)
+    {
+        LayoutCanvas(avail.x, extra_height);
+    }
+    const float canvas_w = m_canvas_w;
+    const float canvas_h = m_canvas_h;
+
+    // Fit: shrink (never enlarge) so the whole chart shows in the space given,
+    // centred on whichever axis has room left over.
+    float scale = 1.0f;
+    if(fit && canvas_w > 0.0f && canvas_h > 0.0f && fill_w > 0.0f && fill_h > 0.0f)
+    {
+        scale = std::min(1.0f, std::min(fill_w / canvas_w, fill_h / canvas_h));
+        scale = std::max(scale, m_is_compact ? COMPACT_MIN_SCALE : MIN_FIT_SCALE);
+    }
+    const float view_w   = canvas_w * scale;
+    const float view_h   = canvas_h * scale;
+    const float offset_x = fit ? std::max(0.0f, (fill_w - view_w) * 0.5f) : 0.0f;
+    const float offset_y = fit ? std::max(0.0f, (fill_h - view_h) * 0.5f) : 0.0f;
+    if(offset_y > 0.0f)
+    {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + offset_y);
+    }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_colors.bg);
-    ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_None,
+    ImGui::BeginChild("MemoryChart", ImVec2(0, view_h), ImGuiChildFlags_None,
                       ImGuiWindowFlags_HorizontalScrollbar);
     ImGui::PopStyleColor(1);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetCursorScreenPos();
     float       backdrop_w =
-        std::max(canvas_w, ImGui::GetContentRegionAvail().x + ImGui::GetScrollX());
+        std::max(offset_x + view_w, ImGui::GetContentRegionAvail().x + ImGui::GetScrollX());
     draw_list->AddRectFilled(window_position,
-                             {window_position.x + backdrop_w, window_position.y + canvas_h},
+                             {window_position.x + backdrop_w, window_position.y + view_h},
                              m_colors.bg);
 
+    const ImVec2 origin(window_position.x + offset_x, window_position.y);
+    m_view_scale    = scale;
+    m_view_origin_x = origin.x;
+    m_view_origin_y = origin.y;
+
+    // Scaled: draw at actual size under a clip rect spanning the whole canvas (so
+    // text beyond the visible area is not culled before it is scaled into view),
+    // then scale the new vertices about the origin and restore the window clip.
+    const bool   scaled   = scale != 1.0f;
+    const ImVec2 clip_min = draw_list->GetClipRectMin();
+    const ImVec2 clip_max = draw_list->GetClipRectMax();
+    int          cmd_start = 0;
+    int          vtx_start = 0;
+    if(scaled)
+    {
+        draw_list->PushClipRect(origin, ImVec2(origin.x + canvas_w, origin.y + canvas_h),
+                                false);
+        cmd_start = draw_list->CmdBuffer.Size - 1;
+        vtx_start = draw_list->VtxBuffer.Size;
+    }
+
     // Arrows first, then group boxes (containers), then blocks on top.
-    DrawArrowRoutes(draw_list, window_position, m_routes);
+    DrawArrowRoutes(draw_list, origin, m_routes);
     for(const MemChartGroupBox& box : m_group_boxes)
     {
-        DrawGroupBox(draw_list, {window_position.x + box.x, window_position.y + box.y},
+        DrawGroupBox(draw_list, {origin.x + box.x, origin.y + box.y},
                      box.w, box.h, box.title.c_str());
     }
     for(const MemChartBlock& block : m_layout.blocks)
     {
-        DrawBlock(draw_list, window_position, block);
+        DrawBlock(draw_list, origin, block);
     }
 
-    DrawLegend(draw_list, window_position, canvas_h - CHART_PADDING - LEGEND_HEIGHT);
+    DrawLegend(draw_list, origin, canvas_h - CHART_PADDING - LEGEND_HEIGHT);
+
+    if(scaled)
+    {
+        for(int i = vtx_start; i < draw_list->VtxBuffer.Size; ++i)
+        {
+            ImDrawVert& vert = draw_list->VtxBuffer[i];
+            vert.pos         = ToScreen(vert.pos);
+        }
+        const ImVec4 window_clip(clip_min.x, clip_min.y, clip_max.x, clip_max.y);
+        for(int c = cmd_start; c < draw_list->CmdBuffer.Size; ++c)
+        {
+            draw_list->CmdBuffer[c].ClipRect = window_clip;
+        }
+        draw_list->PopClipRect();
+    }
 
     const float h_scrollbar_size =
         (ImGui::GetScrollMaxX() > 0.0f) ? ImGui::GetStyle().ScrollbarSize : 0.0f;
-    ImGui::SetCursorPos(ImVec2(canvas_w, canvas_h - 1.0f - h_scrollbar_size));
+    // Content extent: the 1x1 dummy ends exactly at the chart's right edge, so a
+    // chart that fits never gains a horizontal scrollbar.
+    ImGui::SetCursorPos(ImVec2(std::max(0.0f, offset_x + view_w - 1.0f),
+                               view_h - 1.0f - h_scrollbar_size));
     ImGui::Dummy(ImVec2(1, 1));
 
     ImGui::EndChild();
+}
+
+ImVec2
+ComputeMemoryChartView::ToScreen(ImVec2 unscaled) const
+{
+    return ImVec2(m_view_origin_x + (unscaled.x - m_view_origin_x) * m_view_scale,
+                  m_view_origin_y + (unscaled.y - m_view_origin_y) * m_view_scale);
+}
+
+bool
+ComputeMemoryChartView::IsHoveringChartRect(ImVec2 unscaled_min, ImVec2 unscaled_max) const
+{
+    return ImGui::IsMouseHoveringRect(ToScreen(unscaled_min), ToScreen(unscaled_max));
 }
 
 void
@@ -1900,7 +2138,7 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
         ImVec2 row_max(block_x + block.w - ROW_INSET_X, cursor_y + ROW_HEIGHT - ROW_HOVER_INSET);
         if(ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
                                   ImGuiHoveredFlags_NoPopupHierarchy) &&
-           ImGui::IsMouseHoveringRect(row_min, row_max))
+           IsHoveringChartRect(row_min, row_max))
         {
             draw_list->AddRectFilled(row_min, row_max, ApplyAlpha(m_colors.border_hot, ROW_HOVER_ALPHA),
                                      ROW_HOVER_ROUNDING);
@@ -1918,6 +2156,13 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
         float value_w   = ImGui::CalcTextSize(value.c_str()).x;
         float value_x   = block_x + block.w - BLOCK_TEXT_PAD - value_w;
         ImU32 value_col = available ? accent : m_colors.text_dim;
+        // A difference reads by its direction.
+        double a = 0.0;
+        double b = 0.0;
+        if(available && DeltaValues(item.metric, a, b))
+        {
+            value_col = b > a ? m_colors.delta_up : b < a ? m_colors.delta_down : m_colors.text_dim;
+        }
         DrawTextWithTooltip(draw_list, {value_x, cursor_y}, value_col, value.c_str(),
                             item.metric, false, true);
 
@@ -2595,7 +2840,7 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                                           const MemChartMetricRef& ref,
                                           bool show_description, bool show_raw_value)
 {
-    if(!ImGui::IsMouseHoveringRect(hover_min, hover_max) ||
+    if(!IsHoveringChartRect(hover_min, hover_max) ||
        !ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
                                ImGuiHoveredFlags_NoPopupHierarchy))
         return;
@@ -2631,16 +2876,48 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
         if(show_val)
         {
             if(ref.valid || has_desc) ImGui::Spacing();
-            ImGui::Text("Value: %s",
-                        FormatMetricValueRaw(metric->values.begin()->second).c_str());
+            if(m_delta_target)
+            {
+                ShowDeltaValues(ref);
+            }
+            else
+            {
+                ImGui::Text("Value: %s",
+                            FormatMetricValueRaw(metric->values.begin()->second).c_str());
+            }
         }
         EndTooltipStyled();
     }
     else if(show_raw_value && has_value)
     {
-        ImGui::SetTooltip("%s",
-                          FormatMetricValueRaw(metric->values.begin()->second).c_str());
+        if(m_delta_target)
+        {
+            BeginTooltipStyled();
+            ShowDeltaValues(ref);
+            EndTooltipStyled();
+        }
+        else
+        {
+            ImGui::SetTooltip("%s",
+                              FormatMetricValueRaw(metric->values.begin()->second).c_str());
+        }
     }
+}
+
+void
+ComputeMemoryChartView::ShowDeltaValues(const MemChartMetricRef& ref) const
+{
+    double a = 0.0;
+    double b = 0.0;
+    if(!DeltaValues(ref, a, b))
+    {
+        ImGui::TextDisabled("Not available for both A and B");
+        return;
+    }
+    ImGui::Text("A: %s", FormatMetricValueRaw(a).c_str());
+    ImGui::Text("B: %s", FormatMetricValueRaw(b).c_str());
+    ImGui::Text("B - A: %s%s%s", b > a ? "+" : "", FormatMetricValueRaw(b - a).c_str(),
+                FormatChangeSuffix(a, b).c_str());
 }
 
 void

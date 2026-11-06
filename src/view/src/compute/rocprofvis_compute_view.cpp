@@ -3,23 +3,19 @@
 
 #include "rocprofvis_compute_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
-#include "rocprofvis_compute_comparison.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_summary.h"
-#include "rocprofvis_compute_table_view.h"
 #include "rocprofvis_presets.h"
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 #    include "rocprofvis_compute_tester.h"
 #endif
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "isa/rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
 #include <algorithm>
@@ -28,6 +24,15 @@ namespace RocProfVis
 {
 namespace View
 {
+
+// First-open placement of the Summary window, relative to the main viewport's
+// work area (matches the system-trace summary's defaults).
+constexpr ImVec2 SUMMARY_WINDOW_RELATIVE_POS  = ImVec2(0.1f, 0.2f);
+constexpr float  SUMMARY_WINDOW_RELATIVE_SIZE = 0.8f;
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+constexpr ImVec2 TESTER_WINDOW_RELATIVE_POS  = ImVec2(0.15f, 0.15f);
+constexpr float  TESTER_WINDOW_RELATIVE_SIZE = 0.7f;
+#endif
 
 constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
     "The file could not be loaded as a compatible compute profiling "
@@ -61,17 +66,46 @@ HasIsaLines(const std::vector<const WorkloadInfo*>& workloads)
         });
 }
 
+// Placed on first use relative to the main viewport's work area.
+static void
+RenderFloatingWindow(const std::string& title, bool* open, ImVec2 relative_pos,
+                     float relative_size, ImGuiWindowFlags extra_flags, RocWidget& widget)
+{
+    if(!*open)
+    {
+        return;
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos + viewport->WorkSize * relative_pos,
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(viewport->WorkSize * relative_size, ImGuiCond_FirstUseEver);
+    if(ImGui::Begin(title.c_str(), open,
+                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                        extra_flags))
+    {
+        widget.Render();
+    }
+    ImGui::End();
+}
+
 ComputeView::ComputeView()
 : m_view_created(false)
 , m_error_dialog_state(ErrorDialogState::kNone)
 , m_toolbar_available_width(0.0f)
 , m_compute_selection(nullptr)
 , m_preset_browser(nullptr)
-, m_tab_container(nullptr)
+, m_kernel_details(nullptr)
 , m_popup_info({})
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
+    // Titled like the system-trace summary; the "###" ids give each compute
+    // project its own window placement.
+    m_summary_window_title = "Summary###" + m_widget_name + "_summary";
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_tester_window_title = "Compute Tester###" + m_widget_name + "_tester";
+#endif
 
     m_data_provider.SetTraceLoadedCallback([this](const std::string& trace_path,
                                                   uint64_t           response_code) {
@@ -157,7 +191,7 @@ ComputeView::Update()
        (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
-        m_view_created = (m_tab_container != nullptr);
+        m_view_created = (m_kernel_details != nullptr);
     }
 
     if(new_state == ProviderState::kReady)
@@ -166,10 +200,20 @@ ComputeView::Update()
         {
             m_preset_browser->Update();
         }
-        if(m_tab_container)
+        if(m_kernel_details)
         {
-            m_tab_container->Update();
+            m_kernel_details->Update();
         }
+        if(m_summary_view)
+        {
+            m_summary_view->Update();
+        }
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        if(m_compute_tester)
+        {
+            m_compute_tester->Update();
+        }
+#endif
     }
 
     ShowPendingDatabaseErrorDialog();
@@ -180,7 +224,11 @@ ComputeView::CreateView()
 {
     m_compute_selection.reset();
     m_preset_browser.reset();
-    m_tab_container.reset();
+    m_kernel_details.reset();
+    m_summary_view.reset();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_compute_tester.reset();
+#endif
 
     const WorkloadInfo* initial_workload = ValidateDatabase();
     if(!initial_workload)
@@ -191,7 +239,12 @@ ComputeView::CreateView()
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
     m_compute_selection->SelectWorkload(initial_workload->id);
     m_preset_browser = std::make_unique<PresetBrowser>();
-    CreateTabContainer();
+    m_summary_view =
+        std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection);
+    CreateKernelDetails();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_compute_tester = std::make_shared<ComputeTester>(m_data_provider, m_compute_selection);
+#endif
 }
 
 const WorkloadInfo*
@@ -233,36 +286,15 @@ ComputeView::ValidateDatabase()
 }
 
 void
-ComputeView::CreateTabContainer()
+ComputeView::CreateKernelDetails()
 {
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     const bool database_has_metrics   = HasAvailableMetrics(workloads);
-
-    m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(
-        ComputeSummaryView::CreateTabItem(m_data_provider, m_compute_selection));
-    m_tab_container->AddTab(
-        ComputeKernelDetailsView::CreateTabItem(m_data_provider,
-                                                m_compute_selection));
-
-    m_tab_container->AddTab(ComputeTableView::CreateTabItem(
-        m_data_provider, m_compute_selection, database_has_metrics));
-    m_tab_container->AddTab(ComputeComparisonView::CreateTabItem(
-        m_data_provider, m_compute_selection, database_has_metrics));
-    m_tab_container->AddTab(
-        ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
-
     const bool database_has_isa_lines = HasIsaLines(workloads);
-    m_tab_container->AddTab(
-        ComputeIsaView::CreateTabItem(m_data_provider, database_has_isa_lines));
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-
-    m_tab_container->AddTab(
-        ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
-#endif
-    m_tab_container->SetAllowToolTips(false);
+    m_kernel_details = std::make_shared<ComputeKernelDetailsView>(
+        m_data_provider, m_compute_selection, database_has_metrics, database_has_isa_lines);
 }
 
 void
@@ -271,7 +303,11 @@ ComputeView::DestroyView()
     m_view_created       = false;
     m_error_dialog_state = ErrorDialogState::kNone;
     m_popup_info         = {};
-    m_tab_container.reset();
+    m_kernel_details.reset();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_compute_tester.reset();
+#endif
+    m_summary_view.reset();
     m_compute_selection.reset();
     m_preset_browser.reset();
 }
@@ -300,10 +336,26 @@ ComputeView::Render()
         {
             m_preset_browser->Render();
         }
-        if(m_tab_container)
+        if(m_kernel_details)
         {
-            m_tab_container->Render();
+            m_kernel_details->Render();
         }
+        if(m_summary_view)
+        {
+            RenderFloatingWindow(
+                m_summary_window_title, &m_settings_manager.GetAppWindowSettings().show_summary,
+                SUMMARY_WINDOW_RELATIVE_POS, SUMMARY_WINDOW_RELATIVE_SIZE,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse,
+                *m_summary_view);
+        }
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        if(m_compute_tester)
+        {
+            RenderFloatingWindow(m_tester_window_title, ComputeTester::VisiblePtr(),
+                                 TESTER_WINDOW_RELATIVE_POS, TESTER_WINDOW_RELATIVE_SIZE,
+                                 ImGuiWindowFlags_None, *m_compute_tester);
+        }
+#endif
     }
 }
 
@@ -369,8 +421,11 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
-    RenderWorkloadSelection();
-    VerticalSeparator(&m_settings_manager);
+    if(m_kernel_details)
+    {
+        m_kernel_details->RenderLayoutControls();
+        VerticalSeparator(&m_settings_manager);
+    }
     if(m_toolbar_available_width != 0.0)
     {
         ImGui::Dummy(
@@ -389,80 +444,6 @@ ComputeView::RenderToolbar()
     // pop child window style
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(2);
-}
-
-void
-ComputeView::RenderWorkloadSelection()
-{
-    if(!m_compute_selection)
-    {
-        return;
-    }
-
-    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
-
-    const std::vector<const WorkloadInfo*>& workloads =
-        m_data_provider.ComputeModel().GetWorkloadList();
-
-    uint32_t            workload_id       = m_compute_selection->GetSelectedWorkload();
-    const WorkloadInfo* selected_workload =
-        m_data_provider.ComputeModel().GetWorkload(workload_id);
-    ImGui::Text("Workload:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
-    ImGui::BeginDisabled(workloads.empty());
-    PushComboStyles();
-    if(ImGui::BeginCombo("##Workloads",
-                         selected_workload ? selected_workload->name.c_str() : "-"))
-    {
-
-        for(const WorkloadInfo* workload : workloads)
-        {
-            ImGui::PushID(static_cast<int>(workload->id));
-            if(ImGui::Selectable("", workload_id == workload->id))
-            {
-                m_compute_selection->SelectWorkload(workload->id);
-            }
-            ImGui::SameLine(ImGui::GetCursorPosX());
-            ElidedText(workload->name.c_str(), ImGui::GetContentRegionAvail().x,
-                       ImGui::GetContentRegionAvail().x);
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
-    PopComboStyles();
-    ImGui::EndDisabled();
-    ImGui::SameLine(0, style.ItemSpacing.x);
-    VerticalSeparator();
-    ImGui::SameLine(0, style.ItemSpacing.x);
-    ImGui::Text("Kernel:");
-    ImGui::SameLine();
-    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
-
-    std::vector<const KernelInfo*> kernel_info_list =
-        m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
-    ImGui::BeginDisabled(kernel_info_list.empty());
-    PushComboStyles();
-    if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
-    {
-        for(const KernelInfo* info : kernel_info_list)
-        {
-            ImGui::PushID(static_cast<int>(info->id));
-            if(ImGui::Selectable("", kernel_id == info->id))
-            {
-                m_compute_selection->SelectKernel(info->id);
-            }
-            ImGui::SameLine(ImGui::GetCursorPosX());
-            ElidedText(info->name.c_str(), ImGui::GetContentRegionAvail().x,
-                       ImGui::GetContentRegionAvail().x);
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
-    PopComboStyles();
-    ImGui::EndDisabled();
 }
 
 void

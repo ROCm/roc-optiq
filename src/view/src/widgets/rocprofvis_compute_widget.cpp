@@ -12,10 +12,269 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <unordered_map>
+
 namespace RocProfVis
 {
 namespace View
 {
+
+// Row keys of metrics only B has carry this bit so they cannot collide with A's.
+constexpr uint32_t COMPARE_B_ONLY_ENTRY_BIT = 1u << 31;
+// Faintest shading of a changed value, so small changes still show.
+constexpr float  COMPARE_HIGHLIGHT_MIN_ALPHA = 0.1f;
+constexpr double PERCENT                     = 100.0;
+// Compare cells print two decimals.
+constexpr double COMPARE_SHOWN_SCALE = 100.0;
+// Header suffix per MetricCompareColumn.
+constexpr const char* COMPARE_COLUMN_SUFFIXES[] = { "A", "B", "\xCE\x94", "\xCE\x94%" };
+static_assert(sizeof(COMPARE_COLUMN_SUFFIXES) / sizeof(COMPARE_COLUMN_SUFFIXES[0]) ==
+                  METRIC_COMPARE_COLUMN_COUNT,
+              "one suffix per MetricCompareColumn");
+
+// A compared value and, per MetricCompareColumn, the index of its column (set
+// for the shown ones only).
+struct CompareValueColumns
+{
+    std::string                                       value_name;
+    std::array<uint32_t, METRIC_COMPARE_COLUMN_COUNT> columns = {};
+};
+
+MetricCompareOptions::MetricCompareOptions()
+{
+    columns.set(static_cast<size_t>(MetricCompareColumn::kA));
+    columns.set(static_cast<size_t>(MetricCompareColumn::kB));
+    columns.set(static_cast<size_t>(MetricCompareColumn::kDeltaPct));
+}
+
+const AvailableMetrics::Table*
+FindMetricTable(const WorkloadInfo* workload, uint32_t category_id, uint32_t table_id)
+{
+    if(!workload)
+    {
+        return nullptr;
+    }
+    std::unordered_map<uint32_t, AvailableMetrics::Category>::const_iterator category =
+        workload->available_metrics.tree.find(category_id);
+    if(category == workload->available_metrics.tree.end())
+    {
+        return nullptr;
+    }
+    std::unordered_map<uint32_t, AvailableMetrics::Table>::const_iterator table =
+        category->second.tables.find(table_id);
+    return table != category->second.tables.end() ? &table->second : nullptr;
+}
+
+// "Avg A", "Avg Δ%", ...; just the suffix for a table's single unnamed value.
+static std::string
+CompareColumnName(const std::string& value_name, MetricCompareColumn column)
+{
+    const char* suffix = COMPARE_COLUMN_SUFFIXES[static_cast<size_t>(column)];
+    return value_name.empty() ? std::string(suffix) : value_name + " " + suffix;
+}
+
+// A fetched metric's value `value_name`; its first value when the name is empty.
+static const double*
+MetricValueOf(const MetricValue* metric, const std::string& value_name)
+{
+    if(!metric || !metric->entry || metric->values.empty())
+    {
+        return nullptr;
+    }
+    if(value_name.empty())
+    {
+        return &metric->values.begin()->second;
+    }
+    std::unordered_map<std::string, double>::const_iterator it =
+        metric->values.find(value_name);
+    return it != metric->values.end() ? &it->second : nullptr;
+}
+
+// B's counterpart of A's `entry`: the same id with the same name, else the same
+// name (ids can shift between GPU architectures).
+static const AvailableMetrics::Entry*
+MatchCompareEntry(const AvailableMetrics::Table* b_table,
+                  const AvailableMetrics::Entry& entry)
+{
+    if(!b_table)
+    {
+        return nullptr;
+    }
+    std::unordered_map<uint32_t, AvailableMetrics::Entry&>::const_iterator it =
+        b_table->entries.find(entry.id);
+    if(it != b_table->entries.end() && it->second.name == entry.name)
+    {
+        return &it->second;
+    }
+    for(const AvailableMetrics::Entry* candidate : b_table->ordered_entries)
+    {
+        if(candidate->name == entry.name)
+        {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+// A's value names, then any only B has; one unnamed value when neither lists any.
+static std::vector<std::string>
+CompareValueNames(const AvailableMetrics::Table* a_table,
+                  const AvailableMetrics::Table* b_table)
+{
+    std::vector<std::string> names;
+    for(const AvailableMetrics::Table* table : { a_table, b_table })
+    {
+        if(!table)
+        {
+            continue;
+        }
+        for(const std::string& name : table->value_names)
+        {
+            if(std::find(names.begin(), names.end(), name) == names.end())
+            {
+                names.push_back(name);
+            }
+        }
+    }
+    if(names.empty())
+    {
+        names.emplace_back();
+    }
+    return names;
+}
+
+// Index of the column headed `name`, which is added when there is none.
+static uint32_t
+FindOrAddColumn(const std::string& name, std::map<uint32_t, std::string>& columns,
+                uint32_t& last_column_index)
+{
+    for(const std::pair<const uint32_t, std::string>& column : columns)
+    {
+        if(column.second == name)
+        {
+            return column.first;
+        }
+    }
+    columns[last_column_index] = name;
+    return last_column_index++;
+}
+
+// The values compared across `a_table` and `b_table`, with the shown comparison
+// columns of each (added to `columns` when missing).
+static std::vector<CompareValueColumns>
+AddCompareColumns(const AvailableMetrics::Table*   a_table,
+                  const AvailableMetrics::Table*   b_table,
+                  const MetricCompareOptions&      options,
+                  std::map<uint32_t, std::string>& columns, uint32_t& last_column_index)
+{
+    std::vector<std::string>         value_names = CompareValueNames(a_table, b_table);
+    std::vector<CompareValueColumns> values(value_names.size());
+    for(size_t value = 0; value < value_names.size(); ++value)
+    {
+        for(size_t column = 0; column < METRIC_COMPARE_COLUMN_COUNT; ++column)
+        {
+            if(options.columns.test(column))
+            {
+                values[value].columns[column] = FindOrAddColumn(
+                    CompareColumnName(value_names[value],
+                                      static_cast<MetricCompareColumn>(column)),
+                    columns, last_column_index);
+            }
+        }
+        values[value].value_name = std::move(value_names[value]);
+    }
+    return values;
+}
+
+static double
+RoundToShown(double value)
+{
+    return std::round(value * COMPARE_SHOWN_SCALE) / COMPARE_SHOWN_SCALE;
+}
+
+static std::string
+FormatCompareNumber(const char* format, double value)
+{
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), format, value);
+    return buf;
+}
+
+// Fills the shown comparison cells of one value.
+static void
+FillCompareCells(MetricTableBase::Row& row, const CompareValueColumns& value,
+                 const double* a, const double* b, const MetricCompareOptions& options)
+{
+    const std::string a_text = a ? FormatCompareNumber("%.2f", *a) : std::string();
+    const std::string b_text = b ? FormatCompareNumber("%.2f", *b) : std::string();
+    std::string       delta_text;
+    std::string       pct_text;
+    std::string       tooltip;
+    ImU32             shade = 0;
+    if(a && b)
+    {
+        // Compared as shown, so a difference too small to show is no change.
+        const double shown_a = RoundToShown(*a);
+        const double delta   = RoundToShown(*b) - shown_a;
+        const bool   has_pct = shown_a != 0.0;
+        const double pct     = has_pct ? delta / std::fabs(shown_a) * PERCENT : 0.0;
+        delta_text           = FormatCompareNumber("%+.2f", delta);
+        if(has_pct || delta == 0.0)
+        {
+            pct_text = FormatCompareNumber("%+.1f%%", pct);
+        }
+        tooltip = "A: " + a_text + "\nB: " + b_text + "\n\xCE\x94: " + delta_text;
+        if(!pct_text.empty())
+        {
+            tooltip += " (" + pct_text + ")";
+        }
+        // Rising from zero has no percentage; shade it as a full change.
+        const double change = has_pct ? std::fabs(pct) : PERCENT;
+        if(delta != 0.0 && change >= options.highlight_pct)
+        {
+            const Colors color =
+                delta > 0.0 ? Colors::kComparisonGreater : Colors::kComparisonLesser;
+            const float alpha = std::clamp(static_cast<float>(change / PERCENT),
+                                           COMPARE_HIGHLIGHT_MIN_ALPHA, 1.0f);
+            shade = ApplyAlpha(SettingsManager::GetInstance().GetColor(color), alpha);
+        }
+    }
+
+    auto set_cell = [&](MetricCompareColumn column, const std::string& text,
+                        const std::string& cell_tooltip, ImU32 bg) {
+        if(!options.Shows(column))
+        {
+            return;
+        }
+        MetricTableBase::RowValue& cell =
+            row.values[value.columns[static_cast<size_t>(column)]];
+        cell.value    = text;
+        cell.tooltip  = cell_tooltip;
+        cell.bg_color = bg;
+    };
+    set_cell(MetricCompareColumn::kA, a_text, std::string(), 0);
+    set_cell(MetricCompareColumn::kB, b_text, std::string(), 0);
+    set_cell(MetricCompareColumn::kDelta, delta_text, tooltip, shade);
+    set_cell(MetricCompareColumn::kDeltaPct, pct_text, tooltip, shade);
+}
+
+// Fills every value's comparison cells from A's and B's fetched metric (either
+// may be null).
+static void
+FillCompareValues(MetricTableBase::Row&                   row,
+                  const std::vector<CompareValueColumns>& values, const MetricValue* a,
+                  const MetricValue* b, const MetricCompareOptions& options)
+{
+    for(const CompareValueColumns& value : values)
+    {
+        FillCompareCells(row, value, MetricValueOf(a, value.value_name),
+                         MetricValueOf(b, value.value_name), options);
+    }
+}
+
 MetricTableBase::MetricTableBase(std::string event_source_id)
 : m_max_rows_in_table(0)
 , m_event_source_id(std::move(event_source_id))
@@ -37,6 +296,13 @@ void
 MetricTableBase::SetPinMetricCallback(std::function<void(MetricId)> callback)
 {
     m_pin_metric_clicked = callback;
+}
+
+void
+MetricTableBase::SetEmbedded(bool embedded)
+{
+    m_embedded = embedded;
+    m_no_panel = embedded;
 }
 
 void
@@ -66,8 +332,10 @@ MetricTableBase::Render()
         }
     };
 
-    if(!m_table_title.empty())
+    if(!m_table_title.empty() && !m_embedded)
+    {
         SectionTitle(m_table_title.c_str());
+    }
 
     if(m_rows.empty())
     {
@@ -92,9 +360,26 @@ MetricTableBase::Render()
     const float row_hover_height =
         ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
-    const ImVec2 table_size = { 0, GetTableHeight() };
-    if(ImGui::BeginTable(m_table_id_str.c_str(), num_columns, m_table_flags,
-                         table_size))
+    // Embedded: every row, no vertical scroll (the container scrolls). A table
+    // that keeps ScrollX is still a child window, where a height of 0 would fill
+    // the container, so it is sized to its rows plus the horizontal scrollbar.
+    ImGuiTableFlags table_flags = m_table_flags;
+    float           table_h     = 0.0f;
+    if(m_embedded)
+    {
+        table_flags &= ~ImGuiTableFlags_ScrollY;
+        if(table_flags & ImGuiTableFlags_ScrollX)
+        {
+            table_h = style.ScrollbarSize +
+                      row_hover_height * static_cast<float>(m_rows.size() + 1);
+        }
+    }
+    else
+    {
+        table_h = GetTableHeight();
+    }
+    const ImVec2 table_size = { 0, table_h };
+    if(ImGui::BeginTable(m_table_id_str.c_str(), num_columns, table_flags, table_size))
     {
         ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
 
@@ -134,6 +419,12 @@ MetricTableBase::Render()
                                        settings.GetColor(Colors::kHighlightChart));
             }
 
+            // A metric only one side of a comparison has reads as secondary.
+            if(row.second.unmatched)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            }
             for(uint32_t column_index = 0; column_index < m_last_column_index;
                 column_index++)
             {
@@ -151,6 +442,10 @@ MetricTableBase::Render()
             }
 
             RenderUnitValue(row);
+            if(row.second.unmatched)
+            {
+                ImGui::PopStyleColor();
+            }
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -244,10 +539,15 @@ MetricTableBase::RenderRowValues(uint32_t                        column_index,
         }
         else
         {
-            CopyableTextUnformatted(row.second.values.at(column_index).value.c_str(),
+            const RowValue& cell = it->second;
+            if(cell.bg_color != 0)
+            {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, cell.bg_color);
+            }
+            CopyableTextUnformatted(cell.value.c_str(),
                                     "##value" + std::to_string(column_index),
                                     COPY_DATA_NOTIFICATION, false, true, menu_func);
-            RenderTooltip(row.second.values.at(column_index));
+            RenderTooltip(cell);
         }
     }
 }
@@ -256,6 +556,10 @@ void
 MetricTableBase::RenderPinCheckBox(std::pair<const MetricId, Row>& row)
 {
     ImGui::TableNextColumn();
+    if(!row.second.pinnable)
+    {
+        return;
+    }
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
     if(ImGui::Checkbox("", &m_rows[row.first].pinned))
     {
@@ -382,8 +686,9 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
             NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
                                                     NotificationLevel::Info);
         }
-        if(IsValueColumn(column_index))
-        // not equal pin column, MetricId, Metric Name and Metric Unit
+        // Value columns only (not the pin, id, name or unit). A B-only row has no
+        // metric id of A's to send.
+        if(IsValueColumn(column_index) && row.second.pinnable)
         {
             if(!m_event_source_id.empty() &&
                IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
@@ -405,6 +710,7 @@ void
 MetricTable::Populate(const AvailableMetrics::Table& table,
                            const MetricValueLookup&       get_value)
 {
+    m_table_flags &= ~(ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit);
     FillDefaultColumns(m_columns, m_last_column_index);
     SetTableTitle(table.name);
 
@@ -423,10 +729,7 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
     {
         Row row;
         MetricId metric_id{ entry->category_id, entry->table_id, entry->id };
-        row.values[1].value = metric_id.ToString();
-        row.values[2].value   = entry->name;
-        row.values[2].tooltip = entry->description;
-        row.values[LAST_INDEX].value = entry->unit.empty() ? "N/A" : entry->unit;
+        FillEntryCells(*entry, row);
 
         auto metric_value = get_value(entry->id);
 
@@ -459,6 +762,89 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
         }
         m_rows[metric_id] = std::move(row);
     }
+}
+
+void
+MetricTable::PopulateComparison(uint32_t category_id, const AvailableMetrics::Table* a_table,
+                                const AvailableMetrics::Table* b_table,
+                                const MetricValueLookup& get_a,
+                                const MetricValueLookup& get_b,
+                                const MetricCompareOptions& options)
+{
+    Clear();
+    const AvailableMetrics::Table* named = a_table ? a_table : b_table;
+    if(!named)
+    {
+        return;
+    }
+    // Several columns per value: each at its natural width, scrolled sideways
+    // past the frozen id and name.
+    m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit;
+    FillDefaultColumns(m_columns, m_last_column_index);
+    SetTableTitle(named->name);
+    const std::vector<CompareValueColumns> values =
+        AddCompareColumns(a_table, b_table, options, m_columns, m_last_column_index);
+
+    std::set<uint32_t> matched_b;
+    if(a_table)
+    {
+        for(const AvailableMetrics::Entry* entry : a_table->ordered_entries)
+        {
+            const AvailableMetrics::Entry* b_entry = MatchCompareEntry(b_table, *entry);
+            if(!b_entry && !options.show_unmatched)
+            {
+                continue;
+            }
+            Row            row;
+            const MetricId metric_id{ entry->category_id, entry->table_id, entry->id };
+            FillEntryCells(*entry, row);
+            if(b_entry && b_entry->id != entry->id)
+            {
+                row.values[1].tooltip =
+                    "B: " + MetricId{ b_entry->category_id, b_entry->table_id, b_entry->id }
+                                .ToString();
+            }
+            row.unmatched = b_entry == nullptr;
+
+            const std::shared_ptr<MetricValue> a_value = get_a(entry->id);
+            const std::shared_ptr<MetricValue> b_value =
+                b_entry ? get_b(b_entry->id) : nullptr;
+            if(b_entry)
+            {
+                matched_b.insert(b_entry->id);
+            }
+            FillCompareValues(row, values, a_value.get(), b_value.get(), options);
+            m_rows[metric_id] = std::move(row);
+        }
+    }
+    if(b_table && options.show_unmatched)
+    {
+        for(const AvailableMetrics::Entry* entry : b_table->ordered_entries)
+        {
+            if(matched_b.count(entry->id) > 0)
+            {
+                continue;
+            }
+            Row row;
+            FillEntryCells(*entry, row);
+            row.values[1].tooltip = "Only in B";
+            row.pinnable          = false;
+            row.unmatched         = true;
+            FillCompareValues(row, values, nullptr, get_b(entry->id).get(), options);
+            m_rows[MetricId{ category_id, b_table->id, entry->id | COMPARE_B_ONLY_ENTRY_BIT }] =
+                std::move(row);
+        }
+    }
+}
+
+void
+MetricTable::FillEntryCells(const AvailableMetrics::Entry& entry, Row& row)
+{
+    row.values[1].value =
+        MetricId{ entry.category_id, entry.table_id, entry.id }.ToString();
+    row.values[2].value          = entry.name;
+    row.values[2].tooltip        = entry.description;
+    row.values[LAST_INDEX].value = entry.unit.empty() ? "N/A" : entry.unit;
 }
 
 void
@@ -514,6 +900,11 @@ PinnedMetricTable::Update()
             continue;
         }
 
+        if(m_compare)
+        {
+            FillCompareRow(metric_id, new_columns, new_last_column_index, new_rows);
+            continue;
+        }
         UpdateColumns(metric_id, new_columns, new_last_column_index);
         FillTableRow(metric_id, new_columns, new_rows);
     }
@@ -578,6 +969,53 @@ PinnedMetricTable::RefillTable(const std::set<MetricId>& pinned_ids)
 }
 
 void
+PinnedMetricTable::SetCompareSource(uint64_t client_id, uint32_t workload_id,
+                                    uint32_t kernel_id, const MetricCompareOptions& options)
+{
+    m_compare = CompareSource{ client_id, workload_id, kernel_id, options };
+}
+
+void
+PinnedMetricTable::ClearCompareSource()
+{
+    m_compare.reset();
+}
+
+void
+PinnedMetricTable::FillCompareRow(const MetricId&                  metric_id,
+                                  std::map<uint32_t, std::string>& columns,
+                                  uint32_t&                        last_column_index,
+                                  std::map<MetricId, Row>&         rows)
+{
+    ComputeDataModel&              model = m_data_provider.ComputeModel();
+    const AvailableMetrics::Table& table =
+        GetTable(metric_id, m_compute_selection->GetSelectedWorkload());
+    const AvailableMetrics::Table* b_table =
+        FindMetricTable(model.GetWorkload(m_compare->workload_id), metric_id.category_id,
+                        metric_id.table_id);
+    // Pins mix tables, so columns are the union of every pin's.
+    const std::vector<CompareValueColumns> values = AddCompareColumns(
+        &table, b_table, m_compare->options, columns, last_column_index);
+
+    Row row;
+    row.pinned = true;
+    FillMandatoryColumns(metric_id, table, row);
+    const AvailableMetrics::Entry* b_entry =
+        MatchCompareEntry(b_table, table.entries.at(metric_id.entry_id));
+    row.unmatched = b_entry == nullptr;
+
+    const std::shared_ptr<MetricValue> a_value = model.GetKernelMetricValue(
+        m_client_id, m_compute_selection->GetSelectedKernel(), metric_id);
+    const std::shared_ptr<MetricValue> b_value =
+        b_entry ? model.GetKernelMetricValue(m_compare->client_id, m_compare->kernel_id,
+                                             b_entry->category_id, b_entry->table_id,
+                                             b_entry->id)
+                : nullptr;
+    FillCompareValues(row, values, a_value.get(), b_value.get(), m_compare->options);
+    rows[metric_id] = std::move(row);
+}
+
+void
 PinnedMetricTable::AddRow(MetricId metric_id)
 {
     if(!HasMetricInCurrentWorkload(metric_id))
@@ -603,10 +1041,7 @@ PinnedMetricTable::UpdateColumns(MetricId                        metric_id,
 
     for(const auto& name : GetTable(metric_id, workload_id).value_names)
     {
-        if(GetColumnIndex(name, columns) == std::nullopt)
-        {
-            columns[last_column_index++] = name;
-        }
+        FindOrAddColumn(name, columns, last_column_index);
     }
 }
 

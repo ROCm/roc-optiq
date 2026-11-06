@@ -49,6 +49,7 @@ public:
     void SetSplit(float ratio) { m_split_ratio = ratio; };
     void SetSplitSpacing(float spacing) { m_split_spacing = spacing; };
     void ShowSplitter(bool show) { m_always_show_splitter = show; };
+    // Thickness of the draggable gutter between the two children.
     void SetSplitterSize(float size) { m_resize_grip_size = size; };
 
     float GetMinSize();

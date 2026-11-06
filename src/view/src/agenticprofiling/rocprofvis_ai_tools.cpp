@@ -1,12 +1,14 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// The dispatcher, plus the few helpers both halves of the tool set need. The
-// bodies themselves live next door: rocprofvis_ai_ui_tools.cpp for the tools
-// that change Optiq, rocprofvis_ai_data_tools.cpp for the ones that read the
-// trace. Each of those owns its own handler table, so this file never has to be
-// edited to add a tool - only the table in the file the body went into, and the
-// matching schema entry in rocprofvis_ai_tool_schema.cpp.
+// The dispatcher, plus the few helpers every body file needs. The bodies
+// themselves live next door: rocprofvis_ai_ui_tools.cpp for the tools that
+// change Optiq, rocprofvis_ai_data_tools.cpp and rocprofvis_ai_compute_tools.cpp
+// for the ones that read a system trace and a compute workload, and
+// rocprofvis_ai_script_tools.cpp for analysis scripts. Each of those owns its
+// own handler table, so this file never has to be edited to add a tool - only
+// the table in the file the body went into, and the matching schema entry in
+// rocprofvis_ai_tool_schema.cpp.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cctype>
@@ -219,16 +221,6 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         {
             return DoneResult("No trace is open.", "No trace");
         }
-        // Ask Optiq reads system traces. Refused once here rather than in every
-        // tool: the panel is a singleton, so a compute tab can be in front even
-        // when the panel was opened on a system trace.
-        if(context.is_compute)
-        {
-            return DoneResult(
-                "This is a compute trace, and Ask Optiq reads system traces. Tell "
-                "the user to open a system trace to ask about it.",
-                "Compute trace");
-        }
         // Park rather than fail. Loading a large trace takes far longer than a
         // round trip to the model, so answering "not ready" straight away only
         // teaches it to retry into the same wall, or to answer without the data
@@ -244,11 +236,26 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         }
     }
 
-    const AssistantToolTable tables[] = { GetAssistantUiToolHandlers(),
-                                          GetAssistantDataToolHandlers(),
-                                          GetAssistantScriptToolHandlers() };
-    for(const AssistantToolTable& table : tables)
+    // The two trace kinds have disjoint tool sets, and the schema the model was
+    // sent this round matches whichever one is in front. Searching only that
+    // set is what makes a name from the other kind come back as unknown rather
+    // than running against a model that holds nothing: a compute trace still
+    // has a TraceDataModel, it is simply empty, so a system data tool would
+    // answer confidently that there are no tracks and no events.
+    const AssistantToolTable system_tables[] = { GetAssistantUiToolHandlers(),
+                                                 GetAssistantDataToolHandlers(),
+                                                 GetAssistantScriptToolHandlers() };
+    const AssistantToolTable compute_tables[] = { GetAssistantSharedUiToolHandlers(),
+                                                  GetAssistantComputeToolHandlers() };
+
+    const AssistantToolTable* tables = context.is_compute ? compute_tables : system_tables;
+    const size_t              count =
+        context.is_compute ? sizeof(compute_tables) / sizeof(compute_tables[0])
+                           : sizeof(system_tables) / sizeof(system_tables[0]);
+
+    for(size_t t = 0; t < count; ++t)
     {
+        const AssistantToolTable& table = tables[t];
         for(size_t i = 0; i < table.count; ++i)
         {
             if(tool_name == table.entries[i].name)
@@ -259,7 +266,7 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
     }
 
     return DoneResult("Unknown tool \"" + tool_name + "\". Available tools: " +
-                          AssistantToolNameList() + ".",
+                          AssistantToolNameList(context.is_compute) + ".",
                       "Unknown tool");
 }
 

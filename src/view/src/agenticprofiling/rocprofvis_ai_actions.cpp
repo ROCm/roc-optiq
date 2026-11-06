@@ -316,7 +316,8 @@ OptiqActions::ActiveTab() const
 }
 
 bool
-OptiqActions::SelectTab(const std::string& name)
+OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
+                        std::string& selected_label)
 {
     AppWindow* app = AppWindow::GetInstance();
     if(app == nullptr || !app->GetTabContainer() || name.empty())
@@ -333,6 +334,8 @@ OptiqActions::SelectTab(const std::string& name)
     {
         return false;
     }
+    selected_id    = match->m_id;
+    selected_label = match->m_label;
     container->SetActiveTab(match->m_id);
     return true;
 }
@@ -351,9 +354,10 @@ OptiqActions::ActiveAnalysisTab() const
 }
 
 bool
-OptiqActions::SelectAnalysisTab(const std::string& name)
+OptiqActions::SelectAnalysisTab(const std::string& name, std::string& selected_label)
 {
-    return m_trace_view != nullptr && m_trace_view->SelectAnalysisTab(name);
+    return m_trace_view != nullptr &&
+           m_trace_view->SelectAnalysisTab(name, selected_label);
 }
 
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
@@ -367,7 +371,8 @@ OptiqActions::ProposeScript(const std::string& source)
     {
         return false;
     }
-    m_trace_view->SelectAnalysisTab("Script");
+    std::string script_tab;
+    m_trace_view->SelectAnalysisTab("Script", script_tab);
     return true;
 }
 

@@ -56,6 +56,8 @@ protected:
     uint64_t m_hottest_samples = 0;
 
     void               CalculateLineNumberWidth(size_t count);
+    float              CalculateTableInnerWidth() const;
+    void               UpdateTableInnerWidth(int code_column);
     void               RenderEmptyState(const char* data_name, const char* empty_message);
     void               RenderTableContextMenu();
     [[nodiscard]] bool BeginCodeRow(uint64_t row_id, uint64_t source_line_id);
@@ -79,9 +81,10 @@ protected:
     ImVec4 m_line_num_color;
 
 private:
-    CodeLoadState m_load_state     = CodeLoadState::kNotLoaded;
-    bool          m_retry_code     = false;
-    bool          m_retry_sampling = false;
+    CodeLoadState m_load_state                        = CodeLoadState::kNotLoaded;
+    bool          m_retry_code                        = false;
+    bool          m_retry_sampling                    = false;
+    float         m_minimum_table_width_in_characters = 0.0f;
 
     std::unordered_map<uint64_t, uint32_t> m_row_index_by_source_line;
 };
@@ -102,6 +105,8 @@ private:
     {
         kLineNumber,
         kSamplingState,
+        kWaveOccupancy,
+        kActiveThreads,
         kSourceText,
         kCount
     };
@@ -141,6 +146,8 @@ private:
     {
         kLineNumber,
         kSamplingState,
+        kWaveOccupancy,
+        kActiveThreads,
         kOffset,
         kInstruction,
         kCount

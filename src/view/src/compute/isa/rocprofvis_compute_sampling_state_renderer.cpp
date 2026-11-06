@@ -18,12 +18,99 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float       SAMPLING_STATE_BAR_HEIGHT_FRACTION              = 0.5f;
-constexpr float       SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS       = 14.0f;
+constexpr float       SAMPLING_BAR_HEIGHT_FRACTION                    = 0.9f;
 constexpr const char* SAMPLING_STATE_COLUMN_LABEL                     = "Sampling State";
 constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
 constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
 constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES               = 3.0f;
+constexpr float       SAMPLING_BAR_TEXT_PADDING_IN_CHARACTERS         = 0.35f;
+constexpr double      SAMPLING_BAR_PERCENT_SCALE                      = 100.0;
+constexpr float       SAMPLE_METRIC_TOOLTIP_WIDTH_IN_CHARACTERS       = 64.0f;
+
+struct SampleMetricPresentation
+{
+    const char* label;
+    const char* title;
+    const char* isa_description;
+    const char* source_description;
+    const char* developer_information;
+};
+
+static const SampleMetricPresentation&
+get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
+{
+    static constexpr SampleMetricPresentation OCCUPANCY{
+        "Wave occupancy %", "Wave occupancy",
+        "Wave occupancy (%) reported by the profiler at sampled PCs.\n"
+        "Average of this instruction's sampling records,\n"
+        "weighted by each record's sample count.\n"
+        "Bar scale: 0-100%, independent of the hottest instruction.",
+        "Wave occupancy (%) reported by the profiler at sampled PCs.\n"
+        "Average across instructions mapped to this source line,\n"
+        "weighted by sample count.\n"
+        "Bar scale: 0-100%, independent of the hottest source line.",
+        "DB: compute_pc_sample_state.wave_occupancy_percent\n"
+        "ISA: group by instruction_uuid. Source: first primary mapping per instruction\n"
+        "in the selected file; duplicate mappings and inline frames do not add weight.\n"
+        "SUM(total_count * percent) / SUM(total_count), ignoring zero-sample states.\n"
+        "Missing measurements propagate; invalid values or weight overflow are "
+        "unavailable.\n"
+        "Bar scale: 0-100%, independent of sample hotness."
+    };
+    static constexpr SampleMetricPresentation ACTIVE_THREADS{
+        "Active threads %", "Active threads",
+        "Active-thread percentage reported by the profiler at sampled PCs.\n"
+        "Average of this instruction's sampling records,\n"
+        "weighted by each record's sample count.\n"
+        "Separate from issued/stalled sample shares; bar scale: 0-100%.",
+        "Active-thread percentage reported by the profiler at sampled PCs.\n"
+        "Average across instructions mapped to this source line,\n"
+        "weighted by sample count.\n"
+        "Separate from issued/stalled sample shares; bar scale: 0-100%.",
+        "DB: compute_pc_sample_state.active_thread_percent\n"
+        "ISA: group by instruction_uuid. Source: first primary mapping per instruction\n"
+        "in the selected file; duplicate mappings and inline frames do not add weight.\n"
+        "SUM(total_count * percent) / SUM(total_count), ignoring zero-sample states.\n"
+        "Missing measurements propagate; invalid values or weight overflow are "
+        "unavailable.\n"
+        "Bar scale: 0-100%, independent of sample hotness."
+    };
+    return metric == SamplingStateRenderer::Metric::kWaveOccupancy ? OCCUPANCY
+                                                                   : ACTIVE_THREADS;
+}
+
+constexpr SamplingStateRenderer::Metric SAMPLING_COLUMN_METRICS[] = {
+    SamplingStateRenderer::Metric::kSamplingState,
+    SamplingStateRenderer::Metric::kWaveOccupancy,
+    SamplingStateRenderer::Metric::kActiveThreads
+};
+
+static const char*
+get_sampling_column_label(SamplingStateRenderer::Metric metric)
+{
+    return metric == SamplingStateRenderer::Metric::kSamplingState
+               ? SAMPLING_STATE_COLUMN_LABEL
+               : get_sample_metric_presentation(metric).label;
+}
+
+static const IsaDataBuilder::PercentageSummary&
+get_sample_metric_summary(const IsaDataBuilder::SamplingRow& row,
+                          SamplingStateRenderer::Metric      metric)
+{
+    return metric == SamplingStateRenderer::Metric::kWaveOccupancy ? row.wave_occupancy
+                                                                   : row.active_threads;
+}
+
+static void
+push_sample_metric_tooltip_wrap()
+{
+    const float width =
+        std::min(ImGui::CalcTextSize("0").x * SAMPLE_METRIC_TOOLTIP_WIDTH_IN_CHARACTERS,
+                 ImGui::GetWindowViewport()->WorkSize.x -
+                     ImGui::GetStyle().WindowPadding.x * 2.0f);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() +
+                           std::max(width, ImGui::GetTextLineHeight()));
+}
 
 struct StallReasonPresentation
 {
@@ -128,9 +215,9 @@ constexpr const char* SAMPLING_STATE_LOADING_TOOLTIP = "Loading sampling data...
 constexpr const char* SAMPLING_STATE_FAILED_TOOLTIP =
     "Sampling data could not be loaded.\nRight-click a column header to retry.";
 constexpr const char* SAMPLING_STATE_TOTALS_ONLY_TOOLTIP =
-    "Stall data could not be loaded. Showing total samples only.";
+    "Stall details could not be loaded. The bar shows total samples.";
 constexpr const char* SAMPLING_STATE_LOADING_DETAILS_TOOLTIP =
-    "Loading stall data. Showing total samples only.";
+    "Loading stall details. The bar shows total samples.";
 
 constexpr const char* SAMPLING_STATE_ISSUED_TEXT                = "Issued";
 constexpr const char* SAMPLING_STATE_UNCLASSIFIED_STALLS_TEXT   = "Unclassified stalls";
@@ -274,6 +361,13 @@ SamplingStateRenderer::RenderHeaderWithTooltip(int column, const char* label,
         return;
     }
     ImGui::TableHeader(label);
+    RenderHeaderTooltip(tooltip, render_user_content);
+}
+
+void
+SamplingStateRenderer::RenderHeaderTooltip(const HeaderTooltipText& tooltip,
+                                           void (*render_user_content)())
+{
     if(!ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
     {
         return;
@@ -304,52 +398,225 @@ SamplingStateRenderer::IsDisabled() const
     return m_load_state == LoadState::kLoading || m_load_state == LoadState::kFailed;
 }
 
-bool
-SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples)
+void
+SamplingStateRenderer::DrawBarValue(const BarPresentation& bar, const ImVec2& cell_start,
+                                    const ImVec2& cell_size, float bar_width)
 {
-    const SampleCounts&  counts     = row.sample_counts;
-    const CodeCellBounds cell       = get_code_cell_bounds();
-    const float          bar_height = cell.size.y * SAMPLING_STATE_BAR_HEIGHT_FRACTION;
-    const ImVec2         bar_start(cell.start.x,
-                                   cell.start.y + (cell.size.y - bar_height) * 0.5f);
-    const double         bar_percent =
-        row.sampling.availability == SamplingAvailability::kInvalid
-            ? 0.0
-            : IsaDataBuilder::CalculatePercentage(counts.total_count, hottest_samples);
-    const float  bar_width = cell.size.x * static_cast<float>(bar_percent / 100.0);
-    const ImVec2 bar_end(bar_start.x + bar_width, bar_start.y + bar_height);
-    if(!IsDisabled() && bar_width > 0.0f)
+    const std::string text = IsaDataBuilder::FormatSamplePercentage(
+        { bar.available ? SamplingAvailability::kValid : SamplingAvailability::kMissing,
+          bar.percent });
+    const ImVec2 cell_end(cell_start.x + cell_size.x, cell_start.y + cell_size.y);
+    ImDrawList*  draw_list = ImGui::GetWindowDrawList();
+    const float  text_padding =
+        ImGui::CalcTextSize("0").x * SAMPLING_BAR_TEXT_PADDING_IN_CHARACTERS;
+    ImVec2 text_start(cell_start.x + text_padding, cell_start.y);
+    ImU32  text_color      = m_settings.GetColor(Colors::kTextDim);
+    float  filled_text_end = cell_start.x;
+    if(bar.available)
     {
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->PushClipRect(cell.start, cell.End(), true);
-        draw_list->AddRectFilled(bar_start, bar_end,
-                                 m_settings.GetColor(Colors::kTextDim));
+        const float text_width     = ImGui::CalcTextSize(text.c_str()).x;
+        const bool  text_fits_fill = bar_width >= text_width + text_padding * 2.0f;
+        text_color = m_settings.GetColor(text_fits_fill ? Colors::kTextOnAccent
+                                                        : Colors::kTextMain);
+        if(!text_fits_fill)
+        {
+            if(cell_size.x - bar_width >= text_width + text_padding * 2.0f)
+            {
+                // Keep short-fill values fully outside the bar, including zero.
+                text_start.x += bar_width;
+            }
+            else
+            {
+                // Narrow columns may split the value across filled and empty space.
+                filled_text_end = cell_start.x + bar_width;
+            }
+        }
+    }
+    if(filled_text_end > cell_start.x)
+    {
+        draw_list->PushClipRect(ImVec2(filled_text_end, cell_start.y), cell_end, true);
+        draw_list->AddText(text_start, text_color, text.c_str());
+        draw_list->PopClipRect();
+        draw_list->PushClipRect(cell_start, ImVec2(filled_text_end, cell_end.y), true);
+        draw_list->AddText(text_start, m_settings.GetColor(Colors::kTextOnAccent),
+                           text.c_str());
+        draw_list->PopClipRect();
+    }
+    else
+    {
+        draw_list->AddText(text_start, text_color, text.c_str());
+    }
+}
+
+void
+SamplingStateRenderer::DrawBar(const BarPresentation& bar, const ImVec2& cell_start,
+                               const ImVec2& cell_size)
+{
+    const ImVec2 cell_end(cell_start.x + cell_size.x, cell_start.y + cell_size.y);
+    const float  bar_height = cell_size.y * SAMPLING_BAR_HEIGHT_FRACTION;
+    const float  bar_width =
+        bar.available
+             ? cell_size.x * static_cast<float>(bar.percent / SAMPLING_BAR_PERCENT_SCALE)
+             : 0.0f;
+    const ImVec2 start(cell_start.x, cell_start.y + (cell_size.y - bar_height) * 0.5f);
+    const ImVec2 end(start.x + bar_width, start.y + bar_height);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->PushClipRect(cell_start, cell_end, true);
+    if(bar_width > 0.0f)
+    {
+        draw_list->AddRectFilled(start, end, m_settings.GetColor(bar.color));
+        if(bar.breakdown)
+        {
+            const float issue_width =
+                bar_width * static_cast<float>(bar.breakdown->sampling.issue_percent /
+                                               SAMPLING_BAR_PERCENT_SCALE);
+            const float stall_width =
+                bar_width * static_cast<float>(bar.breakdown->sampling.stall_percent /
+                                               SAMPLING_BAR_PERCENT_SCALE);
+            const ImVec2 issue_end(start.x + issue_width, end.y);
+            if(issue_width > 0.0f)
+            {
+                draw_list->AddRectFilled(start, issue_end,
+                                         m_settings.GetColor(Colors::kTextSuccess));
+            }
+            DrawStallReasonSegments(*bar.breakdown, ImVec2(issue_end.x, start.y),
+                                    ImVec2(issue_end.x + stall_width, end.y));
+        }
+        draw_list->AddRect(start, end, m_settings.GetColor(Colors::kBorderGray));
+    }
+    if(bar.show_value)
+    {
+        DrawBarValue(bar, cell_start, cell_size, bar_width);
+    }
+    draw_list->PopClipRect();
+}
+
+const char*
+SamplingStateRenderer::GetMetricStatusText(const SamplingRow& row, Metric metric) const
+{
+    if(IsDisabled())
+    {
+        return m_load_state == LoadState::kLoading ? "loading" : "load failed";
+    }
+    const SamplingAvailability availability =
+        get_sample_metric_summary(row, metric).availability;
+    if(availability == SamplingAvailability::kValid)
+    {
+        return nullptr;
+    }
+    if(availability == SamplingAvailability::kInvalid)
+    {
+        return "invalid";
+    }
+    if(row.sample_counts.total_count == 0)
+    {
+        return "no samples";
+    }
+    return "not recorded";
+}
+
+void
+SamplingStateRenderer::RenderMetricValue(const SamplingRow& row, Metric metric)
+{
+    const SampleMetricPresentation& presentation = get_sample_metric_presentation(metric);
+    const IsaDataBuilder::PercentageSummary& summary =
+        get_sample_metric_summary(row, metric);
+    const std::string value = IsaDataBuilder::FormatSamplePercentage(
+        IsDisabled() ? IsaDataBuilder::PercentageSummary{} : summary);
+    const char* status = GetMetricStatusText(row, metric);
+    if(status)
+    {
+        ImGui::Text("%s: %s (%s)", presentation.title, value.c_str(), status);
+    }
+    else
+    {
+        ImGui::Text("%s: %s", presentation.title, value.c_str());
+    }
+}
+
+void
+SamplingStateRenderer::RenderMetricTooltip(const SamplingRow& row, Metric metric)
+{
+    BeginTooltipStyled();
+    RenderMetricValue(row, metric);
+    const std::string samples =
+        IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
+    ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, samples.c_str());
+    EndTooltipStyled();
+}
+
+void
+SamplingStateRenderer::RenderMetricsSummary(const SamplingRow& row)
+{
+    ImGui::Separator();
+    RenderMetricValue(row, Metric::kWaveOccupancy);
+    RenderMetricValue(row, Metric::kActiveThreads);
+}
+
+bool
+SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples,
+                                  Metric metric)
+{
+    const bool      state_metric = metric == Metric::kSamplingState;
+    BarPresentation bar;
+    bar.show_value = !state_metric;
+    if(state_metric)
+    {
+        bar.available =
+            !IsDisabled() && row.sampling.availability != SamplingAvailability::kInvalid;
+        bar.percent = row.sampling.availability == SamplingAvailability::kInvalid
+                          ? 0.0
+                          : IsaDataBuilder::CalculatePercentage(
+                                row.sample_counts.total_count, hottest_samples);
         if(m_load_state == LoadState::kReady &&
            row.sampling.availability == SamplingAvailability::kValid)
         {
-            const float issue_width =
-                bar_width * static_cast<float>(row.sampling.issue_percent / 100.0);
-            const float stall_width =
-                bar_width * static_cast<float>(row.sampling.stall_percent / 100.0);
-            const ImVec2 issue_end(bar_start.x + issue_width, bar_end.y);
-            if(issue_width > 0.0f)
-            {
-                draw_list->AddRectFilled(bar_start, issue_end,
-                                         m_settings.GetColor(Colors::kTextSuccess));
-            }
-            DrawStallReasonSegments(row, ImVec2(issue_end.x, bar_start.y),
-                                    ImVec2(issue_end.x + stall_width, bar_end.y));
+            bar.breakdown = &row;
         }
-        draw_list->AddRect(bar_start, bar_end, m_settings.GetColor(Colors::kBorderGray));
-        draw_list->PopClipRect();
     }
+    else
+    {
+        const IsaDataBuilder::PercentageSummary& summary =
+            get_sample_metric_summary(row, metric);
+        bar.available =
+            !IsDisabled() && summary.availability == SamplingAvailability::kValid;
+        bar.percent = summary.percent;
+        bar.color   = Colors::kPcSamplingMetricBar;
+    }
+    const CodeCellBounds cell = get_code_cell_bounds();
+    DrawBar(bar, cell.start, cell.size);
     const CodeCellInteraction interaction =
-        finish_code_cell(cell, "##sampling_state_cell", IsDisabled());
+        finish_code_cell(cell, "##sampling_bar_cell", state_metric && IsDisabled());
     if(interaction.hovered)
     {
-        RenderTooltip(row, bar_percent);
+        if(state_metric)
+        {
+            RenderTooltip(row, bar.percent);
+        }
+        else
+        {
+            RenderMetricTooltip(row, metric);
+        }
     }
     return interaction.clicked;
+}
+
+bool
+SamplingStateRenderer::RenderCells(const SamplingRow& row, uint64_t hottest_samples,
+                                   int first_column)
+{
+    bool clicked = false;
+    for(size_t i = 0; i < std::size(SAMPLING_COLUMN_METRICS); ++i)
+    {
+        const int column = first_column + static_cast<int>(i);
+        if(ImGui::TableSetColumnIndex(column))
+        {
+            ImGui::PushID(column);
+            clicked |= RenderCell(row, hottest_samples, SAMPLING_COLUMN_METRICS[i]);
+            ImGui::PopID();
+        }
+    }
+    return clicked;
 }
 
 const char*
@@ -403,9 +670,14 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
 {
     if(IsDisabled())
     {
-        SetTooltipStyled("%s", m_load_state == LoadState::kLoading
+        BeginTooltipStyled();
+        push_sample_metric_tooltip_wrap();
+        ImGui::TextUnformatted(m_load_state == LoadState::kLoading
                                    ? SAMPLING_STATE_LOADING_TOOLTIP
                                    : SAMPLING_STATE_FAILED_TOOLTIP);
+        RenderMetricsSummary(row);
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
         return;
     }
     if(m_load_state != LoadState::kReady ||
@@ -414,6 +686,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
         const std::string total_count =
             IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
         BeginTooltipStyled();
+        push_sample_metric_tooltip_wrap();
         const char* description = m_load_state == LoadState::kTotalsOnly
                                       ? SAMPLING_STATE_TOTALS_ONLY_TOOLTIP
                                   : m_load_state == LoadState::kLoadingDetails
@@ -431,6 +704,8 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
         {
             ImGui::Text(SAMPLING_STATE_BAR_PERCENT_TOOLTIP, bar_percent);
         }
+        RenderMetricsSummary(row);
+        ImGui::PopTextWrapPos();
         EndTooltipStyled();
         return;
     }
@@ -453,6 +728,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
     }
     RenderTooltipTable(rows, layout, mouse_wheel);
     RenderFooter(row);
+    RenderMetricsSummary(row);
     ImGui::PopTextWrapPos();
     ImGui::PopID();
     ImGui::PopID();
@@ -643,15 +919,21 @@ SamplingStateRenderer::RenderTooltipTable(const TooltipRows&        rows,
 }
 
 void
-SamplingStateRenderer::SetupColumn()
+SamplingStateRenderer::SetupColumns()
 {
     // Reuse ImGui's column menu and append the layer retry action after the headers.
     ImGui::GetCurrentTable()->DisableDefaultContextMenu = true;
-    const float sampling_state_column_width =
-        std::max(ImGui::CalcTextSize(SAMPLING_STATE_COLUMN_LABEL).x,
-                 ImGui::CalcTextSize("0").x * SAMPLING_STATE_COLUMN_WIDTH_IN_CHARACTERS);
-    ImGui::TableSetupColumn(SAMPLING_STATE_COLUMN_LABEL, ImGuiTableColumnFlags_WidthFixed,
-                            sampling_state_column_width);
+    for(const Metric metric : SAMPLING_COLUMN_METRICS)
+    {
+        const char* label = get_sampling_column_label(metric);
+        const float width =
+            std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);
+        const ImGuiTableColumnFlags flags =
+            ImGuiTableColumnFlags_WidthFixed |
+            (metric == Metric::kSamplingState ? ImGuiTableColumnFlags_None
+                                              : ImGuiTableColumnFlags_DefaultHide);
+        ImGui::TableSetupColumn(label, flags, width);
+    }
 }
 
 bool
@@ -673,25 +955,44 @@ SamplingStateRenderer::RenderTableContextMenu()
 }
 
 void
-SamplingStateRenderer::RenderHeader(int column, CodePane pane)
+SamplingStateRenderer::RenderHeaders(int first_column, CodePane pane)
 {
-    const HeaderTooltipText& pane_tooltip = pane == CodePane::kSource
-                                               ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
-                                               : SAMPLING_STATE_HEADER_TOOLTIP;
+    for(size_t i = 0; i < std::size(SAMPLING_COLUMN_METRICS); ++i)
+    {
+        RenderHeader(first_column + static_cast<int>(i), SAMPLING_COLUMN_METRICS[i],
+                     pane);
+    }
+}
+
+void
+SamplingStateRenderer::RenderHeader(int column, Metric metric, CodePane pane)
+{
+    HeaderTooltipText tooltip = pane == CodePane::kSource
+                                    ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
+                                    : SAMPLING_STATE_HEADER_TOOLTIP;
+    if(metric != Metric::kSamplingState)
+    {
+        const SampleMetricPresentation& presentation =
+            get_sample_metric_presentation(metric);
+        tooltip = { pane == CodePane::kSource ? presentation.source_description
+                                              : presentation.isa_description,
+                    presentation.developer_information };
+    }
     if(IsDisabled())
     {
-        const HeaderTooltipText tooltip{
-            m_load_state == LoadState::kLoading ? SAMPLING_STATE_LOADING_TOOLTIP
-                                                : SAMPLING_STATE_FAILED_TOOLTIP,
-            pane_tooltip.developer_information
-        };
+        tooltip.user_description = m_load_state == LoadState::kLoading
+                                       ? SAMPLING_STATE_LOADING_TOOLTIP
+                                       : SAMPLING_STATE_FAILED_TOOLTIP;
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-        RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, tooltip);
-        ImGui::PopStyleColor();
-        return;
     }
-    RenderHeaderWithTooltip(column, SAMPLING_STATE_COLUMN_LABEL, pane_tooltip,
-                            render_sampling_state_color_legend);
+    RenderHeaderWithTooltip(column, get_sampling_column_label(metric), tooltip,
+                            metric == Metric::kSamplingState && !IsDisabled()
+                                ? render_sampling_state_color_legend
+                                : nullptr);
+    if(IsDisabled())
+    {
+        ImGui::PopStyleColor();
+    }
 }
 
 }  // namespace View

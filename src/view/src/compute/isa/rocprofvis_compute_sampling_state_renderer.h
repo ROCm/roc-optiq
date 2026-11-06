@@ -69,8 +69,7 @@ public:
     void RenderHeader(int column, CodePane pane = CodePane::kIsa);
     // Returns whether the cell was clicked, for the owning widget's row selection.
     [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
-                                  uint64_t                           hottest_samples,
-                                  CodePane pane = CodePane::kIsa);
+                                  uint64_t                           hottest_samples);
 
 private:
     using SamplingRow          = IsaDataBuilder::SamplingRow;
@@ -99,12 +98,6 @@ private:
     };
     using TooltipRows = std::vector<TooltipRow>;
 
-    struct MetricTooltipText
-    {
-        const char* status;
-        const char* description;
-    };
-
     struct TooltipTableLayout
     {
         ImVec2 size;
@@ -126,19 +119,18 @@ private:
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
                             float mouse_wheel);
-    MetricTooltipText GetMetricTooltipText(const SamplingRow& row, Metric metric) const;
-    void              RenderMetricValue(const SamplingRow& row, Metric metric);
-    void RenderMetricTooltip(const SamplingRow& row, Metric metric, CodePane pane);
-    void RenderMetricsSummary(const SamplingRow& row, CodePane pane);
-    void RenderMetricAggregation(CodePane pane);
-    void RenderTooltip(const SamplingRow& row, double bar_percent, CodePane pane);
-    void RenderSummary(const SamplingRow& row);
-    void RenderFooter(const SamplingRow& row);
-    void DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,
-                                 const ImVec2& end);
+    const char* GetMetricStatusText(const SamplingRow& row, Metric metric) const;
+    void        RenderMetricValue(const SamplingRow& row, Metric metric);
+    void        RenderMetricTooltip(const SamplingRow& row, Metric metric);
+    void        RenderMetricsSummary(const SamplingRow& row);
+    void        RenderTooltip(const SamplingRow& row, double bar_percent);
+    void        RenderSummary(const SamplingRow& row);
+    void        RenderFooter(const SamplingRow& row);
+    void        DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,
+                                        const ImVec2& end);
 
     SettingsManager& m_settings;
-    LoadState        m_load_state = LoadState::kReady;
+    LoadState        m_load_state      = LoadState::kReady;
     Metric           m_selected_metric = Metric::kSamplingState;
 };
 

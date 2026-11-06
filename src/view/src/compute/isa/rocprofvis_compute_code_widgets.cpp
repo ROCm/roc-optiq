@@ -417,8 +417,7 @@ SourceCodeWidget::RenderLine(uint32_t index)
     ImGui::PushID(static_cast<int>(index));
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSamplingMetric)))
     {
-        row_clicked |= m_sampling_renderer.RenderCell(
-            source_row, m_hottest_samples, SamplingStateRenderer::CodePane::kSource);
+        row_clicked |= m_sampling_renderer.RenderCell(source_row, m_hottest_samples);
     }
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSourceText)))
     {

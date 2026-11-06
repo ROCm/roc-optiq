@@ -42,10 +42,12 @@ get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
     static constexpr SampleMetricPresentation OCCUPANCY{
         "Wave occupancy %", "Wave occupancy",
         "Wave occupancy (%) reported by the profiler at sampled PCs.\n"
-        "Sample-weighted mean for this instruction.\n"
+        "Average of this instruction's sampling records,\n"
+        "weighted by each record's sample count.\n"
         "Bar scale: 0-100%, independent of the hottest instruction.",
         "Wave occupancy (%) reported by the profiler at sampled PCs.\n"
-        "Sample-weighted mean over this line's mapped instructions.\n"
+        "Average across instructions mapped to this source line,\n"
+        "weighted by sample count.\n"
         "Bar scale: 0-100%, independent of the hottest source line.",
         "DB: compute_pc_sample_state.wave_occupancy_percent\n"
         "ISA: group by instruction_uuid. Source: first primary mapping per instruction\n"
@@ -58,10 +60,12 @@ get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
     static constexpr SampleMetricPresentation ACTIVE_THREADS{
         "Active threads %", "Active threads",
         "Active-thread percentage reported by the profiler at sampled PCs.\n"
-        "Sample-weighted mean for this instruction.\n"
+        "Average of this instruction's sampling records,\n"
+        "weighted by each record's sample count.\n"
         "Separate from issued/stalled sample shares; bar scale: 0-100%.",
         "Active-thread percentage reported by the profiler at sampled PCs.\n"
-        "Sample-weighted mean over this line's mapped instructions.\n"
+        "Average across instructions mapped to this source line,\n"
+        "weighted by sample count.\n"
         "Separate from issued/stalled sample shares; bar scale: 0-100%.",
         "DB: compute_pc_sample_state.active_thread_percent\n"
         "ISA: group by instruction_uuid. Source: first primary mapping per instruction\n"
@@ -487,33 +491,28 @@ SamplingStateRenderer::DrawBar(const BarPresentation& bar, const ImVec2& cell_st
     draw_list->PopClipRect();
 }
 
-SamplingStateRenderer::MetricTooltipText
-SamplingStateRenderer::GetMetricTooltipText(const SamplingRow& row, Metric metric) const
+const char*
+SamplingStateRenderer::GetMetricStatusText(const SamplingRow& row, Metric metric) const
 {
     if(IsDisabled())
     {
-        return m_load_state == LoadState::kLoading
-                   ? MetricTooltipText{ "loading", SAMPLING_STATE_LOADING_TOOLTIP }
-                   : MetricTooltipText{ "load failed", SAMPLING_STATE_FAILED_TOOLTIP };
+        return m_load_state == LoadState::kLoading ? "loading" : "load failed";
     }
     const SamplingAvailability availability =
         get_sample_metric_summary(row, metric).availability;
     if(availability == SamplingAvailability::kValid)
     {
-        return { nullptr, nullptr };
+        return nullptr;
     }
     if(availability == SamplingAvailability::kInvalid)
     {
-        return { "invalid",
-                 "A recorded percentage is outside 0-100%, is not finite, "
-                 "or the contributing sample counts exceed the supported range." };
+        return "invalid";
     }
     if(row.sample_counts.total_count == 0)
     {
-        return { "no samples", SAMPLING_STATE_NO_SAMPLES_TOOLTIP };
+        return "no samples";
     }
-    return { "not recorded", "No measurement was recorded for one or more contributing "
-                             "samples. This is different from a measured zero." };
+    return "not recorded";
 }
 
 void
@@ -524,10 +523,10 @@ SamplingStateRenderer::RenderMetricValue(const SamplingRow& row, Metric metric)
         get_sample_metric_summary(row, metric);
     const std::string value = IsaDataBuilder::FormatSamplePercentage(
         IsDisabled() ? IsaDataBuilder::PercentageSummary{} : summary);
-    const MetricTooltipText tooltip = GetMetricTooltipText(row, metric);
-    if(tooltip.status)
+    const char* status = GetMetricStatusText(row, metric);
+    if(status)
     {
-        ImGui::Text("%s: %s (%s)", presentation.title, value.c_str(), tooltip.status);
+        ImGui::Text("%s: %s (%s)", presentation.title, value.c_str(), status);
     }
     else
     {
@@ -536,67 +535,26 @@ SamplingStateRenderer::RenderMetricValue(const SamplingRow& row, Metric metric)
 }
 
 void
-SamplingStateRenderer::RenderMetricAggregation(CodePane pane)
-{
-    ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
-    ImGui::TextWrapped("%s",
-                       pane == CodePane::kSource
-                           ? "Sample-weighted mean over this line's mapped instructions."
-                           : "Sample-weighted mean for this instruction.");
-    ImGui::PopStyleColor();
-}
-
-void
-SamplingStateRenderer::RenderMetricTooltip(const SamplingRow& row, Metric metric,
-                                           CodePane pane)
+SamplingStateRenderer::RenderMetricTooltip(const SamplingRow& row, Metric metric)
 {
     BeginTooltipStyled();
-    push_sample_metric_tooltip_wrap();
     RenderMetricValue(row, metric);
-    const MetricTooltipText tooltip = GetMetricTooltipText(row, metric);
-    if(tooltip.description)
-    {
-        ImGui::TextWrapped("%s", tooltip.description);
-    }
-    else
-    {
-        const std::string samples =
-            IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
-        ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, samples.c_str());
-    }
-    if(!IsDisabled())
-    {
-        RenderMetricAggregation(pane);
-    }
-    ImGui::PopTextWrapPos();
+    const std::string samples =
+        IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
+    ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, samples.c_str());
     EndTooltipStyled();
 }
 
 void
-SamplingStateRenderer::RenderMetricsSummary(const SamplingRow& row, CodePane pane)
+SamplingStateRenderer::RenderMetricsSummary(const SamplingRow& row)
 {
     ImGui::Separator();
     RenderMetricValue(row, Metric::kWaveOccupancy);
     RenderMetricValue(row, Metric::kActiveThreads);
-    if(!IsDisabled())
-    {
-        if(row.wave_occupancy.availability == SamplingAvailability::kInvalid ||
-           row.active_threads.availability == SamplingAvailability::kInvalid)
-        {
-            const Metric invalid_metric =
-                row.wave_occupancy.availability == SamplingAvailability::kInvalid
-                    ? Metric::kWaveOccupancy
-                    : Metric::kActiveThreads;
-            ImGui::TextWrapped("%s",
-                               GetMetricTooltipText(row, invalid_metric).description);
-        }
-        RenderMetricAggregation(pane);
-    }
 }
 
 bool
-SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples,
-                                  CodePane pane)
+SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples)
 {
     const bool      state_metric = m_selected_metric == Metric::kSamplingState;
     BarPresentation bar;
@@ -632,11 +590,11 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
     {
         if(state_metric)
         {
-            RenderTooltip(row, bar.percent, pane);
+            RenderTooltip(row, bar.percent);
         }
         else
         {
-            RenderMetricTooltip(row, m_selected_metric, pane);
+            RenderMetricTooltip(row, m_selected_metric);
         }
     }
     return interaction.clicked;
@@ -689,8 +647,7 @@ SamplingStateRenderer::DrawStallReasonSegments(const SamplingRow& row,
 }
 
 void
-SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent,
-                                     CodePane pane)
+SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
 {
     if(IsDisabled())
     {
@@ -699,7 +656,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent,
         ImGui::TextUnformatted(m_load_state == LoadState::kLoading
                                    ? SAMPLING_STATE_LOADING_TOOLTIP
                                    : SAMPLING_STATE_FAILED_TOOLTIP);
-        RenderMetricsSummary(row, pane);
+        RenderMetricsSummary(row);
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
         return;
@@ -728,7 +685,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent,
         {
             ImGui::Text(SAMPLING_STATE_BAR_PERCENT_TOOLTIP, bar_percent);
         }
-        RenderMetricsSummary(row, pane);
+        RenderMetricsSummary(row);
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
         return;
@@ -752,7 +709,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent,
     }
     RenderTooltipTable(rows, layout, mouse_wheel);
     RenderFooter(row);
-    RenderMetricsSummary(row, pane);
+    RenderMetricsSummary(row);
     ImGui::PopTextWrapPos();
     ImGui::PopID();
     ImGui::PopID();

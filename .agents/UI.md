@@ -1671,11 +1671,12 @@ The ISA implementation is organized as follows:
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
   Metric cells and the Sampling State tooltip share `RenderMetricValue` and
-  `GetMetricTooltipText`, including loading, failure, invalid, no-sample, and
-  unrecorded statuses. `CodePane` selects instruction or source aggregation text
-  for cell tooltips as well as headers. Valid metric-cell tooltips show the sample
-  count weighting the mean; source cells explicitly identify the mean over mapped
-  instructions. `IsaDataBuilder::FormatSamplePercentage` shares one-decimal
+  `GetMetricStatusText`, including loading, failure, invalid, no-sample, and
+  unrecorded statuses. Metric-cell tooltips show only the percentage with any brief
+  availability status and the row's sample count. `CodePane` selects instruction
+  or source aggregation explanations for headers only; cell tooltips and the
+  Sampling State metric summary contain no descriptive paragraphs.
+  `IsaDataBuilder::FormatSamplePercentage` shares one-decimal
   formatting between cells and tooltips, preserves measured zero, and returns an
   em dash for missing/invalid summaries.
   Each hovered valid cell builds one local list of tooltip rows (label, color,
@@ -1724,7 +1725,7 @@ indices; `SetupColumns` and `RenderHeaders` keep registration and header renderi
 from the clipped row loop. `SamplingStateRenderer` keeps tooltip summary, table,
 footer, and size measurement separate, with one prepared tooltip-row list for
 both measurement and drawing. `SamplingStateRenderer::CodePane` identifies the
-headers' and cell tooltips' ISA/source context explicitly. Single-argument widget
+headers' ISA/source context explicitly. Single-argument widget
 constructors are explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
 Source selection is shared through `LineSelection`, with no unused forwarding getters.
 Source-file dropdown items use the complete source UUID in their ImGui ID scope,
@@ -1892,9 +1893,10 @@ warnings. These are sample observations, not cycle latency.
 The Sampling State tooltip also includes a compact wave-occupancy / active-thread
 summary outside the scrollable reason list, regardless of the selected column metric.
 Values use the same one-decimal formatter as the columns. Unavailable values carry
-brief loading, load-failed, invalid, no-sample, or unrecorded labels; invalid metrics
-also explain the supported percentage/count range. Source summaries identify the
-sample-weighted mean over mapped instructions. Retained metrics remain visible when
+brief loading, load-failed, invalid, no-sample, or unrecorded labels. Metric-cell
+tooltips show the percentage and sample count without descriptive text; the
+Sampling State metric summary likewise omits descriptive text. Retained metrics
+remain visible when
 issued/stalled counts or stall details are unavailable. Metric headers explain the
 profiler-reported measurements, their own 0-100% scale, and aggregation; active-thread
 percent is explicitly separate from issued/stalled sample shares. Database field

@@ -591,6 +591,7 @@ InfiniteScrollTable::Render()
                         if(filter_input.second)
                         {
                             m_displayed_filter_row_inputs[i]->input.clear();
+                            m_filter_requested = true;
                         }
                         if(ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter))
                         {

@@ -684,6 +684,88 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         }
     }
 
+    // Fetches each line graph zoomed in on its last 10us, where the sample at the end of
+    // the trace is alone in its bucket, and checks that no graph value is NaN.
+    // Fixture Reads: m_controller
+    SECTION("Line Graph Data At Trace End")
+    {
+        rocprofvis_handle_t* timeline_handle = nullptr;
+        rocprofvis_result_t  result          = rocprofvis_controller_get_object(
+            m_controller, kRPVControllerSystemTimeline, 0, &timeline_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(timeline_handle);
+
+        uint64_t num_graphs = 0;
+        result              = rocprofvis_controller_get_uint64(
+            timeline_handle, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        uint64_t num_checked = 0;
+        for(uint32_t i = 0; i < (uint32_t) num_graphs; i++)
+        {
+            rocprofvis_handle_t* graph_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                timeline_handle, kRPVControllerTimelineGraphIndexed, i, &graph_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(graph_handle);
+
+            uint64_t graph_type = 0;
+            result              = rocprofvis_controller_get_uint64(
+                graph_handle, kRPVControllerGraphType, 0, &graph_type);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            if(graph_type != kRPVControllerGraphTypeLine)
+            {
+                continue;
+            }
+
+            double graph_start_ts = 0;
+            double graph_end_ts   = 0;
+            REQUIRE(rocprofvis_controller_get_double(
+                        graph_handle, kRPVControllerGraphStartTimestamp, 0,
+                        &graph_start_ts) == kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_get_double(
+                        graph_handle, kRPVControllerGraphEndTimestamp, 0,
+                        &graph_end_ts) == kRocProfVisResultSuccess);
+            const double fetch_start = std::max(graph_start_ts, graph_end_ts - 10000.0);
+
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            REQUIRE(array != nullptr);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_graph_fetch_async(
+                m_controller, graph_handle, fetch_start, graph_end_ts, 1000, future,
+                array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                    kRocProfVisResultSuccess);
+
+            uint64_t num_results = 0;
+            REQUIRE(rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries,
+                                                     0, &num_results) ==
+                    kRocProfVisResultSuccess);
+            for(uint64_t idx = 0; idx < num_results; idx++)
+            {
+                rocprofvis_handle_t* entry = nullptr;
+                REQUIRE(rocprofvis_controller_get_object(
+                            array, kRPVControllerArrayEntryIndexed, idx, &entry) ==
+                        kRocProfVisResultSuccess);
+                REQUIRE(entry);
+
+                double value = 0;
+                REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleValue,
+                                                         0, &value) ==
+                        kRocProfVisResultSuccess);
+                REQUIRE(!std::isnan(value));
+            }
+            num_checked += num_results;
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+        spdlog::info("Checked {0} line graph samples at the trace end", num_checked);
+    }
+
     // Fetches event-type tracks into a table in paginated chunks, validates column
     // headers, column types, and reads cell values for every row. Exports the last chunk
     // to CSV, and checks that exports which cannot write the file report failure.
@@ -3429,8 +3511,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     }
 }
 
-// Empty names are copied into the table. Distinct temporary buffers share one
-// id, and that pointer stays valid after the temporaries die.
 // Fetches each sample track one segment at a time, so that every segment is read as its
 // own slice, and checks the samples across the slice boundaries. Even segments are read
 // before odd ones so that boundaries are crossed with both loaded and unloaded
@@ -3516,6 +3596,8 @@ TEST_CASE("Sample Track Slice Boundaries")
     rocprofvis_controller_free(controller);
 }
 
+// Empty names are copied into the table. Distinct temporary buffers share one
+// id, and that pointer stays valid after the temporaries die.
 TEST_CASE("StringTable empty string is stored by value")
 {
     using RocProfVis::Controller::StringTable;

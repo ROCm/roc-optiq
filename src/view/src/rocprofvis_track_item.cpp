@@ -137,6 +137,8 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
 , m_node_color_index(0)
 , m_node_display_index(0)
 , m_node_pill(nullptr)
+, m_type_color_index(std::nullopt)
+, m_process_color_index(std::nullopt)
 , m_options(nullptr)
 , m_timeline_track_options(track_options)
 , m_selected(false)
@@ -154,6 +156,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
     m_name           = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetNodeColor(track_info);
+    SetDecoratorColors(track_info);
     SetDefaultPillLabel(track_info);
 
     EventManager::EventHandler selected_changed_handler =
@@ -394,6 +397,11 @@ TrackItem::RenderMetaArea()
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
+        // The strip widens the left gutter, so the grip and everything after it
+        // shift right instead of overlapping it.
+        const float decorator_width = RenderDecorator();
+        m_reorder_grip_width        = DEFAULT_GRIP_WIDTH + decorator_width;
+
         // handle mouse click
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
@@ -421,7 +429,7 @@ TrackItem::RenderMetaArea()
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
 
         ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
+            ImVec2(decorator_width + (DEFAULT_GRIP_WIDTH - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
@@ -991,6 +999,58 @@ TrackItem::SetNodeColor(const TrackInfo* track_info)
     m_node_pill->SetAccentColor(m_node_color_index);
     m_node_pill->SetTooltip("Node " + std::to_string(m_node_display_index) + ": " +
                             m_node_name);
+}
+
+void
+TrackItem::SetDecoratorColors(const TrackInfo* track_info)
+{
+    if(track_info->topology.type != TrackInfo::TrackType::Unknown)
+    {
+        m_type_color_index = static_cast<size_t>(track_info->topology.type);
+    }
+
+    const ProcessInfo* process = m_data_provider.DataModel().GetTopology().GetProcess(
+        track_info->topology.process_id);
+    if(process && process->display_index > 0)
+    {
+        m_process_color_index = process->display_index - 1;
+    }
+}
+
+float
+TrackItem::RenderDecorator()
+{
+    float                 width = 0.0f;
+    std::optional<size_t> color_index;
+    switch(m_settings.GetTrackDecoratorMode())
+    {
+        case TrackDecoratorMode::kTrackType:
+        {
+            color_index = m_type_color_index;
+            break;
+        }
+        case TrackDecoratorMode::kProcess:
+        {
+            color_index = m_process_color_index;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    // Resolved per frame so the strip follows theme changes.
+    const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
+    if(color_index && !wheel.empty())
+    {
+        const ImVec2 strip_min = ImGui::GetWindowPos();
+        width                  = static_cast<float>(m_settings.GetTrackDecoratorWidth());
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            strip_min, strip_min + ImVec2(width, ImGui::GetWindowSize().y),
+            wheel[*color_index % wheel.size()]);
+    }
+    return width;
 }
 
 Pill*

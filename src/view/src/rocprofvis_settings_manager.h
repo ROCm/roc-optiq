@@ -20,6 +20,16 @@ namespace View
 
 enum class TimeFormat;
 
+// What the color strip on a track's left edge encodes. Persisted as an int, so
+// append new modes before kCount.
+enum class TrackDecoratorMode : uint32_t
+{
+    kNone,
+    kTrackType,
+    kProcess,
+    kCount
+};
+
 typedef struct DisplaySettings
 {
     bool use_dark_mode;
@@ -33,6 +43,16 @@ typedef struct UnitSettings
 {
     TimeFormat time_format;
 } UnitSettings;
+
+constexpr int TRACK_DECORATOR_WIDTH_MIN     = 1;
+constexpr int TRACK_DECORATOR_WIDTH_MAX     = 10;
+constexpr int TRACK_DECORATOR_WIDTH_DEFAULT = 3;
+
+typedef struct TrackSettings
+{
+    TrackDecoratorMode decorator;        // what the strip on a track's left edge color-codes
+    int                decorator_width;  // strip width in pixels
+} TrackSettings;
 
 // Persisted UI state for the log viewer window. level_mask packs one bit per
 // spdlog severity level (bit i => level i enabled).
@@ -92,6 +112,7 @@ typedef struct UserSettings
 {
     DisplaySettings   display_settings;
     UnitSettings      unit_settings;
+    TrackSettings     track_settings;
     bool              dont_ask_before_tab_closing;
     bool              dont_ask_before_exit;
     int               log_viewer_max_entries;
@@ -306,6 +327,10 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR = "compact_sideb
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_TRACKS        = "tracks";
+constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR       = "decorator";
+constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH = "decorator_width";
+
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 constexpr size_t      MAX_RECENT_FILES                       = 5;
 
@@ -367,6 +392,11 @@ public:
     // Styling
     bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
     bool CompactSidebar() const { return m_usersettings.display_settings.compact_sidebar; }
+    TrackDecoratorMode GetTrackDecoratorMode() const
+    {
+        return m_usersettings.track_settings.decorator;
+    }
+    int GetTrackDecoratorWidth() const { return m_usersettings.track_settings.decorator_width; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
@@ -443,6 +473,9 @@ private:
     void SerializeUnitSettings(jt::Json& json);
     void DeserializeUnitSettings(jt::Json& json);
     void ApplyUserUnitSettings(const UserSettings& old_settings);
+
+    void SerializeTrackSettings(jt::Json& json);
+    void DeserializeTrackSettings(jt::Json& json);
 
     void SerializeInternalSettings(jt::Json& json);
     void DeserializeInternalSettings(jt::Json& json);

@@ -21,6 +21,7 @@ constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
 constexpr float kLogViewerInputWidth      = 160.0f;
+constexpr float kSliderWidth              = 240.0f;
 
 // Sample duration shown in the time-format preview: 12m 34.123456789s. Uses zero
 // hours so Condensed Timecode (which trims leading zero hour/minute groups)
@@ -89,6 +90,10 @@ SettingsPanel::Render()
             {
                 m_category = Display;
             }
+            if(ImGui::Selectable("Tracks", m_category == Tracks))
+            {
+                m_category = Tracks;
+            }
             if(ImGui::Selectable("Units", m_category == Units))
             {
                 m_category = Units;
@@ -118,6 +123,11 @@ SettingsPanel::Render()
                 case Display:
                 {
                     RenderDisplayOptions();
+                    break;
+                }
+                case Tracks:
+                {
+                    RenderTrackOptions();
                     break;
                 }
                 case Units:
@@ -160,6 +170,11 @@ SettingsPanel::Render()
                     case Display:
                     {
                         ResetDisplayOptions();
+                        break;
+                    }
+                    case Tracks:
+                    {
+                        ResetTrackOptions();
                         break;
                     }
                     case Units:
@@ -295,7 +310,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Font Size");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(240.0f);
+    ImGui::SetNextItemWidth(kSliderWidth);
     if(ImGui::SliderInt("##font_size", &font_size, min_size, max_size, "%d pt"))
     {
         m_pending_font_size_index = m_fonts.GetFontSizeIndex(static_cast<float>(font_size));
@@ -325,6 +340,52 @@ SettingsPanel::RenderDisplayOptions()
             style.FrameRounding);
         ImGui::TextUnformatted(preview_text);
         ImGui::PopFont();
+    }
+}
+
+void
+SettingsPanel::RenderTrackOptions()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    ImGui::TextUnformatted("Decorator");
+    ImGui::Separator();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Color by");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Track type").x + 2 * style.FramePadding.x +
+                            ImGui::GetFrameHeightWithSpacing());
+    int decorator_index = static_cast<int>(m_usersettings.track_settings.decorator);
+    // Options must match TrackDecoratorMode
+    PushComboStyles();
+    if(ImGui::Combo("##track_decorator", &decorator_index, "None\0Track type\0Process\0\0"))
+    {
+        m_usersettings.track_settings.decorator =
+            static_cast<TrackDecoratorMode>(decorator_index);
+        m_settings_changed = true;
+    }
+    PopComboStyles();
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Color a strip on the left edge of each track by its type or by "
+                         "its process.");
+    }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Width");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kSliderWidth);
+    if(ImGui::SliderInt("##track_decorator_width",
+                        &m_usersettings.track_settings.decorator_width,
+                        TRACK_DECORATOR_WIDTH_MIN, TRACK_DECORATOR_WIDTH_MAX, "%d px",
+                        ImGuiSliderFlags_AlwaysClamp))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Width of the track decorator strip.");
     }
 }
 
@@ -423,6 +484,13 @@ SettingsPanel::ResetDisplayOptions()
     m_usersettings.display_settings = m_usersettings_default.display_settings;
     m_pending_font_size_index       = m_usersettings_default.display_settings.font_size_index;
     m_settings_changed              = true;
+}
+
+void
+SettingsPanel::ResetTrackOptions()
+{
+    m_usersettings.track_settings = m_usersettings_default.track_settings;
+    m_settings_changed            = true;
 }
 
 void

@@ -554,9 +554,10 @@ SamplingStateRenderer::RenderMetricsSummary(const SamplingRow& row)
 }
 
 bool
-SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples)
+SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples,
+                                  Metric metric)
 {
-    const bool      state_metric = m_selected_metric == Metric::kSamplingState;
+    const bool      state_metric = metric == Metric::kSamplingState;
     BarPresentation bar;
     bar.show_value = !state_metric;
     if(state_metric)
@@ -576,7 +577,7 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
     else
     {
         const IsaDataBuilder::PercentageSummary& summary =
-            get_sample_metric_summary(row, m_selected_metric);
+            get_sample_metric_summary(row, metric);
         bar.available =
             !IsDisabled() && summary.availability == SamplingAvailability::kValid;
         bar.percent = summary.percent;
@@ -594,10 +595,28 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
         }
         else
         {
-            RenderMetricTooltip(row, m_selected_metric);
+            RenderMetricTooltip(row, metric);
         }
     }
     return interaction.clicked;
+}
+
+bool
+SamplingStateRenderer::RenderCells(const SamplingRow& row, uint64_t hottest_samples,
+                                   int first_column)
+{
+    bool clicked = false;
+    for(size_t i = 0; i < std::size(SAMPLING_COLUMN_METRICS); ++i)
+    {
+        const int column = first_column + static_cast<int>(i);
+        if(ImGui::TableSetColumnIndex(column))
+        {
+            ImGui::PushID(column);
+            clicked |= RenderCell(row, hottest_samples, SAMPLING_COLUMN_METRICS[i]);
+            ImGui::PopID();
+        }
+    }
+    return clicked;
 }
 
 const char*
@@ -900,23 +919,21 @@ SamplingStateRenderer::RenderTooltipTable(const TooltipRows&        rows,
 }
 
 void
-SamplingStateRenderer::SetupColumn()
+SamplingStateRenderer::SetupColumns()
 {
     // Reuse ImGui's column menu and append the layer retry action after the headers.
     ImGui::GetCurrentTable()->DisableDefaultContextMenu = true;
-    float label_width                                   = 0.0f;
     for(const Metric metric : SAMPLING_COLUMN_METRICS)
     {
-        label_width = std::max(label_width,
-                               ImGui::CalcTextSize(get_sampling_column_label(metric)).x);
+        const char* label = get_sampling_column_label(metric);
+        const float width =
+            std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);
+        const ImGuiTableColumnFlags flags =
+            ImGuiTableColumnFlags_WidthFixed |
+            (metric == Metric::kSamplingState ? ImGuiTableColumnFlags_None
+                                              : ImGuiTableColumnFlags_DefaultHide);
+        ImGui::TableSetupColumn(label, flags, width);
     }
-    const float width = label_width + ImGui::GetStyle().FramePadding.x * 2.0f +
-                        ImGui::GetTextLineHeight();
-    ImGui::TableSetupColumn("Sampling metric",
-                            ImGuiTableColumnFlags_WidthFixed |
-                                ImGuiTableColumnFlags_NoHide |
-                                ImGuiTableColumnFlags_NoReorder,
-                            width);
 }
 
 bool
@@ -938,63 +955,44 @@ SamplingStateRenderer::RenderTableContextMenu()
 }
 
 void
-SamplingStateRenderer::RenderHeader(int column, CodePane pane)
+SamplingStateRenderer::RenderHeaders(int first_column, CodePane pane)
 {
-    if(!ImGui::TableSetColumnIndex(column))
+    for(size_t i = 0; i < std::size(SAMPLING_COLUMN_METRICS); ++i)
     {
-        return;
+        RenderHeader(first_column + static_cast<int>(i), SAMPLING_COLUMN_METRICS[i],
+                     pane);
     }
+}
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                        ImVec2(ImGui::GetStyle().FramePadding.x, 0.0f));
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    const bool open = ImGui::BeginCombo("##sampling_metric",
-                                        get_sampling_column_label(m_selected_metric));
-    if(open)
+void
+SamplingStateRenderer::RenderHeader(int column, Metric metric, CodePane pane)
+{
+    HeaderTooltipText tooltip = pane == CodePane::kSource
+                                    ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
+                                    : SAMPLING_STATE_HEADER_TOOLTIP;
+    if(metric != Metric::kSamplingState)
     {
-        for(const Metric metric : SAMPLING_COLUMN_METRICS)
-        {
-            const bool selected = metric == m_selected_metric;
-            if(ImGui::Selectable(get_sampling_column_label(metric), selected))
-            {
-                m_selected_metric = metric;
-            }
-            if(selected)
-            {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
+        const SampleMetricPresentation& presentation =
+            get_sample_metric_presentation(metric);
+        tooltip = { pane == CodePane::kSource ? presentation.source_description
+                                              : presentation.isa_description,
+                    presentation.developer_information };
     }
-    else
+    if(IsDisabled())
     {
-        if(ImGui::IsItemClicked(ImGuiMouseButton_Right))
-        {
-            ImGui::TableOpenContextMenu(column);
-        }
-        HeaderTooltipText tooltip = pane == CodePane::kSource
-                                        ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
-                                        : SAMPLING_STATE_HEADER_TOOLTIP;
-        if(m_selected_metric != Metric::kSamplingState)
-        {
-            const SampleMetricPresentation& presentation =
-                get_sample_metric_presentation(m_selected_metric);
-            tooltip = { pane == CodePane::kSource ? presentation.source_description
-                                                  : presentation.isa_description,
-                        presentation.developer_information };
-        }
-        if(IsDisabled())
-        {
-            tooltip.user_description = m_load_state == LoadState::kLoading
-                                           ? SAMPLING_STATE_LOADING_TOOLTIP
-                                           : SAMPLING_STATE_FAILED_TOOLTIP;
-        }
-        RenderHeaderTooltip(tooltip,
-                            m_selected_metric == Metric::kSamplingState && !IsDisabled()
+        tooltip.user_description = m_load_state == LoadState::kLoading
+                                       ? SAMPLING_STATE_LOADING_TOOLTIP
+                                       : SAMPLING_STATE_FAILED_TOOLTIP;
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+    }
+    RenderHeaderWithTooltip(column, get_sampling_column_label(metric), tooltip,
+                            metric == Metric::kSamplingState && !IsDisabled()
                                 ? render_sampling_state_color_legend
                                 : nullptr);
+    if(IsDisabled())
+    {
+        ImGui::PopStyleColor();
     }
-    ImGui::PopStyleVar();
 }
 
 }  // namespace View

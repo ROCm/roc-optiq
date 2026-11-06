@@ -28,7 +28,7 @@ struct ColorLegendEntry
     Colors      color;
 };
 
-// Renders a selectable sampling metric for ISA instructions and source lines.
+// Renders sampling-state and optional percentage columns for ISA and source lines.
 class SamplingStateRenderer
 {
 public:
@@ -62,14 +62,14 @@ public:
     static void RenderColorLegend(const char* id, const ColorLegendEntry* entries,
                                   size_t count);
 
-    void SetupColumn();
+    void SetupColumns();
     void SetLoadState(LoadState state) { m_load_state = state; }
     // Extends the native column menu; returns whether sampling should be retried.
     [[nodiscard]] bool RenderTableContextMenu();
-    void RenderHeader(int column, CodePane pane = CodePane::kIsa);
-    // Returns whether the cell was clicked, for the owning widget's row selection.
-    [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
-                                  uint64_t                           hottest_samples);
+    void               RenderHeaders(int first_column, CodePane pane = CodePane::kIsa);
+    // Returns whether any sampling cell was clicked, for the widget's row selection.
+    [[nodiscard]] bool RenderCells(const IsaDataBuilder::SamplingRow& row,
+                                   uint64_t hottest_samples, int first_column);
 
 private:
     using SamplingRow          = IsaDataBuilder::SamplingRow;
@@ -119,19 +119,21 @@ private:
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
                             float mouse_wheel);
-    const char* GetMetricStatusText(const SamplingRow& row, Metric metric) const;
-    void        RenderMetricValue(const SamplingRow& row, Metric metric);
-    void        RenderMetricTooltip(const SamplingRow& row, Metric metric);
-    void        RenderMetricsSummary(const SamplingRow& row);
-    void        RenderTooltip(const SamplingRow& row, double bar_percent);
-    void        RenderSummary(const SamplingRow& row);
-    void        RenderFooter(const SamplingRow& row);
-    void        DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,
-                                        const ImVec2& end);
+    const char*        GetMetricStatusText(const SamplingRow& row, Metric metric) const;
+    void               RenderHeader(int column, Metric metric, CodePane pane);
+    [[nodiscard]] bool RenderCell(const SamplingRow& row, uint64_t hottest_samples,
+                                  Metric metric);
+    void               RenderMetricValue(const SamplingRow& row, Metric metric);
+    void               RenderMetricTooltip(const SamplingRow& row, Metric metric);
+    void               RenderMetricsSummary(const SamplingRow& row);
+    void               RenderTooltip(const SamplingRow& row, double bar_percent);
+    void               RenderSummary(const SamplingRow& row);
+    void               RenderFooter(const SamplingRow& row);
+    void DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,
+                                 const ImVec2& end);
 
     SettingsManager& m_settings;
-    LoadState        m_load_state      = LoadState::kReady;
-    Metric           m_selected_metric = Metric::kSamplingState;
+    LoadState        m_load_state = LoadState::kReady;
 };
 
 }  // namespace View

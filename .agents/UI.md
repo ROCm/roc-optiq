@@ -1646,20 +1646,23 @@ The ISA implementation is organized as follows:
   Each widget directly balances table begin/end and style pushes, including
   skipped-table paths. Row styles begin after headers; centered line-number headers
   are rendered directly.
-- `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the common sampling
-  column, bar, header color legend, tooltip, and sampled-percentage cells for
+- `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the sampling columns,
+  bars, header color legend, tooltips, and sampled-percentage cells for
   `IsaDataBuilder::SamplingRow`.
-  Its `Metric` enum selects Sampling State, wave occupancy, or active threads.
-  Each renderer owns an independent header-combo selection, initially Sampling State,
-  retained across kernel/source changes for the widget's lifetime. `RenderCell`
-  builds a stack-local `BarPresentation` and uses one `DrawBar` path for all modes,
+  Its `Metric` enum identifies Sampling State, wave occupancy, and active threads.
+  `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
+  order. Sampling State is visible by default; both percentage columns use
+  `DefaultHide` and can be enabled independently through the native header menu.
+  Each cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,
   availability, and a `show_value` option. Only a stacked state bar borrows its input
   row through `breakdown` for the duration of drawing; no per-row segment allocation
   or retained row pointer is needed.
-  The line numbers and always-visible sampling column use `NoReorder` so they stay
-  first and second. The header remains selectable during loading/failure and shares
-  the existing header-tooltip content through `RenderHeaderTooltip`. Percentages use one
+  Line numbers use `NoReorder` and stay first. All three sampling columns are
+  resizable, hideable, and reorderable. Their normal table headers retain context
+  menus during loading/failure and share the existing header-tooltip content
+  through `RenderHeaderWithTooltip`. Sampling State restores its color legend.
+  Percentages use one
   decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
   All modes share rectangular geometry, the `kBorderGray` outline around the filled
   extent, clipping, and value-label layout. Sampling State uses `show_value = false`;
@@ -1718,8 +1721,8 @@ completion prepares sampling once and updates both panes from the same snapshot.
 reset. Later source/ISA layer arrivals and cached source-file changes reuse it,
 without rebuilding sample counts or normalizing OTHER_WAIT again. Source mappings
 are taken from current source-layer data rather than frozen in the sampling
-snapshot, so correlations arriving after sampling remain correct. Selecting a displayed
-metric does not reaggregate rows. Instruction storage survives source and sampling updates.
+snapshot, so correlations arriving after sampling remain correct. Changing metric
+column visibility does not reaggregate rows. Instruction storage survives source and sampling updates.
 The widgets address columns through named `IsaColumn` and `SourceColumn` logical
 indices; `SetupColumns` and `RenderHeaders` keep registration and header rendering separate
 from the clipped row loop. `SamplingStateRenderer` keeps tooltip summary, table,
@@ -1786,7 +1789,7 @@ the completed layer. `ComputeIsaView` accepts the callback only when its layer,
 kernel, selection generation, request token, and (for source) selected file
 still match. Do not query the controller or model directly from this view.
 
-The ISA table defaults to `# | Sampling State [selector] | Offset | ISA`. Sampling State
+The ISA table defaults to `# | Sampling State | Offset | ISA`. Sampling State
 aggregates sample states and stall reasons by instruction UUID. The former Samples,
 Stall %, and Stall Categories columns have been removed, including their heatmap
 rendering, dedicated header tooltips, kernel-total bookkeeping, and stalled-only
@@ -1796,11 +1799,12 @@ instruction's usable total sample count, used to scale Sampling State bars. Both
 ISA and source maxima exclude rows with invalid counts; missing progress alone
 still permits a total-sample bar, including host-trap captures.
 
-The table uses `IsaCodeSelectableSampling` as its ID so previous separate-column
-layouts cannot restore incompatible logical indices. Width and permitted column-order
-choices use normal ImGui persistence. All four columns remain registered while sampling
-loads. The sampling column cannot be hidden or moved away from the line numbers, but
-remains resizable. Changing its metric does not start, cancel, or repeat data requests.
+The table uses `IsaCodeSamplingColumns` as its ID so previous dropdown layouts
+cannot restore incompatible logical indices. Width, visibility, and permitted
+column-order choices use normal ImGui persistence. All six columns remain
+registered while sampling loads. Wave occupancy and active threads are hidden by
+default and appear between Sampling State and Offset when enabled. Changing
+column visibility does not start, cancel, or repeat data requests.
 The remaining headers and cells address logical indices after reordering.
 
 ISA mnemonic colouring is prepared by `IsaDataBuilder::BuildInstructions`. Each
@@ -1838,8 +1842,8 @@ uppercase hexadecimal, not an absolute runtime address. Right-clicking an offset
 ISA instruction, or source-code line opens its copy context menu. Offset and `#`
 use `NoResize` so their calculated widths follow data and font changes. The `#`
 width is measured with the active code font during rendering. ISA and Sampling
-State remain resizable; Offset is hideable through the header context menu, while the
-sampling selector stays beside the line numbers. The source table supports the same
+State and both percentage columns remain resizable; Offset and the three sampling
+columns are hideable through the header context menu. The source table supports the same
 native column menu. Both menus
 use the application's default window padding, matching event-table menus.
 
@@ -1953,11 +1957,11 @@ Known reason colors are stable across instructions and kernels and come from the
 central `kPcSampling*` dark/light theme palette. Green is reserved for issued
 samples; ALU dependencies use indigo, scheduler arbitration uses the native accent
 blue, and other waits use coral. Unknown reason names are preserved in gray.
-The source table defaults to `# | Sampling State [selector] | Source code`, using
-table ID `SourceCodeSelectableSampling` to isolate the compact layout from older
-saved column indices. Its independent sampling selector stays after the line numbers,
-is always visible, and supports the same three choices during loading and failure.
-The source text remains selectable and copyable for every selected metric.
+The source table defaults to `# | Sampling State | Source code`, using table ID
+`SourceCodeSamplingColumns` to isolate the layout from saved dropdown column
+indices. Wave occupancy and active threads are registered between Sampling State
+and Source code, hidden by default, and independently enabled through the header
+context menu. Source text remains selectable and copyable with any visible metrics.
 
 `IsaDataBuilder::BuildSourceLines` prepares source rows (excluding unknown line
 numbers). `UpdateSourceSampling` sums all sampled instructions with the same primary
@@ -2047,7 +2051,7 @@ The renderer extends ImGui's native column context menu using
 `DisableDefaultContextMenu`, `TableBeginContextMenuPopup`, and
 `TableDrawDefaultContextMenu`. Both widgets render it after their headers. Native
 column controls are retained, and a failed sampling layer adds Refetch sampling data.
-The selector explicitly opens this menu on right-click as normal headers do. Retry
+Normal table headers open this menu on right-click. Retry
 requests are consumed during Update, and only the failed layer is queued. No
 sampling-details visibility toggle is restored.
 Source records with unknown or zero line numbers are omitted. ISA instructions

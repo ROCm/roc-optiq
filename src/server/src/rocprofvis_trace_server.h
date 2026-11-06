@@ -5,7 +5,9 @@
 
 #include "json.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_data_provider_json.h"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -40,11 +42,13 @@ class TraceServer
 public:
     // allowed_origin, when set, is sent as Access-Control-Allow-Origin so a page
     // served from that origin can read the API.
-    TraceServer(View::DataProvider& provider, const std::string& allowed_origin);
+    TraceServer(View::DataProvider&               provider,
+                View::DataProviderJson::TraceKind trace_kind,
+                const std::string&                allowed_origin);
     ~TraceServer();
 
-    // Binds host:port and starts answering on a background thread. False when
-    // the address cannot be bound.
+    // Binds host:port and starts answering on a background thread. This is a
+    // one-shot server; repeated calls return false.
     bool Start(const std::string& host, uint16_t port);
     // Answers every queued request with 503, refuses new ones, and stops
     // listening.
@@ -54,6 +58,8 @@ public:
     void RunPendingRequests();
     // Provider thread: sleeps until a read is queued or timeout passes.
     void WaitForRequests(std::chrono::milliseconds timeout);
+    // True when the accept loop stopped without Stop() asking it to.
+    bool ListenerFailed() const;
 
 private:
     struct Reply
@@ -74,9 +80,11 @@ private:
     {
         std::function<Reply()>               work;
         std::shared_ptr<std::promise<Reply>> reply;
+        std::shared_ptr<std::atomic<bool>>   cancelled;
     };
 
     void RegisterRoutes();
+    bool IsExpectedHost(const std::string& host) const;
     // Registers a GET route whose handler runs on the provider thread.
     void  Route(const std::string&                                          pattern,
                 std::function<Reply(View::DataProvider&, const RouteArgs&)> handler);
@@ -85,14 +93,19 @@ private:
     static Reply Ok(jt::Json body);
     static Reply Error(int32_t status, const std::string& message);
 
-    View::DataProvider&              m_provider;
-    std::string                      m_allowed_origin;
-    std::unique_ptr<httplib::Server> m_http;
-    std::thread                      m_listener;
-    std::mutex                       m_mutex;
-    std::condition_variable          m_task_queued;
-    std::deque<Task>                 m_tasks;
-    bool                             m_stopping;
+    View::DataProvider&               m_provider;
+    View::DataProviderJson::TraceKind m_trace_kind;
+    std::string                       m_allowed_origin;
+    std::string                       m_expected_host;
+    std::string                       m_expected_authority;
+    std::unique_ptr<httplib::Server>  m_http;
+    std::thread                       m_listener;
+    std::atomic<bool>                 m_listener_failed;
+    std::mutex                        m_mutex;
+    std::condition_variable           m_task_queued;
+    std::deque<Task>                  m_tasks;
+    bool                              m_start_attempted;
+    bool                              m_stopping;
 };
 
 }  // namespace Server

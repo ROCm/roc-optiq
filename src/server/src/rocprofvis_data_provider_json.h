@@ -41,6 +41,8 @@ struct WorkloadInfo;
  *   numbers as doubles, which round anything past 2^53, and event uuids and
  *   multi-node topology ids are past it. 32-bit ids (workloads, kernels,
  *   metric categories) stay numbers.
+ * - Other uint64 values stay numbers through JavaScript's safe-integer limit
+ *   and become decimal strings above it.
  * - Times are nanoseconds as the provider stores them, in keys ending in _ns.
  * - Enums are lower_snake_case names rather than their numeric values.
  * - A single item the provider has not loaded (a track's data, an event, a
@@ -49,16 +51,25 @@ struct WorkloadInfo;
 namespace DataProviderJson
 {
 
-// Status plus everything small enough to send whole: timeline bounds and
-// tracks, histogram, topology, summary, compare sources and compute workloads.
+enum class TraceKind
+{
+    kSystem,
+    kCompute
+};
+
+const char*
+TraceKindName(TraceKind kind);
+
+// Status plus everything small enough to send whole. The active trace kind has
+// its data under "system" or "compute"; the inactive section is null.
 // Track data, tables, events, the minimap, metric values and PC sampling have
 // their own calls because each can run to megabytes.
 jt::Json
-Snapshot(DataProvider& provider);
+Snapshot(DataProvider& provider, TraceKind kind);
 
-// Load state, progress message, trace path and the number of requests in flight.
+// Trace kind, load state, progress message, trace path and requests in flight.
 jt::Json
-Status(DataProvider& provider);
+Status(DataProvider& provider, TraceKind kind);
 
 // Trace bounds and every track's metadata, in timeline order.
 jt::Json
@@ -102,8 +113,8 @@ Summary(const TraceDataModel& model);
 jt::Json
 TrackStatistics(const AnalysisTrackStatistics& statistics);
 
-// Profiler metadata and every workload with its kernels, metric catalog and
-// roofline.
+// Profiler metadata and every workload with its kernels, metric catalog,
+// memory-chart layout and roofline.
 jt::Json
 Compute(const ComputeDataModel& model);
 jt::Json

@@ -172,6 +172,7 @@ DataProvider::DetachCleanupWork()
     m_trace_controller = nullptr;
     m_trace_timeline   = nullptr;
     m_model.Clear();
+    m_compute_model.Clear();
     m_progress_mesage.clear();
     m_progress_percent = 0;
     m_state            = ProviderState::kInit;

@@ -1,6 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <csignal>
@@ -60,11 +61,15 @@ print_usage()
     std::cout << "Usage: roc-optiq-server [options] <trace>\n"
                  "Serves a ROCm Optiq trace as JSON over HTTP, under /api/.\n"
                  "\n"
-                 "  --host <address>         Address to listen on (default 127.0.0.1)\n"
+                 "  --host <address>         Loopback address (default 127.0.0.1)\n"
                  "  --port <number>          Port to listen on (default 8080)\n"
                  "  --allow-origin <origin>  Let pages served from origin read the API\n"
                  "  --version                Print the version and exit\n"
-                 "  --help                   Print this help and exit\n";
+                 "  --help                   Print this help and exit\n"
+                 "\n"
+                 "The server has no authentication or TLS. Bind only to a trusted "
+                 "interface;\n"
+                 "--allow-origin is a browser CORS setting, not access control.\n";
     std::cout.flush();
 }
 
@@ -92,6 +97,38 @@ parse_port(const std::string& text, uint16_t& port_out)
     if(valid)
     {
         port_out = static_cast<uint16_t>(port);
+    }
+    return valid;
+}
+
+static bool
+is_loopback_host(const std::string& host)
+{
+    std::string normalized = host;
+    for(char& character : normalized)
+    {
+        character =
+            static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    }
+    return normalized == "localhost" || normalized == "::1" ||
+           normalized.rfind("127.", 0) == 0;
+}
+
+static bool
+get_trace_kind(rocprofvis_controller_t*           controller,
+               View::DataProviderJson::TraceKind& kind_out)
+{
+    rocprofvis_controller_object_type_t type = kRPVControllerObjectTypeControllerSystem;
+    const rocprofvis_result_t           result =
+        rocprofvis_controller_get_object_type(controller, &type);
+    const bool valid = result == kRocProfVisResultSuccess &&
+                       (type == kRPVControllerObjectTypeControllerSystem ||
+                        type == kRPVControllerObjectTypeControllerCompute);
+    if(valid)
+    {
+        kind_out = type == kRPVControllerObjectTypeControllerSystem
+                       ? View::DataProviderJson::TraceKind::kSystem
+                       : View::DataProviderJson::TraceKind::kCompute;
     }
     return valid;
 }
@@ -163,7 +200,8 @@ serve(View::DataProvider& provider, TraceServer& server, const ServerOptions& op
     std::signal(SIGTERM, request_stop);
 
     View::ProviderState state = provider.GetState();
-    while(!g_stop_requested && state != View::ProviderState::kError)
+    while(!g_stop_requested && state != View::ProviderState::kError &&
+          !server.ListenerFailed())
     {
         provider.Update();
         server.RunPendingRequests();
@@ -175,10 +213,16 @@ serve(View::DataProvider& provider, TraceServer& server, const ServerOptions& op
         state = updated;
         server.WaitForRequests(UPDATE_INTERVAL);
     }
+    const bool listener_failed = server.ListenerFailed();
     server.Stop();
 
     int32_t exit_code = EXIT_CODE_OK;
-    if(state == View::ProviderState::kError)
+    if(listener_failed)
+    {
+        spdlog::error("The HTTP listener stopped unexpectedly.");
+        exit_code = EXIT_CODE_ERROR;
+    }
+    else if(state == View::ProviderState::kError)
     {
         spdlog::error("Could not load '{}'.", options.trace_path);
         exit_code = EXIT_CODE_ERROR;
@@ -189,7 +233,13 @@ serve(View::DataProvider& provider, TraceServer& server, const ServerOptions& op
 static int32_t
 run(const ServerOptions& options)
 {
-    int32_t                  exit_code   = EXIT_CODE_ERROR;
+    int32_t exit_code = EXIT_CODE_ERROR;
+    if(!is_loopback_host(options.host))
+    {
+        spdlog::error(
+            "The unauthenticated server only accepts loopback listen addresses.");
+        return exit_code;
+    }
     const std::string        config_path = View::get_application_config_path(true);
     rocprofvis_controller_t* controller =
         rocprofvis_controller_alloc(options.trace_path.c_str(), config_path.c_str());
@@ -199,24 +249,36 @@ run(const ServerOptions& options)
     }
     else
     {
-        // The provider owns the controller from here, and frees it on failure.
-        View::DataProvider provider;
-        if(!provider.FetchTrace(controller, options.trace_path))
+        View::DataProviderJson::TraceKind trace_kind =
+            View::DataProviderJson::TraceKind::kSystem;
+        if(!get_trace_kind(controller, trace_kind))
         {
-            spdlog::error("Could not start loading '{}'.", options.trace_path);
+            spdlog::error("'{}' is not a supported system or compute trace.",
+                          options.trace_path);
+            rocprofvis_controller_free(controller);
         }
         else
         {
-            TraceServer server(provider, options.allowed_origin);
-            if(!server.Start(options.host, options.port))
+            // The provider owns the controller from here, and frees it on failure.
+            View::DataProvider provider;
+            if(!provider.FetchTrace(controller, options.trace_path))
             {
-                spdlog::error("Could not listen on {}:{}.", options.host, options.port);
+                spdlog::error("Could not start loading '{}'.", options.trace_path);
             }
             else
             {
-                spdlog::info("Serving {} at http://{}:{}/api/", options.trace_path,
-                             options.host, options.port);
-                exit_code = serve(provider, server, options);
+                TraceServer server(provider, trace_kind, options.allowed_origin);
+                if(!server.Start(options.host, options.port))
+                {
+                    spdlog::error("Could not listen on {}:{}.", options.host,
+                                  options.port);
+                }
+                else
+                {
+                    spdlog::info("Serving {} at http://{}:{}/api/", options.trace_path,
+                                 options.host, options.port);
+                    exit_code = serve(provider, server, options);
+                }
             }
         }
     }

@@ -3,7 +3,7 @@
 
 #include "rocprofvis_summary_model.h"
 #ifndef ROCPROFVIS_HEADLESS
-#include "../rocprofvis_settings_manager.h"
+#    include "../rocprofvis_settings_manager.h"
 #endif
 #include "../rocprofvis_utils.h"
 #include "rocprofvis_core_assert.h"

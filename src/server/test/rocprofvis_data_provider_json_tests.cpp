@@ -8,15 +8,20 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_data_provider_json.h"
+#include "rocprofvis_trace_server.h"
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <httplib.h>
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <functional>
+#include <future>
+#include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <thread>
@@ -58,6 +63,56 @@ constexpr std::chrono::seconds WAIT_LIMIT(120);
 constexpr uint32_t             TRACK_PIXELS      = 1000;
 constexpr uint64_t             TABLE_ROWS        = 100;
 constexpr uint64_t             METRICS_CLIENT_ID = 7;
+constexpr uint16_t             TEST_PORT_FIRST   = 19080;
+constexpr uint16_t             TEST_PORT_LAST    = 19120;
+
+struct RunningServer
+{
+    std::unique_ptr<RocProfVis::Server::TraceServer> server;
+    uint16_t                                         port = 0;
+};
+
+static RunningServer
+StartServer(DataProvider& provider, DataProviderJson::TraceKind kind)
+{
+    RunningServer running;
+    for(uint16_t port = TEST_PORT_FIRST; port <= TEST_PORT_LAST && !running.server;
+        port++)
+    {
+        std::unique_ptr<RocProfVis::Server::TraceServer> candidate =
+            std::make_unique<RocProfVis::Server::TraceServer>(provider, kind,
+                                                              "http://localhost:3000");
+        if(candidate->Start("127.0.0.1", port))
+        {
+            running.server = std::move(candidate);
+            running.port   = port;
+        }
+    }
+    return running;
+}
+
+static httplib::Result
+GetFromServer(RocProfVis::Server::TraceServer& server, uint16_t port,
+              const std::string& path, const httplib::Headers& headers = {})
+{
+    std::future<httplib::Result> request =
+        std::async(std::launch::async, [port, path, headers]() {
+            httplib::Client client("127.0.0.1", port);
+            client.set_connection_timeout(5, 0);
+            client.set_read_timeout(5, 0);
+            return client.Get(path, headers);
+        });
+    const std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while(request.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
+          std::chrono::steady_clock::now() < deadline)
+    {
+        server.RunPendingRequests();
+        std::this_thread::yield();
+    }
+    REQUIRE(request.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
+    return request.get();
+}
 
 // Updates the provider, the way a server's loop would, until done() holds or
 // WAIT_LIMIT passes.
@@ -82,11 +137,11 @@ NoRequestsPending(DataProvider& provider)
 }
 
 static bool
-Load(DataProvider& provider)
+Load(DataProvider& provider, const std::string& input_file = g_input_file)
 {
     rocprofvis_controller_t* controller =
-        rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
-    bool loaded = controller && provider.FetchTrace(controller, g_input_file);
+        rocprofvis_controller_alloc(input_file.c_str(), nullptr);
+    bool loaded = controller && provider.FetchTrace(controller, input_file);
     if(loaded)
     {
         loaded = UpdateUntil(provider,
@@ -111,9 +166,12 @@ TEST_CASE("A system trace serializes with ids that survive JavaScript", "[system
     DataProvider provider;
     REQUIRE(Load(provider));
 
-    jt::Json snapshot = DataProviderJson::Snapshot(provider);
+    jt::Json snapshot =
+        DataProviderJson::Snapshot(provider, DataProviderJson::TraceKind::kSystem);
     REQUIRE(snapshot["status"]["state"].isString());
     CHECK(snapshot["status"]["state"].getString() == "ready");
+    CHECK(snapshot["status"]["trace_type"].getString() == "system");
+    CHECK(snapshot["compute"].isNull());
 
     std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(snapshot.toString());
     CHECK(parsed.first == jt::Json::success);
@@ -158,6 +216,57 @@ TEST_CASE("The histogram is normalized with no timeline drawing it", "[system]")
         largest = std::max(largest, bin.getNumber());
     }
     CHECK(largest > 0.0);
+}
+
+TEST_CASE("The system HTTP API is local, typed and non-cacheable", "[system]")
+{
+    DataProvider provider;
+    REQUIRE(Load(provider));
+    RunningServer running = StartServer(provider, DataProviderJson::TraceKind::kSystem);
+    REQUIRE(running.server);
+
+    httplib::Result status =
+        GetFromServer(*running.server, running.port, "/api/status?pretty=1");
+    REQUIRE(status);
+    CHECK(status->status == 200);
+    CHECK(status->get_header_value("Cache-Control") == "no-store");
+    CHECK(status->get_header_value("Access-Control-Allow-Origin") ==
+          "http://localhost:3000");
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(status->body);
+    REQUIRE(parsed.first == jt::Json::success);
+    CHECK(parsed.second["trace_type"].getString() == "system");
+
+    httplib::Result wrong_kind =
+        GetFromServer(*running.server, running.port, "/api/compute");
+    REQUIRE(wrong_kind);
+    CHECK(wrong_kind->status == 404);
+
+    httplib::Result unloaded =
+        GetFromServer(*running.server, running.port, "/api/summary");
+    REQUIRE(unloaded);
+    CHECK(unloaded->status == 501);
+
+    httplib::Headers bad_host_headers{ { "Host", "example.invalid" } };
+    httplib::Result  bad_host =
+        GetFromServer(*running.server, running.port, "/api/status", bad_host_headers);
+    REQUIRE(bad_host);
+    CHECK(bad_host->status == 400);
+
+    httplib::Client  client("127.0.0.1", running.port);
+    httplib::Headers preflight_headers{
+        { "Origin", "http://localhost:3000" },
+        { "Access-Control-Request-Method", "GET" },
+        { "Access-Control-Request-Headers", "content-type" },
+    };
+    httplib::Result preflight = client.Options("/api/status", preflight_headers);
+    REQUIRE(preflight);
+    CHECK(preflight->status == 204);
+    CHECK(preflight->get_header_value("Access-Control-Allow-Methods") == "GET, OPTIONS");
+    CHECK(preflight->get_header_value("Access-Control-Allow-Headers") == "Content-Type");
+
+    CHECK_FALSE(running.server->Start("127.0.0.1", running.port));
+    CHECK_FALSE(running.server->ListenerFailed());
+    running.server->Stop();
 }
 
 TEST_CASE("Track data, an event, a table and the summary load with no UI", "[system]")
@@ -247,6 +356,117 @@ TEST_CASE("Every table slot name maps back to its slot", "[system]")
     }
     TableType unknown = TableType::__kTableTypeCount;
     CHECK_FALSE(DataProviderJson::TableTypeFromName("not_a_table", unknown));
+    CHECK(std::string(DataProviderJson::TableTypeName(static_cast<TableType>(-1))) ==
+          "unknown");
+    TraceDataModel model;
+    CHECK(DataProviderJson::Table(model, static_cast<TableType>(-1)).isNull());
+}
+
+TEST_CASE("A memory-chart layout serializes its authored data", "[system]")
+{
+    WorkloadInfo workload = {};
+    workload.id           = 4;
+    workload.name         = "memory chart";
+
+    MemChartContentItem item;
+    item.metric.valid       = true;
+    item.metric.metric_id   = "3.1.2";
+    item.metric.metric_name = "Read bandwidth";
+    item.title              = "Reads";
+    item.category           = "read";
+    item.unit               = "GB/s";
+
+    MemChartBlock child;
+    child.id    = "l1";
+    child.title = "L1";
+
+    MemChartBlock block;
+    block.id      = "gpu";
+    block.column  = 2;
+    block.row     = 3;
+    block.order   = 1;
+    block.title   = "GPU";
+    block.content = { item };
+    block.children.push_back(child);
+    workload.memory_chart_layout.blocks.push_back(block);
+
+    MemChartArrow arrow;
+    arrow.from               = "gpu";
+    arrow.to                 = "l1";
+    arrow.direction          = MemChartArrowDir::kBackward;
+    arrow.metric.valid       = true;
+    arrow.metric.metric_id   = "3.2.1";
+    arrow.metric.metric_name = "Write bandwidth";
+    arrow.title              = "Writes";
+    arrow.category           = "write";
+    workload.memory_chart_layout.arrows.push_back(arrow);
+
+    WorkloadInfo::Roofline::Ceiling ceiling = {};
+    ceiling.bandwidth_type = kRPVControllerRooflineCeilingTypeBandwidthHBM;
+    ceiling.compute_type   = kRPVControllerRooflineCeilingComputeVALUFP32;
+    ceiling.position.p1.x  = std::numeric_limits<double>::quiet_NaN();
+    ceiling.position.p1.y  = std::numeric_limits<double>::infinity();
+    ceiling.position.p2    = { 1.0, 2.0 };
+    ceiling.throughput     = std::numeric_limits<double>::infinity();
+    workload.roofline.ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
+        ceiling;
+
+    jt::Json  json  = DataProviderJson::Workload(workload);
+    jt::Json& chart = json["memory_chart"];
+    REQUIRE(chart["blocks"].isArray());
+    REQUIRE(chart["blocks"].getArray().size() == 1);
+    jt::Json& serialized_block = chart["blocks"].getArray().front();
+    CHECK(serialized_block["id"].getString() == "gpu");
+    CHECK(serialized_block["content"]
+              .getArray()
+              .front()["metric"]["metric_id"]
+              .getString() == "3.1.2");
+    CHECK(serialized_block["children"].getArray().front()["id"].getString() == "l1");
+    REQUIRE(chart["arrows"].getArray().size() == 1);
+    jt::Json& serialized_arrow = chart["arrows"].getArray().front();
+    CHECK(serialized_arrow["direction"].getString() == "backward");
+    CHECK(serialized_arrow["metric"]["metric_id"].getString() == "3.2.1");
+    jt::Json& serialized_ceiling =
+        json["roofline"]["bandwidth_ceilings"].getArray().front();
+    CHECK(serialized_ceiling["from"]["x"].isNull());
+    CHECK(serialized_ceiling["from"]["y"].isNull());
+    CHECK(serialized_ceiling["throughput"].isNull());
+
+    KernelInfo kernel                                    = {};
+    kernel.dispatch_metrics[KernelInfo::InvocationCount] = (1ULL << 53) + 1;
+    jt::Json serialized_kernel = DataProviderJson::Kernel(kernel);
+    CHECK(serialized_kernel["dispatch"]["invocation_count"].getString() ==
+          "9007199254740993");
+}
+
+TEST_CASE("The compute HTTP API rejects system and unloaded routes", "[compute]")
+{
+    DataProvider provider;
+    REQUIRE(Load(provider));
+    REQUIRE_FALSE(provider.ComputeModel().GetWorkloadList().empty());
+    const WorkloadInfo* workload = provider.ComputeModel().GetWorkloadList().front();
+    REQUIRE_FALSE(workload->ordered_kernels.empty());
+    const uint32_t kernel_id = workload->ordered_kernels.front()->id;
+
+    RunningServer running = StartServer(provider, DataProviderJson::TraceKind::kCompute);
+    REQUIRE(running.server);
+
+    httplib::Result compute =
+        GetFromServer(*running.server, running.port, "/api/compute");
+    REQUIRE(compute);
+    CHECK(compute->status == 200);
+
+    httplib::Result wrong_kind =
+        GetFromServer(*running.server, running.port, "/api/timeline");
+    REQUIRE(wrong_kind);
+    CHECK(wrong_kind->status == 404);
+
+    httplib::Result metrics =
+        GetFromServer(*running.server, running.port,
+                      "/api/compute/kernels/" + std::to_string(kernel_id) + "/metrics");
+    REQUIRE(metrics);
+    CHECK(metrics->status == 501);
+    running.server->Stop();
 }
 
 TEST_CASE("A compute trace serializes its workloads, kernels and metrics", "[compute]")
@@ -254,6 +474,12 @@ TEST_CASE("A compute trace serializes its workloads, kernels and metrics", "[com
     DataProvider provider;
     REQUIRE(Load(provider));
     const ComputeDataModel& model = provider.ComputeModel();
+
+    jt::Json snapshot =
+        DataProviderJson::Snapshot(provider, DataProviderJson::TraceKind::kCompute);
+    CHECK(snapshot["status"]["trace_type"].getString() == "compute");
+    CHECK(snapshot["system"].isNull());
+    REQUIRE(snapshot["compute"].isObject());
 
     jt::Json                              compute = DataProviderJson::Compute(model);
     std::pair<jt::Json::Status, jt::Json> parsed  = jt::Json::parse(compute.toString());
@@ -277,6 +503,19 @@ TEST_CASE("A compute trace serializes its workloads, kernels and metrics", "[com
     const WorkloadInfo* workload = model.GetWorkloadList().front();
     REQUIRE_FALSE(workload->ordered_kernels.empty());
     REQUIRE_FALSE(workload->available_metrics.ordered_categories.empty());
+    jt::Json& memory_chart = workloads.front()["memory_chart"];
+    REQUIRE(memory_chart["blocks"].isArray());
+    REQUIRE(memory_chart["arrows"].isArray());
+    CHECK(memory_chart["version"].getLong() == workload->memory_chart_layout.version);
+    CHECK(memory_chart["blocks"].getArray().size() ==
+          workload->memory_chart_layout.blocks.size());
+    CHECK(memory_chart["arrows"].getArray().size() ==
+          workload->memory_chart_layout.arrows.size());
+    if(!workload->memory_chart_layout.blocks.empty())
+    {
+        CHECK(memory_chart["blocks"].getArray().front()["id"].getString() ==
+              workload->memory_chart_layout.blocks.front().id);
+    }
     const KernelInfo*              kernel = workload->ordered_kernels.front();
     MetricsRequestParams::MetricID category{
         workload->available_metrics.ordered_categories.front()->id, std::nullopt,
@@ -297,4 +536,14 @@ TEST_CASE("A compute trace serializes its workloads, kernels and metrics", "[com
     REQUIRE(metric["metric_id"].isString());
     CHECK(metric["metric_id"].getString().rfind(
               std::to_string(category.category_id) + ".", 0) == 0);
+
+    const uint32_t    previous_kernel_id = kernel->id;
+    const std::string system_trace = (std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) /
+                                      "sample" / "rocpd-transpose.db")
+                                         .string();
+    REQUIRE(Load(provider, system_trace));
+    CHECK(provider.ComputeModel().GetWorkloadList().empty());
+    CHECK(DataProviderJson::KernelMetrics(provider.ComputeModel(), METRICS_CLIENT_ID,
+                                          previous_kernel_id)
+              .isNull());
 }

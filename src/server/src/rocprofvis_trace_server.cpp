@@ -3,12 +3,15 @@
 
 #include "rocprofvis_trace_server.h"
 
+#include <cctype>
 #include <charconv>
+#include <exception>
 #include <limits>
 #include <system_error>
 #include <utility>
 
 #include "httplib.h"
+#include "spdlog/spdlog.h"
 
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "model/rocprofvis_trace_data_model.h"
@@ -23,11 +26,16 @@ namespace Server
 // provider thread reaches the client as an error rather than a hung request.
 constexpr std::chrono::seconds PROVIDER_REPLY_TIMEOUT(30);
 
-constexpr int32_t     HTTP_OK           = 200;
-constexpr int32_t     HTTP_BAD_REQUEST  = 400;
-constexpr int32_t     HTTP_NOT_FOUND    = 404;
-constexpr int32_t     HTTP_UNAVAILABLE  = 503;
-constexpr const char* JSON_CONTENT_TYPE = "application/json";
+constexpr int32_t     HTTP_OK                   = 200;
+constexpr int32_t     HTTP_NO_CONTENT           = 204;
+constexpr int32_t     HTTP_BAD_REQUEST          = 400;
+constexpr int32_t     HTTP_NOT_FOUND            = 404;
+constexpr int32_t     HTTP_INTERNAL_ERROR       = 500;
+constexpr int32_t     HTTP_NOT_IMPLEMENTED      = 501;
+constexpr int32_t     HTTP_UNAVAILABLE          = 503;
+constexpr const char* JSON_CONTENT_TYPE         = "application/json";
+constexpr size_t      HTTP_WORKER_COUNT         = 8;
+constexpr size_t      HTTP_QUEUED_REQUEST_LIMIT = 32;
 
 // A route capture or query value as a whole uint64; false for anything else.
 static bool
@@ -51,6 +59,26 @@ parse_uint32(const std::string& text, uint32_t& value_out)
     return parsed;
 }
 
+static std::string
+ascii_lower(const std::string& text)
+{
+    std::string lower = text;
+    for(char& character : lower)
+    {
+        character =
+            static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    }
+    return lower;
+}
+
+static bool
+is_loopback_address(const std::string& host)
+{
+    const std::string normalized = ascii_lower(host);
+    return normalized == "localhost" || normalized == "::1" ||
+           normalized.rfind("127.", 0) == 0;
+}
+
 // The kernel a /workloads/<id>/kernels/<id> route names, or nullptr.
 static const View::KernelInfo*
 find_kernel(View::DataProvider& provider, const std::vector<std::string>& captures)
@@ -65,12 +93,21 @@ find_kernel(View::DataProvider& provider, const std::vector<std::string>& captur
     return kernel;
 }
 
-TraceServer::TraceServer(View::DataProvider& provider, const std::string& allowed_origin)
+TraceServer::TraceServer(View::DataProvider&               provider,
+                         View::DataProviderJson::TraceKind trace_kind,
+                         const std::string&                allowed_origin)
 : m_provider(provider)
+, m_trace_kind(trace_kind)
 , m_allowed_origin(allowed_origin)
 , m_http(std::make_unique<httplib::Server>())
+, m_listener_failed(false)
+, m_start_attempted(false)
 , m_stopping(false)
 {
+    m_http->new_task_queue = []() {
+        return new httplib::ThreadPool(HTTP_WORKER_COUNT, HTTP_WORKER_COUNT,
+                                       HTTP_QUEUED_REQUEST_LIMIT);
+    };
     RegisterRoutes();
 }
 
@@ -79,10 +116,68 @@ TraceServer::~TraceServer() { Stop(); }
 bool
 TraceServer::Start(const std::string& host, uint16_t port)
 {
+    if(!is_loopback_address(host))
+    {
+        return false;
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if(m_start_attempted || m_stopping)
+        {
+            return false;
+        }
+        m_start_attempted = true;
+    }
+
+    std::string expected_host = ascii_lower(host);
+    m_expected_host           = expected_host.find(':') == std::string::npos
+                                    ? expected_host
+                                    : "[" + expected_host + "]";
+    m_expected_authority      = m_expected_host + ":" + std::to_string(port);
+
     bool bound = m_http->bind_to_port(host, port);
     if(bound)
     {
-        m_listener = std::thread([this]() { m_http->listen_after_bind(); });
+        try
+        {
+            m_listener = std::thread([this]() {
+                bool listened = false;
+                try
+                {
+                    listened = m_http->listen_after_bind();
+                } catch(const std::exception& error)
+                {
+                    spdlog::error("HTTP listener failed: {}", error.what());
+                } catch(...)
+                {
+                    spdlog::error("HTTP listener failed with an unknown error.");
+                }
+                if(!listened)
+                {
+                    m_http->decommission();
+                    m_listener_failed.store(true);
+                    m_task_queued.notify_all();
+                }
+            });
+        } catch(const std::exception& error)
+        {
+            spdlog::error("Could not start the HTTP listener thread: {}", error.what());
+            m_http->stop();
+            bound = false;
+        }
+        if(bound)
+        {
+            m_http->wait_until_ready();
+            if(!m_http->is_running())
+            {
+                m_listener_failed.store(true);
+                if(m_listener.joinable())
+                {
+                    m_listener.join();
+                }
+                bound = false;
+            }
+        }
     }
     return bound;
 }
@@ -96,9 +191,14 @@ TraceServer::Stop()
         m_stopping = true;
         abandoned.swap(m_tasks);
     }
+    m_task_queued.notify_all();
     for(Task& task : abandoned)
     {
-        task.reply->set_value(Error(HTTP_UNAVAILABLE, "The server is shutting down."));
+        if(!task.cancelled->load())
+        {
+            task.reply->set_value(
+                Error(HTTP_UNAVAILABLE, "The server is shutting down."));
+        }
     }
     m_http->stop();
     if(m_listener.joinable())
@@ -117,7 +217,26 @@ TraceServer::RunPendingRequests()
     }
     for(Task& task : tasks)
     {
-        task.reply->set_value(task.work());
+        if(task.cancelled->load())
+        {
+            continue;
+        }
+
+        Reply reply = Error(HTTP_INTERNAL_ERROR, "The request could not be completed.");
+        try
+        {
+            reply = task.work();
+        } catch(const std::exception& error)
+        {
+            spdlog::error("Trace server provider task failed: {}", error.what());
+        } catch(...)
+        {
+            spdlog::error("Trace server provider task failed with an unknown error.");
+        }
+        if(!task.cancelled->load())
+        {
+            task.reply->set_value(std::move(reply));
+        }
     }
 }
 
@@ -125,7 +244,15 @@ void
 TraceServer::WaitForRequests(std::chrono::milliseconds timeout)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
-    m_task_queued.wait_for(lock, timeout, [this]() { return !m_tasks.empty(); });
+    m_task_queued.wait_for(lock, timeout, [this]() {
+        return m_stopping || m_listener_failed.load() || !m_tasks.empty();
+    });
+}
+
+bool
+TraceServer::ListenerFailed() const
+{
+    return m_listener_failed.load();
 }
 
 TraceServer::Reply
@@ -133,13 +260,15 @@ TraceServer::OnProviderThread(std::function<Reply()> work)
 {
     std::shared_ptr<std::promise<Reply>> promise =
         std::make_shared<std::promise<Reply>>();
+    std::shared_ptr<std::atomic<bool>> cancelled =
+        std::make_shared<std::atomic<bool>>(false);
     std::future<Reply> reply  = promise->get_future();
     bool               queued = false;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         if(!m_stopping)
         {
-            m_tasks.push_back(Task{ std::move(work), promise });
+            m_tasks.push_back(Task{ std::move(work), promise, cancelled });
             queued = true;
         }
     }
@@ -154,11 +283,19 @@ TraceServer::OnProviderThread(std::function<Reply()> work)
         }
         else
         {
+            cancelled->store(true);
             result =
                 Error(HTTP_UNAVAILABLE, "The trace provider did not answer in time.");
         }
     }
     return result;
+}
+
+bool
+TraceServer::IsExpectedHost(const std::string& host) const
+{
+    const std::string normalized = ascii_lower(host);
+    return normalized == m_expected_host || normalized == m_expected_authority;
 }
 
 void
@@ -202,13 +339,53 @@ TraceServer::Error(int32_t status, const std::string& message)
 void
 TraceServer::RegisterRoutes()
 {
-    if(!m_allowed_origin.empty())
-    {
-        m_http->set_post_routing_handler(
-            [this](const httplib::Request&, httplib::Response& response) {
+    m_http->set_pre_routing_handler(
+        [this](const httplib::Request& request, httplib::Response& response) {
+            if(request.get_header_value_count("Host") == 1 &&
+               IsExpectedHost(request.get_header_value("Host")))
+            {
+                return httplib::Server::HandlerResponse::Unhandled;
+            }
+
+            Reply reply     = Error(HTTP_BAD_REQUEST, "Unexpected Host header.");
+            response.status = reply.status;
+            response.set_content(reply.body.toString(), JSON_CONTENT_TYPE);
+            return httplib::Server::HandlerResponse::Handled;
+        });
+    m_http->set_exception_handler([](const httplib::Request&, httplib::Response& response,
+                                     std::exception_ptr error) {
+        try
+        {
+            if(error)
+            {
+                std::rethrow_exception(error);
+            }
+        } catch(const std::exception& exception)
+        {
+            spdlog::error("Trace server request failed: {}", exception.what());
+        } catch(...)
+        {
+            spdlog::error("Trace server request failed with an unknown error.");
+        }
+        Reply reply = Error(HTTP_INTERNAL_ERROR, "The request could not be completed.");
+        response.status = reply.status;
+        response.set_content(reply.body.toString(), JSON_CONTENT_TYPE);
+    });
+    m_http->set_post_routing_handler(
+        [this](const httplib::Request&, httplib::Response& response) {
+            response.set_header("Cache-Control", "no-store");
+            if(!m_allowed_origin.empty())
+            {
                 response.set_header("Access-Control-Allow-Origin", m_allowed_origin);
-            });
-    }
+                response.set_header("Access-Control-Allow-Methods", "GET, OPTIONS");
+                response.set_header("Access-Control-Allow-Headers", "Content-Type");
+                response.set_header("Vary", "Origin");
+            }
+        });
+    m_http->Options(R"(/api/.*)",
+                    [](const httplib::Request&, httplib::Response& response) {
+                        response.status = HTTP_NO_CONTENT;
+                    });
     // Requests that match no route still get a JSON body.
     m_http->set_error_handler([](const httplib::Request&, httplib::Response& response) {
         if(response.body.empty())
@@ -219,112 +396,161 @@ TraceServer::RegisterRoutes()
         }
     });
 
-    Route("/api/status", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Status(provider));
+    Route("/api/status", [this](View::DataProvider& provider, const RouteArgs&) {
+        return Ok(View::DataProviderJson::Status(provider, m_trace_kind));
     });
-    Route("/api/snapshot", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Snapshot(provider));
+    Route("/api/snapshot", [this](View::DataProvider& provider, const RouteArgs&) {
+        return Ok(View::DataProviderJson::Snapshot(provider, m_trace_kind));
     });
-    Route("/api/timeline", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Timeline(provider.DataModel()));
-    });
-    Route("/api/histogram", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Histogram(provider.DataModel().GetTimeline()));
-    });
-    Route("/api/minimap", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Minimap(provider.DataModel().GetTimeline()));
-    });
-    Route("/api/topology", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Topology(provider.DataModel().GetTopology()));
-    });
-    Route("/api/summary", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Summary(provider.DataModel()));
-    });
-    Route(R"(/api/tracks/(\d+))",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              uint64_t track_id = 0;
-              jt::Json track;
-              if(parse_uint64(args.captures[0], track_id))
-              {
-                  track = View::DataProviderJson::Track(provider.DataModel(), track_id);
-              }
-              return track.isNull() ? Error(HTTP_NOT_FOUND, "No track with that id.")
-                                    : Ok(std::move(track));
-          });
-    Route(R"(/api/tracks/(\d+)/data)",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              const View::TimelineModel& timeline = provider.DataModel().GetTimeline();
-              uint64_t                   track_id = 0;
-              Reply reply = Error(HTTP_NOT_FOUND, "No track with that id.");
-              if(parse_uint64(args.captures[0], track_id) && timeline.GetTrack(track_id))
-              {
-                  reply = Ok(View::DataProviderJson::TrackData(timeline, track_id));
-              }
-              return reply;
-          });
-    Route(R"(/api/tables/([a-z0-9_]+))",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              View::TableType type = View::TableType::__kTableTypeCount;
-              return View::DataProviderJson::TableTypeFromName(args.captures[0], type)
-                         ? Ok(View::DataProviderJson::Table(provider.DataModel(), type))
-                         : Error(HTTP_NOT_FOUND, "No table with that name.");
-          });
-    Route(R"(/api/events/(\d+))",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              uint64_t uuid = 0;
-              return parse_uint64(args.captures[0], uuid)
-                         ? Ok(View::DataProviderJson::Event(
-                               provider.DataModel().GetEvents(), uuid))
-                         : Error(HTTP_BAD_REQUEST, "An event uuid is a decimal uint64.");
-          });
-
-    Route("/api/compute", [](View::DataProvider& provider, const RouteArgs&) {
-        return Ok(View::DataProviderJson::Compute(provider.ComputeModel()));
-    });
-    Route("/api/compute/kernel_table", [](View::DataProvider& provider,
-                                          const RouteArgs&) {
-        return Ok(View::DataProviderJson::KernelSelectionTable(
-            provider.ComputeModel().GetKernelSelectionTable()));
-    });
-    Route(R"(/api/compute/workloads/(\d+))",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              uint32_t                  workload_id = 0;
-              const View::WorkloadInfo* workload    = nullptr;
-              if(parse_uint32(args.captures[0], workload_id))
-              {
-                  workload = provider.ComputeModel().GetWorkload(workload_id);
-              }
-              return workload ? Ok(View::DataProviderJson::Workload(*workload))
-                              : Error(HTTP_NOT_FOUND, "No workload with that id.");
-          });
-    Route(R"(/api/compute/workloads/(\d+)/kernels/(\d+))",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              const View::KernelInfo* kernel = find_kernel(provider, args.captures);
-              return kernel ? Ok(View::DataProviderJson::Kernel(*kernel))
-                            : Error(HTTP_NOT_FOUND,
-                                    "No kernel with that id in that workload.");
-          });
-    Route(R"(/api/compute/workloads/(\d+)/kernels/(\d+)/pc_sampling)",
-          [](View::DataProvider& provider, const RouteArgs& args) {
-              const View::KernelInfo* kernel = find_kernel(provider, args.captures);
-              return kernel ? Ok(View::DataProviderJson::PcSampling(
-                                  kernel->pc_sampling_data))
-                            : Error(HTTP_NOT_FOUND,
-                                    "No kernel with that id in that workload.");
-          });
-    Route(R"(/api/compute/kernels/(\d+)/metrics)", [](View::DataProvider& provider,
-                                                      const RouteArgs&    args) {
-        uint32_t kernel_id = 0;
-        uint64_t client_id = 0;
-        auto     client    = args.params.find("client_id");
-        bool     valid =
-            parse_uint32(args.captures[0], kernel_id) &&
-            (client == args.params.end() || parse_uint64(client->second, client_id));
-        return valid
-                   ? Ok(View::DataProviderJson::KernelMetrics(provider.ComputeModel(),
-                                                              client_id, kernel_id))
-                   : Error(HTTP_BAD_REQUEST, "kernel id and client_id are uint values.");
-    });
+    if(m_trace_kind == View::DataProviderJson::TraceKind::kSystem)
+    {
+        Route("/api/timeline", [](View::DataProvider& provider, const RouteArgs&) {
+            return Ok(View::DataProviderJson::Timeline(provider.DataModel()));
+        });
+        Route("/api/histogram", [](View::DataProvider& provider, const RouteArgs&) {
+            return Ok(
+                View::DataProviderJson::Histogram(provider.DataModel().GetTimeline()));
+        });
+        Route("/api/minimap", [](View::DataProvider& provider, const RouteArgs&) {
+            return Ok(
+                View::DataProviderJson::Minimap(provider.DataModel().GetTimeline()));
+        });
+        Route("/api/topology", [](View::DataProvider& provider, const RouteArgs&) {
+            return Ok(
+                View::DataProviderJson::Topology(provider.DataModel().GetTopology()));
+        });
+        Route("/api/summary", [](View::DataProvider& provider, const RouteArgs&) {
+            jt::Json summary = View::DataProviderJson::Summary(provider.DataModel());
+            return summary.isNull()
+                       ? Error(HTTP_NOT_IMPLEMENTED,
+                               "Summary fetching is not available through HTTP yet.")
+                       : Ok(std::move(summary));
+        });
+        Route(R"(/api/tracks/(\d+))", [](View::DataProvider& provider,
+                                         const RouteArgs&    args) {
+            uint64_t track_id = 0;
+            jt::Json track;
+            if(parse_uint64(args.captures[0], track_id))
+            {
+                track = View::DataProviderJson::Track(provider.DataModel(), track_id);
+            }
+            return track.isNull() ? Error(HTTP_NOT_FOUND, "No track with that id.")
+                                  : Ok(std::move(track));
+        });
+        Route(R"(/api/tracks/(\d+)/data)", [](View::DataProvider& provider,
+                                              const RouteArgs&    args) {
+            const View::TimelineModel& timeline = provider.DataModel().GetTimeline();
+            uint64_t                   track_id = 0;
+            Reply reply = Error(HTTP_NOT_FOUND, "No track with that id.");
+            if(parse_uint64(args.captures[0], track_id) && timeline.GetTrack(track_id))
+            {
+                jt::Json data = View::DataProviderJson::TrackData(timeline, track_id);
+                reply =
+                    data.isNull()
+                        ? Error(HTTP_NOT_IMPLEMENTED,
+                                "Track-data fetching is not available through HTTP yet.")
+                        : Ok(std::move(data));
+            }
+            return reply;
+        });
+        Route(R"(/api/tables/([a-z0-9_]+))", [](View::DataProvider& provider,
+                                                const RouteArgs&    args) {
+            View::TableType type = View::TableType::__kTableTypeCount;
+            if(!View::DataProviderJson::TableTypeFromName(args.captures[0], type))
+            {
+                return Error(HTTP_NOT_FOUND, "No table with that name.");
+            }
+            jt::Json table = View::DataProviderJson::Table(provider.DataModel(), type);
+            return table.isNull()
+                       ? Error(HTTP_NOT_IMPLEMENTED,
+                               "Table fetching is not available through HTTP yet.")
+                       : Ok(std::move(table));
+        });
+        Route(R"(/api/events/(\d+))", [](View::DataProvider& provider,
+                                         const RouteArgs&    args) {
+            uint64_t uuid = 0;
+            if(!parse_uint64(args.captures[0], uuid))
+            {
+                return Error(HTTP_BAD_REQUEST, "An event uuid is a decimal uint64.");
+            }
+            jt::Json event =
+                View::DataProviderJson::Event(provider.DataModel().GetEvents(), uuid);
+            return event.isNull()
+                       ? Error(HTTP_NOT_IMPLEMENTED,
+                               "Event fetching is not available through HTTP yet.")
+                       : Ok(std::move(event));
+        });
+    }
+    else
+    {
+        Route("/api/compute", [](View::DataProvider& provider, const RouteArgs&) {
+            return Ok(View::DataProviderJson::Compute(provider.ComputeModel()));
+        });
+        Route("/api/compute/kernel_table", [](View::DataProvider& provider,
+                                              const RouteArgs&) {
+            jt::Json table = View::DataProviderJson::KernelSelectionTable(
+                provider.ComputeModel().GetKernelSelectionTable());
+            return table.isNull()
+                       ? Error(HTTP_NOT_IMPLEMENTED,
+                               "Kernel-table fetching is not available through HTTP yet.")
+                       : Ok(std::move(table));
+        });
+        Route(R"(/api/compute/workloads/(\d+))",
+              [](View::DataProvider& provider, const RouteArgs& args) {
+                  uint32_t                  workload_id = 0;
+                  const View::WorkloadInfo* workload    = nullptr;
+                  if(parse_uint32(args.captures[0], workload_id))
+                  {
+                      workload = provider.ComputeModel().GetWorkload(workload_id);
+                  }
+                  return workload ? Ok(View::DataProviderJson::Workload(*workload))
+                                  : Error(HTTP_NOT_FOUND, "No workload with that id.");
+              });
+        Route(R"(/api/compute/workloads/(\d+)/kernels/(\d+))",
+              [](View::DataProvider& provider, const RouteArgs& args) {
+                  const View::KernelInfo* kernel = find_kernel(provider, args.captures);
+                  return kernel ? Ok(View::DataProviderJson::Kernel(*kernel))
+                                : Error(HTTP_NOT_FOUND,
+                                        "No kernel with that id in that workload.");
+              });
+        Route(R"(/api/compute/workloads/(\d+)/kernels/(\d+)/pc_sampling)",
+              [](View::DataProvider& provider, const RouteArgs& args) {
+                  const View::KernelInfo* kernel = find_kernel(provider, args.captures);
+                  if(!kernel)
+                  {
+                      return Error(HTTP_NOT_FOUND,
+                                   "No kernel with that id in that workload.");
+                  }
+                  const View::PcSamplingData& data = kernel->pc_sampling_data;
+                  const bool                  loaded =
+                      !data.code_objects.empty() || !data.source_files.empty() ||
+                      data.sample_states_loaded || data.stall_details_loaded;
+                  return loaded
+                             ? Ok(View::DataProviderJson::PcSampling(data))
+                             : Error(HTTP_NOT_IMPLEMENTED, "PC-sampling fetching is not "
+                                                           "available through HTTP yet.");
+              });
+        Route(R"(/api/compute/kernels/(\d+)/metrics)", [](View::DataProvider& provider,
+                                                          const RouteArgs&    args) {
+            uint32_t kernel_id = 0;
+            uint64_t client_id = 0;
+            auto     client    = args.params.find("client_id");
+            bool     valid =
+                parse_uint32(args.captures[0], kernel_id) &&
+                (client == args.params.end() || parse_uint64(client->second, client_id));
+            if(!valid)
+            {
+                return Error(HTTP_BAD_REQUEST,
+                             "kernel id and client_id are uint values.");
+            }
+            jt::Json metrics = View::DataProviderJson::KernelMetrics(
+                provider.ComputeModel(), client_id, kernel_id);
+            return metrics.isNull()
+                       ? Error(HTTP_NOT_IMPLEMENTED,
+                               "Metric fetching is not available through HTTP yet.")
+                       : Ok(std::move(metrics));
+        });
+    }
 }
 
 }  // namespace Server

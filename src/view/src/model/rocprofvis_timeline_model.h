@@ -84,7 +84,9 @@ public:
     void SetMiniMap(std::map<uint64_t, std::vector<double>>&& mini_map);
 
     // Histogram updates
+#ifndef ROCPROFVIS_HEADLESS
     void UpdateHistogram(const std::vector<TrackItem*>& tracks);
+#endif
     void NormalizeHistogram();
     void ToggleNormalization() { m_normalize_global = !m_normalize_global; }
     bool IsNormalizeGlobal() const { return m_normalize_global; }

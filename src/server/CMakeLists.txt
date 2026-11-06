@@ -31,6 +31,68 @@ function(rocprofvis_server_stage_runtime target)
     endif()
 endfunction()
 
+# FindOpenSSL often exposes only import-library paths on Windows, so
+# TARGET_RUNTIME_DLLS can miss the actual libssl/libcrypto DLLs.
+function(rocprofvis_server_stage_openssl target install_runtime)
+    if(NOT WIN32 OR NOT ROCPROFVIS_ENABLE_REMOTE OR
+       NOT CRYPTO_BACKEND STREQUAL "OpenSSL")
+        return()
+    endif()
+
+    set(openssl_dlls "")
+    foreach(openssl_target OpenSSL::SSL OpenSSL::Crypto)
+        if(TARGET ${openssl_target})
+            get_target_property(location ${openssl_target} IMPORTED_LOCATION)
+            if(location AND location MATCHES "\\.dll$")
+                list(APPEND openssl_dlls "${location}")
+            endif()
+        endif()
+    endforeach()
+
+    set(openssl_prefix "")
+    if(DEFINED OPENSSL_ROOT_DIR AND OPENSSL_ROOT_DIR)
+        set(openssl_prefix "${OPENSSL_ROOT_DIR}")
+    elseif(DEFINED OPENSSL_INCLUDE_DIR AND OPENSSL_INCLUDE_DIR)
+        get_filename_component(openssl_prefix "${OPENSSL_INCLUDE_DIR}" DIRECTORY)
+    elseif(DEFINED ENV{OPENSSL_ROOT_DIR} AND NOT "$ENV{OPENSSL_ROOT_DIR}" STREQUAL "")
+        set(openssl_prefix "$ENV{OPENSSL_ROOT_DIR}")
+    endif()
+
+    if(NOT openssl_dlls AND openssl_prefix)
+        set(ssl_glob "libssl*.dll")
+        set(crypto_glob "libcrypto*.dll")
+        if(DEFINED ROCPROFVIS_OPENSSL_VERSION_MAJOR AND
+           NOT ROCPROFVIS_OPENSSL_VERSION_MAJOR STREQUAL "")
+            set(ssl_glob "libssl-${ROCPROFVIS_OPENSSL_VERSION_MAJOR}*.dll")
+            set(crypto_glob "libcrypto-${ROCPROFVIS_OPENSSL_VERSION_MAJOR}*.dll")
+        endif()
+        file(GLOB openssl_dlls
+            "${openssl_prefix}/${ssl_glob}"
+            "${openssl_prefix}/${crypto_glob}"
+            "${openssl_prefix}/bin/${ssl_glob}"
+            "${openssl_prefix}/bin/${crypto_glob}")
+    endif()
+
+    if(openssl_dlls)
+        list(REMOVE_DUPLICATES openssl_dlls)
+        foreach(openssl_dll ${openssl_dlls})
+            add_custom_command(TARGET ${target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${openssl_dll}" "$<TARGET_FILE_DIR:${target}>"
+                COMMENT "Copying OpenSSL runtime DLL ${openssl_dll} next to ${target}")
+        endforeach()
+        if(install_runtime)
+            install(FILES ${openssl_dlls}
+                DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+                COMPONENT ${RUNTIME_COMP_TYPE})
+        endif()
+    else()
+        message(WARNING
+            "CRYPTO_BACKEND=OpenSSL: could not locate libssl/libcrypto DLLs "
+            "for ${target}. Set OPENSSL_ROOT_DIR or OPENSSL_INCLUDE_DIR.")
+    endif()
+endfunction()
+
 # ROCPROFVIS_HEADLESS compiles out the two places the models reach into the UI:
 # the user's time format setting and the timeline view's track items.
 set(PROVIDER_TARGET ${TARGET_NAME}-provider)
@@ -100,7 +162,6 @@ add_executable(${SERVER_TARGET}
 target_include_directories(${SERVER_TARGET} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_include_directories(${SERVER_TARGET} SYSTEM PRIVATE
     ${CMAKE_SOURCE_DIR}/thirdparty/cpp-httplib)
-target_compile_definitions(${SERVER_TARGET} PRIVATE CPPHTTPLIB_NO_EXCEPTIONS)
 target_link_libraries(${SERVER_TARGET} PRIVATE ${PROVIDER_TARGET} Threads::Threads)
 if(WIN32)
     target_link_libraries(${SERVER_TARGET} PRIVATE ws2_32)
@@ -108,15 +169,46 @@ endif()
 # httplib.h is one 21k-line header, which overruns the default section limit.
 target_compile_options(${SERVER_TARGET} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
 rocprofvis_server_stage_runtime(${SERVER_TARGET})
+rocprofvis_server_stage_openssl(${SERVER_TARGET} TRUE)
+
+install(TARGETS ${SERVER_TARGET}
+    RUNTIME DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+    COMPONENT ${RUNTIME_COMP_TYPE})
+if(NOT ROCPROFVIS_ENABLE_GUI)
+    install(FILES ${CMAKE_SOURCE_DIR}/LICENSE.md
+        DESTINATION ${ROCPROFVIS_INSTALL_DOCDIR}
+        RENAME LICENSE.txt
+        COMPONENT ${RUNTIME_COMP_TYPE})
+endif()
+if(WIN32)
+    install(FILES $<TARGET_RUNTIME_DLLS:${SERVER_TARGET}>
+        DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+        COMPONENT ${RUNTIME_COMP_TYPE})
+endif()
+if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
+    rocprofvis_python_vendor_install(${SERVER_TARGET} ${RUNTIME_COMP_TYPE})
+endif()
 
 if(BUILD_TESTING)
     # The provider and its JSON, loading the sample traces with no UI attached.
     set(PROVIDER_TEST_NAME ${PROVIDER_TARGET}-tests)
-    add_executable(${PROVIDER_TEST_NAME} test/rocprofvis_data_provider_json_tests.cpp)
+    add_executable(${PROVIDER_TEST_NAME}
+        test/rocprofvis_data_provider_json_tests.cpp
+        src/rocprofvis_trace_server.cpp
+        src/rocprofvis_trace_server.h)
     target_compile_definitions(${PROVIDER_TEST_NAME} PRIVATE
         ROCPROFVIS_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-    target_link_libraries(${PROVIDER_TEST_NAME} PRIVATE ${PROVIDER_TARGET} Catch2::Catch2)
+    target_include_directories(${PROVIDER_TEST_NAME} SYSTEM PRIVATE
+        ${CMAKE_SOURCE_DIR}/thirdparty/cpp-httplib)
+    target_link_libraries(${PROVIDER_TEST_NAME} PRIVATE
+        ${PROVIDER_TARGET} Catch2::Catch2 Threads::Threads)
+    if(WIN32)
+        target_link_libraries(${PROVIDER_TEST_NAME} PRIVATE ws2_32)
+    endif()
+    target_compile_options(${PROVIDER_TEST_NAME} PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
     rocprofvis_server_stage_runtime(${PROVIDER_TEST_NAME})
+    rocprofvis_server_stage_openssl(${PROVIDER_TEST_NAME} FALSE)
     add_test(NAME ${PROVIDER_TEST_NAME}-system COMMAND ${PROVIDER_TEST_NAME}
         --input_file "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db" "[system]")
     set_tests_properties(${PROVIDER_TEST_NAME}-system PROPERTIES RUN_SERIAL ON)

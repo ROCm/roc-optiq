@@ -241,7 +241,8 @@ function(rocprofvis_python_vendor_install target component)
     get_target_property(_install_dir RocProfVis::Python ROCPROFVIS_PYTHON_INSTALL_DIR)
     get_target_property(_reldir RocProfVis::Python ROCPROFVIS_PYTHON_RELDIR)
     get_target_property(_license RocProfVis::Python ROCPROFVIS_PYTHON_LICENSE)
-    if(NOT APPLE)
+    get_target_property(_bundle ${target} MACOSX_BUNDLE)
+    if(NOT APPLE OR NOT _bundle)
         install(FILES "${_license}" DESTINATION "${ROCPROFVIS_INSTALL_DOCDIR}"
             RENAME Python-LICENSE.txt COMPONENT ${component})
     endif()
@@ -250,6 +251,13 @@ function(rocprofvis_python_vendor_install target component)
         # top-level install rules put beside the executable.
         install(DIRECTORY "${_stage}/" DESTINATION "${_install_dir}"
             COMPONENT ${component})
+    elseif(APPLE AND NOT _bundle)
+        install(DIRECTORY "${_stage}/"
+            DESTINATION "${ROCPROFVIS_INSTALL_BINDIR}/python"
+            COMPONENT ${component} USE_SOURCE_PERMISSIONS)
+        set_target_properties(${target} PROPERTIES
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH "@executable_path/python/lib")
     elseif(NOT APPLE)
         install(DIRECTORY "${_stage}/" DESTINATION "${_install_dir}"
             COMPONENT ${component} USE_SOURCE_PERMISSIONS)

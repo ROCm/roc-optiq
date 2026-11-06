@@ -65,6 +65,15 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
 option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
 option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
 
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING AND NOT ROCPROFVIS_ENABLE_GUI)
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING requires ROCPROFVIS_ENABLE_GUI.")
+endif()
+if(ROCPROFVIS_ENABLE_UI_TESTS AND NOT ROCPROFVIS_ENABLE_GUI)
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_UI_TESTS requires ROCPROFVIS_ENABLE_GUI.")
+endif()
+
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
@@ -107,6 +116,7 @@ else()
     set(ROCPROFVIS_INSTALL_BINDIR "${CMAKE_INSTALL_BINDIR}")
     set(ROCPROFVIS_INSTALL_DOCDIR "${CMAKE_INSTALL_DOCDIR}")
 endif()
+set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 
 # Enable testing if BUILD_TESTING is ON
 if(BUILD_TESTING)
@@ -893,7 +903,6 @@ endif()
 set(PKG_MAINTAINER_NM "ROCm Optiq Support")
 set(PKG_MAINTAINER_EMAIL "rocm-optiq@amd.com")
 
-set(RUNTIME_COMP_TYPE "RV_RUNTIME")
 set(PKG_DESCRIPTION "A visualizer for the ROCm Profiler Tools")
 set(EXTENDED_PACKAGE_DESCRIPTION
 	"This package provides `roc-optiq` which helps in post analysis of ROCm Systems profiling data.")
@@ -1140,6 +1149,9 @@ if(WIN32)
       COMMENT "Building WiX MSI installer: ${_wix_out}"
       VERBATIM
     )
+    if(ROCPROFVIS_ENABLE_WEB_SERVER)
+      add_dependencies(PACKAGE_WIX ${TARGET_NAME}-server)
+    endif()
   else()
     message(STATUS "wix.exe not found — PACKAGE_WIX target unavailable. "
                    "Install WiX v4: dotnet tool install --global wix")
@@ -1241,3 +1253,21 @@ if(PERFETTO_AVAILABLE)
 endif()
 
 endif(ROCPROFVIS_ENABLE_GUI)
+
+# A server-only configuration still gets an installable TGZ package. Desktop
+# builds use the platform-specific packaging configuration above.
+if(ROCPROFVIS_ENABLE_WEB_SERVER AND NOT ROCPROFVIS_ENABLE_GUI)
+    set(CPACK_GENERATOR "TGZ")
+    set(CPACK_PACKAGE_NAME "${PROJECT_NAME}-server")
+    set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
+    set(CPACK_PACKAGE_VERSION
+        "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${PROJECT_VERSION_BUILD}")
+    set(CPACK_PACKAGE_CONTACT "ROCm Optiq Support <rocm-optiq@amd.com>")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+        "A JSON HTTP server for ROCm Optiq trace data")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE.md")
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+    set(CPACK_COMPONENTS_ALL ${RUNTIME_COMP_TYPE})
+    include(CPack)
+endif()

@@ -4,7 +4,7 @@
 #include "rocprofvis_timeline_model.h"
 #include "rocprofvis_core_assert.h"
 #ifndef ROCPROFVIS_HEADLESS
-#include "rocprofvis_track_item.h"
+#    include "rocprofvis_track_item.h"
 #endif
 #include "spdlog/spdlog.h"
 

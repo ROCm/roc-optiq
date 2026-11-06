@@ -4,12 +4,12 @@
 #include "rocprofvis_data_provider_json.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -30,10 +30,16 @@ namespace DataProviderJson
 using roofline_ceiling_t   = WorkloadInfo::Roofline::Ceiling;
 using roofline_intensity_t = KernelInfo::Roofline::Intensity;
 
+constexpr uint64_t JAVASCRIPT_MAX_SAFE_INTEGER = (1ULL << 53) - 1;
+
 constexpr const char* PROVIDER_STATE_NAMES[] = { "init", "loading", "ready", "error" };
 static_assert(std::size(PROVIDER_STATE_NAMES) ==
                   static_cast<size_t>(ProviderState::kError) + 1,
               "Name every ProviderState");
+
+constexpr const char* TRACE_KIND_NAMES[] = { "system", "compute" };
+static_assert(std::size(TRACE_KIND_NAMES) == static_cast<size_t>(TraceKind::kCompute) + 1,
+              "Name every TraceKind");
 
 constexpr const char* TRACK_DATA_TYPE_NAMES[] = { "samples", "events" };
 static_assert(std::size(TRACK_DATA_TYPE_NAMES) ==
@@ -120,6 +126,12 @@ constexpr const char* METRIC_SOURCE_NAMES[] = { "workload", "kernel" };
 static_assert(std::size(METRIC_SOURCE_NAMES) ==
                   static_cast<size_t>(kRPVControllerMetricSourceTypeKernel) + 1,
               "Name every rocprofvis_controller_metric_source_type_t");
+
+constexpr const char* MEMORY_CHART_ARROW_DIRECTION_NAMES[] = { "forward", "backward",
+                                                               "both" };
+static_assert(std::size(MEMORY_CHART_ARROW_DIRECTION_NAMES) ==
+                  static_cast<size_t>(MemChartArrowDir::kBoth) + 1,
+              "Name every MemChartArrowDir");
 
 constexpr const char* DISPATCH_METRIC_NAMES[] = {
     "invocation_count", "duration_total_ns", "duration_min_ns",
@@ -221,6 +233,12 @@ IdJson(uint64_t id)
 }
 
 static jt::Json
+UInt64Json(uint64_t value)
+{
+    return value <= JAVASCRIPT_MAX_SAFE_INTEGER ? jt::Json(value) : IdJson(value);
+}
+
+static jt::Json
 OptionalIdJson(const c_optional_uint64_t& id)
 {
     return id.has_value ? IdJson(id.value) : jt::Json();
@@ -229,14 +247,14 @@ OptionalIdJson(const c_optional_uint64_t& id)
 static jt::Json
 OptionalCountJson(const std::optional<uint64_t>& count)
 {
-    return count ? jt::Json(*count) : jt::Json();
+    return count ? UInt64Json(*count) : jt::Json();
 }
 
 // Request params use INVALID_UINT64_INDEX for "no limit".
 static jt::Json
 RowCountJson(uint64_t count)
 {
-    return count == INVALID_UINT64_INDEX ? jt::Json() : jt::Json(count);
+    return count == INVALID_UINT64_INDEX ? jt::Json() : UInt64Json(count);
 }
 
 static jt::Json
@@ -245,6 +263,12 @@ EmptyArray()
     jt::Json array;
     array.setArray();
     return array;
+}
+
+static jt::Json
+FiniteDoubleJson(double value)
+{
+    return std::isfinite(value) ? jt::Json(value) : jt::Json();
 }
 
 static jt::Json
@@ -277,7 +301,7 @@ DoublesJson(const std::vector<double>& values)
     array.getArray().reserve(values.size());
     for(double value : values)
     {
-        array.getArray().push_back(value);
+        array.getArray().push_back(FiniteDoubleJson(value));
     }
     return array;
 }
@@ -309,8 +333,8 @@ static jt::Json
 PointJson(const Point& point)
 {
     jt::Json json;
-    json["x"] = point.x;
-    json["y"] = point.y;
+    json["x"] = FiniteDoubleJson(point.x);
+    json["y"] = FiniteDoubleJson(point.y);
     return json;
 }
 
@@ -354,7 +378,7 @@ TrackJson(const TraceDataModel& model, const TrackInfo& track)
 
     jt::Json json;
     json["id"]    = IdJson(track.id);
-    json["index"] = track.index;
+    json["index"] = UInt64Json(track.index);
     json["name"]  = model.BuildTrackName(track.id);
     json["data_type"] =
         EnumName(TRACK_DATA_TYPE_NAMES, static_cast<size_t>(track.track_type));
@@ -362,15 +386,15 @@ TrackJson(const TraceDataModel& model, const TrackInfo& track)
     json["category"]        = track.category;
     json["main_name"]       = track.main_name;
     json["sub_name"]        = track.sub_name;
-    json["start_ns"]        = track.min_ts;
-    json["end_ns"]          = track.max_ts;
-    json["entry_count"]     = track.num_entries;
-    json["min_value"]       = track.min_value;
-    json["max_value"]       = track.max_value;
+    json["start_ns"]        = FiniteDoubleJson(track.min_ts);
+    json["end_ns"]          = FiniteDoubleJson(track.max_ts);
+    json["entry_count"]     = UInt64Json(track.num_entries);
+    json["min_value"]       = FiniteDoubleJson(track.min_value);
+    json["max_value"]       = FiniteDoubleJson(track.max_value);
     json["operations"]      = OperationsJson(operations);
-    json["instance_id"]     = track.instance_id;
-    json["file_id"]         = track.file_id;
-    json["order_rank"]      = track.order_rank;
+    json["instance_id"]     = UInt64Json(track.instance_id);
+    json["file_id"]         = UInt64Json(track.file_id);
+    json["order_rank"]      = UInt64Json(track.order_rank);
     json["agent_or_pid"]    = IdJson(track.agent_or_pid);
     json["queue_id_or_tid"] = IdJson(track.queue_id_or_tid);
     json["topology"]        = std::move(topology);
@@ -388,8 +412,8 @@ TraceEventJson(const TraceEvent& event)
     json["op"] =
         EnumName(OPERATION_NAMES, static_cast<size_t>(event.m_id.bitfield.event_op));
     json["name"]              = event.m_name;
-    json["start_ns"]          = event.m_start_ts;
-    json["duration_ns"]       = event.m_duration;
+    json["start_ns"]          = FiniteDoubleJson(event.m_start_ts);
+    json["duration_ns"]       = FiniteDoubleJson(event.m_duration);
     json["level"]             = event.m_level;
     json["child_count"]       = event.m_child_count;
     json["top_combined_name"] = event.m_top_combined_name;
@@ -400,9 +424,9 @@ static jt::Json
 TraceCounterJson(const TraceCounter& counter)
 {
     jt::Json json;
-    json["start_ns"] = counter.m_start_ts;
-    json["end_ns"]   = counter.m_end_ts;
-    json["value"]    = counter.m_value;
+    json["start_ns"] = FiniteDoubleJson(counter.m_start_ts);
+    json["end_ns"]   = FiniteDoubleJson(counter.m_end_ts);
+    json["value"]    = FiniteDoubleJson(counter.m_value);
     return json;
 }
 
@@ -473,7 +497,7 @@ TopologyNodeJson(const TopologyTree& topology, const TopologyNode& node)
             json["os_name"]       = info.os_name;
             json["os_release"]    = info.os_release;
             json["os_version"]    = info.os_version;
-            json["display_index"] = info.display_index;
+            json["display_index"] = UInt64Json(static_cast<uint64_t>(info.display_index));
             AddTopologyChildren(topology, node, TopologyNodeType::kProcessor,
                                 "processors", json);
             AddTopologyChildren(topology, node, TopologyNodeType::kProcess, "processes",
@@ -487,7 +511,7 @@ TopologyNodeJson(const TopologyTree& topology, const TopologyNode& node)
             json["product_name"] = info.product_name;
             json["processor_type"] =
                 EnumName(PROCESSOR_TYPE_NAMES, static_cast<size_t>(info.type));
-            json["type_index"] = info.type_index;
+            json["type_index"] = UInt64Json(info.type_index);
             json["label"] = topology.GetProcessorTypeLabel(info, label) ? jt::Json(label)
                                                                         : jt::Json();
             AddTopologyChildren(topology, node, TopologyNodeType::kQueue, "queues", json);
@@ -499,8 +523,8 @@ TopologyNodeJson(const TopologyTree& topology, const TopologyNode& node)
         {
             const ProcessInfo& info = static_cast<const ProcessInfo&>(node);
             json["pid"]             = IdJson(info.pid);
-            json["start_ns"]        = info.start_time;
-            json["end_ns"]          = info.end_time;
+            json["start_ns"]        = FiniteDoubleJson(info.start_time);
+            json["end_ns"]          = FiniteDoubleJson(info.end_time);
             json["command"]         = info.command;
             json["environment"]     = info.environment;
             AddTopologyChildren(topology, node, TopologyNodeType::kThread, "threads",
@@ -514,8 +538,8 @@ TopologyNodeJson(const TopologyTree& topology, const TopologyNode& node)
             const ThreadInfo& info = static_cast<const ThreadInfo&>(node);
             json["kind"] = EnumName(THREAD_KIND_NAMES, static_cast<size_t>(info.kind));
             json["tid"]  = IdJson(info.tid);
-            json["start_ns"] = info.start_time;
-            json["end_ns"]   = info.end_time;
+            json["start_ns"] = FiniteDoubleJson(info.start_time);
+            json["end_ns"]   = FiniteDoubleJson(info.end_time);
             break;
         }
         case TopologyNodeType::kStream:
@@ -619,11 +643,11 @@ static jt::Json
 TableRequestJson(const TableRequestParams& params)
 {
     jt::Json json;
-    json["start_ns"]    = params.m_start_ts;
-    json["end_ns"]      = params.m_end_ts;
+    json["start_ns"]    = FiniteDoubleJson(params.m_start_ts);
+    json["end_ns"]      = FiniteDoubleJson(params.m_end_ts);
     json["start_row"]   = RowCountJson(params.m_start_row);
     json["row_count"]   = RowCountJson(params.m_req_row_count);
-    json["sort_column"] = params.m_sort_column_index;
+    json["sort_column"] = UInt64Json(params.m_sort_column_index);
     json["sort_order"] =
         EnumName(SORT_ORDER_NAMES, static_cast<size_t>(params.m_sort_order));
     json["filter"]        = params.m_filter;
@@ -678,7 +702,7 @@ EventInfoJson(const EventInfo& event)
         entry["category"]      = data.category;
         entry["name"]          = data.name;
         entry["value"]         = data.value;
-        entry["category_enum"] = data.category_enum;
+        entry["category_enum"] = UInt64Json(data.category_enum);
         ext.getArray().push_back(std::move(entry));
     }
 
@@ -691,10 +715,10 @@ EventInfoJson(const EventInfo& event)
             EnumName(OPERATION_NAMES, static_cast<size_t>(flow.id.bitfield.event_op));
         entry["name"]      = flow.name;
         entry["track_id"]  = IdJson(flow.track_id);
-        entry["start_ns"]  = flow.start_timestamp;
-        entry["end_ns"]    = flow.end_timestamp;
-        entry["level"]     = flow.level;
-        entry["direction"] = flow.direction;
+        entry["start_ns"]  = UInt64Json(flow.start_timestamp);
+        entry["end_ns"]    = UInt64Json(flow.end_timestamp);
+        entry["level"]     = UInt64Json(flow.level);
+        entry["direction"] = UInt64Json(flow.direction);
         flows.getArray().push_back(std::move(entry));
     }
 
@@ -716,8 +740,8 @@ EventInfoJson(const EventInfo& event)
         EnumName(OPERATION_NAMES, static_cast<size_t>(basic.id.bitfield.event_op));
     json["track_id"]     = IdJson(event.track_id);
     json["name"]         = basic.name;
-    json["start_ns"]     = basic.start_ts;
-    json["duration_ns"]  = basic.duration;
+    json["start_ns"]     = FiniteDoubleJson(basic.start_ts);
+    json["duration_ns"]  = FiniteDoubleJson(basic.duration);
     json["level"]        = basic.level;
     json["stream_level"] = basic.stream_level;
     json["args"]         = std::move(args);
@@ -735,17 +759,17 @@ SummaryValueJson(const SummaryInfo::Value& value)
     {
         case SummaryInfo::Value::UInt:
         {
-            json = value.numeric.uint;
+            json = UInt64Json(value.numeric.uint);
             break;
         }
         case SummaryInfo::Value::Double:
         {
-            json = value.numeric.dbl;
+            json = FiniteDoubleJson(value.numeric.dbl);
             break;
         }
         case SummaryInfo::Value::Float:
         {
-            json = value.numeric.flt;
+            json = FiniteDoubleJson(static_cast<double>(value.numeric.flt));
             break;
         }
     }
@@ -912,6 +936,77 @@ AvailableMetricsJson(const AvailableMetrics& metrics)
 }
 
 static jt::Json
+MemoryChartMetricJson(const MemChartMetricRef& metric)
+{
+    jt::Json json;
+    json["valid"]       = metric.valid;
+    json["metric_id"]   = metric.valid ? jt::Json(metric.metric_id) : jt::Json();
+    json["metric_name"] = metric.metric_name;
+    return json;
+}
+
+static jt::Json
+MemoryChartBlockJson(const MemChartBlock& block)
+{
+    jt::Json content = EmptyArray();
+    for(const MemChartContentItem& item : block.content)
+    {
+        jt::Json json;
+        json["metric"]   = MemoryChartMetricJson(item.metric);
+        json["title"]    = item.title;
+        json["category"] = item.category;
+        json["unit"]     = item.unit;
+        content.getArray().push_back(std::move(json));
+    }
+
+    jt::Json children = EmptyArray();
+    for(const MemChartBlock& child : block.children)
+    {
+        children.getArray().push_back(MemoryChartBlockJson(child));
+    }
+
+    jt::Json json;
+    json["id"]       = block.id;
+    json["column"]   = block.column;
+    json["row"]      = block.row;
+    json["order"]    = block.order;
+    json["title"]    = block.title;
+    json["content"]  = std::move(content);
+    json["children"] = std::move(children);
+    return json;
+}
+
+static jt::Json
+MemoryChartJson(const MemChartLayout& layout)
+{
+    jt::Json blocks = EmptyArray();
+    for(const MemChartBlock& block : layout.blocks)
+    {
+        blocks.getArray().push_back(MemoryChartBlockJson(block));
+    }
+
+    jt::Json arrows = EmptyArray();
+    for(const MemChartArrow& arrow : layout.arrows)
+    {
+        jt::Json json;
+        json["from"]      = arrow.from;
+        json["to"]        = arrow.to;
+        json["direction"] = EnumName(MEMORY_CHART_ARROW_DIRECTION_NAMES,
+                                     static_cast<size_t>(arrow.direction));
+        json["metric"]    = MemoryChartMetricJson(arrow.metric);
+        json["title"]     = arrow.title;
+        json["category"]  = arrow.category;
+        arrows.getArray().push_back(std::move(json));
+    }
+
+    jt::Json json;
+    json["version"] = layout.version;
+    json["blocks"]  = std::move(blocks);
+    json["arrows"]  = std::move(arrows);
+    return json;
+}
+
+static jt::Json
 CeilingsJson(std::vector<const roofline_ceiling_t*>& ceilings)
 {
     std::sort(ceilings.begin(), ceilings.end(),
@@ -929,7 +1024,7 @@ CeilingsJson(std::vector<const roofline_ceiling_t*>& ceilings)
             EnumName(ROOFLINE_COMPUTE_NAMES, static_cast<size_t>(ceiling->compute_type));
         json["from"]       = PointJson(ceiling->position.p1);
         json["to"]         = PointJson(ceiling->position.p2);
-        json["throughput"] = ceiling->throughput;
+        json["throughput"] = FiniteDoubleJson(ceiling->throughput);
         array.getArray().push_back(std::move(json));
     }
     return array;
@@ -968,7 +1063,7 @@ MetricValueJson(const MetricValue& metric)
     values.setObject();
     for(const std::pair<const std::string, double>& value : metric.values)
     {
-        values[value.first] = value.second;
+        values[value.first] = FiniteDoubleJson(value.second);
     }
 
     jt::Json json;
@@ -995,7 +1090,7 @@ ComputeTableRequestJson(const ComputeTableRequestParams& params)
     jt::Json json;
     json["workload_id"]      = params.m_workload_id;
     json["metric_selectors"] = StringsJson(params.m_metric_selectors);
-    json["sort_column"]      = params.m_sort_column_index;
+    json["sort_column"]      = UInt64Json(params.m_sort_column_index);
     json["sort_order"] =
         EnumName(SORT_ORDER_NAMES, static_cast<size_t>(params.m_sort_order));
     json["column_filters"] = std::move(filters);
@@ -1020,7 +1115,7 @@ CodeObjectsJson(const PcSamplingData& data)
                 instruction["type_uuid"] = line.instruction_type_uuid
                                                ? IdJson(*line.instruction_type_uuid)
                                                : jt::Json();
-                instruction["offset"]    = line.code_object_offset;
+                instruction["offset"]    = UInt64Json(line.code_object_offset);
                 instruction["text"]      = line.instruction;
                 instructions.getArray().push_back(std::move(instruction));
             }
@@ -1050,7 +1145,7 @@ SourceFilesJson(const PcSamplingData& data)
         {
             jt::Json line_json;
             line_json["uuid"]        = IdJson(line.source_line_uuid);
-            line_json["line_number"] = line.line_number;
+            line_json["line_number"] = UInt64Json(line.line_number);
             line_json["content"]     = line.content;
             lines.getArray().push_back(std::move(line_json));
         }
@@ -1073,7 +1168,7 @@ SampleStatesJson(const PcSamplingData& data)
         jt::Json json;
         json["uuid"]             = IdJson(state.pc_sample_state_uuid);
         json["instruction_uuid"] = IdJson(state.instruction_uuid);
-        json["total_count"]      = state.total_count;
+        json["total_count"]      = UInt64Json(state.total_count);
         json["issue_count"]      = OptionalCountJson(state.issue_count);
         json["stall_count"]      = OptionalCountJson(state.stall_count);
         states.getArray().push_back(std::move(json));
@@ -1082,33 +1177,48 @@ SampleStatesJson(const PcSamplingData& data)
 }
 
 jt::Json
-Snapshot(DataProvider& provider)
+Snapshot(DataProvider& provider, TraceKind kind)
 {
     const TraceDataModel& model = provider.DataModel();
 
-    jt::Json system;
-    system["timeline"]        = Timeline(model);
-    system["histogram"]       = Histogram(model.GetTimeline());
-    system["topology"]        = Topology(model.GetTopology());
-    system["summary"]         = Summary(model);
-    system["compare_sources"] = CompareSourcesJson(model);
-
     jt::Json json;
-    json["status"]  = Status(provider);
-    json["system"]  = std::move(system);
-    json["compute"] = Compute(provider.ComputeModel());
+    json["status"] = Status(provider, kind);
+    if(kind == TraceKind::kSystem)
+    {
+        jt::Json system;
+        system["timeline"]        = Timeline(model);
+        system["histogram"]       = Histogram(model.GetTimeline());
+        system["topology"]        = Topology(model.GetTopology());
+        system["summary"]         = Summary(model);
+        system["compare_sources"] = CompareSourcesJson(model);
+        json["system"]            = std::move(system);
+        json["compute"]           = jt::Json();
+    }
+    else
+    {
+        json["system"]  = jt::Json();
+        json["compute"] = Compute(provider.ComputeModel());
+    }
     return json;
 }
 
+const char*
+TraceKindName(TraceKind kind)
+{
+    return EnumName(TRACE_KIND_NAMES, static_cast<size_t>(kind));
+}
+
 jt::Json
-Status(DataProvider& provider)
+Status(DataProvider& provider, TraceKind kind)
 {
     jt::Json json;
     json["state"] =
         EnumName(PROVIDER_STATE_NAMES, static_cast<size_t>(provider.GetState()));
+    json["trace_type"]       = TraceKindName(kind);
     json["progress_message"] = provider.GetProgressMessage();
     json["trace_file_path"]  = provider.GetTraceFilePath();
-    json["pending_requests"] = provider.GetPendingRequestCount();
+    json["pending_requests"] =
+        UInt64Json(static_cast<uint64_t>(provider.GetPendingRequestCount()));
     return json;
 }
 
@@ -1127,8 +1237,8 @@ Timeline(const TraceDataModel& model)
     }
 
     jt::Json json;
-    json["start_ns"] = timeline.GetStartTime();
-    json["end_ns"]   = timeline.GetEndTime();
+    json["start_ns"] = FiniteDoubleJson(timeline.GetStartTime());
+    json["end_ns"]   = FiniteDoubleJson(timeline.GetEndTime());
     json["tracks"]   = std::move(tracks);
     return json;
 }
@@ -1150,8 +1260,8 @@ TrackData(const TimelineModel& timeline, uint64_t track_id)
         json["track_id"] = IdJson(track_id);
         json["data_type"] =
             EnumName(TRACK_DATA_TYPE_NAMES, static_cast<size_t>(data->GetType()));
-        json["start_ns"] = data->GetStartTs();
-        json["end_ns"]   = data->GetEndTs();
+        json["start_ns"] = FiniteDoubleJson(data->GetStartTs());
+        json["end_ns"]   = FiniteDoubleJson(data->GetEndTs());
         json["complete"] = data->AllDataReady();
 
         const RawTrackEventData*  events  = dynamic_cast<const RawTrackEventData*>(data);
@@ -1212,9 +1322,9 @@ Histogram(const TimelineModel& timeline)
     }
 
     jt::Json json;
-    json["start_ns"]  = timeline.GetStartTime();
-    json["end_ns"]    = timeline.GetEndTime();
-    json["max_value"] = max_value;
+    json["start_ns"]  = FiniteDoubleJson(timeline.GetStartTime());
+    json["end_ns"]    = FiniteDoubleJson(timeline.GetEndTime());
+    json["max_value"] = FiniteDoubleJson(max_value);
     json["bins"]      = DoublesJson(bins);
     return json;
 }
@@ -1250,10 +1360,10 @@ Minimap(const TimelineModel& timeline)
     }
 
     jt::Json json;
-    json["start_ns"]  = timeline.GetStartTime();
-    json["end_ns"]    = timeline.GetEndTime();
-    json["min_value"] = min_value;
-    json["max_value"] = max_value;
+    json["start_ns"]  = FiniteDoubleJson(timeline.GetStartTime());
+    json["end_ns"]    = FiniteDoubleJson(timeline.GetEndTime());
+    json["min_value"] = FiniteDoubleJson(min_value);
+    json["max_value"] = FiniteDoubleJson(max_value);
     json["tracks"]    = std::move(tracks);
     return json;
 }
@@ -1268,7 +1378,7 @@ Topology(const TopologyTree& topology)
     }
 
     jt::Json json;
-    json["revision"]    = topology.GetRevision();
+    json["revision"]    = UInt64Json(topology.GetRevision());
     json["gpu_count"]   = topology.GetGPUCount();
     json["cpu_count"]   = topology.GetCPUCount();
     json["track_order"] = IdsJson(topology.GetTrackOrder());
@@ -1279,8 +1389,9 @@ Topology(const TopologyTree& topology)
 jt::Json
 Table(const TraceDataModel& model, TableType type)
 {
-    jt::Json json;
-    if(type < TableType::__kTableTypeCount)
+    jt::Json     json;
+    const size_t index = static_cast<size_t>(type);
+    if(index < static_cast<size_t>(TableType::__kTableTypeCount))
     {
         const TableInfo& table = TablesFor(model, type).GetTable(type);
         if(table.table_params || !table.table_header.empty())
@@ -1289,7 +1400,7 @@ Table(const TraceDataModel& model, TableType type)
             json["columns"] =
                 TableColumnsJson(table.table_header, table.table_column_types);
             json["rows"]            = StringRowsJson(table.table_data);
-            json["total_row_count"] = table.total_row_count;
+            json["total_row_count"] = UInt64Json(table.total_row_count);
             json["request"] =
                 table.table_params ? TableRequestJson(*table.table_params) : jt::Json();
         }
@@ -1335,7 +1446,7 @@ Summary(const TraceDataModel& model)
     const uint64_t      revision = summary.GetRevision();
     if(revision != 0 && revision == model.GetTopology().GetRevision())
     {
-        json["revision"] = revision;
+        json["revision"] = UInt64Json(revision);
         json["root"]     = AggregateJson(summary, summary.GetSummaryData());
     }
     return json;
@@ -1349,7 +1460,7 @@ TrackStatistics(const AnalysisTrackStatistics& statistics)
     {
         jt::Json entry;
         entry["name"]  = stat.name ? stat.name : "";
-        entry["value"] = stat.value;
+        entry["value"] = FiniteDoubleJson(stat.value);
         entry["units"] = stat.suffix;
         stats.getArray().push_back(std::move(entry));
     }
@@ -1398,6 +1509,7 @@ Workload(const WorkloadInfo& workload)
     json["system_info"]      = StringRowsJson(workload.system_info);
     json["profiling_config"] = StringRowsJson(workload.profiling_config);
     json["metrics"]          = AvailableMetricsJson(workload.available_metrics);
+    json["memory_chart"]     = MemoryChartJson(workload.memory_chart_layout);
     json["kernels"]          = std::move(kernels);
     json["roofline"]         = WorkloadRooflineJson(workload.roofline);
     return json;
@@ -1409,7 +1521,7 @@ Kernel(const KernelInfo& kernel)
     jt::Json dispatch;
     for(size_t i = 0; i < std::size(DISPATCH_METRIC_NAMES); i++)
     {
-        dispatch[DISPATCH_METRIC_NAMES[i]] = kernel.dispatch_metrics[i];
+        dispatch[DISPATCH_METRIC_NAMES[i]] = UInt64Json(kernel.dispatch_metrics[i]);
     }
 
     std::vector<const roofline_intensity_t*> intensities;
@@ -1496,7 +1608,7 @@ PcSampling(const PcSamplingData& data)
         entry["instruction_uuid"] = IdJson(mapping.instruction_uuid);
         entry["source_line_uuid"] = IdJson(mapping.source_line_uuid);
         entry["source_file_uuid"] = IdJson(mapping.source_file_uuid);
-        entry["frame_index"]      = mapping.frame_index;
+        entry["frame_index"]      = UInt64Json(mapping.frame_index);
         source_mappings.getArray().push_back(std::move(entry));
     }
 
@@ -1506,7 +1618,7 @@ PcSampling(const PcSamplingData& data)
         jt::Json entry;
         entry["sample_state_uuid"] = IdJson(reason.pc_sample_state_uuid);
         entry["lookup_uuid"]       = IdJson(reason.pc_sample_stall_reason_lookup_uuid);
-        entry["count"]             = reason.count;
+        entry["count"]             = UInt64Json(reason.count);
         stall_reasons.getArray().push_back(std::move(entry));
     }
 

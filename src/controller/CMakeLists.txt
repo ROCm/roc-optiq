@@ -154,6 +154,7 @@ if(BUILD_TESTING)
 	add_executable(${COMPUTE_TEST_NAME}
         tests/rocprofvis_controller_compute_tests.cpp
         tests/rocprofvis_controller_pc_sampling_tests.cpp)
+    target_include_directories(${COMPUTE_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 	target_compile_definitions(${COMPUTE_TEST_NAME} PRIVATE ROCPROFVIS_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(${COMPUTE_TEST_NAME} PRIVATE ${PROJECT_NAME})
     target_link_libraries(${COMPUTE_TEST_NAME} PRIVATE Catch2::Catch2WithMain)

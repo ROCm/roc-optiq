@@ -322,19 +322,19 @@ DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
 }
 
 const std::string&
-DataProvider::GetTraceFilePath()
+DataProvider::GetTraceFilePath() const
 {
     return m_model.GetTraceFilePath();
 }
 
 ProviderState
-DataProvider::GetState()
+DataProvider::GetState() const
 {
     return m_state;
 }
 
 const char*
-DataProvider::GetProgressMessage()
+DataProvider::GetProgressMessage() const
 {
     return m_progress_mesage.c_str();
 }
@@ -621,16 +621,12 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                         &binval);
 
                     histogram_track[bin_num] = static_cast<double>(binval);
-                    histogram[bin_num] += static_cast<double>(binval);
                 }
             }
 
             histogram_minimap[graphs] = histogram_track;
         }
         tlm.SetMiniMap(std::move(histogram_minimap));
-
-        // Normalize histogram to [0, 1]
-        tlm.NormalizeHistogram();
 
         double min_ts = 0;
         result        = rocprofvis_controller_get_double(
@@ -648,6 +644,18 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
 
         HandleLoadTrackMetaData();
         ApplyTrackOrderRanking();
+
+        // The histogram needs the track types, so it is summed only now. Nothing
+        // is hidden yet, so every track counts.
+        std::vector<uint64_t> track_ids;
+        for(const TrackInfo* track : tlm.GetTrackList())
+        {
+            if(track)
+            {
+                track_ids.push_back(track->id);
+            }
+        }
+        tlm.UpdateHistogram(track_ids);
     }
     else
     {
@@ -3438,7 +3446,6 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
             m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
             CreateSummaryData(metrics_handle, scratch);
-            m_model.GetSummary().UpdateValueStrings();
         }
         else
         {
@@ -4916,6 +4923,12 @@ DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t prope
 
 ComputeDataModel&
 DataProvider::ComputeModel()
+{
+    return m_compute_model;
+}
+
+const ComputeDataModel&
+DataProvider::ComputeModel() const
 {
     return m_compute_model;
 }

@@ -223,11 +223,11 @@ public:
      */
     void Update();
 
-    const std::string& GetTraceFilePath();
+    const std::string& GetTraceFilePath() const;
 
-    ProviderState GetState();
+    ProviderState GetState() const;
 
-    const char* GetProgressMessage();
+    const char* GetProgressMessage() const;
 
     void SetTrackMetadataChangedCallback(
         const std::function<void(const std::string&)>& callback);
@@ -273,6 +273,11 @@ public:
     // has nothing left to read by the time it notices the request finished.
     // False when no script has run, or the script failed.
     bool GetLastScriptResult(std::string& text_out, std::string& error_out) const;
+    // Called with the trace path, whether the script succeeded, its text and its
+    // error message.
+    void SetScriptCompleteCallback(
+        const std::function<void(const std::string&, bool, const std::string&,
+                                 const std::string&)>& callback);
 #endif
 
     bool CleanupDatabase(bool rebuild);
@@ -282,7 +287,8 @@ public:
     const TraceDataModel& DataModel() const { return m_model; };
     TraceDataModel&       DataModel() { return m_model; };
 
-    ComputeDataModel& ComputeModel();
+    ComputeDataModel&       ComputeModel();
+    const ComputeDataModel& ComputeModel() const;
 
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
     bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
@@ -458,6 +464,8 @@ private:
     std::string m_script_result_text;
     std::string m_script_result_error;
     bool        m_script_result_ok = false;
+    std::function<void(const std::string&, bool, const std::string&, const std::string&)>
+        m_script_complete_callback;
 #endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);

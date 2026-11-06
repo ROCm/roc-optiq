@@ -1,5 +1,5 @@
-# Records HEAD for official builds. Local builds keep "unknown", so About and
-# -v hash never name a commit the binary may not match.
+# Records HEAD for official builds. Local builds keep "unknown", so --version
+# never names a commit the binary may not match.
 #
 # GitHub Actions sets GITHUB_ACTIONS, and those jobs check out one commit
 # and configure immediately, so a configure-time rev-parse is the tree that

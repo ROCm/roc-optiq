@@ -29,8 +29,7 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_FLAGS": "/W4 /EHsc",
-                "ROCPROFVIS_DEVELOPER_MODE": "ON"
+                "CMAKE_CXX_FLAGS": "/W4 /EHsc"
             }
         },
         {
@@ -120,8 +119,7 @@
             "description": "Configure ROCm Optiq for macOS with Clang, enabling detailed debugging symbols and checks.",
             "inherits": "macos-base",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "ROCPROFVIS_DEVELOPER_MODE": "ON"
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {

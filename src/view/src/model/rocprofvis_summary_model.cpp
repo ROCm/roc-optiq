@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_summary_model.h"
-#include "../rocprofvis_settings_manager.h"
 #include "../rocprofvis_utils.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_topology_model.h"
@@ -109,7 +108,7 @@ SummaryModel::RegisterTimeunitValue(SummaryInfo::Value& value)
 }
 
 void
-SummaryModel::UpdateValueStrings()
+SummaryModel::UpdateValueStrings(TimeFormat time_format)
 {
     for(SummaryInfo::Value* value : m_event_values)
     {
@@ -162,8 +161,6 @@ SummaryModel::UpdateValueStrings()
             }
         }
     }
-    TimeFormat timeformat =
-        SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
     for(SummaryInfo::Value* value : m_timeunit_values)
     {
         switch(value->type)
@@ -171,18 +168,18 @@ SummaryModel::UpdateValueStrings()
             case SummaryInfo::Value::Type::UInt:
             {
                 value->str = nanosecond_to_formatted_str(
-                    static_cast<double>(value->numeric.uint), timeformat);
+                    static_cast<double>(value->numeric.uint), time_format);
                 break;
             }
             case SummaryInfo::Value::Type::Double:
             {
-                value->str = nanosecond_to_formatted_str(value->numeric.dbl, timeformat);
+                value->str = nanosecond_to_formatted_str(value->numeric.dbl, time_format);
                 break;
             }
             case SummaryInfo::Value::Type::Float:
             {
                 value->str = nanosecond_to_formatted_str(
-                    static_cast<double>(value->numeric.flt), timeformat);
+                    static_cast<double>(value->numeric.flt), time_format);
                 break;
             }
         }

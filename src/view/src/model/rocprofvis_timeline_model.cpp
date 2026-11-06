@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_model.h"
-#include "rocprofvis_track_item.h"
+#include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -146,8 +146,16 @@ TimelineModel::SetMiniMap(std::map<uint64_t, std::vector<double>>&& mini_map)
     m_mini_map = std::move(mini_map);
 }
 
+bool
+TimelineModel::IsEventTrackWithMiniMap(uint64_t track_id) const
+{
+    const TrackInfo* track = GetTrack(track_id);
+    return track && track->track_type == kRPVControllerTrackTypeEvents &&
+           m_mini_map.count(track_id) != 0;
+}
+
 void
-TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
+TimelineModel::UpdateHistogram(const std::vector<uint64_t>& visible_track_ids)
 {
     /*
     This function updates histogram and mini_map.
@@ -157,17 +165,12 @@ TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
     if(!m_histogram.empty())
     {
         std::fill(m_histogram.begin(), m_histogram.end(), 0.0);
-        for(const TrackItem* track : tracks)
+        for(uint64_t track_id : visible_track_ids)
         {
-            // If it's a counter/sample, or hidden track, skip adding it to the global
-            // histogram
-            bool is_included =
-                track && track->GetTrackInfo() && m_mini_map.count(track->GetID()) &&
-                track->IsDisplayed() &&
-                track->GetTrackInfo()->track_type == kRPVControllerTrackTypeEvents;
-            if(is_included)
+            // Counter/sample tracks stay out of the global histogram
+            if(IsEventTrackWithMiniMap(track_id))
             {
-                const std::vector<double>& mini_data = m_mini_map.at(track->GetID());
+                const std::vector<double>& mini_data = m_mini_map.at(track_id);
                 for(size_t i = 0; i < mini_data.size() && i < m_histogram.size(); ++i)
                 {
                     m_histogram[i] += mini_data[i];
@@ -184,17 +187,15 @@ TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
             m_minimap_global_min = DBL_MAX;
             m_minimap_global_max = -DBL_MAX;
 
-            for(const TrackItem* track : tracks)
+            for(const std::pair<const uint64_t, TrackInfo>& entry : m_track_metadata)
             {
                 // If it's a counter/sample track skip adding it to the global histogram
-                if(!track || !track->GetTrackInfo() ||
-                   !m_mini_map.count(track->GetID()) ||
-                   track->GetTrackInfo()->track_type != kRPVControllerTrackTypeEvents)
+                if(!IsEventTrackWithMiniMap(entry.first))
                 {
                     continue;
                 }
 
-                const std::vector<double>& mini_data = m_mini_map.at(track->GetID());
+                const std::vector<double>& mini_data = m_mini_map.at(entry.first);
 
                 for(double val : mini_data)
                 {

@@ -2,20 +2,17 @@
 // SPDX-License-Identifier: MIT
 
 // The DataProvider half of running a Python analysis script: build the context
-// arguments, issue the async request, and turn the finished result into an
-// event. Split out of rocprofvis_data_provider.cpp so the scripting feature is
-// one conditionally compiled file rather than a block in the middle of the
-// request pipeline. The small hooks that have to sit inside existing switches
-// (request dispatch, progress, cleanup) stay there.
+// arguments, issue the async request, and hand the finished result to the
+// completion callback. Split out of rocprofvis_data_provider.cpp so the
+// scripting feature is one conditionally compiled file rather than a block in
+// the middle of the request pipeline. The small hooks that have to sit inside
+// existing switches (request dispatch, progress, cleanup) stay there.
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_script.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_event_manager.h"
-#include "rocprofvis_events.h"
 
 #include "spdlog/spdlog.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -184,8 +181,18 @@ DataProvider::ProcessExecuteScriptRequest(RequestInfo& req)
     m_script_result_text  = text;
     m_script_result_error = error;
     m_script_result_ok    = success;
-    EventManager::GetInstance()->AddEvent(std::make_shared<ScriptExecuteCompleteEvent>(
-        success, text, error, GetTraceFilePath()));
+    if(m_script_complete_callback)
+    {
+        m_script_complete_callback(GetTraceFilePath(), success, text, error);
+    }
+}
+
+void
+DataProvider::SetScriptCompleteCallback(
+    const std::function<void(const std::string&, bool, const std::string&,
+                             const std::string&)>& callback)
+{
+    m_script_complete_callback = callback;
 }
 
 bool

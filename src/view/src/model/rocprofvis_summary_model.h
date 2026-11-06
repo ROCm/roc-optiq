@@ -40,7 +40,8 @@ public:
     void RegisterEventValue(SummaryInfo::Value& value);
     void RegisterCounterValue(SummaryInfo::Value& value);
     void RegisterTimeunitValue(SummaryInfo::Value& value);
-    void UpdateValueStrings();
+    // Fills the display string of every registered value, times in time_format.
+    void UpdateValueStrings(TimeFormat time_format);
 
     void     SetRevision(uint64_t revision);
     uint64_t GetRevision() const;

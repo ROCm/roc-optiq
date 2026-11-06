@@ -15,8 +15,6 @@ namespace RocProfVis
 namespace View
 {
 
-class TrackItem;
-
 /**
  * @brief Manages timeline visualization data.
  *
@@ -84,7 +82,10 @@ public:
     void SetMiniMap(std::map<uint64_t, std::vector<double>>&& mini_map);
 
     // Histogram updates
-    void UpdateHistogram(const std::vector<TrackItem*>& tracks);
+    // Sums the minimaps of the visible event tracks into the histogram. The first
+    // call after a load also takes the maximum over every event track, which
+    // global normalization divides by.
+    void UpdateHistogram(const std::vector<uint64_t>& visible_track_ids);
     void NormalizeHistogram();
     void ToggleNormalization() { m_normalize_global = !m_normalize_global; }
     bool IsNormalizeGlobal() const { return m_normalize_global; }
@@ -103,6 +104,8 @@ public:
     void DumpMetaData() const;
 
 private:
+    bool IsEventTrackWithMiniMap(uint64_t track_id) const;
+
     uint64_t m_num_tracks;
     double   m_min_ts;
     double   m_max_ts;

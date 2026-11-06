@@ -1,11 +1,13 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "compute/rocprofvis_memory_chart_layouts_generated.h"
 #include "model/compute/rocprofvis_memory_chart_model.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 using namespace RocProfVis::View;
@@ -22,14 +24,26 @@ Parses(const std::string& json, std::string& error)
 
 }  // namespace
 
-TEST_CASE("Every embedded memory-chart layout parses and resolves", "[memory_chart]")
+TEST_CASE("Every architecture memory-chart layout parses and resolves", "[memory_chart]")
 {
-    for(const MemChartEmbeddedLayout& entry : kMemChartEmbeddedLayouts)
+    const std::filesystem::path layout_dir =
+        std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "resources" / "memory_chart";
+    size_t layout_count = 0;
+    for(const std::filesystem::directory_entry& entry :
+        std::filesystem::directory_iterator(layout_dir))
     {
-        INFO("layout: " << entry.key);
+        const std::filesystem::path& path = entry.path();
+        if(path.extension() != ".json" || path.filename() == "memory_chart.schema.json")
+        {
+            continue;
+        }
+        INFO("layout: " << path.filename().string());
+        std::ifstream     file(path);
+        std::stringstream contents;
+        contents << file.rdbuf();
         MemChartLayout layout;
         std::string    error;
-        REQUIRE(MemChartLayout::ParseFromString(entry.json, layout, &error));
+        REQUIRE(MemChartLayout::ParseFromString(contents.str(), layout, &error));
         CHECK(error.empty());
         REQUIRE_FALSE(layout.blocks.empty());
         for(const MemChartArrow& arrow : layout.arrows)
@@ -38,7 +52,9 @@ TEST_CASE("Every embedded memory-chart layout parses and resolves", "[memory_cha
             CHECK(layout.FindBlock(arrow.from) != nullptr);
             CHECK(layout.FindBlock(arrow.to) != nullptr);
         }
+        layout_count++;
     }
+    CHECK(layout_count > 0);
 }
 
 TEST_CASE("String block ids connect arrows, including nested blocks", "[memory_chart]")

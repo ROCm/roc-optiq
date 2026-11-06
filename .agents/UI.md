@@ -3111,6 +3111,38 @@ Things to honor in any new data path:
    typed status events, filter by operation ID, and use deferred
    teardown for resources that outlive the UI owner.
 
+### Serving provider state as JSON (`rocprofvis_data_provider_json.{h,cpp}`)
+
+`DataProviderJson` translates what a `DataProvider` holds into `jt::Json`
+for clients other than the ImGui UI, such as a web front end. It is
+read-only: every function takes `const` references, issues no request,
+and changes nothing, so the caller decides when data is current (for
+example from the provider's ready callbacks). Call it on the thread that
+runs `DataProvider::Update()`; the models are not locked.
+
+- `Snapshot` bundles status, timeline and tracks, histogram, topology,
+  summary, compare sources and compute workloads. Track data, tables,
+  events, the minimap, metric values and PC sampling have their own
+  calls because each can run to megabytes.
+- 64-bit identifiers are decimal strings: JavaScript reads JSON numbers
+  as doubles, which round past 2^53, and event uuids and multi-node
+  topology ids are past it. 32-bit ids stay numbers. Times are
+  nanoseconds in `_ns` keys, enums are lower_snake_case names, and an
+  item the provider has not loaded is `null`.
+- Clients address table slots by the names in `TABLE_SLOT_NAMES`
+  (`TableTypeName` / `TableTypeFromName`), so never rename one. A
+  `static_assert` fails the build when a `TableType` has no name or the
+  list leaves declaration order. `TablesFor` must agree with
+  `DataProvider::ClientTableSlot` about which model owns each slot.
+- Each enum-to-name table is `static_assert`ed against its enum; extend
+  the table in the same change as the enum.
+- `src/view/test/rocprofvis_data_provider_json_tests.cpp`
+  (`roc-optiq-provider-tests`) loads both sample traces with no UI and
+  checks the JSON, including fetched track data, events, tables, the
+  summary and compute metrics.
+- `src/server/` (`roc-optiq-server`) serves these functions over HTTP,
+  running every read on the thread that updates the provider.
+
 ## 15. Coding Conventions
 
 `CODING.md` is authoritative. Highlights you must follow:
@@ -3325,6 +3357,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Move/zoom the timeline                        | `TimelineView::MoveToPosition(start, end, y, center)` or `SetViewableRangeNS`                  |
 | Navigate to and highlight an event            | `TimelineSelection::NavigateToEvent(track_id, event_uuid, start_ns, dur_ns)`                   |
 | Pub/sub between widgets                       | `EventManager::Subscribe(id, handler)` / `AddEvent(make_shared<XxxEvent>(...))`                |
+| Send provider state to a non-ImGui client     | `DataProviderJson::Snapshot`, then `TrackData` / `Table` / `Event` / ... (`rocprofvis_data_provider_json.h`) |
 | Keep the lazy render loop awake               | `RootView::WantsContinuousRender` / `AppWindow::WantsContinuousRender`                         |
 | Monitor controller operations without blocking| `AppMonitor::AddOperation` + typed status events                                               |
 | Show application logs                         | `LogViewer` (not the developer-only `DebugWindow`)                                             |
@@ -3624,6 +3657,8 @@ All under `agenticprofiling/`, compiled only with
 - `DataProvider` -> `rocprofvis_data_provider.h` -> The view's
   controller bridge.
 - `ProviderState` -> same.
+- `DataProviderJson` -> `rocprofvis_data_provider_json.h` -> Read-only
+  JSON translation of provider state for non-ImGui clients.
 - `DataProviderCleanupWork`, `DataProviderCleanupResult` -> same.
 - `RequestType`, `RequestState`, `RequestInfo`, `RequestIdBuilder`,
   `IdGenerator`, `RequestParamsBase`, `TrackRequestParams`,

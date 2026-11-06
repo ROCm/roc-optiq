@@ -122,7 +122,8 @@ public:
     // Clear metric values for a specific store and workload
     void ClearWorkloadMetricValues(uint64_t store_id, uint32_t workload_id);
 
-    ComputeKernelSelectionTable& GetKernelSelectionTable();
+    ComputeKernelSelectionTable&       GetKernelSelectionTable();
+    const ComputeKernelSelectionTable& GetKernelSelectionTable() const;
 
     std::vector<const KernelInfo*> GetKernelInfoList(uint32_t workload_id) const;
 

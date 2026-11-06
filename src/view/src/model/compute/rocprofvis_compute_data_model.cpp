@@ -523,6 +523,12 @@ ComputeDataModel::GetKernelSelectionTable()
     return m_kernel_selection_table;
 }
 
+const ComputeKernelSelectionTable&
+ComputeDataModel::GetKernelSelectionTable() const
+{
+    return m_kernel_selection_table;
+}
+
 bool
 ComputeDataModel::MetricIdFromString(const std::string& text, MetricId& out)
 {

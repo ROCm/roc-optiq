@@ -164,6 +164,7 @@ InfiniteScrollTable::Update()
         m_active_filter_row_clause.clear();
         m_update_filter_row = true;
         m_reset_filter_row  = false;
+        m_filter_requested = true;
     }
     if(m_update_filter_row)
     {
@@ -591,6 +592,7 @@ InfiniteScrollTable::Render()
                         if(filter_input.second)
                         {
                             m_displayed_filter_row_inputs[i]->input.clear();
+                            m_filter_requested = true;
                         }
                         if(ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter))
                         {

@@ -107,11 +107,12 @@ rocprofvis_result_t rocprofvis_profiler_tool_get_binary_name(rocprofvis_profiler
     return RocProfVis::Controller::copy_string_to_buffer(name, buffer, length);
 }
 
-rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char* buffer, uint32_t* length)
+rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char const* python_environment, char* buffer, uint32_t* length)
 {
     std::string         resolved;
     rocprofvis_result_t result = RocProfVis::Controller::ProfilerTool::ResolvePath(
-        tool, tool_directory != nullptr ? tool_directory : "", resolved);
+        tool, tool_directory != nullptr ? tool_directory : "",
+        python_environment != nullptr ? python_environment : "", resolved);
     if (result != kRocProfVisResultSuccess)
     {
         return result;
@@ -164,6 +165,17 @@ rocprofvis_result_t rocprofvis_profiler_config_set_working_directory(rocprofvis_
     return config_ref->SetWorkingDirectory(working_directory);
 }
 
+rocprofvis_result_t rocprofvis_profiler_config_set_python_environment(rocprofvis_profiler_config_t* config, char const* python_environment)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return config_ref->SetPythonEnvironment(python_environment);
+}
+
 rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value)
 {
     RocProfVis::Controller::ProfilerConfigRef config_ref(config);
@@ -184,6 +196,17 @@ rocprofvis_result_t rocprofvis_profiler_config_add_profiler_arg(rocprofvis_profi
     }
 
     return config_ref->AddProfilerArg(arg);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_get_command_preview(rocprofvis_profiler_config_t* config, bool remote, char const* argv0, char* buffer, uint32_t* length)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid() || argv0 == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return RocProfVis::Controller::copy_string_to_buffer(config_ref->GetCommandPreview(remote, argv0), buffer, length);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_connection_local(rocprofvis_profiler_config_t* config)

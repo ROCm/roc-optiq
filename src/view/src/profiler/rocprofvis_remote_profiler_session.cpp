@@ -17,9 +17,11 @@ namespace View
 
 RemoteProfilerSession::RemoteProfilerSession(
     std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file,
+    std::function<bool(const std::string&)>        has_output_file,
     std::function<std::string(const std::string&)> parse_trace_path)
 : m_uri(std::move(uri))
 , m_on_open_file(std::move(on_open_file))
+, m_has_output_file(std::move(has_output_file))
 , m_parse_trace_path(std::move(parse_trace_path))
 , m_session(nullptr)
 , m_remote_status_token(EventManager::InvalidSubscriptionToken)
@@ -287,29 +289,37 @@ RemoteProfilerSession::StartDownload()
 
     // Deduce the remote trace path from the profiler's captured stdout (the
     // profiler reports the file it produced). This replaces the old manual
-    // "Remote output database" field.
-    if(m_parse_trace_path)
+    // "Remote output database" field. The parse result is assigned even when
+    // empty: the URI outlives a run, and a failed parse must not fall back to
+    // the previous run's path.
+    if(!m_has_output_file || m_has_output_file(GetOutput()))
     {
-        std::string parsed = m_parse_trace_path(GetOutput());
-        if(!parsed.empty())
+        if(m_parse_trace_path)
         {
-            m_uri->GetRemoteResultPath() = parsed;
+            m_uri->GetRemoteResultPath() = m_parse_trace_path(GetOutput());
+        }
+
+        if(m_uri->GetRemoteResultPathString().empty())
+        {
+            // The run completed but we could not determine a trace path to fetch.
+            Fail("Could not determine remote trace path from profiler output.");
+            return;
+        }
+
+        m_status_message =
+            std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
+        m_phase = Phase::Downloading;
+        if(m_session->StartDownload() == 0)
+        {
+            Fail("Trace download could not be started.");
         }
     }
-
-    if(m_uri->GetRemoteResultPathString().empty())
+    else
     {
-        // The run completed but we could not determine a trace path to fetch.
-        Fail("Could not determine remote trace path from profiler output.");
-        return;
-    }
-
-    m_status_message =
-        std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
-    m_phase = Phase::Downloading;
-    if(m_session->StartDownload() == 0)
-    {
-        Fail("Trace download could not be started.");
+        // Nothing was produced, so there is nothing to download.
+        m_uri->GetRemoteResultPath().clear();
+        m_phase   = Phase::Done;
+        m_running = false;
     }
 }
 

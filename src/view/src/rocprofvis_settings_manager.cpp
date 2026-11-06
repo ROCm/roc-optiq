@@ -343,6 +343,8 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
+// Joins the parts of a recent-targets key; profiler ids contain no ':'.
+inline constexpr const char* RECENT_TARGETS_KEY_SEPARATOR = ":";
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
 inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
 inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
@@ -1037,20 +1039,49 @@ SettingsManager::GetProfilerSettings()
     return m_profilersettings;
 }
 
+std::vector<std::string>&
+SettingsManager::GetRecentTargets(std::string const&                             profiler_id,
+                                  std::optional<rocprofvis_profiler_tool_t>      tool,
+                                  std::optional<rocprofvis_profiler_operation_t> operation)
+{
+    std::string key = profiler_id;
+    if(tool.has_value())
+    {
+        key += RECENT_TARGETS_KEY_SEPARATOR + std::to_string(static_cast<int>(tool.value()));
+    }
+    if(operation.has_value())
+    {
+        key += RECENT_TARGETS_KEY_SEPARATOR +
+               std::to_string(static_cast<int>(operation.value()));
+    }
+    return m_profilersettings.recent_targets[key];
+}
+
 void
 SettingsManager::SerializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
-    ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
-    ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
-    ps["last_preset_name"] = m_profilersettings.last_preset_name;
+    jt::Json& presets = ps["last_preset_names"];
+    presets.setObject();
+    for(std::pair<std::string const, std::string> const& entry :
+        m_profilersettings.last_preset_names)
+    {
+        presets[entry.first] = entry.second;
+    }
     ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
     ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
 
-    int rt_idx = 0;
-    for (auto const& t : m_profilersettings.recent_targets)
+    jt::Json& recent = ps["recent_targets"];
+    recent.setObject();
+    for(std::pair<std::string const, std::vector<std::string>> const& entry :
+        m_profilersettings.recent_targets)
     {
-        ps["recent_targets"][rt_idx++] = t;
+        jt::Json& list = recent[entry.first];
+        list.setArray();
+        for(std::string const& target : entry.second)
+        {
+            list.getArray().push_back(target);
+        }
     }
 }
 
@@ -1058,17 +1089,16 @@ void
 SettingsManager::DeserializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
-    if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
+    if(ps["last_preset_names"].isObject())
     {
-        m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();
-    }
-    if(ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].isBool())
-    {
-        m_profilersettings.auto_load_trace = ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].getBool();
-    }
-    if(ps["last_preset_name"].isString())
-    {
-        m_profilersettings.last_preset_name = ps["last_preset_name"].getString();
+        m_profilersettings.last_preset_names.clear();
+        for(std::pair<std::string const, jt::Json>& entry : ps["last_preset_names"].getObject())
+        {
+            if(entry.second.isString())
+            {
+                m_profilersettings.last_preset_names[entry.first] = entry.second.getString();
+            }
+        }
     }
     if(ps["last_profiler_id"].isString())
     {
@@ -1078,15 +1108,13 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     {
         m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
     }
-    if(ps["recent_targets"].isArray())
+    if(ps["recent_targets"].isObject())
     {
         m_profilersettings.recent_targets.clear();
-        for (jt::Json& item : ps["recent_targets"].getArray())
+        for(std::pair<std::string const, jt::Json>& entry : ps["recent_targets"].getObject())
         {
-            if (item.isString())
-            {
-                m_profilersettings.recent_targets.push_back(item.getString());
-            }
+            m_profilersettings.recent_targets[entry.first] =
+                JsonUtils::GetStringArray(ps["recent_targets"], entry.first);
         }
     }
 }

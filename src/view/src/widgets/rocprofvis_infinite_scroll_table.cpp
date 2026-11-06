@@ -164,6 +164,7 @@ InfiniteScrollTable::Update()
         m_active_filter_row_clause.clear();
         m_update_filter_row = true;
         m_reset_filter_row  = false;
+        m_filter_requested = true;
     }
     if(m_update_filter_row)
     {

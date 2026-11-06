@@ -971,14 +971,14 @@ Install
 
       .. code-block:: shell
 
-         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz
+         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz
 
 
    3. Extract the tarball:
 
       .. code-block:: shell
 
-         sudo tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C /
+         sudo tar -xzf amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz -C /
 
       This installs ROCm Optiq to ``/opt/rocm/extras-10/rocm-optiq``, the same location the package install uses.
 
@@ -990,7 +990,7 @@ Install
 
             OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
             mkdir -p $OPTIQ_INSTALL_PATH
-            tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=4
+            tar -xzf amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=4
 
 
    4. Complete the following post-installation steps:
@@ -1044,14 +1044,14 @@ Install
 
       .. code-block:: shell
 
-         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz
+         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz
 
 
    3. Extract the tarball:
 
       .. code-block:: shell
 
-         sudo tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C /
+         sudo tar -xzf amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz -C /
 
       This installs ROCm Optiq to ``/opt/rocm/extras-10/rocm-optiq``, the same location the package install uses.
 
@@ -1063,7 +1063,7 @@ Install
 
             OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
             mkdir -p $OPTIQ_INSTALL_PATH
-            tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=4
+            tar -xzf amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=4
 
 
    4. Complete the following post-installation steps:
@@ -1117,14 +1117,14 @@ Install
 
       .. code-block:: shell
 
-         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz
+         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz
 
 
    3. Extract the tarball:
 
       .. code-block:: shell
 
-         sudo tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C /
+         sudo tar -xzf amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz -C /
 
       This installs ROCm Optiq to ``/opt/rocm/extras-10/rocm-optiq``, the same location the package install uses.
 
@@ -1136,7 +1136,7 @@ Install
 
             OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
             mkdir -p $OPTIQ_INSTALL_PATH
-            tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=4
+            tar -xzf amdrocm10-roc-optiq-1.2.0.1-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=4
 
 
    4. Complete the following post-installation steps:

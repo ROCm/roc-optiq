@@ -106,6 +106,8 @@ bool SshConnectionStore::Load()
         // Trust the on-disk object key as the id of record.
         cfg.id = entry.first;
         load_secrets(cfg);
+        // Every connection is a run destination with its own launch environment.
+        ProfilesDocument::Get().AddLaunchEnvironment(cfg.id);
         m_connections.push_back(std::move(cfg));
     }
 
@@ -167,6 +169,7 @@ void SshConnectionStore::Save(SshConnectionConfig& config)
 
     // Secrets go to the OS credential vault, never into profiles.json.
     store_secrets(config);
+    ProfilesDocument::Get().AddLaunchEnvironment(config.id);
     Persist();
 }
 
@@ -178,6 +181,7 @@ void SshConnectionStore::Remove(const std::string& id)
         {
             m_connections.erase(it);
             erase_secrets(id);
+            ProfilesDocument::Get().RemoveLaunchEnvironment(id);
             Persist();
             return;
         }

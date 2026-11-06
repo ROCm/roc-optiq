@@ -269,6 +269,8 @@ list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_profiler_backend.h
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.h
     src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
     src/view/src/profiler/rocprofvis_launch_preset_manager.h
     src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp

@@ -15,21 +15,18 @@
 
 #include "imgui.h"
 #include "spdlog/spdlog.h"
-// ~AssistantPanel() destroys m_message_select, which needs the complete type.
+// ~AssistantPanel() destroys every conversation's TextSelects, which needs the
+// complete type.
 #include "textselect.hpp"
 
-#include "icons/rocprovfis_icon_defines.h"
-#include "model/rocprofvis_summary_model.h"
 #include "rocprofvis_ai_prompts.h"
 #include "rocprofvis_ai_tool_schema.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_render_scheduler.h"
-#include "rocprofvis_root_view.h"
 #include "rocprofvis_settings_manager.h"
-#include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_trace_view.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
@@ -102,22 +99,40 @@ AssistantPanel::DestroyInstance()
 
 AssistantPanel::AssistantPanel()
 : m_visible(false)
-, m_scroll_to_bottom(false)
 , m_dock_width(ASSISTANT_DEFAULT_WIDTH)
 , m_phase(Phase::kIdle)
 , m_composer_height(0.0f)
 , m_next_call_index(0)
 , m_tool_round(0)
 , m_force_final(false)
+, m_stop_tool_queue(false)
 , m_fetch_retries(0)
+, m_tab_closed_token(EventManager::InvalidSubscriptionToken)
 {
     m_widget_name = GenUniqueName("AssistantPanel");
+
+    // A closed trace takes its conversation with it, and a turn pinned to it has
+    // nothing left to read. Every tab bar sends this event for its own tabs, so
+    // only the main one's count.
+    m_tab_closed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTabClosed), [this](std::shared_ptr<RocEvent> event) {
+            std::shared_ptr<TabEvent> tab_event =
+                std::dynamic_pointer_cast<TabEvent>(event);
+            AppWindow* app = AppWindow::GetInstance();
+            if(tab_event != nullptr && app != nullptr &&
+               tab_event->GetSourceId() == app->GetMainTabSourceName())
+            {
+                HandleTabClosed(tab_event->GetTabId());
+            }
+        });
 }
 
 // Aborts anything in flight, so quitting mid-answer does not wait on the network.
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
+                                             m_tab_closed_token);
 }
 
 void
@@ -138,79 +153,93 @@ AssistantPanel::Busy() const
     return m_phase != Phase::kIdle || m_pending.valid();
 }
 
+AssistantPanel::Conversation&
+AssistantPanel::ConversationFor(const std::string& project_id)
+{
+    std::unique_ptr<Conversation>& slot = m_conversations[project_id];
+    if(slot == nullptr)
+    {
+        slot = std::make_unique<Conversation>();
+    }
+    return *slot;
+}
+
+AssistantPanel::Conversation&
+AssistantPanel::TurnConversation()
+{
+    return ConversationFor(m_turn_project_id);
+}
+
+AssistantPanel::Conversation&
+AssistantPanel::ViewConversation()
+{
+    return ConversationFor(m_view_project_id);
+}
+
+void
+AssistantPanel::ResetHistory(Conversation& conversation)
+{
+    conversation.messages.clear();
+    conversation.briefed = false;
+    conversation.links_announced.clear();
+}
+
+void
+AssistantPanel::HandleTabClosed(const std::string& project_id)
+{
+    if(Busy() && project_id == m_turn_project_id)
+    {
+        ResetTurn();
+    }
+    m_conversations.erase(project_id);
+}
+
 void
 AssistantPanel::AppendLine(Speaker speaker, const std::string& text)
 {
-    ChatLine line;
+    Conversation& conversation = TurnConversation();
+    ChatLine      line;
     line.speaker = speaker;
     line.text    = text;
-    m_lines.push_back(line);
-    m_scroll_to_bottom = true;
+    conversation.lines.push_back(line);
+    conversation.scroll_to_bottom = true;
 }
 
-// Adds an activity strip for one track, or the whole trace when track_id is
+// Adds an activity strip for one track, or a whole trace when track_id is
 // invalid. Deduplicated: the chart reads live model data, so a repeat would be
 // a pixel-identical copy of one already in the transcript.
 void
-AssistantPanel::AppendChart(uint64_t track_id)
+AssistantPanel::AppendChart(const std::string& project_id, uint64_t track_id)
 {
-    for(const ChatLine& existing : m_lines)
+    Conversation& conversation = TurnConversation();
+    for(const ChatLine& existing : conversation.lines)
     {
-        if(existing.speaker == Speaker::kChart && existing.track_id == track_id)
+        if(existing.speaker == Speaker::kChart && existing.track_id == track_id &&
+           existing.project_id == project_id)
         {
             return;
         }
     }
 
     ChatLine line;
-    line.speaker  = Speaker::kChart;
-    line.track_id = track_id;
-    m_lines.push_back(line);
-    m_scroll_to_bottom = true;
+    line.speaker    = Speaker::kChart;
+    line.track_id   = track_id;
+    line.project_id = project_id;
+    conversation.lines.push_back(line);
+    conversation.scroll_to_bottom = true;
 }
 
 void
 AssistantPanel::SetStatus(const std::string& text)
 {
-    m_status           = text;
-    m_scroll_to_bottom = true;
+    m_status                            = text;
+    TurnConversation().scroll_to_bottom = true;
 }
 
-// Resolves what the tools may touch, from whichever trace is in front. Rebuilt
-// per call, so a closed tab cannot leave a tool holding a dead provider.
 AssistantToolContext
 AssistantPanel::MakeToolContext() const
 {
-    AssistantToolContext context;
-
-    AppWindow* app = AppWindow::GetInstance();
-    if(app == nullptr)
-    {
-        return context;
-    }
-    Project* project = app->GetCurrentProject();
-    if(project == nullptr)
-    {
-        return context;
-    }
-
-    context.trace_name = project->GetName();
-    context.is_compute = project->GetTraceType() == Project::Compute;
-    RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
-    if(root_view != nullptr)
-    {
-        context.data_provider = root_view->GetDataProvider();
-    }
-    if(project->GetTraceType() == Project::System)
-    {
-        TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
-        context.trace_view    = trace_view;
-        if(trace_view != nullptr && trace_view->GetTimelineSelection())
-        {
-            context.timeline_selection = trace_view->GetTimelineSelection().get();
-        }
-    }
-    return context;
+    return MakeAssistantToolContext(m_turn_project_id);
 }
 
 std::string
@@ -225,15 +254,36 @@ AssistantPanel::CurrentProjectId() const
 }
 
 std::string
-AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefing) const
+AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefing)
 {
-    std::ostringstream out;
+    const AssistantToolContext context      = MakeToolContext();
+    Conversation&              conversation = TurnConversation();
+    std::ostringstream         out;
     if(include_briefing)
     {
         out << "Briefing for the current Optiq view:\n";
-        out << BuildAssistantBriefing(MakeToolContext());
+        out << BuildAssistantBriefing(context);
         out << "\n";
     }
+
+    // Links can change between turns, so the current set goes out with the
+    // first message and with any message after a change. It travels in the
+    // user message rather than the system prompt, which has to stay identical
+    // from round to round for the endpoint's prompt cache to hold.
+    const std::string links = BuildAssistantLinkBlock(context);
+    if(include_briefing || links != conversation.links_announced)
+    {
+        if(!links.empty())
+        {
+            out << links << "\n";
+        }
+        else if(!include_briefing)
+        {
+            out << "linked_traces: none. The links listed earlier were removed.\n";
+        }
+        conversation.links_announced = links;
+    }
+
     if(!question.empty())
     {
         out << "User question:\n" << question << "\n";
@@ -250,20 +300,92 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
 void
 AssistantPanel::ResetTurn()
 {
-    CancelPendingRequest();
+    if(m_fetch_wait.active && m_fetch_wait.owns_requests &&
+       m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
+    {
+        const std::string          project_id = m_fetch_wait.fetch.project_id.empty()
+                                                    ? m_turn_project_id
+                                                    : m_fetch_wait.fetch.project_id;
+        const AssistantToolContext context    = MakeAssistantToolContext(project_id);
+        if(context.data_provider != nullptr)
+        {
+            for(uint64_t request_id : m_fetch_wait.request_ids)
+            {
+                context.data_provider->CancelRequest(request_id);
+            }
+        }
+    }
+    AbandonPendingRequest();
     m_phase           = Phase::kIdle;
     m_pending_calls.clear();
     m_next_call_index = 0;
     m_tool_round      = 0;
     m_force_final     = false;
+    m_stop_tool_queue = false;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
     m_status.clear();
     m_queued_question.clear();
 }
 
-// Abandons the reply we are waiting on. Cancel() closes the socket, so this
-// returns immediately instead of blocking out the endpoint's read timeout.
+// Cancels without destroying the std::async future. A future's destructor may
+// wait for the worker, so tab close and Clear hand it to Update() to reap.
+void
+AssistantPanel::AbandonPendingRequest()
+{
+    if(m_pending.valid())
+    {
+        AbandonedRequest abandoned;
+        abandoned.call   = std::move(m_call);
+        abandoned.result = std::move(m_pending);
+        if(abandoned.call != nullptr)
+        {
+            abandoned.cancel = std::async(std::launch::async,
+                                          [call = abandoned.call]() { call->Cancel(); });
+        }
+        m_abandoned.push_back(std::move(abandoned));
+    }
+    else if(m_call != nullptr)
+    {
+        // No async request owns this call, so stopping it cannot strand a
+        // future whose destructor waits on the UI thread.
+        m_call->Cancel();
+    }
+    m_call.reset();
+}
+
+void
+AssistantPanel::ReapAbandonedRequests()
+{
+    for(std::vector<AbandonedRequest>::iterator it = m_abandoned.begin();
+        it != m_abandoned.end();)
+    {
+        const bool cancel_ready =
+            !it->cancel.valid() ||
+            it->cancel.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        const bool result_ready =
+            !it->result.valid() ||
+            it->result.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        if(!cancel_ready || !result_ready)
+        {
+            RenderScheduler::GetInstance().RequestRender();
+            ++it;
+            continue;
+        }
+        if(it->cancel.valid())
+        {
+            it->cancel.get();
+        }
+        if(it->result.valid())
+        {
+            it->result.get();
+        }
+        it = m_abandoned.erase(it);
+    }
+}
+
+// Final teardown may wait: every worker must finish before its owning panel is
+// destroyed, and there is no UI thread left to keep responsive.
 void
 AssistantPanel::CancelPendingRequest()
 {
@@ -271,11 +393,30 @@ AssistantPanel::CancelPendingRequest()
     {
         m_call->Cancel();
     }
+    for(AbandonedRequest& abandoned : m_abandoned)
+    {
+        if(abandoned.call != nullptr && !abandoned.cancel.valid())
+        {
+            abandoned.call->Cancel();
+        }
+    }
     if(m_pending.valid())
     {
         m_pending.wait();
         m_pending = std::future<AssistantChatResult>();
     }
+    for(AbandonedRequest& abandoned : m_abandoned)
+    {
+        if(abandoned.cancel.valid())
+        {
+            abandoned.cancel.wait();
+        }
+        if(abandoned.result.valid())
+        {
+            abandoned.result.wait();
+        }
+    }
+    m_abandoned.clear();
     m_call.reset();
 }
 
@@ -307,8 +448,8 @@ AssistantPanel::StartHttpRequest()
     system_message.role    = "system";
     system_message.content = AssistantSystemPrompt();
     request.messages.push_back(system_message);
-    request.messages.insert(request.messages.end(), m_conversation.begin(),
-                            m_conversation.end());
+    const std::vector<AssistantMessage>& history = TurnConversation().messages;
+    request.messages.insert(request.messages.end(), history.begin(), history.end());
 
     m_phase = Phase::kHttpWait;
     SetStatus("Thinking...");
@@ -327,7 +468,7 @@ AssistantPanel::BeginQueuedTurn()
     AssistantMessage user_message;
     user_message.role    = "user";
     user_message.content = BuildUserPrompt(m_queued_question, NeedsBriefing());
-    m_conversation.push_back(user_message);
+    TurnConversation().messages.push_back(user_message);
     m_queued_question.clear();
     StartHttpRequest();
 }
@@ -338,7 +479,7 @@ bool
 AssistantPanel::TryStartSummaryWarmup(const std::string& question)
 {
     const AssistantToolContext context = MakeToolContext();
-    if(context.data_provider == nullptr || context.is_compute)
+    if(context.data_provider == nullptr || context.is_compute || context.is_compare)
     {
         return false;
     }
@@ -372,6 +513,34 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
+    // The turn belongs to the trace on screen when it is asked, and stays with
+    // it whichever tab the user moves to while it runs.
+    m_turn_project_id                       = m_view_project_id;
+    Conversation&              conversation = TurnConversation();
+    const AssistantToolContext context      = MakeToolContext();
+    std::string                unavailable;
+    if(context.data_provider == nullptr)
+    {
+        unavailable = "Open a system trace before asking Optiq about it.";
+    }
+    else if(context.is_compute)
+    {
+        unavailable = "Ask Optiq reads system traces, not compute traces.";
+    }
+    else if(context.is_compare)
+    {
+        unavailable =
+            "Ask Optiq does not read a side-by-side compare tab, because its tools "
+            "would add both runs together. Open the two files on their own and link "
+            "them with the Link runs button instead.";
+    }
+    if(!unavailable.empty())
+    {
+        AppendLine(Speaker::kStatus, unavailable);
+        NotificationManager::GetInstance().Show(unavailable, NotificationLevel::Warning);
+        return;
+    }
+
     SettingsManager&         settings = SettingsManager::GetInstance();
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
     if(provider == nullptr || provider->endpoint_url.empty())
@@ -383,23 +552,23 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
-    std::string question = m_input;
+    std::string question = conversation.input;
     if(!explain_view && question.empty())
     {
         return;
     }
 
-    m_next_steps.clear();
+    conversation.next_steps.clear();
 
     const std::string display =
         explain_view ? (question.empty() ? std::string("Explain this view") : question)
                      : question;
     AppendLine(Speaker::kUser, display);
-    m_input.clear();
+    conversation.input.clear();
 
     if(explain_view)
     {
-        m_conversation.clear();
+        ResetHistory(conversation);
         m_tool_round  = 0;
         m_force_final = false;
     }
@@ -408,7 +577,6 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_next_call_index = 0;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
-    m_turn_project_id = CurrentProjectId();
     if(TryStartSummaryWarmup(question))
     {
         return;
@@ -417,29 +585,29 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     AssistantMessage user_message;
     user_message.role    = "user";
     user_message.content = BuildUserPrompt(question, NeedsBriefing());
-    m_conversation.push_back(user_message);
+    conversation.messages.push_back(user_message);
     StartHttpRequest();
 }
 
 /*
  * Whether this turn should carry the briefing again.
  *
- * The briefing is topology, selection and summary headline for the trace in
- * front. Repeating it on every follow-up costs its length once per turn for the
- * rest of the session, and puts several copies in context that disagree about
- * the selection - the model then has to guess which is current. Send it when
- * there is no conversation to refer back to, or when the trace it described is
- * no longer the one being asked about.
+ * The briefing is topology, selection and summary headline for the trace the
+ * conversation belongs to. Repeating it on every follow-up costs its length once
+ * per turn for the rest of the session, and puts several copies in context that
+ * disagree about the selection - the model then has to guess which is current.
+ * A conversation only ever covers one trace, so it is sent once, and again only
+ * after the history was cleared.
  */
 bool
 AssistantPanel::NeedsBriefing()
 {
-    const std::string project_id = CurrentProjectId();
-    if(!m_conversation.empty() && project_id == m_briefed_project_id)
+    Conversation& conversation = TurnConversation();
+    if(!conversation.messages.empty() && conversation.briefed)
     {
         return false;
     }
-    m_briefed_project_id = project_id;
+    conversation.briefed = true;
     return true;
 }
 
@@ -484,7 +652,8 @@ MessageChars(const AssistantMessage& message)
 void
 AssistantPanel::TrimConversation()
 {
-    if(m_conversation.size() > ASSISTANT_MAX_CONVERSATION_MESSAGES)
+    std::vector<AssistantMessage>& history = TurnConversation().messages;
+    if(history.size() > ASSISTANT_MAX_CONVERSATION_MESSAGES)
     {
         // Where the live investigation begins. Everything from here on is what
         // the answer is about to be written from, so the drop pass may not
@@ -500,31 +669,50 @@ AssistantPanel::TrimConversation()
         size_t       turn_start = 0;
         size_t       user_seen  = 0;
         const size_t wanted     = m_force_final ? 2 : 1;
-        for(size_t i = m_conversation.size(); i-- > 0;)
+        for(size_t i = history.size(); i-- > 0;)
         {
-            if(m_conversation[i].role == "user" && ++user_seen == wanted)
+            if(history[i].role == "user" && ++user_seen == wanted)
             {
                 turn_start = i;
                 break;
             }
         }
 
-        size_t drop = m_conversation.size() - ASSISTANT_MAX_CONVERSATION_MESSAGES;
-        while(drop < turn_start && m_conversation[drop].role != "user")
+        size_t drop = history.size() - ASSISTANT_MAX_CONVERSATION_MESSAGES;
+        while(drop < turn_start && history[drop].role != "user")
         {
             ++drop;
         }
         if(drop > 0 && drop < turn_start)
         {
             spdlog::info("Assistant history trimmed: dropping {} of {} messages", drop,
-                         m_conversation.size());
-            m_conversation.erase(m_conversation.begin(),
-                                 m_conversation.begin() + static_cast<ptrdiff_t>(drop));
+                         history.size());
+            history.erase(history.begin(),
+                          history.begin() + static_cast<ptrdiff_t>(drop));
+
+            // The first user message carried the trace briefing and links. If
+            // that exchange was one of the ones dropped, put a compact refresh
+            // ahead of what remains so a later answer cannot attribute old
+            // rows to an unidentified trace.
+            const AssistantToolContext context = MakeToolContext();
+            AssistantMessage           refresh;
+            refresh.role    = "user";
+            refresh.content = "Refreshed context for the retained conversation:\n" +
+                              BuildAssistantBriefing(context);
+            const std::string links = BuildAssistantLinkBlock(context);
+            if(!links.empty())
+            {
+                refresh.content += "\n" + links;
+            }
+            history.insert(history.begin(), refresh);
+            Conversation& conversation   = TurnConversation();
+            conversation.briefed         = true;
+            conversation.links_announced = links;
         }
     }
 
     size_t total = 0;
-    for(const AssistantMessage& message : m_conversation)
+    for(const AssistantMessage& message : history)
     {
         total += MessageChars(message);
     }
@@ -535,12 +723,12 @@ AssistantPanel::TrimConversation()
 
     // Walk back over the newest replies to find where the protected tail
     // starts, so compaction can then run oldest-first.
-    size_t protected_from = m_conversation.size();
+    size_t protected_from = history.size();
     size_t recent         = 0;
     while(protected_from > 0 && recent < ASSISTANT_RECENT_TOOL_REPLIES)
     {
         --protected_from;
-        if(m_conversation[protected_from].role == "tool")
+        if(history[protected_from].role == "tool")
         {
             ++recent;
         }
@@ -550,7 +738,7 @@ AssistantPanel::TrimConversation()
     size_t            compacted = 0;
     for(size_t i = 0; i < protected_from && total > ASSISTANT_MAX_CONVERSATION_CHARS; ++i)
     {
-        AssistantMessage& message = m_conversation[i];
+        AssistantMessage& message = history[i];
         if(message.role != "tool" || message.content.size() <= note.size())
         {
             continue;
@@ -574,14 +762,14 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
     if(result.cancelled)
     {
         ResetTurn();
-        m_next_steps.clear();
+        TurnConversation().next_steps.clear();
         return;
     }
 
     if(!result.ok)
     {
         ResetTurn();
-        m_next_steps.clear();
+        TurnConversation().next_steps.clear();
         AppendLine(Speaker::kStatus, result.error);
         NotificationManager::GetInstance().Show(result.error, NotificationLevel::Error);
         return;
@@ -616,7 +804,7 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
     AssistantMessage assistant_message;
     assistant_message.role    = "assistant";
     assistant_message.content = reply;
-    m_conversation.push_back(assistant_message);
+    TurnConversation().messages.push_back(assistant_message);
 }
 
 // Queues one round of tool calls, or gives up on gathering once the budget for
@@ -636,11 +824,12 @@ AssistantPanel::BeginToolQueue(const std::vector<AssistantToolCall>& calls,
     assistant_message.role       = "assistant";
     assistant_message.content    = assistant_text;
     assistant_message.tool_calls = calls;
-    m_conversation.push_back(assistant_message);
+    TurnConversation().messages.push_back(assistant_message);
 
     m_pending_calls   = calls;
     m_next_call_index = 0;
     m_fetch_retries   = 0;
+    m_stop_tool_queue = false;
     RunNextTool();
 }
 
@@ -654,30 +843,20 @@ AssistantPanel::BeginFinalAnswer()
     nudge.content =
         "Do not call any more tools. Write your answer now, reading the numbers you "
         "already gathered and saying what they mean for this workload.";
-    m_conversation.push_back(nudge);
+    TurnConversation().messages.push_back(nudge);
     m_force_final = true;
     SetStatus("Working out what it means...");
     StartHttpRequest();
 }
 
+// Tools run against the turn's own trace, never whichever tab is in front, so
+// a tab switch mid-queue cannot mix two traces' numbers.
 void
 AssistantPanel::RunNextTool()
 {
     if(m_next_call_index >= m_pending_calls.size())
     {
         ContinueAfterTools();
-        return;
-    }
-
-    // Tools read whichever trace is in front, so a tab change mid-queue would
-    // silently mix two traces' numbers. Say so instead.
-    const std::string project_id = CurrentProjectId();
-    if(project_id != m_turn_project_id)
-    {
-        m_turn_project_id = project_id;
-        FinishCurrentTool("The trace in front changed, so everything you gathered "
-                          "before this belongs to a different trace. Call "
-                          "trace_overview to start again on this one.");
         return;
     }
 
@@ -693,11 +872,18 @@ AssistantPanel::RunNextTool()
     }
     if(started.chart)
     {
-        AppendChart(started.chart_track_id);
+        // The trace the tool read, which a linked read makes another one.
+        AppendChart(started.fetch.project_id.empty() ? m_turn_project_id
+                                                     : started.fetch.project_id,
+                    started.chart_track_id);
     }
     if(started.set_next_steps)
     {
-        m_next_steps = started.next_steps;
+        TurnConversation().next_steps = started.next_steps;
+    }
+    if(started.stop_tool_queue)
+    {
+        m_stop_tool_queue = true;
     }
 
     if(started.pending)
@@ -719,6 +905,7 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
     m_phase                    = Phase::kToolWait;
     m_fetch_wait.active        = true;
     m_fetch_wait.started_fetch = started.started_fetch;
+    m_fetch_wait.owns_requests   = started.owns_requests;
     m_fetch_wait.warmup        = warmup;
     m_fetch_wait.request_ids   = started.request_ids;
     m_fetch_wait.fetch         = started.fetch;
@@ -756,14 +943,28 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
                   call.arguments.empty() ? "{}" : call.arguments);
     spdlog::debug("Assistant tool {} result:\n{}", call.name, tool_message.content);
 
-    m_conversation.push_back(tool_message);
+    TurnConversation().messages.push_back(tool_message);
 
-    // switch_tab is the model changing traces on purpose, so re-pin here rather
-    // than reporting its own move back to it on the next call.
-    m_turn_project_id = CurrentProjectId();
-    m_fetch_wait      = FetchWait();
-    m_fetch_retries   = 0;
+    m_fetch_wait    = FetchWait();
+    m_fetch_retries = 0;
     ++m_next_call_index;
+    if(m_stop_tool_queue)
+    {
+        while(m_next_call_index < m_pending_calls.size())
+        {
+            const AssistantToolCall& skipped = m_pending_calls[m_next_call_index];
+            AssistantMessage         skipped_message;
+            skipped_message.role         = "tool";
+            skipped_message.name         = skipped.name;
+            skipped_message.tool_call_id = skipped.id;
+            skipped_message.content =
+                "Not run because switch_tab moved the user to another trace. This "
+                "conversation stays with its original trace.";
+            TurnConversation().messages.push_back(skipped_message);
+            ++m_next_call_index;
+        }
+        m_stop_tool_queue = false;
+    }
     RunNextTool();
 }
 
@@ -812,7 +1013,13 @@ AssistantPanel::PollToolFetch()
 
     RenderScheduler::GetInstance().RequestRender();
 
-    const AssistantToolContext context = MakeToolContext();
+    // The provider the requests went to: a linked trace's when the tool read
+    // one, the turn's own otherwise. Request ids repeat in every provider, so
+    // polling any other would report someone else's query as this one's.
+    const std::string          fetch_project_id = m_fetch_wait.fetch.project_id.empty()
+                                                      ? m_turn_project_id
+                                                      : m_fetch_wait.fetch.project_id;
+    const AssistantToolContext context = MakeAssistantToolContext(fetch_project_id);
     if(context.data_provider == nullptr)
     {
         // Warmup has no pending tool call, so FinishCurrentTool would wrongly
@@ -824,15 +1031,10 @@ AssistantPanel::PollToolFetch()
                        "The trace closed before the summary finished loading.");
             return;
         }
-        FinishCurrentTool("The trace closed while a tool was running.");
-        return;
-    }
-
-    if(!m_fetch_wait.warmup && CurrentProjectId() != m_turn_project_id)
-    {
-        FinishCurrentTool("The trace in front changed, so this tool's pending "
-                          "data belongs to a different trace. Run it again on "
-                          "the current trace.");
+        FinishCurrentTool(fetch_project_id == m_turn_project_id
+                              ? "The trace closed while a tool was running."
+                              : "The linked trace closed before its data arrived, so "
+                                "nothing was read from it.");
         return;
     }
 
@@ -857,18 +1059,10 @@ AssistantPanel::PollToolFetch()
     }
 
     // The warmup has no tool call to answer, so the queued question goes out
-    // whether it landed or timed out — but only on the same trace it started on.
+    // whether it landed or timed out.
     if(m_fetch_wait.warmup)
     {
         m_fetch_wait = FetchWait();
-        if(CurrentProjectId() != m_turn_project_id)
-        {
-            ResetTurn();
-            AppendLine(Speaker::kStatus,
-                       "The trace in front changed before the summary finished "
-                       "loading. Ask again on this trace.");
-            return;
-        }
         BeginQueuedTurn();
         return;
     }
@@ -937,6 +1131,7 @@ AssistantPanel::PollToolFetch()
 void
 AssistantPanel::Update()
 {
+    ReapAbandonedRequests();
     if(m_pending.valid())
     {
         RenderScheduler::GetInstance().RequestRender();

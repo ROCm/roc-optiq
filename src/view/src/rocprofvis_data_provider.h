@@ -80,7 +80,11 @@ public:
     // gives it its own request ids, its own controller tables, and its own
     // model slots, so the two never meet. Anything else that reads tables
     // without being a tab wants the same treatment and a client id of its own.
-    static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
+    // Not 1 or 2: the compare panes build their event, sample and top-events
+    // request ids from those, which are request types read here too.
+    static constexpr uint64_t ASSISTANT_CLIENT_ID = 3;
+    static_assert(ASSISTANT_CLIENT_ID < RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID,
+                  "Ask Optiq's client id must stay in the reserved band");
     static const uint64_t     ASSISTANT_EVENT_TABLE_REQUEST_ID;
     static const uint64_t     ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t     ASSISTANT_EVENT_SEARCH_REQUEST_ID;
@@ -206,6 +210,10 @@ public:
     bool FetchTable(const TableRequestParams& table_params);
 
     bool FetchSummary();
+    // Whether the last summary request completed with an error. A caller that
+    // retries after an in-flight request needs this to distinguish an empty
+    // summary from one that has not been requested yet.
+    bool SummaryFetchFailed() const;
 
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
@@ -411,6 +419,7 @@ private:
     rocprofvis_controller_timeline_t* m_trace_timeline;
 
     ProviderState m_state;
+    bool          m_summary_fetch_failed;
 
     // Data model aggregating all trace data
     TraceDataModel m_model;

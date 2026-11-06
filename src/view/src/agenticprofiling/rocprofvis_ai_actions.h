@@ -73,15 +73,19 @@ public:
 
     // --- Tabs -------------------------------------------------------------
 
-    // Open traces. Names match the tab labels the user sees.
+    // Open traces. Names match the tab labels the user sees. A tab bar switches
+    // when it next draws, so the select calls report the label they matched:
+    // reading the active tab straight after would still name the old one.
     std::vector<std::string> ListTabs() const;
+    std::vector<std::string> ListTabIds() const;
     std::string              ActiveTab() const;
-    bool                     SelectTab(const std::string& name);
+    bool                     SelectTab(const std::string& name, std::string& selected_id,
+                                       std::string& selected_label);
 
     // The details panel's inner tabs. Selecting one also opens the panel.
     std::vector<std::string> ListAnalysisTabs() const;
     std::string              ActiveAnalysisTab() const;
-    bool                     SelectAnalysisTab(const std::string& name);
+    bool SelectAnalysisTab(const std::string& name, std::string& selected_label);
 
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     // --- Scripts ----------------------------------------------------------

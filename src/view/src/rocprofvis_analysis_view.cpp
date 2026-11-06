@@ -217,7 +217,7 @@ AnalysisView::ActiveTab()
 }
 
 bool
-AnalysisView::SelectTab(const std::string& name)
+AnalysisView::SelectTab(const std::string& name, std::string& selected_label)
 {
     if(!m_tab_container)
     {
@@ -228,6 +228,7 @@ AnalysisView::SelectTab(const std::string& name)
     {
         return false;
     }
+    selected_label = match->m_label;
     m_tab_container->SetActiveTab(match->m_id);
     return true;
 }

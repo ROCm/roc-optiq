@@ -6376,8 +6376,9 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
 
     // A cancelled read is left unmarked, so whoever still wants the layer reads
     // it again. A source file is recorded as read only when its lines landed;
-    // a failure is recorded apart from that, and does not take back a file
-    // whose lines already did.
+    // a failed or unsupported read is recorded apart from that, so the same
+    // call does not ask for it again, and does not take back a file whose
+    // lines already did.
     if(kernel && req.response_code != kRocProfVisResultCancelled)
     {
         PcSamplingLayerState outcome = PcSamplingLayerState::kFailed;
@@ -6419,8 +6420,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                             data.source_files_failed.erase(failed);
                         }
                     }
-                    else if(outcome == PcSamplingLayerState::kFailed &&
-                            read == data.source_files_read.end() &&
+                    else if(read == data.source_files_read.end() &&
                             failed == data.source_files_failed.end())
                     {
                         data.source_files_failed.push_back(completed_source_file_uuid);

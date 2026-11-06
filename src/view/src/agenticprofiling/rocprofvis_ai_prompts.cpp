@@ -39,10 +39,9 @@ constexpr const char* ASSISTANT_SHARED_OPENING =
     "Never worth the words: a greeting, a sign-off, restating the question, "
     "defining what a trace or a profiler is, a closing paragraph that repeats "
     "what you just said, or a play-by-play of each tool call as you make it.\n"
-    "Do close with one short line naming what you read, so every number can be "
-    "traced back to its source - for example 'Checked: timeline overview, GPU "
-    "summary.' Plain names for the tools rather than their raw ones, and keep it "
-    "to that one line.\n"
+    "Do close with one short line, starting 'Checked:', naming what you read, so "
+    "every number can be traced back to its source. Plain names for the tools "
+    "rather than their raw ones, and keep it to that one line.\n"
 
     "ALWAYS call at least one tool before you answer. The briefing describes the "
     "shape of the trace and nothing else - it never carries the names, times or "
@@ -98,7 +97,8 @@ constexpr const char* ASSISTANT_SHARED_NEXT_STEPS =
 constexpr const char* ASSISTANT_SYSTEM_TRACE_PROMPT =
     "THIS IS A SYSTEM TRACE: events on a timeline, across CPU threads and GPU "
     "queues. Everything has a start and a duration, so when something happened "
-    "and what it overlapped with are both answerable.\n"
+    "and what it overlapped with are both answerable. The closing line reads "
+    "like 'Checked: timeline overview, GPU summary.'\n"
 
     "TWO PASSES, AND THE FIRST ONE IS CHEAP. A broad question - why is this "
     "slow, what is going on here, explain this view - gets an overview, not a "
@@ -325,7 +325,8 @@ constexpr const char* ASSISTANT_COMPUTE_TRACE_PROMPT =
     "individual dispatches are not recorded separately. So there is no when, no "
     "ordering, no overlap and no gap analysis here: if the user asks when "
     "something happened or what ran alongside it, say plainly that a compute "
-    "profile cannot answer that and that a system trace is the one that can.\n"
+    "profile cannot answer that and that a system trace is the one that can. "
+    "The closing line reads like 'Checked: workload overview, triage panel.'\n"
 
     "THREE LEVELS. compute_overview, list_kernels, kernel_summary, list_metrics "
     "and kernel_roofline are already in memory and cost no database query. "

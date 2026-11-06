@@ -1963,8 +1963,9 @@ measured issued and stall counts contributes none, the `OTHER_WAIT`
 contribution of issued samples is dropped under the same names
 (`ResolveStallReasonKind`), and a lookup with no text is named
 `Unknown stall reason (lookup ID n)`. An instruction with any unmeasured
-sample state reports its issued and stalled counts as `n/a`, and the
-kernel-wide totals leave it out. A stalls read that failed after its
+sample state reports its issued and stalled counts as `n/a` and lists no
+reasons, as the Sampling State tooltip shows it, and the kernel-wide
+totals leave it out. A stalls read that failed after its
 sample counts landed still answers from those counts, and says the stall
 reasons could not be read.
 
@@ -2601,7 +2602,9 @@ Layered, transport at the bottom and the panel at the top:
   and cannot contend with anything. `kernel_triage` reads the standard
   diagnostic tables in one query, found by name
   (`ASSISTANT_TRIAGE_TABLE_NAMES`) because the dotted ids move with the
-  accelerator and the profiling mode while the names do not. Both go
+  accelerator and the profiling mode while the names do not. A standard
+  name this workload has no table for is named in the reply, so the
+  defect that table would have shown is not read as absent. Both go
   through `StartComputeMetricsFetch`, which calls `FetchMetrics` under
   `ASSISTANT_CLIENT_ID` - their own request slot (`MakeClientRequestId`)
   and their own `store_id` partition in `ComputeDataModel`, the compute

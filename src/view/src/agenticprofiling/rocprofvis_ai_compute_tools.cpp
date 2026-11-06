@@ -111,7 +111,8 @@ constexpr const char* ASSISTANT_PC_SAMPLES_UNSUPPORTED =
  *
  * Matched against the catalogue's own table names because the dotted ids move
  * with the accelerator and the profiling mode, while these names do not. A
- * table this trace did not record simply contributes no selector.
+ * table this trace did not record contributes no selector, and kernel_triage
+ * names it in its reply.
  */
 constexpr const char* ASSISTANT_TRIAGE_TABLE_NAMES[] = {
     "System Speed-of-Light",           "Wavefront Launch Stats",
@@ -1233,16 +1234,19 @@ ToolKernelRoofline(const AssistantToolContext& context, const jt::Json& args,
     return DoneResult(TrimComputeResult(out.str()), "Read the roofline");
 }
 
-// Every triage table this workload actually recorded, as table-wide selectors.
+// Every triage table this workload actually recorded, as table-wide selectors,
+// and the standard names it has no table for.
 void
 CollectTriageSelectors(const WorkloadInfo&                          workload,
-                       std::vector<MetricsRequestParams::MetricID>& out)
+                       std::vector<MetricsRequestParams::MetricID>& out,
+                       std::vector<std::string>&                    missing_out)
 {
     std::vector<std::string> wanted;
     for(const char* name : ASSISTANT_TRIAGE_TABLE_NAMES)
     {
         wanted.push_back(Core::String::to_lower_copy(name));
     }
+    std::vector<bool> found(wanted.size(), false);
 
     for(const AvailableMetrics::Category* category :
         workload.available_metrics.ordered_categories)
@@ -1253,16 +1257,29 @@ CollectTriageSelectors(const WorkloadInfo&                          workload,
         }
         for(const AvailableMetrics::Table* table : category->ordered_tables)
         {
-            if(table == nullptr || out.size() >= ASSISTANT_COMPUTE_MAX_SELECTORS ||
-               std::find(wanted.begin(), wanted.end(),
-                         Core::String::to_lower_copy(table->name)) == wanted.end())
+            if(table == nullptr)
             {
                 continue;
             }
+            const std::vector<std::string>::const_iterator match = std::find(
+                wanted.begin(), wanted.end(), Core::String::to_lower_copy(table->name));
+            if(match == wanted.end())
+            {
+                continue;
+            }
+            found[static_cast<size_t>(match - wanted.begin())] = true;
             MetricsRequestParams::MetricID selector{};
             selector.category_id = category->id;
             selector.table_id    = table->id;
             out.push_back(selector);
+        }
+    }
+
+    for(size_t i = 0; i < found.size(); ++i)
+    {
+        if(!found[i])
+        {
+            missing_out.push_back(ASSISTANT_TRIAGE_TABLE_NAMES[i]);
         }
     }
 }
@@ -1352,7 +1369,8 @@ ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
     }
 
     std::vector<MetricsRequestParams::MetricID> selectors;
-    CollectTriageSelectors(*workload, selectors);
+    std::vector<std::string>                    missing;
+    CollectTriageSelectors(*workload, selectors, missing);
     if(selectors.empty())
     {
         return DoneResult("This workload recorded none of the standard triage tables, "
@@ -1361,8 +1379,23 @@ ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
                           "No triage tables");
     }
 
-    return StartComputeMetricsFetch(context, *workload, kernel, selectors,
-                                    "Reading the triage panel...");
+    AssistantToolStartResult result = StartComputeMetricsFetch(
+        context, *workload, kernel, selectors, "Reading the triage panel...");
+    // Without this, a table the panel lacks is simply not there, and the
+    // defect it would have shown reads as one the kernel does not have.
+    if(result.pending && !missing.empty())
+    {
+        std::ostringstream note;
+        note << "note: not in this panel, because this workload has no table named";
+        for(size_t i = 0; i < missing.size(); ++i)
+        {
+            note << (i == 0 ? " \"" : ", \"") << missing[i] << "\"";
+        }
+        note << ". Nothing below says those counters are healthy - they were not "
+                "read. list_metrics search may find them under another name.\n";
+        result.content = note.str();
+    }
+    return result;
 }
 
 AssistantToolStartResult
@@ -1427,7 +1460,8 @@ struct PcInstructionSamples
     uint64_t                        issued           = 0;
     uint64_t                        stalled          = 0;
     // False when any sample state for this instruction left its issue or stall
-    // count unmeasured. issued and stalled then mean nothing and print as n/a.
+    // count unmeasured. issued, stalled and reasons then mean nothing: the
+    // counts print as n/a and no reason is listed.
     bool                            progress_known = true;
     std::map<std::string, uint64_t> reasons;
 };
@@ -1609,9 +1643,10 @@ PcSamplingRequestId(PcSamplingLayer layer)
  * that never comes - so a busy slot is waited out, never taken. Either way the
  * wait is parked as someone else's fetch, which has the panel run the tool
  * again once the slot clears; that run picks up whatever landed and moves on to
- * the next layer it still needs. Only a read this call actually submitted
- * counts as its retry: a wait behind the view's read, which may be for another
- * kernel, does not.
+ * the next layer it still needs. started_fetch therefore stays false: one
+ * layer alone is nothing FinishAssistantFetch could format. Only a read this
+ * call actually submitted counts as its retry: a wait behind the view's read,
+ * which may be for another kernel, does not.
  */
 AssistantToolStartResult
 ReadPcSamplingLayer(const AssistantToolContext& context, const WorkloadInfo& workload,
@@ -1677,21 +1712,23 @@ RankPcSamples(const PcSamplingData& data)
         }
         PcInstructionSamples& entry = ranked[found->second];
         entry.total += state.total_count;
-        // As in the ISA View, a state without measured progress gives no
-        // reasons: without its issue count, its OTHER_WAIT rows cannot be told
-        // apart from real stalls.
+        // One state without measured progress leaves the whole instruction
+        // without a split, and the ISA View then shows neither its counts nor
+        // its reasons, so neither is kept here.
+        if(!entry.progress_known)
+        {
+            continue;
+        }
         if(!state.issue_count || !state.stall_count)
         {
             entry.progress_known = false;
             entry.issued         = 0;
             entry.stalled        = 0;
+            entry.reasons.clear();
             continue;
         }
-        if(entry.progress_known)
-        {
-            entry.issued += *state.issue_count;
-            entry.stalled += *state.stall_count;
-        }
+        entry.issued += *state.issue_count;
+        entry.stalled += *state.stall_count;
 
         std::map<std::string, uint64_t> state_reasons;
         auto reasons = reasons_by_state.find(state.pc_sample_state_uuid);
@@ -1957,7 +1994,8 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
     if(!all_progress)
     {
         out << "note: issued and stalled counts were not recorded for every sampled "
-               "instruction. Lines that lack them say n/a"
+               "instruction. Lines that lack them say n/a and list no stall reasons, "
+               "as the ISA View shows them"
             << (any_progress ? ", and the totals above leave those instructions out.\n"
                              : ", so those totals are omitted.\n");
     }

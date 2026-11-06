@@ -2597,6 +2597,14 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         return std::string();
     }
+    // kernel_pc_samples answers by running again once each layer lands, so a
+    // layer only gets here if a read set started_fetch.
+    if(fetch.kind == AssistantFetchKind::kPcSampling)
+    {
+        ROCPROFVIS_ASSERT_MSG(false, "A PC sampling layer reached FinishAssistantFetch.");
+        return "The PC samples were read but not formatted. Call kernel_pc_samples "
+               "again to read them.";
+    }
     return "Fetch finished with nothing to report.";
 }
 

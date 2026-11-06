@@ -683,12 +683,17 @@ rocprofvis_dm_result_t
         }
         if (split_count > 1)
         {
-            uint64_t trace_time = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()] - TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
-            if (trace_time > 0)
+            uint64_t trace_start = TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
+            uint64_t trace_end = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()];
+            uint64_t time_bucket_size = (trace_end > trace_start ? trace_end - trace_start : 0) / split_count;
+            // Half-open ranges with open outer ends, so every event lands in exactly one split.
+            if (split_index > 0)
             {
-                uint64_t time_bucket_size = trace_time / split_count;
-                ss << " and " << Builder::START_SERVICE_NAME << " BETWEEN " << TraceProperties()->db_inst_start_time[db_instance->GuidIndex()] + (time_bucket_size * split_index);
-                ss << " and " << TraceProperties()->db_inst_start_time[db_instance->GuidIndex()] + (time_bucket_size * (split_index+1));
+                ss << " and " << Builder::START_SERVICE_NAME << " >= " << trace_start + (time_bucket_size * split_index);
+            }
+            if (split_index + 1 < split_count)
+            {
+                ss << " and " << Builder::START_SERVICE_NAME << " < " << trace_start + (time_bucket_size * (split_index + 1));
             }
         }
     }

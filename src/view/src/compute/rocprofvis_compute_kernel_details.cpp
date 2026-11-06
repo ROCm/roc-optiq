@@ -14,7 +14,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
-
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -509,11 +508,11 @@ ComputeKernelDetailsView::SubscribeToEvents()
                 return;
             }
 
-            // A failed workload is skipped so the rest still show.
             if(table_data_event->GetRequestID() == DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID)
             {
-                m_kernel_metric_table->HandleNewData(table_data_event->GetResponseCode() ==
-                                                     kRocProfVisResultSuccess);
+                m_kernel_metric_table->HandleNewData(
+                    table_data_event->GetResponseCode() == kRocProfVisResultSuccess,
+                    table_data_event->GetErrorMessage());
             }
         }
     };

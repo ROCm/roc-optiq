@@ -1685,7 +1685,10 @@ Public:
   `SetExternalQuery(metric_id, value_name)` for the "Add Metric" flow
   (driven by `QueryBuilder`).
 - Per-column filters (`ColumnFilter`) with `ApplyFilters` /
-  `ClearAllFilters` / `ValidateFilterExpression`.
+  `ClearAllFilters`. Filters are not validated in the view: the model
+  returns every column and no rows for a filter it can't apply, with the
+  error on the `TableDataEvent`. `HandleNewData` shows that message once per
+  fetch cycle and keeps the previous rows when every workload's fetch failed.
 - Bar-chart columns (`m_bar_chart_columns`) computed via
   `ComputeColumnMaxValues`.
 - Persistent state via the nested `Preset : PresetComponent`.
@@ -3210,8 +3213,9 @@ EventManager dispatches next frame
 Things to honor in any new data path:
 
 1. **Request IDs are packed.** Use `RequestIdBuilder::MakeRequestId`
-   or `MakeTrackDataRequestId` / `MakeClientRequestId`. Do not invent
-   raw IDs - they collide with the encoded fields.
+   or `MakeTrackDataRequestId` / `MakeEventDataRequestId` /
+   `MakeClientRequestId`. Do not invent raw IDs - they collide with the
+   encoded fields.
 2. **Long-running fetches must update progress.** Wire your widget
    into `SetRequestProgressUpdateCallback` and emit
    `RequestProgressUpdateEvent`s if you want progress in the UI.
@@ -3460,7 +3464,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Run an in-app Python analysis script          | `ScriptEditor`, the details panel's Script tab, owned by `AnalysisView` (`ROCPROFVIS_ENABLE_SCRIPTING`) |
 | Add a hotkey                                  | Add to `HotkeyActionId`, declare info, read with `WasActionTriggered / IsActionHeld`           |
 | Disambiguate clicks across timeline layers    | `TimelineFocusManager::RequestLayerFocus / EvaluateFocusedLayer`                               |
-| Encode a request ID                           | `RequestIdBuilder::MakeRequestId(...)` or `MakeTrackDataRequestId(...)`                        |
+| Encode a request ID                           | `RequestIdBuilder::MakeRequestId(...)`, `MakeTrackDataRequestId(...)` or `MakeEventDataRequestId(...)` |
 | Generate a unique client ID                   | `IdGenerator::GetInstance().GenerateId()`                                                      |
 | Get an index sentinel                         | `INVALID_UINT64_INDEX` (`view/src/model/rocprofvis_common_defs.h`)                             |
 | Get a selection sentinel                      | `TimelineSelection::INVALID_SELECTION_ID` / `ComputeSelection::INVALID_SELECTION_ID`           |

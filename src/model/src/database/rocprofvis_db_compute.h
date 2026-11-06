@@ -178,7 +178,7 @@ namespace DataModel
         static int CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         rocprofvis_dm_result_t ComputeWorkloadTopKernelsMeanAndMedian(rocprofvis_dm_table_t table);
-        rocprofvis_dm_result_t BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json & plan);
+        rocprofvis_dm_result_t BuildKernelMetricsMatrix(Future* future, rocprofvis_dm_table_t table, jt::Json & plan);
         rocprofvis_dm_result_t CreateIndexes();
 
         inline static const rocprofvis_null_data_exceptions_skip

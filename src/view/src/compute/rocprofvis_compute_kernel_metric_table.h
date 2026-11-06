@@ -32,8 +32,9 @@ public:
     // The selection's workload (metric picking follows it). The table lists every
     // workload's kernels, so it fetches only when it has nothing yet.
     void FetchData(uint32_t workload_id);
-    // One workload's rows arrived (or failed); the last one shows them all.
-    void HandleNewData(bool success = true);
+    // One workload's rows arrived, or failed with `error_message`. The last one
+    // shows them all, or keeps the previous rows when every workload failed.
+    void HandleNewData(bool success, const std::string& error_message);
     void SetQuery(const std::string& query);
     void SetExternalQuery(MetricId metric_id, const std::string& value_name);
     // Stretch the card and table to the parent's height (a resizable pane). The
@@ -78,7 +79,6 @@ private:
     const std::string& WorkloadName(uint32_t workload_id) const;
     void RenderColumnFilter(int column_index);
     void ApplyFilters();
-    bool ValidateFilterExpression(const char* expr, bool is_numeric_column);
     void ComputeColumnMaxValues(const std::vector<std::vector<std::string>>& data);
     void RenderBarChartContextMenu(int col);
     void AppendMetricQuery(const std::string& query, const AvailableMetrics::Entry& entry,
@@ -137,8 +137,9 @@ private:
     std::vector<ShownKernel>              m_shown_kernels;
     // The fetch cycle in progress.
     std::vector<uint32_t>                 m_fetch_workloads;
-    size_t                                m_fetch_index  = 0;
-    bool                                  m_cycle_active = false;
+    size_t                                m_fetch_index    = 0;
+    size_t                                m_fetch_failures = 0;
+    bool                                  m_cycle_active   = false;
     bool                                  m_fetch_next   = false;
     std::vector<std::string>              m_pending_header;
     std::vector<std::vector<std::string>> m_pending_rows;

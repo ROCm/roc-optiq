@@ -1095,7 +1095,10 @@ caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
   expression for each filter.
 
 It pivots metric values into a `kernel x metric` matrix and exposes
-the result like any other table.
+the result like any other table. A filter the model can't apply
+returns Success with every column and no rows, and its message is
+copied to `kRPVControllerFutureLastErrorMessage`. `Fetch` deletes the
+DM table after reading it, so the same query runs (and reports) again.
 
 ### 6.7 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
 

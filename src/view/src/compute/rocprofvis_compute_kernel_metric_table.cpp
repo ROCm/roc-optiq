@@ -15,7 +15,6 @@
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <numeric>
@@ -221,8 +220,9 @@ KernelMetricTable::StartFetchCycle()
             m_fetch_workloads.push_back(candidate->id);
         }
     }
-    m_fetch_index = 0;
-    m_fetch_next  = false;
+    m_fetch_index    = 0;
+    m_fetch_failures = 0;
+    m_fetch_next     = false;
     m_pending_header.clear();
     m_pending_rows.clear();
     m_pending_row_workloads.clear();
@@ -262,13 +262,23 @@ KernelMetricTable::RequestWorkloadRows(uint32_t workload_id)
 }
 
 void
-KernelMetricTable::HandleNewData(bool success)
+KernelMetricTable::HandleNewData(bool success, const std::string& error_message)
 {
     if(!m_cycle_active || m_fetch_index >= m_fetch_workloads.size())
     {
         return;
     }
-    if(success)
+    if(!success)
+    {
+        // One query runs per workload, so an invalid filter fails each of them;
+        // report it once.
+        if(m_fetch_failures == 0 && !error_message.empty())
+        {
+            NotificationManager::GetInstance().Show(error_message, NotificationLevel::Error);
+        }
+        ++m_fetch_failures;
+    }
+    else
     {
         ComputeKernelSelectionTable& table =
             m_data_provider.ComputeModel().GetKernelSelectionTable();
@@ -282,6 +292,13 @@ KernelMetricTable::HandleNewData(bool success)
     if(m_fetch_index < m_fetch_workloads.size())
     {
         m_fetch_next = true;
+    }
+    else if(m_fetch_failures == m_fetch_workloads.size())
+    {
+        m_cycle_active = false;
+        m_pending_header.clear();
+        m_pending_rows.clear();
+        m_pending_row_workloads.clear();
     }
     else
     {
@@ -1237,26 +1254,6 @@ KernelMetricTable::RenderColumnFilter(int column_index)
 void
 KernelMetricTable::ApplyFilters()
 {
-    // Validate each filter before applying
-    for(size_t i = 0; i < m_pending_column_filters.size(); i++)
-    {
-        const ColumnFilter& filter = m_pending_column_filters[i];
-        if(!filter.is_active || strlen(filter.filter_text) == 0)
-            continue;
-
-        bool is_numeric_column = (i != NAME_COLUMN_INDEX);  // Name Column is text, others are numeric
-
-        if(!ValidateFilterExpression(filter.filter_text, is_numeric_column))
-        {
-            spdlog::warn("Invalid filter expression for column {}: {}", i, filter.filter_text);
-            NotificationManager::GetInstance().Show(
-                "Invalid filter expression: " + std::string(filter.filter_text),
-                NotificationLevel::Error);
-
-            return;  // Don't apply invalid filters
-        }
-    }
-
     m_column_filters = m_pending_column_filters;
     m_fetch_requested = true;
 }
@@ -1321,53 +1318,6 @@ KernelMetricTable::RenderBarChartContextMenu(int col)
         ImGui::EndPopup();
     }
     ImGui::PopID();
-}
-
-bool
-KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_column)
-{
-    std::string trimmed(expr);
-    // Trim whitespace
-    trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
-    trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
-
-    if(trimmed.empty()) return true;
-
-    if(is_numeric_column)
-    {
-        // Must be: operator + number
-        // Check for operators followed by numbers
-        static const std::vector<std::string> ops = {">=", "<=", "!=", ">", "<", "="};
-        for(const auto& op : ops)
-        {
-            if(trimmed.find(op) == 0)
-            {
-                std::string value = trimmed.substr(op.length());
-                // Trim value
-                value.erase(0, value.find_first_not_of(" \t\n\r"));
-                value.erase(value.find_last_not_of(" \t\n\r") + 1);
-                // Check if value is numeric
-                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '.'))
-                {
-                    return true;
-                }
-                return false;
-            }
-        }
-        return false;
-    }
-    else
-    {
-        // Text column: LIKE operator required
-        auto starts_with_like = [](const std::string& str) {
-            if(str.length() < 4) return false;
-            std::string prefix = str.substr(0, 4);
-            std::transform(prefix.begin(), prefix.end(), prefix.begin(),
-                [](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
-            return prefix == "like";
-        };
-        return starts_with_like(trimmed);
-    }
 }
 
 KernelMetricTable::Preset::Preset(KernelMetricTable& widget)

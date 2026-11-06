@@ -287,6 +287,15 @@ ComputeView::LoadTrace(rocprofvis_controller_t* controller, const std::string& f
     return result;
 }
 
+bool
+ComputeView::LoadRemoteTrace(std::shared_ptr<IDataChannel> channel,
+                             const std::string&            file_path)
+{
+    m_error_dialog_state = ErrorDialogState::kNone;
+    m_popup_info         = {};
+    return m_data_provider.FetchRemoteTrace(std::move(channel), file_path, true);
+}
+
 void
 ComputeView::Render()
 {

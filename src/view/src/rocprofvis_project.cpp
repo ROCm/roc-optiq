@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_project.h"
+#include "protocol/rocprofvis_data_channel.h"
+#include "protocol/rocprofvis_protocol_uri.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_presets.h"
 #include "rocprofvis_trace_view.h"
@@ -9,6 +11,9 @@
 #include "rocprofvis_utils.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+#include "clientserver/rocprofvis_server_open.h"
+#endif
 #include <fstream>
 
 constexpr const char* PROJECT_VERSION = "1.0";
@@ -60,7 +65,22 @@ Project::Open(std::string& file_path)
 {
     OpenResult result = Failed;
     m_open_error_message.clear();
-    if(std::filesystem::exists(file_path))
+    if(is_server_uri(file_path))
+    {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        file_path = canonical_server_uri(file_path);
+#endif
+        result = OpenRemoteTrace(file_path, { file_path });
+        if(result == Failed)
+        {
+            AppWindow::GetInstance()->ShowMessageDialog(
+                "Error", m_open_error_message.empty()
+                             ? "The trace could not be opened:\n\n" + file_path
+                             : m_open_error_message);
+            spdlog::error("Failed to open {}: {}", file_path, m_open_error_message);
+        }
+    }
+    else if(std::filesystem::exists(file_path))
     {
         std::string file_ext = std::filesystem::path(file_path).extension().string();
         if(file_ext == ".rpv")
@@ -152,12 +172,21 @@ Project::OpenProject(std::string& file_path)
             {
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
                 std::vector<std::string> files;
+                size_t                   server_files = 0;
                 for(jt::Json& entry : general[JSON_KEY_GENERAL_COMPARE_FILES].getArray())
                 {
-                    files.push_back(
-                        std::filesystem::weakly_canonical(
-                            project_dir / std::filesystem::path(entry.getString()))
-                            .string());
+                    if(is_server_uri(entry.getString()))
+                    {
+                        files.push_back(entry.getString());
+                        server_files++;
+                    }
+                    else
+                    {
+                        files.push_back(
+                            std::filesystem::weakly_canonical(
+                                project_dir / std::filesystem::path(entry.getString()))
+                                .string());
+                    }
                 }
                 std::string compare_id = AppWindow::MakeCompareId(files);
                 if(AppWindow::GetInstance()->GetProject(compare_id))
@@ -166,6 +195,15 @@ Project::OpenProject(std::string& file_path)
                     result    = Duplicate;
                     NotificationManager::GetInstance().Show(
                         "This comparison is already open.", NotificationLevel::Warning);
+                }
+                else if(server_files == files.size())
+                {
+                    result = OpenRemoteTrace(compare_id, files);
+                }
+                else if(server_files > 0)
+                {
+                    m_open_error_message = "This comparison mixes traces on a server with "
+                                           "local traces, which cannot be compared.";
                 }
                 else
                 {
@@ -177,6 +215,15 @@ Project::OpenProject(std::string& file_path)
                     "available in this build.\n\nRebuild with "
                     "ROCPROFVIS_ENABLE_TRACE_COMPARE=ON to open it.";
 #endif
+            }
+            else if(is_server_uri(general[JSON_KEY_GENERAL_TRACE_PATH].getString()))
+            {
+                std::string trace_uri = general[JSON_KEY_GENERAL_TRACE_PATH].getString();
+                result                = OpenRemoteTrace(trace_uri, { trace_uri });
+                if(result == Duplicate)
+                {
+                    file_path = trace_uri;
+                }
             }
             else
             {
@@ -240,6 +287,16 @@ Project::OpenTrace(std::string& file_path)
         std::string config_path = get_application_config_path(true);
         rocprofvis_controller_t*   controller =
             rocprofvis_controller_alloc(file_path.c_str(), config_path.c_str());
+#ifdef ROCPROFVIS_THIN_CLIENT
+        if(!controller)
+        {
+            m_open_error_message =
+                "This build of roc-optiq opens traces only through a roc-optiq-server:\n\n" +
+                file_path +
+                "\n\nUpload it with File > Open from Server, or open it on the server as "
+                "optiq://host:port/path/to/trace.";
+        }
+#endif
         if(controller)
         {
             rocprofvis_controller_object_type_t type =
@@ -284,6 +341,109 @@ Project::OpenTrace(std::string& file_path)
     return open_result;
 }
 
+Project::OpenResult
+Project::OpenRemoteTrace(const std::string& project_id, const std::vector<std::string>& uris)
+{
+    OpenResult open_result = Failed;
+    if(AppWindow::GetInstance()->GetProject(project_id))
+    {
+        open_result = Duplicate;
+    }
+    else
+    {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        ServerOpenResult opened = open_on_server(uris);
+        open_result = OpenServerTrace(project_id, uris, opened.channel, opened.is_compute,
+                                      opened.error);
+#else
+        m_open_error_message = "This trace is on a roc-optiq-server:\n\n" + uris.front() +
+                               "\n\nThis build cannot connect to servers. Rebuild with "
+                               "ROCPROFVIS_ENABLE_CLIENT_SERVER=ON to open it.";
+#endif
+    }
+    return open_result;
+}
+
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+Project::OpenResult
+Project::OpenServerTrace(const std::string& project_id, const std::vector<std::string>& uris,
+                         std::shared_ptr<IDataChannel> channel, bool is_compute,
+                         const std::string& error)
+{
+    OpenResult                 open_result  = Failed;
+    bool                       trace_result = false;
+    const bool                 is_compare   = uris.size() > 1;
+    std::shared_ptr<RocWidget> view;
+    if(m_view)
+    {
+        spdlog::error("Project already has a trace, cannot open {}", project_id);
+    }
+    else if(!channel)
+    {
+        m_open_error_message = error;
+    }
+#ifndef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    else if(is_compare)
+    {
+        m_open_error_message = "Comparing traces is not available in this build.";
+    }
+#endif
+    else if(is_compute)
+    {
+        std::shared_ptr<ComputeView> compute_view = std::make_shared<ComputeView>();
+        trace_result = compute_view->LoadRemoteTrace(channel, project_id);
+        view         = compute_view;
+    }
+    else
+    {
+        std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();
+        trace_result = trace_view->LoadRemoteTrace(channel, project_id);
+        view         = trace_view;
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+        if(trace_result && is_compare)
+        {
+            std::vector<std::string> paths;
+            for(const std::string& uri : uris)
+            {
+                paths.push_back(server_uri_path(uri));
+            }
+            std::vector<CompareSourceInfo> sources = make_compare_sources(paths);
+            trace_view->GetDataProvider()->DataModel().SetCompareSources(sources);
+            m_compare_files = uris;
+            m_name = "Compare: " + sources[0].name + " vs " + sources[1].name;
+        }
+#endif
+    }
+
+    if(trace_result)
+    {
+        m_trace_file_path = project_id;
+        m_trace_type      = is_compute ? Compute : System;
+        m_view            = view;
+        if(IsProject())
+        {
+            m_name = std::filesystem::path(m_project_file_path).filename().string();
+        }
+        else if(!is_compare)
+        {
+            m_name = server_trace_label(project_id);
+        }
+        open_result = Success;
+    }
+    else if(channel)
+    {
+        channel->Close();
+    }
+    return open_result;
+}
+#endif  // ROCPROFVIS_ENABLE_CLIENT_SERVER
+
+const std::string&
+Project::GetOpenErrorMessage() const
+{
+    return m_open_error_message;
+}
+
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 Project::OpenResult
 Project::OpenCompare(const std::string&              project_id,
@@ -320,18 +480,7 @@ Project::OpenCompare(const std::string&              project_id,
         std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();
         if(trace_view->LoadTrace(controller, project_id))
         {
-            // Tag each source A, B, ... in selection order so the timeline and sidebar
-            // badges can resolve a track's instance index back to its file.
-            std::vector<CompareSourceInfo> sources;
-            sources.reserve(file_paths.size());
-            for(size_t i = 0; i < file_paths.size(); i++)
-            {
-                CompareSourceInfo info;
-                info.id   = std::string(1, static_cast<char>('A' + i));
-                info.name = std::filesystem::path(file_paths[i]).stem().string();
-                info.path = file_paths[i];
-                sources.push_back(std::move(info));
-            }
+            std::vector<CompareSourceInfo> sources = make_compare_sources(file_paths);
             if(DataProvider* provider = trace_view->GetDataProvider())
             {
                 provider->DataModel().SetCompareSources(sources);
@@ -397,11 +546,20 @@ Project::SaveSetttingsJson()
         for(size_t i = 0; i < m_compare_files.size(); i++)
         {
             compare_files[i] =
-                std::filesystem::proximate(m_compare_files[i], project_dir).generic_string();
+                is_server_uri(m_compare_files[i])
+                    ? m_compare_files[i]
+                    : std::filesystem::proximate(m_compare_files[i], project_dir)
+                          .generic_string();
         }
     }
     else
 #endif
+    if(is_server_uri(m_trace_file_path))
+    {
+        m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH] =
+            m_trace_file_path;
+    }
+    else
     {
         m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH] =
             std::filesystem::proximate(m_trace_file_path, project_dir).generic_string();

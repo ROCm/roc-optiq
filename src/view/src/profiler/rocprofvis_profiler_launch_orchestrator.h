@@ -30,6 +30,9 @@ class AppWindow;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 class RemoteUri;  // TEMPORARY (remote/SSH)
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+class ServerConnection;  // TEMPORARY (client/server)
+#endif
 
 // View-layer orchestrator for a profiling run. Owns the local / remote profiler
 // sessions and normalizes their two very different control flows (local is
@@ -59,6 +62,10 @@ public:
 #ifdef ROCPROFVIS_ENABLE_REMOTE
         // Remote only: the connection/operation state for the SSH workflow.
         std::shared_ptr<RemoteUri> remote_uri;
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        // Set: run on this roc-optiq-server, which then has the trace.
+        std::shared_ptr<ServerConnection> server;
 #endif
 
         // Backend-specific scraper that derives the produced trace path from the
@@ -97,6 +104,8 @@ public:
     rocprofvis_profiler_state_t GetState() const { return m_profiler_state; }
     bool                        IsRunning() const { return m_is_running; }
     bool                        IsRemote() const { return m_is_remote; }
+    // On a roc-optiq-server; the trace path is then an optiq:// URI.
+    bool                        IsOnServer() const;
 
     // Latest accumulated profiler stdout (raw, including ANSI). The view strips
     // and composes for display.
@@ -140,6 +149,11 @@ private:
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     bool LaunchRemote(const LaunchRequest& request);
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    bool LaunchOnServer(const LaunchRequest& request);
+    void UpdateServerRun();
+    void EndServerRun();
+#endif
     void ResolveLocalTracePath();
 
     AppWindow*                              m_app_window;
@@ -153,6 +167,15 @@ private:
     // Orchestrator holds its own reference to the shared RemoteUri so the remote
     // session (and its deferred SSH teardown) can outlive the dialog's copy.
     std::shared_ptr<RemoteUri>              m_remote_uri;
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    std::shared_ptr<ServerConnection> m_server;
+    uint64_t                          m_server_run_id;
+    // Relative trace paths in the output are relative to this, on the server.
+    std::string                       m_server_working_directory;
+    int32_t                           m_server_exit_code;
+    std::string                       m_server_error;
+    bool                              m_server_cancel_requested;
 #endif
 
     rocprofvis_profiler_state_t m_profiler_state;

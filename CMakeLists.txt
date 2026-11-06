@@ -62,6 +62,10 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
 # features graduate.
 option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
 option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_CLIENT_SERVER "Build roc-optiq-server and the client connection UI (in development)" OFF)
+cmake_dependent_option(ROCPROFVIS_THIN_CLIENT
+    "Build roc-optiq to open traces only through a roc-optiq-server, without the controller, data model or SQLite (in development)"
+    OFF "ROCPROFVIS_ENABLE_CLIENT_SERVER" OFF)
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
@@ -87,6 +91,12 @@ endif(ROCPROFVIS_ENABLE_TRACE_COMPARE)
 if(ROCPROFVIS_MULTI_WINDOW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_MULTI_WINDOW")
 endif(ROCPROFVIS_MULTI_WINDOW)
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_CLIENT_SERVER")
+endif(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+if(ROCPROFVIS_THIN_CLIENT)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_THIN_CLIENT")
+endif(ROCPROFVIS_THIN_CLIENT)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)
@@ -173,19 +183,10 @@ set(VIEW_FILES
     src/view/src/rocprofvis_timeline_view.cpp 
     src/view/src/rocprofvis_sidebar.cpp 
     src/view/src/rocprofvis_view_module.cpp
-    src/view/src/rocprofvis_data_provider.cpp
     src/view/src/rocprofvis_root_view.cpp
-    src/view/src/model/rocprofvis_topology_model.cpp
-    src/view/src/model/rocprofvis_timeline_model.cpp
-    src/view/src/model/rocprofvis_tables_model.cpp
-    src/view/src/model/rocprofvis_summary_model.cpp
-    src/view/src/model/rocprofvis_event_model.cpp
-    src/view/src/model/rocprofvis_analysis_model.cpp
-    src/view/src/model/rocprofvis_trace_data_model.cpp
-    src/view/src/rocprofvis_raw_track_data.cpp
+    src/view/src/model/rocprofvis_timeline_model_histogram.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp
-    src/view/src/rocprofvis_utils.cpp
     src/view/src/rocprofvis_timeline_selection.cpp
     src/view/src/rocprofvis_timeline_track_options.cpp
     src/view/src/rocprofvis_track_details.cpp
@@ -218,7 +219,6 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_table_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_details.cpp
     src/view/src/compute/rocprofvis_compute_memory_chart.cpp
-    src/view/src/model/compute/rocprofvis_memory_chart_model.cpp
     src/view/src/compute/rocprofvis_compute_selection.cpp
     src/view/src/compute/rocprofvis_compute_summary.cpp
     src/view/src/compute/rocprofvis_compute_roofline.cpp
@@ -227,10 +227,100 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_comparison.cpp
     ${ISA_VIEW_FILES}
     src/view/src/compute/rocprofvis_compute_tester.cpp
-    src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_query_builder.cpp
 )
+
+# Headless data layer: DataProvider, the view models it fills, and the wire
+# protocol. Shared by the UI and roc-optiq-server, so nothing here may depend on
+# ImGui, the settings manager, or any widget.
+set(DATA_FILES
+    src/view/src/rocprofvis_data_provider.cpp
+    src/view/src/rocprofvis_data_provider_remote.cpp
+    src/view/src/model/rocprofvis_topology_model.cpp
+    src/view/src/model/rocprofvis_timeline_model.cpp
+    src/view/src/model/rocprofvis_tables_model.cpp
+    src/view/src/model/rocprofvis_summary_model.cpp
+    src/view/src/model/rocprofvis_event_model.cpp
+    src/view/src/model/rocprofvis_analysis_model.cpp
+    src/view/src/model/rocprofvis_trace_data_model.cpp
+    src/view/src/model/compute/rocprofvis_memory_chart_model.cpp
+    src/view/src/model/compute/rocprofvis_compute_data_model.cpp
+    src/view/src/rocprofvis_raw_track_data.cpp
+    src/view/src/rocprofvis_utils.cpp
+    src/view/src/protocol/rocprofvis_protocol.cpp
+    src/view/src/protocol/rocprofvis_protocol_uri.cpp
+)
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+    list(APPEND DATA_FILES src/view/src/rocprofvis_data_provider_script.cpp)
+endif()
+add_library(${TARGET_NAME}-data STATIC ${DATA_FILES})
+target_include_directories(${TARGET_NAME}-data PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+)
+target_link_libraries(${TARGET_NAME}-data PUBLIC
+    ${TARGET_NAME}-controller
+    datamodel
+    ${TARGET_NAME}-core
+    spdlog
+    json
+)
+target_compile_options(${TARGET_NAME}-data PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+
+# TEMPORARY (client/server): a thin client links the controller C ABI as stubs
+# that open nothing locally, in place of the controller, data model and SQLite.
+# The server keeps the real data layer above. Remove this guard when the
+# feature graduates.
+if(ROCPROFVIS_THIN_CLIENT)
+    add_library(${TARGET_NAME}-controller-stub STATIC
+        src/controller/stub/rocprofvis_controller_stub.cpp
+        src/controller/src/profiler/rocprofvis_controller_profiler_tool.cpp)
+    target_include_directories(${TARGET_NAME}-controller-stub PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+    target_include_directories(${TARGET_NAME}-controller-stub PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/src/profiler)
+    target_link_libraries(${TARGET_NAME}-controller-stub PRIVATE spdlog)
+
+    add_library(${TARGET_NAME}-data-thin STATIC ${DATA_FILES})
+    target_include_directories(${TARGET_NAME}-data-thin PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+    )
+    target_link_libraries(${TARGET_NAME}-data-thin PUBLIC
+        ${TARGET_NAME}-controller-stub
+        ${TARGET_NAME}-core
+        spdlog
+        json
+    )
+    target_compile_options(${TARGET_NAME}-data-thin PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+    # What the UI links for the data layer and the controller ABI.
+    set(ROCPROFVIS_UI_DATA_LIBRARIES ${TARGET_NAME}-data-thin)
+else()
+    set(ROCPROFVIS_UI_DATA_LIBRARIES ${TARGET_NAME}-data ${TARGET_NAME}-controller datamodel sqlite3)
+endif()
+
+# TEMPORARY (client/server): the client connection UI. Remove this guard when
+# the feature graduates.
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+list(APPEND VIEW_FILES
+    src/view/src/clientserver/rocprofvis_server_connection.cpp
+    src/view/src/clientserver/rocprofvis_server_connection.h
+    src/view/src/clientserver/rocprofvis_server_dialog.cpp
+    src/view/src/clientserver/rocprofvis_server_dialog.h
+    src/view/src/clientserver/rocprofvis_server_open.cpp
+    src/view/src/clientserver/rocprofvis_server_open.h
+    src/view/src/protocol/rocprofvis_protocol_frame.cpp
+    src/view/src/protocol/rocprofvis_protocol_frame.h
+)
+endif(ROCPROFVIS_ENABLE_CLIENT_SERVER)
 
 # TEMPORARY (trace compare): compare-files dialog. Remove this guard when the
 # feature graduates. Compare pane chrome stays in the always-built view because
@@ -340,7 +430,6 @@ endif()
 
 if(ROCPROFVIS_ENABLE_SCRIPTING)
 list(APPEND VIEW_FILES
-    src/view/src/rocprofvis_data_provider_script.cpp
     src/view/src/widgets/rocprofvis_script_editor.cpp
     src/view/src/widgets/rocprofvis_script_editor.h
 )
@@ -466,12 +555,22 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_link_libraries(${TARGET_NAME} PRIVATE imgui)
 target_link_libraries(${TARGET_NAME} PRIVATE implot)
 target_link_libraries(${TARGET_NAME} PRIVATE glfw)
-target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-controller)
-target_link_libraries(${TARGET_NAME} PRIVATE datamodel)
+target_link_libraries(${TARGET_NAME} PRIVATE ${ROCPROFVIS_UI_DATA_LIBRARIES})
 target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
-target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER AND NOT ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    target_link_libraries(${TARGET_NAME} PRIVATE cpp-httplib)
+endif()
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+    target_link_libraries(${TARGET_NAME} PRIVATE ZLIB::ZLIB)
+endif()
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER AND MSVC)
+    set_source_files_properties(
+        src/view/src/clientserver/rocprofvis_server_connection.cpp PROPERTIES
+        COMPILE_OPTIONS "/bigobj"
+    )
+endif()
 if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     target_link_libraries(${TARGET_NAME} PRIVATE cpp-httplib)
     # httplib.h is one 21k-line header, which overruns the default section limit.
@@ -579,19 +678,20 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         imgui_test_engine
         implot
         glfw
-        ${TARGET_NAME}-controller
-        datamodel
+        ${ROCPROFVIS_UI_DATA_LIBRARIES}
         ${TARGET_NAME}-core
         spdlog
-        sqlite3
         json
         ImGuiFileDialog
         "${Vulkan_LIBRARIES}"
         OpenGL::GL
     )
-    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING OR ROCPROFVIS_ENABLE_CLIENT_SERVER)
         target_link_libraries(${TEST_TARGET} PRIVATE cpp-httplib)
-    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    endif()
+    if(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+        target_link_libraries(${TEST_TARGET} PRIVATE ZLIB::ZLIB)
+    endif()
     if(USE_NATIVE_FILE_DIALOG)
         target_link_libraries(${TEST_TARGET} PRIVATE nfd)
         target_compile_definitions(${TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
@@ -958,6 +1058,63 @@ endif()
 if(ROCPROFVIS_ENABLE_VENDOR_PYTHON)
     rocprofvis_python_vendor_install(${TARGET_NAME} ${RUNTIME_COMP_TYPE})
 endif()
+
+# TEMPORARY (client/server): the headless server, which owns the trace files and
+# runs the controller for remote clients. Remove this guard when the feature
+# graduates.
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+    find_package(Threads REQUIRED)
+    add_library(${TARGET_NAME}-server-core STATIC
+        src/server/rocprofvis_server.cpp
+        src/server/rocprofvis_server.h
+        src/server/rocprofvis_server_session.cpp
+        src/server/rocprofvis_server_session.h
+        src/server/rocprofvis_server_trace.cpp
+        src/server/rocprofvis_server_trace.h
+        src/view/src/protocol/rocprofvis_protocol_frame.cpp
+        src/view/src/protocol/rocprofvis_protocol_frame.h
+    )
+    if(ROCPROFVIS_ENABLE_PROFILER)
+        target_sources(${TARGET_NAME}-server-core PRIVATE
+            src/server/rocprofvis_server_profiler.cpp
+            src/server/rocprofvis_server_profiler.h)
+    endif()
+    target_include_directories(${TARGET_NAME}-server-core PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/server
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc)
+    target_link_libraries(${TARGET_NAME}-server-core PUBLIC
+        ${TARGET_NAME}-data cpp-httplib ZLIB::ZLIB Threads::Threads)
+    # httplib.h is one 21k-line header, which overruns the default section limit.
+    target_compile_options(${TARGET_NAME}-server-core PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+
+    add_executable(${TARGET_NAME}-server src/server/rocprofvis_server_main.cpp)
+    target_link_libraries(${TARGET_NAME}-server PRIVATE ${TARGET_NAME}-server-core)
+    if(NOT APPLE)
+        install(TARGETS ${TARGET_NAME}-server
+                RUNTIME DESTINATION ${ROCPROFVIS_INSTALL_BINDIR}
+                COMPONENT ${RUNTIME_COMP_TYPE})
+    endif()
+
+    if(BUILD_TESTING)
+        # Opens each sample trace both in-process and through a loopback server
+        # and checks that the two DataProviders end up with the same models.
+        set(SERVER_TEST_NAME ${TARGET_NAME}-server-tests)
+        add_executable(${SERVER_TEST_NAME}
+            src/server/tests/rocprofvis_server_parity_tests.cpp
+            src/view/src/clientserver/rocprofvis_server_connection.cpp)
+        target_include_directories(${SERVER_TEST_NAME} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/clientserver)
+        target_link_libraries(${SERVER_TEST_NAME} PRIVATE
+            ${TARGET_NAME}-server-core Catch2::Catch2)
+        target_compile_options(${SERVER_TEST_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj>)
+        add_test(NAME ${SERVER_TEST_NAME}-system
+                 COMMAND ${SERVER_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
+        add_test(NAME ${SERVER_TEST_NAME}-rpd
+                 COMMAND ${SERVER_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/trace_70b_1024_32.rpd")
+        add_test(NAME ${SERVER_TEST_NAME}-compute
+                 COMMAND ${SERVER_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
+    endif()
+endif(ROCPROFVIS_ENABLE_CLIENT_SERVER)
 
 # Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
 set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")

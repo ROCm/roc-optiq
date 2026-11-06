@@ -19,6 +19,10 @@ namespace RocProfVis
 namespace View
 {
 
+// Compare sources for files opened as one compare project: A, B, ... in order,
+// named by file stem.
+std::vector<CompareSourceInfo> make_compare_sources(const std::vector<std::string>& paths);
+
 /**
  * @brief Aggregates all trace data models.
  *

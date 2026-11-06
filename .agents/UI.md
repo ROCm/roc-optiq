@@ -3045,6 +3045,75 @@ To add a backend: implement `IProfilerBackend`, register it in
 `ProfilerLauncherDialog`, map its `rocprofvis_profiler_type_t` in
 `ResolveProfilerType`, and implement `ParseTraceOutputPath`.
 
+### 13.5 Client/server (`ROCPROFVIS_ENABLE_CLIENT_SERVER`)
+
+A trace can live on a headless `roc-optiq-server` (`src/server/`) instead of in
+the UI process. The cut is at `DataProvider`, not the controller ABI:
+
+- `DataProvider`, the models under `src/view/src/model/`, `rocprofvis_utils`, and
+  the protocol in `src/view/src/protocol/` build as the static
+  `roc-optiq-data` library, shared by the app and the server. Nothing in it may
+  include ImGui, `SettingsManager`, or a widget. That is why
+  `TimelineModel::UpdateHistogram` lives in the app-only
+  `rocprofvis_timeline_model_histogram.cpp` and
+  `SummaryModel::UpdateValueStrings` takes the time format (SummaryView passes
+  it from the summary-ready callback).
+- Remote mode: `DataProvider::FetchRemoteTrace(channel, uri, is_compute)`
+  (`rocprofvis_data_provider_remote.cpp`). Each public `Fetch*` keeps its local
+  validation and request id, then sends the parameters through an
+  `IDataChannel` instead of calling the controller. Responses are applied by the
+  same steps as local results and fire the same callbacks, so widgets do not
+  know the difference.
+- The server runs an ordinary `DataProvider` per open trace
+  (`ServerTrace`) and installs `SetRequestCompletedCallback`. Request types
+  whose effect depends on what the client model already holds (track chunks,
+  event details, flows, call stacks, metrics) carry their controller rows in
+  `RequestInfo::result` (`rocprofvis_request_results.h`); the other types are
+  encoded from the server's models. When adding a request type, split its
+  `Process*` into a read and an apply step the same way, and add its op to the
+  protocol and to `ServerTrace::HandleRequest` / `OnRequestCompleted`.
+- Transport: one WebSocket per server (`ServerConnection`,
+  `src/view/src/clientserver/`), JSON in binary frames; the message catalog is
+  at the top of `rocprofvis_protocol.h` and the frame kinds (plain, zlib
+  compressed, file and upload chunks, TLS pieces) in
+  `rocprofvis_protocol_frame.h`, which is the only part that needs zlib and so
+  stays out of `roc-optiq-data`.
+- Addressing: `optiq://host:port/path`, or `optiqs://` for TLS. A `?token=` is
+  remembered for that server (`ServerConnection::SetToken`) and stripped by
+  `canonical_server_uri`, so tokens never reach recent files or projects. The
+  client also finds a token in `ROCPROFVIS_SERVER_TOKEN` or, for a server on
+  this machine, in the file the server saves (`server_token_file_name`).
+- Opening never blocks the UI: `AppWindow::OpenFile` and `OpenCompare` hand
+  server URIs to `StartServerOpen`, which connects and opens on a worker
+  (`open_on_server`), and `UpdateServerOpens` builds the tab with
+  `Project::OpenServerTrace` once the server answers. Two server URIs open as a
+  comparison the server loads with `rocprofvis_controller_alloc_compare`.
+  `.rpv` projects still open synchronously through `Project::OpenRemoteTrace`.
+- Sessions survive a dropped socket: both sides number their messages, the
+  server keeps a replay buffer, and the reader thread reconnects with backoff
+  and resumes. Channels report connected while resuming, so requests queue
+  instead of failing; only a session the server no longer has delivers
+  `MSG_DISCONNECTED`. A clean `Disconnect()` sends `bye`, which ends the
+  session and its traces at once.
+- `File > Open from Server...` (`ServerDialog`) connects off the UI thread with
+  token, TLS and CA options, browses, uploads a local trace (then opens it),
+  and compares two selected traces. The profiler launcher's "roc-optiq-server"
+  target sends the run to a connected server (`ProfilerLaunchOrchestrator::
+  LaunchOnServer`) and opens the trace it reports as an `optiq://` URI. Python
+  scripts run on the server's interpreter (`DataProvider::ExecuteScript` sends
+  `execute_script`); the server refuses profilers and scripts unless started
+  with `--allow-profiler` / `--allow-scripts`. Ask Optiq needs nothing extra,
+  as its tools only go through `DataProvider`.
+- `ROCPROFVIS_THIN_CLIENT` builds the app against
+  `src/controller/stub/rocprofvis_controller_stub.cpp` (every controller ABI
+  function, refusing local work) and `roc-optiq-data-thin`, so it links no
+  controller, data model or SQLite and opens traces only through a server.
+- `roc-optiq-server-tests` opens each sample trace both locally and through a
+  loopback server and requires the two providers' models to match. It also
+  covers auth, TLS, upload, resume after a dropped socket, compare, profiler
+  runs (`ROCPROFVIS_SERVER_TEST_GPU_APP` adds a real GPU run) and scripts.
+  Extend it with every new request type.
+
 ## 14. Data Flow: Requests, Remote Operations, and Profiler Runs
 
 This is the canonical request lifecycle. Match this when adding new

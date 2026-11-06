@@ -3,10 +3,30 @@
 
 #include "rocprofvis_trace_data_model.h"
 
+#include <filesystem>
+
 namespace RocProfVis
 {
 namespace View
 {
+
+std::vector<CompareSourceInfo>
+make_compare_sources(const std::vector<std::string>& paths)
+{
+    // Tag each source A, B, ... in selection order so the timeline and sidebar
+    // badges can resolve a track's instance index back to its file.
+    std::vector<CompareSourceInfo> sources;
+    sources.reserve(paths.size());
+    for(size_t i = 0; i < paths.size(); i++)
+    {
+        CompareSourceInfo info;
+        info.id   = std::string(1, static_cast<char>('A' + i));
+        info.name = std::filesystem::path(paths[i]).stem().string();
+        info.path = paths[i];
+        sources.push_back(std::move(info));
+    }
+    return sources;
+}
 
 TraceDataModel::TraceDataModel()
 : m_analysis(m_topology)

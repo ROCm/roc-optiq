@@ -20,7 +20,8 @@ add_subdirectory(yaml-cpp)
 set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
 
 set(ROCPROFVIS_USES_CRYPTO OFF)
-if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING OR
+   ROCPROFVIS_ENABLE_CLIENT_SERVER)
     set(ROCPROFVIS_USES_CRYPTO ON)
 endif()
 
@@ -83,11 +84,13 @@ endif()
 # a console on Windows and takes the request down with it). Upstream keeps
 # httplib.h at its repo root and we compile it header-only, so its own
 # CMakeLists is deliberately not added.
-if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+# The client/server feature uses the same header for its WebSocket transport,
+# with TLS from the same CRYPTO_BACKEND.
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING OR ROCPROFVIS_ENABLE_CLIENT_SERVER)
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib/httplib.h)
     message(FATAL_ERROR
-        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING is ON but thirdparty/cpp-httplib is "
-        "empty. Run: git submodule update --init thirdparty/cpp-httplib")
+        "cpp-httplib is required by the assistant or client/server feature but "
+        "thirdparty/cpp-httplib is empty. Run: git submodule update --init thirdparty/cpp-httplib")
 endif()
 add_library(cpp-httplib INTERFACE)
 target_include_directories(cpp-httplib INTERFACE
@@ -96,7 +99,16 @@ target_include_directories(cpp-httplib INTERFACE
 target_compile_definitions(cpp-httplib INTERFACE
     CPPHTTPLIB_NO_EXCEPTIONS
 )
-if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+if(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+    # One response (a whole table page, a track's events at a zoom level) is one
+    # WebSocket message; the 16 MiB default is too small for large traces.
+    target_compile_definitions(cpp-httplib INTERFACE
+        CPPHTTPLIB_WEBSOCKET_MAX_PAYLOAD_LENGTH=1073741824
+    )
+endif()
+if(NOT ROCPROFVIS_USES_CRYPTO)
+    # No TLS backend was resolved, so plain HTTP/WebSocket only.
+elseif(CRYPTO_BACKEND STREQUAL "OpenSSL")
     target_compile_definitions(cpp-httplib INTERFACE
         CPPHTTPLIB_OPENSSL_SUPPORT
     )
@@ -113,7 +125,7 @@ endif()
 if(WIN32)
     target_link_libraries(cpp-httplib INTERFACE crypt32 ws2_32)
 endif()
-if(APPLE)
+if(APPLE AND ROCPROFVIS_USES_CRYPTO)
     target_compile_definitions(cpp-httplib INTERFACE
         CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN
     )
@@ -121,7 +133,7 @@ if(APPLE)
         "-framework Security" "-framework CoreFoundation"
     )
 endif()
-endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+endif()
 
 # TEMPORARY (agentic profiling): ImGuiTextSelect (MIT), pinned to v1.3.2.
 # Ask Optiq message cards compile textselect.cpp directly. Upstream's
@@ -134,6 +146,21 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiTextSelect/textselect.hpp)
         "empty. Run: git submodule update --init thirdparty/ImGuiTextSelect")
 endif()
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
+# Vendored zlib, static only: SSH transport compression (libssh2's
+# find_package(ZLIB) is pointed at it, so no system zlib is required) and the
+# client/server protocol's compressed frames.
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_CLIENT_SERVER)
+set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(ZLIB_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(zlib)
+
+add_library(ZLIB::ZLIB ALIAS zlibstatic)
+set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib CACHE PATH "" FORCE)
+set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
+endif()
 
 # TEMPORARY (remote/SSH): libssh2 and its crypto-backend selection stay gated
 # until remote graduates. The TLS library itself is resolved above and shared
@@ -173,18 +200,8 @@ if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 
 endif()
 
-# Vendored zlib for SSH transport compression. Static only, and libssh2's
-# find_package(ZLIB) is pointed at it so no system zlib is required.
+# Vendored zlib, added below, compresses the SSH transport.
 set(ENABLE_ZLIB_COMPRESSION ON CACHE BOOL "" FORCE)
-set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
-set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(ZLIB_INSTALL OFF CACHE BOOL "" FORCE)
-add_subdirectory(zlib)
-
-add_library(ZLIB::ZLIB ALIAS zlibstatic)
-set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib CACHE PATH "" FORCE)
-set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
 
 set(LIBSSH2_INSTALL OFF CACHE BOOL "" FORCE)
 set(LIBSSH2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)

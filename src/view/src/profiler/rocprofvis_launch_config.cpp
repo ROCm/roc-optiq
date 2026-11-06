@@ -29,8 +29,11 @@ jt::Json LaunchConfig::ToJson() const
     json["tool_directory"] = tool_directory;
 
     jt::Json& conn = json["connection"];
-    conn["type"] = (connection == ConnectionType::kLocal) ? "local" : "ssh";
+    conn["type"] = connection == ConnectionType::kLocal ? "local"
+                   : connection == ConnectionType::kSsh ? "ssh"
+                                                        : "server";
     conn["ssh_connection_ref"] = ssh_connection_ref;
+    conn["server_address"]     = server_address;
 
     jt::Json& tgt = json["target"];
     tgt["executable"] = target.executable;
@@ -67,12 +70,18 @@ LaunchConfig LaunchConfig::FromJson(jt::Json const& json)
 
     if (j.contains("connection"))
     {
-        jt::Json& conn = j["connection"];
-        if (JsonUtils::GetString(conn, "type", "local") == "ssh")
+        jt::Json&         conn = j["connection"];
+        const std::string type = JsonUtils::GetString(conn, "type", "local");
+        if (type == "ssh")
         {
             cfg.connection = ConnectionType::kSsh;
         }
+        else if (type == "server")
+        {
+            cfg.connection = ConnectionType::kServer;
+        }
         cfg.ssh_connection_ref = JsonUtils::GetString(conn, "ssh_connection_ref", "");
+        cfg.server_address     = JsonUtils::GetString(conn, "server_address", "");
     }
 
     if (j.contains("target"))

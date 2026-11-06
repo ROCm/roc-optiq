@@ -9,6 +9,7 @@
 #endif
 #include "ImGuiFileDialog.h"
 
+#include "protocol/rocprofvis_protocol_uri.h"
 #include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
@@ -168,6 +169,13 @@ AppWindow::~AppWindow()
     }
     m_provider_cleanup_jobs.clear();
     m_projects.clear();
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    // After the projects, whose providers close their traces on the server, and
+    // before the pending opens, which then end without waiting for an answer.
+    m_server_dialog.reset();
+    ServerConnection::DisconnectAll();
+    m_server_opens.clear();
+#endif
     // Destroy owners of monitored sessions (e.g. the profiler dialog and the
     // remote-trace orchestrator) before tearing down the monitor so they
     // unregister cleanly instead of lazily re-creating the singleton during
@@ -701,6 +709,10 @@ AppWindow::Update()
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    UpdateServerOpens();
+    UpdateServerConnectionStates();
+#endif
     UpdateStatusBar();
 }
 
@@ -720,6 +732,12 @@ AppWindow::WantsContinuousRender()
     {
         return true;
     }
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(!m_server_opens.empty())
+    {
+        return true;
+    }
+#endif
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     if(m_test_data_provider.GetState() == ProviderState::kLoading ||
@@ -834,6 +852,12 @@ AppWindow::Render()
     if(m_ssh_test_dialog)
     {
         m_ssh_test_dialog->Render();
+    }
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(m_server_dialog)
+    {
+        m_server_dialog->Render();
     }
 #endif
     m_confirmation_dialog->Render();
@@ -983,6 +1007,10 @@ AppWindow::GetTabContainer() const
 void
 AppWindow::OpenFile(std::string file_path)
 {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    // First, so a ?token= never reaches the log, recent files or a compare slot.
+    file_path = canonical_server_uri(file_path);
+#endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     // While the Compare dialog is up, dropped/opened files fill its slots rather than
     // opening standalone trace tabs behind the modal.
@@ -994,6 +1022,14 @@ AppWindow::OpenFile(std::string file_path)
 #endif
 
     spdlog::info("Opening file: {}", file_path);
+
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(is_server_uri(file_path))
+    {
+        StartServerOpen(file_path, { file_path });
+        return;
+    }
+#endif
 
     std::unique_ptr<Project> project = std::make_unique<Project>();
     switch(project->Open(file_path))
@@ -1021,7 +1057,11 @@ AppWindow::OpenFile(std::string file_path)
         }
         default:
         {
-            SettingsManager::GetInstance().RemoveRecentFile(file_path);
+            // A server that is down now may be up later, unlike a deleted file.
+            if(!is_server_uri(file_path))
+            {
+                SettingsManager::GetInstance().RemoveRecentFile(file_path);
+            }
             break;
         }
     }
@@ -1046,20 +1086,40 @@ AppWindow::MakeCompareId(const std::vector<std::string>& files)
 void
 AppWindow::OpenCompare(const std::string& first_file, const std::string& second_file)
 {
-    spdlog::info("Opening compare: {} vs {}", first_file, second_file);
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    // Before logging, so a ?token= stays out of the log.
+    const std::string first  = canonical_server_uri(first_file);
+    const std::string second = canonical_server_uri(second_file);
+#else
+    const std::string& first  = first_file;
+    const std::string& second = second_file;
+#endif
+    spdlog::info("Opening compare: {} vs {}", first, second);
 
     // Synthetic, deterministic project id so the compare tab has a stable identity
     // without a file on disk (the two traces are loaded directly by the controller).
-    const std::string compare_id = MakeCompareId({ first_file, second_file });
+    const std::string compare_id = MakeCompareId({ first, second });
     if(GetProject(compare_id))
     {
         m_tab_container->SetActiveTab(compare_id);
         return;
     }
+    if(is_server_uri(first) || is_server_uri(second))
+    {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        if(is_server_uri(first) && is_server_uri(second))
+        {
+            StartServerOpen(compare_id, { first, second });
+            return;
+        }
+#endif
+        ShowMessageDialog("Error", "A trace on a server can only be compared with another "
+                                   "trace on the same server.");
+        return;
+    }
 
     std::unique_ptr<Project> project = std::make_unique<Project>();
-    if(project->OpenCompare(compare_id, { first_file, second_file }) ==
-       Project::OpenResult::Success)
+    if(project->OpenCompare(compare_id, { first, second }) == Project::OpenResult::Success)
     {
         TabItem tab =
             TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
@@ -1120,6 +1180,12 @@ AppWindow::RenderFileMenu(Project* project)
         if(ImGui::MenuItem("Open Remote..."))
         {
             HandleTestRemoteSSH();
+        }
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        if(ImGui::MenuItem("Open from Server..."))
+        {
+            HandleOpenFromServer();
         }
 #endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
@@ -1865,6 +1931,133 @@ AppWindow::HandleTestRemoteSSH()
 }
 
 #endif // ROCPROFVIS_ENABLE_REMOTE
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+
+void
+AppWindow::HandleOpenFromServer()
+{
+    if(!m_server_dialog)
+    {
+        m_server_dialog = std::make_unique<ServerDialog>();
+    }
+    m_server_dialog->Show();
+}
+
+void
+AppWindow::StartServerOpen(const std::string& project_id, const std::vector<std::string>& uris)
+{
+    if(GetProject(project_id))
+    {
+        m_tab_container->SetActiveTab(project_id);
+        return;
+    }
+    for(const PendingServerOpen& pending : m_server_opens)
+    {
+        if(pending.project_id == project_id)
+        {
+            return;
+        }
+    }
+
+    PendingServerOpen pending;
+    pending.project_id      = project_id;
+    pending.uris            = uris;
+    pending.notification_id = "server_open_" + std::to_string(++m_next_server_open_id);
+    pending.future          = std::async(std::launch::async,
+                                         [uris]() { return open_on_server(uris); });
+    NotificationManager::GetInstance().ShowPersistent(
+        pending.notification_id,
+        "Opening " +
+            (uris.size() > 1 ? "comparison of " + std::to_string(uris.size()) + " traces"
+                             : server_trace_label(uris.front())) +
+            "...",
+        NotificationLevel::Info);
+    m_server_opens.push_back(std::move(pending));
+}
+
+void
+AppWindow::UpdateServerOpens()
+{
+    for(auto it = m_server_opens.begin(); it != m_server_opens.end();)
+    {
+        if(it->future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        {
+            ++it;
+            continue;
+        }
+        PendingServerOpen pending = std::move(*it);
+        it                        = m_server_opens.erase(it);
+        NotificationManager::GetInstance().Hide(pending.notification_id);
+
+        ServerOpenResult         opened  = pending.future.get();
+        std::unique_ptr<Project> project = std::make_unique<Project>();
+        if(project->OpenServerTrace(pending.project_id, pending.uris, opened.channel,
+                                    opened.is_compute, opened.error) == Project::Success)
+        {
+            TabItem tab =
+                TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
+            m_tab_container->AddTab(std::move(tab));
+            m_tab_container->SetActiveTab(project->GetID());
+            m_projects[project->GetID()] = std::move(project);
+            if(pending.uris.size() == 1)
+            {
+                SettingsManager::GetInstance().AddRecentFile(pending.project_id);
+            }
+        }
+        else
+        {
+            const std::string& message = project->GetOpenErrorMessage();
+            ShowMessageDialog("Error", message.empty()
+                                           ? "The trace could not be opened:\n\n" +
+                                                 pending.project_id
+                                           : message);
+            spdlog::error("Failed to open {}: {}", pending.project_id, message);
+        }
+    }
+}
+
+void
+AppWindow::UpdateServerConnectionStates()
+{
+    std::map<std::string, ServerConnectionState> states;
+    for(const std::shared_ptr<ServerConnection>& connection : ServerConnection::GetAll())
+    {
+        const std::string address = connection->GetAddress();
+        const ServerConnectionState state = connection->GetState();
+        states[address]                   = state;
+        auto previous                     = m_server_states.find(address);
+        if(previous == m_server_states.end() || previous->second == state)
+        {
+            continue;
+        }
+        if(state == ServerConnectionState::kReconnecting)
+        {
+            NotificationManager::GetInstance().ShowPersistent(
+                "server_state_" + address,
+                "Lost the connection to " + address + ", reconnecting...",
+                NotificationLevel::Warning);
+        }
+        else if(state == ServerConnectionState::kConnected)
+        {
+            NotificationManager::GetInstance().Hide("server_state_" + address);
+            NotificationManager::GetInstance().Show("Reconnected to " + address + ".",
+                                                    NotificationLevel::Success);
+        }
+    }
+    for(const std::pair<const std::string, ServerConnectionState>& previous : m_server_states)
+    {
+        if(states.count(previous.first) == 0)
+        {
+            // Lost connections drop out of GetAll.
+            NotificationManager::GetInstance().Hide("server_state_" + previous.first);
+            NotificationManager::GetInstance().Show(
+                "Disconnected from " + previous.first + ".", NotificationLevel::Error);
+        }
+    }
+    m_server_states.swap(states);
+}
+
+#endif  // ROCPROFVIS_ENABLE_CLIENT_SERVER
 void
 AppWindow::UpdateStatusBar()
 {
@@ -1946,6 +2139,22 @@ AppWindow::UpdateStatusBar()
         {
             segments.push_back("SSH: " + std::to_string(remote_sessions) + " session(s)");
         }
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        for(const std::shared_ptr<ServerConnection>& connection : ServerConnection::GetAll())
+        {
+            segments.push_back(
+                "Server: " + connection->GetAddress() +
+                (connection->GetState() == ServerConnectionState::kReconnecting
+                     ? " (reconnecting)"
+                     : ""));
+        }
+        if(!m_server_opens.empty())
+        {
+            has_active_work = true;
+            segments.push_back("Opening: " + std::to_string(m_server_opens.size()) +
+                               " server trace(s)");
+        }
+#endif
 
         if(!segments.empty())
         {

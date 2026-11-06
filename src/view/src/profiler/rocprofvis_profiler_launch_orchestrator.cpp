@@ -8,8 +8,15 @@
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_uri.h"
 #endif
+// TEMPORARY (client/server): remove guard when client/server graduates.
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+#include "clientserver/rocprofvis_server_connection.h"
+#include "protocol/rocprofvis_protocol.h"
+#include "protocol/rocprofvis_protocol_uri.h"
+#endif
 
 #include <spdlog/spdlog.h>
+#include <filesystem>
 #include <utility>
 
 namespace RocProfVis
@@ -26,6 +33,12 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 , m_remote_uri(nullptr)
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+, m_server(nullptr)
+, m_server_run_id(0)
+, m_server_exit_code(-1)
+, m_server_cancel_requested(false)
 #endif
 , m_profiler_state(kRPVProfilerStateIdle)
 , m_is_running(false)
@@ -67,6 +80,9 @@ ProfilerLaunchOrchestrator::~ProfilerLaunchOrchestrator()
     // owning dialog's lifetime.
     m_remote_session.reset();
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    EndServerRun();
+#endif
 
     if(m_profiler_status_token != EventManager::InvalidSubscriptionToken)
     {
@@ -81,6 +97,9 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
     // output so stale data from a previous launch does not leak through.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_remote_session.reset();
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    EndServerRun();
 #endif
     m_raw_output.clear();
     m_output_dirty   = false;
@@ -100,7 +119,22 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
         return LaunchRemote(request);
     }
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(request.server)
+    {
+        return LaunchOnServer(request);
+    }
+#endif
     return LaunchLocal(request);
+}
+
+bool ProfilerLaunchOrchestrator::IsOnServer() const
+{
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    return m_server != nullptr;
+#else
+    return false;
+#endif
 }
 
 bool ProfilerLaunchOrchestrator::LaunchLocal(const LaunchRequest& request)
@@ -167,8 +201,139 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+bool ProfilerLaunchOrchestrator::LaunchOnServer(const LaunchRequest& request)
+{
+    if(request.server->GetState() == ServerConnectionState::kLost)
+    {
+        m_launch_error   = "Not connected to " + request.server->GetAddress() + ".";
+        m_profiler_state = kRPVProfilerStateFailed;
+        return false;
+    }
+
+    // An empty working directory would be the server process's own, which the
+    // client cannot know; the home directory is what the server's browser shows.
+    m_server_working_directory = request.spec.working_directory.empty()
+                                     ? request.server->GetHomeDirectory()
+                                     : request.spec.working_directory;
+    jt::Json launch;
+    launch["tool"]              = static_cast<long long>(request.spec.tool);
+    launch["tool_directory"]    = request.spec.tool_directory;
+    launch["working_directory"] = m_server_working_directory;
+    launch["output_directory"]  = request.spec.output_directory;
+    jt::Json argv;
+    argv.setArray();
+    for(const std::string& argument : request.spec.profiler_argv)
+    {
+        argv.getArray().emplace_back(argument);
+    }
+    launch["argv"] = std::move(argv);
+    jt::Json env;
+    env.setArray();
+    for(const std::pair<std::string, std::string>& variable : request.spec.env_vars)
+    {
+        jt::Json pair;
+        pair.setArray();
+        pair.getArray().emplace_back(variable.first);
+        pair.getArray().emplace_back(variable.second);
+        env.getArray().push_back(std::move(pair));
+    }
+    launch["env"] = std::move(env);
+
+    m_server                  = request.server;
+    m_server_exit_code        = -1;
+    m_server_error.clear();
+    m_server_cancel_requested = false;
+    m_server_run_id           = m_server->StartProfilerRun(launch);
+    m_is_running              = true;
+    m_profiler_state          = kRPVProfilerStateRunning;
+    return true;
+}
+
+void ProfilerLaunchOrchestrator::UpdateServerRun()
+{
+    ServerProfilerRunStatus status;
+    if(!m_server->GetProfilerRunStatus(m_server_run_id, status))
+    {
+        return;
+    }
+    if(status.output != m_raw_output)
+    {
+        m_raw_output   = status.output;
+        m_output_dirty = true;
+    }
+    const rocprofvis_profiler_state_t state =
+        static_cast<rocprofvis_profiler_state_t>(status.state);
+    const bool terminal = state == kRPVProfilerStateCompleted ||
+                          state == kRPVProfilerStateFailed ||
+                          state == kRPVProfilerStateCancelled;
+    // After a cancel only the server's final word counts, so the badge does not
+    // flick back to running before the server has acted on it.
+    if(state == m_profiler_state || (!terminal && m_server_cancel_requested))
+    {
+        return;
+    }
+    m_profiler_state   = state;
+    m_is_running       = !terminal;
+    m_server_exit_code = status.exit_code;
+    m_server_error     = status.error;
+    if(state != kRPVProfilerStateCompleted)
+    {
+        return;
+    }
+
+    std::string trace_path = m_parse_trace ? m_parse_trace(m_raw_output) : std::string();
+    if(!trace_path.empty() && std::filesystem::path(trace_path).is_relative())
+    {
+        trace_path =
+            (std::filesystem::path(m_server_working_directory) / trace_path).generic_string();
+    }
+    if(trace_path.empty())
+    {
+        if(m_auto_load_trace)
+        {
+            NotificationManager::GetInstance().Show(
+                "Profiling finished, but the trace file could not be located automatically. "
+                "Open it from the server with File > Open from Server.",
+                NotificationLevel::Warning);
+        }
+        return;
+    }
+    m_trace_path = make_server_uri(m_server->GetHost(), m_server->GetPort(), m_server->IsTls(),
+                                   trace_path);
+    if(m_auto_load_trace && m_app_window)
+    {
+        m_app_window->OpenFile(m_trace_path);
+    }
+}
+
+void ProfilerLaunchOrchestrator::EndServerRun()
+{
+    if(m_server)
+    {
+        if(m_is_running)
+        {
+            m_server->CancelProfilerRun(m_server_run_id);
+        }
+        m_server->ForgetProfilerRun(m_server_run_id);
+    }
+    m_server.reset();
+    m_server_run_id = 0;
+}
+#endif  // ROCPROFVIS_ENABLE_CLIENT_SERVER
+
 void ProfilerLaunchOrchestrator::Cancel()
 {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(m_server)
+    {
+        m_server->CancelProfilerRun(m_server_run_id);
+        m_server_cancel_requested = true;
+        m_profiler_state          = kRPVProfilerStateCancelled;
+        m_is_running              = false;
+        return;
+    }
+#endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
     {
@@ -202,6 +367,9 @@ void ProfilerLaunchOrchestrator::Close()
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_remote_session.reset();
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    EndServerRun();
+#endif
     m_profiler_session.Close();
     m_is_running     = false;
     m_profiler_state = kRPVProfilerStateIdle;
@@ -209,6 +377,13 @@ void ProfilerLaunchOrchestrator::Close()
 
 void ProfilerLaunchOrchestrator::Update()
 {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(m_server)
+    {
+        UpdateServerRun();
+        return;
+    }
+#endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
     {
@@ -347,11 +522,23 @@ void ProfilerLaunchOrchestrator::ResolveLocalTracePath()
 
 int32_t ProfilerLaunchOrchestrator::GetExitCode() const
 {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(m_server)
+    {
+        return m_server_exit_code;
+    }
+#endif
     return m_profiler_session.GetExitCode();
 }
 
 std::string ProfilerLaunchOrchestrator::GetRemoteStatusMessage() const
 {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if(m_server)
+    {
+        return m_server_error;
+    }
+#endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
     {

@@ -152,6 +152,14 @@ TraceView::TraceView()
                     m_data_provider.GetTraceFilePath()));
         });
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    m_data_provider.SetScriptCompletedCallback(
+        [this](bool success, const std::string& text, const std::string& error) {
+            EventManager::GetInstance()->AddEvent(std::make_shared<ScriptExecuteCompleteEvent>(
+                success, text, error, m_data_provider.GetTraceFilePath()));
+        });
+#endif
+
     auto event_selection_handler = [this](std::shared_ptr<RocEvent> e) {
         std::shared_ptr<EventSelectionChangedEvent> event =
             std::dynamic_pointer_cast<EventSelectionChangedEvent>(e);
@@ -209,6 +217,9 @@ TraceView::~TraceView()
     m_data_provider.SetSaveTraceCallback(nullptr);
     m_data_provider.SetCleanupDatabaseCallback(nullptr);
     m_data_provider.SetRequestProgressUpdateCallback(nullptr);
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    m_data_provider.SetScriptCompletedCallback(nullptr);
+#endif
 
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
@@ -383,6 +394,18 @@ TraceView::LoadTrace(rocprofvis_controller_t* controller, const std::string& fil
             m_timeline_view->ResetView();
             m_timeline_view->DestroyGraphs();
         }
+    }
+    return result;
+}
+
+bool
+TraceView::LoadRemoteTrace(std::shared_ptr<IDataChannel> channel, const std::string& file_path)
+{
+    bool result = m_data_provider.FetchRemoteTrace(std::move(channel), file_path, false);
+    if(result && m_view_created)
+    {
+        m_timeline_view->ResetView();
+        m_timeline_view->DestroyGraphs();
     }
     return result;
 }

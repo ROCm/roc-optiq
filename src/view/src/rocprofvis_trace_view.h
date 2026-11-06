@@ -57,6 +57,8 @@ public:
     void Render() override;
 
     bool LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path);
+    // As LoadTrace, for a trace a roc-optiq-server has opened.
+    bool LoadRemoteTrace(std::shared_ptr<IDataChannel> channel, const std::string& file_path);
 
     void CreateView();
     void DestroyView();

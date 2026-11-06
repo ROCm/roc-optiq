@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_summary_model.h"
-#include "../rocprofvis_settings_manager.h"
 #include "../rocprofvis_utils.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_topology_model.h"
@@ -108,8 +107,26 @@ SummaryModel::RegisterTimeunitValue(SummaryInfo::Value& value)
     m_timeunit_values.push_back(&value);
 }
 
+const std::vector<SummaryInfo::Value*>&
+SummaryModel::GetEventValues() const
+{
+    return m_event_values;
+}
+
+const std::vector<SummaryInfo::Value*>&
+SummaryModel::GetCounterValues() const
+{
+    return m_counter_values;
+}
+
+const std::vector<SummaryInfo::Value*>&
+SummaryModel::GetTimeunitValues() const
+{
+    return m_timeunit_values;
+}
+
 void
-SummaryModel::UpdateValueStrings()
+SummaryModel::UpdateValueStrings(TimeFormat timeformat)
 {
     for(SummaryInfo::Value* value : m_event_values)
     {
@@ -162,8 +179,6 @@ SummaryModel::UpdateValueStrings()
             }
         }
     }
-    TimeFormat timeformat =
-        SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format;
     for(SummaryInfo::Value* value : m_timeunit_values)
     {
         switch(value->type)

@@ -17,7 +17,9 @@ namespace View
 enum class ConnectionType
 {
     kLocal,
-    kSsh
+    kSsh,
+    // On the machine of a connected roc-optiq-server, which then has the trace.
+    kServer
 };
 
 // Note: only the connection MODE (local vs. SSH) is stored on a LaunchConfig.
@@ -53,6 +55,8 @@ struct LaunchConfig
     // Id of the SSH connection profile (SshConnectionConfig::id) used when
     // connection == kSsh. Empty for local launches or when unset.
     std::string              ssh_connection_ref;
+    // "host:port" of the roc-optiq-server used when connection == kServer.
+    std::string              server_address;
     TargetSpec               target;
     std::map<std::string, std::string> extra_env;
     std::vector<std::string> extra_argv;

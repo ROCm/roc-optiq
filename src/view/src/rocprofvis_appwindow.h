@@ -21,10 +21,16 @@
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_test_dialog.h"
 #endif
+// TEMPORARY (client/server): remove this guard when the feature graduates.
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+#include "clientserver/rocprofvis_server_dialog.h"
+#include "clientserver/rocprofvis_server_open.h"
+#endif
 
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <map>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -160,6 +166,13 @@ private:
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     void HandleTestRemoteSSH();
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    void HandleOpenFromServer();
+    // Connects and opens on a worker; the tab is added once the server answers.
+    void StartServerOpen(const std::string& project_id, const std::vector<std::string>& uris);
+    void UpdateServerOpens();
+    void UpdateServerConnectionStates();
+#endif
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     void HandleCompareFiles();
     void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
@@ -257,6 +270,21 @@ private:
     uint64_t                         m_next_provider_cleanup_id;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    struct PendingServerOpen
+    {
+        std::string                   project_id;
+        std::vector<std::string>      uris;
+        std::string                   notification_id;
+        std::future<ServerOpenResult> future;
+    };
+
+    std::unique_ptr<ServerDialog>             m_server_dialog;
+    std::vector<PendingServerOpen>            m_server_opens;
+    uint64_t                                  m_next_server_open_id = 0;
+    // The last state seen per server address, to notify on changes.
+    std::map<std::string, ServerConnectionState> m_server_states;
 #endif
 
     std::string m_status_message;

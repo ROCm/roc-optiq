@@ -485,14 +485,19 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
     {
         ss << SUMMARY_SEPARATOR << m_remote_uri->GetRemoteUserString() << "@"
            << m_remote_uri->GetRemoteHostString();
+        return ss.str();
     }
-    else
-    {
-        ss << SUMMARY_SEPARATOR << "This machine";
-    }
-#else
-    ss << SUMMARY_SEPARATOR << "This machine";
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if (IsServerMode())
+    {
+        std::shared_ptr<ServerConnection> server = GetSelectedServer();
+        ss << SUMMARY_SEPARATOR << "roc-optiq-server"
+           << (server ? " at " + server->GetAddress() : std::string());
+        return ss.str();
+    }
+#endif
+    ss << SUMMARY_SEPARATOR << "This machine";
 
     return ss.str();
 }
@@ -643,7 +648,7 @@ void ProfilerLauncherDialog::RenderMainContent()
                       ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoBackground);
     PopSlimScrollbarStyle();
     ImGui::PopStyleVar();
-#ifdef ROCPROFVIS_ENABLE_REMOTE
+#if defined(ROCPROFVIS_ENABLE_REMOTE) || defined(ROCPROFVIS_ENABLE_CLIENT_SERVER)
     // Where to run first: pick the machine before the paths.
     BeginLaunchCard("card_connection");
     LaunchCardHeader(ICON_CHAIN, "Where to run");
@@ -800,7 +805,9 @@ void ProfilerLauncherDialog::RenderToolResolutionNotice()
     {
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
         ImGui::TextWrapped("Using tools from %s%s", m_config.tool_directory.c_str(),
-                           IsSshMode() ? " on the remote host" : "");
+                           IsSshMode()      ? " on the remote host"
+                           : IsServerMode() ? " on the server"
+                                            : "");
         ImGui::PopStyleColor();
     }
 }
@@ -860,7 +867,8 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
         }
 #endif
         if (RenderToolLocationSection(m_config.tool_directory, m_config.connection, m_app_window,
-                                      IsSshMode() ? std::string() : m_execution_cache.argv0,
+                                      IsSshMode() || IsServerMode() ? std::string()
+                                                                    : m_execution_cache.argv0,
                                       on_browse_tool_dir))
         {
             m_execution_cache_dirty = true;
@@ -1084,9 +1092,9 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     }
 }
 
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-// TEMPORARY (remote/SSH): the SSH connection selector, settings dialog, auth
-// modal, and download-progress popup. Remove this guard when remote graduates.
+#if defined(ROCPROFVIS_ENABLE_REMOTE) || defined(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+// TEMPORARY (remote/SSH, client/server): the run-on selector with the SSH
+// connection or roc-optiq-server choice. Remove this guard when both graduate.
 void ProfilerLauncherDialog::RenderRemoteSection()
 {
     // Local vs. remote (SSH) execution selector. Kept here (rather than in the
@@ -1108,23 +1116,74 @@ void ProfilerLauncherDialog::RenderRemoteSection()
     ImGui::TableSetColumnIndex(0);
     PanelFieldLabel("Run on", true, &settings);
 
-    // A two-button segmented control reads more clearly than a dropdown for a
-    // binary choice.
+    // A segmented control reads more clearly than a dropdown for so few choices.
     ImGui::TableSetColumnIndex(1);
-    bool is_local = (m_config.connection == ConnectionType::kLocal);
-
-    if (ImGui::RadioButton("This machine", is_local))
+    if (ImGui::RadioButton("This machine", m_config.connection == ConnectionType::kLocal))
     {
         m_config.connection     = ConnectionType::kLocal;
         m_execution_cache_dirty = true;
     }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     ImGui::SameLine();
-    if (ImGui::RadioButton("Remote (SSH)", !is_local))
+    if (ImGui::RadioButton("Remote (SSH)", m_config.connection == ConnectionType::kSsh))
     {
         m_config.connection     = ConnectionType::kSsh;
         m_execution_cache_dirty = true;
     }
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    ImGui::SameLine();
+    if (ImGui::RadioButton("roc-optiq-server", m_config.connection == ConnectionType::kServer))
+    {
+        m_config.connection     = ConnectionType::kServer;
+        m_execution_cache_dirty = true;
+    }
 
+    if (IsServerMode())
+    {
+        // Connected servers only: connecting, with its token and TLS options,
+        // is File > Open from Server's job.
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        PanelFieldLabel("Server", true, &settings);
+        ImGui::TableSetColumnIndex(1);
+        std::vector<std::shared_ptr<ServerConnection>> servers = ServerConnection::GetAll();
+        std::shared_ptr<ServerConnection>              selected = GetSelectedServer();
+        if (servers.empty())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::TextWrapped("Not connected to a server. Connect with File > Open from "
+                               "Server first.");
+            ImGui::PopStyleColor();
+        }
+        else
+        {
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::BeginCombo("##profiler_server",
+                                  selected ? selected->GetAddress().c_str() : "Choose a server"))
+            {
+                for (const std::shared_ptr<ServerConnection>& server : servers)
+                {
+                    if (ImGui::Selectable(server->GetAddress().c_str(), server == selected))
+                    {
+                        m_config.server_address = server->GetAddress();
+                        m_execution_cache_dirty = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (selected && !selected->GetFeatures().profiler)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
+                ImGui::TextWrapped("This server does not run profilers. Start it with "
+                                   "--allow-profiler.");
+                ImGui::PopStyleColor();
+            }
+        }
+    }
+#endif
+
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     if (IsSshMode())
     {
         // Connection chip: accent when configured, dim "Configure" when not -
@@ -1162,10 +1221,13 @@ void ProfilerLauncherDialog::RenderRemoteSection()
         }
         ImGui::PopStyleColor(4);
     }
+#endif
 
     ImGui::EndTable();
 }
+#endif
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 void ProfilerLauncherDialog::RenderRemotePopups()
 {
     // Render the transient SSH settings dialog; destroy once it reports closed.
@@ -1239,6 +1301,20 @@ void ProfilerLauncherDialog::RenderButtonRow()
          m_remote_uri->GetRemoteUserString().empty()))
     {
         readiness = "Configure the SSH connection (host/user) to launch";
+    }
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    if (readiness.empty() && IsServerMode())
+    {
+        std::shared_ptr<ServerConnection> server = GetSelectedServer();
+        if (!server)
+        {
+            readiness = "Choose a connected roc-optiq-server to launch";
+        }
+        else if (!server->GetFeatures().profiler)
+        {
+            readiness = "This server does not run profilers (--allow-profiler)";
+        }
     }
 #endif
     bool valid      = readiness.empty();
@@ -1484,6 +1560,22 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         return;
     }
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    std::shared_ptr<ServerConnection> server = IsServerMode() ? GetSelectedServer() : nullptr;
+    if (IsServerMode() && !server)
+    {
+        m_error_message = "Connect to a roc-optiq-server (File > Open from Server) and "
+                          "choose it before launching.";
+        return;
+    }
+#else
+    if (m_config.connection == ConnectionType::kServer)
+    {
+        m_error_message = "This configuration targets a roc-optiq-server, but this build "
+                          "was compiled without client/server support.";
+        return;
+    }
+#endif
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote precheck: bind the selected connection and require host/user.
@@ -1542,6 +1634,9 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     request.remote_uri        = is_remote ? m_remote_uri : nullptr;
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    request.server            = server;
+#endif
     request.parse_trace       = [backend](const std::string& profiler_stdout) -> std::string
     {
         return backend ? backend->ParseTraceOutputPath(profiler_stdout) : std::string();
@@ -1561,6 +1656,12 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         {
             preamble << "[remote] ";
         }
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        if (server)
+        {
+            preamble << "[" << server->GetAddress() << "] ";
+        }
+#endif
         preamble << m_execution_cache.command_preview << "\n\n";
         m_output_preamble = preamble.str();
         m_last_seen_state = kRPVProfilerStateRunning;
@@ -1641,6 +1742,13 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
             m_output_epilogue += "\nRemote profiler failed.\n";
             m_error_message = remote_msg.empty() ? std::string("Remote profiler failed.")
                                                  : remote_msg;
+            RebuildComposedOutput();
+        }
+        else if (m_orchestrator.IsOnServer() && !m_orchestrator.GetRemoteStatusMessage().empty())
+        {
+            // The server refused the run, or the connection to it was lost.
+            m_error_message = m_orchestrator.GetRemoteStatusMessage();
+            m_output_epilogue += "\nProfiler failed on the server: " + m_error_message + "\n";
             RebuildComposedOutput();
         }
         else
@@ -1746,9 +1854,25 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
     }
 }
 
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+std::shared_ptr<ServerConnection> ProfilerLauncherDialog::GetSelectedServer() const
+{
+    std::vector<std::shared_ptr<ServerConnection>> servers = ServerConnection::GetAll();
+    for (const std::shared_ptr<ServerConnection>& server : servers)
+    {
+        if (server->GetAddress() == m_config.server_address)
+        {
+            return server;
+        }
+    }
+    return servers.size() == 1 ? servers.front() : nullptr;
+}
+#endif
+
 void ProfilerLauncherDialog::RefreshToolPath(bool force)
 {
-    bool const ssh = IsSshMode();
+    // A server run, like an SSH one, finds its tool on the other machine.
+    bool const ssh = IsSshMode() || IsServerMode();
     if (!force && m_tool_path.populated && m_tool_path.tool == m_config.tool &&
         m_tool_path.ssh == ssh && m_tool_path.directory == m_config.tool_directory)
     {

@@ -6,6 +6,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
+#include "rocprofvis_request_results.h"
 #include "rocprofvis_requests.h"
 #include "model/rocprofvis_trace_data_model.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
@@ -20,10 +21,17 @@
 #include <unordered_map>
 #include <vector>
 
+namespace jt
+{
+class Json;
+}
+
 namespace RocProfVis
 {
 namespace View
 {
+
+class IDataChannel;
 
 enum class ProviderState
 {
@@ -137,6 +145,35 @@ public:
      * @param file_path: The path to the trace file to passed to the trace data model.
      */
     bool FetchTrace(rocprofvis_controller_t* controller, const std::string& file_path);
+
+    /*
+     * Loads a trace that lives on a roc-optiq-server. Every request from here on
+     * goes through the channel instead of a local controller; results land in
+     * the same models and fire the same callbacks.
+     * @param channel: The trace the server opened, see ServerConnection::OpenTrace.
+     * @param file_path: The id the UI knows the trace by (an optiq:// URI).
+     * @param is_compute: The kind of trace the server reported when it opened it.
+     */
+    bool FetchRemoteTrace(std::shared_ptr<IDataChannel> channel,
+                          const std::string& file_path, bool is_compute);
+    bool IsRemote() const;
+
+    /*
+     * Server side: called once for every completed request, after the model was
+     * updated and the request's own callback fired. RequestInfo::result holds
+     * the rows for the request types that carry them.
+     */
+    void SetRequestCompletedCallback(
+        const std::function<void(const RequestInfo&)>& callback);
+
+    uint64_t GetProgressPercent() const;
+
+    // The controller table a completed table request read.
+    static bool GetRequestTableType(RequestType                         request_type,
+                                    rocprofvis_controller_table_type_t& table_type);
+    // Where the rows of a completed table request live in the model.
+    std::pair<TablesModel*, TableType> GetTableSlot(
+        rocprofvis_controller_table_type_t table_type, const TableRequestParams* params);
 
     /*
      * Fetches a track from the controller. Stores the data in a raw track buffer.
@@ -276,6 +313,10 @@ public:
     // has nothing left to read by the time it notices the request finished.
     // False when no script has run, or the script failed.
     bool GetLastScriptResult(std::string& text_out, std::string& error_out) const;
+    // Called on the thread that updates the provider when a script finishes.
+    void SetScriptCompletedCallback(
+        const std::function<void(bool success, const std::string& text,
+                                 const std::string& error)>& callback);
 #endif
 
     bool CleanupDatabase(bool rebuild);
@@ -309,6 +350,19 @@ private:
 
     bool FetchTrackTable(const TrackTableRequestParams& table_params);
     bool FetchEventSearch(const EventSearchRequestParams& table_params);
+
+    /*
+     * Request bookkeeping shared by the local and remote paths, so both agree
+     * on the id a request occupies and on what it is recorded as.
+     */
+    bool        GetTrackTableRequestId(const TrackTableRequestParams& table_params,
+                                       uint64_t&                      request_id) const;
+    bool        GetEventSearchRequestId(const EventSearchRequestParams& table_params,
+                                        uint64_t&                       request_id) const;
+    RequestType GetTrackTableRequestType(const TrackTableRequestParams& table_params) const;
+    RequestType GetEventSearchRequestType(const EventSearchRequestParams& table_params) const;
+    // The requested tracks that can serve this table type, in request order.
+    std::vector<uint64_t> FilterTableTrackIds(const TrackTableRequestParams& table_params) const;
 
     /*
      * The request id, table handle and model slot a table fetch should use.
@@ -365,6 +419,9 @@ private:
     void ProcessExecuteScriptRequest(RequestInfo& req);
     rocprofvis_controller_arguments_t* BuildScriptContext(
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts);
+    void ApplyScriptResult(bool success, const std::string& text, const std::string& error);
+    bool RemoteExecuteScript(const std::string& source, const std::vector<uint64_t>& track_ids,
+                             double start_ts, double end_ts);
 #endif
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
@@ -373,9 +430,63 @@ private:
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);
 
-    void CreateRawEventData(const TrackRequestParams& params, const RequestInfo& req);
-    void CreateRawSampleData(const TrackRequestParams& params,
-                             const RequestInfo&    req);
+    void CreateRawEventData(const TrackRequestParams& params, RequestInfo& req);
+    void CreateRawSampleData(const TrackRequestParams& params, RequestInfo& req);
+    void ReadRawEvents(rocprofvis_controller_array_t* track_data, uint64_t count,
+                       std::vector<TraceEvent>& events);
+    void ReadRawSamples(rocprofvis_controller_array_t* track_data, uint64_t count,
+                        std::vector<TraceCounter>& samples);
+    void ApplyRawEventData(const TrackRequestParams& params, const RequestInfo& req,
+                           std::vector<TraceEvent>&& events);
+    void ApplyRawSampleData(const TrackRequestParams& params, const RequestInfo& req,
+                            std::vector<TraceCounter>&& samples);
+    void FireTrackDataReady(const TrackRequestParams& params, const RequestInfo& req);
+
+    void ReadEventExtData(rocprofvis_controller_array_t* array, uint64_t count,
+                          std::vector<EventExtDataRow>& rows);
+    void ApplyEventExtData(const RequestInfo& req, const std::vector<EventExtDataRow>& rows);
+    void ReadEventFlowData(rocprofvis_controller_array_t* array, uint64_t count,
+                           std::vector<EventFlowData>& rows);
+    void ApplyEventFlowData(const RequestInfo& req, const std::vector<EventFlowData>& rows);
+    void ReadEventCallStackData(rocprofvis_controller_array_t* array, uint64_t count,
+                                std::vector<CallStackRow>& rows);
+    void ApplyEventCallStackData(const RequestInfo&               req,
+                                 const std::vector<CallStackRow>& rows);
+    bool ApplyTableData(const RequestInfo& req, rocprofvis_controller_table_type_t table_type,
+                        std::vector<std::string>&&                            column_names,
+                        std::vector<rocprofvis_controller_primitive_type_t>&& column_types,
+                        std::vector<std::vector<std::string>>&&               table_data,
+                        uint64_t                                              total_num_rows);
+    void FireTableDataReady(const RequestInfo& req);
+    void ApplyMetricsData(const RequestInfo& req, const std::vector<MetricValueRow>& rows);
+
+    // Remote mode, see rocprofvis_data_provider_remote.cpp.
+    bool SubmitRemoteRequest(RequestInfo&& request_info, const char* operation,
+                             jt::Json& params);
+    void HandleRemoteMessages();
+    void ProcessRemoteProgress(jt::Json& message);
+    void ProcessRemoteResponse(RequestInfo& req, jt::Json& message);
+    void ProcessRemoteSystemTrace(RequestInfo& req, jt::Json& data);
+    void ProcessRemoteComputeTrace(RequestInfo& req, jt::Json& data);
+    void ProcessRemotePcSampling(RequestInfo& req, jt::Json& data);
+    void FailRemoteRequests(uint64_t response_code);
+    bool RemoteFetchTrack(const TrackRequestParams& request_params, RequestType type,
+                          uint64_t request_id);
+    bool RemoteFetchTrackTable(const TrackTableRequestParams& table_params);
+    bool RemoteFetchEventSearch(const EventSearchRequestParams& table_params);
+    bool RemoteFetchEventData(uint64_t event_id, RequestType type, uint64_t request_id,
+                              const char* operation);
+    bool RemoteFetchSummary();
+    bool RemoteFetchAnalysisTrackStatistics(
+        const AnalysisTrackStatisticsRequestParams& params);
+    bool RemoteSaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
+    bool RemoteCleanupDatabase(bool rebuild);
+    bool RemoteFetchMetrics(const MetricsRequestParams& metrics_params);
+    bool RemoteFetchMetricPivotTable(const ComputeTableRequestParams& params);
+    bool RemoteFetchPcSampling(const PcSamplingRequestParams& params);
+    bool RemoteCancelRequest(uint64_t request_id);
+    void RemoteSetSelected();
+    void CloseRemote();
     void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
                            std::vector<size_t>& sub_metrics_idx);
     void CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
@@ -409,6 +520,9 @@ private:
 
     rocprofvis_controller_t*          m_trace_controller;
     rocprofvis_controller_timeline_t* m_trace_timeline;
+    // Set instead of m_trace_controller when the trace lives on a server.
+    std::shared_ptr<IDataChannel>     m_remote_channel;
+    std::function<void(const RequestInfo&)> m_request_completed_callback;
 
     ProviderState m_state;
 
@@ -458,6 +572,8 @@ private:
     std::string m_script_result_text;
     std::string m_script_result_error;
     bool        m_script_result_ok = false;
+    std::function<void(bool, const std::string&, const std::string&)>
+        m_script_completed_callback;
 #endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);

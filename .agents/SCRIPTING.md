@@ -484,6 +484,18 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
 - **One script per trace.** `EXECUTE_SCRIPT_REQUEST_ID` is a single
   slot, and the user's own run owns it just as much as the
   assistant's. The tool reports that rather than queueing.
+- **The event comes from the view, not the provider.**
+  `rocprofvis_data_provider_script.cpp` is part of `roc-optiq-data`,
+  which roc-optiq-server links without `EventManager`, so the provider
+  reports a finished script through `SetScriptCompletedCallback` and
+  `TraceView` turns that into `ScriptExecuteCompleteEvent`.
+- **A trace on a roc-optiq-server runs its scripts there.**
+  `ExecuteScript` on a remote provider sends `execute_script` with the
+  source, tracks and range; the server's provider runs it on the
+  server's interpreter and answers with the text and error, and
+  `CancelScript` reaches that interpreter through the request cancel.
+  Servers refuse unless started with `--allow-scripts`, as a script is
+  arbitrary code under the server's user.
 
 ---
 

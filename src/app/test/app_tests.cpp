@@ -32,6 +32,13 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+#include "protocol/rocprofvis_protocol_uri.h"
+#endif
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#include "agenticprofiling/rocprofvis_ai_tools.h"
+#include "spdlog/spdlog.h"
+#endif
 using namespace RocProfVis::View;
 
 namespace
@@ -354,6 +361,108 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Close the menu so its popup doesn't intercept clicks in later tests.
         ctx->PopupCloseAll();
     };
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // TEMPORARY (agentic profiling): remove this guard when the feature graduates.
+    // Runs Ask Optiq's read-only tools the way the panel does, without a model,
+    // so they can be checked on a local trace and on one from a server alike.
+    t = IM_REGISTER_TEST(e, "app", "sys_assistant_data_tools_answer");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AssistantToolContext context;
+        context.trace_name    = AppWindow::GetInstance()->GetCurrentProject()->GetName();
+        context.data_provider = tv->GetDataProvider();
+        context.trace_view    = tv;
+        if (tv->GetTimelineSelection())
+            context.timeline_selection = tv->GetTimelineSelection().get();
+        IM_CHECK(context.data_provider != nullptr);
+        if (context.data_provider == nullptr) return;
+
+        IM_CHECK(!BuildAssistantBriefing(context).empty());
+        const char* tools[][2] = {
+            { "trace_overview", "{}" },
+            { "list_tracks", "{}" },
+            { "get_summary", "{}" },
+            { "top_events", "{}" },
+            { "search_events", "{\"terms\": [\"a\"]}" },
+        };
+        for (const auto& tool : tools)
+        {
+            AssistantToolStartResult result = StartAssistantTool(context, tool[0], tool[1]);
+            if (result.pending)
+            {
+                for (int frame = 0; frame < 3000; frame++)
+                {
+                    bool pending = false;
+                    for (uint64_t id : result.request_ids)
+                        pending = pending || context.data_provider->IsRequestPending(id);
+                    if (!pending) break;
+                    ctx->Yield();
+                }
+                result.content = FinishAssistantFetch(context, result.fetch);
+            }
+            spdlog::info("Assistant tool {}: {}", tool[0], result.content.substr(0, 240));
+            IM_CHECK(!result.content.empty());
+        }
+    };
+#endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    // TEMPORARY (client/server): remove this guard when the feature graduates.
+    t = IM_REGISTER_TEST(e, "app", "cs_server_dialog_browses_and_opens");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+        AppWindow* app     = AppWindow::GetInstance();
+        Project*   project = app->GetCurrentProject();
+        ServerUri  uri;
+        if (project == nullptr || !parse_server_uri(project->GetID(), uri))
+        {
+            ctx->LogWarning("SKIP: the current trace is not on a roc-optiq-server");
+            return;
+        }
+        const std::string project_id = project->GetID();
+        const std::string directory  = fs::path(uri.path).parent_path().generic_string();
+        const std::string file_name  = fs::path(uri.path).filename().string();
+        const char*       dialog     = "//Open from Server##_server_dialog";
+
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("##MenuBar/File");
+        ctx->ItemClick("//Menu_00/Open from Server...");
+        ctx->Yield(3);
+        ctx->SetRef(dialog);
+        IM_CHECK(ctx->ItemExists("Disconnect"));
+        ctx->ItemInputValue("##server_path", directory.c_str());
+
+        // The listing arrives on the connection's reader thread.
+        ImGuiID entry_id = 0;
+        for (int frame = 0; frame < 600 && entry_id == 0; frame++)
+        {
+            ctx->Yield();
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, dialog);
+            for (int i = 0; i < items.GetSize(); i++)
+                if (file_name == items[i]->DebugLabel) { entry_id = items[i]->ID; break; }
+        }
+        IM_CHECK(entry_id != 0);
+        if (entry_id == 0)
+        {
+            ctx->PopupCloseAll();
+            return;
+        }
+
+        // The trace is already open, so Open closes the dialog onto its tab.
+        ctx->ItemClick(entry_id);
+        ctx->ItemClick("Open");
+        ctx->Yield(5);
+        IM_CHECK(app->GetCurrentProject() != nullptr);
+        if (app->GetCurrentProject() != nullptr)
+        {
+            IM_CHECK(app->GetCurrentProject()->GetID() == project_id);
+        }
+        ctx->PopupCloseAll();
+    };
+#endif
     t = IM_REGISTER_TEST(e, "app", "sys_events_view_populates");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2352,6 +2461,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP: sample dbs (rocpd-transpose.db / rocprof_compute_23ed6f36.db) not found");
             return;
         }
+#ifdef ROCPROFVIS_THIN_CLIENT
+        ctx->LogWarning("SKIP: a thin client opens no local dbs");
+        return;
+#endif
 
         // A project's id is its source-db path, so a .db and a .rpv that point
         // at that same .db share one id.

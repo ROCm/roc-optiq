@@ -131,6 +131,14 @@ public:
     virtual ~RequestParamsBase() = default;
 };
 
+// What a request read out of the controller, before it was applied to the model.
+// See rocprofvis_request_results.h for the concrete types.
+class RequestResultBase
+{
+public:
+    virtual ~RequestResultBase() = default;
+};
+
 // Track request parameters
 class TrackRequestParams : public RequestParamsBase
 {
@@ -425,6 +433,9 @@ struct RequestInfo
     uint64_t                              response_code;  // response code for the request
     std::string                           error_message;  // message the controller left for the user, if any
     uint64_t                              request_progress; // progress percentage of the request 
+    // Set only while a request-completed callback is installed, for the request
+    // types whose result depends on model state the receiver already holds.
+    std::shared_ptr<RequestResultBase>    result;
 };
 
 }  // namespace View

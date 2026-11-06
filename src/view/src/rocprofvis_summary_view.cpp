@@ -76,6 +76,8 @@ SummaryView::SummaryView(DataProvider&                      dp,
     m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_topology,
                                                    m_top_events, *m_tab_container.get());
     m_data_provider.SetSummaryDataReadyCallback([this]() {
+        m_data_provider.DataModel().GetSummary().UpdateValueStrings(
+            SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format);
         m_topology->Fetched();
         for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
         {
@@ -87,7 +89,8 @@ SummaryView::SummaryView(DataProvider&                      dp,
         static_cast<int>(RocEvents::kTimeFormatChanged),
         [this](std::shared_ptr<RocEvent> e) {
             (void) e;
-            m_data_provider.DataModel().GetSummary().UpdateValueStrings();
+            m_data_provider.DataModel().GetSummary().UpdateValueStrings(
+                SettingsManager::GetInstance().GetUserSettings().unit_settings.time_format);
             m_topology->TimeFormatChanged();
             for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
             {

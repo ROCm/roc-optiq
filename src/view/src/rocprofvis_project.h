@@ -15,6 +15,7 @@ namespace View
 
 class RocWidget;
 class ProjectSetting;
+class IDataChannel;
 
 class Project
 {
@@ -78,6 +79,25 @@ public:
     OpenResult OpenCompare(const std::string&              project_id,
                            const std::vector<std::string>& file_paths);
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    /*
+     * Builds the view for traces a roc-optiq-server has already opened, see
+     * open_on_server. Fast, so the UI connects and opens on a worker first.
+     * @param project_id: The canonical optiq:// URI, or the compare id for two or
+     * more traces.
+     * @param uris: The server traces, one, or two or more compared.
+     * @param channel: The opened trace; null fails with error as the message.
+     */
+    OpenResult OpenServerTrace(const std::string&              project_id,
+                               const std::vector<std::string>& uris,
+                               std::shared_ptr<IDataChannel> channel, bool is_compute,
+                               const std::string& error);
+#endif
+    /*
+     * The message for the user when Open/OpenServerTrace failed; empty when there
+     * is nothing more specific than "could not be opened".
+     */
+    const std::string& GetOpenErrorMessage() const;
     /*
      * Overwrites the project settings to the project file without further user input.
      */
@@ -117,6 +137,13 @@ private:
      * duplicate's tab.
      */
     OpenResult OpenTrace(std::string& file_path);
+    /*
+     * Opens traces on a roc-optiq-server, given as optiq:// URIs, and returns
+     * Success/Duplicate/Failed. Connects to the server first if needed, blocking
+     * until the server has opened them.
+     */
+    OpenResult OpenRemoteTrace(const std::string&              project_id,
+                               const std::vector<std::string>& uris);
     /*
      * Performs basic validation on the project settings for fields required to open a
      * trace.

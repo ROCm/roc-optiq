@@ -21,6 +21,10 @@
 #include "remote/rocprofvis_ssh_fetch.h"
 #include "remote/rocprofvis_remote_file_browser.h"
 #endif
+// TEMPORARY (client/server): remove this guard when the feature graduates.
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+#include "clientserver/rocprofvis_server_connection.h"
+#endif
 #include "imgui.h"
 #include <memory>
 #include <string>
@@ -102,6 +106,18 @@ private:
         return false;
 #endif
     }
+    bool IsServerMode() const
+    {
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+        return m_config.connection == ConnectionType::kServer;
+#else
+        return false;
+#endif
+    }
+#ifdef ROCPROFVIS_ENABLE_CLIENT_SERVER
+    // The connected server m_config.server_address names, else the only one.
+    std::shared_ptr<ServerConnection> GetSelectedServer() const;
+#endif
     // Forces m_config.tool to be one the current backend actually offers, falling
     // back to its first tool. Call after anything that can change either side of
     // that pairing - a backend switch, or loading a profile that may name a tool
@@ -136,9 +152,12 @@ private:
     void RenderRunButtonRow();
     // One-line "what is being run" summary shown atop the run view.
     std::string BuildRunSummary() const;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    // TEMPORARY (remote/SSH): SSH connection selector + popups.
+#if defined(ROCPROFVIS_ENABLE_REMOTE) || defined(ROCPROFVIS_ENABLE_CLIENT_SERVER)
+    // TEMPORARY (remote/SSH, client/server): where-to-run selector.
     void RenderRemoteSection();
+#endif
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // TEMPORARY (remote/SSH): SSH settings, download popups.
     void RenderRemotePopups();
 #endif
 

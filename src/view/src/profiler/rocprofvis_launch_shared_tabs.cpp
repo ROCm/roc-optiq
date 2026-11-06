@@ -355,7 +355,7 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     // host. When the caller supplies a remote-browse callback we drive the shared
     // remote file browser; otherwise the local pickers don't apply and the Browse
     // button stays disabled.
-    const bool is_remote        = (connection == ConnectionType::kSsh);
+    const bool is_remote        = (connection != ConnectionType::kLocal);
     const bool remote_browse_exe = is_remote && static_cast<bool>(on_remote_browse_program);
     const bool remote_browse_out = is_remote && static_cast<bool>(on_remote_browse_output);
 
@@ -512,7 +512,7 @@ bool RenderToolLocationSection(std::string& tool_directory, ConnectionType conne
 {
     bool modified = false;
 
-    const bool is_remote     = (connection == ConnectionType::kSsh);
+    const bool is_remote     = (connection != ConnectionType::kLocal);
     const bool remote_browse = is_remote && static_cast<bool>(on_remote_browse_directory);
 
     // Size the label column to fit its label (matches RenderTargetSection).

@@ -40,7 +40,12 @@ public:
     void RegisterEventValue(SummaryInfo::Value& value);
     void RegisterCounterValue(SummaryInfo::Value& value);
     void RegisterTimeunitValue(SummaryInfo::Value& value);
-    void UpdateValueStrings();
+    void UpdateValueStrings(TimeFormat time_format);
+
+    // The registered values, by how UpdateValueStrings formats them.
+    const std::vector<SummaryInfo::Value*>& GetEventValues() const;
+    const std::vector<SummaryInfo::Value*>& GetCounterValues() const;
+    const std::vector<SummaryInfo::Value*>& GetTimeunitValues() const;
 
     void     SetRevision(uint64_t revision);
     uint64_t GetRevision() const;

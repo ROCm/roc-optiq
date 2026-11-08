@@ -73,15 +73,15 @@ struct RunningServer
 };
 
 static RunningServer
-StartServer(DataProvider& provider, DataProviderJson::TraceKind kind)
+StartServer(DataProvider& provider)
 {
     RunningServer running;
     for(uint16_t port = TEST_PORT_FIRST; port <= TEST_PORT_LAST && !running.server;
         port++)
     {
         std::unique_ptr<RocProfVis::Server::TraceServer> candidate =
-            std::make_unique<RocProfVis::Server::TraceServer>(provider, kind,
-                                                              "http://localhost:3000");
+            std::make_unique<RocProfVis::Server::TraceServer>(
+                provider, "http://localhost:3000", "");
         if(candidate->Start("127.0.0.1", port))
         {
             running.server = std::move(candidate);
@@ -89,29 +89,6 @@ StartServer(DataProvider& provider, DataProviderJson::TraceKind kind)
         }
     }
     return running;
-}
-
-static httplib::Result
-GetFromServer(RocProfVis::Server::TraceServer& server, uint16_t port,
-              const std::string& path, const httplib::Headers& headers = {})
-{
-    std::future<httplib::Result> request =
-        std::async(std::launch::async, [port, path, headers]() {
-            httplib::Client client("127.0.0.1", port);
-            client.set_connection_timeout(5, 0);
-            client.set_read_timeout(5, 0);
-            return client.Get(path, headers);
-        });
-    const std::chrono::steady_clock::time_point deadline =
-        std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    while(request.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
-          std::chrono::steady_clock::now() < deadline)
-    {
-        server.RunPendingRequests();
-        std::this_thread::yield();
-    }
-    REQUIRE(request.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
-    return request.get();
 }
 
 // Updates the provider, the way a server's loop would, until done() holds or
@@ -127,6 +104,70 @@ UpdateUntil(DataProvider& provider, const std::function<bool()>& done)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     return done();
+}
+
+// Opens the test trace the way POST /api/open does.
+static bool
+OpenThroughServer(RunningServer& running, DataProvider& provider)
+{
+    std::string error;
+    return running.server->Open(g_input_file, error) &&
+           UpdateUntil(provider,
+                       [&provider]() {
+                           return provider.GetState() != ProviderState::kLoading;
+                       }) &&
+           provider.GetState() == ProviderState::kReady;
+}
+
+// Sends a GET, or a POST when content_type is set, and runs the server's
+// provider loop until it is answered.
+static httplib::Result
+SendToServer(RunningServer& running, DataProvider& provider, const std::string& path,
+             const httplib::Headers& headers = {}, const std::string& content_type = "",
+             const std::string& body = "")
+{
+    const uint16_t               port = running.port;
+    std::future<httplib::Result> request =
+        std::async(std::launch::async, [port, path, headers, content_type, body]() {
+            httplib::Client client("127.0.0.1", port);
+            client.set_connection_timeout(5, 0);
+            client.set_read_timeout(WAIT_LIMIT.count(), 0);
+            return content_type.empty() ? client.Get(path, headers)
+                                        : client.Post(path, headers, body, content_type);
+        });
+    const std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::now() + WAIT_LIMIT;
+    while(request.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
+          std::chrono::steady_clock::now() < deadline)
+    {
+        provider.Update();
+        running.server->RunPendingRequests();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(request.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready);
+    return request.get();
+}
+
+static jt::Json
+BodyOf(const httplib::Result& result)
+{
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(result->body);
+    REQUIRE(parsed.first == jt::Json::success);
+    return parsed.second;
+}
+
+static const TrackInfo*
+FirstEventTrack(const TraceDataModel& model)
+{
+    for(const TrackInfo* track : model.GetTimeline().GetTrackList())
+    {
+        if(track && track->track_type == kRPVControllerTrackTypeEvents &&
+           track->num_entries > 0)
+        {
+            return track;
+        }
+    }
+    return nullptr;
 }
 
 static bool
@@ -220,52 +261,133 @@ TEST_CASE("The histogram is normalized with no timeline drawing it", "[system]")
 
 TEST_CASE("The system HTTP API is local, typed and non-cacheable", "[system]")
 {
-    DataProvider provider;
-    REQUIRE(Load(provider));
-    RunningServer running = StartServer(provider, DataProviderJson::TraceKind::kSystem);
+    DataProvider  provider;
+    RunningServer running = StartServer(provider);
     REQUIRE(running.server);
 
-    httplib::Result status =
-        GetFromServer(*running.server, running.port, "/api/status?pretty=1");
+    httplib::Result not_loaded = SendToServer(running, provider, "/api/timeline");
+    REQUIRE(not_loaded);
+    CHECK(not_loaded->status == 503);
+    REQUIRE(OpenThroughServer(running, provider));
+
+    httplib::Result status = SendToServer(running, provider, "/api/status?pretty=1");
     REQUIRE(status);
     CHECK(status->status == 200);
     CHECK(status->get_header_value("Cache-Control") == "no-store");
     CHECK(status->get_header_value("Access-Control-Allow-Origin") ==
           "http://localhost:3000");
-    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(status->body);
-    REQUIRE(parsed.first == jt::Json::success);
-    CHECK(parsed.second["trace_type"].getString() == "system");
+    CHECK(BodyOf(status)["trace_type"].getString() == "system");
 
-    httplib::Result wrong_kind =
-        GetFromServer(*running.server, running.port, "/api/compute");
+    httplib::Result wrong_kind = SendToServer(running, provider, "/api/compute");
     REQUIRE(wrong_kind);
-    CHECK(wrong_kind->status == 404);
+    CHECK(wrong_kind->status == 409);
 
-    httplib::Result unloaded =
-        GetFromServer(*running.server, running.port, "/api/summary");
-    REQUIRE(unloaded);
-    CHECK(unloaded->status == 501);
+    httplib::Result unknown = SendToServer(running, provider, "/api/not_a_route");
+    REQUIRE(unknown);
+    CHECK(unknown->status == 404);
+
+    // A body another site's form could send must not reach a POST route.
+    httplib::Result form_post = SendToServer(running, provider, "/api/open", {},
+                                             "text/plain", "{\"path\": \"x.db\"}");
+    REQUIRE(form_post);
+    CHECK(form_post->status == 415);
 
     httplib::Headers bad_host_headers{ { "Host", "example.invalid" } };
     httplib::Result  bad_host =
-        GetFromServer(*running.server, running.port, "/api/status", bad_host_headers);
+        SendToServer(running, provider, "/api/status", bad_host_headers);
     REQUIRE(bad_host);
     CHECK(bad_host->status == 400);
+    httplib::Headers localhost_headers{ { "Host",
+                                          "localhost:" + std::to_string(running.port) } };
+    httplib::Result  localhost =
+        SendToServer(running, provider, "/api/status", localhost_headers);
+    REQUIRE(localhost);
+    CHECK(localhost->status == 200);
 
     httplib::Client  client("127.0.0.1", running.port);
     httplib::Headers preflight_headers{
         { "Origin", "http://localhost:3000" },
-        { "Access-Control-Request-Method", "GET" },
+        { "Access-Control-Request-Method", "POST" },
         { "Access-Control-Request-Headers", "content-type" },
     };
-    httplib::Result preflight = client.Options("/api/status", preflight_headers);
+    httplib::Result preflight = client.Options("/api/open", preflight_headers);
     REQUIRE(preflight);
     CHECK(preflight->status == 204);
-    CHECK(preflight->get_header_value("Access-Control-Allow-Methods") == "GET, OPTIONS");
+    CHECK(preflight->get_header_value("Access-Control-Allow-Methods") ==
+          "GET, POST, OPTIONS");
     CHECK(preflight->get_header_value("Access-Control-Allow-Headers") == "Content-Type");
 
     CHECK_FALSE(running.server->Start("127.0.0.1", running.port));
+    RocProfVis::Server::TraceServer second(provider, "", "");
+    CHECK_FALSE(second.Start("127.0.0.1", running.port));
     CHECK_FALSE(running.server->ListenerFailed());
+    running.server->Stop();
+}
+
+TEST_CASE("The system HTTP API fetches what a timeline client needs", "[system]")
+{
+    DataProvider  provider;
+    RunningServer running = StartServer(provider);
+    REQUIRE(running.server);
+    REQUIRE(OpenThroughServer(running, provider));
+    const TrackInfo* events_track = FirstEventTrack(provider.DataModel());
+    REQUIRE(events_track != nullptr);
+    const std::string track = std::to_string(events_track->id);
+
+    httplib::Result data =
+        SendToServer(running, provider, "/api/track_data?px=1000&tracks=" + track);
+    REQUIRE(data);
+    REQUIRE(data->status == 200);
+    jt::Json               data_json = BodyOf(data);
+    std::vector<jt::Json>& tracks    = data_json["tracks"].getArray();
+    REQUIRE(tracks.size() == 1);
+    CHECK(tracks.front()["complete"].getBool());
+    std::string uuid;
+    for(jt::Json& event : tracks.front()["events"].getArray())
+    {
+        if(uuid.empty() && event["child_count"].getLong() == 1)
+        {
+            uuid = event["uuid"].getString();
+        }
+    }
+    REQUIRE_FALSE(uuid.empty());
+
+    httplib::Result event =
+        SendToServer(running, provider, "/api/events/" + uuid + "?track=" + track);
+    REQUIRE(event);
+    REQUIRE(event->status == 200);
+    CHECK(BodyOf(event)["uuid"].getString() == uuid);
+    CHECK(provider.DataModel().GetEvents().GetEvent(std::stoull(uuid)) == nullptr);
+
+    httplib::Result table = SendToServer(
+        running, provider, "/api/tables/event_table?limit=5&order=desc&tracks=" + track);
+    REQUIRE(table);
+    REQUIRE(table->status == 200);
+    jt::Json table_json = BodyOf(table);
+    REQUIRE_FALSE(table_json["columns"].getArray().empty());
+    CHECK_FALSE(table_json["rows"].getArray().empty());
+    CHECK(table_json["rows"].getArray().size() <= 5);
+
+    httplib::Result bad_table = SendToServer(
+        running, provider, "/api/tables/event_table?limit=0&tracks=" + track);
+    REQUIRE(bad_table);
+    CHECK(bad_table->status == 400);
+
+    httplib::Result summary = SendToServer(running, provider, "/api/summary");
+    REQUIRE(summary);
+    REQUIRE(summary->status == 200);
+    CHECK(BodyOf(summary)["root"]["level"].getString() == "trace");
+
+    httplib::Result files = SendToServer(running, provider, "/api/files");
+    REQUIRE(files);
+    REQUIRE(files->status == 200);
+    jt::Json          files_json = BodyOf(files);
+    const std::string trace_name =
+        std::filesystem::path(g_input_file).filename().string();
+    std::vector<jt::Json>& entries = files_json["entries"].getArray();
+    CHECK(std::any_of(entries.begin(), entries.end(), [&trace_name](jt::Json& entry) {
+        return entry["name"].getString() == trace_name;
+    }));
     running.server->Stop();
 }
 
@@ -439,33 +561,44 @@ TEST_CASE("A memory-chart layout serializes its authored data", "[system]")
           "9007199254740993");
 }
 
-TEST_CASE("The compute HTTP API rejects system and unloaded routes", "[compute]")
+TEST_CASE("The compute HTTP API rejects system routes and fetches metrics", "[compute]")
 {
-    DataProvider provider;
-    REQUIRE(Load(provider));
+    DataProvider  provider;
+    RunningServer running = StartServer(provider);
+    REQUIRE(running.server);
+    REQUIRE(OpenThroughServer(running, provider));
     REQUIRE_FALSE(provider.ComputeModel().GetWorkloadList().empty());
     const WorkloadInfo* workload = provider.ComputeModel().GetWorkloadList().front();
     REQUIRE_FALSE(workload->ordered_kernels.empty());
-    const uint32_t kernel_id = workload->ordered_kernels.front()->id;
+    REQUIRE_FALSE(workload->available_metrics.ordered_categories.empty());
+    const std::string workload_path =
+        "/api/compute/workloads/" + std::to_string(workload->id);
+    const std::string kernel = std::to_string(workload->ordered_kernels.front()->id);
+    const std::string category =
+        std::to_string(workload->available_metrics.ordered_categories.front()->id);
 
-    RunningServer running = StartServer(provider, DataProviderJson::TraceKind::kCompute);
-    REQUIRE(running.server);
-
-    httplib::Result compute =
-        GetFromServer(*running.server, running.port, "/api/compute");
+    httplib::Result compute = SendToServer(running, provider, "/api/compute");
     REQUIRE(compute);
     CHECK(compute->status == 200);
 
-    httplib::Result wrong_kind =
-        GetFromServer(*running.server, running.port, "/api/timeline");
+    httplib::Result wrong_kind = SendToServer(running, provider, "/api/timeline");
     REQUIRE(wrong_kind);
-    CHECK(wrong_kind->status == 404);
+    CHECK(wrong_kind->status == 409);
 
-    httplib::Result metrics =
-        GetFromServer(*running.server, running.port,
-                      "/api/compute/kernels/" + std::to_string(kernel_id) + "/metrics");
+    httplib::Result metrics = SendToServer(
+        running, provider,
+        workload_path + "/metrics?client=7&kernels=" + kernel + "&metrics=" + category);
     REQUIRE(metrics);
-    CHECK(metrics->status == 501);
+    REQUIRE(metrics->status == 200);
+    jt::Json metrics_json = BodyOf(metrics);
+    REQUIRE(metrics_json["kernels"].getArray().size() == 1);
+    CHECK_FALSE(metrics_json["kernels"].getArray().front()["metrics"].getArray().empty());
+
+    httplib::Result kernel_table =
+        SendToServer(running, provider, workload_path + "/kernel_table");
+    REQUIRE(kernel_table);
+    REQUIRE(kernel_table->status == 200);
+    CHECK_FALSE(BodyOf(kernel_table)["rows"].getArray().empty());
     running.server->Stop();
 }
 

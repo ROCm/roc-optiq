@@ -10,10 +10,8 @@
 #include <string>
 #include <system_error>
 
-#include "rocprofvis_controller.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_trace_server.h"
-#include "rocprofvis_utils.h"
 #include "rocprofvis_version.h"
 
 #include "spdlog/spdlog.h"
@@ -38,6 +36,7 @@ struct ServerOptions
     std::string host = DEFAULT_HOST;
     uint16_t    port = DEFAULT_PORT;
     std::string allowed_origin;
+    std::string web_root;
 };
 
 enum class ParseOutcome
@@ -58,11 +57,13 @@ request_stop(int)
 static void
 print_usage()
 {
-    std::cout << "Usage: roc-optiq-server [options] <trace>\n"
-                 "Serves a ROCm Optiq trace as JSON over HTTP, under /api/.\n"
+    std::cout << "Usage: roc-optiq-server [options] [trace]\n"
+                 "Serves a ROCm Optiq trace as JSON over HTTP, under /api/. With no\n"
+                 "trace, clients open one through the API.\n"
                  "\n"
                  "  --host <address>         Loopback address (default 127.0.0.1)\n"
                  "  --port <number>          Port to listen on (default 8080)\n"
+                 "  --web <folder>           Serve the built web app from folder at /\n"
                  "  --allow-origin <origin>  Let pages served from origin read the API\n"
                  "  --version                Print the version and exit\n"
                  "  --help                   Print this help and exit\n"
@@ -114,25 +115,6 @@ is_loopback_host(const std::string& host)
            normalized.rfind("127.", 0) == 0;
 }
 
-static bool
-get_trace_kind(rocprofvis_controller_t*           controller,
-               View::DataProviderJson::TraceKind& kind_out)
-{
-    rocprofvis_controller_object_type_t type = kRPVControllerObjectTypeControllerSystem;
-    const rocprofvis_result_t           result =
-        rocprofvis_controller_get_object_type(controller, &type);
-    const bool valid = result == kRocProfVisResultSuccess &&
-                       (type == kRPVControllerObjectTypeControllerSystem ||
-                        type == kRPVControllerObjectTypeControllerCompute);
-    if(valid)
-    {
-        kind_out = type == kRPVControllerObjectTypeControllerSystem
-                       ? View::DataProviderJson::TraceKind::kSystem
-                       : View::DataProviderJson::TraceKind::kCompute;
-    }
-    return valid;
-}
-
 static ParseOutcome
 parse_args(int argc, char** argv, ServerOptions& options)
 {
@@ -170,6 +152,11 @@ parse_args(int argc, char** argv, ServerOptions& options)
             i++;
             options.allowed_origin = argv[i];
         }
+        else if(arg == "--web" && has_value)
+        {
+            i++;
+            options.web_root = argv[i];
+        }
         else if(!arg.empty() && arg[0] != '-' && options.trace_path.empty())
         {
             options.trace_path = arg;
@@ -180,11 +167,6 @@ parse_args(int argc, char** argv, ServerOptions& options)
             outcome = ParseOutcome::kUsageError;
         }
     }
-    if(outcome == ParseOutcome::kRun && options.trace_path.empty())
-    {
-        spdlog::error("No trace file given.");
-        outcome = ParseOutcome::kUsageError;
-    }
     if(outcome == ParseOutcome::kUsageError)
     {
         print_usage();
@@ -193,96 +175,67 @@ parse_args(int argc, char** argv, ServerOptions& options)
 }
 
 // Updates the provider and answers requests on this thread until asked to stop.
+// A trace that fails to load stays reported in /api/status until a client opens
+// another.
 static int32_t
-serve(View::DataProvider& provider, TraceServer& server, const ServerOptions& options)
+serve(View::DataProvider& provider, TraceServer& server)
 {
     std::signal(SIGINT, request_stop);
     std::signal(SIGTERM, request_stop);
 
     View::ProviderState state = provider.GetState();
-    while(!g_stop_requested && state != View::ProviderState::kError &&
-          !server.ListenerFailed())
+    while(!g_stop_requested && !server.ListenerFailed())
     {
         provider.Update();
         server.RunPendingRequests();
         View::ProviderState updated = provider.GetState();
         if(updated != state && updated == View::ProviderState::kReady)
         {
-            spdlog::info("Loaded {}", options.trace_path);
+            spdlog::info("Loaded {}", provider.GetTraceFilePath());
+        }
+        else if(updated != state && updated == View::ProviderState::kError)
+        {
+            spdlog::error("Could not load '{}'.", provider.GetTraceFilePath());
         }
         state = updated;
         server.WaitForRequests(UPDATE_INTERVAL);
     }
     const bool listener_failed = server.ListenerFailed();
     server.Stop();
-
-    int32_t exit_code = EXIT_CODE_OK;
     if(listener_failed)
     {
         spdlog::error("The HTTP listener stopped unexpectedly.");
-        exit_code = EXIT_CODE_ERROR;
     }
-    else if(state == View::ProviderState::kError)
-    {
-        spdlog::error("Could not load '{}'.", options.trace_path);
-        exit_code = EXIT_CODE_ERROR;
-    }
-    return exit_code;
+    return listener_failed ? EXIT_CODE_ERROR : EXIT_CODE_OK;
 }
 
 static int32_t
 run(const ServerOptions& options)
 {
-    int32_t exit_code = EXIT_CODE_ERROR;
     if(!is_loopback_host(options.host))
     {
         spdlog::error(
             "The unauthenticated server only accepts loopback listen addresses.");
-        return exit_code;
+        return EXIT_CODE_ERROR;
     }
-    const std::string        config_path = View::get_application_config_path(true);
-    rocprofvis_controller_t* controller =
-        rocprofvis_controller_alloc(options.trace_path.c_str(), config_path.c_str());
-    if(!controller)
+
+    View::DataProvider provider;
+    TraceServer        server(provider, options.allowed_origin, options.web_root);
+    std::string        error;
+    if(!options.trace_path.empty() && !server.Open(options.trace_path, error))
     {
-        spdlog::error("Could not open '{}' as a trace.", options.trace_path);
+        spdlog::error("{}", error);
+        return EXIT_CODE_ERROR;
     }
-    else
+    if(!server.Start(options.host, options.port))
     {
-        View::DataProviderJson::TraceKind trace_kind =
-            View::DataProviderJson::TraceKind::kSystem;
-        if(!get_trace_kind(controller, trace_kind))
-        {
-            spdlog::error("'{}' is not a supported system or compute trace.",
-                          options.trace_path);
-            rocprofvis_controller_free(controller);
-        }
-        else
-        {
-            // The provider owns the controller from here, and frees it on failure.
-            View::DataProvider provider;
-            if(!provider.FetchTrace(controller, options.trace_path))
-            {
-                spdlog::error("Could not start loading '{}'.", options.trace_path);
-            }
-            else
-            {
-                TraceServer server(provider, trace_kind, options.allowed_origin);
-                if(!server.Start(options.host, options.port))
-                {
-                    spdlog::error("Could not listen on {}:{}.", options.host,
-                                  options.port);
-                }
-                else
-                {
-                    spdlog::info("Serving {} at http://{}:{}/api/", options.trace_path,
-                                 options.host, options.port);
-                    exit_code = serve(provider, server, options);
-                }
-            }
-        }
+        spdlog::error("Could not listen on {}:{}.", options.host, options.port);
+        return EXIT_CODE_ERROR;
     }
-    return exit_code;
+    spdlog::info("Serving {} at http://{}:{}/",
+                 options.trace_path.empty() ? "no trace yet" : options.trace_path,
+                 options.host, options.port);
+    return serve(provider, server);
 }
 
 }  // namespace Server

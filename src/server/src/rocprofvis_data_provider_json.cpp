@@ -1575,6 +1575,36 @@ KernelMetrics(const ComputeDataModel& model, uint64_t client_id, uint32_t kernel
 }
 
 jt::Json
+WorkloadMetrics(const ComputeDataModel& model, uint64_t client_id,
+                const WorkloadInfo& workload)
+{
+    jt::Json list = EmptyArray();
+    for(const AvailableMetrics::Category* category :
+        workload.available_metrics.ordered_categories)
+    {
+        for(const AvailableMetrics::Table* table : category->ordered_tables)
+        {
+            for(const AvailableMetrics::Entry* entry : table->ordered_entries)
+            {
+                std::shared_ptr<MetricValue> metric = model.GetWorkloadMetricValue(
+                    client_id, workload.id, entry->category_id, entry->table_id,
+                    entry->id);
+                if(metric && metric->entry)
+                {
+                    list.getArray().push_back(MetricValueJson(*metric));
+                }
+            }
+        }
+    }
+
+    jt::Json json;
+    json["client_id"]   = IdJson(client_id);
+    json["workload_id"] = workload.id;
+    json["metrics"]     = std::move(list);
+    return json;
+}
+
+jt::Json
 KernelSelectionTable(const ComputeKernelSelectionTable& selection_table)
 {
     jt::Json                json;

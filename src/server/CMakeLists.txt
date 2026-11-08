@@ -198,6 +198,8 @@ if(BUILD_TESTING)
         src/rocprofvis_trace_server.h)
     target_compile_definitions(${PROVIDER_TEST_NAME} PRIVATE
         ROCPROFVIS_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    target_include_directories(${PROVIDER_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/generated)
     target_include_directories(${PROVIDER_TEST_NAME} SYSTEM PRIVATE
         ${CMAKE_SOURCE_DIR}/thirdparty/cpp-httplib)
     target_link_libraries(${PROVIDER_TEST_NAME} PRIVATE

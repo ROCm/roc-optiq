@@ -124,6 +124,10 @@ Kernel(const KernelInfo& kernel);
 // The metric values client_id fetched for a kernel, or null if it has none.
 jt::Json
 KernelMetrics(const ComputeDataModel& model, uint64_t client_id, uint32_t kernel_id);
+// The workload-wide metric values client_id fetched, in catalog order.
+jt::Json
+WorkloadMetrics(const ComputeDataModel& model, uint64_t client_id,
+                const WorkloadInfo& workload);
 // The kernel selection table, or null before it has been fetched.
 jt::Json
 KernelSelectionTable(const ComputeKernelSelectionTable& selection_table);

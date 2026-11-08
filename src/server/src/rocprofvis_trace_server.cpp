@@ -944,19 +944,23 @@ TraceServer::RegisterRoutes()
                 [](const httplib::Request&, httplib::Response& response) {
                     response.set_content(AssistantStatus().toString(), JSON_CONTENT_TYPE);
                 });
-    m_http->Post("/api/assistant/chat",
-                 [](const httplib::Request& request, httplib::Response& response) {
-                     jt::Json body;
-                     Reply    reply = Error(HTTP_UNSUPPORTED_MEDIA_TYPE,
-                                            "Send a JSON object with Content-Type: "
-                                            "application/json.");
-                     if(read_json_body(request, body))
-                     {
-                         reply.body = AssistantChat(std::move(body), reply.status);
-                     }
-                     response.status = reply.status;
-                     response.set_content(reply.body.toString(), JSON_CONTENT_TYPE);
-                 });
+    auto post_json = [this](const char* path, jt::Json (*handle)(jt::Json, int32_t&)) {
+        m_http->Post(
+            path, [handle](const httplib::Request& request, httplib::Response& response) {
+                jt::Json body;
+                Reply    reply =
+                    Error(HTTP_UNSUPPORTED_MEDIA_TYPE,
+                          "Send a JSON object with Content-Type: application/json.");
+                if(read_json_body(request, body))
+                {
+                    reply.body = handle(std::move(body), reply.status);
+                }
+                response.status = reply.status;
+                response.set_content(reply.body.toString(), JSON_CONTENT_TYPE);
+            });
+    };
+    post_json("/api/assistant/chat", AssistantChat);
+    post_json("/api/assistant/settings", AssistantSave);
 #endif
     RegisterSystemRoutes();
     RegisterComputeRoutes();

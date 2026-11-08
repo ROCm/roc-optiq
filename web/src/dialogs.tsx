@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowUp, BookOpen, Database, Folder, FolderOpen, GitBranch, HardDrive, History, Info, Save, Settings } from 'lucide-react'
 import { get, post, type FolderListing, type Status } from './api'
+import { AssistantSettings } from './assistant/Assistant'
 import { fileName, formatBytes, formatDuration, formatTime } from './format'
 import { useStore, type TimeFormat } from './store'
 import { AmdMark, Empty, Loading, Modal, Segmented, useAsync } from './ui'
@@ -186,6 +187,7 @@ export function SettingsDialog() {
           </div>
           <div className="faint">Preview: <span className="mono">{formatTime(3723456789012, settings.timeFormat)}</span></div>
         </div>
+        <AssistantSettings />
         <div className="col">
           <span className="section-label">Keyboard and mouse</span>
           <div className="kv">

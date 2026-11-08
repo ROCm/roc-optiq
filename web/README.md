@@ -41,6 +41,6 @@ Then open `http://localhost:5173`. `npm run build` also type-checks.
 The timeline draws on a canvas from the store directly, and asks the server for
 each visible track's events at the current zoom with `/api/track_data`.
 
-Ask Optiq uses the endpoint and key configured in the desktop app; the server
-relays each round (see the server README). Its key button sets a different
-endpoint, model or key for this browser only.
+Ask Optiq is set up in Preferences, which edits the same endpoint, model and
+key as the desktop app's Settings > Assistant; the server keeps the key and
+relays each round (see the server README).

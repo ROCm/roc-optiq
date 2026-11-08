@@ -5,6 +5,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
 
@@ -45,7 +47,14 @@ constexpr const char* DEFAULT_PROVIDER = "Default";
 constexpr const char* DEFAULT_MODEL    = "gpt-5.6-luna";
 constexpr int32_t     HTTP_OK          = 200;
 constexpr int32_t     HTTP_BAD_REQUEST = 400;
+constexpr int32_t     HTTP_INTERNAL    = 500;
 constexpr int32_t     HTTP_BAD_GATEWAY = 502;
+
+// HTTP workers read and write the settings file and the session keys at once.
+static std::mutex g_mutex;
+// Keys saved when there is no OS credential store, kept until the server stops,
+// as the desktop app keeps them for its session.
+static std::map<std::string, std::string> g_session_tokens;
 
 struct Endpoint
 {
@@ -62,55 +71,127 @@ StringField(jt::Json& json, const char* key)
                : std::string();
 }
 
+static std::filesystem::path
+SettingsPath(bool create_dirs)
+{
+    return std::filesystem::u8path(View::get_application_config_path(create_dirs)) /
+           SETTINGS_FILE;
+}
+
+// The desktop settings file; a missing file reads as empty. False when the file
+// is there but is not a settings object, so it must not be overwritten.
+static bool
+ReadSettings(jt::Json& root)
+{
+    root.setObject();
+    std::ifstream file(SettingsPath(false));
+    if(!file.is_open())
+    {
+        return true;
+    }
+    std::stringstream text;
+    text << file.rdbuf();
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(text.str());
+    if(parsed.first != jt::Json::success || !parsed.second.isObject())
+    {
+        return false;
+    }
+    root = std::move(parsed.second);
+    return true;
+}
+
+// The active endpoint's entry in the settings, added with the defaults when
+// there is none.
+static jt::Json&
+ActiveProvider(jt::Json& root)
+{
+    jt::Json& assistant = root["settings"]["assistant"];
+    jt::Json& providers = assistant["providers"];
+    if(!providers.isArray() || providers.getArray().empty())
+    {
+        jt::Json provider;
+        provider["name"]         = DEFAULT_PROVIDER;
+        provider["endpoint_url"] = "";
+        provider["model"]        = DEFAULT_MODEL;
+        providers.setArray();
+        providers.getArray().push_back(std::move(provider));
+    }
+    size_t active = 0;
+    if(assistant.contains("active") && assistant["active"].isLong() &&
+       assistant["active"].getLong() > 0 &&
+       static_cast<size_t>(assistant["active"].getLong()) < providers.getArray().size())
+    {
+        active = static_cast<size_t>(assistant["active"].getLong());
+    }
+    return providers.getArray()[active];
+}
+
+static Endpoint
+ToEndpoint(jt::Json& provider)
+{
+    Endpoint          endpoint;
+    const std::string name  = StringField(provider, "name");
+    const std::string model = StringField(provider, "model");
+    endpoint.url            = StringField(provider, "endpoint_url");
+    endpoint.name           = name.empty() ? endpoint.name : name;
+    endpoint.model          = model.empty() ? endpoint.model : model;
+    return endpoint;
+}
+
 // The active endpoint in the desktop settings, or the defaults when there is none.
 static Endpoint
 ActiveEndpoint()
 {
-    Endpoint      endpoint;
-    std::ifstream file(std::filesystem::u8path(View::get_application_config_path(false)) /
-                       SETTINGS_FILE);
-    std::stringstream text;
-    text << file.rdbuf();
-    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(text.str());
-    jt::Json&                             root   = parsed.second;
-    if(parsed.first == jt::Json::success && root.isObject() &&
-       root.contains("settings") && root["settings"].isObject() &&
-       root["settings"].contains("assistant"))
-    {
-        jt::Json& assistant = root["settings"]["assistant"];
-        if(assistant.isObject() && assistant.contains("providers") &&
-           assistant["providers"].isArray() && !assistant["providers"].getArray().empty())
-        {
-            std::vector<jt::Json>& providers = assistant["providers"].getArray();
-            size_t                 active    = 0;
-            if(assistant.contains("active") && assistant["active"].isLong() &&
-               assistant["active"].getLong() > 0 &&
-               static_cast<size_t>(assistant["active"].getLong()) < providers.size())
-            {
-                active = static_cast<size_t>(assistant["active"].getLong());
-            }
-            jt::Json&         provider = providers[active];
-            const std::string name     = StringField(provider, "name");
-            const std::string model    = StringField(provider, "model");
-            endpoint.url               = StringField(provider, "endpoint_url");
-            endpoint.name              = name.empty() ? endpoint.name : name;
-            endpoint.model             = model.empty() ? endpoint.model : model;
-        }
-    }
-    return endpoint;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    jt::Json                    root;
+    return ReadSettings(root) ? ToEndpoint(ActiveProvider(root)) : Endpoint();
 }
 
-// The key the desktop app stored for this endpoint, if any.
+// Each endpoint has its own entry, so a key saved for one host is never sent
+// to another.
+static std::string
+TokenKey(const Endpoint& endpoint)
+{
+    return std::string(TOKEN_SECRET_KEY) + "/" + endpoint.name;
+}
+
 static std::string
 StoredToken(const Endpoint& endpoint)
 {
     std::string token;
     if(View::SecretStore::IsAvailable())
     {
-        View::SecretStore::Get(std::string(TOKEN_SECRET_KEY) + "/" + endpoint.name,
-                               token);
+        View::SecretStore::Get(TokenKey(endpoint), token);
+        return token;
     }
-    return token;
+    std::lock_guard<std::mutex> lock(g_mutex);
+    auto                        session = g_session_tokens.find(endpoint.name);
+    return session == g_session_tokens.end() ? token : session->second;
+}
+
+// Saves the key, or forgets it when token is empty.
+static bool
+StoreToken(const Endpoint& endpoint, const std::string& token)
+{
+    if(View::SecretStore::IsAvailable())
+    {
+        if(token.empty())
+        {
+            View::SecretStore::Erase(TokenKey(endpoint));
+            return true;
+        }
+        return View::SecretStore::Set(TokenKey(endpoint), token);
+    }
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if(token.empty())
+    {
+        g_session_tokens.erase(endpoint.name);
+    }
+    else
+    {
+        g_session_tokens[endpoint.name] = token;
+    }
+    return true;
 }
 
 jt::Json
@@ -140,23 +221,67 @@ AssistantStatus()
 }
 
 jt::Json
+AssistantSave(jt::Json body, int32_t& status_out)
+{
+    jt::Json json;
+    Endpoint endpoint;
+    status_out = HTTP_INTERNAL;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        jt::Json                    root;
+        if(!ReadSettings(root))
+        {
+            json["error"] = "The desktop settings file could not be read, so nothing "
+                            "was saved.";
+            return json;
+        }
+        jt::Json& provider = ActiveProvider(root);
+        bool      changed  = false;
+        for(const char* field : { "endpoint_url", "model" })
+        {
+            if(body.contains(field) && body[field].isString())
+            {
+                provider[field] = body[field].getString();
+                changed         = true;
+            }
+        }
+        if(changed)
+        {
+            std::ofstream file(SettingsPath(true));
+            file << root.toStringPretty();
+            if(!file)
+            {
+                json["error"] = "Could not write the desktop settings file.";
+                return json;
+            }
+        }
+        endpoint = ToEndpoint(provider);
+    }
+
+    const bool clear = body.contains("clear_token") && body["clear_token"].isBool() &&
+                       body["clear_token"].getBool();
+    const std::string token = StringField(body, "token");
+    if((clear || !token.empty()) && !StoreToken(endpoint, clear ? std::string() : token))
+    {
+        json["error"] = "Could not save the key to the OS credential store.";
+        return json;
+    }
+    status_out = HTTP_OK;
+    return AssistantStatus();
+}
+
+jt::Json
 AssistantChat(jt::Json body, int32_t& status_out)
 {
-    Endpoint          endpoint = ActiveEndpoint();
-    const std::string url      = StringField(body, "endpoint_url");
-    const std::string model    = StringField(body, "model");
-    std::string       token    = StringField(body, "token");
-    endpoint.url               = url.empty() ? endpoint.url : url;
-    endpoint.model             = model.empty() ? endpoint.model : model;
-    token                      = token.empty() ? StoredToken(endpoint) : token;
+    const Endpoint    endpoint = ActiveEndpoint();
+    const std::string token    = StoredToken(endpoint);
 
     jt::Json json;
     status_out = HTTP_BAD_REQUEST;
     if(endpoint.url.empty() || token.empty())
     {
-        json["error"] = "Ask Optiq needs an endpoint URL and a key. Set them in the "
-                        "desktop app's Preferences > Assistant, or in this page's "
-                        "Ask Optiq settings.";
+        json["error"] =
+            "Ask Optiq needs an endpoint URL and a key. Set them in Preferences.";
         return json;
     }
     if(!body.contains("messages") || !body["messages"].isArray())

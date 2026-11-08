@@ -26,11 +26,17 @@ namespace Server
 jt::Json
 AssistantStatus();
 
+// Saves body.endpoint_url and body.model to the desktop settings file and
+// body.token to the OS credential store, where the desktop app's Settings >
+// Assistant page keeps them; body.clear_token forgets the key. Fields left out
+// are unchanged. Returns the new status.
+jt::Json
+AssistantSave(jt::Json body, int32_t& status_out);
+
 // Sends one round of a conversation to the model. body.messages are the user,
 // assistant and tool messages in the chat API's shape; the system prompt and
 // tool schema are added here. body.final asks for the written answer with
-// tools off. body.endpoint_url, body.model and body.token override the desktop
-// settings.
+// tools off.
 jt::Json
 AssistantChat(jt::Json body, int32_t& status_out);
 

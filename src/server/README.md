@@ -39,6 +39,7 @@ General:
 | `POST /api/open {path}` | Load another trace in place of the current one |
 | `GET /api/logs` | The server's last 1000 log lines |
 | `GET /api/assistant` | Ask Optiq's endpoint, model, whether a key is stored, and its tools |
+| `POST /api/assistant/settings {endpoint_url, model, token, clear_token}` | Save Ask Optiq's endpoint, model or key; fields left out are unchanged |
 | `POST /api/assistant/chat {messages, final}` | One round of an Ask Optiq conversation |
 
 System traces:
@@ -80,11 +81,14 @@ With `ROCPROFVIS_ENABLE_WEB_ASSISTANT` (on by default with the server) the
 server relays the web client's Ask Optiq conversations. The browser runs the
 conversation and the tools, against the API above; the server adds what a page
 cannot hold or reach: the desktop assistant's instructions and tool schema
-(compiled from `src/view/src/agenticprofiling`), the endpoint and key the user
-set in the desktop app's Preferences > Assistant (read from its settings file
-and the OS credential store), and an HTTPS client, so the endpoint need not
-allow browser requests. The stored key never leaves the server. The option builds the
-TLS backend chosen by `CRYPTO_BACKEND` (vendored mbedTLS by default).
+(compiled from `src/view/src/agenticprofiling`), the endpoint and key, and an
+HTTPS client, so the endpoint need not allow browser requests. The endpoint,
+model and key are the ones the desktop app's Settings > Assistant page uses:
+the endpoint and model live in its settings file and the key in the OS
+credential store (in memory until the server stops when there is no store),
+and the web client's Preferences edit the same entries. The key never leaves
+the server. The option builds the TLS backend chosen by `CRYPTO_BACKEND`
+(vendored mbedTLS by default).
 
 ## How requests run
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Copy, KeyRound, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { ArrowUp, Copy, Eye, EyeOff, KeyRound, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { get, post } from '../api'
 import { useStore } from '../store'
 import { briefing, runTool, type OverviewChart } from './tools'
@@ -20,6 +20,7 @@ interface Status {
   model: string
   endpoint_url: string
   has_token: boolean
+  credential_store: boolean
   tools: { name: string; label: string }[]
 }
 
@@ -35,7 +36,6 @@ const FINAL_NUDGE =
   'Do not call any more tools. Write your answer now, reading the numbers you already gathered and saying what they mean for this workload.'
 const EXPLAIN =
   'Explain this view. Call trace_overview and get_summary so the explanation uses real kernel names and numbers, keep it to the overview pass, and offer the deeper dives as next steps.'
-const OVERRIDES_KEY = 'optiq.assistant'
 
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
@@ -110,33 +110,109 @@ function OverviewCard({ chart }: { chart: OverviewChart }) {
   )
 }
 
+// Preferences > Ask Optiq. It edits the endpoint, model and key the desktop
+// app's Settings > Assistant uses; the server keeps the key and never sends it
+// back. Fields save as they lose focus, the way the rest of Preferences applies
+// at once.
+export function AssistantSettings() {
+  const notify = useStore((s) => s.notify)
+  const [status, setStatus] = useState<Status | null>(null)
+  const [reveal, setReveal] = useState(false)
+  useEffect(() => {
+    get<Status>('/api/assistant').then(setStatus, () => setStatus(null))
+  }, [])
+  if (!status) return null
+
+  const save = (change: object) =>
+    post<Status>('/api/assistant/settings', change).then(
+      (next) => {
+        setStatus(next)
+        notify('Ask Optiq settings saved')
+      },
+      (error: Error) => notify(error.message, true),
+    )
+  const field = (name: 'endpoint_url' | 'model', placeholder: string, title: string) => (
+    <input
+      className="input small mono grow"
+      defaultValue={status[name]}
+      placeholder={placeholder}
+      title={title}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      onBlur={(e) => e.target.value.trim() !== status[name] && save({ [name]: e.target.value.trim() })}
+    />
+  )
+  return (
+    <div className="col">
+      <span className="section-label">Ask Optiq</span>
+      <div className="faint">An OpenAI-compatible chat endpoint, shared with the desktop app.</div>
+      <div className="row">
+        <span style={{ width: 48 }}>URL</span>
+        {field('endpoint_url', 'https://<host>/<path>', 'Base URL, e.g. https://api.openai.com/v1. /chat/completions is appended. Azure-style /azure and /openai paths also insert the model as the deployment id.')}
+      </div>
+      <div className="row">
+        <span style={{ width: 48 }}>Model</span>
+        {field('model', 'gpt-5.6-luna', 'Model name sent to the endpoint. On Azure-style URLs this is the deployment id.')}
+      </div>
+      <div className="row">
+        <span style={{ width: 48 }}>Key</span>
+        <input
+          className="input small mono grow"
+          type={reveal ? 'text' : 'password'}
+          placeholder={status.has_token ? 'Stored, type to replace' : 'API key'}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+          onBlur={(e) => {
+            if (!e.target.value) return
+            save({ token: e.target.value })
+            e.target.value = ''
+          }}
+        />
+        {/* Keeps focus in the key field, so revealing it does not save a half-typed key. */}
+        <button className="icon-btn small" title={reveal ? 'Hide' : 'Show'} onMouseDown={(e) => e.preventDefault()} onClick={() => setReveal(!reveal)}>
+          {reveal ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      </div>
+      <div className="row">
+        <span className="faint grow">
+          {status.has_token
+            ? 'A key is stored. Leave the field blank to keep it.'
+            : status.credential_store
+              ? 'The key is saved to the OS credential store, never to a settings file.'
+              : 'No OS credential store is available, so the key is kept only until the server stops.'}
+        </span>
+        <button className="btn small" disabled={!status.has_token} onClick={() => save({ clear_token: true })}>
+          Clear stored key
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function Assistant() {
   const set = useStore((s) => s.set)
+  const dialog = useStore((s) => s.dialog)
   const [status, setStatus] = useState<Status | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [steps, setSteps] = useState<string[]>([])
   const [working, setWorking] = useState<string | null>(null)
   const [input, setInput] = useState('')
-  const [overrides, setOverrides] = useState<{ endpoint_url?: string; model?: string; token?: string }>(() =>
-    JSON.parse(localStorage.getItem(OVERRIDES_KEY) ?? '{}'),
-  )
-  const [setup, setSetup] = useState(false)
   const conversation = useRef<ChatMessage[]>([])
   const stopped = useRef(false)
   const transcript = useRef<HTMLDivElement>(null)
 
+  // Re-read after Preferences closes, where the endpoint and key are set.
   useEffect(() => {
-    get<Status>('/api/assistant').then(setStatus, () => setStatus(null))
-  }, [])
+    if (!dialog) get<Status>('/api/assistant').then(setStatus, () => setStatus(null))
+  }, [dialog])
   useEffect(() => {
     transcript.current?.scrollTo({ top: transcript.current.scrollHeight, behavior: 'smooth' })
   }, [items, working])
 
-  const configured = !!status && (!!(overrides.endpoint_url || status.endpoint_url) && !!(overrides.token || status.has_token))
+  const configured = !!status?.endpoint_url && status.has_token
   const label = (name: string) => status?.tools.find((t) => t.name === name)?.label ?? `Running ${name}...`
   const add = (item: Item) => setItems((all) => [...all, item])
+  const openSettings = () => set({ dialog: 'settings' })
 
-  const chat = (final: boolean) => post<Reply>('/api/assistant/chat', { messages: conversation.current, final, ...overrides })
+  const chat = (final: boolean) => post<Reply>('/api/assistant/chat', { messages: conversation.current, final })
 
   // One question: tool rounds until the model stops asking, then the write-up.
   const ask = async (question: string) => {
@@ -202,10 +278,6 @@ export function Assistant() {
     setSteps([])
     set({ highlights: [] })
   }
-  const saveOverrides = (next: typeof overrides) => {
-    localStorage.setItem(OVERRIDES_KEY, JSON.stringify(next))
-    setOverrides(next)
-  }
 
   return (
     <aside className="assistant">
@@ -213,9 +285,9 @@ export function Assistant() {
         <Sparkles size={17} color="var(--red)" />
         <div className="grow">
           <div style={{ fontWeight: 650 }}>Ask Optiq</div>
-          <div className="faint" style={{ fontSize: 11.5 }}>{overrides.model || status?.model || 'not configured'}</div>
+          <div className="faint" style={{ fontSize: 11.5 }}>{configured ? status.model : 'not set up'}</div>
         </div>
-        <button className="icon-btn small" title="Endpoint and key" onClick={() => setSetup(!setup)}><KeyRound size={14} /></button>
+        <button className="icon-btn small" title="Endpoint and key" onClick={openSettings}><KeyRound size={14} /></button>
         <button
           className="icon-btn small"
           title="Copy the conversation"
@@ -226,15 +298,14 @@ export function Assistant() {
         <button className="icon-btn small" title="Clear the conversation" onClick={clear}><Trash2 size={14} /></button>
         <button className="icon-btn small" title="Close" onClick={() => set({ assistant: false })}><X size={14} /></button>
       </div>
-      {(setup || (status && !configured)) && (
+      {status && !configured && (
         <div className="assistant-setup col">
           <div className="faint" style={{ fontSize: 12 }}>
-            {status?.endpoint_url ? `Using the desktop app's endpoint ${status.endpoint_url}${status.has_token ? ' and its stored key' : ', but no key is stored for it'}. ` : 'No endpoint is configured in the desktop app. '}
-            Anything set here applies to this browser only.
+            Ask Optiq needs {status.endpoint_url ? 'an API key' : 'an endpoint URL and an API key'}.
           </div>
-          <input className="input small mono" placeholder={status?.endpoint_url || 'https://… OpenAI-compatible endpoint'} value={overrides.endpoint_url ?? ''} onChange={(e) => saveOverrides({ ...overrides, endpoint_url: e.target.value })} />
-          <input className="input small mono" placeholder={status?.model || 'model'} value={overrides.model ?? ''} onChange={(e) => saveOverrides({ ...overrides, model: e.target.value })} />
-          <input className="input small mono" type="password" placeholder={status?.has_token ? 'stored key in use' : 'API key'} value={overrides.token ?? ''} onChange={(e) => saveOverrides({ ...overrides, token: e.target.value })} />
+          <button className="btn small" onClick={openSettings}>
+            <KeyRound size={13} /> Set up in Preferences
+          </button>
         </div>
       )}
       <div className="assistant-body" ref={transcript}>

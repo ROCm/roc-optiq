@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Download, Filter, ListFilter, X } from 'lucide-react'
 import type { Column, Table } from './api'
 import { downloadCsv } from './format'
@@ -16,6 +16,9 @@ export interface TableQuery {
 
 const PAGE = 200
 const ROW = 28
+// MAX_ROWS * ROW has to stay under the tallest element a browser lays out
+// (about 17.9 million pixels in Firefox, 33.5 million in Chrome).
+const MAX_ROWS = 500000
 const EXPORT_PAGE = 10000
 const isHidden = (column: Column) => column.name.startsWith('__')
 const isNumeric = (column?: Column) => column?.type === 'uint64' || column?.type === 'double'
@@ -55,6 +58,7 @@ export function ServerTable(props: {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [viewport, setViewport] = useState({ top: 0, height: 400 })
+  const [widths, setWidths] = useState<{ key: string; sizes: number[] } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const requested = useRef(new Set<number>())
   const generation = useRef(0)
@@ -108,11 +112,21 @@ export function ServerTable(props: {
     return () => observer.disconnect()
   }, [])
 
+  const rowCount = Math.min(total, MAX_ROWS)
   const first = Math.max(0, Math.floor(viewport.top / ROW) - 10)
-  const last = Math.min(total, Math.ceil((viewport.top + viewport.height) / ROW) + 10)
+  const last = Math.min(rowCount, Math.ceil((viewport.top + viewport.height) / ROW) + 10)
   useEffect(() => {
     for (let page = Math.floor(first / PAGE); page * PAGE < last; page++) fetchPage(page)
   }, [first, last, pages])
+
+  // Columns take their widths from the first page, then keep them while scrolling.
+  const columnKey = columns.map((c) => c.name).join()
+  const sizes = widths?.key === columnKey ? widths.sizes : null
+  useLayoutEffect(() => {
+    if (sizes || !pages.size || !ref.current) return
+    const header = ref.current.querySelectorAll('thead tr:first-child th')
+    setWidths({ key: columnKey, sizes: Array.from(header, (th) => th.getBoundingClientRect().width) })
+  }, [pages, columnKey, sizes])
 
   const visible = columns.map((column, index) => ({ column, index })).filter(({ column }) => !isHidden(column))
   const rowAt = (index: number) => pages.get(Math.floor(index / PAGE))?.[index % PAGE]
@@ -143,6 +157,7 @@ export function ServerTable(props: {
         {props.tools}
         <span className="faint">
           {total.toLocaleString()} {total === 1 ? 'row' : 'rows'}
+          {total > rowCount && `, first ${rowCount.toLocaleString()} shown (sort or filter to reach the rest)`}
         </span>
         {loading && <div className="spinner" />}
         <div className="grow" />
@@ -201,12 +216,13 @@ export function ServerTable(props: {
         {!columns.length && !loading ? (
           <Empty title="No rows" />
         ) : (
-          <table>
+          <table style={sizes ? { tableLayout: 'fixed', width: sizes.reduce((sum, size) => sum + size, 0) } : undefined}>
             <thead>
               <tr>
-                {visible.map(({ column, index }) => (
+                {visible.map(({ column, index }, i) => (
                   <th
                     key={column.name}
+                    style={sizes ? { width: sizes[i] } : undefined}
                     onClick={() =>
                       setSort({ column: index, order: sort.column === index && sort.order === 'asc' ? 'desc' : 'asc' })
                     }
@@ -253,7 +269,7 @@ export function ServerTable(props: {
                   </tr>
                 )
               })}
-              <tr style={{ height: Math.max(0, total - last) * ROW }} />
+              <tr style={{ height: Math.max(0, rowCount - last) * ROW }} />
             </tbody>
           </table>
         )}

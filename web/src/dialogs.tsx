@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUp, BookOpen, Database, FileText, Folder, FolderOpen, GitBranch, HardDrive, Info, Save, Settings } from 'lucide-react'
+import { ArrowUp, BookOpen, Database, Folder, FolderOpen, GitBranch, HardDrive, History, Info, Save, Settings } from 'lucide-react'
 import { get, post, type FolderListing, type Status } from './api'
 import { fileName, formatBytes, formatDuration, formatTime } from './format'
 import { useStore, type TimeFormat } from './store'
@@ -34,76 +34,119 @@ export async function openTrace(path: string) {
   }
 }
 
+const parentOf = (path: string) => path.replace(/[\\/][^\\/]*$/, '') || path
+
+// Clickable segments of a folder path, Windows or POSIX.
+function crumbs(path: string) {
+  const windows = /^[A-Za-z]:/.test(path)
+  const parts = path.split(/[\\/]+/).filter(Boolean)
+  const join = (count: number) =>
+    windows ? `${parts.slice(0, count).join('\\')}${count === 1 ? '\\' : ''}` : `/${parts.slice(0, count).join('/')}`
+  return [...(windows ? [] : [{ name: '/', path: '/' }]), ...parts.map((name, i) => ({ name, path: join(i + 1) }))]
+}
+
+// The server's file system, which is this machine's while the server is local.
 export function OpenDialog() {
   const set = useStore((s) => s.set)
   const recent = useStore((s) => s.recent)
   const [folder, setFolder] = useState('')
   const [path, setPath] = useState('')
+  const [filter, setFilter] = useState('')
   const listing = useAsync(() => get<FolderListing>('/api/files', { path: folder }), [folder])
+  const data = listing.data
+  const entries = (data?.entries ?? []).filter((e) => e.name.toLowerCase().includes(filter.toLowerCase()))
   const close = () => set({ dialog: null })
   const open = (target: string) => {
     close()
     openTrace(target)
   }
+  const go = (target: string) => {
+    setFolder(target)
+    setFilter('')
+  }
+  const choose = (entry: (typeof entries)[number]) => (entry.is_folder ? go(entry.path) : open(entry.path))
   useEffect(() => {
-    if (listing.data && !folder) setFolder(listing.data.path)
-  }, [listing.data])
+    if (data && !folder) setFolder(data.path)
+  }, [data])
+  const onKey = (event: React.KeyboardEvent) => {
+    const index = entries.findIndex((e) => e.path === path)
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const next = entries[Math.min(entries.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)))]
+      if (next) setPath(next.path)
+    } else if (event.key === 'Enter' && index >= 0) {
+      choose(entries[index])
+    } else if (event.key === 'Backspace' && !filter && data) {
+      go(data.parent)
+    }
+  }
+  const side = (title: string, items: { name: string; path: string }[], icon: typeof Folder) =>
+    items.length > 0 && (
+      <>
+        <div className="section-label" style={{ margin: '10px 8px 4px' }}>{title}</div>
+        {items.map((item) => {
+          const Icon = icon
+          return (
+            <button key={item.path} className={`list-item ${data?.path === item.path ? 'on' : ''}`} style={{ padding: '6px 8px' }} onClick={() => go(item.path)} title={item.path}>
+              <Icon size={15} />
+              <span className="ellipsis">{item.name}</span>
+            </button>
+          )
+        })}
+      </>
+    )
 
   return (
     <Modal
       title="Open a trace"
       icon={FolderOpen}
-      width={760}
+      width={900}
       onClose={close}
       footer={
         <>
-          <input className="input grow mono" placeholder="Path to a .db, .rpd or .yaml file on the server" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && path && open(path)} />
+          <input className="input grow mono" placeholder="Path to a .db, .rpd or .yaml file" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && path && open(path)} />
           <button className="btn" onClick={close}>Cancel</button>
-          <button className="btn primary" disabled={!path} onClick={() => open(path)}>Open</button>
+          <button className="btn primary" disabled={!path || entries.some((e) => e.path === path && e.is_folder)} onClick={() => open(path)}>Open</button>
         </>
       }
     >
-      <div className="row" style={{ marginBottom: 10 }}>
-        <button className="icon-btn" title="Up one folder" disabled={!listing.data || listing.data.parent === listing.data.path} onClick={() => listing.data && setFolder(listing.data.parent)}>
-          <ArrowUp size={16} />
-        </button>
-        <input className="input grow mono" value={folder} onChange={(e) => setFolder(e.target.value)} />
-        {listing.data?.roots.length ? (
-          <select className="select" value="" onChange={(e) => e.target.value && setFolder(e.target.value)}>
-            <option value="">Drives</option>
-            {listing.data.roots.map((root) => <option key={root} value={root}>{root}</option>)}
-          </select>
-        ) : null}
-      </div>
-      <div className="card" style={{ height: 340, overflow: 'auto', padding: 4 }}>
-        {listing.error && <Empty icon={Folder} title="This folder cannot be read" hint={listing.error} />}
-        {!listing.data && !listing.error && <Loading />}
-        {listing.data?.entries.length === 0 && <Empty icon={Folder} title="No traces here" />}
-        {listing.data?.entries.map((entry) => (
-          <button
-            key={entry.path}
-            className={`list-item ${path === entry.path ? 'on' : ''}`}
-            onClick={() => (entry.is_folder ? setFolder(entry.path) : setPath(entry.path))}
-            onDoubleClick={() => !entry.is_folder && open(entry.path)}
-          >
-            {entry.is_folder ? <Folder size={16} /> : <Database size={16} color="var(--red)" />}
-            <span className="grow ellipsis">{entry.name}</span>
-            {!entry.is_folder && <span className="faint mono">{formatBytes(entry.size)}</span>}
-          </button>
-        ))}
-      </div>
-      {recent.length > 0 && (
-        <>
-          <div className="section-label" style={{ margin: '14px 0 6px' }}>Recent</div>
-          {recent.slice(0, 4).map((item) => (
-            <button key={item} className="list-item" onClick={() => open(item)}>
-              <FileText size={15} />
-              <span className="ellipsis">{fileName(item)}</span>
-              <span className="faint ellipsis grow mono" style={{ fontSize: 11 }}>{item}</span>
+      <div className="picker" onKeyDown={onKey}>
+        <nav className="picker-side">
+          {side('Places', data?.places ?? [], Folder)}
+          {side('Drives', (data?.roots ?? []).map((root) => ({ name: root, path: root })), HardDrive)}
+          {side('Recent folders', [...new Set(recent.map(parentOf))].slice(0, 5).map((p) => ({ name: fileName(p), path: p })), History)}
+        </nav>
+        <div className="col" style={{ minWidth: 0, gap: 8 }}>
+          <div className="row">
+            <button className="icon-btn" title="Up one folder (Backspace)" disabled={!data || data.parent === data.path} onClick={() => data && go(data.parent)}>
+              <ArrowUp size={16} />
             </button>
-          ))}
-        </>
-      )}
+            <div className="crumbs grow" ref={(element) => element?.scrollTo({ left: element.scrollWidth })}>
+              {data && crumbs(data.path).map((c, i, all) => (
+                <button key={c.path} className={i === all.length - 1 ? 'on' : ''} onClick={() => go(c.path)}>{c.name}</button>
+              ))}
+            </div>
+            <input className="input small" style={{ width: 160 }} placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
+          </div>
+          <div className="card picker-list" tabIndex={0}>
+            {listing.error && <Empty icon={Folder} title="This folder cannot be read" hint={listing.error} />}
+            {!data && !listing.error && <Loading />}
+            {data && entries.length === 0 && <Empty icon={Folder} title={filter ? 'Nothing matches the filter' : 'No folders or traces here'} />}
+            {entries.map((entry) => (
+              <button
+                key={entry.path}
+                className={`list-item ${path === entry.path ? 'on' : ''}`}
+                onClick={() => (entry.is_folder ? go(entry.path) : setPath(entry.path))}
+                onDoubleClick={() => choose(entry)}
+              >
+                {entry.is_folder ? <Folder size={16} /> : <Database size={16} color="var(--red)" />}
+                <span className="grow ellipsis">{entry.name}</span>
+                {!entry.is_folder && <span className="faint mono">{formatBytes(entry.size)}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
     </Modal>
   )
 }

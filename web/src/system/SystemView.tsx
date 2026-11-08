@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Cpu, Eye, EyeOff, Gauge, Layers, Locate, MemoryStick, Search, Server, Workflow } from 'lucide-react'
+import {
+  Bookmark, BookmarkPlus, ChevronRight, Cpu, Eye, EyeOff, Gauge, Layers, Locate, Maximize2, MemoryStick, Plus, Ruler, Search,
+  Server, Trash2, Waypoints, Workflow, X,
+} from 'lucide-react'
 import { get, type EventDetails, type Minimap, type Timeline as TimelineData, type Topology, type TopologyNode, type Track } from '../api'
+import { formatDuration } from '../format'
 import { useStore } from '../store'
-import { Loading, Menu, type MenuState } from '../ui'
+import { Loading, Menu, Segmented, type MenuState } from '../ui'
 import { BottomPanel } from './BottomPanel'
 import { Timeline, clampView, trackColor } from './Timeline'
 
@@ -17,9 +21,11 @@ export function SystemView() {
     Promise.all([get<TimelineData>('/api/timeline'), get<Topology>('/api/topology')]).then(
       ([loaded, topology]) => {
         const ids = loaded.tracks.map((t) => t.id)
-        const saved = useStore.getState().order
+        const { order: saved, timeline: previous } = useStore.getState()
         const order = saved.length === ids.length && ids.every((id) => saved.includes(id)) ? saved : ids
-        set({ timeline: loaded, topology, order, view: { start: loaded.start_ns, end: loaded.end_ns }, scroll: 0 })
+        // Reloading the same trace (after a lost connection) keeps the user's place.
+        const same = previous?.start_ns === loaded.start_ns && previous?.end_ns === loaded.end_ns
+        set({ timeline: loaded, topology, order, ...(same ? {} : { view: { start: loaded.start_ns, end: loaded.end_ns }, scroll: 0 }) })
       },
       (error: Error) => notify(`Could not load the timeline: ${error.message}`, true),
     )
@@ -42,10 +48,120 @@ export function SystemView() {
     <div className="system" style={{ gridTemplateColumns: settings.sidebar ? 'auto 1fr' : '1fr' }}>
       {settings.sidebar && <Sidebar />}
       <div className="main">
+        <Toolbar />
         {settings.overview && <Overview />}
         <Timeline />
         {settings.details && <BottomPanel />}
       </div>
+    </div>
+  )
+}
+
+const KIND_NAMES: Record<string, string> = {
+  instrumented_thread: 'threads',
+  sampled_thread: 'sampled',
+  queue: 'queues',
+  stream: 'streams',
+  counter: 'counters',
+}
+
+// The desktop toolbar: flow arrows, annotations, bookmarks, measuring and reset.
+function Toolbar() {
+  const timeline = useStore((s) => s.timeline)!
+  const settings = useStore((s) => s.settings)
+  const measuring = useStore((s) => s.measuring)
+  const range = useStore((s) => s.range)
+  const bookmarks = useStore((s) => s.bookmarks)
+  const set = useStore((s) => s.set)
+  const setSettings = useStore((s) => s.setSettings)
+  const notify = useStore((s) => s.notify)
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const counts = timeline.tracks.reduce<Record<string, number>>((all, t) => ({ ...all, [t.kind]: (all[t.kind] ?? 0) + 1 }), {})
+
+  const bookmarkMenu = (event: React.MouseEvent) => {
+    const box = event.currentTarget.getBoundingClientRect()
+    const state = useStore.getState()
+    const free = Array.from({ length: 10 }, (_, i) => i).find((i) => !state.bookmarks[i])
+    const saved = state.bookmarks.flatMap((b, i) => (b ? [{ b, i }] : []))
+    setMenu({
+      x: box.left,
+      y: box.bottom + 4,
+      items: [
+        {
+          label: free === undefined ? 'All 10 slots are used' : `Save this view to slot ${free}`,
+          icon: BookmarkPlus,
+          hint: free === undefined ? '' : `Ctrl+${free}`,
+          disabled: free === undefined,
+          onClick: () => {
+            const next = [...state.bookmarks]
+            next[free!] = { ...state.view, scroll: state.scroll }
+            set({ bookmarks: next })
+            notify(`Saved view to bookmark ${free}`)
+          },
+        },
+        ...(saved.length ? ['divider' as const, { section: 'Go to' }] : []),
+        ...saved.map(({ b, i }) => ({
+          label: `${i} · ${formatDuration(b.start - timeline.start_ns)} – ${formatDuration(b.end - timeline.start_ns)}`,
+          icon: Bookmark,
+          hint: String(i),
+          onClick: () => set({ view: { start: b.start, end: b.end }, scroll: b.scroll }),
+        })),
+        ...(saved.length ? ['divider' as const, { label: 'Remove all bookmarks', icon: Trash2, onClick: () => set({ bookmarks: [] }) }] : []),
+      ],
+    })
+  }
+
+  return (
+    <div className="toolbar">
+      <span className="faint ellipsis" style={{ fontSize: 12 }}>
+        <b style={{ color: 'var(--text)' }}>{timeline.tracks.length} tracks</b>
+        {Object.entries(KIND_NAMES).map(([kind, name]) => (counts[kind] ? ` · ${counts[kind]} ${name}` : ''))}
+      </span>
+      <div className="grow" />
+      <span className="toolbar-label">Flow</span>
+      <button className={`icon-btn small ${settings.flows ? 'on' : ''}`} title="Show flow arrows" onClick={() => setSettings({ flows: !settings.flows })}>
+        <Waypoints size={14} />
+      </button>
+      <Segmented value={settings.flowStyle} onChange={(flowStyle) => setSettings({ flowStyle, flows: true })} options={[{ id: 'chain', label: 'Chain' }, { id: 'fan', label: 'Fan' }]} />
+      <span className="toolbar-sep" />
+      <span className="toolbar-label">Annotations</span>
+      <button className={`icon-btn small ${settings.annotations ? 'on' : ''}`} title="Show annotations" onClick={() => setSettings({ annotations: !settings.annotations })}>
+        {settings.annotations ? <Eye size={14} /> : <EyeOff size={14} />}
+      </button>
+      <button
+        className="icon-btn small"
+        title="Add a note in the middle of the view"
+        onClick={() => {
+          const { view, notes } = useStore.getState()
+          set({ notes: [...notes, { id: crypto.randomUUID(), time: (view.start + view.end) / 2, trackId: null, title: 'Note', text: '' }], tab: 'notes' })
+          setSettings({ annotations: true, details: true })
+        }}
+      >
+        <Plus size={14} />
+      </button>
+      <span className="toolbar-sep" />
+      <button className="btn small" onClick={bookmarkMenu}>
+        <Bookmark size={13} /> Bookmarks{bookmarks.some(Boolean) ? ` (${bookmarks.filter(Boolean).length})` : ''}
+      </button>
+      <button
+        className={`btn small ${measuring ? 'primary' : ''}`}
+        title="Click two points on the timeline; pins snap to event edges"
+        onClick={() => set({ measuring: !measuring, range: measuring ? range : null })}
+      >
+        <Ruler size={13} /> {measuring ? 'Exit measure' : 'Measure'}
+      </button>
+      {range && (
+        <span className="badge" title="Selected range">
+          Δ {formatDuration(range.end - range.start)}
+          <button className="icon-btn small" style={{ width: 16, height: 16, color: 'inherit' }} onClick={() => set({ range: null })}>
+            <X size={11} />
+          </button>
+        </span>
+      )}
+      <button className="btn small ghost" title="Zoom out to the whole trace" onClick={() => set({ view: { start: timeline.start_ns, end: timeline.end_ns } })}>
+        <Maximize2 size={13} /> Reset view
+      </button>
+      <Menu menu={menu} onClose={() => setMenu(null)} />
     </div>
   )
 }

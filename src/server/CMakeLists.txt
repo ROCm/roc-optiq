@@ -153,16 +153,37 @@ configure_file(
     @ONLY
 )
 
+# Ask Optiq for the web client: the desktop assistant's prompt, tool schema and
+# HTTPS chat client, plus the credential store that holds its key.
+set(ASSISTANT_SOURCES "")
+if(ROCPROFVIS_ENABLE_WEB_ASSISTANT)
+    set(ASSISTANT_SOURCES
+        src/rocprofvis_assistant_relay.cpp
+        src/rocprofvis_assistant_relay.h
+        ${VIEW_SRC_DIR}/agenticprofiling/rocprofvis_ai_client.cpp
+        ${VIEW_SRC_DIR}/agenticprofiling/rocprofvis_ai_prompts.cpp
+        ${VIEW_SRC_DIR}/agenticprofiling/rocprofvis_ai_tool_schema.cpp
+        ${VIEW_SRC_DIR}/remote/rocprofvis_secret_store.cpp
+    )
+endif()
+
 set(SERVER_TARGET ${TARGET_NAME}-server)
 add_executable(${SERVER_TARGET}
     src/main.cpp
     src/rocprofvis_trace_server.cpp
     src/rocprofvis_trace_server.h
+    ${ASSISTANT_SOURCES}
 )
 target_include_directories(${SERVER_TARGET} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_include_directories(${SERVER_TARGET} SYSTEM PRIVATE
     ${CMAKE_SOURCE_DIR}/thirdparty/cpp-httplib)
 target_link_libraries(${SERVER_TARGET} PRIVATE ${PROVIDER_TARGET} Threads::Threads)
+if(ROCPROFVIS_ENABLE_WEB_ASSISTANT)
+    target_compile_definitions(${SERVER_TARGET} PRIVATE ROCPROFVIS_WEB_ASSISTANT)
+    target_include_directories(${SERVER_TARGET} PRIVATE
+        ${VIEW_SRC_DIR}/agenticprofiling ${VIEW_SRC_DIR}/remote)
+    target_link_libraries(${SERVER_TARGET} PRIVATE cpp-httplib)
+endif()
 if(WIN32)
     target_link_libraries(${SERVER_TARGET} PRIVATE ws2_32)
 endif()

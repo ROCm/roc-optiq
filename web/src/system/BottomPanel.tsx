@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
-import { Activity, Copy, Info, ListTree, MousePointerClick, Rows3, StickyNote, Trash2, Trophy, Waves } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Activity, Copy, Info, ListTree, MousePointerClick, Rows3, ScrollText, StickyNote, Trash2, Trophy, Waves } from 'lucide-react'
 import { get, type Statistics, type Table, type Track } from '../api'
 import { colorFor, formatDuration, formatNumber, formatTime } from '../format'
 import { useStore, type EventRef } from '../store'
 import { ServerTable, SimpleTable, type TableQuery } from '../table'
-import { Empty, Loading, Tabs, useAsync } from '../ui'
+import { Empty, Loading, Segmented, Tabs, useAsync } from '../ui'
 import { trackColor } from './Timeline'
 
 const TOP_TABLES = [
@@ -68,6 +68,7 @@ export function BottomPanel() {
             { id: 'track', label: 'Track details', icon: Info, count: selected.length || undefined },
             { id: 'top', label: 'Top events', icon: Trophy },
             { id: 'notes', label: 'Annotations', icon: StickyNote, count: notes.length || undefined },
+            { id: 'log', label: 'Log', icon: ScrollText },
           ]}
         />
         <div className="bottom-body">
@@ -77,6 +78,7 @@ export function BottomPanel() {
           {tab === 'track' && <TrackTab />}
           {tab === 'top' && <TopEventsTab />}
           {tab === 'notes' && <NotesTab />}
+          {tab === 'log' && <LogTab />}
         </div>
       </div>
     </>
@@ -257,6 +259,46 @@ function TopEventsTab() {
       }
       load={(query) => get<Table>(`/api/tables/${current.table}`, { ...query, tracks: ids, start: range.start, end: range.end })}
     />
+  )
+}
+
+// The server's recent log, the web's Log Viewer.
+function LogTab() {
+  const [lines, setLines] = useState<string[]>([])
+  const [level, setLevel] = useState('all')
+  const body = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    let live = true
+    const load = () => get<{ lines: string[] }>('/api/logs').then((reply) => live && setLines(reply.lines), () => undefined)
+    load()
+    const timer = setInterval(load, 2000)
+    return () => {
+      live = false
+      clearInterval(timer)
+    }
+  }, [])
+  useEffect(() => {
+    body.current?.scrollTo({ top: body.current.scrollHeight })
+  }, [lines])
+  const shown = lines.filter((line) => level === 'all' || line.includes(`[${level}]`))
+  return (
+    <div className="grid-wrap">
+      <div className="grid-tools">
+        <Segmented value={level} onChange={setLevel} options={['all', 'info', 'warning', 'error'].map((id) => ({ id, label: id }))} />
+        <span className="faint">{shown.length} lines</span>
+        <div className="grow" />
+        <button className="icon-btn small" title="Copy the log" onClick={() => navigator.clipboard.writeText(shown.join(''))}>
+          <Copy size={14} />
+        </button>
+      </div>
+      <div className="grid code" ref={body} style={{ padding: '6px 12px' }}>
+        {shown.map((line, i) => (
+          <div key={i} className={/\[(error|critical)\]/.test(line) ? 'log-error' : /\[warning\]/.test(line) ? 'log-warn' : ''}>
+            {line.trimEnd()}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 

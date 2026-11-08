@@ -35,8 +35,11 @@ General:
 |---|---|
 | `GET /api/status` | Load state, trace kind (`system` or `compute`), trace path, version |
 | `GET /api/snapshot` | Status plus the active trace kind's metadata |
-| `GET /api/files?path=` | Folders and trace files in a server folder (default: the trace's) |
+| `GET /api/files?path=` | Folders and trace files in a server folder (default: the trace's), plus drives and the home, Desktop, Documents and Downloads folders |
 | `POST /api/open {path}` | Load another trace in place of the current one |
+| `GET /api/logs` | The server's last 1000 log lines |
+| `GET /api/assistant` | Ask Optiq's endpoint, model, whether a key is stored, and its tools |
+| `POST /api/assistant/chat {messages, final}` | One round of an Ask Optiq conversation |
 
 System traces:
 
@@ -70,6 +73,18 @@ Compute traces:
 
 A route for the other trace kind returns `409`, and any data route returns `503`
 until a trace is ready.
+
+## Ask Optiq
+
+With `ROCPROFVIS_ENABLE_WEB_ASSISTANT` (on by default with the server) the
+server relays the web client's Ask Optiq conversations. The browser runs the
+conversation and the tools, against the API above; the server adds what a page
+cannot hold or reach: the desktop assistant's instructions and tool schema
+(compiled from `src/view/src/agenticprofiling`), the endpoint and key the user
+set in the desktop app's Preferences > Assistant (read from its settings file
+and the OS credential store), and an HTTPS client, so the endpoint need not
+allow browser requests. The stored key never leaves the server. The option builds the
+TLS backend chosen by `CRYPTO_BACKEND` (vendored mbedTLS by default).
 
 ## How requests run
 

@@ -51,6 +51,11 @@ include(CMakeDependentOption)
 cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
     "Vendor a pinned CPython for embedded Python analysis scripts" ON
     "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
+# Lets the web client use Ask Optiq: the server relays its chat requests over
+# HTTPS, so this builds the TLS backend (CRYPTO_BACKEND) into the server.
+cmake_dependent_option(ROCPROFVIS_ENABLE_WEB_ASSISTANT
+    "Relay Ask Optiq requests from the web client through the web server" ON
+    "ROCPROFVIS_ENABLE_WEB_SERVER" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via

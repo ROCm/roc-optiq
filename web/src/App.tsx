@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
   AlertTriangle, BarChart3, BookOpen, Database, FileText, FolderOpen, GitBranch, History, Info, Maximize, Menu as MenuIcon,
-  Moon, PanelBottom, PanelLeft, PanelTop, Save, Search as SearchIcon, Settings, Sun, Waypoints, Wrench,
+  Moon, PanelBottom, PanelLeft, PanelTop, Save, ScrollText, Search as SearchIcon, Settings, Sparkles, Sun, Waypoints, Wrench,
 } from 'lucide-react'
 import { get, post, type Status } from './api'
+import { Assistant } from './assistant/Assistant'
 import { ComputeView } from './compute/ComputeView'
 import { AboutDialog, OpenDialog, RESOURCES, SaveDialog, SettingsDialog, openTrace } from './dialogs'
 import { fileName } from './format'
@@ -14,14 +15,16 @@ import { SystemView } from './system/SystemView'
 import { AmdMark, Boundary, Menu, type MenuItem, type MenuState } from './ui'
 
 // Hands a newly opened trace to the store, or updates the current one's state.
+// After a lost connection, a reply means the server is back: views reload.
 async function poll() {
   try {
     const status = await get<Status>('/api/status')
-    const current = useStore.getState().status
+    const { status: current, offline, epoch } = useStore.getState()
     if (!current || current.trace_file_path !== status.trace_file_path) useStore.getState().showTrace(status)
     else useStore.setState({ status })
+    if (offline) useStore.setState({ offline: false, epoch: epoch + 1 })
   } catch {
-    if (!useStore.getState().status) setTimeout(poll, 2000)
+    // The request marked the app offline; the reconnect loop takes it from here.
   }
 }
 
@@ -31,20 +34,23 @@ export function App() {
   const dialog = useStore((s) => s.dialog)
   const summary = useStore((s) => s.summary)
   const search = useStore((s) => s.search)
+  const assistant = useStore((s) => s.assistant)
   const toast = useStore((s) => s.toast)
   const set = useStore((s) => s.set)
   const ready = status?.state === 'ready'
   const system = ready && status.trace_type === 'system'
 
+  const offline = useStore((s) => s.offline)
+  const epoch = useStore((s) => s.epoch)
   const loading = status?.state === 'loading'
   useEffect(() => {
     poll()
   }, [])
   useEffect(() => {
-    if (!loading) return
-    const timer = setInterval(poll, 250)
+    if (!loading && !offline) return
+    const timer = setInterval(poll, offline ? 1500 : 250)
     return () => clearInterval(timer)
-  }, [loading, status?.trace_file_path])
+  }, [loading, offline, status?.trace_file_path])
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme
     document.documentElement.style.setProperty('--fs', `${settings.fontSize}px`)
@@ -68,17 +74,26 @@ export function App() {
   return (
     <div className="app">
       <TopBar />
-      {!status ? (
-        <Splash text="Connecting to the Optiq server…" />
-      ) : status.state === 'loading' ? (
-        <Splash text={status.progress_message || 'Loading the trace…'} title={fileName(status.trace_file_path)} />
-      ) : !ready ? (
-        <Welcome />
-      ) : (
-        <Boundary key={status.trace_file_path}>
-          {status.trace_type === 'system' ? <SystemView /> : <ComputeView />}
-        </Boundary>
+      {offline && (
+        <div className="offline">
+          <div className="spinner" />
+          Lost the connection to the Optiq server at {window.location.host}. Reconnecting…
+        </div>
       )}
+      <div className="workspace">
+        {!status ? (
+          <Splash text={offline ? 'Waiting for roc-optiq-server…' : 'Connecting to the Optiq server…'} />
+        ) : status.state === 'loading' ? (
+          <Splash text={status.progress_message || 'Loading the trace…'} title={fileName(status.trace_file_path)} />
+        ) : !ready ? (
+          <Welcome />
+        ) : (
+          <Boundary key={`${status.trace_file_path}:${epoch}`}>
+            {status.trace_type === 'system' ? <SystemView /> : <ComputeView />}
+          </Boundary>
+        )}
+        {system && assistant && <Assistant key={status.trace_file_path} />}
+      </div>
       {system && summary && <Summary />}
       {system && search && <Search />}
       {dialog === 'open' && <OpenDialog />}
@@ -99,6 +114,7 @@ function TopBar() {
   const status = useStore((s) => s.status)
   const settings = useStore((s) => s.settings)
   const summary = useStore((s) => s.summary)
+  const assistant = useStore((s) => s.assistant)
   const range = useStore((s) => s.range)
   const recent = useStore((s) => s.recent)
   const set = useStore((s) => s.set)
@@ -132,6 +148,8 @@ function TopBar() {
       { label: 'Show topology sidebar', icon: PanelLeft, disabled: !system, hint: settings.sidebar ? '✓' : '', onClick: () => setSettings({ sidebar: !settings.sidebar }) },
       { label: 'Show timeline overview', icon: PanelTop, disabled: !system, hint: settings.overview ? '✓' : '', onClick: () => setSettings({ overview: !settings.overview }) },
       { label: 'Show details panel', icon: PanelBottom, disabled: !system, hint: settings.details ? '✓' : '', onClick: () => setSettings({ details: !settings.details }) },
+      { label: 'Show log viewer', icon: ScrollText, disabled: !system, onClick: () => { setSettings({ details: true }); set({ tab: 'log' }) } },
+      { label: 'Ask Optiq', icon: Sparkles, disabled: !system, hint: assistant ? '✓' : '', onClick: () => set({ assistant: !assistant }) },
       { label: 'Fullscreen', icon: Maximize, hint: 'F11', onClick: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()) },
       'divider',
       { label: 'Preferences', icon: Settings, onClick: () => set({ dialog: 'settings' }) },
@@ -167,6 +185,9 @@ function TopBar() {
         <>
           <button className={`btn small ${summary ? 'primary' : ''}`} onClick={() => set({ summary: !summary })}>
             <BarChart3 size={15} /> Summary
+          </button>
+          <button className={`btn small ask ${assistant ? 'primary' : ''}`} onClick={() => set({ assistant: !assistant })}>
+            <Sparkles size={15} /> Ask Optiq
           </button>
           <button className={`icon-btn ${settings.flows ? 'on' : ''}`} title="Show flow arrows" onClick={() => setSettings({ flows: !settings.flows })}>
             <Waypoints size={17} />

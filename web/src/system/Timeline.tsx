@@ -2,9 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   ChevronRight, Copy, Crosshair, Eye, EyeOff, Maximize2, Save, StickyNote, Trash2, Waypoints, X, ZoomIn,
 } from 'lucide-react'
-import { get, type Track, type TrackData } from '../api'
+import { get, type Statistics, type Track, type TrackData } from '../api'
 import { colorFor, formatDuration, formatNumber, formatTick, formatTime, niceInterval } from '../format'
-import { useStore, type Note, type Range } from '../store'
+import { useStore, type Note, type Range, type TimeFormat } from '../store'
 import { Menu, type MenuState } from '../ui'
 
 const RULER = 30
@@ -40,6 +40,33 @@ type Drag =
 
 export const trackColor = (track: Track) => colorFor(track.category + track.name)
 
+// A ruler label in the user's time format, precise enough to tell ticks apart.
+function rulerLabel(ns: number, interval: number, format: TimeFormat) {
+  const scale = ({ s: 1e9, ms: 1e6, us: 1e3, ns: 1 } as Record<string, number>)[format]
+  const digits = (unit: number) => Math.max(0, Math.min(9, Math.ceil(Math.log10(unit / interval) - 1e-9)))
+  if (scale) return `${(ns / scale).toFixed(digits(scale))} ${format === 'us' ? 'µs' : format}`
+  const places = digits(1e9)
+  return formatTime(ns, format).replace(/\.(\d{9})$/, (_, fraction: string) => (places ? `.${fraction.slice(0, places)}` : ''))
+}
+
+// The label the desktop puts on a track: what kind of thing it is.
+function trackBadge(track: Track, processors: Map<string, string>) {
+  switch (track.kind) {
+    case 'instrumented_thread':
+      return track.agent_or_pid === track.queue_id_or_tid ? 'Main thread' : 'Thread'
+    case 'sampled_thread':
+      return 'Sampled thread'
+    case 'queue':
+      return `Queue ${processors.get(track.topology.device_id) ?? ''}`.trim()
+    case 'stream':
+      return 'Stream'
+    case 'counter':
+      return 'Counter'
+    default:
+      return ''
+  }
+}
+
 // Keeps a view inside the trace, give or take a margin, and wider than a few ns.
 export function clampView(start: number, end: number): Range {
   const { timeline } = useStore.getState()
@@ -70,6 +97,7 @@ export function Timeline() {
   const fetching = useRef(false)
   const frame = useRef(0)
   const drag = useRef<Drag | null>(null)
+  const measureAnchor = useRef<number | null>(null)
   const hover = useRef<{ x: number; y: number; hit: Hit | null } | null>(null)
   const lanesRef = useRef<Lane[]>([])
   const [size, setSize] = useState({ width: 800, height: 400 })
@@ -78,6 +106,8 @@ export function Timeline() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [editing, setEditing] = useState<{ note: Note; x: number; y: number } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [utilization, setUtilization] = useState<Record<string, string>>({})
+  const topology = useStore((s) => s.topology)
 
   const byId = useMemo(() => new Map(timeline.tracks.map((t) => [t.id, t])), [timeline])
   const lanes = useMemo(() => {
@@ -118,7 +148,9 @@ export function Timeline() {
       element.height = Math.round(height * dpr)
     }
     const state = useStore.getState()
-    const { view, range, event: selected, details, notes, selectedTracks: chosen, settings } = state
+    const { view, range, event: selected, details, selectedTracks: chosen, settings } = state
+    const notes = settings.annotations ? state.notes : []
+    const glow = new Set(state.highlights)
     const css = getComputedStyle(document.documentElement)
     const color = (name: string) => css.getPropertyValue(name).trim()
     const [text2, text3, line, line2, panel2, red] = ['--text-2', '--text-3', '--line', '--line-2', '--panel-2', '--red'].map(color)
@@ -183,9 +215,9 @@ export function Timeline() {
             context.fillStyle = 'rgba(10, 10, 14, 0.92)'
             context.fillText(label.length > chars ? `${label.slice(0, Math.max(1, chars - 1))}…` : label, left, y + (ROW - 3) / 2 + 0.5)
           }
-          if (selected?.uuid === event.uuid) {
+          if (selected?.uuid === event.uuid || glow.has(event.uuid)) {
             context.save()
-            context.strokeStyle = '#fff'
+            context.strokeStyle = selected?.uuid === event.uuid ? '#fff' : red
             context.lineWidth = 2
             context.shadowColor = red
             context.shadowBlur = 14
@@ -233,7 +265,8 @@ export function Timeline() {
       }
     }
 
-    // Flows, as a chain through the selected event's flow list in time order.
+    // Flows: a chain through the selected event's flow list in time order, or
+    // a fan from the selected event to each linked one.
     if (settings.flows && details && selected && details.uuid === selected.uuid && details.flows.length > 1) {
       const points = details.flows
         .map((flow) => {
@@ -245,9 +278,12 @@ export function Timeline() {
       context.strokeStyle = '#ff7a59'
       context.fillStyle = '#ff7a59'
       context.lineWidth = 1.6
-      for (let i = 1; i < points.length; i++) {
-        const from = points[i - 1]
-        const to = points[i]
+      const own = points.find((p) => p.flow.uuid === selected.uuid) ?? points[0]
+      const links =
+        settings.flowStyle === 'fan'
+          ? points.filter((p) => p !== own).map((p) => (p.flow.start_ns < own.flow.start_ns ? [p, own] : [own, p]))
+          : points.slice(1).map((p, i) => [points[i], p])
+      for (const [from, to] of links) {
         const x0 = toX(Math.max(from.flow.start_ns, Math.min(from.flow.end_ns, to.flow.start_ns)))
         const x1 = toX(to.flow.start_ns)
         const bend = Math.max(30, Math.abs(x1 - x0) / 2)
@@ -305,7 +341,7 @@ export function Timeline() {
     for (let t = firstTick; t <= view.end; t += interval) {
       const x = Math.round(toX(t)) + 0.5
       context.fillRect(x - 0.5, RULER - 7, 1, 6)
-      context.fillText(formatTick(t - timeline.start_ns, interval), x + 4, 11)
+      context.fillText(rulerLabel(t - timeline.start_ns, interval, settings.timeFormat), x + 4, 11)
     }
     if (range) {
       const x0 = toX(range.start)
@@ -533,8 +569,16 @@ export function Timeline() {
       setEditing({ note, x: x + HEAD, y: RULER + 4 })
       return
     }
-    event.currentTarget.setPointerCapture(event.pointerId)
     const state = useStore.getState()
+    if (state.measuring) {
+      const time = snapTime(x, y)
+      const anchor = measureAnchor.current
+      measureAnchor.current = anchor === null ? time : null
+      set({ range: anchor === null ? { start: time, end: time } : { start: Math.min(anchor, time), end: Math.max(anchor, time) } })
+      return
+    }
+    measureAnchor.current = null
+    event.currentTarget.setPointerCapture(event.pointerId)
     if (y < RULER || event.ctrlKey || event.metaKey) {
       const anchor = timeAt(x)
       drag.current = { kind: 'range', anchor }
@@ -559,11 +603,27 @@ export function Timeline() {
       set({ range: { start: Math.min(current.anchor, time), end: Math.max(current.anchor, time) } })
     } else {
       const hit = y > RULER ? hitTest(x, y) : null
+      const measuring = useStore.getState().measuring
       hover.current = { x, y, hit }
       showTooltip(event.clientX, event.clientY, hit, x)
-      canvas.current!.style.cursor = hit && hit.index >= 0 ? 'pointer' : y < RULER ? 'text' : 'grab'
+      canvas.current!.style.cursor = measuring ? 'crosshair' : hit && hit.index >= 0 ? 'pointer' : y < RULER ? 'text' : 'grab'
+      const anchor = measureAnchor.current
+      if (measuring && anchor !== null) {
+        const time = snapTime(x, y)
+        set({ range: { start: Math.min(anchor, time), end: Math.max(anchor, time) } })
+      }
     }
     schedule()
+  }
+
+  // A measurement pin lands on the nearest edge of the event under the pointer.
+  const snapTime = (x: number, y: number) => {
+    const time = timeAt(x)
+    const hit = y > RULER ? hitTest(x, y) : null
+    const event = hit && hit.index >= 0 ? cache.current.get(hit.lane.track.id)?.data.events?.[hit.index] : undefined
+    if (!event) return time
+    const end = event.start_ns + event.duration_ns
+    return Math.abs(time - event.start_ns) <= Math.abs(time - end) ? event.start_ns : end
   }
 
   const onPointerUp = (event: React.PointerEvent) => {
@@ -685,7 +745,10 @@ export function Timeline() {
         s: () => zoomAt(pointer, 1 + 0.25 * boost),
         arrowup: () => setScroll(state.scroll - 60 * boost),
         arrowdown: () => setScroll(state.scroll + 60 * boost),
-        escape: () => set({ event: null, details: null, range: null }),
+        escape: () => {
+          measureAnchor.current = null
+          set({ event: null, details: null, range: null, highlights: [], measuring: false })
+        },
         z: zoomToSelection,
         m: () => {
           if (state.range) set({ range: null })
@@ -740,6 +803,26 @@ export function Timeline() {
   }
 
   const visibleLanes = lanes.filter((l) => l.top + l.height > scroll && l.top < scroll + viewportHeight)
+  const processors = useMemo(
+    () => new Map((topology?.nodes ?? []).flatMap((n) => (n.processors ?? []).map((p) => [p.id, p.label ?? ''] as const))),
+    [topology],
+  )
+
+  // Each visible queue's utilization over the whole trace, fetched once.
+  const visibleQueues = visibleLanes.filter((l) => l.track.kind === 'queue').map((l) => l.track.id)
+  useEffect(() => {
+    for (const id of visibleQueues) {
+      if (id in utilization) continue
+      setUtilization((all) => ({ ...all, [id]: '' }))
+      get<Statistics>(`/api/tracks/${id}/statistics`).then(
+        (stats) => {
+          const value = stats.stats[0]?.value
+          setUtilization((all) => ({ ...all, [id]: value === null || value === undefined ? '' : `${value.toFixed(1)}%` }))
+        },
+        () => undefined,
+      )
+    }
+  }, [visibleQueues.join(',')])
 
   return (
     <div
@@ -789,9 +872,12 @@ export function Timeline() {
                   <ChevronRight size={13} style={{ transform: collapsed.has(track.id) ? undefined : 'rotate(90deg)', transition: 'transform .15s' }} />
                 </button>
               )}
-              <div className="grow">
+              <div className="grow" style={{ minWidth: 0 }}>
                 <div className="title ellipsis">{track.name}</div>
-                <div className="sub ellipsis">{track.main_name}</div>
+                <div className="pills">
+                  <span className="pill">{trackBadge(track, processors)}</span>
+                  {utilization[track.id] && <span className="pill util">Util {utilization[track.id]}</span>}
+                </div>
               </div>
               <div className="tools">
                 <button

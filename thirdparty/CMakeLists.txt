@@ -22,7 +22,8 @@ add_subdirectory(yaml-cpp)
 set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
 
 set(ROCPROFVIS_USES_CRYPTO OFF)
-if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING OR
+   ROCPROFVIS_ENABLE_WEB_ASSISTANT)
     set(ROCPROFVIS_USES_CRYPTO ON)
 endif()
 
@@ -85,11 +86,11 @@ endif()
 # a console on Windows and takes the request down with it). Upstream keeps
 # httplib.h at its repo root and we compile it header-only, so its own
 # CMakeLists is deliberately not added.
-if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING OR ROCPROFVIS_ENABLE_WEB_ASSISTANT)
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib/httplib.h)
     message(FATAL_ERROR
-        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING is ON but thirdparty/cpp-httplib is "
-        "empty. Run: git submodule update --init thirdparty/cpp-httplib")
+        "Ask Optiq is enabled but thirdparty/cpp-httplib is empty. "
+        "Run: git submodule update --init thirdparty/cpp-httplib")
 endif()
 add_library(cpp-httplib INTERFACE)
 target_include_directories(cpp-httplib INTERFACE
@@ -123,7 +124,7 @@ if(APPLE)
         "-framework Security" "-framework CoreFoundation"
     )
 endif()
-endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+endif()
 
 # TEMPORARY (agentic profiling): ImGuiTextSelect (MIT), pinned to v1.3.2.
 # Ask Optiq message cards compile textselect.cpp directly. Upstream's

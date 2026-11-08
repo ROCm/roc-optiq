@@ -1,5 +1,7 @@
 // The roc-optiq-server API. 64-bit ids arrive as decimal strings and stay strings.
 
+import { useStore } from './store'
+
 export interface Status {
   state: 'init' | 'loading' | 'ready' | 'error'
   trace_type: 'system' | 'compute'
@@ -23,6 +25,8 @@ export interface Track {
   min_value: number
   max_value: number
   operations: string[]
+  agent_or_pid: string
+  queue_id_or_tid: string
   topology: { node_id: string; process_id: string; device_id: string; id: string }
 }
 
@@ -172,6 +176,7 @@ export interface FolderListing {
   path: string
   parent: string
   roots: string[]
+  places: { name: string; path: string }[]
   entries: { name: string; path: string; is_folder: boolean; size: number }[]
 }
 
@@ -302,7 +307,13 @@ type Query = Record<string, string | number | boolean | null | undefined>
 const BASE: string = import.meta.env.VITE_OPTIQ_SERVER ?? ''
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(BASE + path, init)
+  let response: Response
+  try {
+    response = await fetch(BASE + path, init)
+  } catch {
+    useStore.getState().set({ offline: true })
+    throw new Error('The Optiq server is not reachable.')
+  }
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.error ?? response.statusText)
   return body as T

@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "httplib.h"
+#include "spdlog/sinks/ringbuffer_sink.h"
 #include "spdlog/spdlog.h"
 
 #include "model/compute/rocprofvis_compute_data_model.h"
@@ -23,6 +24,9 @@
 #include "rocprofvis_data_provider_json.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_version.h"
+#ifdef ROCPROFVIS_WEB_ASSISTANT
+#    include "rocprofvis_assistant_relay.h"
+#endif
 
 namespace RocProfVis
 {
@@ -50,6 +54,9 @@ constexpr int32_t     HTTP_UNAVAILABLE            = 503;
 constexpr const char* JSON_CONTENT_TYPE           = "application/json";
 constexpr size_t      HTTP_WORKER_COUNT           = 8;
 constexpr size_t      HTTP_QUEUED_REQUEST_LIMIT   = 64;
+
+// Log lines the log viewer can read back.
+constexpr size_t LOG_LINES = 1000;
 
 constexpr uint64_t DEFAULT_HORIZONTAL_PIXELS = 1000;
 constexpr uint64_t MAX_HORIZONTAL_PIXELS     = 8192;
@@ -299,6 +306,21 @@ is_trace_file(const std::filesystem::path& path)
            std::end(TRACE_EXTENSIONS);
 }
 
+static std::string
+environment(const char* name)
+{
+#ifdef _WIN32
+    char*             value = nullptr;
+    size_t            size  = 0;
+    const std::string text  = _dupenv_s(&value, &size, name) == 0 && value ? value : "";
+    std::free(value);
+    return text;
+#else
+    const char* value = std::getenv(name);
+    return value ? value : "";
+#endif
+}
+
 // Folders and trace files in a folder, folders first, each sorted by name.
 static bool
 list_folder(const std::filesystem::path& folder, jt::Json& json_out)
@@ -347,14 +369,63 @@ list_folder(const std::filesystem::path& folder, jt::Json& json_out)
             roots.getArray().push_back(root);
         }
     }
+    const char* home_variable = "USERPROFILE";
 #else
     roots.getArray().push_back("/");
+    const char* home_variable = "HOME";
 #endif
+    // The folders a file dialog offers on the side.
+    jt::Json places;
+    places.setArray();
+    const std::string home = environment(home_variable);
+    if(!home.empty())
+    {
+        for(const char* name : { "", "Desktop", "Documents", "Downloads" })
+        {
+            const fs::path  place = *name ? fs::u8path(home) / name : fs::u8path(home);
+            std::error_code place_error;
+            if(fs::is_directory(place, place_error))
+            {
+                jt::Json entry;
+                entry["name"] = *name ? name : "Home";
+                entry["path"] = place.u8string();
+                places.getArray().push_back(std::move(entry));
+            }
+        }
+    }
     json_out["path"]    = folder.u8string();
     json_out["parent"]  = folder.parent_path().u8string();
     json_out["entries"] = std::move(list);
     json_out["roots"]   = std::move(roots);
+    json_out["places"]  = std::move(places);
     return !error;
+}
+
+// The server's recent log lines, kept beside its usual output from the first call.
+static std::shared_ptr<spdlog::sinks::ringbuffer_sink_mt>
+recent_log()
+{
+    static std::shared_ptr<spdlog::sinks::ringbuffer_sink_mt> sink = []() {
+        auto ring = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(LOG_LINES);
+        spdlog::default_logger()->sinks().push_back(ring);
+        return ring;
+    }();
+    return sink;
+}
+
+// A POST body, accepted only as a JSON object sent as application/json. That
+// content type forces a CORS preflight, so another site's page cannot post
+// here without the server allowing its origin.
+static bool
+read_json_body(const httplib::Request& request, jt::Json& body_out)
+{
+    if(request.get_header_value("Content-Type").rfind(JSON_CONTENT_TYPE, 0) != 0)
+    {
+        return false;
+    }
+    std::pair<jt::Json::Status, jt::Json> body = jt::Json::parse(request.body);
+    body_out                                   = std::move(body.second);
+    return body.first == jt::Json::success && body_out.isObject();
 }
 
 std::string
@@ -401,6 +472,7 @@ TraceServer::TraceServer(View::DataProvider& provider, const std::string& allowe
             m_table_errors[request_id] = error;
         }
     });
+    recent_log();
     m_provider.SetSaveTraceCallback(
         [this](bool succeeded) { m_save_succeeded = succeeded; });
     m_provider.SetCleanupDatabaseCallback(
@@ -681,18 +753,9 @@ TraceServer::Route(Method method, const std::string& pattern, Handler handler)
             args.params.emplace(param.first, param.second);
         }
 
-        // A JSON body forces a CORS preflight, so another site's page cannot
-        // post here without the server allowing its origin.
         Reply reply = Error(HTTP_UNSUPPORTED_MEDIA_TYPE,
                             "Send a JSON object with Content-Type: application/json.");
-        bool  valid = method == Method::kGet;
-        if(!valid &&
-           request.get_header_value("Content-Type").rfind(JSON_CONTENT_TYPE, 0) == 0)
-        {
-            std::pair<jt::Json::Status, jt::Json> body = jt::Json::parse(request.body);
-            valid     = body.first == jt::Json::success && body.second.isObject();
-            args.body = std::move(body.second);
-        }
+        bool  valid = method == Method::kGet || read_json_body(request, args.body);
         if(valid)
         {
             reply = OnProviderThread(
@@ -863,6 +926,38 @@ TraceServer::RegisterRoutes()
                              ? Ok(View::DataProviderJson::Status(provider, m_trace_kind))
                              : Error(HTTP_BAD_REQUEST, error));
           });
+    m_http->Get("/api/logs", [](const httplib::Request&, httplib::Response& response) {
+        jt::Json lines;
+        lines.setArray();
+        for(std::string& line : recent_log()->last_formatted())
+        {
+            lines.getArray().push_back(std::move(line));
+        }
+        jt::Json json;
+        json["lines"] = std::move(lines);
+        response.set_content(json.toString(), JSON_CONTENT_TYPE);
+    });
+#ifdef ROCPROFVIS_WEB_ASSISTANT
+    // Ask Optiq never reads the provider, so it answers on the HTTP worker
+    // rather than queueing behind trace work.
+    m_http->Get("/api/assistant",
+                [](const httplib::Request&, httplib::Response& response) {
+                    response.set_content(AssistantStatus().toString(), JSON_CONTENT_TYPE);
+                });
+    m_http->Post("/api/assistant/chat",
+                 [](const httplib::Request& request, httplib::Response& response) {
+                     jt::Json body;
+                     Reply    reply = Error(HTTP_UNSUPPORTED_MEDIA_TYPE,
+                                            "Send a JSON object with Content-Type: "
+                                            "application/json.");
+                     if(read_json_body(request, body))
+                     {
+                         reply.body = AssistantChat(std::move(body), reply.status);
+                     }
+                     response.status = reply.status;
+                     response.set_content(reply.body.toString(), JSON_CONTENT_TYPE);
+                 });
+#endif
     RegisterSystemRoutes();
     RegisterComputeRoutes();
 }

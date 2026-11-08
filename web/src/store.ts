@@ -12,6 +12,8 @@ export interface Settings {
   overview: boolean
   details: boolean
   flows: boolean
+  flowStyle: 'chain' | 'fan'
+  annotations: boolean
   normalizeVisible: boolean
   detailsHeight: number
 }
@@ -54,6 +56,9 @@ export type Dialog = 'open' | 'settings' | 'about' | 'save' | null
 
 interface State extends Project {
   status: Status | null
+  // The server stopped answering; views reload when it is back (epoch changes).
+  offline: boolean
+  epoch: number
   settings: Settings
   recent: string[]
   timeline: Timeline | null
@@ -63,13 +68,17 @@ interface State extends Project {
   selectedTracks: string[]
   event: EventRef | null
   details: EventDetails | null
+  // Events Ask Optiq pointed at, drawn with a glow until something clears them.
+  highlights: string[]
   range: Range | null
+  measuring: boolean
   scrollTo: string | null
   workloadId: number | null
   kernelId: number | null
   dialog: Dialog
   summary: boolean
   search: boolean
+  assistant: boolean
   tab: string
   toast: { text: string; error?: boolean } | null
   set: (state: Partial<State>) => void
@@ -88,6 +97,8 @@ const DEFAULT_SETTINGS: Settings = {
   overview: true,
   details: true,
   flows: true,
+  flowStyle: 'chain',
+  annotations: true,
   normalizeVisible: false,
   detailsHeight: 300,
 }
@@ -107,6 +118,8 @@ let toastTimer = 0
 export const useStore = create<State>((set, get) => ({
   ...emptyProject(),
   status: null,
+  offline: false,
+  epoch: 0,
   settings: read('optiq.settings', DEFAULT_SETTINGS),
   recent: read<{ list: string[] }>('optiq.recent', { list: [] }).list,
   timeline: null,
@@ -116,13 +129,16 @@ export const useStore = create<State>((set, get) => ({
   selectedTracks: [],
   event: null,
   details: null,
+  highlights: [],
   range: null,
+  measuring: false,
   scrollTo: null,
   workloadId: null,
   kernelId: null,
   dialog: null,
   summary: false,
   search: false,
+  assistant: false,
   tab: 'event',
   toast: null,
   set,
@@ -165,6 +181,7 @@ export const useStore = create<State>((set, get) => ({
       selectedTracks: [],
       event: null,
       details: null,
+      highlights: [],
       range: null,
       workloadId: null,
       kernelId: null,

@@ -37,9 +37,9 @@ public:
 
     ~Data();
 
-    rocprofvis_controller_primitive_type_t GetType(void) const;
+    rocprofvis_controller_primitive_type_t GetType(void) const { return m_type; }
 
-    void SetType(rocprofvis_controller_primitive_type_t type);
+    void SetType(rocprofvis_controller_primitive_type_t type) { m_type = type; }
 
     rocprofvis_result_t GetObject(rocprofvis_handle_t** object);
 

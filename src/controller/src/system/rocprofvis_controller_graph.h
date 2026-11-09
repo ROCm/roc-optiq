@@ -28,19 +28,33 @@ public:
 
     Handle* GetContext() override;
 
-    virtual ~Graph();
+    virtual ~Graph() { UnregisterFromMemoryManager(); }
 
-    rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
+    [[nodiscard]] rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
 
-    rocprofvis_controller_object_type_t GetType(void) final;
-    rocprofvis_result_t                 CombineEventInfo(std::vector<Event*>& events,
-                                                         std::string&         combined_name,
-                                                         uint64_t&            max_duration_str_index);
-    rocprofvis_result_t                 GenerateLODEvent(std::vector<Event*>& events,
-                                                         uint32_t lod_to_generate, uint32_t level,
-                                                         double event_min, double event_max);
+    rocprofvis_controller_object_type_t GetType(void) final
+    {
+        return kRPVControllerObjectTypeGraph;
+    }
+    uint64_t                           GetId() const noexcept { return m_id; }
+    rocprofvis_controller_graph_type_t GetGraphType() const noexcept { return m_type; }
+    Track*                             GetTrack() const noexcept { return m_track; }
+    void SetGraphType(rocprofvis_controller_graph_type_t type) { m_type = type; }
+    void SetTrack(Track* track) { m_track = track; }
 
-    // Handlers for getters.
+    [[nodiscard]] rocprofvis_result_t GetNumberOfEntries(uint64_t* value) const;
+    [[nodiscard]] rocprofvis_result_t GetStartTimestamp(double* value) const;
+    [[nodiscard]] rocprofvis_result_t GetEndTimestamp(double* value) const;
+    [[nodiscard]] rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
+    uint64_t                          GetExclusiveMemoryUsage() const noexcept { return sizeof(Graph); }
+    [[nodiscard]] rocprofvis_result_t CombineEventInfo(std::vector<Event*>& events,
+                                                       std::string&         combined_name,
+                                                       uint64_t&            max_duration_str_index);
+    [[nodiscard]] rocprofvis_result_t GenerateLODEvent(std::vector<Event*>& events,
+                                                       uint32_t lod_to_generate, uint32_t level,
+                                                       double event_min, double event_max);
+
+private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;
     rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
@@ -48,6 +62,8 @@ public:
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
+
+    void UnregisterFromMemoryManager();
 
 private:
     std::map<uint32_t, SegmentTimeline> m_lods;

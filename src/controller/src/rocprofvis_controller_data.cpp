@@ -4,6 +4,10 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
+#include "system/rocprofvis_controller_event.h"
+#include "system/rocprofvis_controller_graph.h"
+#include "system/rocprofvis_controller_sample.h"
+#include "system/rocprofvis_controller_timeline.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -218,16 +222,6 @@ Data::~Data()
     }
 }
 
-rocprofvis_controller_primitive_type_t Data::GetType(void) const
-{
-    return m_type;
-}
-
-void Data::SetType(rocprofvis_controller_primitive_type_t type)
-{
-    m_type = type;
-}
-
 rocprofvis_result_t Data::GetObject(rocprofvis_handle_t** object)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -429,7 +423,36 @@ rocprofvis_result_t Data::GetMemoryUsage(uint64_t* value, rocprofvis_common_prop
                 result = kRocProfVisResultSuccess;
                 if(m_type == kRPVControllerPrimitiveTypeObject)
                 {
-                    result = ((Handle*)m_object)->GetUInt64((rocprofvis_property_t)property, 0, value);
+                    Handle* object = reinterpret_cast<Handle*>(m_object);
+                    if(object->GetType() == kRPVControllerObjectTypeEvent)
+                    {
+                        result =
+                            static_cast<Event*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else if(object->GetType() == kRPVControllerObjectTypeSample)
+                    {
+                        result =
+                            static_cast<Sample*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else if(object->GetType() == kRPVControllerObjectTypeGraph)
+                    {
+                        result =
+                            static_cast<Graph*>(object)->GetInclusiveMemoryUsage(value);
+                    }
+                    else if(object->GetType() == kRPVControllerObjectTypeTimeline)
+                    {
+                        result = static_cast<Timeline*>(object)->GetInclusiveMemoryUsage(
+                            value);
+                    }
+                    else
+                    {
+                        result = object->GetUInt64(
+                            static_cast<rocprofvis_property_t>(property), 0, value);
+                    }
+                }
+                else if(m_type == kRPVControllerPrimitiveTypeString && m_string)
+                {
+                    *value = std::strlen(m_string) + 1;
                 }
                 if(result == kRocProfVisResultSuccess)
                 {

@@ -22,9 +22,9 @@ class PresetManager
 public:
     enum ComponentType
     {
-        ComputeComparison,
         ComputeTableView,
         ComputeKernelMetricTable,
+        ComputeKernelDetailsLayout,
         NumComponentTypes,
     };
 

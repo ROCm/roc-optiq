@@ -1224,6 +1224,41 @@ SettingsManager::GetActiveAssistantProvider() const
     return &providers[m_usersettings.assistant.active];
 }
 
+// Compute Kernel Details settings stored as one JSON value each.
+struct AppWindowBoolSetting
+{
+    const char*              key;
+    bool AppWindowSettings::*field;
+};
+struct AppWindowIntSetting
+{
+    const char*                 key;
+    int32_t AppWindowSettings::*field;
+};
+
+constexpr AppWindowBoolSetting APP_WINDOW_COMPUTE_BOOL_SETTINGS[] = {
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST,
+      &AppWindowSettings::show_compute_kernel_list },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MEMORY_CHART,
+      &AppWindowSettings::show_compute_memory_chart },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ROOFLINE, &AppWindowSettings::show_compute_roofline },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES,
+      &AppWindowSettings::show_compute_metric_tables },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA, &AppWindowSettings::show_compute_isa },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_WORKLOAD_DETAILS,
+      &AppWindowSettings::show_compute_workload_details },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED, &AppWindowSettings::compute_maximized },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST_TABLE,
+      &AppWindowSettings::compute_kernel_list_table },
+};
+
+constexpr AppWindowIntSetting APP_WINDOW_COMPUTE_INT_SETTINGS[] = {
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_TEMPLATE,
+      &AppWindowSettings::compute_layout_template },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED_PANE,
+      &AppWindowSettings::compute_maximized_pane },
+};
+
 void
 SettingsManager::SerializeAppWindowSettings(jt::Json& json)
 {
@@ -1234,6 +1269,19 @@ SettingsManager::SerializeAppWindowSettings(jt::Json& json)
     aw[JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR]   = m_appwindowsettings.show_sidebar;
     aw[JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM] = m_appwindowsettings.show_histogram;
     aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
+    for(const AppWindowBoolSetting& setting : APP_WINDOW_COMPUTE_BOOL_SETTINGS)
+    {
+        aw[setting.key] = m_appwindowsettings.*(setting.field);
+    }
+    for(const AppWindowIntSetting& setting : APP_WINDOW_COMPUTE_INT_SETTINGS)
+    {
+        aw[setting.key] = m_appwindowsettings.*(setting.field);
+    }
+    jt::Json& slots = aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS];
+    for(int32_t i = 0; i < COMPUTE_LAYOUT_MAX_SLOTS; ++i)
+    {
+        slots[static_cast<size_t>(i)] = m_appwindowsettings.compute_layout_slots[i];
+    }
 }
 
 void
@@ -1255,6 +1303,31 @@ SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
     m_appwindowsettings.show_summary =
         JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY,
                            m_appwindowsettings.show_summary);
+    for(const AppWindowBoolSetting& setting : APP_WINDOW_COMPUTE_BOOL_SETTINGS)
+    {
+        bool& value = m_appwindowsettings.*(setting.field);
+        value       = JsonUtils::GetBool(aw, setting.key, value);
+    }
+    for(const AppWindowIntSetting& setting : APP_WINDOW_COMPUTE_INT_SETTINGS)
+    {
+        int32_t& value = m_appwindowsettings.*(setting.field);
+        value          = JsonUtils::GetInt(aw, setting.key, value);
+    }
+    if(aw.contains(JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS) &&
+       aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS].isArray())
+    {
+        std::vector<jt::Json>& slots =
+            aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS].getArray();
+        for(size_t i = 0;
+            i < slots.size() && i < static_cast<size_t>(COMPUTE_LAYOUT_MAX_SLOTS); ++i)
+        {
+            if(slots[i].isLong())
+            {
+                m_appwindowsettings.compute_layout_slots[i] =
+                    static_cast<int32_t>(slots[i].getLong());
+            }
+        }
+    }
 }
 
 }  // namespace View

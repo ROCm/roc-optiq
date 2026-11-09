@@ -20,18 +20,7 @@ namespace RocProfVis
 namespace View
 {
 
-static constexpr const char* UNAVAILABLE_VALUE_TEXT   = "N/A";
-static constexpr const char* WORKLOAD_SECTION_TITLE   = "Workload Information";
-
-TabItem
-ComputeWorkloadView::CreateTabItem(
-    DataProvider& data_provider,
-    const std::shared_ptr<ComputeSelection>& compute_selection)
-{
-    return RocWidget::CreateTabItem(
-        "Profile Details", TAB_ID,
-        std::make_shared<ComputeWorkloadView>(data_provider, compute_selection));
-}
+static constexpr const char* UNAVAILABLE_VALUE_TEXT = "N/A";
 
 ComputeWorkloadView::ComputeWorkloadView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
@@ -39,6 +28,8 @@ ComputeWorkloadView::ComputeWorkloadView(
 , m_data_provider(data_provider)
 , m_compute_selection(compute_selection)
 , m_workload_info(nullptr)
+, m_follow_selection(true)
+, m_shown_workload_id(ComputeSelection::INVALID_SELECTION_ID)
 {
     CreateLayout();
 }
@@ -48,6 +39,19 @@ ComputeWorkloadView::~ComputeWorkloadView() {}
 void
 ComputeWorkloadView::Update()
 {}
+
+void
+ComputeWorkloadView::ShowWorkload(uint32_t workload_id)
+{
+    m_follow_selection  = false;
+    m_shown_workload_id = workload_id;
+}
+
+void
+ComputeWorkloadView::FollowSelection()
+{
+    m_follow_selection = true;
+}
 
 void
 ComputeWorkloadView::CreateLayout()
@@ -77,44 +81,36 @@ ComputeWorkloadView::CreateLayout()
 void
 ComputeWorkloadView::Render()
 {
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-    m_workload_info      = m_data_provider.ComputeModel().GetWorkload(workload_id);
+    const uint32_t workload_id = m_follow_selection
+                                     ? m_compute_selection->GetSelectedWorkload()
+                                     : m_shown_workload_id;
+    m_workload_info = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
     SettingsManager& settings = SettingsManager::GetInstance();
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
-
     RenderAnalysisInfo(m_data_provider.ComputeModel().GetAnalysisInfo());
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar();
 
     if(m_workload_info)
     {
-        if(ImGui::BeginChild("info", ImVec2(0, 0),
-                             ImGuiChildFlags_Borders |
-                                 ImGuiChildFlags_AlwaysUseWindowPadding))
+        // Kernels of several workloads share the kernel list, so name the one shown.
+        ImGui::TextDisabled("Workload");
+        ImGui::SameLine();
+        ImGui::TextUnformatted(m_workload_info->name.c_str());
+        if(m_content_container)
         {
-            const std::string title =
-                m_workload_info->name.empty()
-                    ? std::string(WORKLOAD_SECTION_TITLE)
-                    : std::string(WORKLOAD_SECTION_TITLE) + ": " + m_workload_info->name;
-            SectionTitle(title.c_str());
-            if(m_content_container)
-            {
-                m_content_container->Render();
-            }
+            m_content_container->Render();
         }
-        ImGui::EndChild();
     }
     else
     {
-        SectionTitle(WORKLOAD_SECTION_TITLE);
         const char* label = "Workload Information Unavailable";
         RenderUnavailableMessage(label);
     }
-
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar();
 }
 
 void
@@ -250,6 +246,7 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
             RenderUnavailableMessage(label);
         }
     }
+    // Must be called even when BeginChild returns false.
     ImGui::EndChild();
 }
 

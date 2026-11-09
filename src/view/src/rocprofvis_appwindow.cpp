@@ -24,6 +24,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+#    include "compute/rocprofvis_compute_tester.h"
+#endif
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
@@ -1305,20 +1308,6 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
 #endif
-        ImGui::SeparatorText("System Profiler Panels");
-        if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
-                           &settings.show_details_panel))
-        {
-            ApplyPanelVisibilitySettings();
-        }
-        if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
-        {
-            ApplyPanelVisibilitySettings();
-        }
-        if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
-        {
-            ApplyPanelVisibilitySettings();
-        }
         // Compare projects have no summary, so the toggle would do nothing there.
         bool           summary_supported = true;
         const TabItem* active_tab        = m_tab_container->GetActiveTab();
@@ -1334,6 +1323,31 @@ AppWindow::RenderViewMenu(Project* project)
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary,
                         summary_supported);
+
+        ImGui::SeparatorText("System Profiler Panels");
+        if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
+                           &settings.show_details_panel))
+        {
+            ApplyPanelVisibilitySettings();
+        }
+        if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
+        {
+            ApplyPanelVisibilitySettings();
+        }
+        if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
+        {
+            ApplyPanelVisibilitySettings();
+        }
+
+        // Kernel Details reads these every frame, so no apply step is needed.
+        ImGui::SeparatorText("Compute Profiler Panels");
+        ImGui::MenuItem("Show Kernel List", nullptr, &settings.show_compute_kernel_list);
+        ImGui::MenuItem("Show Memory Chart", nullptr, &settings.show_compute_memory_chart);
+        ImGui::MenuItem("Show Roofline", nullptr, &settings.show_compute_roofline);
+        ImGui::MenuItem("Show Metric Tables", nullptr, &settings.show_compute_metric_tables);
+        ImGui::MenuItem("Show ISA", nullptr, &settings.show_compute_isa);
+        ImGui::MenuItem("Show Workload Details", nullptr,
+                        &settings.show_compute_workload_details);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
@@ -1998,6 +2012,7 @@ AppWindow::RenderDeveloperMenu()
         {
             m_show_metrics = !m_show_metrics;
         }
+        ImGui::MenuItem("Show Compute Tester", nullptr, ComputeTester::VisiblePtr());
         // Toggle debug output window
         if(ImGui::MenuItem("Show Debug Output Window", nullptr, m_show_debug_window))
         {

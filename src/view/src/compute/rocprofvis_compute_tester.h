@@ -17,19 +17,18 @@ namespace View
 class ComputeTester : public RocWidget
 {
 public:
-    static constexpr const char* TAB_ID = "compute_tester_view";
-
-    static TabItem CreateTabItem(
-        DataProvider& data_provider,
-        const std::shared_ptr<ComputeSelection>& compute_selection);
-
     ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTester();
 
     void Update() override;
     void Render() override;
 
+    // Whether compute projects show their tester window; one toggle for all of
+    // them, in Developer Options.
+    static bool* VisiblePtr();
+
 private:
+    static bool s_visible;
 
     struct SelectionState
     {

@@ -73,6 +73,12 @@ These features are in progress and available for preview only (build from source
 - Fixed missing dependencies in Debian packages.
 - Fixed commit hash missing from Linux builds.
 - Fixed process id not read correctly in some trace files.
+- Fixed event details, flows, and call stacks not loading when a second event was selected while another event's details were still loading.
+- Fixed histogram counts being incorrect when a query was split.
+- Fixed HIP events were not trimmed by time and were lost when saving a trimmed trace.
+- Fixed saving a trimmed trace over the open trace was possible. It is now refused, and the destination is replaced only after the trim succeeds.
+- Fixed the table not refreshing when a filter box was cleared with its X or when Reset Filter was used.
+- Fixed app icon not present in desktop app menus or taskbar in Linux environments (DEB/RPM packages).
 
 ## ROCm Optiq 1.1.0
 

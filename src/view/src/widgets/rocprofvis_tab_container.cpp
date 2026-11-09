@@ -429,12 +429,23 @@ TabContainer::FindTabByLabel(const std::string& label) const
     }
 
     const std::string needle = Core::String::to_lower_copy(label);
+    const TabItem*    exact  = nullptr;
     for(const TabItem& tab : m_tabs)
     {
         if(Core::String::to_lower_copy(tab.m_label) == needle)
         {
-            return &tab;
+            if(exact != nullptr)
+            {
+                // Two files may have the same basename. Picking the first one
+                // would make a natural-language tab switch non-deterministic.
+                return nullptr;
+            }
+            exact = &tab;
         }
+    }
+    if(exact != nullptr)
+    {
+        return exact;
     }
 
     if(needle.size() < MIN_SUBSTRING_LABEL_MATCH)

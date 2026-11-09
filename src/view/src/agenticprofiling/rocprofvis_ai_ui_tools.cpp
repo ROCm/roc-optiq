@@ -8,6 +8,8 @@
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cmath>
+#include <cstdint>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -34,6 +36,25 @@ namespace
 constexpr size_t ASSISTANT_MAX_HIGHLIGHTS      = 12;
 constexpr size_t ASSISTANT_MAX_NEXT_STEPS      = 3;
 constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
+constexpr uint64_t ASSISTANT_TAB_REF_OFFSET      = 14695981039346656037ULL;
+constexpr uint64_t ASSISTANT_TAB_REF_PRIME       = 1099511628211ULL;
+
+// Stable for one project id without sending its full path to the model. The
+// mapping is recomputed from the open tabs, so closing another tab cannot
+// silently redirect an earlier ref.
+std::string
+TabRef(const std::string& project_id)
+{
+    uint64_t hash = ASSISTANT_TAB_REF_OFFSET;
+    for(unsigned char c : project_id)
+    {
+        hash ^= c;
+        hash *= ASSISTANT_TAB_REF_PRIME;
+    }
+    std::ostringstream out;
+    out << "tab_" << std::hex << std::setw(16) << std::setfill('0') << hash;
+    return out.str();
+}
 
 // Every UI-facing thing a tool does goes through here.
 OptiqActions
@@ -304,13 +325,15 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
 {
     OptiqActions                   actions       = Actions(context);
     const std::vector<std::string> trace_tabs    = actions.ListTabs();
+    const std::vector<std::string> trace_tab_ids = actions.ListTabIds();
     const std::vector<std::string> analysis_tabs = actions.ListAnalysisTabs();
 
     std::ostringstream out;
     out << "trace_tabs:";
-    for(const std::string& tab : trace_tabs)
+    for(size_t i = 0; i < trace_tabs.size(); ++i)
     {
-        out << "\n  " << tab;
+        out << "\n  ref=" << TabRef(trace_tab_ids[i]) << " name=\"" << trace_tabs[i]
+            << "\"";
     }
     out << "\nactive_trace_tab: " << actions.ActiveTab() << "\n";
     if(!analysis_tabs.empty())
@@ -323,7 +346,7 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
         out << "\nactive_details_tab: " << actions.ActiveAnalysisTab() << "\n";
     }
 
-    const std::string name = JsonUtils::GetString(args, "name", "");
+    std::string name = JsonUtils::GetString(args, "name", "");
     if(name.empty())
     {
         return DoneResult(out.str(), "Listed tabs");
@@ -331,16 +354,54 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
 
     // Details tabs are the ones people usually mean by name, so try those
     // first; trace tabs are file names and rarely collide.
-    if(actions.SelectAnalysisTab(name))
+    std::string selected;
+    if(actions.SelectAnalysisTab(name, selected))
     {
-        return DoneResult("Opened the " + actions.ActiveAnalysisTab() +
-                              " tab in the details panel.",
+        return DoneResult("Opened the " + selected + " tab in the details panel.",
                           "Switched tabs");
     }
-    if(actions.SelectTab(name))
+    // A ref is unambiguous even when two paths have the same basename. The
+    // labels remain accepted when they name exactly one tab.
+    const std::string ref_prefix = "tab_";
+    if(name.compare(0, ref_prefix.size(), ref_prefix) == 0)
     {
-        return DoneResult("Switched to trace " + actions.ActiveTab() + ".",
-                          "Switched tabs");
+        const std::string* matched_id = nullptr;
+        for(const std::string& tab_id : trace_tab_ids)
+        {
+            if(TabRef(tab_id) != name)
+            {
+                continue;
+            }
+            if(matched_id != nullptr)
+            {
+                matched_id = nullptr;  // A hash collision is ambiguous.
+                break;
+            }
+            matched_id = &tab_id;
+        }
+        if(matched_id != nullptr)
+        {
+            name = *matched_id;
+        }
+    }
+    std::string selected_id;
+    if(actions.SelectTab(name, selected_id, selected))
+    {
+        if(selected_id == context.project_id)
+        {
+            return DoneResult("Trace " + selected + " is already in front.",
+                              "Switched tabs");
+        }
+        // The turn stays with its own trace, so say where the user went rather
+        // than let the model think it can now read the other one.
+        AssistantToolStartResult result =
+            DoneResult("Switched the user to trace " + selected +
+                           ". This conversation stays with " + context.trace_name +
+                           ", so read and change nothing more here; questions about " +
+                           selected + " continue in its own conversation.",
+                       "Switched tabs");
+        result.stop_tool_queue = true;
+        return result;
     }
 
     out << "Nothing matches \"" << name << "\".\n";

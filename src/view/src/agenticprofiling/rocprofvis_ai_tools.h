@@ -9,6 +9,7 @@
 #include "json.h"
 #include "model/rocprofvis_common_defs.h"
 #include "model/rocprofvis_tables_model.h"
+#include "rocprofvis_ai_trace_links.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -52,17 +53,28 @@ enum class AssistantFetchKind
     // queried yet: the panel parks until the trace is ready and then runs the
     // tool for real, so a big file is waited out rather than reported as a
     // failure the model answers around.
-    kTraceLoading
+    kTraceLoading,
+    // compare_traces waiting on one run's summary. It needs both, so it runs
+    // again once this one lands instead of formatting anything.
+    kCompareTraces
 };
 
-// What the tools may touch on the trace in front. Rebuilt for every call, so it
-// is never held across a frame.
+// What the tools may touch on one trace. Rebuilt for every call, so it is never
+// held across a frame.
 struct AssistantToolContext
 {
     DataProvider*      data_provider      = nullptr;
     TimelineSelection* timeline_selection = nullptr;
     TraceView*         trace_view         = nullptr;
     bool               is_compute         = false;
+    // Two runs opened side by side in one tab, which every tool here would read
+    // as a single trace.
+    bool is_compare = false;
+    // Whether this trace's tab is the one in front. A tool that changes what
+    // the user sees needs it, or it would change a tab they cannot see.
+    bool in_front = false;
+    // Project::GetID(), which is what links and parked fetches name a trace by.
+    std::string        project_id;
     std::string        trace_name;
 };
 
@@ -83,6 +95,11 @@ struct AssistantFetchState
     // the scope asked for.
     std::string summary_level;
     uint64_t    summary_id = INVALID_UINT64_INDEX;
+    // The trace whose provider the requests went to. A read of a linked trace
+    // makes it differ from the conversation's own, and request ids repeat in
+    // every provider, so polling the wrong one would format another trace's
+    // rows as this tool's answer.
+    std::string project_id;
 };
 
 // What one tool call produced: either finished content, or a set of requests
@@ -91,6 +108,10 @@ struct AssistantToolStartResult
 {
     bool                  pending       = false;
     bool                  started_fetch = false;
+    // This call started the request ids and may cancel them if its turn is
+    // cleared. Separate from started_fetch: compare_traces owns a summary
+    // request but reruns after it instead of formatting its rows directly.
+    bool owns_requests = false;
     // A tool may issue several fetches at once (event details needs three);
     // the panel waits until none of them are pending.
     std::vector<uint64_t> request_ids;
@@ -103,6 +124,9 @@ struct AssistantToolStartResult
     // When true, replace the stacked follow-up buttons under the transcript.
     bool                     set_next_steps = false;
     std::vector<std::string> next_steps;
+    // A trace switch is a barrier: later calls in the same batch were planned
+    // for a tab state that has not landed yet, so they receive skipped replies.
+    bool stop_tool_queue = false;
     // How long the panel waits before calling this a timeout. Zero takes the
     // default, which suits a query; a tool waiting on the user needs longer.
     uint32_t                 timeout_seconds = 0;
@@ -125,6 +149,23 @@ std::vector<double> GetAssistantActivityBins(const AssistantToolContext& context
 // The busiest event tracks, for drawing the minimap under the histogram.
 std::vector<AssistantActivityRow> GetAssistantActivityRows(
     const AssistantToolContext& context, size_t bin_count, size_t max_rows);
+
+// Resolves what the tools may touch on one open trace, by Project::GetID(). An
+// empty context when no such trace is open.
+AssistantToolContext
+MakeAssistantToolContext(const std::string& project_id);
+
+// The links between traces, from {config}/trace_links.json.
+TraceLinkStore&
+AssistantTraceLinks();
+
+// The fingerprint a link records for a loaded trace, unset when it is not ready.
+TraceFingerprint
+AssistantTraceFingerprint(const AssistantToolContext& context);
+
+// The traces linked to this one, as the model reads them. Empty when none are.
+std::string
+BuildAssistantLinkBlock(const AssistantToolContext& context);
 
 // The short trace description the model sees before it asks anything.
 std::string BuildAssistantBriefing(const AssistantToolContext& context);

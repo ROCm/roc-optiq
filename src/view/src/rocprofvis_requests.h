@@ -73,6 +73,9 @@ public:
         sizeof(uint16_t) * 8 + TRACK_CHUNK_OFFSET_BITS;
     static constexpr uint8_t REQUEST_TYPE_OFFSET_BITS =
         sizeof(uint8_t) * 8 + TRACK_GROUP_OFFSET_BITS;
+    // 0 is the shared UI, 1 and 2 are trace compare, and 3 is Ask Optiq.
+    // Widget-owned clients start above the reserved band.
+    static constexpr uint64_t FIRST_DYNAMIC_CLIENT_ID = 4;
 
     static uint64_t MakeTrackDataRequestId(uint32_t track_id, uint16_t chunk_index,
                                            uint8_t group_id, RequestType request_type)
@@ -133,13 +136,15 @@ public:
         {
             // Wrap around if we exceed the maximum client ID that can be encoded in the
             // request ID
-            m_current_id = 0;
+            m_current_id = RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID;
         }
         return id;
     }
 
 private:
-    IdGenerator() : m_current_id(0) {}
+    IdGenerator()
+    : m_current_id(RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID)
+    {}
     uint64_t m_current_id;
 };
 

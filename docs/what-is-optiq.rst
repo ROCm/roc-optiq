@@ -15,14 +15,15 @@ ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis fil
 Visualize ROCm Systems Profiler and ROCprofiler-SDK traces
 ==========================================================
 
-ROCm Optiq opens trace databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCprofiler-SDK (rocprofv3) <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_ in the same trace views. Use these views to inspect CPU and GPU activity, ROCm API calls, kernel dispatches, and memory operations recorded for an application running on the ROCm stack.
+ROCm Optiq opens trace databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCprofiler-SDK (rocprofv3) <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_ in the same trace views. Use these views to inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, and memory operations for applications running on the ROCm stack. For ROCm Systems Profiler traces, the views also show system telemetry, such as processor frequency and thermal readings, as counter tracks.
 
 .. image:: /images/optiq-systems.png
    :width: 800
    :align: center
    :alt: ROCm Optiq timeline view showing CPU and GPU activity tracks for a trace database
 
-ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. It shows GPU work alongside the CPU API calls that submitted it, so you can relate kernel execution to the application behavior that produced it.
+ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. 
+It correlates GPU workloads with in-application CPU events and performance with hardware resource usage, providing a holistic view for optimization.
 
 Key views include:
 

@@ -1161,7 +1161,11 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		while (true)
 		{			
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
-			m_query_factory.SetVersion(m_db_version.c_str());
+			if (!m_query_factory.SetVersion(m_db_version.c_str()))
+			{
+				spdlog::error("Unsupported schema version '{}'; the trace cannot be opened.", m_db_version);
+				break;
+			}
 			// Best-effort detection of the optional memory_chart_extdata column so
 			// the workload query includes it only when present.
 			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_extdata';", &CallbackDetectMemoryChartColumn);

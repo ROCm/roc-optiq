@@ -17,7 +17,10 @@ namespace DataModel
     {
     public:
 
-        void SetVersion(const char* version);
+        // Each dot-separated part is read from its leading digits, so "2.0.0-rc1"
+        // reads as 2.0.0. Returns false, and leaves no version set, when a part has
+        // no leading digits or does not fit in 32 bits. An empty string reads as 0.
+        bool SetVersion(const char* version);
         bool IsVersionEqual(const char*);
         bool IsVersionGreaterOrEqual(const char*);
 
@@ -34,7 +37,7 @@ namespace DataModel
             return m_db_version.size() > 2 ? m_db_version[2] : 0;
         }
     private:
-        std::vector<uint32_t>  ConvertVersionStringToInt(const char* version);
+        bool ConvertVersionStringToInt(const char* version, std::vector<uint32_t>& version_array);
         std::vector<uint32_t> m_db_version;
     };
 

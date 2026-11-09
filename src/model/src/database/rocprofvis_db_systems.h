@@ -223,6 +223,21 @@ class SystemDatabase : public Database
            return kRocProfVisDmResultNotSupported;
        };
 
+       virtual rocprofvis_dm_result_t SummarizeNameDurations(
+           const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+           Future* future,
+           std::vector<rocprofvis_db_name_duration_t>& rows)
+       {
+           (void) queries;
+           (void) future;
+           (void) rows;
+           return kRocProfVisDmResultNotSupported;
+       }
+
+       // True when this database can aggregate the event summary with a
+       // SQLite GROUP BY. Other sources load the rows and aggregate afterwards.
+       virtual bool EventSummaryInSqlite() const { return false; }
+
 
 
     private:

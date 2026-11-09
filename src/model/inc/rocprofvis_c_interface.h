@@ -14,6 +14,14 @@
 
 #include "rocprofvis_c_interface_types.h"
 
+// Reserved group argument for the summary's top-events query.
+// Analysis::FetchTopEvents passes this. The table processor matches it and
+// reads the name-duration summary from SQLite. A table-viewer group is a
+// column name plus its own aggregate list, so it stays in memory.
+// When the SQLite summary is not used, the processor expands this token to
+// name, COUNT, MIN, MAX, and SUM before aggregating the loaded rows.
+#define ROCPROFVIS_DB_NAME_DURATION_SUMMARY_GROUP "name_duration_summary"
+
 #ifdef __cplusplus
 extern "C"
 {

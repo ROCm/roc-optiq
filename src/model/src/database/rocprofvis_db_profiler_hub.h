@@ -84,6 +84,8 @@ protected:
 
     rocprofvis_dm_result_t ReadTraceMetadata(Future* object) override;
 
+    rocprofvis_dm_result_t Cleanup(Future* future, bool rebuild) override;
+
     rocprofvis_dm_result_t ReadFlowTraceInfo(rocprofvis_dm_event_id_t event_id,
                                              Future*                  object) override;
 
@@ -110,6 +112,12 @@ protected:
     rocprofvis_dm_result_t GetEventTablesAsync(
         std::vector<std::pair<DbInstance*, std::string>>& queries, Future* parent,
         rocprofvis_dm_handle_t handle, RpvCallback callback) override;
+
+    rocprofvis_dm_result_t SummarizeNameDurations(
+        const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+        Future* future, std::vector<rocprofvis_db_name_duration_t>& rows) override;
+
+    bool EventSummaryInSqlite() const override { return true; }
 
     rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type,
                                          uint32_t node, uint64_t& result) override;
@@ -222,6 +230,11 @@ private:
         };
 
     friend class ProfilerHubClientMethods;
+
+private:
+    // A track published from the hub source stored in an event's node field.
+    // Correlation, call stack, and details use it to open that file.
+    uint32_t TrackOnSource(uint32_t source_index);
 };
 
 }  // namespace DataModel

@@ -330,6 +330,13 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_handle_t handle,
             RpvCallback callback) override;
 
+        rocprofvis_dm_result_t SummarizeNameDurations(
+            const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+            Future* future,
+            std::vector<rocprofvis_db_name_duration_t>& rows) override;
+
+        bool EventSummaryInSqlite() const override { return true; }
+
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
         virtual std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
 

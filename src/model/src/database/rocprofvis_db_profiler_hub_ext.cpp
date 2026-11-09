@@ -405,17 +405,17 @@ ProfilerHubExtData::AddRegion(const ph_region_details_t& region)
     {
         return false;
     }
+    // The Arguments panel reads the argument list, not property rows.
     for(uint32_t index = 0; index < region.arg_count; ++index)
     {
-        const ph_arg_data_t& arg         = region.args[index];
-        const text_field_t   arg_texts[] = {
-            { "type", arg.type },
-            { "name", arg.name },
-            { "value", arg.value },
-            { "arg_extdata", arg.extdata },
-        };
-        if(!AddInt("arg_data_t", "position", arg.position) ||
-           !AddTexts("arg_data_t", arg_texts, sizeof(arg_texts) / sizeof(arg_texts[0])))
+        const ph_arg_data_t&          arg = region.args[index];
+        rocprofvis_db_argument_data_t record{};
+        record.name     = arg.name != nullptr ? arg.name : "";
+        record.value    = arg.value != nullptr ? arg.value : "";
+        record.type     = arg.type != nullptr ? arg.type : "";
+        record.position = static_cast<uint32_t>(arg.position);
+        if(m_hub->BindObject()->FuncAddArgDataRecord(m_container, record) !=
+           kRocProfVisDmResultSuccess)
         {
             return false;
         }

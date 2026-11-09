@@ -6,8 +6,10 @@
 #include "rocprofvis_db.h"
 #include "json.h"
 #include <mutex>
+#include <string>
 #include <variant>
 #include <functional>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -15,6 +17,22 @@ namespace DataModel
 {
 
     class SystemDatabase;
+
+    struct rocprofvis_db_name_duration_t
+    {
+        std::string name;
+        uint64_t count;
+        uint64_t min_duration;
+        uint64_t max_duration;
+        uint64_t total_duration;
+    };
+
+    struct rocprofvis_db_duration_summary_query_t
+    {
+        DbInstance* db_instance;
+        uint32_t track_id;
+        std::string query;
+    };
 
     typedef enum rocprofvis_dm_track_search_id_t
     {
@@ -308,6 +326,11 @@ namespace DataModel
         rocprofvis_dm_result_t AddTableColumns(bool to_file, rocprofvis_dm_handle_t handle);
         rocprofvis_dm_result_t AddAggregatedColumns(bool to_file, rocprofvis_dm_handle_t handle);
         rocprofvis_dm_result_t AddAggregatedCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index);
+        rocprofvis_dm_result_t ExecuteNameDurationSummary(
+            Future* future,
+            std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
+            std::vector<rocprofvis_db_compound_query_command>& commands,
+            rocprofvis_dm_handle_t handle);
 
     private:
         SystemDatabase* m_db;

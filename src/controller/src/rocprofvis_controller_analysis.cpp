@@ -1002,7 +1002,7 @@ rocprofvis_result_t Analysis::FetchTopEvents(rocprofvis_dm_trace_t dm_handle, co
                                                         (rocprofvis_dm_timestamp_t)start, (rocprofvis_dm_timestamp_t)end,
                                                         tracks.size(), (rocprofvis_db_track_selection_t)tracks.data(),
                                                         (rocprofvis_dm_query_criteria_t*)&criteria, nullptr,
-                                                        "name, COUNT(*) AS num_invocations, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration", "name",
+                                                        ROCPROFVIS_DB_NAME_DURATION_SUMMARY_GROUP, "name",
                                                         "total_duration", kRPVDMSortOrderDesc,
                                                         UINT32_MAX, 0, false, &query);
             if(dm_result == kRocProfVisDmResultSuccess)

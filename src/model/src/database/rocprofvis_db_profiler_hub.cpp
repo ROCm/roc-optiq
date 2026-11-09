@@ -4,6 +4,7 @@
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
 
 #include "rocprofvis_db_profiler_hub.h"
+#include "rocprofvis_db_summary_cache.h"
 #include <profiler-hub/c/profiler_hub_trim.h>
 #include "rocprofvis_db_profiler_hub_ext.h"
 #include "rocprofvis_db_query_builder.h"
@@ -179,6 +180,67 @@ ProfilerHub::Close()
     ph_result_t result = ph_ctx_free(m_ph_trace);
     return result == PH_RESULT_SUCCESS ? kRocProfVisDmResultSuccess
                                        : kRocProfVisDmResultUnknownError;
+}
+
+rocprofvis_dm_result_t
+ProfilerHub::Cleanup(Future* future, bool rebuild)
+{
+    (void) rebuild;
+    if(future == nullptr)
+    {
+        return kRocProfVisDmResultInvalidParameter;
+    }
+
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    try
+    {
+        const rocprofvis_dm_db_bind_struct* binding = BindObject();
+        if(binding != nullptr && !binding->config_path.empty())
+        {
+            std::vector<std::string> files;
+            if(!HubYamlFiles(Path(), files))
+            {
+                files.push_back(Path());
+            }
+            std::vector<const char*> paths;
+            paths.reserve(files.size());
+            for(const std::string& file : files)
+            {
+                paths.push_back(file.c_str());
+            }
+
+            uint32_t capacity = 0;
+            ph_result_t hub_result = ph_trace_cache_directory(
+                binding->config_path.c_str(), paths.data(),
+                static_cast<uint32_t>(paths.size()), nullptr, &capacity);
+            if(hub_result == PH_RESULT_SUCCESS && capacity > 1)
+            {
+                std::string directory(capacity, '\0');
+                hub_result = ph_trace_cache_directory(
+                    binding->config_path.c_str(), paths.data(),
+                    static_cast<uint32_t>(paths.size()), directory.data(), &capacity);
+                if(hub_result == PH_RESULT_SUCCESS)
+                {
+                    directory.resize(capacity - 1);
+                    std::filesystem::remove_all(directory);
+                }
+            }
+            if(hub_result == PH_RESULT_INVALID_FILE)
+            {
+                result = kRocProfVisDmResultDbAccessFailed;
+            }
+            else if(hub_result != PH_RESULT_SUCCESS)
+            {
+                result = kRocProfVisDmResultUnknownError;
+            }
+        }
+    } catch(const std::exception&)
+    {
+        result = kRocProfVisDmResultUnknownError;
+    }
+
+    future->SetPromise(result);
+    return result;
 }
 
 bool
@@ -369,6 +431,19 @@ ProfilerHub::ProcessTrack(rocprofvis_dm_track_params_t& track_params)
                 return kRocProfVisDmResultUnknownError;
             if(GpuTracks(track_params.track_indentifiers.category))
             {
+                // A hardware queue id is shared by every GPU. The catalog keeps
+                // one row per queue id, so write this track's process into that
+                // row before the properties are copied onto its own topology node.
+                if(track_params.track_indentifiers.process_id != 0)
+                {
+                    CachedTables(db_instance->GuidIndex())
+                        ->Catalog()
+                        .SetInt("Queue",
+                                track_params.track_indentifiers.id[TRACK_ID_QUEUE],
+                                "pid",
+                                static_cast<int64_t>(
+                                    track_params.track_indentifiers.process_id));
+                }
                 if(CachedTables(db_instance->GuidIndex())
                        ->PopulateTrackExtendedDataTemplate(
                            this, db_instance->GuidIndex(), "Queue",
@@ -930,9 +1005,12 @@ ProfilerHub::ReadTraceMetadata(Future* future)
             break;
         }
         ShowProgress(1, "Call profiler hub to read trace metadata", kRPVDbBusy, future);
+        const std::string& cache = BindObject()->config_path;
+        const char* cache_directory = cache.empty() ? nullptr : cache.c_str();
         ph_result_t hub_result =
-            ph_ctx_create_files(&m_ph_trace, paths.data(),
-                                static_cast<uint32_t>(paths.size()), hub_future);
+            ph_ctx_create_files_cached(&m_ph_trace, paths.data(),
+                                       static_cast<uint32_t>(paths.size()),
+                                       cache_directory, hub_future);
         if(hub_result != PH_RESULT_SUCCESS)
         {
             future->DeleteProfilerHubFuture(hub_future);
@@ -1015,7 +1093,7 @@ ProfilerHub::ReadTraceMetadata(Future* future)
         }
         if(!tracks_added) break;
 
-        rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
+        rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
         for(int i = 0; i < NumTracks(); i++)
         {
             if(TrackPropertiesAt(i)->track_indentifiers.category ==
@@ -1117,7 +1195,7 @@ ProfilerHub::BuildTableQuery(
     query.clear();
     
     if (num == 0)
-        kRocProfVisDmResultInvalidParameter;
+        return kRocProfVisDmResultInvalidParameter;
 
     bool sample_query = false;
     if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
@@ -1274,6 +1352,20 @@ convert_dm_ph_event_type(rocprofvis_dm_event_operation_t dm_type,
     return true;
 }
 
+uint32_t
+ProfilerHub::TrackOnSource(uint32_t source_index)
+{
+    for(int index = 0; index < NumTracks(); ++index)
+    {
+        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(index);
+        if(props == nullptr) continue;
+        auto* instance = static_cast<DbInstance*>(props->track_indentifiers.db_instance);
+        if(instance == nullptr || instance->GuidIndex() != source_index) continue;
+        return props->track_indentifiers.track_id;
+    }
+    return 0;
+}
+
 bool
 convert_ph_dm_event_type(ph_event_type_t                  ph_type,
                          rocprofvis_dm_event_operation_t& dm_type)
@@ -1311,9 +1403,10 @@ ProfilerHub::ReadFlowTraceInfo(rocprofvis_dm_event_id_t event_id, Future* future
         {
             break;
         }
-        ph_event_list_t ph_endpoints;
-        ph_event_t      event;
-        event.id = event_id.bitfield.event_id;
+        ph_event_list_t ph_endpoints{};
+        ph_event_t      event{};
+        event.id       = event_id.bitfield.event_id;
+        event.track_id = TrackOnSource(event_id.bitfield.event_node);
 
         if(!convert_dm_ph_event_type(
                (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op, event.type))
@@ -1392,9 +1485,10 @@ ProfilerHub::ReadStackTraceInfo(rocprofvis_dm_event_id_t event_id, Future* futur
         {
             break;
         }
-        ph_call_stack_t ph_callstack;
-        ph_event_t      event;
-        event.id = event_id.bitfield.event_id;
+        ph_call_stack_t ph_callstack{};
+        ph_event_t      event{};
+        event.id       = event_id.bitfield.event_id;
+        event.track_id = TrackOnSource(event_id.bitfield.event_node);
 
         if(!convert_dm_ph_event_type(
             (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op, event.type))
@@ -1469,7 +1563,8 @@ ProfilerHub::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* future)
             break;
         }
         ph_event_t event{};
-        event.id = event_id.bitfield.event_id;
+        event.id       = event_id.bitfield.event_id;
+        event.track_id = TrackOnSource(event_id.bitfield.event_node);
         if(!convert_dm_ph_event_type(
                (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op, event.type))
         {
@@ -1593,12 +1688,20 @@ ProfilerHub::ReadTraceSlice(rocprofvis_dm_timestamp_t            start,
                                               slice_handle);
                 break;
             }
-            ph_event_list_t        ph_slice;
+            struct ph_event_list_hold_t
+            {
+                ph_ctx_t        ctx;
+                ph_event_list_t list{};
+                ~ph_event_list_hold_t()
+                {
+                    if(ctx != nullptr) ph_release_track_events(ctx, &list);
+                }
+            } ph_slice{ m_ph_trace };
             rocprofvis_dm_result_t result    = kRocProfVisDmResultUnknownError;
             ph_result_t            ph_result = ph_get_track_events(
                 m_ph_trace, tracks[0],
                 start + TraceProperties()->db_inst_start_time[db_instance],
-                end + TraceProperties()->db_inst_start_time[db_instance], &ph_slice,
+                end + TraceProperties()->db_inst_start_time[db_instance], &ph_slice.list,
                 ph_future);
             if(ph_result != PH_RESULT_SUCCESS)
             {
@@ -1612,27 +1715,27 @@ ProfilerHub::ReadTraceSlice(rocprofvis_dm_timestamp_t            start,
 
             if(result == kRocProfVisDmResultSuccess)
             {
-                for(int i = 0; i < ph_slice.list_size; i++)
+                for(int i = 0; i < ph_slice.list.list_size; i++)
                 {
                     rocprofvis_db_record_data_t     record;
                     rocprofvis_dm_event_operation_t op;
-                    record.event.id.bitfield.event_id   = ph_slice.events[i].id;
+                    record.event.id.bitfield.event_id   = ph_slice.list.events[i].id;
                     record.event.id.bitfield.event_node = db_instance;
 
-                    if(!convert_ph_dm_event_type(ph_slice.events[i].type, op))
+                    if(!convert_ph_dm_event_type(ph_slice.list.events[i].type, op))
                     {
                         break;
                     }
                     record.event.id.bitfield.event_op = op;
-                    record.event.timestamp            = ph_slice.events[i].start;
+                    record.event.timestamp            = ph_slice.list.events[i].start;
                     record.event.duration =
-                        ph_slice.events[i].end - ph_slice.events[i].start;
+                        ph_slice.list.events[i].end - ph_slice.list.events[i].start;
                     record.event.timestamp -=
                         TraceProperties()->db_inst_start_time[db_instance];
                     record.event.category = 0;
                     record.event.symbol   = BindObject()->FuncAddString(
-                        BindObject()->trace_object, ph_slice.events[i].name);
-                    record.event.level = ph_slice.events[i].nesting_depth-1;
+                        BindObject()->trace_object, ph_slice.list.events[i].name);
+                    record.event.level = ph_slice.list.events[i].nesting_depth-1;
                     if(BindObject()->FuncAddRecord(slice_handle, record) !=
                        kRocProfVisDmResultSuccess)
                     {
@@ -1699,12 +1802,20 @@ ProfilerHub::ReadTracePMCSlice(rocprofvis_dm_timestamp_t            start,
             break;
         }
 
-        ph_sample_list_t       ph_slice;
+        struct ph_sample_list_hold_t
+        {
+            ph_ctx_t         ctx;
+            ph_sample_list_t list{};
+            ~ph_sample_list_hold_t()
+            {
+                if(ctx != nullptr) ph_release_track_samples(ctx, &list);
+            }
+        } ph_slice{ m_ph_trace };
         rocprofvis_dm_result_t result    = kRocProfVisDmResultUnknownError;
         ph_result_t            ph_result = ph_get_track_samples(
             m_ph_trace, tracks[0],
             start + TraceProperties()->db_inst_start_time[db_instance],
-            end + TraceProperties()->db_inst_start_time[db_instance], &ph_slice,
+            end + TraceProperties()->db_inst_start_time[db_instance], &ph_slice.list,
             ph_future);
         if(ph_result != PH_RESULT_SUCCESS)
         {
@@ -1717,13 +1828,13 @@ ProfilerHub::ReadTracePMCSlice(rocprofvis_dm_timestamp_t            start,
         }
         if(result == kRocProfVisDmResultSuccess)
         {
-            for(int i = 0; i < ph_slice.list_size; i++)
+            for(int i = 0; i < ph_slice.list.list_size; i++)
             {
                 rocprofvis_db_record_data_t record;
-                record.pmc.timestamp = ph_slice.samples[i].timestamp;
+                record.pmc.timestamp = ph_slice.list.samples[i].timestamp;
                 record.pmc.timestamp -=
                     TraceProperties()->db_inst_start_time[db_instance];
-                record.pmc.value = ph_slice.samples[i].value;
+                record.pmc.value = ph_slice.list.samples[i].value;
                 if(BindObject()->FuncAddRecord(slice_handle, record) !=
                    kRocProfVisDmResultSuccess)
                 {
@@ -2326,6 +2437,230 @@ free_event_queries(std::vector<ph_event_query_t>& event_queries)
         ph_event_query_free(event_query);
     }
     event_queries.clear();
+}
+
+struct HubSummarySink
+{
+    std::unordered_map<std::string, rocprofvis_db_name_duration_t>* groups;
+    uint32_t event_type;
+};
+
+extern "C" void
+rocprofvis_hub_duration_summary_row(const ph_name_duration_summary_t* row, void* user_data)
+{
+    if(row == nullptr || user_data == nullptr || row->count == 0) return;
+    HubSummarySink* sink = static_cast<HubSummarySink*>(user_data);
+    std::string name = row->name != nullptr ? row->name : "";
+    if(sink->event_type == PH_EVENT_TYPE_MEMORY_ALLOCATE)
+    {
+        const uint8_t index =
+            Builder::TypeEnumToInt(name.c_str(), Builder::mem_alloc_types);
+        if(index < Builder::mem_alloc_types.size()) name = Builder::mem_alloc_types[index];
+    }
+    rocprofvis_db_name_duration_t& group = (*sink->groups)[name];
+    if(group.count == 0)
+    {
+        group.min_duration = row->min_duration;
+        group.max_duration = row->max_duration;
+    }
+    else
+    {
+        group.min_duration = std::min(group.min_duration, row->min_duration);
+        group.max_duration = std::max(group.max_duration, row->max_duration);
+    }
+    group.count += row->count;
+    group.total_duration += row->total_duration;
+}
+
+rocprofvis_dm_result_t
+ProfilerHub::SummarizeNameDurations(
+    const std::vector<rocprofvis_db_duration_summary_query_t>& queries, Future* future,
+    std::vector<rocprofvis_db_name_duration_t>& rows)
+{
+    rows.clear();
+    if(future != nullptr && future->Interrupted()) return kRocProfVisDmResultDbAbort;
+    for(const rocprofvis_db_duration_summary_query_t& request : queries)
+    {
+        if(request.query.empty() || request.query.front() != '{')
+        {
+            return kRocProfVisDmResultNotSupported;
+        }
+    }
+
+    std::vector<std::string> sources;
+    if(!HubYamlFiles(Path(), sources))
+    {
+        sources.emplace_back(Path());
+    }
+    const rocprofvis_dm_db_bind_struct* binding = BindObject();
+    const std::string cache_directory = SummaryCacheDirectory(
+        binding != nullptr ? binding->config_path : std::string(), sources);
+
+    std::unordered_map<std::string, rocprofvis_db_name_duration_t> groups;
+    std::vector<ph_event_query_t> event_queries;
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    for(const rocprofvis_db_duration_summary_query_t& request : queries)
+    {
+        if(future != nullptr && future->Interrupted())
+        {
+            result = kRocProfVisDmResultDbAbort;
+            break;
+        }
+        const std::string cache_key = SummaryCacheKey(request);
+        std::vector<rocprofvis_db_name_duration_t> cached_rows;
+        if(SummaryCacheFind(cache_directory, cache_key, cached_rows))
+        {
+            MergeNameDurations(groups, cached_rows);
+            continue;
+        }
+        ParamDeserializer        des(request.query);
+        uint64_t                 start = 0;
+        uint64_t                 end   = 0;
+        uint64_t                 node  = 0;
+        uint64_t                 agent = 0;
+        uint64_t                 process_id = 0;
+        uint64_t                 thread_id  = 0;
+        std::vector<size_t>      tracks;
+        std::vector<std::string> filters;
+        bool                     include_substring = false;
+        bool                     include_category  = false;
+        bool                     partial_matching  = false;
+        bool                     has_time = true;
+        if(!des.get("start", start)) has_time = false;
+        if(!des.get("end", end)) has_time = false;
+        const bool has_node    = des.get("node", node);
+        const bool has_agent   = des.get("agent", agent);
+        const bool has_process = des.get("process", process_id);
+        const bool has_thread  = des.get("thread", thread_id);
+        const bool tracks_selected = des.getArray("tracks", tracks);
+        const bool search_query    = des.getArray("filters", filters);
+        des.get("include_substring", include_substring);
+        des.get("include_category", include_category);
+        des.get("partial_matching", partial_matching);
+        const bool by_operation = tracks_selected && tracks.size() > 0 &&
+                                  TABLE_QUERY_UNPACK_OP_TYPE((uint32_t) tracks[0]) > 0;
+        if(has_time && request.db_instance != nullptr && TraceProperties() != nullptr)
+        {
+            const uint32_t guid = request.db_instance->GuidIndex();
+            const std::vector<rocprofvis_dm_timestamp_t>& origins =
+                TraceProperties()->db_inst_start_time;
+            if(guid < origins.size() && origins[guid] != UINT64_MAX && origins[guid] > 0)
+            {
+                const uint64_t origin = origins[guid];
+                if(start <= UINT64_MAX - origin) start += origin;
+                if(end <= UINT64_MAX - origin) end += origin;
+            }
+        }
+        if((search_query && (!by_operation || filters.size() == 0)) ||
+           (!search_query && !by_operation && (!tracks_selected || tracks.size() != 1)))
+        {
+            result = kRocProfVisDmResultInvalidParameter;
+            break;
+        }
+
+        std::vector<uint32_t> event_types;
+        bool                  has_track = false;
+        uint32_t              hub_track = 0;
+        if(by_operation)
+        {
+            for(size_t index = 0; index < tracks.size(); ++index)
+            {
+                const rocprofvis_dm_event_operation_t operation =
+                    (rocprofvis_dm_event_operation_t)
+                        TABLE_QUERY_UNPACK_OP_TYPE((uint32_t) tracks[index]);
+                uint32_t event_type = 0;
+                if(hub_event_type(operation, event_type)) event_types.push_back(event_type);
+            }
+        }
+        else
+        {
+            rocprofvis_dm_track_params_t* props = TrackPropertiesAt(tracks[0]);
+            if(props == nullptr)
+            {
+                result = kRocProfVisDmResultInvalidParameter;
+                break;
+            }
+            has_track = true;
+            hub_track = props->track_indentifiers.track_id;
+            const rocprofvis_dm_event_operation_t operation =
+                (rocprofvis_dm_event_operation_t) props->op;
+            if(operation == kRocProfVisDmMultipleOperations)
+            {
+                event_types = { PH_EVENT_TYPE_KERNEL_DISPATCH, PH_EVENT_TYPE_MEMORY_ALLOCATE,
+                                PH_EVENT_TYPE_MEMORY_COPY, PH_EVENT_TYPE_HIP_EVENT };
+            }
+            else if(operation == kRocProfVisDmOperationNoOp)
+            {
+                result = kRocProfVisDmResultNotSupported;
+                break;
+            }
+            else
+            {
+                uint32_t event_type = 0;
+                if(hub_event_type(operation, event_type)) event_types.push_back(event_type);
+            }
+        }
+        for(uint32_t event_type : event_types)
+        {
+            if(hub_sample_event(event_type))
+            {
+                result = kRocProfVisDmResultNotSupported;
+                break;
+            }
+        }
+        if(result != kRocProfVisDmResultSuccess) break;
+        if(event_types.empty()) continue;
+
+        ph_event_query_t event_query = nullptr;
+        const bool has_source = request.db_instance != nullptr && DbInstances().size() > 1;
+        const uint32_t source_index = has_source ? request.db_instance->GuidIndex() : 0;
+        const rocprofvis_dm_result_t opened = open_event_query(
+            m_ph_trace, has_time, start, end, has_node, node, has_agent, agent, has_process,
+            process_id, has_thread, thread_id, has_track ? &hub_track : nullptr,
+            has_track ? 1u : 0u, event_types.data(), (uint32_t) event_types.size(), filters,
+            include_substring, include_category, partial_matching, has_source, source_index,
+            event_query);
+        if(opened != kRocProfVisDmResultSuccess)
+        {
+            result = opened;
+            break;
+        }
+        event_queries.push_back(event_query);
+
+        std::unordered_map<std::string, rocprofvis_db_name_duration_t> request_groups;
+        for(uint32_t event_type : event_types)
+        {
+            HubSummarySink sink;
+            sink.groups     = &request_groups;
+            sink.event_type = event_type;
+            const ph_result_t summarized = ph_event_query_summarize_durations(
+                event_query, event_type, rocprofvis_hub_duration_summary_row, &sink, nullptr);
+            if(summarized != PH_RESULT_SUCCESS)
+            {
+                result = hub_query_result(summarized);
+                break;
+            }
+        }
+        if(result != kRocProfVisDmResultSuccess) break;
+        std::vector<rocprofvis_db_name_duration_t> request_rows;
+        NameDurationsFromGroups(request_groups, request_rows);
+        SummaryCacheStore(cache_directory, cache_key, request_rows);
+        MergeNameDurations(groups, request_rows);
+    }
+
+    free_event_queries(event_queries);
+    if(result != kRocProfVisDmResultSuccess)
+    {
+        rows.clear();
+        return result;
+    }
+    rows.reserve(groups.size());
+    for(std::pair<const std::string, rocprofvis_db_name_duration_t>& entry : groups)
+    {
+        entry.second.name = entry.first;
+        rows.push_back(std::move(entry.second));
+    }
+    return kRocProfVisDmResultSuccess;
 }
 
 rocprofvis_dm_result_t

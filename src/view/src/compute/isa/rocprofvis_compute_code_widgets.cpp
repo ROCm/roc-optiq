@@ -21,6 +21,16 @@ constexpr const char* CODE_OBJECT_OFFSET_FORMAT           = "0x%llX";
 constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY    = 19;
 constexpr float       CODE_COLUMN_MIN_WIDTH_IN_CHARACTERS = 40.0f;
 
+static constexpr bool
+sampling_columns_match_renderer(int sampling_state, int wave_occupancy,
+                                int active_threads, int next_column)
+{
+    using Metric = SamplingStateRenderer::Metric;
+    return wave_occupancy == sampling_state + static_cast<int>(Metric::kWaveOccupancy) &&
+           active_threads == sampling_state + static_cast<int>(Metric::kActiveThreads) &&
+           next_column == sampling_state + static_cast<int>(Metric::kCount);
+}
+
 struct InstructionPresentation
 {
     IsaDataBuilder::InstructionKind kind;
@@ -335,6 +345,13 @@ SourceCodeWidget::Render()
     }
 
     constexpr int columns_count = ColumnIndex(SourceColumn::kCount);
+    static_assert(columns_count == 5);
+    static_assert(
+        sampling_columns_match_renderer(ColumnIndex(SourceColumn::kSamplingState),
+                                        ColumnIndex(SourceColumn::kWaveOccupancy),
+                                        ColumnIndex(SourceColumn::kActiveThreads),
+                                        ColumnIndex(SourceColumn::kSourceText)),
+        "Source sampling columns must match the renderer's column layout.");
     CalculateLineNumberWidth(static_cast<size_t>(m_largest_line_number));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
@@ -475,6 +492,11 @@ IsaCodeWidget::Render()
 
     constexpr int columns_count = ColumnIndex(IsaColumn::kCount);
     static_assert(columns_count == 6);
+    static_assert(sampling_columns_match_renderer(ColumnIndex(IsaColumn::kSamplingState),
+                                                  ColumnIndex(IsaColumn::kWaveOccupancy),
+                                                  ColumnIndex(IsaColumn::kActiveThreads),
+                                                  ColumnIndex(IsaColumn::kOffset)),
+                  "ISA sampling columns must match the renderer's column layout.");
     CalculateLineNumberWidth(m_entries.size());
 
     // A new layout ID prevents saved dropdown layouts from restoring column settings.

@@ -1651,7 +1651,9 @@ The ISA implementation is organized as follows:
   `IsaDataBuilder::SamplingRow`.
   Its `Metric` enum identifies Sampling State, wave occupancy, and active threads.
   `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
-  order. Sampling State is visible by default; both percentage columns use
+  order. Compile-time assertions check the metric array against the enum, both
+  widgets' sampling-column positions, and their total column counts. Sampling State
+  is visible by default; both percentage columns use
   `DefaultHide` and can be enabled independently through the native header menu.
   Each cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,

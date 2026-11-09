@@ -42,7 +42,8 @@ public:
     {
         kSamplingState,
         kWaveOccupancy,
-        kActiveThreads
+        kActiveThreads,
+        kCount
     };
 
     enum class LoadState : uint32_t

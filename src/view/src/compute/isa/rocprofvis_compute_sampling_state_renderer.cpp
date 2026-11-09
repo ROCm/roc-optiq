@@ -84,6 +84,20 @@ constexpr SamplingStateRenderer::Metric SAMPLING_COLUMN_METRICS[] = {
     SamplingStateRenderer::Metric::kWaveOccupancy,
     SamplingStateRenderer::Metric::kActiveThreads
 };
+static_assert(std::size(SAMPLING_COLUMN_METRICS) ==
+              static_cast<size_t>(SamplingStateRenderer::Metric::kCount));
+static_assert(
+    [] {
+        for(size_t i = 0; i < std::size(SAMPLING_COLUMN_METRICS); ++i)
+        {
+            if(static_cast<size_t>(SAMPLING_COLUMN_METRICS[i]) != i)
+            {
+                return false;
+            }
+        }
+        return true;
+    }(),
+    "Sampling columns must follow the Metric enum order.");
 
 static const char*
 get_sampling_column_label(SamplingStateRenderer::Metric metric)

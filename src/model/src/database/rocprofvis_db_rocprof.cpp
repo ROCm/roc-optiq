@@ -132,7 +132,13 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
                 track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "name");
             }
             else {
-                track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "symbol");
+                // ROCm Systems Profiler gives each sampled thread counter its category as the symbol
+                // (thread_hardware_counter, thread_cpu_time), so a symbol that several counters of one
+                // agent and process share does not tell them apart; their names do.
+                uint64_t pmc_id = track_params.track_indentifiers.id[TRACK_ID_QUEUE];
+                auto guid_it = m_pmc_ids_with_shared_symbol.find(db_instance->GuidIndex());
+                bool symbol_is_shared = guid_it != m_pmc_ids_with_shared_symbol.end() && guid_it->second.count(pmc_id) > 0;
+                track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", pmc_id, symbol_is_shared ? "name" : "symbol");
             }
 
         }
@@ -188,6 +194,28 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
         track_params.track_indentifiers.track_id = it->get()->track_indentifiers.track_id;
     }
     return 0;
+}
+
+void RocprofDatabase::FindPmcIdsWithSharedSymbol()
+{
+    m_pmc_ids_with_shared_symbol.clear();
+    for (auto& guid_info : DbInstances())
+    {
+        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle("PMC");
+        std::map<std::string, std::vector<uint64_t>> pmc_ids_by_symbol;
+        for (size_t row = 0; row < pmc_table->NumRows(); row++)
+        {
+            std::string key = std::string(pmc_table->GetCellByIndex(row, "agent_id")) + '\0' + pmc_table->GetCellByIndex(row, "pid") + '\0' + pmc_table->GetCellByIndex(row, "symbol");
+            pmc_ids_by_symbol[key].push_back(std::strtoull(pmc_table->GetCellByIndex(row, "id"), nullptr, 10));
+        }
+        for (auto& entry : pmc_ids_by_symbol)
+        {
+            if (entry.second.size() > 1)
+            {
+                m_pmc_ids_with_shared_symbol[guid_info.first.GuidIndex()].insert(entry.second.begin(), entry.second.end());
+            }
+        }
+    }
 }
 
 
@@ -924,6 +952,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         LoadMemoryActivityData(future);
         CreateMemoryActivityTable(future);
         CreateAgentFriendlyMemoryAllocationTable(future);
+        FindPmcIdsWithSharedSymbol();
 
         ShowProgress(1, "Collect topology data", kRPVDbBusy, future);
         GenerateInterdependencyTables(future);

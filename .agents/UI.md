@@ -1140,11 +1140,15 @@ the sidebar owns only the *projection* of it that it draws:
   `DataProvider`.
 - The active-node accent mirrors timeline node coloring when
   `SettingsManager::ShowNodeColors()` is enabled.
+- A plain click on a leaf's name selects the track
+  (`TimelineSelection::ClickTrack`) and sends the same
+  `ScrollToTrackEvent` as the scroll-to-track button, so the timeline
+  jumps to it. Ctrl- and Shift-clicks only change the selection.
 - `SettingsManager::CompactSidebar()` drops the per-row eye and
   scroll-to-track buttons (leaf and branch) so labels sit flush against
   the tree. Nothing is reserved in their place; the context menus below
-  remain the way to toggle visibility and jump to a track, and hidden
-  tracks stay marked by their dimmed label.
+  remain the way to toggle visibility, and hidden tracks stay marked by
+  their dimmed label.
 - Right-click a leaf track (`##track_ctx`): Go to Track, Hide/Show
   Track, Show All Tracks, Hide All But This Track, and Show/Hide
   Selected Tracks (enabled when

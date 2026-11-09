@@ -53,6 +53,7 @@ class RocprofDatabase : public ProfileDatabase
     typedef std::unordered_map<std::string, uint32_t> string_map_t;
     typedef std::map<uint32_t, std::vector<rocprofvis_db_memalloc_activity_t>> memalloc_activity_t;
     typedef std::map<uint32_t, std::unordered_map<uint32_t, uint32_t>> mem_free_stream_to_agent_t;
+    typedef std::map<uint32_t, std::set<uint64_t>> pmc_ids_per_guid_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
@@ -166,6 +167,7 @@ private:
     rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
     rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
     rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
+    void FindPmcIdsWithSharedSymbol();
 
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
@@ -202,6 +204,7 @@ private:
         string_map_t m_string_map; //temporary map to reuse string
         memalloc_activity_t m_memalloc_activity;
         mem_free_stream_to_agent_t m_memfree_stream_to_agent;
+        pmc_ids_per_guid_t m_pmc_ids_with_shared_symbol;
         RocprofMetadataVersionControl m_metadata_version_control;
 
         inline static const rocprofvis_event_data_category_map_t

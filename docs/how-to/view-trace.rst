@@ -159,8 +159,7 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 Select a track
 ^^^^^^^^^^^^^^
 
-Use the following actions to select tracks in the Timeline View or the **System Topology View**. They work the same way as selecting files in File Explorer.
-
+Use the following actions to select tracks in the **Timeline View** or the **System Topology View**. 
 - Click a track in the **Description** area to select only that track.
 - Press and hold **Ctrl** while clicking a track to add it to the selection or remove it.
 - Press and hold **Shift** while clicking a track to select every track between it and the track you last clicked. Hold **Ctrl** as well to add those tracks to the current selection.
@@ -386,7 +385,7 @@ Summary View
    :width: 300
    :alt: View menu with the Show Summary option highlighted
 
-The view has these tabs:
+The **Summary View** has these tabs:
 
 * **Overview** shows the event composition for the trace and a card for each category that has data. Each card shows total duration and invocation count, and a chart of the operations that used the most execution time. Those entries also report percent of total duration and mean duration. **Details** opens that category's tab.
 * **System Topology** shows the system topology and counters, grouped as trace, node, processor, process, and thread.

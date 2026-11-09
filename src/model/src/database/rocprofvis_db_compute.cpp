@@ -89,6 +89,7 @@ namespace DataModel
 		{"instruction_line_instruction_type_uuid", kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid},
 		{"instruction_line_code_object_offset", kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset},
 		{"instruction_line_instruction", kRPVComputeColumnPcSamplingInstructionLineInstruction},
+		{"instruction_line_instruction_type", kRPVComputeColumnPcSamplingInstructionLineInstructionType},
 		{"kernel_symbol_uuid", kRPVComputeColumnPcSamplingKernelSymbolUuid},
 		{"kernel_symbol_code_object_uuid", kRPVComputeColumnPcSamplingKernelSymbolCodeObjectUuid},
 		{"kernel_symbol_kernel_uuid", kRPVComputeColumnPcSamplingKernelSymbolKernelUuid},
@@ -475,11 +476,14 @@ namespace DataModel
 				query_out =
 					"SELECT il.instruction_uuid AS instruction_line_uuid, "
 					"il.kernel_symbol_uuid AS instruction_line_kernel_symbol_uuid, "
-					"COALESCE(il.instruction_type_uuid, 0) AS instruction_line_instruction_type_uuid, "
+					"il.instruction_type_uuid AS instruction_line_instruction_type_uuid, "
 					"COALESCE(il.code_object_offset, 0) AS instruction_line_code_object_offset, "
-					"COALESCE(il.instruction, '') AS instruction_line_instruction "
+					"COALESCE(il.instruction, '') AS instruction_line_instruction, "
+					"COALESCE(it.text, '') AS instruction_line_instruction_type "
 					"FROM compute_instruction_line il "
 					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"LEFT JOIN compute_instruction_type_lookup it ON "
+					"it.instruction_type_lookup_uuid = il.instruction_type_uuid "
 					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
 				query_out += " ORDER BY il.kernel_symbol_uuid, il.code_object_offset, il.instruction_uuid";
@@ -1448,7 +1452,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				}
 				if (kRocProfVisDmResultSuccess == result)
 				{
-					result = BuildKernelMetricsMatrix(table, kernel_metrics_matrix_plan);
+					result = BuildKernelMetricsMatrix(future, table, kernel_metrics_matrix_plan);
 				}
 				break;
 			}
@@ -1814,15 +1818,19 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	 *  - Populate the destination data model table @p table with the resulting
 	 *    kernel metric rows and column metadata.
 	 *
-	 * @param table Destination data model table that will be populated with the
-	 *              kernel metrics matrix (columns and rows).
-	 * @param plan  JSON description of the query plan, including workload_id,
-	 *              column descriptions and optional filter specifications.
+	 * @param future Future that receives the message for a filter that could not
+	 *               be applied.
+	 * @param table  Destination data model table that will be populated with the
+	 *               kernel metrics matrix (columns and rows).
+	 * @param plan   JSON description of the query plan, including workload_id,
+	 *               column descriptions and optional filter specifications.
 	 *
-	 * @return kRocProfVisDmResultSuccess on success, or an appropriate error
-	 *         code if the plan is invalid or if table population fails.
+	 * @return kRocProfVisDmResultSuccess on success, including when a filter
+	 *         cannot be applied: the table then has all its columns and no rows,
+	 *         and @p future holds the message. Otherwise an appropriate error code
+	 *         if table population fails.
 	 */
-	rocprofvis_dm_result_t ComputeDatabase::BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json& plan)
+	rocprofvis_dm_result_t ComputeDatabase::BuildKernelMetricsMatrix(Future* future, rocprofvis_dm_table_t table, jt::Json& plan)
 	{
 		rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
 		std::vector<MetricSelector> selectors;
@@ -1860,6 +1868,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			}
 		}
 
+		// A filter that can't be applied matches no kernels. The columns are still
+		// added so the view keeps them, and the future reports the filter.
+		std::string filter_error;
 		if (plan.contains("filters"))
 		{
 			auto& obj = plan["filters"].getObject();
@@ -1874,8 +1885,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			}
 			catch (const std::exception& e)
 			{
-				spdlog::error("Error: {} ", e.what());
-				return kRocProfVisDmResultInvalidParameter;
+				filter_error = e.what();
 			}
 		}
 
@@ -1934,6 +1944,11 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		metrics_rows.reserve(matrix.size());
 		for (auto& [uuid, mrow] : matrix)
 		{
+			if (!filter_error.empty())
+			{
+				break;
+			}
+
 			uint32_t column_index = 0;
 			columns[column_index++].eval_value = (double)mrow.kernel_uuid;
 			columns[column_index++].eval_value = mrow.stats.name;
@@ -1962,13 +1977,19 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			}
 			catch (const std::exception& e)
 			{
-				spdlog::error("Error: {} ", e.what());
-				return kRocProfVisDmResultInvalidParameter;
+				filter_error = e.what();
+				break;
 			}
 			if (passed_evaluation)
 			{
 				metrics_rows.push_back(std::move(mrow));
 			}
+		}
+		if (!filter_error.empty())
+		{
+			spdlog::error("Error: {} ", filter_error);
+			future->SetErrorMessage("Could not apply filter: " + filter_error);
+			metrics_rows.clear();
 		}
 
 		int sort_column_index = 0;

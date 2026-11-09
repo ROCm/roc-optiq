@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -26,6 +27,36 @@ public:
         kMissing,
         kInvalid,
         kValid
+    };
+
+    enum class InstructionKind : uint32_t
+    {
+        kInternal,
+        kMatrix,
+        kScalar,
+        kBranch,
+        kValu,
+        kFlat,
+        kLds,
+        kBarrier,
+        kUnknown
+    };
+
+    struct InstructionTypeInfo
+    {
+        InstructionKind kind;
+        const char*     name;
+    };
+
+    inline static constexpr InstructionTypeInfo INSTRUCTION_TYPES[] = {
+        { InstructionKind::kInternal, "INTERNAL" },
+        { InstructionKind::kMatrix, "MATRIX" },
+        { InstructionKind::kScalar, "SCALAR" },
+        { InstructionKind::kBranch, "BRANCH" },
+        { InstructionKind::kValu, "VALU" },
+        { InstructionKind::kFlat, "FLAT" },
+        { InstructionKind::kLds, "LDS" },
+        { InstructionKind::kBarrier, "BARRIER" }
     };
 
     enum class StallReasonKind : uint32_t
@@ -117,7 +148,12 @@ public:
 
     struct IsaRow : SamplingRow
     {
-        std::string instruction;
+        std::string     instruction;
+        std::string     instruction_type_name;
+        InstructionKind instruction_kind = InstructionKind::kUnknown;
+        // Byte offsets remain valid when rows and their owning strings move.
+        size_t      mnemonic_begin     = 0;
+        size_t      mnemonic_end       = 0;
         uint64_t    code_object_offset = 0;
         uint64_t    source_line_id     = 0;
         uint64_t    source_file_id     = 0;
@@ -148,6 +184,7 @@ public:
     [[nodiscard]] static SamplingSummary SummarizeSampling(const SampleCounts& counts);
     [[nodiscard]] static StallReasonKind ResolveStallReasonKind(std::string_view text);
     [[nodiscard]] static const char*     GetStallReasonName(StallReasonKind kind);
+    [[nodiscard]] static const char*     GetInstructionTypeName(InstructionKind kind);
     [[nodiscard]] static double      CalculatePercentage(uint64_t value, uint64_t total);
     [[nodiscard]] static std::string FormatSampleCount(uint64_t value);
 
@@ -166,6 +203,7 @@ private:
     };
 
     static bool AddSampleCount(uint64_t& total, uint64_t count);
+    static InstructionKind ResolveInstructionKind(std::string_view text);
     static void AccumulateSampleCounts(SampleCounts& total, const SampleCounts& counts);
     static void AddStallReasonCount(StallReasonCounts& counts, uint64_t lookup_uuid,
                                     uint64_t count);

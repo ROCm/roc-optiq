@@ -156,6 +156,14 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
+    IM_COL32(184, 183, 204, 255),  // Colors::kIsaInternal
+    IM_COL32(188, 145, 235, 255),  // Colors::kIsaMatrix
+    IM_COL32(108, 203, 173, 255),  // Colors::kIsaScalar
+    IM_COL32(222, 199, 115, 255),  // Colors::kIsaBranch
+    IM_COL32(114, 163, 240, 255),  // Colors::kIsaValu
+    IM_COL32(220, 153, 120, 255),  // Colors::kIsaFlat
+    IM_COL32(99, 196, 215, 255),   // Colors::kIsaLds
+    IM_COL32(231, 166, 193, 255),  // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
 
@@ -288,8 +296,19 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
+    IM_COL32(108, 105, 131, 255),  // Colors::kIsaInternal
+    IM_COL32(126, 77, 170, 255),   // Colors::kIsaMatrix
+    IM_COL32(25, 120, 92, 255),    // Colors::kIsaScalar
+    IM_COL32(139, 110, 18, 255),   // Colors::kIsaBranch
+    IM_COL32(40, 95, 178, 255),    // Colors::kIsaValu
+    IM_COL32(163, 78, 43, 255),    // Colors::kIsaFlat
+    IM_COL32(21, 111, 132, 255),   // Colors::kIsaLds
+    IM_COL32(160, 65, 105, 255),   // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
+static_assert(DARK_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));
+static_assert(LIGHT_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));
+
 // Same hue order as origin/main, desaturated for the redesign.
 const std::vector<ImU32> DARK_FLAME_COLORS = {
     IM_COL32(82, 154, 210, 220),  IM_COL32(72, 174, 156, 220),

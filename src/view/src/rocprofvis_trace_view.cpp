@@ -32,6 +32,8 @@
 #include "widgets/rocprofvis_notification_manager.h"
 
 #include <cmath>
+#include <filesystem>
+#include <system_error>
 
 namespace RocProfVis
 {
@@ -107,9 +109,10 @@ TraceView::TraceView()
     });
 
     m_data_provider.SetTableDataReadyCallback(
-        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code) {
-            EventManager::GetInstance()->AddEvent(
-                std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
+        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code,
+           const std::string& error_message) {
+            EventManager::GetInstance()->AddEvent(std::make_shared<TableDataEvent>(
+                trace_path, request_id, response_code, error_message));
         });
 
     m_data_provider.SetTraceLoadedCallback(
@@ -528,6 +531,18 @@ TraceView::SaveSelection(const std::string& file_path)
         if(!m_timeline_selection->HasValidTimeRangeSelection())
         {
             spdlog::warn("No valid time range selection to save.");
+            return false;
+        }
+
+        // The model refuses this too, but only reports a generic failure.
+        std::error_code error;
+        if(std::filesystem::equivalent(file_path, m_data_provider.GetTraceFilePath(), error))
+        {
+            m_popup_info.show_popup = true;
+            m_popup_info.title      = "Save Trimmed Trace";
+            m_popup_info.message =
+                "The selection can't be saved over the trace that is open. Choose a "
+                "different file.";
             return false;
         }
 

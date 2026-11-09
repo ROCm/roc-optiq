@@ -55,9 +55,6 @@ public:
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
-    static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
-    static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t CLEANUP_DATABASE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
@@ -234,8 +231,11 @@ public:
 
     void SetTrackMetadataChangedCallback(
         const std::function<void(const std::string&)>& callback);
+    // Called with the trace path, request id, response code and any error message the
+    // controller left for the user.
     void SetTableDataReadyCallback(
-        const std::function<void(const std::string&, uint64_t, uint64_t)>& callback);
+        const std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>&
+            callback);
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
@@ -319,6 +319,9 @@ private:
         rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+    // True when the request in flight under an event's request ID is for that event,
+    // so it already covers a new fetch.
+    bool IsPendingEventFetch(const RequestInfo& pending, uint64_t event_id) const;
 
     // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
@@ -418,7 +421,8 @@ private:
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when table data has changed
-    std::function<void(const std::string&, uint64_t, uint64_t)> m_table_data_ready_callback;
+    std::function<void(const std::string&, uint64_t, uint64_t, const std::string&)>
+        m_table_data_ready_callback;
     // Called when new track data is ready
     std::function<void(uint64_t, const std::string&, const RequestInfo&)>
         m_track_data_ready_callback;
@@ -477,9 +481,11 @@ private:
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle,
                                           uint64_t refreshed_source_file_uuid);
-    inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
-                                      rocprofvis_handle_t* pc_handle,
-                                      uint64_t             index);
+    inline void LoadPcSamplingInstructionLine(
+        InstructionLine&                          instruction_line,
+        std::unordered_map<uint64_t, std::string>& instruction_type_lookup_map,
+        rocprofvis_handle_t*                       pc_handle,
+        uint64_t                                   index);
     inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
                                          rocprofvis_handle_t* pc_handle,
                                          uint64_t             index);

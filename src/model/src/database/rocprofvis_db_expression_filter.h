@@ -230,7 +230,7 @@ namespace DataModel
         {
             SkipSpaces();
             static const std::vector<std::string> ops = {
-                "<=", ">=", "<>", "!=", "=", "==", "<", ">", "+", "-", "*", "/", "%", "LIKE"
+                "<=", ">=", "<>", "!=", "==", "=", "<", ">", "+", "-", "*", "/", "%", "LIKE"
             };
 
             for (const auto& op : ops)
@@ -247,6 +247,25 @@ namespace DataModel
         }
 
         bool End() const { return m_pos >= m_text.size(); }
+
+        // For error messages: the text from here up to the next space.
+        std::string Upcoming()
+        {
+            SkipSpaces();
+            size_t end = m_pos;
+            while (end < m_text.size() && !std::isspace(static_cast<unsigned char>(m_text[end])))
+                ++end;
+            return m_text.substr(m_pos, end - m_pos);
+        }
+
+        // For error messages: the text read so far.
+        std::string Consumed() const
+        {
+            size_t end = std::min(m_pos, m_text.size());
+            while (end > 0 && std::isspace(static_cast<unsigned char>(m_text[end - 1])))
+                --end;
+            return m_text.substr(0, end);
+        }
 
     private:
         std::string m_text;

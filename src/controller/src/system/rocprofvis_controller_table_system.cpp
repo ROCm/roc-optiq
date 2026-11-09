@@ -82,6 +82,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
                     {
                         future->AddDependentFuture(object2wait);
                         dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+                        future->KeepErrorMessage(object2wait);
                     }
 
                     if(dm_result == kRocProfVisDmResultSuccess)
@@ -261,6 +262,7 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
                     {
                         future->AddDependentFuture(object2wait);
                         dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+                        future->KeepErrorMessage(object2wait);
                     }
 
                     future->RemoveDependentFuture(object2wait);

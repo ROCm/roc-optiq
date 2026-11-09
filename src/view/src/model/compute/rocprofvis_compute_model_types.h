@@ -94,9 +94,11 @@ struct InstructionSourceLine
 
 struct InstructionLine
 {
-    uint64_t    instruction_uuid   = 0;
-    uint64_t    code_object_offset = 0;
-    std::string instruction;
+    uint64_t                instruction_uuid = 0;
+    // Unset when the database type is NULL. Zero remains a real lookup id.
+    std::optional<uint64_t> instruction_type_uuid;
+    uint64_t                code_object_offset = 0;
+    std::string             instruction;
 };
 
 struct KernelSymbol
@@ -129,6 +131,7 @@ struct SourceFile
 struct PcSamplingData
 {
     std::vector<CodeObjectStore>            code_objects;
+    std::unordered_map<uint64_t, std::string> instruction_type_lookup_map;
     std::vector<SourceFile>                 source_files;
     std::vector<InstructionSourceLine>      instruction_source_lines;
     std::vector<PcSampleState>              pc_sample_states;

@@ -795,6 +795,9 @@ typedef enum rocprofvis_controller_future_properties_t : uint32_t
     kRPVControllerFutureProgressPercentage,
     // Progress message
     kRPVControllerFutureProgressMessage,
+    // Message the operation left for the user, such as a table filter that could not be
+    // applied. Empty when there is none.
+    kRPVControllerFutureLastErrorMessage,
     __kRPVControllerFuturePropertiesLast
    
 } rocprofvis_controller_future_properties_t;
@@ -1026,6 +1029,7 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingInstructionLineInstructionTypeUuid,
     kRPVControllerPCSamplingInstructionLineCodeObjectOffset,
     kRPVControllerPCSamplingInstructionLineInstruction,
+    kRPVControllerPCSamplingInstructionLineInstructionType,
 
     // Stalls layer
     kRPVControllerPCSamplingNumPcSampleStates = kRPVPCSamplingStallsGroup,

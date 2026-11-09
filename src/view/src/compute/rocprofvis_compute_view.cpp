@@ -104,7 +104,8 @@ ComputeView::ComputeView()
         });
 
     m_data_provider.SetTableDataReadyCallback(
-        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code) {
+        [](const std::string& trace_path, uint64_t request_id, uint64_t response_code,
+           const std::string& error_message) {
             if(response_code != kRocProfVisResultSuccess)
             {
                 NotificationManager::GetInstance().Show(
@@ -113,8 +114,8 @@ ComputeView::ComputeView()
             }
 
             // Trigger new table data event to update the UI.
-            EventManager::GetInstance()->AddEvent(
-                std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
+            EventManager::GetInstance()->AddEvent(std::make_shared<TableDataEvent>(
+                trace_path, request_id, response_code, error_message));
         });
 
     // The forwarding TraceView installs. Without it a compute tab runs requests

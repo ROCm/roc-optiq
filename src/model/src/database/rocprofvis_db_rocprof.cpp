@@ -1502,9 +1502,6 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     rocprofvis_db_sqlite_trim_parameters rocpd_trim_views;
     TemporaryDbInstance tmp_db_instance(0);
 
-
-    std::filesystem::remove(new_db_path);
-
     while (true) 
     {
         RocprofDatabase rpDb(new_db_path);
@@ -1624,6 +1621,16 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                     return a < b; 
                 });
 
+            std::string hip_event_table;
+            for (const std::string& table : sorted_tables)
+            {
+                if (table.find("rocpd_hip_event") != std::string::npos)
+                {
+                    hip_event_table = table;
+                    break;
+                }
+            }
+
             ShowProgress(0, "Attaching old DB to new", kRPVDbBusy, future);
 
             rocprofvis_dm_timestamp_t fecth_start = start + TraceProperties()->db_inst_start_time[guid_info.first.GuidIndex()];
@@ -1651,7 +1658,8 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                             if (strstr(table.c_str(), "rocpd_kernel_dispatch") ||
                                 strstr(table.c_str(), "rocpd_memory_allocate") ||
                                 strstr(table.c_str(), "rocpd_memory_copy") ||
-                                strstr(table.c_str(), "rocpd_region"))
+                                strstr(table.c_str(), "rocpd_region") ||
+                                strstr(table.c_str(), "rocpd_hip_event"))
                             {
                                 query = "INSERT INTO ";
                                 query += table;
@@ -1731,7 +1739,18 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                                 query += " R ON E.id = R.event_id  LEFT JOIN oldDb.";
                                 query += sorted_tables[kSampleTable];
                                 query += " S ON E.id = S.event_id ";
-                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL;";
+                                if (!hip_event_table.empty())
+                                {
+                                    query += " LEFT JOIN oldDb.";
+                                    query += hip_event_table;
+                                    query += " HE ON E.id = HE.event_id ";
+                                }
+                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL";
+                                if (!hip_event_table.empty())
+                                {
+                                    query += " OR HE.event_id IS NOT NULL";
+                                }
+                                query += ";";
                             }
                             else if (strstr(table.c_str(), "rocpd_arg") ||
                                 strstr(table.c_str(), "rocpd_pmc_event"))
@@ -1801,12 +1820,12 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
         if (result != kRocProfVisDmResultSuccess) break;
 
         ShowProgress(100, "Trace trimmed successfully!", kRPVDbSuccess, future);
-        return future->SetPromise(result);
+        return result;
     }
 
 
     ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
-    return future->SetPromise(result);
+    return result;
 }
 
 void RocprofDatabase::BuildOpQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_event_operation_t op)

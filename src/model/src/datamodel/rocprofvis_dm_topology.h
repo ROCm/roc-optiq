@@ -184,6 +184,7 @@ private:
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
             { "id", kRPVControllerProcessId },
+            { "pid", kRPVControllerProcessPid },
             { "nid", kRPVControllerProcessNodeId },
             { "init", kRPVControllerProcessInitTime },
             { "fini", kRPVControllerProcessFinishTime },
@@ -193,7 +194,6 @@ private:
             { "environment", kRPVControllerProcessEnvironment },
             { "extdata", kRPVControllerProcessExtData },
 
- //           { "pid", kRPVControllerProcessId },
             { "cmdline", kRPVControllerProcessCommand },
             { "machine_id", kRPVControllerProcessNodeId },
             { "end_ts", kRPVControllerProcessEndTime },

@@ -36,6 +36,12 @@ Future::~Future(){
 Future* Future::AddSubFuture() {
     Future* sub_feature = (Future*)rocprofvis_db_future_alloc(nullptr);
     std::unique_lock lock(m_mutex);
+    // A stage started after a cancel has to stop as well, or it runs to completion
+    // and the partial results of the cancelled stages get saved.
+    if (m_interrupt_status)
+    {
+        sub_feature->m_interrupt_status = true;
+    }
     m_sub_futures.push_back(sub_feature);
     return sub_feature;
 }

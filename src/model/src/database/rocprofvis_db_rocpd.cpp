@@ -342,6 +342,11 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, DbInstancePtrAt(0),"SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &CallBackAddString)) break;
 
+        // A cancelled stage stops early, so its results are partial. Stop before
+        // anything derived from them is saved into the trace, where later opens
+        // would trust it.
+        if (future->Interrupted()) break;
+
 
         if(m_metadata_version_control.MustRebuildLevels())
         {
@@ -418,6 +423,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                 break;
             }
         }
+
+        if (future->Interrupted()) break;
 
         ShowProgress(5, "Save track information", kRPVDbBusy, future);
         SaveTrackProperties(future);

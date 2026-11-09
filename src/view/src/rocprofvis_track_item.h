@@ -215,7 +215,7 @@ protected:
 
 private:
     void RenderPills(ImVec2 region);
-    // Returns the width of the strip it drew, 0 when there is none.
+    // Gutter reserved for the strip. 0 when the decorator is off.
     float RenderDecorator();
 
     std::vector<std::unique_ptr<Pill>> m_pills;

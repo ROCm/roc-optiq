@@ -1018,8 +1018,8 @@ TrackItem::SetDecoratorColors(const TrackInfo* track_info)
 float
 TrackItem::RenderDecorator()
 {
-    float                 width = 0.0f;
     std::optional<size_t> color_index;
+    bool                  reverse_wheel = false;
     switch(m_settings.GetTrackDecoratorMode())
     {
         case TrackDecoratorMode::kTrackType:
@@ -1029,24 +1029,33 @@ TrackItem::RenderDecorator()
         }
         case TrackDecoratorMode::kProcess:
         {
-            color_index = m_process_color_index;
+            color_index   = m_process_color_index;
+            reverse_wheel = true;
             break;
         }
         default:
         {
-            break;
+            return 0.0f;
         }
     }
 
-    // Resolved per frame so the strip follows theme changes.
+    // Every track reserves the column, including tracks with no color, so the
+    // labels stay aligned.
+    const float width = static_cast<float>(m_settings.GetTrackDecoratorWidth());
+
+    // Resolved per frame so the strip follows theme changes. Process ranks walk
+    // the wheel from the end: node pills walk it from the start, and the first
+    // node and the first process would otherwise share a swatch.
     const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
     if(color_index && !wheel.empty())
     {
+        const size_t slot = *color_index % wheel.size();
+        const size_t index =
+            reverse_wheel ? (wheel.size() - 1 - slot) : slot;
         const ImVec2 strip_min = ImGui::GetWindowPos();
-        width                  = static_cast<float>(m_settings.GetTrackDecoratorWidth());
         ImGui::GetWindowDrawList()->AddRectFilled(
             strip_min, strip_min + ImVec2(width, ImGui::GetWindowSize().y),
-            wheel[*color_index % wheel.size()]);
+            wheel[index]);
     }
     return width;
 }

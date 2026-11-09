@@ -15,6 +15,10 @@
 // the user is looking at one. kernel_pc_samples reads PC samples through the
 // ISA View's slots instead, and never while the view has one of its own in
 // flight.
+//
+// With ROCPROFVIS_ENABLE_AGENTIC_COMPUTE off, all of this compiles to the stubs
+// at the end of the file: the handler table is empty, and the dispatcher turns
+// a compute tab away before it would search it.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
@@ -42,6 +46,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 
 namespace
 {
@@ -2387,6 +2393,39 @@ BuildAssistantComputeBriefing(const AssistantToolContext& context)
            "and get_metrics to see them.\n";
     return out.str();
 }
+
+#else
+
+// Compute support is not built in, so no compute tool reaches the model. The
+// accessors still exist because the dispatcher, the briefing and the panel call
+// them without knowing whether it is.
+AssistantToolTable
+GetAssistantComputeToolHandlers()
+{
+    AssistantToolTable table;
+    return table;
+}
+
+std::string
+FinishAssistantComputeFetch(const AssistantToolContext&, const AssistantFetchState&)
+{
+    return "This build of Ask Optiq does not read compute traces.";
+}
+
+std::string
+BuildAssistantComputeBriefing(const AssistantToolContext& context)
+{
+    return "trace_name: " + context.trace_name +
+           "\nkind: compute_trace\nnote: this build of Ask Optiq reads system traces "
+           "only, so none of its tools can read this one. Tell the user to open a "
+           "system trace to ask about it.\n";
+}
+
+void
+ResetAssistantPcRead()
+{}
+
+#endif  // ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 
 }  // namespace View
 }  // namespace RocProfVis

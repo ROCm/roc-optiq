@@ -61,7 +61,9 @@ AssistantToolTable GetAssistantDataToolHandlers();
 AssistantToolTable GetAssistantScriptToolHandlers();
 
 // The compute reads, searched instead of the data table on a compute trace.
-// Nothing in here touches TraceDataModel, which is empty on such a trace.
+// Nothing in here touches TraceDataModel, which is empty on such a trace. Empty
+// when compute support is not built in, and the dispatcher then turns a compute
+// tab away before searching it.
 AssistantToolTable GetAssistantComputeToolHandlers();
 
 // The handful of UI tools that mean the same thing on either kind of trace, so

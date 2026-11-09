@@ -2501,6 +2501,20 @@ round trip through one without it. Only the four `*AssistantToken`
 methods are guarded, because they are the sole users of `SecretStore`
 outside remote.
 
+**Compute support has its own gate, `ROCPROFVIS_ENABLE_AGENTIC_COMPUTE`**,
+a `cmake_dependent_option` that is ON by default under
+`ROCPROFVIS_ENABLE_AGENTIC_PROFILING` and forced OFF without it, so the
+assistant can ship for system traces alone. Off, three guards do the
+work. `rocprofvis_ai_compute_tools.cpp` compiles to stubs: an empty
+handler table, a briefing that names the trace as one this build cannot
+read, and a no-op `ResetAssistantPcRead`. `PinTurnTrace` never pins a
+compute turn, so the prompt, the schema, the Explain-this-view text and
+`RestartHint` are always the system ones; the compute versions are still
+compiled, but nothing sends them. And `StartAssistantTool` refuses every
+tool but `offer_next_steps` on a compute tab. System traces behave the
+same either way. A new compute path that does not run through one of
+those three needs a guard of its own.
+
 Layered, transport at the bottom and the panel at the top:
 
 - `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
@@ -2532,7 +2546,8 @@ Layered, transport at the bottom and the panel at the top:
   but `offer_next_steps` when no trace is ready, parks while a trace is
   still loading, then searches the tables for whichever kind of trace is
   in front - system gets UI, data and script; compute gets shared-UI and
-  compute. Also defines the handful of helpers every body file needs.
+  compute, or is refused outright when compute support is not built in.
+  Also defines the handful of helpers every body file needs.
   Reads go through `DataProvider` and the view-side models only - never
   SQLite, never `src/model/`.
 - `rocprofvis_ai_tools_internal.h` - private wiring between the
@@ -2640,7 +2655,9 @@ Layered, transport at the bottom and the panel at the top:
   fetch so the panel runs it again once the slot clears; see
   `ComputeIsaView` for the slot rules it keeps. Every way a call ends -
   `FinishCurrentTool`, `AbandonBatchForNewTrace`, `ResetTurn` - clears its
-  retry marks through `ResetAssistantPcRead`.
+  retry marks through `ResetAssistantPcRead`. **Its body compiles only
+  under `ROCPROFVIS_ENABLE_AGENTIC_COMPUTE`**; with that off the file is
+  the stubs described under the compute gate above.
 - `rocprofvis_ai_script_tools.cpp` - `run_analysis_script`, which is
   neither of the above: the model writes Python, the interpreter
   computes the answer, and what comes back is a conclusion rather than
@@ -3764,7 +3781,9 @@ All under `agenticprofiling/`, compiled only with
   open; `kernel_triage` and `get_metrics` go through
   `DataProvider::FetchMetrics` under `ASSISTANT_CLIENT_ID`, and
   `kernel_pc_samples` through `DataProvider::FetchPcSampling`, sharing the
-  ISA View's slots.
+  ISA View's slots. Needs `ROCPROFVIS_ENABLE_AGENTIC_COMPUTE` as well (ON
+  by default with Ask Optiq); the table is empty otherwise, and a compute
+  tab is refused.
 - `run_analysis_script` -> `agenticprofiling/rocprofvis_ai_script_tools.cpp`
   -> Runs model-written Python through `DataProvider::ExecuteScript`.
   Needs `ROCPROFVIS_ENABLE_SCRIPTING` as well; the table is empty

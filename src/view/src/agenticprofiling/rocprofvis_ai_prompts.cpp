@@ -316,6 +316,9 @@ constexpr const char* ASSISTANT_SYSTEM_TRACE_PROMPT =
  * are the profiler's own, not ours: percent-of-peak is computed against a
  * clock rocminfo reports as achievable, and occupancy is unreliable on short
  * kernels.
+ *
+ * Compiled whether or not compute support is built in, but sent only when it
+ * is: without it the panel never pins a compute turn.
  */
 constexpr const char* ASSISTANT_COMPUTE_TRACE_PROMPT =
     "THIS IS A COMPUTE WORKLOAD, not a system trace. It holds kernels and the "

@@ -221,6 +221,19 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         {
             return DoneResult("No trace is open.", "No trace");
         }
+#ifndef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+        // Without compute support Ask Optiq reads system traces only. Refused
+        // once here rather than in every tool: the panel is a singleton, so a
+        // compute tab can be in front even when the panel was opened on a
+        // system trace.
+        if(context.is_compute)
+        {
+            return DoneResult(
+                "This is a compute trace, and this build of Ask Optiq reads system "
+                "traces only. Tell the user to open a system trace to ask about it.",
+                "Compute trace");
+        }
+#endif
         // Park rather than fail. Loading a large trace takes far longer than a
         // round trip to the model, so answering "not ready" straight away only
         // teaches it to retry into the same wall, or to answer without the data

@@ -695,7 +695,8 @@ AddComputeScopeParams(jt::Json& params, bool with_kernel)
 // Assembles the compute-trace schema. A compute trace is a set of workloads,
 // each holding kernels with aggregate dispatch statistics and a catalogue of
 // hardware metrics - there is no timeline, so none of these tools takes a time
-// range and none returns an event.
+// range and none returns an event. Compiled either way, but only ever built for
+// a compute turn, which a build without compute support never pins.
 jt::Json
 MakeAssistantComputeToolsJson()
 {

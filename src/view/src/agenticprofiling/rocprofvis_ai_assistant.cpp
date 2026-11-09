@@ -232,12 +232,16 @@ AssistantPanel::CurrentProjectId() const
 
 // The kind moves only here, together with the project, so the prompt and
 // schema a round goes out with always match the tools the dispatcher runs.
+// Without compute support every turn is a system turn, and the dispatcher turns
+// a compute tab away.
 bool
 AssistantPanel::PinTurnTrace()
 {
     const bool was_compute = m_turn_is_compute;
     m_turn_project_id      = CurrentProjectId();
-    m_turn_is_compute      = MakeToolContext().is_compute;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    m_turn_is_compute = MakeToolContext().is_compute;
+#endif
     return m_turn_is_compute != was_compute;
 }
 
@@ -278,11 +282,13 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
     {
         out << "User question:\n" << question << "\n";
     }
-    else if(context.is_compute)
+    else if(m_turn_is_compute)
     {
         // Names the free tools, so the button never spends a metric query the
         // user did not ask for. kernel_roofline follows compute_overview
         // because, with several kernels, it needs the id that call hands back.
+        // Keyed on the pinned kind rather than the trace's, because these are
+        // the names in the schema the turn goes out with.
         out << "Explain this view. Call compute_overview, then kernel_roofline with "
                "the kernel_id of the kernel that owns the most time, so the "
                "explanation uses real kernel names and numbers. Stay on the tools "

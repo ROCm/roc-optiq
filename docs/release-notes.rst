@@ -19,8 +19,8 @@ Added
 Systems Trace Summary
 ~~~~~~~~~~~~~~~~~~~~~
 
-* The **Summary** view now covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top entries also report percent of total duration and mean duration.
-* **Details** on a category card opens that category's tab, which gives a fuller breakdown.
+* The **Summary** view covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top entries also report percent of total duration and mean duration.
+* **Details** on a category card opens that category's tab, with pie and bar charts and a table of its operations.
 * A **System Topology** tab shows the system topology and counters.
 
 Compute profiling
@@ -28,7 +28,7 @@ Compute profiling
 
 * Roofline comparison: compare a kernel against a baseline kernel, including a kernel from another workload, and choose whether hardware peaks come from the baseline or the compared workload.
 * Roofline option menus open outside the plot by default.
-* Roofline now has toggleable labels for hardware peaks.
+* Roofline has toggleable labels for hardware peaks.
 * **Profile Details** (formerly **Workload Details**) includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
 
 Memory chart
@@ -50,12 +50,12 @@ Trace formats
 Timeline and navigation
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-* File Explorer-style track selection: In the timeline and the topology sidebar, click a track to select only that track, **Ctrl**+click to add or remove it, and **Shift**+click to select every track in between.
+* File Explorer-style track selection: In the timeline and the System Topology sidebar, click a track to select only that track. Hold **Ctrl** and click to add a track to the selection or remove it. Hold **Shift** and click to select every track between the last track and the one you click.
 
 ISA View
 ~~~~~~~~
 
-* ISA View is included in the release build and marked **Tech Preview**, because the collected data format is still under development. The tab is inactive when the database has no ISA lines.
+* ISA View is included in the release build and marked **Tech Preview**, because the collected data format is still under development.
 
 Binaries / build
 ~~~~~~~~~~~~~~~~

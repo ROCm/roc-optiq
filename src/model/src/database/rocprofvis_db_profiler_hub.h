@@ -162,7 +162,7 @@ private:
                                           rocprofvis_db_track_selection_t  tracks,
                                           rocprofvis_dm_query_criteria_ptr source_filter);
 
-    std::string ProfilerHub::BuildSemanticSourceFilter(
+    std::string BuildSemanticSourceFilter(
         rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
         rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks,
         rocprofvis_dm_query_criteria_ptr         source_filter,
@@ -170,7 +170,7 @@ private:
         rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring,
         bool include_category, bool partial_matching);
 
-    rocprofvis_dm_result_t ProfilerHub::PopulateStreamToHardwareFlowProperties(
+    rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(
         uint32_t stream_track_index, uint32_t db_instance);
 
     rocprofvis_dm_track_category_t GetRegionTrackCategory() override

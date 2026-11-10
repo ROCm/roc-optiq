@@ -892,8 +892,13 @@ include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 # Archive generators wrap the prefix in <package>-<version>-<system>/. DEB and
-# RPM do not. Leave it off so the tarball extracts onto / at the install prefix.
+# RPM do not. Leave it off so the tarball has no wrapper directory.
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+# The tarball drops the install prefix too, so it extracts flat into the current
+# directory like the other ROCm extras (RVS, MIGraphX). DEB and RPM keep it.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocprofvis_cpack_config.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake" @ONLY)
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake")
 
 set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
 # Detect Linux distro for additional package types

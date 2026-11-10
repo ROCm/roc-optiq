@@ -69,7 +69,7 @@ These features are in progress and available for preview only (build from source
 - Fixed a leaked row-count query when a table had nothing to count.
 - Fixed invalid table filter feedback. Improved error notifications when table filters are invalid.
 - Fixed the kernel selection table disappearing when a filter matches no rows.
-- Fixed Linux tarball extracts at the install prefix. It no longer wraps its contents in a `<package>-<version>-<system>/` directory, matching the .deb and .rpm layout.
+- Fixed the Linux tarball extracting into `/opt/rocm/...`. It is now flat (`bin/`, `lib/`, `share/` at the root) and extracts into the current directory, matching other ROCm extras such as RVS. The .deb and .rpm still install under the prefix.
 - Fixed missing dependencies in Debian packages.
 - Fixed commit hash missing from Linux builds.
 - Fixed process id not read correctly in some trace files.

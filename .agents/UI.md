@@ -2014,8 +2014,13 @@ remain unset and measured zero remains present. The fields travel with completed
 sample states even when stall details fail, and the shared prepared snapshot feeds
 both ISA and source rows. Both code panes render the percentages through the
 shared `SamplingStateRenderer` metric cells and headers.
-Instruction-sample metadata and dispatch UUID remain available only on the
-controller handle.
+`PcSamplingData` also owns `InstructionSample` records and
+`InstructionSampleLookup` labels. `DataProvider::LoadPcSamplingInstructionSamples`
+and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
+into these vectors. Counts remain optional, preserving unrecorded values and
+measured zero. Fresh rows replace previous records on every load. Raw issue-state
+data is not yet aggregated into ISA/source sampling rows or rendered. Dispatch
+UUID remains available only on the controller handle.
 Instruction samples are optional: absent sample/lookup tables or empty results
 must not downgrade the existing sampling columns. Missing instruction-sample
 counts remain unavailable, distinct from measured zero. When added, the issue-state
@@ -2034,13 +2039,16 @@ failure with retained total counts uses Warning and explains the total-only view
 Successful empty results, expected host-trap absence, cancellation, and stale
 callbacks do not produce failure notifications.
 
-The sampling request still contains sample states and stall details, but their
-completion is tracked independently. `DataProvider` reads the controller's
-`SampleStatesLoaded` and `StallDetailsLoaded` properties even after a failed
-sampling request, except cancellation or a superseded request. It copies only
-completed query groups into `PcSamplingData`; reasons are published together with
-their lookups. Explicit completion flags distinguish successful empty results from
-failed queries. The view prepares any retained sample counts for both panes.
+The sampling request contains sample states, stall details, and instruction
+samples, with independent completion flags. `DataProvider` reads the controller's
+`SampleStatesLoaded`, `StallDetailsLoaded`, and `InstructionSamplesLoaded` properties
+even after a failed sampling request, except cancellation or a superseded request.
+It copies only completed query groups into `PcSamplingData`; reasons and instruction
+samples are each published together with their corresponding lookups. An incomplete
+instruction-sample group clears both view-model vectors and leaves
+`instruction_samples_loaded` false, even if the controller has partial records.
+Successful empty results set the completion flag with empty vectors. The view
+prepares any retained sample counts for both panes.
 
 If sample counts loaded but stall details failed, Sampling State displays neutral
 total-sample bars with formatted sample counts and the existing hottest-row
@@ -3762,7 +3770,8 @@ All under `agenticprofiling/`, compiled only with
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
 - `ComputeDataModel`, `ComputeKernelSelectionTable` ->
   `model/compute/rocprofvis_compute_data_model.h`.
-- `AvailableMetrics`, `PcSampleState`, `InstructionSourceLine`,
+- `AvailableMetrics`, `PcSampleState`, `InstructionSample`,
+  `InstructionSampleLookup`, `InstructionSourceLine`,
   `InstructionLine`, `KernelSymbol`, `CodeObjectStore`, `SourceLine`,
   `SourceFile`, `PcSamplingData`, `KernelInfo`, `WorkloadInfo`,
   `MetricValue`, `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->

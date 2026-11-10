@@ -1021,8 +1021,9 @@ selects the first available source file. The stall fetch independently loads
 PC sample states and stall-reason counts. It also loads instruction-sample
 metadata by default for compatibility, unless the caller sets
 `kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
-the default full fetch; instruction samples currently remain on the controller
-handle until the view-model projection is extended. Per-table flags on
+the default full fetch and copies completed instruction-sample records and
+lookup text into its view model. Interpretation and rendering remain View-layer
+responsibilities. Per-table flags on
 `PcSampling` prevent repeated queries while `m_source_line_cache` stores source
 lines separately by file UUID.
 
@@ -1125,16 +1126,20 @@ owning layer mutex. ISA owns the code-object, kernel-symbol and instruction-line
 flags; source owns the source-file and instruction-correlation flags; stalls
 owns the sample-state, stall-detail and instruction-sample flags. Distinct scalar
 booleans avoid shared read-modify-write state across independently locked layers.
-The completion properties read `m_pc_sample_states_loaded` and `m_stalls_loaded`
-under the same stalls mutex used by their fetchers.
+The completion properties read `m_pc_sample_states_loaded`, `m_stalls_loaded`,
+and `m_instruction_samples_loaded` under the same stalls mutex used by their
+fetchers.
 Row-count setters clear their destination vectors before resizing so a failed
 fetch followed by a retry cannot preserve fields from an earlier result.
-Read-only uint64 properties `kRPVControllerPCSamplingSampleStatesLoaded` and
-`kRPVControllerPCSamplingStallDetailsLoaded` expose completed query groups under
+Read-only uint64 properties `kRPVControllerPCSamplingSampleStatesLoaded`,
+`kRPVControllerPCSamplingStallDetailsLoaded`, and
+`kRPVControllerPCSamplingInstructionSamplesLoaded` expose completed query groups under
 the stalls-layer lock. They are appended to the property bank to preserve existing
 IDs. They remain readable after a later query fails; a successful empty query is
 loaded as well. Stall details are complete only after both reasons and lookups
-succeed. Retrying the same request reuses completed groups and queries the failed
+succeed. Instruction samples are complete only after records and lookup metadata
+load successfully; partial records after a lookup failure do not mark the group
+loaded. Retrying the same request reuses completed groups and queries the failed
 group again.
 
 `GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
@@ -1539,7 +1544,9 @@ controller loading and verify that sample counts, stall details, and any remaini
 metric are still loaded successfully.
 Instruction-sample scenarios use the default full fetch and cover missing tables,
 empty results, samples belonging to another state, missing/NULL counts, measured
-zero, populated counts, row replacement, and genuine query failures.
+zero, populated counts, row replacement, and genuine query failures. Completion
+checks also cover skipped fetches, successful empty-result caching, partial records
+after lookup failure, and retry without refetching completed sample-state groups.
 
 `rocprofvis_controller_test_database.h` provides the shared `TemporaryDatabase`
 utility for PC-sampling and summary fixtures. It owns a copied database file,

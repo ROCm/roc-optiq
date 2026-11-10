@@ -176,10 +176,10 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/optiq-ci-manylinux:latest
+      image: ghcr.io/rocm/optiq-ci-manylinux@sha256:21a37da72e6875d7cb8beaa8dd6031b7d33dc5c48bd519afeefb6aec987b98fb
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           submodules: true
@@ -266,7 +266,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-manylinux${{ inputs.artifact_suffix }}
           path: |
@@ -284,7 +284,7 @@ jobs:
 
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-manylinux-release${{ inputs.artifact_suffix }}
           path: |
@@ -329,7 +329,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.S3_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}

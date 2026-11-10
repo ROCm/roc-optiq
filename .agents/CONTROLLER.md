@@ -1021,7 +1021,8 @@ selects the first available source file. The stall fetch independently loads
 PC sample states and stall-reason counts. It also loads instruction-sample
 metadata by default for compatibility, unless the caller sets
 `kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
-that opt-out because it does not consume the metadata. Per-table flags on
+the default full fetch; instruction samples currently remain on the controller
+handle until the view-model projection is extended. Per-table flags on
 `PcSampling` prevent repeated queries while `m_source_line_cache` stores source
 lines separately by file UUID.
 
@@ -1148,6 +1149,13 @@ sampling does not measure progress state. Empty database cells leave the
 corresponding `std::optional` unset. Their UInt64 getters return
 `kRocProfVisResultNotLoaded` for an unset value, while a measured zero returns
 success with zero; `total_count` remains a required UInt64 value.
+
+Instruction-sample counts follow the same optional-value convention: SQL NULL
+or a missing `compute_instruction_sample.count` column returns
+`kRocProfVisResultNotLoaded` without overwriting the caller's output; a measured
+zero returns success. Replacing instruction-sample rows resets their counts.
+If either instruction-sample table is absent, the model returns successful empty
+sample and lookup results, preserving the completed sample-state and stall groups.
 
 Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 (guarded by `__kRPVControllerPCSamplingPropertiesFirst` and
@@ -1529,6 +1537,9 @@ stall-detail failure and retry.
 Additional schema scenarios remove either or both percentage columns before
 controller loading and verify that sample counts, stall details, and any remaining
 metric are still loaded successfully.
+Instruction-sample scenarios use the default full fetch and cover missing tables,
+empty results, samples belonging to another state, missing/NULL counts, measured
+zero, populated counts, row replacement, and genuine query failures.
 
 `rocprofvis_controller_test_database.h` provides the shared `TemporaryDatabase`
 utility for PC-sampling and summary fixtures. It owns a copied database file,

@@ -1774,9 +1774,9 @@ independent layers:
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
 - `kStalls` runs automatically whenever the view selects a kernel, independently
-  of column visibility. The View asks the controller for PC sample states plus stall-reason
-  rows and lookups, explicitly excluding instruction-sample metadata that this
-  view does not consume. The projection uses each state's UUID, instruction
+  of column visibility. The View asks the controller for PC sample states,
+  stall-reason rows and lookups, and instruction-sample metadata. The projection
+  currently uses each state's UUID, instruction
   UUID and total count, plus nullable issued/stall counts and wave-occupancy /
   active-thread percentages, together with the stall-reason rows and lookup text.
   A controller getter returns `kRocProfVisResultNotLoaded` for an unmeasured count
@@ -2016,6 +2016,10 @@ both ISA and source rows. Both code panes render the percentages through the
 shared `SamplingStateRenderer` metric cells and headers.
 Instruction-sample metadata and dispatch UUID remain available only on the
 controller handle.
+Instruction samples are optional: absent sample/lookup tables or empty results
+must not downgrade the existing sampling columns. Missing instruction-sample
+counts remain unavailable, distinct from measured zero. When added, the issue-state
+column must use the same unavailable placeholder as other sampling metrics.
 
 PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
 its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected

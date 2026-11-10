@@ -159,6 +159,9 @@ namespace DataModel
         bool m_has_memory_chart_extdata = false;
         bool                                      m_has_pc_wave_occupancy_percent = false;
         bool                                      m_has_pc_active_thread_percent  = false;
+        bool                                      m_has_instruction_type_lookups  = false;
+        bool                                      m_has_instruction_sample_tables = false;
+        bool                                      m_has_instruction_sample_count  = false;
         std::unordered_map<uint32_t, KernelStats> m_kernel_stats;
         std::vector<MetricRow> m_metric_rows;
         std::mutex m_mutex;
@@ -179,6 +182,9 @@ namespace DataModel
         static int CallbackDetectPcSamplingMetricColumns(void* data, int argc,
                                                          sqlite3_stmt* stmt,
                                                          char**        azColName);
+        static int CallbackDetectInstructionSampleCountColumn(void* data, int argc,
+                                                              sqlite3_stmt* stmt,
+                                                              char**        azColName);
         static int CallbackGetComputeWorkloadTopKernels(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);

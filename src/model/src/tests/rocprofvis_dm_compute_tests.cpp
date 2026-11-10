@@ -325,6 +325,71 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
         }
     }
 
+    SECTION("Instruction samples preserve NULL counts and kernel-scoped lookups")
+    {
+        const char* fixture = R"sql(
+            WITH compute_instruction_sample(instruction_sample_uuid,
+                pc_sample_state_uuid, instruction_sample_lookup_uuid, count) AS (VALUES
+                (1, 1, 1, NULL), (2, 1, 2, 0), (3, 1, 3, 1649), (4, 2, 4, 999)),
+            compute_instruction_sample_lookup(instruction_sample_lookup_uuid, text)
+                AS (VALUES (1, 'NO_INST'), (2, 'BARRIER'), (3, NULL), (4, 'OTHER_KERNEL')),
+            compute_pc_sample_state(pc_sample_state_uuid, instruction_uuid)
+                AS (VALUES (1, 10), (2, 20)),
+            compute_instruction_line(instruction_uuid, kernel_symbol_uuid)
+                AS (VALUES (10, 1), (20, 2)),
+            compute_kernel_symbol(kernel_symbol_uuid, kernel_uuid)
+                AS (VALUES (1, 42), (2, 43))
+        )sql";
+        for(const char* version : { "2.2.0", "2.3.0", "2.5.0" })
+        {
+            CAPTURE(version);
+            RocProfVis::DataModel::ComputeQueryFactory factory(nullptr);
+            factory.SetVersion(version);
+            rocprofvis_db_compute_param_t kernel = { kRPVComputeParamKernelId, "42" };
+            for(rocprofvis_db_compute_use_case_enum_t use_case :
+                { kRPVComputeFetchKernelInstructionSamples,
+                  kRPVComputeFetchKernelInstructionSampleLookups })
+            {
+                CAPTURE(use_case);
+                std::string query;
+                REQUIRE(
+                    (use_case == kRPVComputeFetchKernelInstructionSamples
+                         ? factory.GetComputeKernelInstructionSamples(1, &kernel, query)
+                         : factory.GetComputeKernelInstructionSampleLookups(
+                               1, &kernel, query)) == kRocProfVisDmResultSuccess);
+                query.insert(0, fixture);
+                std::unique_ptr<void, decltype(&rocprofvis_db_future_free)> future(
+                    rocprofvis_db_future_alloc(db_progress), &rocprofvis_db_future_free);
+                REQUIRE(future);
+                rocprofvis_dm_table_id_t table_id = 0;
+                REQUIRE(rocprofvis_db_execute_compute_query_async(
+                            m_db, use_case, query.c_str(), future.get(), &table_id) ==
+                        kRocProfVisDmResultSuccess);
+                REQUIRE(rocprofvis_db_future_wait(future.get(), 30) ==
+                        kRocProfVisDmResultSuccess);
+                const ComputeQueryResult result =
+                    ParseComputeQueryResult(m_trace, table_id);
+                REQUIRE(result.rows.size() == 3);
+                if(use_case == kRPVComputeFetchKernelInstructionSamples)
+                {
+                    const int count = result.columns.at(
+                        kRPVComputeColumnPcSamplingInstructionSampleCount);
+                    CHECK(result.rows[0][count].empty());
+                    CHECK(result.rows[1][count] == "0");
+                    CHECK(result.rows[2][count] == "1649");
+                }
+                else
+                {
+                    const int text = result.columns.at(
+                        kRPVComputeColumnPcSamplingInstructionSampleLookupText);
+                    CHECK(result.rows[0][text] == "NO_INST");
+                    CHECK(result.rows[1][text] == "BARRIER");
+                    CHECK(result.rows[2][text].empty());
+                }
+            }
+        }
+    }
+
     // Queries all available workloads and stores their id/name in the fixture.
     // Fixture Reads:  m_db, m_trace
     // Fixture Writes: m_workloads[].id, m_workloads[].name

@@ -356,9 +356,9 @@ jobs:
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_BASE=$(basename "${DEB_SRC}")
           if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            DEB_NAME="amdrocm${ROCM_VERSION}-$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
+            DEB_NAME="$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
           else
-            DEB_NAME="amdrocm${ROCM_VERSION}-${DEB_BASE}"
+            DEB_NAME="${DEB_BASE}"
           fi
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64

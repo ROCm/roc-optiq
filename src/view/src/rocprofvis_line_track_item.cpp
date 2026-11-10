@@ -161,6 +161,16 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
     double      scale_y         = content_size.y / (m_max_y.Value() - m_min_y.Value());
     const float bottom_of_chart = cursor_position.y + content_size.y;
+    // One window origin for every sample. MapToUI used to query it per point.
+    const float  origin_x   = ImGui::GetWindowPos().x;
+    const ImVec2 clip_min   = draw_list->GetClipRectMin();
+    const ImVec2 clip_max   = draw_list->GetClipRectMax();
+    const float  view_min_x = clip_min.x;
+    const float  view_max_x = clip_max.x;
+    const ImVec2 mouse_pos  = ImGui::GetIO().MousePos;
+    const ImVec2 touch_pad  = ImGui::GetStyle().TouchExtraPadding;
+    const bool track_hovered = ImGui::IsWindowHovered(
+        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
     ImU32 base_fill_color   = m_settings.GetColor(Colors::kLineChartColor);
     ImU32 alt_fill_color    = m_settings.GetColor(Colors::kLineChartColorAlt);
@@ -188,10 +198,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
     size_t data_len = m_data.size();
     for(size_t i = 0; i < data_len; ++i)
     {
-        ImVec2 point_start = MapToUI(m_data[i].m_start_ts, m_data[i].m_value,
+        ImVec2 point_start = MapToUI(m_data[i].m_start_ts, m_data[i].m_value, origin_x,
                                      cursor_position, content_size, scale_y);
-        ImVec2 point_end = MapToUI(m_data[i].m_end_ts, m_data[i].m_value, cursor_position,
-                                   content_size, scale_y);
+        ImVec2 point_end   = MapToUI(m_data[i].m_end_ts, m_data[i].m_value, origin_x,
+                                     cursor_position, content_size, scale_y);
 
         if(data_len == 1)
         {
@@ -199,42 +209,60 @@ LineTrackItem::BoxPlotRender(float graph_width)
             point_end.x = std::max(point_end.x, point_start.x + 1.0f);
         }
 
-        ImU32 fill_color = base_fill_color;
-        if(m_counter_options)
+        // Samples are fetched with a viewport of padding on each side. Skip quads
+        // that sit fully outside the clip, and still stroke a connector that
+        // crosses the edge.
+        const float sample_min_x = std::min(point_start.x, point_end.x);
+        const float sample_max_x = std::max(point_start.x, point_end.x);
+        const bool  sample_visible =
+            sample_max_x >= view_min_x && sample_min_x <= view_max_x;
+
+        if(sample_visible)
         {
-            if(m_counter_options->m_boxplot.enabled)
+            ImU32 fill_color = base_fill_color;
+            if(m_counter_options)
             {
-                if(m_counter_options->m_boxplot.stripes && (i % 2))
+                if(m_counter_options->m_boxplot.enabled)
                 {
-                    fill_color = alt_fill_color;
+                    if(m_counter_options->m_boxplot.stripes && (i % 2))
+                    {
+                        fill_color = alt_fill_color;
+                    }
+                }
+                else
+                {
+                    fill_color = transparent_color;
                 }
             }
-            else
-            {
-                fill_color = transparent_color;
-            }
-        }
 
-        draw_list->AddRectFilled(ImVec2(point_start.x, point_start.y),
-                                 ImVec2(point_end.x, bottom_of_chart), fill_color);
-        draw_list->AddLine(point_start, point_end, outline_color, DEFAULT_LINE_THICKNESS);
+            draw_list->AddRectFilled(ImVec2(point_start.x, point_start.y),
+                                     ImVec2(point_end.x, bottom_of_chart), fill_color);
+            draw_list->AddLine(point_start, point_end, outline_color,
+                               DEFAULT_LINE_THICKNESS);
+        }
 
         if(i + 1 < m_data.size())
         {
             // Map the start of the next box
             ImVec2 next_point_start =
-                MapToUI(m_data[i + 1].m_start_ts, m_data[i + 1].m_value, cursor_position,
-                        content_size, scale_y);
-
-            draw_list->AddLine(point_end, next_point_start, outline_color,
-                               DEFAULT_LINE_THICKNESS);
+                MapToUI(m_data[i + 1].m_start_ts, m_data[i + 1].m_value, origin_x,
+                        cursor_position, content_size, scale_y);
+            const float segment_min_x = std::min(point_end.x, next_point_start.x);
+            const float segment_max_x = std::max(point_end.x, next_point_start.x);
+            if(segment_max_x >= view_min_x && segment_min_x <= view_max_x)
+            {
+                draw_list->AddLine(point_end, next_point_start, outline_color,
+                                   DEFAULT_LINE_THICKNESS);
+            }
         }
 
-        if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x, 0.0f),
-                                      ImVec2(point_end.x, bottom_of_chart)) &&
-           ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
-                                  ImGuiHoveredFlags_NoPopupHierarchy) &&
-           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+        if(sample_visible && track_hovered &&
+           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone &&
+           mouse_pos.x >= sample_min_x - touch_pad.x &&
+           mouse_pos.x < sample_max_x + touch_pad.x &&
+           mouse_pos.y < bottom_of_chart + touch_pad.y &&
+           ImGui::IsMouseHoveringRect(ImVec2(point_start.x, 0.0f),
+                                      ImVec2(point_end.x, bottom_of_chart)))
         {
             hovered_idx = static_cast<int>(i);
         }
@@ -262,9 +290,9 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
         // Map start and end points
         ImVec2 start_point = MapToUI(hovered_item.m_start_ts, hovered_item.m_value,
-                                     cursor_position, content_size, scale_y);
-        ImVec2 end_point   = MapToUI(hovered_item.m_end_ts, hovered_item.m_value,
-                                     cursor_position, content_size, scale_y);
+                                     origin_x, cursor_position, content_size, scale_y);
+        ImVec2 end_point = MapToUI(hovered_item.m_end_ts, hovered_item.m_value, origin_x,
+                                   cursor_position, content_size, scale_y);
 
         // Draw a circle at the start
         draw_list->AddCircle(start_point, 4.0f, accent, 12, 3);
@@ -543,13 +571,13 @@ LineTrackItem::RenderChart(float graph_width)
 }
 
 ImVec2
-LineTrackItem::MapToUI(double x_in, double y_in, ImVec2& cursor_position,
-                       ImVec2& content_size, double scaleY)
+LineTrackItem::MapToUI(double x_in, double y_in, float origin_x,
+                       const ImVec2& cursor_position, const ImVec2& content_size,
+                       double scale_y)
 {
-    ImVec2 container_pos = ImGui::GetWindowPos();
-
-    double x = container_pos.x + m_tpt->RawTimeToPixel(x_in);
-    double y = cursor_position.y + content_size.y - (y_in - m_min_y.Value()) * scaleY;
+    double x = static_cast<double>(origin_x) + m_tpt->RawTimeToPixel(x_in);
+    double y =
+        cursor_position.y + content_size.y - (y_in - m_min_y.Value()) * scale_y;
 
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }

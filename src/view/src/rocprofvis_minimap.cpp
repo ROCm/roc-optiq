@@ -392,26 +392,51 @@ Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
 {
     if(m_visible_tracks.empty() || m_data_width == 0 || m_data_height == 0) return;
 
-    float bw = map_size.x / m_data_width, bh = map_size.y / m_data_height;
+    const float bw = map_size.x / static_cast<float>(m_data_width);
+    const float bh = map_size.y / static_cast<float>(m_data_height);
     for(size_t y = 0; y < m_data_height && y < m_visible_tracks.size(); ++y)
-        for(size_t x = 0; x < m_data_width; ++x)
-            if(double v = m_downsampled_data[y][x])
+    {
+        const rocprofvis_controller_track_type_t track_type =
+            m_visible_tracks[y]->track_type;
+        // A hidden series paints the opaque map background, so the row contributes
+        // nothing and can be skipped entirely.
+        if((track_type == kRPVControllerTrackTypeSamples && !m_show_counters) ||
+           (track_type == kRPVControllerTrackTypeEvents && !m_show_events))
+        {
+            continue;
+        }
+
+        const float row_y = map_pos.y + static_cast<float>(y) * bh;
+        size_t      x     = 0;
+        while(x < m_data_width)
+        {
+            const double value = m_downsampled_data[y][x];
+            if(value == 0.0)
             {
-                if(m_visible_tracks[y]->track_type == kRPVControllerTrackTypeSamples)
-                {
-                    dl->AddRectFilled(
-                        ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
-                        ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
-                        GetColor(v, kRPVControllerTrackTypeSamples));
-                }
-                else
-                {
-                    dl->AddRectFilled(
-                        ImVec2(map_pos.x + x * bw, map_pos.y + y * bh),
-                        ImVec2(map_pos.x + x * bw + bw, map_pos.y + y * bh + bh),
-                        GetColor(v, kRPVControllerTrackTypeEvents));
-                }
+                ++x;
+                continue;
             }
+
+            // Merge a horizontal run of the same color into one quad. The run's
+            // outer edges use the same per-cell formula, so the pixels match.
+            const ImU32 color   = GetColor(value, track_type);
+            size_t      run_end = x + 1;
+            while(run_end < m_data_width)
+            {
+                const double next_value = m_downsampled_data[y][run_end];
+                if(next_value == 0.0 || GetColor(next_value, track_type) != color)
+                {
+                    break;
+                }
+                ++run_end;
+            }
+
+            const float x0 = map_pos.x + static_cast<float>(x) * bw;
+            const float x1 = map_pos.x + static_cast<float>(run_end - 1) * bw + bw;
+            dl->AddRectFilled(ImVec2(x0, row_y), ImVec2(x1, row_y + bh), color);
+            x = run_end;
+        }
+    }
 }
 
 void

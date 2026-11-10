@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -30,6 +31,10 @@ namespace View
 {
 
 inline constexpr float MIN_LABEL_WIDTH          = 40.0f;
+inline constexpr float EVENT_BOX_ROUNDING       = 2.0f;
+// ImGui fills a rounded rect with a convex path once the radius reaches half a
+// pixel. Bars thinner than the corner never show it, so they stay on the quad path.
+inline constexpr float MIN_ROUNDED_BOX_SIZE     = EVENT_BOX_ROUNDING * 2.0f;
 inline constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
 inline constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
 inline constexpr float TOOLTIP_OFFSET           = 16.0f;
@@ -549,12 +554,11 @@ FlameTrackItem::ComputeTextVerticalOffset(float box_height) const
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float duration,
-                        ImDrawList* draw_list, bool use_highlight_color)
+                        ImDrawList* draw_list, bool use_highlight_color,
+                        const ChartDrawState& draw_state)
 {
-    ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-    ImVec2 content_size    = ImGui::GetContentRegionAvail();
-
-    const float box_height = EventBoxHeight();
+    const ImVec2& cursor_position = draw_state.cursor_position;
+    const float   box_height      = draw_state.box_height;
 
     ImVec2 rectMin = ImVec2(start_position.x, start_position.y + cursor_position.y);
     ImVec2 rectMax = ImVec2(start_position.x + duration,
@@ -604,111 +608,142 @@ FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float dura
         rectColor   = color_wheel[color_index];
     }
 
-    float rounding = 2.0f;
+    const float box_width = rectMax.x - rectMin.x;
+    // A 2px corner is invisible on a 1px bar, and the rounded fill builds a convex
+    // path instead of a quad. Dense, zoomed-out tracks are almost all this case.
+    const float rounding = (box_width >= MIN_ROUNDED_BOX_SIZE &&
+                            box_height >= MIN_ROUNDED_BOX_SIZE)
+                               ? EVENT_BOX_ROUNDING
+                               : 0.0f;
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
 
-    if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH &&
-       box_height >= ImGui::GetTextLineHeight())
+    if(draw_state.labels_fit && box_width > MIN_LABEL_WIDTH)
     {
-        draw_list->PushClipRect(rectMin, rectMax, true);
-        const std::string label =
-            (chart_item.event.m_child_count > 1)
-                ? std::to_string(chart_item.event.m_child_count) + " events"
-                : chart_item.event.m_name;
+        char        count_label[32];
+        const char* label = chart_item.event.m_name.c_str();
+        if(chart_item.event.m_child_count > 1)
+        {
+            std::snprintf(count_label, sizeof(count_label), "%u events",
+                          chart_item.event.m_child_count);
+            label = count_label;
+        }
+
         const float text_y  = rectMin.y + m_text_vertical_offset;
         ImVec2      textPos = ImVec2(rectMin.x + m_text_padding.x, text_y);
 
-        if(chart_item.event.m_child_count > 1)
+        if(chart_item.event.m_child_count <= 1)
         {
-            draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                               label.c_str());
-        }
-        else
-        {
-            if(rectMin.x < draw_list->GetClipRectMin().x &&
-               rectMax.x > draw_list->GetClipRectMin().x)
+            const float clip_left = draw_list->GetClipRectMin().x;
+            if(rectMin.x < clip_left && rectMax.x > clip_left)
             {
-                // If the rectangle is partially outside the viewport then start rendering
-                // the text at the viewport edge to maintain readability.
-                textPos =
-                    ImVec2(draw_list->GetClipRectMin().x + m_text_padding.x, text_y);
-                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                                   label.c_str());
-            }
-            else
-            {
-                // The rectangle is fully inside the viewport, render text normally.
-                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                                   label.c_str());
+                // The bar starts off the left of the viewport. Draw the name at the
+                // viewport edge so it stays readable while the bar is clipped.
+                textPos.x = clip_left + m_text_padding.x;
             }
         }
-        draw_list->PopClipRect();
+
+        // Walk only about a pixel's worth of bytes past the bar. Kernel names are
+        // much longer than the bar, and the clipped tail would still be tessellated.
+        // The extra bytes keep the glyph that straddles the edge; the fine clip
+        // cuts it without a per-bar PushClipRect, which would split the draw batch.
+        const float max_width = rectMax.x - textPos.x;
+        if(max_width > 0.0f)
+        {
+            const char* text_end  = label;
+            const int   max_bytes = static_cast<int>(max_width) + 8;
+            int         counted   = 0;
+            while(text_end[0] != '\0' && counted < max_bytes)
+            {
+                ++text_end;
+                ++counted;
+            }
+            // Don't stop in the middle of a UTF-8 sequence.
+            while(text_end[0] != '\0' &&
+                  (static_cast<unsigned char>(text_end[0]) & 0xC0) == 0x80)
+            {
+                ++text_end;
+            }
+            if(text_end != label)
+            {
+                ImFont*      font      = ImGui::GetFont();
+                const float  font_size = ImGui::GetFontSize();
+                const ImVec4 fine_clip(rectMin.x, rectMin.y, rectMax.x, rectMax.y);
+                draw_list->AddText(font, font_size, textPos, draw_state.text_color, label,
+                                   text_end, 0.0f, &fine_clip);
+            }
+        }
     }
-    if(ImGui::IsMouseHoveringRect(rectMin, rectMax) &&
-       ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
-                              ImGuiHoveredFlags_NoPopupHierarchy))
+    if(draw_state.track_hovered)
     {
-        // Select on click
-        if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left) &&
-           TimelineFocusManager::GetInstance().GetFocusedLayer() !=
-               Layer::kInteractiveLayer)
+        const ImVec2& mouse = draw_state.mouse_pos;
+        const ImVec2& pad   = draw_state.touch_pad;
+        const bool    mouse_near =
+            mouse.x >= rectMin.x - pad.x && mouse.x < rectMax.x + pad.x &&
+            mouse.y >= rectMin.y - pad.y && mouse.y < rectMax.y + pad.y;
+        if(mouse_near && ImGui::IsMouseHoveringRect(rectMin, rectMax))
         {
-            // Defer on click execution to next frame if no other layer takes focus
-            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
-        }
-        // Execute deferred click if layer has focus
-        else if(!m_deferred_click_handled &&
-                TimelineFocusManager::GetInstance().GetFocusedLayer() ==
-                    Layer::kGraphLayer)
-        {
-            m_deferred_click_handled       = true;
-            MeasurementController& measure = *m_measurement;
-
-            if(measure.IsMeasurementMode() && !measure.IsFreehandMode())
+            // Select on click
+            if(IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left) &&
+               TimelineFocusManager::GetInstance().GetFocusedLayer() !=
+                   Layer::kInteractiveLayer)
             {
-                // Clicking after a complete measurement starts a new one.
-                if(measure.GetMeasurementState() == MeasurementState::kComplete)
-                {
-                    m_timeline_selection->UnhighlightPersistentEvents();
-                    measure.ClearMeasurement();
-                }
-                measure.SetMeasurementPoint(
-                    chart_item.event.m_start_ts, chart_item.event.m_duration, m_track_id,
-                    chart_item.event.m_level, chart_item.event.m_name,
-                    chart_item.event.m_id.uuid);
-                m_timeline_selection->HighlightTrackEventPersistent(
-                    m_track_id, chart_item.event.m_id.uuid);
+                // Defer on click execution to next frame if no other layer takes focus
+                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kGraphLayer);
             }
-            else if(!measure.IsMeasurementMode())
+            // Execute deferred click if layer has focus
+            else if(!m_deferred_click_handled &&
+                    TimelineFocusManager::GetInstance().GetFocusedLayer() ==
+                        Layer::kGraphLayer)
             {
-                chart_item.selected = !chart_item.selected;
+                m_deferred_click_handled       = true;
+                MeasurementController& measure = *m_measurement;
 
-                if(!HotkeyManager::GetInstance().IsActionHeld(
-                       HotkeyActionId::kMultiSelect))
+                if(measure.IsMeasurementMode() && !measure.IsFreehandMode())
                 {
-                    m_timeline_selection->UnselectAllEvents();
+                    // Clicking after a complete measurement starts a new one.
+                    if(measure.GetMeasurementState() == MeasurementState::kComplete)
+                    {
+                        m_timeline_selection->UnhighlightPersistentEvents();
+                        measure.ClearMeasurement();
+                    }
+                    measure.SetMeasurementPoint(
+                        chart_item.event.m_start_ts, chart_item.event.m_duration,
+                        m_track_id, chart_item.event.m_level, chart_item.event.m_name,
+                        chart_item.event.m_id.uuid);
+                    m_timeline_selection->HighlightTrackEventPersistent(
+                        m_track_id, chart_item.event.m_id.uuid);
                 }
+                else if(!measure.IsMeasurementMode())
+                {
+                    chart_item.selected = !chart_item.selected;
 
-                chart_item.selected ? m_timeline_selection->SelectTrackEvent(
-                                          m_track_id, chart_item.event.m_id.uuid)
-                                    : m_timeline_selection->UnselectTrackEvent(
-                                          m_track_id, chart_item.event.m_id.uuid);
+                    if(!HotkeyManager::GetInstance().IsActionHeld(
+                           HotkeyActionId::kMultiSelect))
+                    {
+                        m_timeline_selection->UnselectAllEvents();
+                    }
+
+                    chart_item.selected ? m_timeline_selection->SelectTrackEvent(
+                                              m_track_id, chart_item.event.m_id.uuid)
+                                        : m_timeline_selection->UnselectTrackEvent(
+                                              m_track_id, chart_item.event.m_id.uuid);
+                }
+                TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
             }
-            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kNone);
-        }
 
-        // only show one tooltip per render cycle and if no other layer has focus
-        if(!m_has_drawn_tool_tip &&
-           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
-        {
-            RenderTooltip(chart_item, color_index);
-            m_has_drawn_tool_tip = true;
+            // only show one tooltip per render cycle and if no other layer has focus
+            if(!m_has_drawn_tool_tip &&
+               TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+            {
+                RenderTooltip(chart_item, color_index);
+                m_has_drawn_tool_tip = true;
+            }
         }
     }
 
     if(chart_item.selected || chart_item.highlighted)
     {
-        m_selected_chart_items.push_back(chart_item);
+        m_selected_chart_items.push_back(&chart_item);
     }
 }
 
@@ -947,9 +982,24 @@ FlameTrackItem::RenderChart(float graph_width)
 
     m_has_drawn_tool_tip = false;
 
-    // The label baseline is the same for every box on the track, so compute the
-    // vertical offset once per frame instead of per rendered event.
-    m_text_vertical_offset = ComputeTextVerticalOffset(EventBoxHeight());
+    // The label baseline, bar height, and hover query are the same for every box
+    // on the track. Resolve them once instead of once per rendered event.
+    const float  box_height      = EventBoxHeight();
+    m_text_vertical_offset       = ComputeTextVerticalOffset(box_height);
+    const ImVec2 cursor_position = ImGui::GetCursorScreenPos();
+    const ImVec2 container_pos   = ImGui::GetWindowPos();
+    const float  view_left       = container_pos.x;
+    const float  view_right      = container_pos.x + graph_width;
+    const double pixels_per_ns   = m_tpt->GetPixelsPerNs();
+    ChartDrawState draw_state    = {};
+    draw_state.cursor_position   = cursor_position;
+    draw_state.mouse_pos         = ImGui::GetIO().MousePos;
+    draw_state.touch_pad         = ImGui::GetStyle().TouchExtraPadding;
+    draw_state.box_height        = box_height;
+    draw_state.text_color        = m_settings.GetColor(Colors::kTextMain);
+    draw_state.labels_fit        = box_height >= ImGui::GetTextLineHeight();
+    draw_state.track_hovered     = ImGui::IsWindowHovered(
+        ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 
     double     range_start_ns = TimelineSelection::INVALID_SELECTION_TIME;
     double     range_end_ns   = TimelineSelection::INVALID_SELECTION_TIME;
@@ -958,23 +1008,18 @@ FlameTrackItem::RenderChart(float graph_width)
 
     for(ChartItem& item : m_chart_items)
     {
-        ImVec2 container_pos = ImGui::GetWindowPos();
-
         double normalized_start =
-            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
+            view_left + m_tpt->RawTimeToPixel(item.event.m_start_ts);
 
         double normalized_duration =
-            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
+            std::max(item.event.m_duration * pixels_per_ns, 1.0);
         double normalized_end = normalized_start + normalized_duration;
 
-        ImVec2 start_position;
-
         // Calculate the start position based on the normalized start time and level
-        start_position = ImVec2(static_cast<float>(normalized_start),
-                                item.event.m_level * m_level_height);
+        ImVec2 start_position = ImVec2(static_cast<float>(normalized_start),
+                                       item.event.m_level * m_level_height);
 
-        if(normalized_end < container_pos.x ||
-           normalized_start > container_pos.x + graph_width)
+        if(normalized_end < view_left || normalized_start > view_right)
         {
             continue;  // Skip if the item is not visible in the current view
         }
@@ -989,25 +1034,29 @@ FlameTrackItem::RenderChart(float graph_width)
             item.event.m_start_ts + item.event.m_duration >= range_start_ns;
 
         DrawBox(start_position, item, static_cast<float>(normalized_duration), draw_list,
-                use_highlight_color);
+                use_highlight_color, draw_state);
     }
 
-    for(ChartItem& item : m_selected_chart_items)
+    const ImU32 search_highlight_color =
+        m_settings.GetColor(Colors::kEventSearchHighlight);
+    const ImU32 event_highlight_color = m_settings.GetColor(Colors::kEventHighlight);
+
+    for(ChartItem* selected_item : m_selected_chart_items)
     {
-        ImVec2 container_pos = ImGui::GetWindowPos();
+        ChartItem& item = *selected_item;
         double normalized_start =
-            container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
+            view_left + m_tpt->RawTimeToPixel(item.event.m_start_ts);
 
         double normalized_duration =
-            std::max(item.event.m_duration * m_tpt->GetPixelsPerNs(), 1.0);
+            std::max(item.event.m_duration * pixels_per_ns, 1.0);
 
-        float  rounding       = 2.0f;
+        const float box_width = static_cast<float>(normalized_duration);
+        const float rounding  = (box_width >= MIN_ROUNDED_BOX_SIZE &&
+                                box_height >= MIN_ROUNDED_BOX_SIZE)
+                                    ? EVENT_BOX_ROUNDING
+                                    : 0.0f;
         ImVec2 start_position = ImVec2(static_cast<float>(normalized_start),
                                        item.event.m_level * m_level_height);
-
-        ImVec2 cursor_position = ImGui::GetCursorScreenPos();
-
-        const float box_height = EventBoxHeight();
 
         ImVec2 rectMin = ImVec2(start_position.x - HIGHLIGHT_THICKNESS_HALF,
                                 start_position.y + cursor_position.y +
@@ -1018,9 +1067,8 @@ FlameTrackItem::RenderChart(float graph_width)
                    start_position.y + box_height + cursor_position.y -
                        HIGHLIGHT_THICKNESS_HALF + ANTI_ALIASING_WORKAROUND);
 
-        ImU32 border_color = item.highlighted
-                                 ? m_settings.GetColor(Colors::kEventSearchHighlight)
-                                 : m_settings.GetColor(Colors::kEventHighlight);
+        ImU32 border_color =
+            item.highlighted ? search_highlight_color : event_highlight_color;
 
         float thickness = HIGHLIGHT_THICKNESS;
         if(item.highlighted)

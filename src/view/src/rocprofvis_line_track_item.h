@@ -74,8 +74,8 @@ protected:
 
 private:
     void   UpdateMetadata();
-    ImVec2 MapToUI(double x, double y, ImVec2& c_position, ImVec2& c_size,
-                   double scale_y);
+    ImVec2 MapToUI(double x, double y, float origin_x, const ImVec2& cursor_position,
+                   const ImVec2& content_size, double scale_y);
     float  CalculatePlotHeight() const;
     // Fills out_ticks with interior Y-axis values, count based on plot_height.
     void   GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const;

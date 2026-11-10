@@ -48,6 +48,10 @@ constexpr float    OVERVIEW_MARKER_THICKNESS     = 2.0f;
 // Overview duration bracket: end-cap half-height and label gap (px).
 constexpr float    OVERVIEW_BRACKET_CAP_HALF     = 3.0f;
 constexpr float    OVERVIEW_BRACKET_LABEL_GAP    = 4.0f;
+// Corner radius of an overview histogram bar. Below this width the corner is
+// not visible and ImGui's rounded fill leaves the fast quad path.
+constexpr float    OVERVIEW_BAR_ROUNDING         = 1.5f;
+constexpr float    OVERVIEW_BAR_MIN_WIDTH        = OVERVIEW_BAR_ROUNDING * 2.0f;
 // BT.601 luma weights for desaturating out-of-view overview bars.
 constexpr float    LUMA_WEIGHT_R                 = 0.299f;
 constexpr float    LUMA_WEIGHT_G                 = 0.587f;
@@ -3129,6 +3133,8 @@ TimelineView::RenderHistogram(float total_height, float graph_origin_x)
     if(bin_count > 0)
     {
         float bin_width = bars_width / static_cast<float>(bin_count);
+        const float bar_rounding =
+            (bin_width >= OVERVIEW_BAR_MIN_WIDTH) ? OVERVIEW_BAR_ROUNDING : 0.0f;
 
         for(size_t i = 0; i < bin_count; ++i)
         {
@@ -3142,7 +3148,7 @@ TimelineView::RenderHistogram(float total_height, float graph_origin_x)
                 // Grey the whole bar, then repaint the in-focus slice; this splits a
                 // bar that straddles a focus edge into coloured and grey parts.
                 draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
-                                         grey_colors[i % 2], 1.5f);
+                                         grey_colors[i % 2], bar_rounding);
                 float in_left  = std::max(x0, focus_left);
                 float in_right = std::min(x1, focus_right);
                 if(in_right > in_left)
@@ -3163,13 +3169,13 @@ TimelineView::RenderHistogram(float total_height, float graph_origin_x)
                         corners = ImDrawFlags_RoundCornersRight;
                     }
                     draw_list->AddRectFilled(ImVec2(in_left, y_bar), ImVec2(in_right, y1),
-                                             bar_colors[i % 2], 1.5f, corners);
+                                             bar_colors[i % 2], bar_rounding, corners);
                 }
             }
             else
             {
                 draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
-                                         bar_colors[i % 2], 1.5f);
+                                         bar_colors[i % 2], bar_rounding);
             }
         }
     }

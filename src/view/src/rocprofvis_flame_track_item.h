@@ -71,8 +71,21 @@ private:
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
     void HandleFontSizeChanged(std::shared_ptr<RocEvent> e);
 
-    void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
-                 ImDrawList* draw_list, bool use_highlight_color);
+    // Values that are constant for every bar on this track during one frame.
+    struct ChartDrawState
+    {
+        ImVec2 cursor_position;
+        ImVec2 mouse_pos;
+        ImVec2 touch_pad;
+        ImU32  text_color;
+        float  box_height;
+        bool   track_hovered;
+        bool   labels_fit;
+    };
+
+    void DrawBox(ImVec2 start_position, ChartItem& chart_item, float duration,
+                 ImDrawList* draw_list, bool use_highlight_color,
+                 const ChartDrawState& draw_state);
 
     void ExtractPointsFromData() override;
     bool ExtractChildInfo(ChartItem& item);
@@ -101,7 +114,9 @@ private:
     // Used to enforce one click handling per render cycle.
     bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
-    std::vector<ChartItem>          m_selected_chart_items;
+    // Pointers into m_chart_items for the highlight pass. Cleared before the
+    // chart vector can be rebuilt, so they never outlive that storage.
+    std::vector<ChartItem*>         m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_highlight_changed_token;
     EventManager::SubscriptionToken m_font_size_changed_token;

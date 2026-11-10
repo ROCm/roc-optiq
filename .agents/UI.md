@@ -2867,6 +2867,19 @@ Rules that are easy to get wrong here:
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
+- **Message styling may change color, never geometry.**
+  `BuildMessageLines` parses a reply once into `AssistantTextLine`s
+  (headings, bullets, quotes, rules, code fences, `*` emphasis, and
+  `` `code` ``) with the markers stripped, and `RenderStyledLine` draws
+  them run by run. `ImGuiTextSelect` hit-tests that stored text with the
+  current font and one line height, so a style can only recolor a run,
+  faux-bold it, or shear it into italic; a second font, a size change, or
+  an indent would put the highlight off the glyphs. That is also why a
+  wrapped bullet line starts back at the margin. Emphasis follows
+  CommonMark's flanking rule, so `float*` and `a * b` stay as written.
+  Tables and links show as written. Copying a selection gives the text as
+  shown; Copy message and export keep the raw markdown. User messages and
+  notices are drawn verbatim.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -3755,8 +3768,9 @@ For fast lookup. Each entry: class -> file -> one-line role.
 All under `agenticprofiling/`, compiled only with
 `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`.
 
-- `AssistantPanel` -> `agenticprofiling/rocprofvis_ai_assistant.h` ->
-  Docked chat panel and turn loop.
+- `AssistantPanel`, `AssistantTextLine` ->
+  `agenticprofiling/rocprofvis_ai_assistant.h` -> Docked chat panel, turn
+  loop, and the styled message lines it draws.
 - `OptiqActions`, `OptiqPanel` ->
   `agenticprofiling/rocprofvis_ai_actions.h` -> The only code that
   mutates the UI on the assistant's behalf.

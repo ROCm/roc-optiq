@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_controller_handle.h"
 #include "rocprofvis_core_assert.h"
 
 namespace RocProfVis
@@ -22,8 +23,11 @@ public:
     Reference(Pointer* ptr)
     : m_object(nullptr)
     {
-        Type* t = (Type*)ptr;
-        m_object = (t && t->GetType() == Enum) ? t : nullptr; 
+        Handle* handle = reinterpret_cast<Handle*>(ptr);
+        if(HasType(handle))
+        {
+            m_object = static_cast<Type*>(handle);
+        }
     }
 
     ~Reference()
@@ -32,7 +36,7 @@ public:
 
     bool IsValid(void) const
     {
-        return (m_object && m_object->GetType() == Enum);
+        return HasType(m_object);
     }
 
     rocprofvis_handle_t** GetHandleAddress(void)
@@ -60,6 +64,14 @@ public:
     }
 
 private:
+    // GetType is final in each Type, so calling it through a Type* is resolved
+    // at compile time and always matches Enum. Calling it through the Handle
+    // base reads the object's real type.
+    static bool HasType(Handle* handle)
+    {
+        return handle && handle->GetType() == Enum;
+    }
+
     Type* m_object;
 };
 

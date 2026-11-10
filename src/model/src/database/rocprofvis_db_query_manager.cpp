@@ -759,6 +759,12 @@ uint32_t QueryManager::CalculateParallelProcessSplitCount(uint32_t track_index)
         {
             total_event_count += TraceProperties()->events_count[j];
         }
+        // Counter samples are not in events_count, so a counter-only trace has no
+        // events to weigh the track against; weigh it against itself instead.
+        if (total_event_count == 0)
+        {
+            total_event_count = TrackPropertiesAt(track_index)->record_count;
+        }
         split_count = static_cast<uint32_t>((TrackPropertiesAt(track_index)->record_count * 10) / total_event_count);
 
         if (split_count == 0)

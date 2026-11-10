@@ -418,7 +418,7 @@ Minimap::RenderMinimapData(ImDrawList* dl, ImVec2 map_pos, ImVec2 map_size)
             }
 
             // Merge a horizontal run of the same color into one quad. The run's
-            // outer edges use the same per-cell formula, so the pixels match.
+            // outer edges use the per-cell formula, so it covers the same area.
             const ImU32 color   = GetColor(value, track_type);
             size_t      run_end = x + 1;
             while(run_end < m_data_width)

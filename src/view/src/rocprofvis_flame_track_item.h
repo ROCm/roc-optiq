@@ -75,11 +75,8 @@ private:
     struct ChartDrawState
     {
         ImVec2 cursor_position;
-        ImVec2 mouse_pos;
-        ImVec2 touch_pad;
         ImU32  text_color;
         float  box_height;
-        bool   track_hovered;
         bool   labels_fit;
     };
 
@@ -114,8 +111,7 @@ private:
     // Used to enforce one click handling per render cycle.
     bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
-    // Pointers into m_chart_items for the highlight pass. Cleared before the
-    // chart vector can be rebuilt, so they never outlive that storage.
+    // Points into m_chart_items; filled and cleared within one RenderChart call.
     std::vector<ChartItem*>         m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_highlight_changed_token;

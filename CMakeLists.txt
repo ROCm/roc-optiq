@@ -49,6 +49,12 @@ include(CMakeDependentOption)
 cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
     "Vendor a pinned CPython for embedded Python analysis scripts" ON
     "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
+# Only meaningful with Ask Optiq: lets it read compute traces as well as system
+# traces. OFF compiles the compute tools out, and Ask Optiq turns a compute tab
+# away.
+cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    "Let the Ask Optiq assistant read compute traces (in development)" ON
+    "ROCPROFVIS_ENABLE_AGENTIC_PROFILING" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -75,6 +81,9 @@ endif(ROCPROFVIS_ENABLE_REMOTE)
 if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING")
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_COMPUTE")
+endif(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
 if(ROCPROFVIS_ENABLE_SCRIPTING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
 endif(ROCPROFVIS_ENABLE_SCRIPTING)
@@ -310,6 +319,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_compute_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.h

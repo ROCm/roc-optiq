@@ -576,6 +576,29 @@ RocProfVis::View::parse_compact_number(std::string_view input, std::string_view 
     return false;
 }
 
+#ifndef _WIN32
+// Single-quotes an argument for /bin/sh. URLs can come from model output, and
+// unquoted, a $(...) or ; in one would run as part of the command.
+static std::string
+quote_for_shell(const std::string& text)
+{
+    std::string quoted = "'";
+    for(const char c : text)
+    {
+        if(c == '\'')
+        {
+            quoted += "'\\''";
+        }
+        else
+        {
+            quoted += c;
+        }
+    }
+    quoted += "'";
+    return quoted;
+}
+#endif
+
 bool RocProfVis::View::open_url(const std::string& url)
 {
     if (url.empty()) {
@@ -589,11 +612,11 @@ bool RocProfVis::View::open_url(const std::string& url)
     }
     return true;
 #elif defined(__APPLE__)
-    std::string command = "open " + url;
+    std::string command = "open " + quote_for_shell(url);
     int status = system(command.c_str());
     return status == 0;
 #else
-    std::string command = "xdg-open " + url;
+    std::string command = "xdg-open " + quote_for_shell(url);
     int status = system(command.c_str());
     return status == 0;
 #endif

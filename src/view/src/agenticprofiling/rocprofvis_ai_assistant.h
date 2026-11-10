@@ -15,7 +15,10 @@
 #include <string>
 #include <vector>
 
-class TextSelect;
+namespace ImMarkdown
+{
+class View;
+}  // namespace ImMarkdown
 
 namespace RocProfVis
 {
@@ -23,17 +26,6 @@ namespace View
 {
 
 enum class Colors;
-
-// A message line as drawn. Markdown markers are already removed, so
-// TextSelect measures exactly the text on screen.
-struct AssistantTextLine
-{
-    std::string text;
-    // Style flags, one entry per byte of text.
-    std::vector<uint8_t> styles;
-    // A horizontal rule, drawn across the line in place of text.
-    bool rule = false;
-};
 
 class AssistantPanel : public RocWidget
 {
@@ -113,10 +105,10 @@ private:
     void        RenderHeaderCard();
     void        RenderTranscript();
     void        RenderMessageCard(size_t index, const ChatLine& line);
-    void        RenderSelectableMessage(size_t index, const std::string& text,
-                                        Colors text_color);
-    TextSelect* MessageSelect(size_t index);
-    void        RenderComposer();
+    void              RenderSelectableMessage(size_t index, const std::string& text,
+                                              Colors text_color);
+    ImMarkdown::View* MessageView(size_t index);
+    void              RenderComposer();
     // Explain this view on an empty chat, or the model's offered follow-ups
     // after a turn.
     void RenderSuggestedActions();
@@ -178,8 +170,7 @@ private:
     std::vector<ChatLine> m_lines;
     // Parallel to m_lines. Text rows create one; charts do not. Cleared with
     // the transcript so a new conversation does not keep an old highlight.
-    std::vector<std::unique_ptr<TextSelect>>    m_message_select;
-    std::vector<std::vector<AssistantTextLine>> m_message_lines;
+    std::vector<std::unique_ptr<ImMarkdown::View>> m_message_views;
 
     std::string                    m_queued_question;
     std::vector<AssistantMessage>  m_conversation;

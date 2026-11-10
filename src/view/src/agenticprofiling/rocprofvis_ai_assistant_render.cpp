@@ -10,17 +10,13 @@
 #include "rocprofvis_ai_assistant.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <fstream>
-#include <iterator>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "imgui.h"
-#include "imgui_internal.h"
-#include "textselect.hpp"
+#include "immarkdown.h"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
@@ -29,6 +25,7 @@
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
@@ -65,26 +62,6 @@ constexpr float    ASSISTANT_CHART_HEIGHT          = 52.0f;
 constexpr float    ASSISTANT_CHART_ROW_HEIGHT      = 12.0f;
 constexpr float    ASSISTANT_CHART_ROW_GAP         = 2.0f;
 constexpr float    ASSISTANT_CHART_MIN_ALPHA       = 0.12f;
-
-// Bold is the run drawn twice, this far apart, and italic is the glyphs
-// sheared. Real bold and italic fonts have other widths, which would pull
-// TextSelect's highlight off the text.
-constexpr float       ASSISTANT_BOLD_OFFSET       = 1.0f;
-constexpr float       ASSISTANT_ITALIC_SHEAR      = 0.2f;
-constexpr size_t      ASSISTANT_MAX_HEADING_LEVEL = 6;
-constexpr size_t      ASSISTANT_MIN_RULE_LENGTH   = 3;
-constexpr const char* ASSISTANT_BULLET            = "\xE2\x80\xA2";  // U+2022
-
-constexpr uint32_t ASSISTANT_STYLE_BOLD    = 1u << 0;
-constexpr uint32_t ASSISTANT_STYLE_ITALIC  = 1u << 1;
-constexpr uint32_t ASSISTANT_STYLE_CODE    = 1u << 2;
-constexpr uint32_t ASSISTANT_STYLE_HEADING = 1u << 3;
-constexpr uint32_t ASSISTANT_STYLE_QUOTE   = 1u << 4;
-// Indexed by the length of a * run less one: *italic*, **bold**, ***both***.
-constexpr uint32_t ASSISTANT_EMPHASIS_STYLES[] = {
-    ASSISTANT_STYLE_ITALIC, ASSISTANT_STYLE_BOLD,
-    ASSISTANT_STYLE_BOLD | ASSISTANT_STYLE_ITALIC
-};
 
 // Breaks a button label onto extra lines so a long follow-up still fits.
 std::string
@@ -134,276 +111,32 @@ WrapButtonLabel(const std::string& text, float wrap_width)
     return out.empty() ? text : out;
 }
 
-std::vector<std::string>
-SplitMessageLines(const std::string& text)
-{
-    std::vector<std::string> lines;
-    size_t                   start = 0;
-    do
-    {
-        const size_t end = text.find('\n', start);
-        if(end == std::string::npos)
-        {
-            lines.emplace_back(text, start, text.size() - start);
-            break;
-        }
-        lines.emplace_back(text, start, end - start);
-        start = end + 1;
-    } while(start <= text.size());
-    return lines;
-}
-
-bool
-StartsWith(std::string_view text, std::string_view prefix)
-{
-    return text.substr(0, prefix.size()) == prefix;
-}
-
-bool
-IsSpace(char c)
-{
-    return c == '\0' || std::isspace(static_cast<unsigned char>(c)) != 0;
-}
-
-bool
-IsPunct(char c)
-{
-    return std::ispunct(static_cast<unsigned char>(c)) != 0;
-}
-
-// Three or more of one of - * _, with nothing else but spaces.
-bool
-IsRule(std::string_view body)
-{
-    const char marker    = body.empty() ? '\0' : body[0];
-    const char allowed[] = { marker, ' ', '\0' };
-    return (marker == '-' || marker == '*' || marker == '_') &&
-           body.find_first_not_of(allowed) == std::string_view::npos &&
-           static_cast<size_t>(std::count(body.begin(), body.end(), marker)) >=
-               ASSISTANT_MIN_RULE_LENGTH;
-}
-
-// CommonMark's rule, roughly: a * run only opens or closes emphasis where it
-// hugs the text, which keeps `a * b` and `float*, int*` as written. Returns
-// where the closing run starts, or npos.
-size_t
-FindEmphasisClose(std::string_view text, size_t open, size_t width)
-{
-    const char before = open > 0 ? text[open - 1] : '\0';
-    const char after  = open + width < text.size() ? text[open + width] : '\0';
-    const bool opens =
-        !IsSpace(after) && (!IsPunct(after) || IsSpace(before) || IsPunct(before));
-
-    const std::string_view mark = text.substr(open, width);
-    size_t                 close =
-        opens ? text.find(mark, open + width) : std::string_view::npos;
-    while(close != std::string_view::npos)
-    {
-        const char inside = text[close - 1];
-        const char next   = close + width < text.size() ? text[close + width] : '\0';
-        if(!IsSpace(inside) && (!IsPunct(inside) || IsSpace(next) || IsPunct(next)))
-        {
-            break;
-        }
-        close = text.find(mark, close + 1);
-    }
-    return close;
-}
-
+// Replies come from a model, so only web links open; anything else, such as a
+// file path or a program, would be launched by the shell.
 void
-AppendRun(AssistantTextLine& line, std::string_view text, uint32_t style)
+OpenReplyLink(const std::string& url)
 {
-    line.text.append(text.data(), text.size());
-    line.styles.insert(line.styles.end(), text.size(), static_cast<uint8_t>(style));
-}
-
-// Strips `code` and emphasis markers and styles what they enclose. A marker
-// with no partner stays as text.
-void
-AppendInline(AssistantTextLine& line, std::string_view text, uint32_t style)
-{
-    size_t i = 0;
-    while(i < text.size())
+    if(url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0)
     {
-        size_t run = 0;
-        while(i + run < text.size() && text[i + run] == '*')
-        {
-            ++run;
-        }
-        const size_t width = std::min(run, std::size(ASSISTANT_EMPHASIS_STYLES));
-        const size_t close =
-            run > 0 ? FindEmphasisClose(text, i, width) : std::string_view::npos;
-        const size_t code_close =
-            text[i] == '`' ? text.find('`', i + 1) : std::string_view::npos;
-        if(code_close != std::string_view::npos)
-        {
-            AppendRun(line, text.substr(i + 1, code_close - i - 1),
-                      style | ASSISTANT_STYLE_CODE);
-            i = code_close + 1;
-        }
-        else if(close != std::string_view::npos)
-        {
-            AppendInline(line, text.substr(i + width, close - i - width),
-                         style | ASSISTANT_EMPHASIS_STYLES[width - 1]);
-            i = close + width;
-        }
-        else
-        {
-            const size_t literal = std::max<size_t>(run, 1);
-            AppendRun(line, text.substr(i, literal), style);
-            i += literal;
-        }
+        open_url(url);
     }
 }
 
-// With markdown on, handles what replies use: headings, bullets, quotes,
-// rules, code fences, emphasis, and inline code. Anything else, tables and
-// links included, shows as written.
-std::vector<AssistantTextLine>
-BuildMessageLines(const std::string& text, bool markdown)
+ImMarkdown::Style
+MessageStyle(Colors text_color)
 {
-    std::vector<AssistantTextLine> lines;
-    bool                           in_code = false;
-    for(const std::string& raw : SplitMessageLines(text))
-    {
-        const std::string_view source = raw;
-        const size_t           indent =
-            std::min(source.find_first_not_of(' '), source.size());
-        std::string_view body = source.substr(indent);
-        if(markdown && StartsWith(body, "```"))
-        {
-            in_code = !in_code;
-            continue;
-        }
-
-        AssistantTextLine& line = lines.emplace_back();
-        if(!markdown || in_code)
-        {
-            AppendRun(line, source, in_code ? ASSISTANT_STYLE_CODE : 0);
-            continue;
-        }
-
-        uint32_t style = 0;
-        if(StartsWith(body, ">"))
-        {
-            style = ASSISTANT_STYLE_QUOTE;
-            body  = body.substr(std::min(body.find_first_not_of("> "), body.size()));
-        }
-        const size_t hashes = body.find_first_not_of('#');
-        if(IsRule(body))
-        {
-            line.rule = true;
-        }
-        else if(hashes > 0 && hashes <= ASSISTANT_MAX_HEADING_LEVEL &&
-                body[hashes] == ' ')
-        {
-            AppendInline(line, body.substr(hashes + 1), style | ASSISTANT_STYLE_HEADING);
-        }
-        else if(body.size() > 1 && (body[0] == '-' || body[0] == '*' || body[0] == '+') &&
-                body[1] == ' ')
-        {
-            AppendRun(line, source.substr(0, indent), style);
-            AppendRun(line, ASSISTANT_BULLET, style);
-            AppendInline(line, body.substr(1), style);
-        }
-        else
-        {
-            AppendRun(line, source.substr(0, indent), style);
-            AppendInline(line, body, style);
-        }
-    }
-    // TextSelect indexes the last line, so a reply that is only a fence still
-    // needs one.
-    if(lines.empty())
-    {
-        lines.emplace_back();
-    }
-    return lines;
-}
-
-// Draws one line run by run, wrapping with the same calls TextSelect makes so
-// its highlight stays on the glyphs. ImGui's own wrapped text takes one color.
-void
-RenderStyledLine(const AssistantTextLine& line, ImU32 text_color)
-{
-    SettingsManager& settings      = SettingsManager::GetInstance();
-    const ImU32      heading_color = settings.GetColor(Colors::kAccent);
-    const ImU32      code_color    = settings.GetColor(Colors::kTextWarning);
-    const ImU32      quote_color   = settings.GetColor(Colors::kTextDim);
-    ImDrawList*      draw          = ImGui::GetWindowDrawList();
-    ImFont*          font          = ImGui::GetFont();
-    const float      size          = ImGui::GetFontSize();
-    const ImVec2     origin        = ImGui::GetCursorScreenPos();
-    const float      wrap_width    = ImGui::CalcWrapWidthForPos(origin, 0.0f);
-    const char*      begin         = line.text.c_str();
-    const char*      end           = begin + line.text.size();
-
-    if(line.rule)
-    {
-        const float middle = origin.y + size * 0.5f;
-        draw->AddLine(ImVec2(origin.x, middle), ImVec2(origin.x + wrap_width, middle),
-                      settings.GetColor(Colors::kBorderColor));
-    }
-
-    const char* row = begin;
-    float       y   = origin.y;
-    do
-    {
-        const char* row_end = font->CalcWordWrapPosition(size, row, end, wrap_width);
-        const char* run     = row;
-        float       x       = origin.x;
-        while(run < row_end)
-        {
-            const uint32_t style   = line.styles[static_cast<size_t>(run - begin)];
-            const char*    run_end = run + 1;
-            while(run_end < row_end &&
-                  line.styles[static_cast<size_t>(run_end - begin)] == style)
-            {
-                ++run_end;
-            }
-
-            ImU32 color = text_color;
-            if(style & ASSISTANT_STYLE_HEADING)
-            {
-                color = heading_color;
-            }
-            else if(style & ASSISTANT_STYLE_CODE)
-            {
-                color = code_color;
-            }
-            else if(style & ASSISTANT_STYLE_QUOTE)
-            {
-                color = quote_color;
-            }
-            const int first_vertex = draw->VtxBuffer.Size;
-            draw->AddText(font, size, ImVec2(x, y), color, run, run_end);
-            if(style & (ASSISTANT_STYLE_BOLD | ASSISTANT_STYLE_HEADING))
-            {
-                draw->AddText(font, size, ImVec2(x + ASSISTANT_BOLD_OFFSET, y), color,
-                              run, run_end);
-            }
-            if(style & (ASSISTANT_STYLE_ITALIC | ASSISTANT_STYLE_QUOTE))
-            {
-                for(int vertex = first_vertex; vertex < draw->VtxBuffer.Size; ++vertex)
-                {
-                    ImVec2& pos = draw->VtxBuffer[vertex].pos;
-                    pos.x += (y + size - pos.y) * ASSISTANT_ITALIC_SHEAR;
-                }
-            }
-            x += font->CalcTextSizeA(size, FLT_MAX, 0.0f, run, run_end).x;
-            run = run_end;
-        }
-        y += size;
-        row = row_end;
-        while(row < end && ImCharIsBlankA(*row))
-        {
-            ++row;
-        }
-    } while(row < end);
-    ImGui::Dummy(ImVec2(0.0f, y - origin.y));
-}
-
-}  // namespace
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    ImMarkdown::Style style;
+    style.code_font         = settings.GetFontManager().GetFont(FontType::kCode);
+    style.text_color        = settings.GetColor(text_color);
+    style.link_color        = settings.GetColor(Colors::kAccent);
+    style.code_background   = settings.GetColor(Colors::kBgFrame);
+    style.quote_color       = settings.GetColor(Colors::kTextDim);
+    style.line_color        = settings.GetColor(Colors::kBorderColor);
+    style.header_background = settings.GetColor(Colors::kTableHeaderBg);
+    style.open_link         = OpenReplyLink;
+    return style;
+}}  // namespace
 
 void
 AssistantPanel::RenderActivityChart(uint64_t track_id)
@@ -833,110 +566,58 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
     ImGui::PopID();
 }
 
-TextSelect*
-AssistantPanel::MessageSelect(size_t index)
+ImMarkdown::View*
+AssistantPanel::MessageView(size_t index)
 {
     if(index >= m_lines.size())
     {
         return nullptr;
     }
-    if(m_message_select.size() < m_lines.size())
+    if(m_message_views.size() < m_lines.size())
     {
-        m_message_select.resize(m_lines.size());
+        m_message_views.resize(m_lines.size());
     }
-    if(m_message_lines.size() < m_lines.size())
+    if(m_message_views[index] == nullptr)
     {
-        m_message_lines.resize(m_lines.size());
+        // Only replies are Markdown; what the user typed and notices show as
+        // written.
+        const uint32_t format = m_lines[index].speaker == Speaker::kAssistant
+                                    ? ImMarkdown::kNone
+                                    : ImMarkdown::kPlain;
+        m_message_views[index] = std::make_unique<ImMarkdown::View>();
+        m_message_views[index]->SetText(m_lines[index].text,
+                                        ImMarkdown::kSelectable | format);
     }
-    if(m_message_select[index] == nullptr)
-    {
-        m_message_select[index] = std::make_unique<TextSelect>(
-            [this, index](size_t line_index) {
-                if(index >= m_message_lines.size() ||
-                   line_index >= m_message_lines[index].size())
-                {
-                    return std::string_view();
-                }
-                return std::string_view(m_message_lines[index][line_index].text);
-            },
-            [this, index]() {
-                return index < m_message_lines.size() ? m_message_lines[index].size()
-                                                      : size_t{0};
-            },
-            true);
-    }
-    return m_message_select[index].get();
+    return m_message_views[index].get();
 }
 
 void
 AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
                                         Colors text_color)
 {
-    const ImU32 color  = SettingsManager::GetInstance().GetColor(text_color);
-    TextSelect* select = MessageSelect(index);
-    if(select == nullptr)
+    ImMarkdown::View* view = MessageView(index);
+    if(view == nullptr)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              SettingsManager::GetInstance().GetColor(text_color));
         ImGui::TextWrapped("%s", text.c_str());
         ImGui::PopStyleColor();
         return;
     }
-    if(m_message_lines[index].empty())
-    {
-        m_message_lines[index] =
-            BuildMessageLines(text, m_lines[index].speaker == Speaker::kAssistant);
-    }
 
-    // TextSelect expects a text-only window whose first glyph is at its origin.
-    // Splitting on explicit newlines preserves blank paragraphs while its word
-    // wrapping handles each visual line.
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    const ImVec2 message_spacing = ImGui::GetStyle().ItemSpacing;
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(message_spacing.x, 0.0f));
-    ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                          ImGuiWindowFlags_NoScrollWithMouse);
-    for(const AssistantTextLine& line : m_message_lines[index])
-    {
-        RenderStyledLine(line, color);
-    }
-
-    // Only one message keeps a highlight, so Ctrl+C copies what is on screen.
-    // Ctrl+C reaches only the focused window, and right-click does not focus
-    // on its own. The popup flag keeps this working when the click lands while
-    // another message's menu is still open.
-    if(ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
-       (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
-        ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
-    {
-        ImGui::SetWindowFocus();
-        for(const std::unique_ptr<TextSelect>& other : m_message_select)
-        {
-            if(other != nullptr && other.get() != select)
-            {
-                other->clearSelection();
-            }
-        }
-    }
-    select->update();
-    // update() copies on Ctrl+C but does not report it. The same chord in the
-    // same window fires on the same press.
-    bool copied_selection =
-        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && select->hasSelection();
+    bool copied_selection = view->Render(MessageStyle(text_color));
 
     PushContextMenuStyles();
-    if(ImGui::BeginPopupContextWindow("##message_copy"))
+    if(ImGui::BeginPopupContextItem("##message_copy"))
     {
-        if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection()))
+        if(IconMenuItem(ICON_COPY, "Copy", view->HasSelection()))
         {
-            select->copy();
+            view->Copy();
             copied_selection = true;
         }
         if(IconMenuItem(ICON_LIST, "Select all"))
         {
-            select->selectAll();
+            view->SelectAll();
         }
         ImGui::Separator();
         if(IconMenuItem(ICON_DOCUMENT, "Copy message"))
@@ -953,9 +634,6 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
         NotificationManager::GetInstance().Show("Selection copied to clipboard",
                                                 NotificationLevel::Info);
     }
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
 }
 
 // Stacked follow-ups under the transcript: Explain this view on an empty chat,
@@ -1218,8 +896,7 @@ AssistantPanel::RenderComposer()
     {
         ResetTurn();
         m_lines.clear();
-        m_message_select.clear();
-        m_message_lines.clear();
+        m_message_views.clear();
         m_input.clear();
         m_conversation.clear();
         m_next_steps.clear();

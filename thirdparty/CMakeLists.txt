@@ -4,14 +4,14 @@
 find_package(Vulkan REQUIRED)
 set(VULKAN_LIB "Vulkan::Vulkan")
 
-option(PROFILER_HUB_BUILD "Build RocOptiq interface library" ON)
-
-if(PROFILER_HUB_BUILD)
+if(ROCPROFVIS_ENABLE_PROFILER_HUB)
     message(STATUS "Enable profiler hub support")
-
-include(${CMAKE_SOURCE_DIR}/cmake/profiler-hub.cmake)
-
-endif()
+    include(${CMAKE_SOURCE_DIR}/cmake/profiler-hub.cmake)
+else()
+    # profiler-hub forces SPDLOG_FMT_EXTERNAL ON in the cache. Reset it so a
+    # build dir that once had the hub enabled uses spdlog's bundled fmt again.
+    set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "" FORCE)
+endif(ROCPROFVIS_ENABLE_PROFILER_HUB)
 
 if(NOT TARGET spdlog)
     add_subdirectory(spdlog)

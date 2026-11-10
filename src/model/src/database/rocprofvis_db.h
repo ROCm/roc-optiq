@@ -125,8 +125,8 @@ class Database
 
         virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) 
         { 
-        	(void) future; (void) rebuild; 
-        	return kRocProfVisDmResultSuccess; 
+        	(void) rebuild; 
+        	return future->SetPromise(kRocProfVisDmResultSuccess); 
        	};
 
     private:

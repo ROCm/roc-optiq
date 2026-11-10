@@ -4,6 +4,8 @@
 #include "rocprofvis_db_information_catalog.h"
 
 #include <charconv>
+#include <cstdlib>
+#include <mutex>
 #include <system_error>
 #include <utility>
 
@@ -38,6 +40,15 @@ parse_double(const std::string& text, double& value)
     {
         return false;
     }
+#if defined(__APPLE__)
+    // macOS doesn't support from_chars for floating point yet, use strtod.
+    char*        end_ptr = nullptr;
+    const double parsed  = std::strtod(text.c_str(), &end_ptr);
+    if(end_ptr != text.c_str() + text.size())
+    {
+        return false;
+    }
+#else
     const char*                  begin  = text.data();
     const char*                  end    = begin + text.size();
     double                       parsed = 0.0;
@@ -46,6 +57,7 @@ parse_double(const std::string& text, double& value)
     {
         return false;
     }
+#endif
     value = parsed;
     return true;
 }

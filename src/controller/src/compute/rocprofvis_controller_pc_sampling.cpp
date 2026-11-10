@@ -62,6 +62,12 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerPCSamplingInstructionSamplesLoaded:
+            {
+                *value = m_instruction_samples_loaded;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerPCSamplingNumSourceFiles:
             {
                 (void)index;

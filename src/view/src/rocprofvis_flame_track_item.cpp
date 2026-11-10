@@ -979,6 +979,13 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
+        // Levels below the track's height are clipped. A selection outline can
+        // reach up to HIGHLIGHT_THICKNESS above its box, so keep that margin.
+        if(start_position.y >= m_track_content_height + HIGHLIGHT_THICKNESS)
+        {
+            continue;
+        }
+
         if(normalized_duration > std::numeric_limits<float>::max())
         {
             normalized_duration = std::numeric_limits<float>::max();

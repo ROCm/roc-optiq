@@ -1700,8 +1700,9 @@ The ISA implementation is organized as follows:
   updates source mappings and sampling independently, and prepares count validity,
   percentages, reason identities, formatted legend counts, and reason/bar shares.
   `PrepareSampling` builds one owned `PreparedSamplingData` with instruction counts,
-  normalized reason counts, and lookup names. It holds no pointers into controller
-  result vectors. ISA and source projections consume the same const prepared data.
+  normalized reason counts, checked issue-state counts, and lookup names. It holds
+  no pointers into controller result vectors. ISA and source projections consume
+  the same const prepared data.
   `AccumulateSampleCounts` handles missing values, malformed contributors, and checked
   addition for both sample-state-to-instruction and instruction-to-source grouping.
   `SampleCounts::invalid_counts` preserves invalid contributors and saturated
@@ -1713,8 +1714,24 @@ The ISA implementation is organized as follows:
   `PreparedSamplingData::metrics_by_instruction`. Both instruction and source
   grouping reuse the same checked accumulator; progress-count validity does not
   determine whether either sampled metric is available.
+  Issue-state counts use `IssueStateCounts` and the existing checked addition helper.
+  `PrepareSampling` consumes completed instruction-sample groups, joins records by
+  sample-state UUID, validates each state against its total PC samples, then merges
+  by instruction UUID into `issue_states_by_instruction`. Missing records, NULL counts,
+  or incomplete positive-sample distributions remain missing; excess counts and
+  overflow remain invalid through later grouping. Unrecorded zero-sample states do
+  not invalidate observed distributions, while recorded zeros remain available.
+  `SamplingRow::issue_states` is an `IssueStateSummary`: missing/invalid results
+  publish no totals or breakdown entries. Valid entries retain captured lookup text,
+  formatted counts, and percentages of all samples, independently of issued/stalled
+  progress and static instruction types. Unknown/empty labels retain their lookup
+  identity. Entries sort by descending count, then label and lookup UUID. Source
+  grouping reuses the same accumulator through the existing primary mappings; the
+  prepared snapshot owns both counts and names, so later layer arrival is safe.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
-  without a database or GPU.
+  without a database or GPU. Issue-state cases cover the reported barrier/VALU
+  samples, branch outcomes, missing versus zero, per-state mismatches, overflow,
+  unknown labels, source grouping, snapshot ownership, and clearing stale results.
 
 Layer completions refresh only their owned data: ISA completion builds instruction
 rows, source completion updates correlations and selected source text, and stalls
@@ -2018,9 +2035,9 @@ shared `SamplingStateRenderer` metric cells and headers.
 `InstructionSampleLookup` labels. `DataProvider::LoadPcSamplingInstructionSamples`
 and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
 into these vectors. Counts remain optional, preserving unrecorded values and
-measured zero. Fresh rows replace previous records on every load. Raw issue-state
-data is not yet aggregated into ISA/source sampling rows or rendered. Dispatch
-UUID remains available only on the controller handle.
+measured zero. Fresh rows replace previous records on every load. Prepared issue-state
+data now feeds ISA and source sampling rows; the issue-state column is not yet
+rendered. Dispatch UUID remains available only on the controller handle.
 Instruction samples are optional: absent sample/lookup tables or empty results
 must not downgrade the existing sampling columns. Missing instruction-sample
 counts remain unavailable, distinct from measured zero. When added, the issue-state
@@ -3764,7 +3781,8 @@ All under `agenticprofiling/`, compiled only with
   `compute/isa/rocprofvis_compute_code_widgets.h`.
 - `SamplingStateRenderer`, `HeaderTooltipText`, and static header renderer ->
   `compute/isa/rocprofvis_compute_sampling_state_renderer.h`.
-- `IsaDataBuilder` -> `compute/isa/rocprofvis_compute_isa_data.h`.
+- `IsaDataBuilder`, `IssueStateCounts`, `IssueState`, `IssueStateSummary`, and
+  `PreparedSamplingData` -> `compute/isa/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.

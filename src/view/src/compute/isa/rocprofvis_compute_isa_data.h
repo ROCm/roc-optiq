@@ -147,6 +147,32 @@ public:
     };
     using GroupedStallReasonCounts = std::unordered_map<uint64_t, StallReasonCounts>;
 
+    struct IssueStateCounts
+    {
+        std::unordered_map<uint64_t, uint64_t> by_lookup;
+        uint64_t                               total_count  = 0;
+        uint64_t                               sample_count = 0;  // Expected PC samples.
+        bool                                   missing      = false;
+        bool                                   invalid      = false;
+    };
+    using GroupedIssueStateCounts = std::unordered_map<uint64_t, IssueStateCounts>;
+
+    struct IssueState
+    {
+        uint64_t    lookup_uuid = 0;
+        std::string text;
+        uint64_t    count = 0;
+        std::string count_text;
+        double      percent = 0.0;  // Share of all samples, independently of issued count.
+    };
+
+    struct IssueStateSummary
+    {
+        SamplingAvailability    availability = SamplingAvailability::kMissing;
+        uint64_t                total_count  = 0;
+        std::vector<IssueState> states;
+    };
+
     // Owns normalized instruction sampling independently of source/ISA layer arrival.
     struct PreparedSamplingData
     {
@@ -154,6 +180,8 @@ public:
         std::unordered_map<uint64_t, SampleMetrics> metrics_by_instruction;
         GroupedStallReasonCounts                   reasons_by_instruction;
         std::unordered_map<uint64_t, std::string>  reason_text;
+        GroupedIssueStateCounts                   issue_states_by_instruction;
+        std::unordered_map<uint64_t, std::string>  issue_state_text;
     };
 
     struct SamplingRow
@@ -163,6 +191,7 @@ public:
         SamplingSummary          sampling;
         PercentageSummary        wave_occupancy;
         PercentageSummary        active_threads;
+        IssueStateSummary        issue_states;
         uint64_t                 unclassified_stall_count = 0;
         std::string              unclassified_stall_count_text;
         uint64_t                 stall_reason_sample_count    = 0;
@@ -193,7 +222,7 @@ public:
                                                                uint64_t code_object_uuid);
     static void UpdateSourceLocations(std::vector<IsaRow>&  rows,
                                       const PcSamplingData& data);
-    // Prepares owned counts and normalized reasons once for both panes.
+    // Prepares owned counts and sampling breakdowns once for both panes.
     [[nodiscard]] static PreparedSamplingData PrepareSampling(const PcSamplingData& data);
     // Updates row sampling and returns the largest usable instruction sample count.
     static uint64_t                             UpdateSampling(std::vector<IsaRow>&        rows,
@@ -244,11 +273,21 @@ private:
                                     uint64_t count);
     static void MergeStallReasonCounts(StallReasonCounts&       total,
                                        const StallReasonCounts& counts);
+    static void AddIssueStateCount(IssueStateCounts& counts, uint64_t lookup_uuid,
+                                   uint64_t count);
+    static void MergeIssueStateCounts(IssueStateCounts&       total,
+                                      const IssueStateCounts& counts);
+    static GroupedIssueStateCounts BuildIssueStateCounts(
+        const PcSamplingData& data, const SampleAggregation& aggregation);
+    static IssueStateSummary SummarizeIssueStates(
+        const IssueStateCounts&                          counts,
+        const std::unordered_map<uint64_t, std::string>& text_by_lookup);
 
-    static void UpdateSamplingRow(
-        SamplingRow& row, const SampleCounts& counts, const SampleMetrics& metrics,
-        const StallReasonCounts&                         reasons,
-        const std::unordered_map<uint64_t, std::string>& reason_text);
+    static void UpdateSamplingRow(SamplingRow& row, const SampleCounts& counts,
+                                  const SampleMetrics&        metrics,
+                                  const StallReasonCounts&    reasons,
+                                  const IssueStateCounts&     issues,
+                                  const PreparedSamplingData& prepared);
 
     static const CodeObjectStore* FindCodeObject(const PcSamplingData& data,
                                                  uint64_t              code_object_uuid);

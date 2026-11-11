@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: MIT
 
 // The Ask Optiq panel's drawing half: the dock and its splitter, the
-// transcript and its cards, the composer, the activity strip, and the toolbar
-// button that opens it. Everything here reads panel state and emits ImGui; the
-// turn machinery that fills that state lives in rocprofvis_ai_assistant.cpp,
-// and the two only meet through AssistantPanel members.
+// transcript and its cards, the composer, the context pill, the activity
+// strip, and the toolbar button that opens it. Everything here reads panel
+// state and emits ImGui; the turn machinery that fills that state lives in
+// rocprofvis_ai_assistant.cpp, and the two only meet through AssistantPanel
+// members.
 
 #include "rocprofvis_ai_assistant.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -62,6 +64,125 @@ constexpr float    ASSISTANT_CHART_HEIGHT          = 52.0f;
 constexpr float    ASSISTANT_CHART_ROW_HEIGHT      = 12.0f;
 constexpr float    ASSISTANT_CHART_ROW_GAP         = 2.0f;
 constexpr float    ASSISTANT_CHART_MIN_ALPHA       = 0.12f;
+// The context pill under the title. Its ring turns to a warning, then an error,
+// as the history nears the point where older tool results are shortened.
+constexpr float ASSISTANT_CONTEXT_WARN_FILL   = 0.70f;
+constexpr float ASSISTANT_CONTEXT_HOT_FILL    = 0.90f;
+constexpr float ASSISTANT_CONTEXT_RING_STROKE = 2.0f;
+// Smallest arc drawn for a conversation that is not empty, so a short chat
+// still reads as started rather than as an empty ring.
+constexpr float ASSISTANT_CONTEXT_MIN_ARC    = 0.04f;
+constexpr float ASSISTANT_CONTEXT_CHIP_PAD_X = 8.0f;
+constexpr float ASSISTANT_CONTEXT_CHIP_PAD_Y = 2.0f;
+// Space reserved under the pill. The title's line height leaves room above its
+// glyphs that the pill's hard edge does not, so without this the header looks
+// heavier at the bottom than at the top.
+constexpr float ASSISTANT_CONTEXT_CHIP_BELOW    = 2.5f;
+constexpr float ASSISTANT_CONTEXT_CHIP_GAP      = 5.0f;
+constexpr float ASSISTANT_CONTEXT_DIVIDER_GAP   = 8.0f;
+constexpr float ASSISTANT_CONTEXT_TIP_WIDTH     = 300.0f;
+constexpr float ASSISTANT_CONTEXT_TIP_BAR_H     = 6.0f;
+constexpr float ASSISTANT_CONTEXT_TIP_NUM_WIDTH = 72.0f;
+// imgui.h does not publish IM_PI.
+constexpr float ASSISTANT_PI = 3.14159265f;
+
+// Groups digits so a token count can be read at a glance. 12481 -> "12,481".
+std::string
+FormatCount(size_t value)
+{
+    const std::string digits = std::to_string(value);
+    std::string       out;
+    out.reserve(digits.size() + digits.size() / 3);
+    for(size_t i = 0; i < digits.size(); ++i)
+    {
+        if(i > 0 && (digits.size() - i) % 3 == 0)
+        {
+            out += ',';
+        }
+        out += digits[i];
+    }
+    return out;
+}
+
+// Compact count for the pill: 386, 2.2k, 45.1k, 120k, 1.2M. Full counts stay in
+// the tooltip.
+std::string
+FormatTokensShort(size_t tokens)
+{
+    if(tokens < 1000)
+    {
+        return std::to_string(tokens);
+    }
+    const char* suffix = "k";
+    double      value  = static_cast<double>(tokens) / 1000.0;
+    if(tokens >= 999500)
+    {
+        suffix = "M";
+        value  = static_cast<double>(tokens) / 1000000.0;
+    }
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), value >= 100.0 ? "%.0f" : "%.1f", value);
+    std::string text = buf;
+    if(text.size() > 2 && text.compare(text.size() - 2, 2, ".0") == 0)
+    {
+        text.resize(text.size() - 2);
+    }
+    return text + suffix;
+}
+
+// How full the kept history is, from 0 to 1.
+float
+ContextFill(size_t used_chars, size_t budget_chars)
+{
+    if(budget_chars == 0)
+    {
+        return 0.0f;
+    }
+    return std::min(1.0f,
+                    static_cast<float>(used_chars) / static_cast<float>(budget_chars));
+}
+
+ImU32
+ContextFillColor(float fill)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    if(fill >= ASSISTANT_CONTEXT_HOT_FILL)
+    {
+        return settings.GetColor(Colors::kTextError);
+    }
+    if(fill >= ASSISTANT_CONTEXT_WARN_FILL)
+    {
+        return settings.GetColor(Colors::kTextWarning);
+    }
+    return settings.GetColor(Colors::kAccent);
+}
+
+// Percent of the history budget, never showing a started chat as 0%.
+std::string
+FormatFillPercent(float fill)
+{
+    if(fill <= 0.0f)
+    {
+        return "0%";
+    }
+    const long percent = std::lround(fill * 100.0f);
+    return percent < 1 ? std::string("<1%") : std::to_string(percent) + "%";
+}
+
+// Text that sits right-aligned in the space left on the current line or cell.
+void
+RightAlignedText(const std::string& text, ImU32 color)
+{
+    const float width = ImGui::CalcTextSize(text.c_str()).x;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if(avail > width)
+    {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - width);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopStyleColor();
+}
 
 // Breaks a button label onto extra lines so a long follow-up still fits.
 std::string
@@ -388,6 +509,11 @@ AssistantPanel::RenderHeaderCard()
 
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
     const bool configured = provider != nullptr && !provider->endpoint_url.empty();
+    // An empty Model field sends the default, so name what is actually sent.
+    const std::string model = !configured ? std::string()
+                              : provider->model.empty()
+                                  ? std::string(ASSISTANT_DEFAULT_MODEL)
+                                  : provider->model;
 
     const float close_width = ImGui::GetFrameHeight();
     ImGui::BeginGroup();
@@ -397,20 +523,12 @@ AssistantPanel::RenderHeaderCard()
     ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
     ImGui::TextUnformatted("Ask Optiq");
     ImGui::PopFont();
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     if(!configured)
     {
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
         ImGui::TextUnformatted("Not configured");
+        ImGui::PopStyleColor();
     }
-    else if(!provider->model.empty())
-    {
-        ImGui::TextUnformatted(provider->model.c_str());
-    }
-    else
-    {
-        ImGui::TextUnformatted("Ready");
-    }
-    ImGui::PopStyleColor();
     ImGui::EndGroup();
     ImGui::EndGroup();
     if(ImGui::IsItemHovered())
@@ -421,10 +539,7 @@ AssistantPanel::RenderHeaderCard()
         }
         else
         {
-            SetTooltipStyled("%s\n%s",
-                             provider->model.empty() ? "(no model set)"
-                                                     : provider->model.c_str(),
-                             provider->endpoint_url.c_str());
+            SetTooltipStyled("%s\n%s", model.c_str(), provider->endpoint_url.c_str());
         }
     }
 
@@ -440,7 +555,13 @@ AssistantPanel::RenderHeaderCard()
         m_visible = false;
     }
 
-    if(!configured)
+    // Its own row rather than under the title, so it starts on the card's left
+    // edge with the icon and the transcript text below.
+    if(configured)
+    {
+        RenderContextChip(model, provider->endpoint_url);
+    }
+    else
     {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
@@ -449,6 +570,271 @@ AssistantPanel::RenderHeaderCard()
     }
 
     EndPanelCard();
+}
+
+/*
+ * The pill under the title: the model, a ring for how full the kept history is,
+ * the conversation's size against that budget, and - once the endpoint has
+ * reported any - the tokens this conversation has used.
+ */
+void
+AssistantPanel::RenderContextChip(const std::string& model, const std::string& endpoint)
+{
+    const ContextLoad load = MeasureContext();
+    const float       fill = ContextFill(load.history_chars, load.history_budget_chars);
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImU32      main     = settings.GetColor(Colors::kTextMain);
+    const ImU32      dim      = settings.GetColor(Colors::kTextDim);
+
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float  avail  = ImGui::GetContentRegionAvail().x;
+
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    const float text_h   = ImGui::GetTextLineHeight();
+    const float chip_h   = text_h + ASSISTANT_CONTEXT_CHIP_PAD_Y * 2.0f;
+    const float ring_d   = std::max(8.0f, text_h - 3.0f);
+    const float word_gap = ImGui::CalcTextSize(" ").x * 2.0f;
+
+    const std::string used   = FormatTokensShort(load.history_tokens);
+    const std::string budget = " / " + FormatTokensShort(load.history_budget_tokens);
+    const std::string in_n =
+        FormatTokensShort(static_cast<size_t>(m_session_prompt_tokens));
+    const std::string out_n =
+        FormatTokensShort(static_cast<size_t>(m_session_completion_tokens));
+    const char* in_label  = " in";
+    const char* out_label = " out";
+
+    const float divider_w = ASSISTANT_CONTEXT_DIVIDER_GAP * 2.0f + 1.0f;
+    const float context_w =
+        ring_d + ASSISTANT_CONTEXT_CHIP_GAP + ImGui::CalcTextSize(used.c_str()).x;
+    const float budget_w = ImGui::CalcTextSize(budget.c_str()).x;
+    const float usage_w  = divider_w + ImGui::CalcTextSize(in_n.c_str()).x +
+                          ImGui::CalcTextSize(in_label).x + word_gap +
+                          ImGui::CalcTextSize(out_n.c_str()).x +
+                          ImGui::CalcTextSize(out_label).x;
+    const float pads = ASSISTANT_CONTEXT_CHIP_PAD_X * 2.0f;
+
+    // A narrow dock drops the usage first, then the budget, then shortens the
+    // model name. The ring and the conversation size always stay.
+    std::string label       = model;
+    bool        show_usage  = m_usage_reported;
+    bool        show_budget = true;
+    auto        total       = [&]() {
+        return pads + ImGui::CalcTextSize(label.c_str()).x + divider_w + context_w +
+               (show_budget ? budget_w : 0.0f) + (show_usage ? usage_w : 0.0f);
+    };
+    if(show_usage && total() > avail)
+    {
+        show_usage = false;
+    }
+    if(total() > avail)
+    {
+        show_budget = false;
+    }
+    if(total() > avail)
+    {
+        label = ElideWithEllipsis(model,
+                                  std::max(0.0f, avail - (pads + divider_w + context_w)));
+    }
+    const float width = total();
+
+    ImGui::InvisibleButton("##assistant_context_chip",
+                           ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool hovered = ImGui::IsItemHovered();
+
+    ImDrawList*  draw     = ImGui::GetWindowDrawList();
+    const float  center_y = origin.y + chip_h * 0.5f;
+    const ImVec2 chip_min(origin);
+    const ImVec2 chip_max(origin.x + width, origin.y + chip_h);
+    // Hover changes only the outline: the ring's track and the dividers share
+    // the fill's tone, so a tinted fill would hide them.
+    draw->AddRectFilled(chip_min, chip_max, settings.GetColor(Colors::kBgPanel),
+                        chip_h * 0.5f);
+    draw->AddRect(
+        chip_min, chip_max,
+        settings.GetColor(hovered ? Colors::kBorderColor : Colors::kPanelBorderSubtle),
+        chip_h * 0.5f);
+
+    const float text_y  = center_y - text_h * 0.5f;
+    const ImU32 divider = settings.GetColor(Colors::kBorderColor);
+    float       x       = origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X;
+    auto        run     = [&](const char* text, ImU32 color) {
+        draw->AddText(ImVec2(x, text_y), color, text);
+        x += ImGui::CalcTextSize(text).x;
+    };
+    auto rule = [&]() {
+        x += ASSISTANT_CONTEXT_DIVIDER_GAP;
+        draw->AddLine(ImVec2(x, center_y - text_h * 0.35f),
+                      ImVec2(x, center_y + text_h * 0.35f), divider);
+        x += 1.0f + ASSISTANT_CONTEXT_DIVIDER_GAP;
+    };
+
+    run(label.c_str(), main);
+    rule();
+
+    const ImVec2 ring_center(x + ring_d * 0.5f, center_y);
+    const float  ring_r = ring_d * 0.5f - ASSISTANT_CONTEXT_RING_STROKE * 0.5f;
+    draw->AddCircle(ring_center, ring_r, settings.GetColor(Colors::kBorderColor), 0,
+                    ASSISTANT_CONTEXT_RING_STROKE);
+    if(fill >= 0.995f)
+    {
+        draw->AddCircle(ring_center, ring_r, ContextFillColor(fill), 0,
+                        ASSISTANT_CONTEXT_RING_STROKE);
+    }
+    else if(load.history_chars > 0)
+    {
+        // Zero radians points right, so start at the top and sweep clockwise.
+        const float start = -ASSISTANT_PI * 0.5f;
+        const float sweep =
+            std::max(fill, ASSISTANT_CONTEXT_MIN_ARC) * ASSISTANT_PI * 2.0f;
+        draw->PathArcTo(ring_center, ring_r, start, start + sweep, 0);
+        draw->PathStroke(ContextFillColor(fill), ASSISTANT_CONTEXT_RING_STROKE);
+    }
+    x += ring_d + ASSISTANT_CONTEXT_CHIP_GAP;
+
+    run(used.c_str(), load.history_chars > 0 ? main : dim);
+    if(show_budget)
+    {
+        run(budget.c_str(), dim);
+    }
+    if(show_usage)
+    {
+        rule();
+        run(in_n.c_str(), main);
+        run(in_label, dim);
+        x += word_gap;
+        run(out_n.c_str(), main);
+        run(out_label, dim);
+    }
+    ImGui::PopFont();
+
+    if(hovered)
+    {
+        BeginTooltipStyled();
+        RenderContextTooltip(load, fill, model, endpoint);
+        EndTooltipStyled();
+    }
+}
+
+// The pill's hover card: which endpoint answers, the history against its
+// budget, what rides along on every request, and the reported token counts.
+void
+AssistantPanel::RenderContextTooltip(const ContextLoad& load, float fill,
+                                     const std::string& model,
+                                     const std::string& endpoint) const
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImU32      main     = settings.GetColor(Colors::kTextMain);
+    const ImU32      dim      = settings.GetColor(Colors::kTextDim);
+    const float      width    = ASSISTANT_CONTEXT_TIP_WIDTH;
+    // A tooltip sizes itself to its content, so alignment is measured against
+    // this fixed width rather than against the space the window reports.
+    const float start_x = ImGui::GetCursorPosX();
+
+    ImGui::PushTextWrapPos(start_x + width);
+
+    ImGui::TextUnformatted(model.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("%s", endpoint.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    const std::string percent = FormatFillPercent(fill) + " used";
+    ImGui::TextUnformatted("Context");
+    ImGui::SameLine(start_x + width - ImGui::CalcTextSize(percent.c_str()).x);
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextUnformatted(percent.c_str());
+    ImGui::PopStyleColor();
+
+    ImDrawList*  draw   = ImGui::GetWindowDrawList();
+    const ImVec2 bar    = ImGui::GetCursorScreenPos();
+    const float  radius = ASSISTANT_CONTEXT_TIP_BAR_H * 0.5f;
+    draw->AddRectFilled(bar, ImVec2(bar.x + width, bar.y + ASSISTANT_CONTEXT_TIP_BAR_H),
+                        settings.GetColor(Colors::kBorderColor), radius);
+    if(load.history_chars > 0)
+    {
+        const float filled =
+            std::min(width, std::max(ASSISTANT_CONTEXT_TIP_BAR_H, width * fill));
+        draw->AddRectFilled(bar,
+                            ImVec2(bar.x + filled, bar.y + ASSISTANT_CONTEXT_TIP_BAR_H),
+                            ContextFillColor(fill), radius);
+    }
+    ImGui::Dummy(ImVec2(width, ASSISTANT_CONTEXT_TIP_BAR_H));
+
+    const std::string about =
+        FormatCount(load.history_tokens) + " of " +
+        FormatCount(load.history_budget_tokens) +
+        " tokens of conversation. Past that, Optiq shortens older tool results. The "
+        "prompt and tool list add about " +
+        FormatCount(load.overhead_tokens) + " to every request.";
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("%s", about.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextUnformatted("Token usage");
+    if(!m_usage_reported)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, dim);
+        ImGui::TextWrapped("%s", m_conversation.empty()
+                                     ? "Counts appear after the first reply."
+                                     : "This endpoint did not report token counts.");
+        ImGui::PopStyleColor();
+        ImGui::PopTextWrapPos();
+        return;
+    }
+
+    if(ImGui::BeginTable("##assistant_usage", 3, ImGuiTableFlags_None,
+                         ImVec2(width, 0.0f)))
+    {
+        ImGui::TableSetupColumn("##what", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##in", ImGuiTableColumnFlags_WidthFixed,
+                                ASSISTANT_CONTEXT_TIP_NUM_WIDTH);
+        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed,
+                                ASSISTANT_CONTEXT_TIP_NUM_WIDTH);
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(1);
+        RightAlignedText("In", dim);
+        ImGui::TableSetColumnIndex(2);
+        RightAlignedText("Out", dim);
+
+        auto row = [&](const char* label, int in_tokens, int out_tokens) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::PushStyleColor(ImGuiCol_Text, dim);
+            ImGui::TextUnformatted(label);
+            ImGui::PopStyleColor();
+            ImGui::TableSetColumnIndex(1);
+            RightAlignedText(FormatCount(static_cast<size_t>(in_tokens)), main);
+            ImGui::TableSetColumnIndex(2);
+            RightAlignedText(FormatCount(static_cast<size_t>(out_tokens)), main);
+        };
+        row("Last reply", m_last_prompt_tokens, m_last_completion_tokens);
+        row("This conversation", m_session_prompt_tokens, m_session_completion_tokens);
+        ImGui::EndTable();
+    }
+
+    std::string note = "Over " + std::to_string(m_session_rounds) +
+                       (m_session_rounds == 1 ? " request" : " requests") +
+                       ". Input counts the whole history again on every request.";
+    if(m_last_cached_known && m_last_cached_tokens > 0)
+    {
+        note += " " + FormatCount(static_cast<size_t>(m_last_cached_tokens)) +
+                " of the last reply's input came from the endpoint's cache.";
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("%s", note.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::PopTextWrapPos();
 }
 
 void
@@ -954,6 +1340,7 @@ AssistantPanel::RenderComposer()
         m_input.clear();
         m_conversation.clear();
         m_next_steps.clear();
+        ClearTokenUsage();
     }
     ImGui::EndDisabled();
 

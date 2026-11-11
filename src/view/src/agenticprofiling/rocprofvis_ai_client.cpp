@@ -19,6 +19,8 @@
 #include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
+#include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -306,6 +308,65 @@ JsonString(jt::Json& node, const char* key)
     return node[key].getString();
 }
 
+// Reads a non-negative token count. Usage numbers arrive as ints from a stock
+// endpoint and as doubles from others, and a count a 32-bit int cannot hold is
+// rejected rather than wrapped.
+bool
+JsonCount(jt::Json& node, const char* key, int& out)
+{
+    if(!node.contains(key))
+    {
+        return false;
+    }
+    jt::Json& value = node[key];
+    double    raw   = 0.0;
+    if(value.isLong())
+    {
+        raw = static_cast<double>(value.getLong());
+    }
+    else if(value.isDouble())
+    {
+        raw = value.getDouble();
+    }
+    else
+    {
+        return false;
+    }
+    if(!std::isfinite(raw) || raw < 0.0 || raw > static_cast<double>(INT32_MAX))
+    {
+        return false;
+    }
+    out = static_cast<int>(raw);
+    return true;
+}
+
+// Copies the usage object when the endpoint sent one. Missing fields stay zero.
+// A body with no usage object leaves has_usage false, which is what a local
+// server that does not count tokens looks like.
+void
+ReadUsage(jt::Json& root, AssistantChatResult& result)
+{
+    if(!root.contains("usage") || !root["usage"].isObject())
+    {
+        return;
+    }
+    jt::Json&  usage      = root["usage"];
+    const bool has_prompt = JsonCount(usage, "prompt_tokens", result.prompt_tokens);
+    const bool has_completion =
+        JsonCount(usage, "completion_tokens", result.completion_tokens);
+    if(!has_prompt && !has_completion)
+    {
+        return;
+    }
+    result.has_usage = true;
+    if(usage.contains("prompt_tokens_details") &&
+       usage["prompt_tokens_details"].isObject())
+    {
+        result.has_cached_tokens = JsonCount(usage["prompt_tokens_details"],
+                                             "cached_tokens", result.cached_tokens);
+    }
+}
+
 // "content" is either a plain string or a list of {"text": "..."} parts.
 std::string
 JoinContent(jt::Json& content)
@@ -542,6 +603,9 @@ ParseChatCompletion(jt::Json& root, bool allow_tool_calls, AssistantChatResult& 
     {
         return;
     }
+    // Read before the choices checks. A length-limit body still carries usage,
+    // and that count is worth keeping even when the reply itself is unusable.
+    ReadUsage(root, result);
 
     if(!root.contains("choices") || !root["choices"].isArray() ||
        root["choices"].getArray().empty())

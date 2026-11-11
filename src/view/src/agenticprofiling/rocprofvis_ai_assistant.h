@@ -100,6 +100,8 @@ private:
     void AppendChart(uint64_t track_id);
     void RenderActivityChart(uint64_t track_id);
     void        RenderHeaderCard();
+    // The model, context, and token-usage pill under the title.
+    void        RenderContextChip(const std::string& model, const std::string& endpoint);
     void        RenderTranscript();
     void        RenderMessageCard(size_t index, const ChatLine& line);
     void        RenderSelectableMessage(size_t index, const std::string& text,
@@ -151,6 +153,27 @@ private:
     bool                 NeedsBriefing();
     void                 TrimConversation();
     bool                 Busy() const;
+    // Records a usage object from a completed response. Ignored when the
+    // endpoint sent none.
+    void NoteTokenUsage(const AssistantChatResult& result);
+    void ClearTokenUsage();
+
+    // The conversation as the history trimmer budgets it, plus the standing
+    // prompt and tool schema that ride along with every request. The pill
+    // draws the first against its budget and reports the overhead apart, so
+    // an empty chat reads as empty. Tokens are characters over four.
+    struct ContextLoad
+    {
+        size_t history_chars         = 0;
+        size_t history_budget_chars  = 0;
+        size_t history_tokens        = 0;
+        size_t history_budget_tokens = 0;
+        size_t overhead_tokens       = 0;
+    };
+    ContextLoad MeasureContext() const;
+    void        RenderContextTooltip(const ContextLoad& load, float fill,
+                                     const std::string& model,
+                                     const std::string& endpoint) const;
 
     static AssistantPanel* s_instance;
 
@@ -198,6 +221,18 @@ private:
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
+
+    // Token counts the endpoint reported. Kept across the end of a turn so the
+    // pill can still show the answer that just landed, and cleared only when
+    // the conversation itself is cleared.
+    bool m_usage_reported            = false;
+    int  m_last_prompt_tokens        = 0;
+    int  m_last_completion_tokens    = 0;
+    bool m_last_cached_known         = false;
+    int  m_last_cached_tokens        = 0;
+    int  m_session_prompt_tokens     = 0;
+    int  m_session_completion_tokens = 0;
+    int  m_session_rounds            = 0;
 };
 
 }  // namespace View

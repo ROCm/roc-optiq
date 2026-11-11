@@ -59,6 +59,13 @@ struct AssistantChatResult
     std::string                    error;
     std::string                    finish_reason;
     std::vector<AssistantToolCall> tool_calls;
+    // Set when the body carried a usage object. Endpoints that omit it leave
+    // this false, and the panel shows only its own estimate of the context.
+    bool has_usage         = false;
+    int  prompt_tokens     = 0;
+    int  completion_tokens = 0;
+    bool has_cached_tokens = false;
+    int  cached_tokens     = 0;
 };
 
 /**

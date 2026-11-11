@@ -188,7 +188,7 @@ SettingsPanel::Render()
                 ImGui::CalcTextSize("Cancel").x + 2 * ImGui::GetStyle().FramePadding.x;
             ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
                                  ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
-            if(ImGui::Button("OK", ImVec2(button_width, 0)))
+            if(AccentButton("OK", ImVec2(button_width, 0)))
             {
                 m_usersettings.display_settings.font_size_index =
                     m_pending_font_size_index;

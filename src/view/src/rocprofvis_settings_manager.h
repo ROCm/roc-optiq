@@ -5,12 +5,15 @@
 
 #include "imgui.h"
 #include "json.h"
+#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_font_manager.h"
 #include <array>
 #include <filesystem>
 #include <list>
 #include <map>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -117,10 +120,10 @@ typedef struct InternalSettings
 // because a remote profile needs a directory on the remote host.
 typedef struct ProfilerSettings
 {
-    std::string profiler_output_directory;
-    bool        auto_load_trace = true;
-    std::vector<std::string> recent_targets;
-    std::string last_preset_name;
+    // Most recent first, keyed as described at SettingsManager::GetRecentTargets.
+    std::unordered_map<std::string, std::vector<std::string>> recent_targets;
+    // Each profiler's last selected launch profile, keyed by profiler id.
+    std::unordered_map<std::string, std::string> last_preset_names;
     std::string last_profiler_id;
     std::string last_ssh_connection_id;
 } ProfilerSettings;
@@ -348,8 +351,6 @@ constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 
 class SettingsManager
 {
@@ -398,6 +399,17 @@ public:
     // Profiler settings
     ProfilerSettings& GetProfilerSettings();
     void SaveProfilerSettings();
+    /*
+     * The recent target list for a profiler, optionally narrowed to one tool and
+     * one operation; created empty on first use. The list is keyed by the
+     * profiler id followed by each supplied enum value, so a caller that passes
+     * only the profiler id gets one list shared by all of its tools. The
+     * reference stays valid as other lists are added.
+     */
+    std::vector<std::string>& GetRecentTargets(
+        std::string const&                             profiler_id,
+        std::optional<rocprofvis_profiler_tool_t>      tool      = std::nullopt,
+        std::optional<rocprofvis_profiler_operation_t> operation = std::nullopt);
 
     // The route the assistant should use, or nullptr when none is configured.
     const AssistantProvider* GetActiveAssistantProvider() const;

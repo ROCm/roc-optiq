@@ -23,21 +23,15 @@ std::vector<PresetInfo> LaunchPresetManager::ListPresets(std::string const& prof
 {
     std::vector<PresetInfo> presets;
 
+    // Profiles are grouped by profiler, so each profiler has its own names.
     jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
-    if (!profiles.isObject())
+    if (!profiles.contains(profiler_id) || !profiles[profiler_id].isObject())
     {
         return presets;
     }
 
-    for (auto& entry : profiles.getObject())
+    for (std::pair<std::string const, jt::Json>& entry : profiles[profiler_id].getObject())
     {
-        // Only surface profiles for the requested profiler. The profiler id is
-        // stored inside each LaunchConfig entry.
-        if (JsonUtils::GetString(entry.second, "profiler_id", "") != profiler_id)
-        {
-            continue;
-        }
-
         PresetInfo info;
         info.name = entry.first;
         info.file_path = entry.first;  // logical name; no longer a filesystem path
@@ -56,8 +50,12 @@ bool LaunchPresetManager::SavePreset(std::string const& name, LaunchConfig const
         return false;
     }
 
-    jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
-    profiles[name] = config.ToJson();
+    jt::Json& group = ProfilesDocument::Get().LaunchProfiles()[config.profiler_id];
+    if (!group.isObject())
+    {
+        group.setObject();
+    }
+    group[name] = config.ToJson();
 
     if (!ProfilesDocument::Get().Persist())
     {
@@ -73,33 +71,29 @@ bool LaunchPresetManager::LoadPreset(std::string const& name, std::string const&
                                       LaunchConfig& config_out) const
 {
     jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
-    if (!profiles.isObject() || !profiles.contains(name))
+    if (!profiles.contains(profiler_id) || !profiles[profiler_id].isObject() ||
+        !profiles[profiler_id].contains(name))
     {
         spdlog::error("Launch profile not found: {}", name);
         return false;
     }
 
-    jt::Json& entry = profiles[name];
-    if (JsonUtils::GetString(entry, "profiler_id", profiler_id) != profiler_id)
-    {
-        spdlog::warn("Launch profile '{}' belongs to a different profiler", name);
-    }
-
-    config_out = LaunchConfig::FromJson(entry);
+    config_out = LaunchConfig::FromJson(profiles[profiler_id][name]);
     spdlog::info("Loaded launch profile '{}'", name);
     return true;
 }
 
-bool LaunchPresetManager::DeletePreset(std::string const& name, std::string const& /*profiler_id*/)
+bool LaunchPresetManager::DeletePreset(std::string const& name, std::string const& profiler_id)
 {
     jt::Json& profiles = ProfilesDocument::Get().LaunchProfiles();
-    if (!profiles.isObject() || !profiles.contains(name))
+    if (!profiles.contains(profiler_id) || !profiles[profiler_id].isObject() ||
+        !profiles[profiler_id].contains(name))
     {
         spdlog::error("Launch profile not found for delete: {}", name);
         return false;
     }
 
-    profiles.getObject().erase(name);
+    profiles[profiler_id].getObject().erase(name);
 
     if (!ProfilesDocument::Get().Persist())
     {
@@ -159,7 +153,8 @@ bool LaunchPresetManager::ImportPreset(std::string const& file_path,
         return true;
     }
 
-    // Fall back to .cfg format: KEY = VALUE lines -> extra_env
+    // Fall back to .cfg format: KEY = VALUE lines -> the backend's extra
+    // environment variables
     std::ifstream ifs(file_path);
     if (!ifs.is_open())
     {
@@ -174,6 +169,7 @@ bool LaunchPresetManager::ImportPreset(std::string const& file_path,
 
     config_out = LaunchConfig();
     config_out.profiler_id = profiler_id;
+    ExtraArguments extra;
 
     std::istringstream lines(content);
     std::string line;
@@ -211,9 +207,10 @@ bool LaunchPresetManager::ImportPreset(std::string const& file_path,
 
         if (!key.empty())
         {
-            config_out.extra_env[key] = val;
+            extra.env[key] = val;
         }
     }
+    config_out.backend_payload["extra_arguments"] = extra.ToJson();
 
     spdlog::info("Imported .cfg file as raw env vars: {}", file_path);
     return true;

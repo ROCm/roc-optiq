@@ -26,17 +26,21 @@ rocprofvis_result_t rocprofvis_profiler_tool_get_binary_name(rocprofvis_profiler
 
 /*
 * Absolute path of `tool` on this machine, same order as a local launch:
-* tool_directory alone if set, else $ROCM_PATH/bin (default /opt/rocm off
-* Windows), then $PATH. Local only — do not use for a remote launch.
+* tool_directory alone if set, else <python_environment>/bin (off Windows), then
+* $ROCM_PATH/bin (default /opt/rocm off Windows), then $PATH. Local only — do
+* not use for a remote launch.
 * Same string-getter convention as rocprofvis_profiler_tool_get_binary_name.
 * @param tool The profiler tool.
 * @param tool_directory Absolute search dir, or null/empty for the default.
+* @param python_environment Python virtual environment the tool runs in, or
+*        null/empty for none.
 * @param buffer Destination, or nullptr to query length.
 * @param length In/out byte count (must not be null).
 * @returns kRocProfVisResultSuccess, kRocProfVisResultToolNotFound, or
-*          kRocProfVisResultInvalidArgument (unknown tool or relative directory).
+*          kRocProfVisResultInvalidArgument (unknown tool, relative directory or
+*          relative Python environment).
 */
-rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char* buffer, uint32_t* length);
+rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char const* python_environment, char* buffer, uint32_t* length);
 
 /*
 * Allocates a profiler configuration object.
@@ -90,6 +94,18 @@ rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_p
 rocprofvis_result_t rocprofvis_profiler_config_set_working_directory(rocprofvis_profiler_config_t* config, char const* working_directory);
 
 /*
+* Python virtual environment to run the profiler in, for tools that are Python
+* scripts. A directory, never a command: SSH launches source its bin/activate
+* before the profiler; local launches (POSIX only) set VIRTUAL_ENV and put its
+* bin first on PATH. Must be absolute; empty (the default) uses the inherited
+* Python. Local launches on Windows ignore it.
+* @param config The profiler config object.
+* @param python_environment The venv directory, or empty for none.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_set_python_environment(rocprofvis_profiler_config_t* config, char const* python_environment);
+
+/*
 * Adds an environment variable set in the child before exec.
 * @param config The profiler config object.
 * @param name Variable name (must not be null).
@@ -106,6 +122,22 @@ rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_c
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_profiler_config_add_profiler_arg(rocprofvis_profiler_config_t* config, char const* arg);
+
+/*
+* The command a launch of `config` runs, formatted for display: an optional
+* "cd <dir> &&" line, the venv activation for a remote run, one NAME=value line
+* per environment variable as the launch composes them (a local preview shows
+* the inherited PATH as "$PATH"), then the arguments with each flag on its own
+* continuation line. Not shell-safe. Same string-getter convention as
+* rocprofvis_profiler_tool_get_binary_name.
+* @param config The profiler config object.
+* @param remote True to compose as an SSH launch, false as a local one.
+* @param argv0 The tool path to show as argv[0].
+* @param buffer Destination, or nullptr to query length.
+* @param length In/out byte count (must not be null).
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_get_command_preview(rocprofvis_profiler_config_t* config, bool remote, char const* argv0, char* buffer, uint32_t* length);
 
 /*
 * Sets local execution (default).

@@ -29,10 +29,6 @@ namespace View
 
 namespace
 {
-    // Interior padding for the file-listing card.
-    constexpr float kFileTableCardPadX = 10.0f;
-    constexpr float kFileTableCardPadY = 6.0f;
-
     constexpr int DEFAULT_SSH_PORT = 22;
     // Relative remote paths resolve against the home folder, so this lists it.
     constexpr const char* REMOTE_HOME_DIR = ".";
@@ -401,7 +397,7 @@ void RemoteFileBrowser::Render()
 
     SettingsManager&  settings   = SettingsManager::GetInstance();
     ImFont*           icon_font  = settings.GetFontManager().GetFont(FontType::kIcon);
-    const ImGuiStyle& style      = ImGui::GetStyle();
+    const ImGuiStyle& style      = settings.GetDefaultStyle();
 
     const ImU32 accent         = settings.GetColor(Colors::kAccent);
     const ImU32 accent_hover   = settings.GetColor(Colors::kAccentHover);
@@ -453,16 +449,15 @@ void RemoteFileBrowser::Render()
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
-
-    const ImGuiStyle& def = settings.GetDefaultStyle();
-    // Round to 12 px to match the app's other frameless pop-ups.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup(ImGuiCond_Always);
 
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(640, 440), ImVec2(FLT_MAX, FLT_MAX));
 
     if (ImGui::BeginPopupModal("Remote File System", nullptr,
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar))
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoScrollWithMouse))
     {
         const bool busy     = m_browser_busy || (m_orchestrator && m_orchestrator->IsRunning());
         // Open() clears the listing, so having one means this session connected.
@@ -482,20 +477,14 @@ void RemoteFileBrowser::Render()
         const bool can_up   = !is_posix_root_path(m_browser_dir);
 
         // Header card: title, host chip, navigation, address bar and filters.
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
-        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
-
-        const float header_h = 10.0f * 2.0f + ImGui::GetTextLineHeightWithSpacing() +
-                               ImGui::GetFrameHeightWithSpacing() +
-                               ImGui::GetFrameHeightWithSpacing();
-        ImGui::BeginChild("RemoteExplorerHeader", ImVec2(0.0f, header_h), true,
+        ImGui::BeginChild("RemoteExplorerHeader", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         {
             // Title and host chip.
-            ImGui::PushFont(icon_font, ImGui::GetFontSize());
+            ImGui::PushFont(icon_font);
             ImGui::PushStyleColor(ImGuiCol_Text, accent);
+            ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted(ICON_FOLDER);
             ImGui::PopStyleColor();
             ImGui::PopFont();
@@ -523,13 +512,13 @@ void RemoteFileBrowser::Render()
                     host_chip.empty() ? std::string("Choose connection") : host_chip;
                 ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
                                      ImGui::CalcTextSize(chip_label.c_str()).x -
-                                     style.FramePadding.x * 2.0f - 4.0f);
+                                     style.FramePadding.x * 2.0f);
                 ImGui::PushStyleColor(ImGuiCol_Button, btn_col);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, btn_hover);
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn_active);
                 ImGui::PushStyleColor(ImGuiCol_Text, accent);
                 const bool change_connection =
-                    ImGui::SmallButton((chip_label + "##connection").c_str());
+                    ImGui::Button((chip_label + "##connection").c_str());
                 ImGui::PopStyleColor(4);
                 if (ImGui::IsItemHovered())
                 {
@@ -543,7 +532,7 @@ void RemoteFileBrowser::Render()
             else
             {
                 ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
-                                     ImGui::CalcTextSize(host_chip.c_str()).x - 4.0f);
+                                     ImGui::CalcTextSize(host_chip.c_str()).x);
                 ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
                 ImGui::TextUnformatted(host_chip.c_str());
                 ImGui::PopStyleColor();
@@ -609,16 +598,17 @@ void RemoteFileBrowser::Render()
             ImGui::SameLine();
 
             // Address pill: editable text field, or clickable breadcrumb segments.
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, m_address_editing ? btn_col : transparent);
             ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 2.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.FrameRounding);
+            ImGui::PushStyleVarY(ImGuiStyleVar_WindowPadding, 0.0f);
             ImGui::BeginChild("RemoteExplorerAddress",
-                              ImVec2(0.0f, ImGui::GetFrameHeight() + 4.0f), true,
+                              ImVec2(0.0f, ImGui::GetItemRectSize().y), true,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
             {
                 if (m_address_editing)
                 {
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, transparent);
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     if (InputTextStringWithHint("##addr_edit", "/path/to/directory",
                             m_address_edit, ImGuiInputTextFlags_EnterReturnsTrue))
@@ -630,15 +620,15 @@ void RemoteFileBrowser::Render()
                     {
                         m_address_editing = false;
                     }
+                    ImGui::PopStyleColor();
                 }
                 else
                 {
+                    ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, 0.0f);
                     ImGui::PushStyleColor(ImGuiCol_Button, transparent);
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
                     ImGui::PushStyleColor(ImGuiCol_Text, accent);
-                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, style.FramePadding.y));
-
+                    ImGui::SetCursorPosY(0.5f * (ImGui::GetContentRegionAvail().y -
+                                                 ImGui::GetTextLineHeight()));
                     if (ImGui::Button("/##crumb_root"))
                     {
                         NavigateBrowserTo("/", true);
@@ -680,9 +670,8 @@ void RemoteFileBrowser::Render()
                             NavigateBrowserTo(accum, true);
                         }
                     }
-
                     ImGui::PopStyleVar();
-                    ImGui::PopStyleColor(4);
+                    ImGui::PopStyleColor(2);
                 }
             }
             ImGui::EndChild();
@@ -711,24 +700,13 @@ void RemoteFileBrowser::Render()
                                          ImGui::CalcTextSize(ICON_EYE_SLASH).x) +
                                 style.FramePadding.x * 2.0f;
             ImGui::PopFont();
-            const float clear_w    = ImGui::GetFrameHeight();
-            const float trailing_w = clear_w + eye_w + style.ItemSpacing.x * 2.0f +
-                                     (dir_mode ? 0.0f : combo_w + style.ItemSpacing.x);
-            ImGui::SetNextItemWidth(
-                std::max(clear_w * 4.0f, ImGui::GetContentRegionAvail().x - trailing_w));
-            InputTextStringWithHint("##remote_file_filter", "Filter name",
-                m_remote_file_filter);
-            ImGui::SameLine();
-            if (!m_remote_file_filter.empty())
+            if (InputTextWithClear("##remote_file_filter", "Filter name", m_remote_file_filter,
+                    icon_font, btn_col, style,
+                    ImGui::GetContentRegionAvail().x - combo_w - eye_w -
+                        (dir_mode ? 1.0f : 2.0f) * style.ItemSpacing.x)
+                    .second)
             {
-                if (XButton("##remote_filter_clear", "Clear filter", &settings))
-                {
-                    m_remote_file_filter.clear();
-                }
-            }
-            else
-            {
-                ImGui::Dummy(ImVec2(clear_w, clear_w));
+                m_remote_file_filter.clear();
             }
 
             if (!dir_mode)
@@ -756,7 +734,7 @@ void RemoteFileBrowser::Render()
             }
 
             ImGui::SameLine();
-            if (IconButton(m_show_hidden ? ICON_EYE : ICON_EYE_SLASH, icon_font, ImVec2(0, 0),
+            if (IconButton(m_show_hidden ? ICON_EYE : ICON_EYE_SLASH, icon_font, ImVec2(eye_w, 0.0f),
                            m_show_hidden ? "Hide hidden files" : "Show hidden files", false,
                            style.FramePadding, btn_col, btn_hover, btn_active,
                            "##toggle_hidden"))
@@ -767,12 +745,9 @@ void RemoteFileBrowser::Render()
             ImGui::EndDisabled();
         }
         ImGui::EndChild();
-        ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor(2);
 
         // File listing table.
-        const float footer_card_height = 48.0f;
-        const float footer_reserve     = footer_card_height + style.ItemSpacing.y;
+        const float footer_reserve = ImGui::GetFrameHeight() + style.ItemSpacing.y;
 
         // Filtered index list over the active source (hidden, type and name
         // filter). Sorted below once the sort spec is known, and reused by the
@@ -889,19 +864,16 @@ void RemoteFileBrowser::Render()
         }
         else
         {
-            // Wrap the listing in a rounded, bordered card matching the header/footer
-            // cards; interior padding insets the rows from the border.
+            // Wrap the listing in a bordered card; interior padding insets the rows
+            // from the border.
             ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
             ImGui::PushStyleColor(ImGuiCol_Border,
                                   settings.GetColor(Colors::kPanelBorderSubtle));
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
 
             ImGui::BeginChild("RemoteFilesCard", ImVec2(0.0f, -footer_reserve),
                               ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-            ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, def.CellPadding);
             if (ImGui::BeginTable("RemoteFiles", 4, table_flags, ImVec2(0, 0)))
             {
             // Sized from sample text so nothing truncates at any font scale.
@@ -980,7 +952,7 @@ void RemoteFileBrowser::Render()
             }
 
             auto row_icon = [&](const char* glyph, ImU32 color) {
-                ImGui::PushFont(icon_font, ImGui::GetFontSize());
+                ImGui::PushFont(icon_font);
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
                 ImGui::TextUnformatted(glyph);
                 ImGui::PopStyleColor();
@@ -1125,9 +1097,7 @@ void RemoteFileBrowser::Render()
             ImGui::PopStyleColor(3);
             ImGui::EndTable();
             }
-            ImGui::PopStyleVar();  // CellPadding
             ImGui::EndChild();     // RemoteFilesCard
-            ImGui::PopStyleVar(2);   // ChildRounding, WindowPadding
             ImGui::PopStyleColor(2); // ChildBg, Border
         }
         m_scroll_to_selected = false;
@@ -1189,121 +1159,110 @@ void RemoteFileBrowser::Render()
         };
 
         bool open_pressed = false;
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
-        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
-
-        ImGui::BeginChild("RemoteExplorerFooter", ImVec2(0.0f, footer_card_height), true,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        const float button_width = ImGui::CalcTextSize("Select Folder").x + style.FramePadding.x * 2.0f;
+        const float status_width = ImGui::GetContentRegionAvail().x -
+                                   (button_width * 2.0f + style.ItemSpacing.x * 2.0f);
+        ImGui::AlignTextToFramePadding();
+        if (!connected)
         {
-            const float button_width = 120.0f;
-            const float status_width = ImGui::GetContentRegionAvail().x -
-                                       (button_width * 2.0f + style.ItemSpacing.x * 2.0f);
-            ImGui::AlignTextToFramePadding();
-            if (!connected)
+            ImGui::PushStyleColor(ImGuiCol_Text, connecting ? accent : text_dim);
+            ImGui::TextUnformatted(connecting ? "Connecting..." : "Not connected");
+            ImGui::PopStyleColor();
+        }
+        else if (busy)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, accent);
+            ImGui::TextUnformatted("Loading...");
+            ImGui::PopStyleColor();
+        }
+        else if (!m_browser_error.empty())
+        {
+            // A failed navigation leaves the last folder listed, so the table
+            // cannot carry the error; say it here.
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+            ElidedText(m_browser_error.c_str(), std::max(status_width, 80.0f), 0.0f,
+                       Alignment_Left, true);
+            ImGui::PopStyleColor();
+        }
+        else
+        {
+            ImGui::TextDisabled("%zu item%s", visible.size(), visible.size() == 1 ? "" : "s");
+
+            // In directory mode the effective selection is the folder being
+            // viewed when no folder row is highlighted.
+            std::string shown_selection = selection_label;
+            if (dir_mode && (selection_label.empty() || !selection_is_dir))
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, connecting ? accent : text_dim);
-                ImGui::TextUnformatted(connecting ? "Connecting..." : "Not connected");
-                ImGui::PopStyleColor();
+                shown_selection = posix_base_name(m_browser_dir);
+                if (shown_selection.empty())
+                {
+                    shown_selection = m_browser_dir;
+                }
             }
-            else if (busy)
+            if (!shown_selection.empty())
             {
+                ImGui::SameLine();
+                ImGui::TextDisabled("Selected:");
+                ImGui::SameLine();
                 ImGui::PushStyleColor(ImGuiCol_Text, accent);
-                ImGui::TextUnformatted("Loading...");
-                ImGui::PopStyleColor();
-            }
-            else if (!m_browser_error.empty())
-            {
-                // A failed navigation leaves the last folder listed, so the table
-                // cannot carry the error; say it here.
-                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
-                ElidedText(m_browser_error.c_str(), std::max(status_width, 80.0f), 0.0f,
+                const float selected_width = ImGui::GetContentRegionAvail().x -
+                                             (button_width + style.ItemSpacing.x) * 2.0f;
+                ElidedText(shown_selection.c_str(), std::max(selected_width, 80.0f), 0.0f,
                            Alignment_Left, true);
                 ImGui::PopStyleColor();
             }
-            else
-            {
-                ImGui::TextDisabled("%zu item%s", visible.size(), visible.size() == 1 ? "" : "s");
-
-                // In directory mode the effective selection is the folder being
-                // viewed when no folder row is highlighted.
-                std::string shown_selection = selection_label;
-                if (dir_mode && (selection_label.empty() || !selection_is_dir))
-                {
-                    shown_selection = posix_base_name(m_browser_dir);
-                    if (shown_selection.empty())
-                    {
-                        shown_selection = m_browser_dir;
-                    }
-                }
-                if (!shown_selection.empty())
-                {
-                    ImGui::SameLine(0, style.ItemSpacing.x * 2.0f);
-                    ImGui::TextDisabled("Selected:");
-                    ImGui::SameLine();
-                    ImGui::PushStyleColor(ImGuiCol_Text, accent);
-                    const float selected_width = ImGui::GetContentRegionAvail().x -
-                                                 (button_width + style.ItemSpacing.x) * 2.0f;
-                    ElidedText(shown_selection.c_str(), std::max(selected_width, 80.0f), 0.0f,
-                               Alignment_Left, true);
-                    ImGui::PopStyleColor();
-                }
-            }
-
-            const float total_width  = button_width * 2.0f + style.ItemSpacing.x;
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - total_width);
-
-            if (ImGui::Button("Cancel", ImVec2(button_width, 0)))
-            {
-                m_orchestrator.reset();
-                m_browser_busy = false;
-                ImGui::CloseCurrentPopup();
-                m_show_remote_filesystem_popup = false;
-            }
-            ImGui::SameLine();
-
-            ImGui::BeginDisabled(!connected);
-            if (dir_mode)
-            {
-                // Once connected, choosing a folder is always possible (defaults
-                // to the current directory).
-                ImGui::PushStyleColor(ImGuiCol_Button, accent);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
-                ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
-                if (ImGui::Button("Select Folder", ImVec2(button_width, 0)))
-                {
-                    commit_folder();
-                }
-                ImGui::PopStyleColor(4);
-            }
-            else
-            {
-                const bool can_open = !m_selected_name.empty();
-                if (!can_open)
-                {
-                    ImGui::BeginDisabled();
-                }
-                ImGui::PushStyleColor(ImGuiCol_Button, accent);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
-                ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
-                const char* file_label = m_accept_label.empty() ? "Select" : m_accept_label.c_str();
-                open_pressed =
-                    ImGui::Button(selection_is_dir ? "Open" : file_label, ImVec2(button_width, 0));
-                ImGui::PopStyleColor(4);
-                if (!can_open)
-                {
-                    ImGui::EndDisabled();
-                }
-            }
-            ImGui::EndDisabled();
         }
-        ImGui::EndChild();
-        ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor(2);
+
+        const float total_width  = button_width * 2.0f + style.ItemSpacing.x;
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - total_width);
+
+        if (ImGui::Button("Cancel", ImVec2(button_width, 0)))
+        {
+            m_orchestrator.reset();
+            m_browser_busy = false;
+            ImGui::CloseCurrentPopup();
+            m_show_remote_filesystem_popup = false;
+        }
+        ImGui::SameLine();
+
+        ImGui::BeginDisabled(!connected);
+        if (dir_mode)
+        {
+            // Once connected, choosing a folder is always possible (defaults
+            // to the current directory).
+            ImGui::PushStyleColor(ImGuiCol_Button, accent);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
+            ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
+            if (ImGui::Button("Select Folder", ImVec2(button_width, 0)))
+            {
+                commit_folder();
+            }
+            ImGui::PopStyleColor(4);
+        }
+        else
+        {
+            const bool can_open = !m_selected_name.empty();
+            if (!can_open)
+            {
+                ImGui::BeginDisabled();
+            }
+            ImGui::PushStyleColor(ImGuiCol_Button, accent);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
+            ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
+            const char* file_label = m_accept_label.empty() ? "Select" : m_accept_label.c_str();
+            open_pressed = ImGui::Button(
+                m_selected_name.empty() ? file_label : selection_is_dir ? "Open" : file_label,
+                ImVec2(button_width, 0));
+            ImGui::PopStyleColor(4);
+            if (!can_open)
+            {
+                ImGui::EndDisabled();
+            }
+        }
+        ImGui::EndDisabled();
 
         // Keyboard: arrows move the selection, Enter opens, Backspace goes up.
         // Suppressed while a text field (address or filter) is being edited, and
@@ -1390,9 +1349,6 @@ void RemoteFileBrowser::Render()
 
         ImGui::EndPopup();
     }
-
-    ImGui::PopStyleVar();  // WindowRounding
-    popup_style.PopStyles();
 }
 
 }  // namespace View

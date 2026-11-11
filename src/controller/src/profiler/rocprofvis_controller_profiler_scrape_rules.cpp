@@ -47,7 +47,10 @@ constexpr RuleRow kComputeCapture[] = {
 
 // rocprof-compute analyze. "Created file:" carries a bare filename written
 // relative to the stage's working directory; the engine resolves it.
+// "Analysis mode =" is not the artifact. A trace is opened only when that
+// mode ends in "db" and the created file ends in ".db".
 constexpr RuleRow kComputeAnalyze[] = {
+    {kKeyAnalysisMode, R"(Analysis mode =\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
     {kKeyAnalysisDb, R"(Created file:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
 };
 
@@ -55,12 +58,11 @@ constexpr RuleRow kComputeAnalyze[] = {
 // database again when it finalizes, and the earlier mentions can be other
 // files.
 //
-// Row order is the preference order, and it is the same one the View's
-// ParseTraceOutputPath documents, so the two readers cannot pick different
-// files off the same log: the "Database:" log line first, then the Output
-// Summary box's "File:", then a bare-token sweep for a tool that labels
-// neither. Collapsing the first two into one alternation would let a later
-// summary line outrank the database line, which is the disagreement.
+// Row order is the preference order, and it is the only reader of this log:
+// the "Database:" log line first, then the Output Summary box's "File:", then
+// a bare-token sweep for a tool that labels neither. Collapsing the first two
+// into one alternation would let a later summary line outrank the database
+// line.
 constexpr RuleRow kRocprofSysTrace[] = {
     {kKeyTraceDb, R"(Database:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
     {kKeyTraceDb, R"(File:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},

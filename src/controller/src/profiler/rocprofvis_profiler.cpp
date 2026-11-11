@@ -132,6 +132,17 @@ rocprofvis_result_t rocprofvis_profiler_config_set_tool(rocprofvis_profiler_conf
     return config_ref->SetTool(tool);
 }
 
+rocprofvis_result_t rocprofvis_profiler_config_set_operation(rocprofvis_profiler_config_t* config, rocprofvis_profiler_operation_t operation)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return config_ref->SetOperation(operation);
+}
+
 rocprofvis_result_t rocprofvis_profiler_config_set_tool_directory(rocprofvis_profiler_config_t* config, char const* tool_directory)
 {
     RocProfVis::Controller::ProfilerConfigRef config_ref(config);
@@ -361,6 +372,24 @@ rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_profiler_t* profil
 
     return RocProfVis::Controller::copy_string_to_buffer(
         session_ref->GetController().GetOutput(), buffer, length);
+}
+
+rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length)
+{
+    RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
+    if (!session_ref.IsValid() || length == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    std::string path;
+    rocprofvis_result_t const result = session_ref->GetController().GetTraceFilePath(path);
+    if (result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    return RocProfVis::Controller::copy_string_to_buffer(path, buffer, length);
 }
 
 rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_profiler_t* profiler)

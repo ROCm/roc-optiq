@@ -1442,33 +1442,17 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     }
 
     // Assemble the run request from the config / execution cache, then hand off
-    // to the orchestrator. The backend scraper resolves the produced trace path
-    // from the profiler's stdout (local and remote).
+    // to the orchestrator. The controller scrapes the produced trace path from
+    // the profiler's stdout; the operation on the spec selects those rules.
     TargetSpec const& target = backend->GetTarget(m_config.operation);
 
     ProfilerLaunchOrchestrator::LaunchRequest request;
     BuildLaunchSpec(m_execution_cache, request.spec);
-    request.is_remote              = is_remote;
-    request.auto_load_trace         = target.auto_load_trace;
+    request.is_remote       = is_remote;
+    request.auto_load_trace = target.auto_load_trace;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    request.remote_uri        = is_remote ? m_remote_uri : nullptr;
+    request.remote_uri = is_remote ? m_remote_uri : nullptr;
 #endif
-    // The operation, working directory and connection are captured at launch so
-    // that editing the config while the run is in flight cannot change how its
-    // output is read. A relative path is one the profiler wrote relative to its
-    // own working directory, so it is resolved against that directory.
-    request.has_output_file = [backend, operation = m_config.operation](
-                                  const std::string& profiler_stdout) -> bool {
-        return backend ? backend->HasOutputFile(operation, profiler_stdout) : false;
-    };
-    request.parse_trace = [backend, operation = m_config.operation,
-                           working_directory = target.working_directory, is_remote](
-                              const std::string& profiler_stdout) -> std::string {
-        return backend ? ResolveOutputPath(
-                             backend->ParseTraceOutputPath(operation, profiler_stdout),
-                             working_directory, is_remote)
-                       : std::string();
-    };
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_remote_show_progress_popup = false;
@@ -1779,6 +1763,7 @@ ProfilerLauncherDialog::BuildLaunchSpec(ExecutionCache const& cache,
     TargetSpec const& target =
         m_backends[m_backend_index]->GetTarget(m_config.operation);
     spec.tool               = cache.tool;
+    spec.operation          = m_config.operation;
     spec.tool_directory     = m_config.tool_directory;
     spec.python_environment = m_config.python_environment;
     spec.output_directory   = target.output_directory;

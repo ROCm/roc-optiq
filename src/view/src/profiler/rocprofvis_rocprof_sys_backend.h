@@ -155,8 +155,6 @@ public:
     std::vector<WarningMessage> GetWarnings(
         LaunchConfig const& config) const override;
 
-    std::string ParseTraceOutputPath(rocprofvis_profiler_operation_t operation, std::string const& profiler_stdout) const override;
-
 private:
     // Each returns true if the user changed a setting this frame - see
     // TabDescriptor::render_fn, which is what these are bound to.

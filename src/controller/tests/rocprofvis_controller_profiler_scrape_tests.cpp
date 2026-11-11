@@ -621,10 +621,34 @@ TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
 
     std::string value;
     REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
-    // Same preference order the View's ParseTraceOutputPath documents. The two
-    // read the same log, so a tool that prints both labels must not lead them
-    // to different files.
+    // The rule table is the only reader of this log, so a tool that prints
+    // both labels must resolve to the database line.
     CHECK(value == "/run/rocpd-1234-0.db");
+}
+
+TEST_CASE("Remote scraped paths join with POSIX rules", "[profiler][scrape]")
+{
+    auto resolve = [](std::string const& printed, std::string const& cwd) {
+        ProfilerStageSpec stage;
+        stage.working_directory = cwd;
+        stage.scrape_rules.push_back(make_rule("trace_db", R"(Database:\s*(\S+))"));
+
+        ProfilerScrapeEngine engine;
+        REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+        engine.BeginStage(0);
+        engine.Feed("Database: " + printed + "\n");
+        engine.EndStage(stage.working_directory, true);
+
+        std::string value;
+        REQUIRE(engine.GetValue("trace_db", value) == kRocProfVisResultSuccess);
+        return value;
+    };
+
+    // A leading '/' stays absolute even on Windows, where std::filesystem
+    // would treat it as relative and join it onto a drive.
+    CHECK(resolve("out.db", "/remote/work") == "/remote/work/out.db");
+    CHECK(resolve("out.db", "/remote/work/") == "/remote/work/out.db");
+    CHECK(resolve("/remote/work/out.db", "/elsewhere") == "/remote/work/out.db");
 }
 
 TEST_CASE("The shipped compute rules read progress and the output directory",

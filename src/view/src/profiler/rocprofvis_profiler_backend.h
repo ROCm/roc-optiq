@@ -194,37 +194,6 @@ public:
         return {};
     }
 
-    /**
-     * Whether this run is expected to have produced an output file, judged from
-     * the profiler's captured stdout. False means there is nothing to load - not
-     * a failure - so callers skip trace resolution, the remote download and the
-     * cache directory rather than reporting the file missing. Defaults to true.
-     */
-    virtual bool HasOutputFile(rocprofvis_profiler_operation_t operation,
-                               std::string const&              profiler_stdout) const
-    {
-        (void) operation;
-        (void) profiler_stdout;
-        return true;
-    }
-
-    /**
-     * Deduce the produced trace file path from the profiler's captured stdout.
-     * Each profiler reports its output location differently, so parsing rules
-     * are backend-specific. Returns an empty string if the path cannot be
-     * determined (callers should fall back to other discovery, e.g. scanning
-     * the output directory). The returned path is whatever the profiler
-     * reported, so it may be a remote path for SSH launches. Only meaningful
-     * when HasOutputFile is true.
-     */
-    virtual std::string ParseTraceOutputPath(rocprofvis_profiler_operation_t operation,
-                                             std::string const& profiler_stdout) const
-    {
-        (void) operation;
-        (void)profiler_stdout;
-        return {};
-    }
-
     // TODO(launcher-phase4): Full CLI import/export API
     //
     // Future work beyond the current --preset integration:

@@ -78,17 +78,8 @@ public:
 
     std::vector<WarningMessage> GetWarnings(LaunchConfig const& config) const override;
 
-    bool HasOutputFile(rocprofvis_profiler_operation_t operation,
-                       std::string const&              profiler_stdout) const override;
-
-    std::string ParseTraceOutputPath(rocprofvis_profiler_operation_t operation,
-                                     std::string const& profiler_stdout) const override;
-
 private:
     bool RenderProfilingOptions(rocprofvis_profiler_operation_t operation);
-
-    std::string ParseLineWithPrefix(std::string const& profiler_stdout,
-                                    std::string_view   prefix) const;
 
     RocprofComputeSettings m_settings;
 };

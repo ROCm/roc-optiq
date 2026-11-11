@@ -84,8 +84,13 @@ void strip_ansi(std::string& text);
 
 bool is_absolute_path(std::string const& path);
 
-// Resolve a scraped relative path against its stage working directory.
-std::string resolve_scraped_path(std::string const& value, std::string const& working_directory);
+/*
+ * Resolve a scraped relative path against its stage working directory.
+ * posix_paths joins with '/' and treats a leading '/' as absolute, which is
+ * what a remote host's paths are, including when this process is on Windows.
+ */
+std::string resolve_scraped_path(std::string const& value, std::string const& working_directory,
+                                 bool posix_paths = false);
 
 /*
  * Per-line regex scrape for a pipeline. Patterns are compiled once at
@@ -109,7 +114,7 @@ public:
     // resolved one.
     void Feed(std::string const& chunk);
     // Idempotent: settles every slot the stage declares, then closes it.
-    void EndStage(std::string const& working_directory);
+    void EndStage(std::string const& working_directory, bool posix_paths = false);
     void SkipRemainingFrom(uint32_t first_unstarted_stage);
 
     rocprofvis_result_t GetValue(std::string const& key, std::string& out) const;

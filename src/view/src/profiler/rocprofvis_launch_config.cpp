@@ -162,28 +162,6 @@ TargetSpec::Argv(bool executable, std::vector<std::string>& argv_out) const
     }
 }
 
-std::string
-ResolveOutputPath(std::string const& path, std::string const& working_directory, bool remote)
-{
-    std::string resolved = path;
-    if (!path.empty() && !working_directory.empty())
-    {
-        if (remote)
-        {
-            if (path.front() != '/')
-            {
-                resolved = (working_directory.back() == '/') ? working_directory + path
-                                                             : working_directory + "/" + path;
-            }
-        }
-        else if (std::filesystem::path(path).is_relative())
-        {
-            resolved = (std::filesystem::path(working_directory) / path).lexically_normal().string();
-        }
-    }
-    return resolved;
-}
-
 std::vector<std::string> SplitArguments(std::string const& arguments)
 {
     std::vector<std::string> argv;

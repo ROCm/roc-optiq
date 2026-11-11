@@ -901,7 +901,12 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         }
         if (result != kRocProfVisDmResultSuccess)
             break;
-        m_query_factory.SetVersion(m_db_version.c_str());
+        if (!m_query_factory.SetVersion(m_db_version.c_str()))
+        {
+            spdlog::error("Unsupported schema version '{}'; the trace cannot be opened.", m_db_version);
+            result = kRocProfVisDmResultNotSupported;
+            break;
+        }
 
         ShowProgress(5, "Indexing tables", kRPVDbBusy, future);
         CreateIndexes();

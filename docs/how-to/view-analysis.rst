@@ -233,7 +233,7 @@ The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, whic
 ISA View
 ========
 
-**ISA View** is in **Tech Preview**, and its functionality may change.
+**ISA View** is in **Tech Preview**, and its functionality might change.
 
 **ISA View** lists the instructions of the selected kernel's code object, with PC-sampling counts for each instruction. Select an instruction to see its type and stall reasons. When source file information is available, the view also shows the matching source lines.
 

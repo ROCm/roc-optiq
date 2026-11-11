@@ -298,12 +298,12 @@ jobs:
             dev)
               echo "S3_BUCKET=${{ secrets.AWS_DEV_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_DEV_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
-              echo "S3_PACKAGES_ROOT=packages/unsigned" >> "$GITHUB_ENV"
               ;;
             nightly)
               echo "S3_BUCKET=${{ secrets.AWS_NIGHTLY_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_NIGHTLY_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
               echo "BUILD_TIMESTAMP=$(date -u '+%Y%m%d')" >> "$GITHUB_ENV"
+              echo "S3_PACKAGES_ROOT=packages/unsigned" >> "$GITHUB_ENV"
               ;;
             rc)
               echo "S3_BUCKET=${{ secrets.AWS_RC_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"

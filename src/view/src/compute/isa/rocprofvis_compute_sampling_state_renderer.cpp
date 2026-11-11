@@ -414,9 +414,12 @@ SamplingStateRenderer::RenderHeaderTooltip(const HeaderTooltipText& tooltip,
 }
 
 bool
-SamplingStateRenderer::IsDisabled() const
+SamplingStateRenderer::IsDisabled(Metric metric) const
 {
-    return m_load_state == LoadState::kLoading || m_load_state == LoadState::kFailed;
+    const SamplingLoadState state = metric == Metric::kIssueStateCounts
+                                        ? m_load_states.issue_states
+                                        : m_load_states.sampling;
+    return state == SamplingLoadState::kLoading || state == SamplingLoadState::kFailed;
 }
 
 void
@@ -515,9 +518,12 @@ SamplingStateRenderer::DrawBar(const BarPresentation& bar, const ImVec2& cell_st
 const char*
 SamplingStateRenderer::GetMetricStatusText(const SamplingRow& row, Metric metric) const
 {
-    if(IsDisabled())
+    if(IsDisabled(metric))
     {
-        return m_load_state == LoadState::kLoading ? "loading" : "load failed";
+        const SamplingLoadState state = metric == Metric::kIssueStateCounts
+                                            ? m_load_states.issue_states
+                                            : m_load_states.sampling;
+        return state == SamplingLoadState::kLoading ? "loading" : "load failed";
     }
     const bool                 issue_states = metric == Metric::kIssueStateCounts;
     const SamplingAvailability availability =
@@ -530,14 +536,6 @@ SamplingStateRenderer::GetMetricStatusText(const SamplingRow& row, Metric metric
     if(availability == SamplingAvailability::kInvalid)
     {
         return "invalid";
-    }
-    if(issue_states && m_load_state == LoadState::kLoadingDetails)
-    {
-        return "loading";
-    }
-    if(issue_states && m_load_state == LoadState::kTotalsOnly)
-    {
-        return "load failed";
     }
     if(row.sample_counts.total_count == 0)
     {
@@ -603,7 +601,7 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
                           ? 0.0
                           : IsaDataBuilder::CalculatePercentage(
                                 row.sample_counts.total_count, hottest_samples);
-        if(m_load_state == LoadState::kReady &&
+        if(m_load_states.sampling == SamplingLoadState::kReady &&
            row.sampling.availability == SamplingAvailability::kValid)
         {
             bar.breakdown = &row;
@@ -640,7 +638,8 @@ bool
 SamplingStateRenderer::RenderIssueStateCell(const SamplingRow& row)
 {
     const CodeCellBounds cell = get_code_cell_bounds();
-    if(IsDisabled() || row.issue_states.availability != SamplingAvailability::kValid)
+    if(IsDisabled(Metric::kIssueStateCounts) ||
+       row.issue_states.availability != SamplingAvailability::kValid)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
         ImGui::TextUnformatted(u8"\u2014");
@@ -784,7 +783,7 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
     {
         BeginTooltipStyled();
         push_sample_metric_tooltip_wrap();
-        ImGui::TextUnformatted(m_load_state == LoadState::kLoading
+        ImGui::TextUnformatted(m_load_states.sampling == SamplingLoadState::kLoading
                                    ? SAMPLING_STATE_LOADING_TOOLTIP
                                    : SAMPLING_STATE_FAILED_TOOLTIP);
         RenderMetricsSummary(row);
@@ -792,21 +791,22 @@ SamplingStateRenderer::RenderTooltip(const SamplingRow& row, double bar_percent)
         EndTooltipStyled();
         return;
     }
-    if(m_load_state != LoadState::kReady ||
+    if(m_load_states.sampling != SamplingLoadState::kReady ||
        row.sampling.availability != SamplingAvailability::kValid)
     {
         const std::string total_count =
             IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
         BeginTooltipStyled();
         push_sample_metric_tooltip_wrap();
-        const char* description = m_load_state == LoadState::kTotalsOnly
-                                      ? SAMPLING_STATE_TOTALS_ONLY_TOOLTIP
-                                  : m_load_state == LoadState::kLoadingDetails
-                                      ? SAMPLING_STATE_LOADING_DETAILS_TOOLTIP
-                                      : GetUnavailableSamplingTooltip(row);
+        const char* description =
+            m_load_states.sampling == SamplingLoadState::kTotalsOnly
+                ? SAMPLING_STATE_TOTALS_ONLY_TOOLTIP
+            : m_load_states.sampling == SamplingLoadState::kLoadingDetails
+                ? SAMPLING_STATE_LOADING_DETAILS_TOOLTIP
+                : GetUnavailableSamplingTooltip(row);
         ImGui::TextUnformatted(description);
         if(row.sampling.availability == SamplingAvailability::kInvalid &&
-           m_load_state != LoadState::kReady)
+           m_load_states.sampling != SamplingLoadState::kReady)
         {
             ImGui::TextUnformatted(GetUnavailableSamplingTooltip(row));
         }
@@ -1075,7 +1075,7 @@ SamplingStateRenderer::RenderTableContextMenu()
     if(ImGui::TableBeginContextMenuPopup(table))
     {
         ImGui::TableDrawDefaultContextMenu(table, table->Flags);
-        if(m_load_state == LoadState::kFailed || m_load_state == LoadState::kTotalsOnly)
+        if(m_load_states.CanRetry())
         {
             ImGui::Separator();
             retry = ImGui::MenuItem("Refetch sampling data");
@@ -1098,6 +1098,7 @@ SamplingStateRenderer::RenderHeaders(int first_column, CodePane pane)
 void
 SamplingStateRenderer::RenderHeader(int column, Metric metric, CodePane pane)
 {
+    const bool        disabled = IsDisabled(metric);
     HeaderTooltipText tooltip = pane == CodePane::kSource
                                     ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
                                     : SAMPLING_STATE_HEADER_TOOLTIP;
@@ -1133,18 +1134,21 @@ SamplingStateRenderer::RenderHeader(int column, Metric metric, CodePane pane)
                                               : presentation.isa_description,
                     presentation.developer_information };
     }
-    if(IsDisabled())
+    if(disabled)
     {
-        tooltip.user_description = m_load_state == LoadState::kLoading
-                                       ? SAMPLING_STATE_LOADING_TOOLTIP
-                                       : SAMPLING_STATE_FAILED_TOOLTIP;
+        const SamplingLoadState state = metric == Metric::kIssueStateCounts
+                                            ? m_load_states.issue_states
+                                            : m_load_states.sampling;
+        tooltip.user_description      = state == SamplingLoadState::kLoading
+                                            ? SAMPLING_STATE_LOADING_TOOLTIP
+                                            : SAMPLING_STATE_FAILED_TOOLTIP;
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
     }
     RenderHeaderWithTooltip(column, get_sampling_column_label(metric), tooltip,
-                            metric == Metric::kSamplingState && !IsDisabled()
+                            metric == Metric::kSamplingState && !disabled
                                 ? render_sampling_state_color_legend
                                 : nullptr);
-    if(IsDisabled())
+    if(disabled)
     {
         ImGui::PopStyleColor();
     }

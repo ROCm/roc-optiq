@@ -48,7 +48,7 @@ public:
     virtual void Render() override = 0;
 
     void               SetLoadState(CodeLoadState state);
-    void               SetSamplingLoadState(SamplingStateRenderer::LoadState state);
+    void               SetSamplingLoadStates(const SamplingLoadStates& states);
     [[nodiscard]] bool TakeCodeRetryRequest();
     [[nodiscard]] bool TakeSamplingRetryRequest();
 

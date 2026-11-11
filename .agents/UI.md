@@ -1649,24 +1649,25 @@ The ISA implementation is organized as follows:
 - `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the sampling columns,
   bars, header color legend, tooltips, and sampled-percentage cells for
   `IsaDataBuilder::SamplingRow`.
-  Its `Metric` enum identifies Sampling State, wave occupancy, and active threads.
+  Its `Metric` enum identifies Sampling State, wave occupancy, active threads, and
+  issue-state counts.
   `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
   order. Compile-time assertions check the metric array against the enum, both
   widgets' sampling-column positions, and their total column counts. Sampling State
-  is visible by default; both percentage columns use
+  is visible by default; Issue-state counts and both percentage columns use
   `DefaultHide` and can be enabled independently through the native header menu.
-  Each cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
+  Each bar cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,
   availability, and a `show_value` option. Only a stacked state bar borrows its input
   row through `breakdown` for the duration of drawing; no per-row segment allocation
   or retained row pointer is needed.
-  Line numbers use `NoReorder` and stay first. All three sampling columns are
+  Line numbers use `NoReorder` and stay first. All four sampling columns are
   resizable, hideable, and reorderable. Their normal table headers retain context
   menus during loading/failure and share the existing header-tooltip content
   through `RenderHeaderWithTooltip`. Sampling State restores its color legend.
   Percentages use one
   decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
-  All modes share rectangular geometry, the `kBorderGray` outline around the filled
+  All bar modes share rectangular geometry, the `kBorderGray` outline around the filled
   extent, clipping, and value-label layout. Sampling State uses `show_value = false`;
   the two percentage modes use `true`. `DrawBarValue` uses `kTextOnAccent` inside
   fills that fit the label, or `kTextMain` beside short fills. Narrow columns that
@@ -1675,9 +1676,17 @@ The ISA implementation is organized as follows:
   dim em dash. All modes share cell hit testing and forward clicks to row selection even
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
-  Metric cells and the Sampling State tooltip share `RenderMetricValue` and
+  Issue-state cells render the prepared `IssueStateSummary::display_text` as
+  `STATE: count; STATE: count`, elided to the column width. Missing/invalid data
+  uses the same dim em dash; recorded zero is displayed as zero. Hovering any
+  issue-state cell shows its availability status or the full neutral three-column
+  breakdown (state, samples, percent of all samples). It reuses the stall-tooltip
+  table sizing, wrapping, and bounded scrolling without a color-swatch column.
+  Separate table layout IDs prevent old saved column indices from applying to
+  the expanded ISA/source tables.
+  Percentage cells and the Sampling State tooltip share `RenderMetricValue` and
   `GetMetricStatusText`, including loading, failure, invalid, no-sample, and
-  unrecorded statuses. Metric-cell tooltips show only the percentage with any brief
+  unrecorded statuses. Percentage-cell tooltips show only the percentage with any brief
   availability status and the row's sample count. `CodePane` selects instruction
   or source aggregation explanations for headers only; cell tooltips and the
   Sampling State metric summary contain no descriptive paragraphs.
@@ -1725,7 +1734,8 @@ The ISA implementation is organized as follows:
   publish no totals or breakdown entries. Valid entries retain captured lookup text,
   formatted counts, and percentages of all samples, independently of issued/stalled
   progress and static instruction types. Unknown/empty labels retain their lookup
-  identity. Entries sort by descending count, then label and lookup UUID. Source
+  identity. Entries sort by descending count, then label and lookup UUID; the
+  builder prepares the formatted display summary once per sampling update. Source
   grouping reuses the same accumulator through the existing primary mappings; the
   prepared snapshot owns both counts and names, so later layer arrival is safe.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
@@ -2036,12 +2046,12 @@ shared `SamplingStateRenderer` metric cells and headers.
 and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
 into these vectors. Counts remain optional, preserving unrecorded values and
 measured zero. Fresh rows replace previous records on every load. Prepared issue-state
-data now feeds ISA and source sampling rows; the issue-state column is not yet
-rendered. Dispatch UUID remains available only on the controller handle.
+data feeds the optional Issue-state counts column in ISA and source sampling rows.
+Dispatch UUID remains available only on the controller handle.
 Instruction samples are optional: absent sample/lookup tables or empty results
 must not downgrade the existing sampling columns. Missing instruction-sample
-counts remain unavailable, distinct from measured zero. When added, the issue-state
-column must use the same unavailable placeholder as other sampling metrics.
+counts remain unavailable, distinct from measured zero. The issue-state column
+uses the same unavailable placeholder as other sampling metrics.
 
 PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
 its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected

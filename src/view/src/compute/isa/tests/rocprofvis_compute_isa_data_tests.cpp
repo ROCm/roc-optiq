@@ -1074,6 +1074,7 @@ TEST_CASE("Issue states preserve the reported barrier and VALU counts",
     CHECK(rows[0].issue_states.availability ==
           IsaDataBuilder::SamplingAvailability::kValid);
     CHECK(rows[0].issue_states.total_count == 1901);
+    CHECK(rows[0].issue_states.display_text == "NO_INST: 1,649; BARRIER: 252");
     REQUIRE(rows[0].issue_states.states.size() == 2);
     const auto& no_inst = rows[0].issue_states.states[0];
     CHECK(no_inst.text == "NO_INST");
@@ -1092,6 +1093,7 @@ TEST_CASE("Issue states preserve the reported barrier and VALU counts",
     REQUIRE(rows[1].issue_states.states.size() == 1);
     CHECK(rows[1].issue_states.states[0].text == "VALU");
     CHECK(rows[1].issue_states.states[0].count == 9538);
+    CHECK(rows[1].issue_states.display_text == "VALU: 9,538");
     CHECK(rows[1].issue_states.states[0].percent == 100.0);
     CHECK(rows[1].sample_counts.issue_count == 2012);
 }
@@ -1119,6 +1121,7 @@ TEST_CASE("Issue states merge by instruction UUID and retain both branch outcome
     CHECK(rows[0].instruction_kind == IsaDataBuilder::InstructionKind::kBranch);
     REQUIRE(rows[0].issue_states.states.size() == 2);
     CHECK(rows[0].issue_states.total_count == 150);
+    CHECK(rows[0].issue_states.display_text == "BRANCH_NOT_TAKEN: 110; BRANCH_TAKEN: 40");
     CHECK(rows[0].issue_states.states[0].text == "BRANCH_NOT_TAKEN");
     CHECK(rows[0].issue_states.states[0].count == 110);
     CHECK(rows[0].issue_states.states[0].percent == Catch::Approx(110.0 / 150.0 * 100.0));
@@ -1161,6 +1164,7 @@ TEST_CASE("Incomplete issue distributions never publish partial counts or shares
         CHECK(row->issue_states.availability == Availability::kMissing);
         CHECK(row->issue_states.states.empty());
         CHECK(row->issue_states.total_count == 0);
+        CHECK(row->issue_states.display_text.empty());
         CHECK(row->sampling.availability == Availability::kValid);
     }
 }
@@ -1201,6 +1205,8 @@ TEST_CASE("Issue-state zero counts are recorded and zero-sample gaps do not cont
     CHECK(no_inst->text == "NO_INST");
     CHECK(no_inst->count == 0);
     CHECK(no_inst->count_text == "0");
+    CHECK(issues.display_text ==
+          (total == 0 ? "NO_INST: 0; VALU: 0" : "VALU: 100; NO_INST: 0"));
     CHECK(no_inst->percent == 0.0);
 }
 
@@ -1350,6 +1356,7 @@ TEST_CASE("Source issue aggregation retains missing contributors and owned snaps
     IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
     CHECK(source[0].issue_states.availability == Availability::kValid);
     CHECK(source[0].issue_states.total_count == 150);
+    CHECK(source[0].issue_states.display_text == "VALU: 130; NO_INST: 20");
     REQUIRE(source[0].issue_states.states.size() == 2);
     CHECK(source[0].issue_states.states[0].text == "VALU");
     CHECK(source[0].issue_states.states[0].count == 130);
@@ -1379,9 +1386,11 @@ TEST_CASE("Source issue aggregation retains missing contributors and owned snaps
     CHECK(isa[0].issue_states.availability == Availability::kMissing);
     CHECK(isa[0].issue_states.states.empty());
     CHECK(isa[0].issue_states.total_count == 0);
+    CHECK(isa[0].issue_states.display_text.empty());
     CHECK(source[0].issue_states.availability == Availability::kMissing);
     CHECK(source[0].issue_states.states.empty());
     CHECK(source[0].issue_states.total_count == 0);
+    CHECK(source[0].issue_states.display_text.empty());
 }
 
 }  // namespace View

@@ -18,8 +18,10 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float       SAMPLING_BAR_HEIGHT_FRACTION                    = 0.9f;
-constexpr const char* SAMPLING_STATE_COLUMN_LABEL                     = "Sampling State";
+constexpr float       SAMPLING_BAR_HEIGHT_FRACTION           = 0.9f;
+constexpr const char* SAMPLING_STATE_COLUMN_LABEL            = "Sampling State";
+constexpr const char* ISSUE_STATE_COLUMN_LABEL               = "Issue-state counts";
+constexpr float       ISSUE_STATE_COLUMN_WIDTH_IN_CHARACTERS = 30.0f;
 constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
 constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
 constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES               = 3.0f;
@@ -82,7 +84,8 @@ get_sample_metric_presentation(SamplingStateRenderer::Metric metric)
 constexpr SamplingStateRenderer::Metric SAMPLING_COLUMN_METRICS[] = {
     SamplingStateRenderer::Metric::kSamplingState,
     SamplingStateRenderer::Metric::kWaveOccupancy,
-    SamplingStateRenderer::Metric::kActiveThreads
+    SamplingStateRenderer::Metric::kActiveThreads,
+    SamplingStateRenderer::Metric::kIssueStateCounts
 };
 static_assert(std::size(SAMPLING_COLUMN_METRICS) ==
               static_cast<size_t>(SamplingStateRenderer::Metric::kCount));
@@ -102,6 +105,10 @@ static_assert(
 static const char*
 get_sampling_column_label(SamplingStateRenderer::Metric metric)
 {
+    if(metric == SamplingStateRenderer::Metric::kIssueStateCounts)
+    {
+        return ISSUE_STATE_COLUMN_LABEL;
+    }
     return metric == SamplingStateRenderer::Metric::kSamplingState
                ? SAMPLING_STATE_COLUMN_LABEL
                : get_sample_metric_presentation(metric).label;
@@ -512,8 +519,10 @@ SamplingStateRenderer::GetMetricStatusText(const SamplingRow& row, Metric metric
     {
         return m_load_state == LoadState::kLoading ? "loading" : "load failed";
     }
+    const bool                 issue_states = metric == Metric::kIssueStateCounts;
     const SamplingAvailability availability =
-        get_sample_metric_summary(row, metric).availability;
+        issue_states ? row.issue_states.availability
+                     : get_sample_metric_summary(row, metric).availability;
     if(availability == SamplingAvailability::kValid)
     {
         return nullptr;
@@ -521,6 +530,14 @@ SamplingStateRenderer::GetMetricStatusText(const SamplingRow& row, Metric metric
     if(availability == SamplingAvailability::kInvalid)
     {
         return "invalid";
+    }
+    if(issue_states && m_load_state == LoadState::kLoadingDetails)
+    {
+        return "loading";
+    }
+    if(issue_states && m_load_state == LoadState::kTotalsOnly)
+    {
+        return "load failed";
     }
     if(row.sample_counts.total_count == 0)
     {
@@ -571,6 +588,10 @@ bool
 SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_samples,
                                   Metric metric)
 {
+    if(metric == Metric::kIssueStateCounts)
+    {
+        return RenderIssueStateCell(row);
+    }
     const bool      state_metric = metric == Metric::kSamplingState;
     BarPresentation bar;
     bar.show_value = !state_metric;
@@ -613,6 +634,83 @@ SamplingStateRenderer::RenderCell(const SamplingRow& row, uint64_t hottest_sampl
         }
     }
     return interaction.clicked;
+}
+
+bool
+SamplingStateRenderer::RenderIssueStateCell(const SamplingRow& row)
+{
+    const CodeCellBounds cell = get_code_cell_bounds();
+    if(IsDisabled() || row.issue_states.availability != SamplingAvailability::kValid)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+        ImGui::TextUnformatted(u8"\u2014");
+        ImGui::PopStyleColor();
+    }
+    else
+    {
+        const std::string text =
+            ElideWithEllipsis(row.issue_states.display_text, cell.size.x);
+        ImGui::TextUnformatted(text.c_str());
+    }
+    const CodeCellInteraction interaction = finish_code_cell(cell, "##issue_state_cell");
+    if(interaction.hovered)
+    {
+        RenderIssueStateTooltip(row);
+    }
+    return interaction.clicked;
+}
+
+void
+SamplingStateRenderer::RenderIssueStateTooltip(const SamplingRow& row)
+{
+    const char* status = GetMetricStatusText(row, Metric::kIssueStateCounts);
+    TooltipRows rows;
+    if(!status)
+    {
+        rows.reserve(row.issue_states.states.size());
+        for(const IsaDataBuilder::IssueState& state : row.issue_states.states)
+        {
+            TooltipRow tooltip_row{
+                state.text.c_str(), Colors::kTextDim, state.count_text, {}
+            };
+            std::snprintf(tooltip_row.share_text, sizeof(tooltip_row.share_text),
+                          "%.1f%%", state.percent);
+            rows.push_back(std::move(tooltip_row));
+        }
+    }
+    const TooltipTableLayout layout =
+        CalculateTooltipLayout(rows, Metric::kIssueStateCounts);
+    const float mouse_wheel = layout.size.y > 0.0f && !ImGui::GetIO().KeyCtrl &&
+                                      ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY)
+                                  ? ImGui::GetIO().MouseWheel
+                                  : 0.0f;
+    BeginTooltipStyled();
+    ImGui::PushID(this);
+    ImGui::PushID(static_cast<int>(row.id));
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + layout.size.x);
+    if(status)
+    {
+        ImGui::Text("%s: %s (%s)", ISSUE_STATE_COLUMN_LABEL, u8"\u2014", status);
+    }
+    else
+    {
+        ImGui::TextUnformatted(ISSUE_STATE_COLUMN_LABEL);
+    }
+    const std::string samples =
+        IsaDataBuilder::FormatSampleCount(row.sample_counts.total_count);
+    ImGui::Text(SAMPLING_STATE_SAMPLE_COUNT_TOOLTIP, samples.c_str());
+    if(!rows.empty())
+    {
+        if(layout.size.y > 0.0f)
+        {
+            ImGui::TextUnformatted("Scroll to see all issue states");
+        }
+        RenderTooltipTable(rows, layout, mouse_wheel, Metric::kIssueStateCounts);
+    }
+    ImGui::PopTextWrapPos();
+    ImGui::PopID();
+    ImGui::PopID();
+    EndTooltipStyled();
 }
 
 bool
@@ -838,13 +936,16 @@ SamplingStateRenderer::BuildTooltipRows(const SamplingRow& row)
 }
 
 SamplingStateRenderer::TooltipTableLayout
-SamplingStateRenderer::CalculateTooltipLayout(const TooltipRows& rows)
+SamplingStateRenderer::CalculateTooltipLayout(const TooltipRows& rows, Metric metric)
 {
+    const bool        issue_states  = metric == Metric::kIssueStateCounts;
     const ImGuiStyle& style         = ImGui::GetStyle();
     const ImVec2      viewport_size = ImGui::GetWindowViewport()->WorkSize;
     float count_width = ImGui::CalcTextSize(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[2]).x;
     float state_text_width =
-        ImGui::CalcTextSize(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[1]).x;
+        ImGui::CalcTextSize(issue_states ? "Issue state"
+                                         : SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[1])
+            .x;
     float share_width =
         std::max(ImGui::CalcTextSize(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[3]).x,
                  ImGui::CalcTextSize("100.0%").x);
@@ -856,10 +957,13 @@ SamplingStateRenderer::CalculateTooltipLayout(const TooltipRows& rows)
         share_width      = std::max(share_width, ImGui::CalcTextSize(row.share_text).x);
     }
     const float color_width =
-        std::max(ImGui::CalcTextSize(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[0]).x,
-                 ImGui::GetTextLineHeight());
-    const float other_columns_width =
-        color_width + count_width + share_width + style.CellPadding.x * 8.0f;
+        issue_states
+            ? 0.0f
+            : std::max(ImGui::CalcTextSize(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[0]).x,
+                       ImGui::GetTextLineHeight());
+    const int   column_count        = issue_states ? 3 : 4;
+    const float other_columns_width = color_width + count_width + share_width +
+                                      style.CellPadding.x * 2.0f * column_count;
     const float state_width = std::min(
         { state_text_width,
           ImGui::CalcTextSize("0").x * STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS,
@@ -886,13 +990,17 @@ SamplingStateRenderer::CalculateTooltipLayout(const TooltipRows& rows)
 void
 SamplingStateRenderer::RenderTooltipTable(const TooltipRows&        rows,
                                           const TooltipTableLayout& layout,
-                                          float                     mouse_wheel)
+                                          float mouse_wheel, Metric metric)
 {
+    const bool issue_states = metric == Metric::kIssueStateCounts;
+    const int  state_column = issue_states ? 0 : 1;
     ImGui::Spacing();
     const ImGuiTableFlags flags =
         STALL_REASON_TOOLTIP_TABLE_FLAGS |
         (layout.size.y > 0.0f ? ImGuiTableFlags_ScrollY : ImGuiTableFlags_NoHostExtendX);
-    if(ImGui::BeginTable("##StallReasonDistribution", 4, flags, layout.size))
+    if(ImGui::BeginTable(issue_states ? "##IssueStateDistribution"
+                                      : "##StallReasonDistribution",
+                         issue_states ? 3 : 4, flags, layout.size))
     {
         if(layout.size.y > 0.0f)
         {
@@ -907,10 +1015,14 @@ SamplingStateRenderer::RenderTooltipTable(const TooltipRows&        rows,
         // Reapply content widths so no column retains spare space from an earlier layout.
         const ImGuiTableColumnFlags column_flags =
             ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize;
-        ImGui::TableSetupColumn(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[0], column_flags,
-                                layout.color_width);
-        ImGui::TableSetupColumn(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[1], column_flags,
-                                layout.state_width);
+        if(!issue_states)
+        {
+            ImGui::TableSetupColumn(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[0],
+                                    column_flags, layout.color_width);
+        }
+        ImGui::TableSetupColumn(issue_states ? "Issue state"
+                                             : SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[1],
+                                column_flags, layout.state_width);
         ImGui::TableSetupColumn(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[2], column_flags,
                                 layout.count_width);
         ImGui::TableSetupColumn(SAMPLING_STATE_TOOLTIP_COLUMN_HEADERS[3], column_flags,
@@ -919,13 +1031,16 @@ SamplingStateRenderer::RenderTooltipTable(const TooltipRows&        rows,
         for(const TooltipRow& row : rows)
         {
             ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            render_sampling_color_swatch(row.label, m_settings.GetColor(row.color));
-            ImGui::TableSetColumnIndex(1);
+            if(!issue_states)
+            {
+                ImGui::TableSetColumnIndex(0);
+                render_sampling_color_swatch(row.label, m_settings.GetColor(row.color));
+            }
+            ImGui::TableSetColumnIndex(state_column);
             ImGui::TextWrapped("%s", row.label);
-            ImGui::TableSetColumnIndex(2);
+            ImGui::TableSetColumnIndex(state_column + 1);
             ImGui::TextUnformatted(row.count_text.c_str());
-            ImGui::TableSetColumnIndex(3);
+            ImGui::TableSetColumnIndex(state_column + 2);
             ImGui::TextUnformatted(row.share_text);
         }
         ImGui::EndTable();
@@ -941,7 +1056,9 @@ SamplingStateRenderer::SetupColumns()
     {
         const char* label = get_sampling_column_label(metric);
         const float width =
-            std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);
+            metric == Metric::kIssueStateCounts
+                ? ImGui::CalcTextSize("0").x * ISSUE_STATE_COLUMN_WIDTH_IN_CHARACTERS
+                : std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);
         const ImGuiTableColumnFlags flags =
             ImGuiTableColumnFlags_WidthFixed |
             (metric == Metric::kSamplingState ? ImGuiTableColumnFlags_None
@@ -984,7 +1101,31 @@ SamplingStateRenderer::RenderHeader(int column, Metric metric, CodePane pane)
     HeaderTooltipText tooltip = pane == CodePane::kSource
                                     ? SOURCE_SAMPLING_STATE_HEADER_TOOLTIP
                                     : SAMPLING_STATE_HEADER_TOOLTIP;
-    if(metric != Metric::kSamplingState)
+    if(metric == Metric::kIssueStateCounts)
+    {
+        tooltip = {
+            pane == CodePane::kSource
+                ? "Sampled SDK issue/execution states across instructions mapped to this "
+                  "source line.\n"
+                  "Counts include issued and stalled samples. Hover a cell for the full "
+                  "breakdown.\n"
+                  "Instruction types and Sampling State stall reasons are shown "
+                  "separately."
+                : "SDK issue/execution state at each sample of this instruction.\n"
+                  "Counts include issued and stalled samples. Hover a cell for the full "
+                  "breakdown.\n"
+                  "Instruction types and Sampling State stall reasons are shown "
+                  "separately.",
+            "DB: compute_instruction_sample, joined by pc_sample_state_uuid;\n"
+            "labels: compute_instruction_sample_lookup.text via lookup UUID.\n"
+            "Sum by instruction_uuid; source uses the first primary mapping per "
+            "instruction.\n"
+            "Percentages use all PC samples. Missing/NULL/incomplete data is "
+            "unavailable;\n"
+            "excess counts and overflow are invalid. Recorded zero remains available."
+        };
+    }
+    else if(metric != Metric::kSamplingState)
     {
         const SampleMetricPresentation& presentation =
             get_sample_metric_presentation(metric);

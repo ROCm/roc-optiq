@@ -409,7 +409,11 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
                     double fetch_end =
                         GetStartTimestamp() + ((range.second + 1) * kSegmentDuration);
 
-                    result = FetchFromDataModel(fetch_start, fetch_end, future);
+                    // The processed flags below must be cleared even if the fetch
+                    // throws, or later fetches of these segments wait forever.
+                    result = CallCatchingExceptions([&]() {
+                        return FetchFromDataModel(fetch_start, fetch_end, future);
+                    });
                     spdlog::debug("FetchFromDataModel for track {} ({}-{}) = {}, cancelled={}",GetId(),fetch_start, fetch_end,(uint32_t)result, future->IsCancelled());
 
                 }
@@ -649,6 +653,7 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
         data, kRPVDMNumberOfRecordsUInt64, 0);
     if(num_records > 0)
     {
+        // The slice must be deleted below even if processing its records throws.
         switch(dm_track_type)
         {
             case kRocProfVisDmRegionTrack:
@@ -660,12 +665,14 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
             case kRocProfVisDmHipEventTrack:
             case kRocProfVisDmStreamTrack:
             {
-                result = ProcessEventRecords(data, num_records, future);
+                result = CallCatchingExceptions(
+                    [&]() { return ProcessEventRecords(data, num_records, future); });
                 break;
             }
             case kRocProfVisDmPmcTrack:
             {
-                result = ProcessPmcSampleRecords(data, num_records, future);
+                result = CallCatchingExceptions(
+                    [&]() { return ProcessPmcSampleRecords(data, num_records, future); });
                 break;
             }
             default:

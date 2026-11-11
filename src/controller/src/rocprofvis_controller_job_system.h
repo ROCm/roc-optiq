@@ -21,6 +21,10 @@ class Future;
 
 typedef std::function<rocprofvis_result_t(Future*)> JobFunction;
 
+// Calls function and turns any exception it throws into a failed result, so the
+// exception can't terminate a worker thread or skip the caller's cleanup.
+rocprofvis_result_t CallCatchingExceptions(const std::function<rocprofvis_result_t()>& function);
+
 class Job
 {
 public:

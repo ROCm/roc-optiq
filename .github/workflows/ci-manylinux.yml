@@ -298,6 +298,7 @@ jobs:
             dev)
               echo "S3_BUCKET=${{ secrets.AWS_DEV_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_DEV_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
+              echo "S3_PACKAGES_ROOT=packages/unsigned" >> "$GITHUB_ENV"
               ;;
             nightly)
               echo "S3_BUCKET=${{ secrets.AWS_NIGHTLY_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
@@ -344,7 +345,7 @@ jobs:
           else
             DEB_NAME="${DEB_BASE}"
           fi
-          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/${S3_PACKAGES_ROOT:-packages}/deb"
           aws s3 cp \
             "${DEB_SRC}" \
             "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
@@ -390,7 +391,7 @@ jobs:
           EOF
 
           cd ..
-          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/${S3_PACKAGES_ROOT:-packages}/deb"
           aws s3 cp --recursive deb-repo/dists \
             "${S3_DEB_BASE}/dists/" \
             --no-progress
@@ -404,7 +405,7 @@ jobs:
           else
             RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           fi
-          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
+          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/${S3_PACKAGES_ROOT:-packages}/rpm/x86_64"
 
           # Use the renamed file so repodata <location href> matches the S3 key
           mkdir -p rpm-repo

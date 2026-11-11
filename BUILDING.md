@@ -6,7 +6,7 @@ This document describes how to build ROCm Optiq (roc-optiq) on Windows, Linux, a
 
 1. Clone the repository with submodules:
    - `git clone --recursive <repo-url>`
-   - The `thirdparty/mbedtls` submodule is only needed when remote/SSH or agentic profiling is enabled with the default `mbedTLS` backend. `thirdparty/cpp-httplib` and `thirdparty/ImGuiTextSelect` are only needed for agentic profiling (see the options below). `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL instead of the mbedTLS submodule. If you already have a non-recursive clone, run `git submodule update --init --recursive`.
+   - The `thirdparty/mbedtls` submodule is only needed when remote/SSH or agentic profiling is enabled with the default `mbedTLS` backend. `thirdparty/cpp-httplib` is only needed for agentic profiling (see the options below). `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL instead of the mbedTLS submodule. If you already have a non-recursive clone, run `git submodule update --init --recursive`.
 2. Ensure CMake presets are available (see [CMakePresets.json](CMakePresets.json)).
 3. Use the appropriate configure and build presets for your platform.
 
@@ -271,15 +271,13 @@ for system traces only: the compute tools are compiled out, and on a compute tab
 the assistant answers that this build reads system traces only. System traces
 behave the same either way.
 
-`cpp-httplib` and `ImGuiTextSelect` are submodules. `ImGuiTextSelect` is pinned
-to v1.3.2 and compiled as `textselect.cpp`; its own CMakeLists is an example
-app and is not added. The default backend also needs the `mbedtls` submodule;
-`-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL and does not build mbedTLS. A
-non-recursive clone must initialize the ones it will use before configuring
-with this option on:
-`git submodule update --init thirdparty/cpp-httplib thirdparty/ImGuiTextSelect thirdparty/mbedtls`.
-Configure fails with an explicit message if `thirdparty/cpp-httplib` or
-`thirdparty/ImGuiTextSelect` is still empty.
+`cpp-httplib` is a submodule. The default backend also needs the `mbedtls`
+submodule; `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL and does not build
+mbedTLS. A non-recursive clone must initialize the ones it will use before
+configuring with this option on:
+`git submodule update --init thirdparty/cpp-httplib thirdparty/mbedtls`.
+Configure fails with an explicit message if `thirdparty/cpp-httplib` is still
+empty.
 
 Saved endpoint URLs and model names round-trip through `settings.json` whether
 or not the option is on, so switching between builds does not discard an

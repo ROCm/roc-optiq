@@ -84,10 +84,12 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   default, or a system OpenSSL when `-DCRYPTO_BACKEND=OpenSSL` (the same
   choice as remote/SSH). Targets the OpenAI chat-completions API. Built
   only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
-- **Message selection (Ask Optiq):** ImGuiTextSelect
-  (`thirdparty/ImGuiTextSelect/`, a submodule pinned to v1.3.2). Compiled
-  as `textselect.cpp` into the app. Its CMakeLists is an example and is
-  not added. Built only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`.
+- **Markdown and selectable text:** ImMarkdown (`thirdparty/ImMarkdown/`),
+  our own library that depends only on Dear ImGui. It draws Markdown or plain
+  text wrapped to the window, with mouse selection and copy that can be
+  turned off per view (`kSelectable`) or app-wide
+  (`ImMarkdown::SetSelectionEnabled`). Compiled as `immarkdown.cpp` into the
+  app in every build; Ask Optiq messages are its first user.
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -2488,8 +2490,8 @@ same way remote and profiler launch are gated. Everything in
 option is off, and so are `cpp-httplib`, its TLS backend, and
 `SecretStore` unless remote asks for them. The default backend is
 vendored mbedTLS; `-DCRYPTO_BACKEND=OpenSSL` links a system OpenSSL
-instead and does not build mbedTLS. A default clone needs neither the `thirdparty/cpp-httplib`,
-`thirdparty/ImGuiTextSelect`, nor the `thirdparty/mbedtls` submodule. Every
+instead and does not build mbedTLS. A default clone needs neither the `thirdparty/cpp-httplib`
+nor the `thirdparty/mbedtls` submodule. Every
 call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
@@ -2867,6 +2869,16 @@ Rules that are easy to get wrong here:
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
+- **Messages draw through `ImMarkdown::View`.** One view per transcript
+  line, made on first draw with the line's text, which never changes.
+  Replies parse as Markdown; user messages and notices are `kPlain`. The
+  view owns selection, Ctrl+A / Ctrl+C, and the one-selection-at-a-time
+  rule, so the panel adds only the right-click menu. Copying a selection
+  gives the text as shown; Copy message and export keep the raw Markdown.
+  Links open only for http(s) URLs, since a reply can name any path, and
+  `open_url` quotes its argument on Linux and macOS for the same reason.
+  The prompt says to write Markdown in the `VOICE` line, not in a paragraph
+  of its own.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -3486,6 +3498,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Render a vertical separator                   | `VerticalSeparator(settings)`                                                                  |
 | Get a themed color                            | `settings.GetColor(Colors::kSomething)` / `ThemeColor(settings, Colors::..., alpha)`           |
 | Add a copyable text cell                      | `CopyableTextUnformatted(text, unique_id, COPY_DATA_NOTIFICATION)`                             |
+| Draw Markdown or selectable wrapped text      | `ImMarkdown::Text(id, text, flags, style)`, or an owned `ImMarkdown::View` for a context menu  |
 | Add consistent table cell/row copy menus      | `CellMenuTarget` + `RenderRowHitbox` + `BeginCellContextMenu` helpers                          |
 | Bind an ImGui input to `std::string`          | `InputTextString` / `InputTextStringWithHint`                                                  |
 | Truncate text with tooltip                    | `ElidedText(text, available_width, tooltip_width, alignment)`                                  |
@@ -3992,6 +4005,9 @@ All under `agenticprofiling/`, compiled only with
   `rocprofvis_utils.h`.
 - Icon constants and `icon_ranges[]` ->
   `icons/rocprovfis_icon_defines.h`, `icons/rocprofvis_icon_data.h`.
+- `ImMarkdown::View`, `ImMarkdown::Text`, `ImMarkdown::Style`,
+  `ImMarkdown::SetSelectionEnabled` -> `thirdparty/ImMarkdown/immarkdown.h`
+  -> Markdown and plain text with selection and copy, for any ImGui window.
 
 ---
 

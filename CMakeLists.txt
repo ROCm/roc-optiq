@@ -239,6 +239,9 @@ set(VIEW_FILES
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_query_builder.cpp
+    # ImMarkdown: Markdown and selectable text for any ImGui window.
+    thirdparty/ImMarkdown/immarkdown.cpp
+    thirdparty/ImMarkdown/immarkdown.h
 )
 
 # TEMPORARY (trace compare): compare-files dialog. Remove this guard when the
@@ -336,8 +339,6 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
-    # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
-    thirdparty/ImGuiTextSelect/textselect.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
@@ -463,10 +464,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
-if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
-target_include_directories(${TARGET_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
-endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImMarkdown)
 # TEMPORARY (profiler launch): remove when the profiler feature graduates.
 if(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -573,15 +571,12 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/test
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImMarkdown
         ${Vulkan_INCLUDE_DIRS}
         ${Vulkan_INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
     )
-    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
-    target_include_directories(${TEST_TARGET} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
-    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     # TEMPORARY (profiler launch): remove when the profiler feature graduates.
     if(ROCPROFVIS_ENABLE_PROFILER)
     target_include_directories(${TEST_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)

@@ -13,11 +13,10 @@
 #include <cmath>
 #include <fstream>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "imgui.h"
-#include "textselect.hpp"
+#include "immarkdown.h"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
@@ -26,6 +25,7 @@
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
@@ -111,26 +111,32 @@ WrapButtonLabel(const std::string& text, float wrap_width)
     return out.empty() ? text : out;
 }
 
-std::vector<std::string>
-SplitMessageLines(const std::string& text)
+// Replies come from a model, so only web links open; anything else, such as a
+// file path or a program, would be launched by the shell.
+void
+OpenReplyLink(const std::string& url)
 {
-    std::vector<std::string> lines;
-    size_t                   start = 0;
-    do
+    if(url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0)
     {
-        const size_t end = text.find('\n', start);
-        if(end == std::string::npos)
-        {
-            lines.emplace_back(text, start, text.size() - start);
-            break;
-        }
-        lines.emplace_back(text, start, end - start);
-        start = end + 1;
-    } while(start <= text.size());
-    return lines;
+        open_url(url);
+    }
 }
 
-}  // namespace
+ImMarkdown::Style
+MessageStyle(Colors text_color)
+{
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    ImMarkdown::Style style;
+    style.code_font         = settings.GetFontManager().GetFont(FontType::kCode);
+    style.text_color        = settings.GetColor(text_color);
+    style.link_color        = settings.GetColor(Colors::kAccent);
+    style.code_background   = settings.GetColor(Colors::kBgFrame);
+    style.quote_color       = settings.GetColor(Colors::kTextDim);
+    style.line_color        = settings.GetColor(Colors::kBorderColor);
+    style.header_background = settings.GetColor(Colors::kTableHeaderBg);
+    style.open_link         = OpenReplyLink;
+    return style;
+}}  // namespace
 
 void
 AssistantPanel::RenderActivityChart(uint64_t track_id)
@@ -560,114 +566,58 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
     ImGui::PopID();
 }
 
-TextSelect*
-AssistantPanel::MessageSelect(size_t index)
+ImMarkdown::View*
+AssistantPanel::MessageView(size_t index)
 {
     if(index >= m_lines.size())
     {
         return nullptr;
     }
-    if(m_message_select.size() < m_lines.size())
+    if(m_message_views.size() < m_lines.size())
     {
-        m_message_select.resize(m_lines.size());
+        m_message_views.resize(m_lines.size());
     }
-    if(m_message_lines.size() < m_lines.size())
+    if(m_message_views[index] == nullptr)
     {
-        m_message_lines.resize(m_lines.size());
+        // Only replies are Markdown; what the user typed and notices show as
+        // written.
+        const uint32_t format = m_lines[index].speaker == Speaker::kAssistant
+                                    ? ImMarkdown::kNone
+                                    : ImMarkdown::kPlain;
+        m_message_views[index] = std::make_unique<ImMarkdown::View>();
+        m_message_views[index]->SetText(m_lines[index].text,
+                                        ImMarkdown::kSelectable | format);
     }
-    if(m_message_select[index] == nullptr)
-    {
-        m_message_select[index] = std::make_unique<TextSelect>(
-            [this, index](size_t line_index) {
-                if(index >= m_message_lines.size() ||
-                   line_index >= m_message_lines[index].size())
-                {
-                    return std::string_view();
-                }
-                return std::string_view(m_message_lines[index][line_index]);
-            },
-            [this, index]() {
-                return index < m_message_lines.size() ? m_message_lines[index].size()
-                                                      : size_t{0};
-            },
-            true);
-    }
-    return m_message_select[index].get();
+    return m_message_views[index].get();
 }
 
 void
 AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
                                         Colors text_color)
 {
-    const ImU32 color  = SettingsManager::GetInstance().GetColor(text_color);
-    TextSelect* select = MessageSelect(index);
-    if(select == nullptr)
+    ImMarkdown::View* view = MessageView(index);
+    if(view == nullptr)
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              SettingsManager::GetInstance().GetColor(text_color));
         ImGui::TextWrapped("%s", text.c_str());
         ImGui::PopStyleColor();
         return;
     }
-    if(m_message_lines[index].empty())
-    {
-        m_message_lines[index] = SplitMessageLines(text);
-    }
 
-    // TextSelect expects a text-only window whose first glyph is at its origin.
-    // Splitting on explicit newlines preserves blank paragraphs while its word
-    // wrapping handles each visual line.
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    const ImVec2 message_spacing = ImGui::GetStyle().ItemSpacing;
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(message_spacing.x, 0.0f));
-    ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                          ImGuiWindowFlags_NoScrollWithMouse);
-    // Scoped to the text so the copy menu below keeps the theme's text color.
-    ImGui::PushStyleColor(ImGuiCol_Text, color);
-    for(const std::string& line : m_message_lines[index])
-    {
-        ImGui::PushTextWrapPos(0.0f);
-        ImGui::TextUnformatted(line.data(), line.data() + line.size());
-        ImGui::PopTextWrapPos();
-    }
-    ImGui::PopStyleColor();
-
-    // Only one message keeps a highlight, so Ctrl+C copies what is on screen.
-    // Ctrl+C reaches only the focused window, and right-click does not focus
-    // on its own. The popup flag keeps this working when the click lands while
-    // another message's menu is still open.
-    if(ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
-       (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
-        ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
-    {
-        ImGui::SetWindowFocus();
-        for(const std::unique_ptr<TextSelect>& other : m_message_select)
-        {
-            if(other != nullptr && other.get() != select)
-            {
-                other->clearSelection();
-            }
-        }
-    }
-    select->update();
-    // update() copies on Ctrl+C but does not report it. The same chord in the
-    // same window fires on the same press.
-    bool copied_selection =
-        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && select->hasSelection();
+    bool copied_selection = view->Render(MessageStyle(text_color));
 
     PushContextMenuStyles();
-    if(ImGui::BeginPopupContextWindow("##message_copy"))
+    if(ImGui::BeginPopupContextItem("##message_copy"))
     {
-        if(IconMenuItem(ICON_COPY, "Copy", select->hasSelection()))
+        if(IconMenuItem(ICON_COPY, "Copy", view->HasSelection()))
         {
-            select->copy();
+            view->Copy();
             copied_selection = true;
         }
         if(IconMenuItem(ICON_LIST, "Select all"))
         {
-            select->selectAll();
+            view->SelectAll();
         }
         ImGui::Separator();
         if(IconMenuItem(ICON_DOCUMENT, "Copy message"))
@@ -684,9 +634,6 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
         NotificationManager::GetInstance().Show("Selection copied to clipboard",
                                                 NotificationLevel::Info);
     }
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
 }
 
 // Stacked follow-ups under the transcript: Explain this view on an empty chat,
@@ -949,8 +896,7 @@ AssistantPanel::RenderComposer()
     {
         ResetTurn();
         m_lines.clear();
-        m_message_select.clear();
-        m_message_lines.clear();
+        m_message_views.clear();
         m_input.clear();
         m_conversation.clear();
         m_next_steps.clear();

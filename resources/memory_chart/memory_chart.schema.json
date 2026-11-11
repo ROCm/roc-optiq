@@ -24,7 +24,7 @@
         "category": {
             "description": "Accent color bucket. Omit to infer from the label text.",
             "type": "string",
-            "enum": ["read", "write", "atomic", "util", "hit", "stall", "misc"]
+            "enum": ["read", "write", "atomic", "util", "hit", "stall", "neutral"]
         },
         "contentItem": {
             "type": "object",

@@ -60,7 +60,7 @@
  { "from": "mall", "to": "umc",  "direction": "both" },
  { "from": "umc", "to": "hbm",  "direction": "both" },
 
- { "from": "xgmi", "to": "data_fabric", "direction": "both", "category": "misc" },
- { "from": "pcie", "to": "data_fabric", "direction": "both", "category": "misc" }
+ { "from": "xgmi", "to": "data_fabric", "direction": "both", "category": "neutral" },
+ { "from": "pcie", "to": "data_fabric", "direction": "both", "category": "neutral" }
  ]
 }

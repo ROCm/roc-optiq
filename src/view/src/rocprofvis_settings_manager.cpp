@@ -156,6 +156,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
+    IM_COL32(54, 114, 188, 255),   // Colors::kPcSamplingMetricBar
     IM_COL32(184, 183, 204, 255),  // Colors::kIsaInternal
     IM_COL32(188, 145, 235, 255),  // Colors::kIsaMatrix
     IM_COL32(108, 203, 173, 255),  // Colors::kIsaScalar
@@ -296,6 +297,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
+    IM_COL32(32, 102, 180, 255),   // Colors::kPcSamplingMetricBar
     IM_COL32(108, 105, 131, 255),  // Colors::kIsaInternal
     IM_COL32(126, 77, 170, 255),   // Colors::kIsaMatrix
     IM_COL32(25, 120, 92, 255),    // Colors::kIsaScalar

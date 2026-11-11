@@ -28,7 +28,7 @@ struct ColorLegendEntry
     Colors      color;
 };
 
-// Renders the same sampling-state column for ISA instructions and source lines.
+// Renders sampling-state and optional percentage columns for ISA and source lines.
 class SamplingStateRenderer
 {
 public:
@@ -36,6 +36,14 @@ public:
     {
         kIsa,
         kSource
+    };
+
+    enum class Metric : uint32_t
+    {
+        kSamplingState,
+        kWaveOccupancy,
+        kActiveThreads,
+        kCount
     };
 
     enum class LoadState : uint32_t
@@ -55,20 +63,30 @@ public:
     static void RenderColorLegend(const char* id, const ColorLegendEntry* entries,
                                   size_t count);
 
-    void SetupColumn();
+    void SetupColumns();
     void SetLoadState(LoadState state) { m_load_state = state; }
     // Extends the native column menu; returns whether sampling should be retried.
     [[nodiscard]] bool RenderTableContextMenu();
-    void RenderHeader(int column, CodePane pane = CodePane::kIsa);
-    // Returns whether the cell was clicked, for the owning widget's row selection.
-    [[nodiscard]] bool RenderCell(const IsaDataBuilder::SamplingRow& row,
-                                  uint64_t                           hottest_samples);
+    void               RenderHeaders(int first_column, CodePane pane = CodePane::kIsa);
+    // Returns whether any sampling cell was clicked, for the widget's row selection.
+    [[nodiscard]] bool RenderCells(const IsaDataBuilder::SamplingRow& row,
+                                   uint64_t hottest_samples, int first_column);
 
 private:
     using SamplingRow          = IsaDataBuilder::SamplingRow;
     using SampleCounts         = IsaDataBuilder::SampleCounts;
     using StallReason          = IsaDataBuilder::StallReason;
     using SamplingAvailability = IsaDataBuilder::SamplingAvailability;
+
+    struct BarPresentation
+    {
+        double percent    = 0.0;
+        Colors color      = Colors::kTextDim;
+        bool   available  = false;
+        bool   show_value = false;
+        // Borrow the row only while drawing an optional stacked breakdown.
+        const SamplingRow* breakdown = nullptr;
+    };
 
     static constexpr size_t SHARE_TEXT_CAPACITY = 32;
     struct TooltipRow
@@ -91,14 +109,27 @@ private:
     };
 
     static const char* GetUnavailableSamplingTooltip(const SamplingRow& row);
+    static void        RenderHeaderTooltip(const HeaderTooltipText& tooltip,
+                                           void (*render_user_content)());
+    void               DrawBar(const BarPresentation& bar, const ImVec2& cell_start,
+                               const ImVec2& cell_size);
+    void               DrawBarValue(const BarPresentation& bar, const ImVec2& cell_start,
+                                    const ImVec2& cell_size, float bar_width);
     [[nodiscard]] bool IsDisabled() const;
     static TooltipRows BuildTooltipRows(const SamplingRow& row);
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
                             float mouse_wheel);
-    void RenderTooltip(const SamplingRow& row, double bar_percent);
-    void RenderSummary(const SamplingRow& row);
-    void RenderFooter(const SamplingRow& row);
+    const char*        GetMetricStatusText(const SamplingRow& row, Metric metric) const;
+    void               RenderHeader(int column, Metric metric, CodePane pane);
+    [[nodiscard]] bool RenderCell(const SamplingRow& row, uint64_t hottest_samples,
+                                  Metric metric);
+    void               RenderMetricValue(const SamplingRow& row, Metric metric);
+    void               RenderMetricTooltip(const SamplingRow& row, Metric metric);
+    void               RenderMetricsSummary(const SamplingRow& row);
+    void               RenderTooltip(const SamplingRow& row, double bar_percent);
+    void               RenderSummary(const SamplingRow& row);
+    void               RenderFooter(const SamplingRow& row);
     void DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,
                                  const ImVec2& end);
 

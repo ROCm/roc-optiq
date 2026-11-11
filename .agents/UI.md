@@ -1640,13 +1640,52 @@ The ISA implementation is organized as follows:
   `SourceCodeWidget`, `IsaCodeWidget`, their shared `LineSelection`, and
   `CodeLoadState` (not loaded, loading, loaded, or failed).
   `BaseCodeWidget` shares row layout, selection, hover, and cached scroll navigation.
+  Both tables scroll horizontally when the visible fixed columns plus a 40-character
+  code column exceed the pane width. The minimum follows resolved column visibility,
+  saved widths, and the current font; code stretches to fill wider panes.
   Each widget delegates sampling cells and headers to its composed
   `SamplingStateRenderer`; the cell returns clicks to the widget's row selection.
   Each widget directly balances table begin/end and style pushes, including
   skipped-table paths. Row styles begin after headers; centered line-number headers
   are rendered directly.
-- `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the common sampling
-  column, bar, header color legend, and tooltip for `IsaDataBuilder::SamplingRow`.
+- `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the sampling columns,
+  bars, header color legend, tooltips, and sampled-percentage cells for
+  `IsaDataBuilder::SamplingRow`.
+  Its `Metric` enum identifies Sampling State, wave occupancy, and active threads.
+  `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
+  order. Compile-time assertions check the metric array against the enum, both
+  widgets' sampling-column positions, and their total column counts. Sampling State
+  is visible by default; both percentage columns use
+  `DefaultHide` and can be enabled independently through the native header menu.
+  Each cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
+  without reaggregation. The presentation carries the fill percentage, color,
+  availability, and a `show_value` option. Only a stacked state bar borrows its input
+  row through `breakdown` for the duration of drawing; no per-row segment allocation
+  or retained row pointer is needed.
+  Line numbers use `NoReorder` and stay first. All three sampling columns are
+  resizable, hideable, and reorderable. Their normal table headers retain context
+  menus during loading/failure and share the existing header-tooltip content
+  through `RenderHeaderWithTooltip`. Sampling State restores its color legend.
+  Percentages use one
+  decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
+  All modes share rectangular geometry, the `kBorderGray` outline around the filled
+  extent, clipping, and value-label layout. Sampling State uses `show_value = false`;
+  the two percentage modes use `true`. `DrawBarValue` uses `kTextOnAccent` inside
+  fills that fit the label, or `kTextMain` beside short fills. Narrow columns that
+  cannot fit either segment clip the same label in both colors at the fill boundary.
+  Measured zero has no fill and shows `0.0%`; unavailable percentages show only a
+  dim em dash. All modes share cell hit testing and forward clicks to row selection even
+  when unavailable, and retained state metrics render while stall details fail or
+  reload. Their availability is independent of the issued/stalled bar breakdown.
+  Metric cells and the Sampling State tooltip share `RenderMetricValue` and
+  `GetMetricStatusText`, including loading, failure, invalid, no-sample, and
+  unrecorded statuses. Metric-cell tooltips show only the percentage with any brief
+  availability status and the row's sample count. `CodePane` selects instruction
+  or source aggregation explanations for headers only; cell tooltips and the
+  Sampling State metric summary contain no descriptive paragraphs.
+  `IsaDataBuilder::FormatSamplePercentage` shares one-decimal
+  formatting between cells and tooltips, preserves measured zero, and returns an
+  em dash for missing/invalid summaries.
   Each hovered valid cell builds one local list of tooltip rows (label, color,
   formatted count, formatted percentage), ordered as issued, stall reasons,
   unclassified stalls, and unclassified progress. Layout and drawing consume that
@@ -1670,6 +1709,12 @@ The ISA implementation is organized as follows:
   `SampleCounts::invalid_counts` preserves invalid contributors and saturated
   overflow through every grouping stage; percentages and bar shares stay unavailable
   when that flag is set. Known invalid counts take precedence over missing fields.
+  Sampled wave occupancy and active-thread measurements have independent
+  `PercentageSummary` values on `SamplingRow`. `SamplePercentage` retains each
+  metric's unrounded weighted sum, sample count, and missing/invalid flags in
+  `PreparedSamplingData::metrics_by_instruction`. Both instruction and source
+  grouping reuse the same checked accumulator; progress-count validity does not
+  determine whether either sampled metric is available.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
   without a database or GPU.
 
@@ -1680,15 +1725,15 @@ completion prepares sampling once and updates both panes from the same snapshot.
 reset. Later source/ISA layer arrivals and cached source-file changes reuse it,
 without rebuilding sample counts or normalizing OTHER_WAIT again. Source mappings
 are taken from current source-layer data rather than frozen in the sampling
-snapshot, so correlations arriving after sampling remain correct. Column visibility
-does not reaggregate rows. Instruction storage survives source and sampling updates.
+snapshot, so correlations arriving after sampling remain correct. Changing metric
+column visibility does not reaggregate rows. Instruction storage survives source and sampling updates.
 The widgets address columns through named `IsaColumn` and `SourceColumn` logical
 indices; `SetupColumns` and `RenderHeaders` keep registration and header rendering separate
 from the clipped row loop. `SamplingStateRenderer` keeps tooltip summary, table,
 footer, and size measurement separate, with one prepared tooltip-row list for
 both measurement and drawing. `SamplingStateRenderer::CodePane` identifies the
-header's ISA/source context explicitly. Single-argument widget constructors are
-explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
+headers' ISA/source context explicitly. Single-argument widget
+constructors are explicit; value-producing APIs and click/status results use `[[nodiscard]]`.
 Source selection is shared through `LineSelection`, with no unused forwarding getters.
 Source-file dropdown items use the complete source UUID in their ImGui ID scope,
 so equal basenames remain independently selectable without truncating 64-bit IDs.
@@ -1715,10 +1760,9 @@ using that button's reserved width. Both icon and text
 show the standard themed tooltip explaining that profiling data interpretation,
 displayed values, layout, and controls may change in future releases. The notice
 remains visible when no source file is available or the source pane is hidden.
-The button wraps to another row when the notice would overlap it. Sampling State visibility
-is controlled only by each table's native
-header context menu; there is no sampling-details button or global visibility
-flag. PC-sampling data is fetched
+The button wraps to another row when the notice would overlap it. Each pane's
+sampling-column header selects Sampling State, Wave occupancy %, or Active threads %;
+there is no sampling-details button or global selection flag. PC-sampling data is fetched
 through `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
 independent layers:
 
@@ -1735,10 +1779,10 @@ independent layers:
   of column visibility. The View asks the controller for PC sample states plus stall-reason
   rows and lookups, explicitly excluding instruction-sample metadata that this
   view does not consume. The projection uses each state's UUID, instruction
-  UUID and total count, plus nullable issued and stall counts, together with
-  the stall-reason rows and lookup text. A controller getter returns
-  `kRocProfVisResultNotLoaded` for a nullable count that was not measured, and
-  `DataProvider` preserves that distinction with `std::optional`.
+  UUID and total count, plus nullable issued/stall counts and wave-occupancy /
+  active-thread percentages, together with the stall-reason rows and lookup text.
+  A controller getter returns `kRocProfVisResultNotLoaded` for an unmeasured count
+  or percentage, and `DataProvider` preserves that distinction with `std::optional`.
 
 `FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
 use distinct `DataProvider` request IDs and may be in flight together. A newer
@@ -1759,14 +1803,13 @@ instruction's usable total sample count, used to scale Sampling State bars. Both
 ISA and source maxima exclude rows with invalid counts; missing progress alone
 still permits a total-sample bar, including host-trap captures.
 
-The table uses `IsaCodeSamplingState` as its ID so the previous seven-column layout
-does not override these defaults. Subsequent visibility, width, and order choices
-use normal ImGui persistence. All four columns remain registered while sampling
-loads, and Sampling State stays available in the header menu. Hiding or showing
-columns does not start, cancel, or repeat data requests. No application-owned
-sampling visibility state overrides the saved ImGui preference. The ISA table
-enables `Reorderable`, so users can drag any visible column header to change its
-display order; headers and cells address logical indices after reordering.
+The table uses `IsaCodeSamplingColumns` as its ID so previous dropdown layouts
+cannot restore incompatible logical indices. Width, visibility, and permitted
+column-order choices use normal ImGui persistence. All six columns remain
+registered while sampling loads. Wave occupancy and active threads are hidden by
+default and appear between Sampling State and Offset when enabled. Changing
+column visibility does not start, cancel, or repeat data requests.
+The remaining headers and cells address logical indices after reordering.
 
 ISA mnemonic colouring is prepared by `IsaDataBuilder::BuildInstructions`. Each
 `IsaRow` owns its original instruction string, byte offsets for its first token,
@@ -1803,8 +1846,9 @@ uppercase hexadecimal, not an absolute runtime address. Right-clicking an offset
 ISA instruction, or source-code line opens its copy context menu. Offset and `#`
 use `NoResize` so their calculated widths follow data and font changes. The `#`
 width is measured with the active code font during rendering. ISA and Sampling
-State remain resizable; Sampling State and Offset are hideable through the header
-context menu. The source table supports the same native column menu. Both menus
+State and both percentage columns remain resizable; Offset and the three sampling
+columns are hideable through the header context menu. The source table supports the same
+native column menu. Both menus
 use the application's default window padding, matching event-table menus.
 
 Sampling State consumes the prepared `SamplingSummary` from
@@ -1815,7 +1859,9 @@ count does not exceed total samples. Genuine zero total/issued/stalled counts
 remain valid. Mismatched reason classifications are reported separately and retain
 bounded normalization when the progress counts themselves are valid.
 
-Sampling State draws a thin stacked bar: issued observations come first in the
+The common `DrawBar` draws Sampling State as a stacked bar using `SAMPLING_BAR_HEIGHT_FRACTION`
+as both percentage modes (90% of the text-line height), centered within the row.
+Issued observations come first in the
 success green, followed by every stall reason in descending count and then name
 order. Total bar length is normalized to the hottest displayed instruction.
 The issued portion uses issued samples over that maximum. Reason segments divide
@@ -1851,6 +1897,18 @@ progress rows explain gray portions. The issued row remains available when no
 stalled samples exist, including genuine zero counts. Counts use separators.
 Cell tooltips have no title or verbose reason descriptions and retain mismatch
 warnings. These are sample observations, not cycle latency.
+
+The Sampling State tooltip also includes a compact wave-occupancy / active-thread
+summary outside the scrollable reason list, regardless of the selected column metric.
+Values use the same one-decimal formatter as the columns. Unavailable values carry
+brief loading, load-failed, invalid, no-sample, or unrecorded labels. Metric-cell
+tooltips show the percentage and sample count without descriptive text; the
+Sampling State metric summary likewise omits descriptive text. Retained metrics
+remain visible when
+issued/stalled counts or stall details are unavailable. Metric headers explain the
+profiler-reported measurements, their own 0-100% scale, and aggregation; active-thread
+percent is explicitly separate from issued/stalled sample shares. Database field
+names, grouping keys, source-mapping details, and formulas remain developer-only.
 
 The Sampling State column fits its header and the widest displayed name, capped by the character limit
 and viewport width. All legend columns receive explicit fixed widths with
@@ -1904,11 +1962,10 @@ central `kPcSampling*` dark/light theme palette. Green is reserved for issued
 samples; ALU dependencies use indigo, scheduler arbitration uses the native accent
 blue, and other waits use coral. Unknown reason names are preserved in gray.
 The source table defaults to `# | Sampling State | Source code`, using table ID
-`SourceCodeSamplingState` so earlier two-column preferences do not override the new
-default. Sampling State is visible by default, hideable, resizable, and reorderable.
-Both panes use their own header context menus to hide or show Sampling State,
-including while data loads. The source text remains
-selectable and copyable when sampling is hidden or reordered.
+`SourceCodeSamplingColumns` to isolate the layout from saved dropdown column
+indices. Wave occupancy and active threads are registered between Sampling State
+and Source code, hidden by default, and independently enabled through the header
+context menu. Source text remains selectable and copyable with any visible metrics.
 
 `IsaDataBuilder::BuildSourceLines` prepares source rows (excluding unknown line
 numbers). `UpdateSourceSampling` sums all sampled instructions with the same primary
@@ -1939,9 +1996,28 @@ Returning to a cached file recomputes source-line grouping from the prepared
 sampling snapshot and current source correlations.
 Source and ISA row sampling fields share `SamplingRow`; ISA keeps instruction,
 offset, and correlation fields, while source keeps text and line numbers.
-Instruction-sample metadata, active-thread percentage, wave-occupancy
-percentage, and dispatch UUID are available on the controller handle but are
-not currently represented in `PcSamplingData` or rendered by `ComputeIsaView`.
+`PcSampleState` represents wave-occupancy and active-thread percentages as nullable
+doubles. `IsaDataBuilder` accepts finite values in [0, 100], including genuine
+zero, and computes sample-count-weighted means: `sum(total_count * percent) /
+sum(total_count)`. Zero-sample states contribute neither values nor missing/invalid
+flags; a row without observations has missing metrics. Any positive-sample
+contributor with a missing metric makes that metric unavailable; any invalid
+contributor or weight overflow makes it invalid, taking precedence over missing.
+The two metrics are validated independently of each other and of issued/stalled
+counts. Source grouping merges the unrounded numerators and weights using the
+existing primary mappings, rather than averaging instruction-level display values.
+Keep full precision in the projection; presentation should use one decimal place
+and show an em dash for unavailable values, preserving measured `0.0%`.
+These sampled percentages are separate from issued/stalled sample shares; no
+resource-pressure or divergence classification is inferred from them.
+`DataProvider::LoadPcSamplingStates` copies both percentages through the existing
+double properties, resetting the optional fields before every read. Missing values
+remain unset and measured zero remains present. The fields travel with completed
+sample states even when stall details fail, and the shared prepared snapshot feeds
+both ISA and source rows. Both code panes render the percentages through the
+shared `SamplingStateRenderer` metric cells and headers.
+Instruction-sample metadata and dispatch UUID remain available only on the
+controller handle.
 
 `PcSamplingData` also records how far each layer has got -
 `PcSamplingLayerState` (`kNotRead`, `kRead`, `kFailed`, and `kUnsupported`
@@ -1997,7 +2073,7 @@ total-sample bars with formatted sample counts and the existing hottest-row
 percentage. Its tooltip explains the stall load failure, rather than identifying
 the capture as host-trap. Actual progress counts remain intact in the data model.
 While retrying details, the neutral bars remain and the tooltip says details are
-loading. If no sample counts loaded, the column remains registered and dimmed,
+loading. If no sample counts loaded, the column remains registered,
 with no bars; header and cell tooltips distinguish loading from failure. Disabled
 cells use `AllowWhenDisabled` for their tooltip hit targets, rather than the table
 column Disabled flag, so column visibility and ordering preferences are preserved.
@@ -2007,7 +2083,7 @@ The renderer extends ImGui's native column context menu using
 `DisableDefaultContextMenu`, `TableBeginContextMenuPopup`, and
 `TableDrawDefaultContextMenu`. Both widgets render it after their headers. Native
 column controls are retained, and a failed sampling layer adds Refetch sampling data.
-This remains accessible from another header when Sampling State is hidden. Retry
+Normal table headers open this menu on right-click. Retry
 requests are consumed during Update, and only the failed layer is queued. No
 sampling-details visibility toggle is restored.
 Source records with unknown or zero line numbers are omitted. ISA instructions

@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <utility>
 
+#include "imgui_internal.h"
+
 #include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
@@ -15,8 +17,19 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr const char* CODE_OBJECT_OFFSET_FORMAT        = "0x%llX";
-constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY = 19;
+constexpr const char* CODE_OBJECT_OFFSET_FORMAT           = "0x%llX";
+constexpr size_t      CODE_OBJECT_OFFSET_TEXT_CAPACITY    = 19;
+constexpr float       CODE_COLUMN_MIN_WIDTH_IN_CHARACTERS = 40.0f;
+
+static constexpr bool
+sampling_columns_match_renderer(int sampling_state, int wave_occupancy,
+                                int active_threads, int next_column)
+{
+    using Metric = SamplingStateRenderer::Metric;
+    return wave_occupancy == sampling_state + static_cast<int>(Metric::kWaveOccupancy) &&
+           active_threads == sampling_state + static_cast<int>(Metric::kActiveThreads) &&
+           next_column == sampling_state + static_cast<int>(Metric::kCount);
+}
 
 struct InstructionPresentation
 {
@@ -105,7 +118,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable |
                     ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_BordersInnerV |
-                    ImGuiTableFlags_ScrollY | ImGuiTableFlags_NoSavedSettings;;
+                    ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
 }
 
 void
@@ -176,6 +189,26 @@ BaseCodeWidget::CalculateLineNumberWidth(size_t count)
 
     m_line_num_width =
         ImGui::CalcTextSize("0").x * static_cast<float>(m_line_num_digits + 1);
+}
+
+float
+BaseCodeWidget::CalculateTableInnerWidth() const
+{
+    return std::max(ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ScrollbarSize,
+                    ImGui::CalcTextSize("0").x * m_minimum_table_width_in_characters);
+}
+
+void
+BaseCodeWidget::UpdateTableInnerWidth(int code_column)
+{
+    const ImGuiTable* table           = ImGui::GetCurrentTable();
+    const float       character_width = ImGui::CalcTextSize("0").x;
+    // Use the resolved visible column widths on the next frame, including saved
+    // resize/hide choices. Store font-relative units so font changes also scale it.
+    m_minimum_table_width_in_characters =
+        (table->ColumnsGivenWidth - table->Columns[code_column].WidthGiven) /
+            character_width +
+        CODE_COLUMN_MIN_WIDTH_IN_CHARACTERS;
 }
 
 bool
@@ -312,11 +345,19 @@ SourceCodeWidget::Render()
     }
 
     constexpr int columns_count = ColumnIndex(SourceColumn::kCount);
+    static_assert(columns_count == 5);
+    static_assert(
+        sampling_columns_match_renderer(ColumnIndex(SourceColumn::kSamplingState),
+                                        ColumnIndex(SourceColumn::kWaveOccupancy),
+                                        ColumnIndex(SourceColumn::kActiveThreads),
+                                        ColumnIndex(SourceColumn::kSourceText)),
+        "Source sampling columns must match the renderer's column layout.");
     CalculateLineNumberWidth(static_cast<size_t>(m_largest_line_number));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
-    if(!ImGui::BeginTable("SourceCodeSamplingState", columns_count,
-                          m_table_flags | ImGuiTableFlags_Reorderable))
+    if(!ImGui::BeginTable("SourceCodeSamplingColumns", columns_count,
+                          m_table_flags | ImGuiTableFlags_Reorderable, ImVec2(0.0f, 0.0f),
+                          CalculateTableInnerWidth()))
     {
         ImGui::PopStyleVar();
         return;
@@ -324,6 +365,7 @@ SourceCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
+    UpdateTableInnerWidth(ColumnIndex(SourceColumn::kSourceText));
     RenderTableContextMenu();
 
     const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
@@ -352,13 +394,13 @@ SourceCodeWidget::Render()
 void
 SourceCodeWidget::SetupColumns()
 {
-    ImGui::TableSetupColumn("#",
-                            ImGuiTableColumnFlags_NoResize |
-                                ImGuiTableColumnFlags_NoHide |
-                                ImGuiTableColumnFlags_WidthFixed,
-                            m_line_num_width);
+    ImGui::TableSetupColumn(
+        "#",
+        ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_NoHide |
+            ImGuiTableColumnFlags_NoReorder | ImGuiTableColumnFlags_WidthFixed,
+        m_line_num_width);
 
-    m_sampling_renderer.SetupColumn();
+    m_sampling_renderer.SetupColumns();
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_NoHide |
                                                ImGuiTableColumnFlags_WidthStretch);
 }
@@ -372,8 +414,8 @@ SourceCodeWidget::RenderHeaders()
         CenterNextTextItem("#");
         ImGui::TableHeader("#");
     }
-    m_sampling_renderer.RenderHeader(ColumnIndex(SourceColumn::kSamplingState),
-                                     SamplingStateRenderer::CodePane::kSource);
+    m_sampling_renderer.RenderHeaders(ColumnIndex(SourceColumn::kSamplingState),
+                                      SamplingStateRenderer::CodePane::kSource);
     SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(SourceColumn::kSourceText),
                                                    "Source code",
                                                    SOURCE_CODE_HEADER_TOOLTIP);
@@ -390,10 +432,8 @@ SourceCodeWidget::RenderLine(uint32_t index)
                        static_cast<unsigned long long>(display_num));
 
     ImGui::PushID(static_cast<int>(index));
-    if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSamplingState)))
-    {
-        row_clicked |= m_sampling_renderer.RenderCell(source_row, m_hottest_samples);
-    }
+    row_clicked |= m_sampling_renderer.RenderCells(
+        source_row, m_hottest_samples, ColumnIndex(SourceColumn::kSamplingState));
     if(ImGui::TableSetColumnIndex(ColumnIndex(SourceColumn::kSourceText)))
     {
         row_clicked |= CopyableTextUnformatted(source_row.content.c_str(), "source",
@@ -451,14 +491,20 @@ IsaCodeWidget::Render()
     }
 
     constexpr int columns_count = ColumnIndex(IsaColumn::kCount);
-    static_assert(columns_count == 4);
+    static_assert(columns_count == 6);
+    static_assert(sampling_columns_match_renderer(ColumnIndex(IsaColumn::kSamplingState),
+                                                  ColumnIndex(IsaColumn::kWaveOccupancy),
+                                                  ColumnIndex(IsaColumn::kActiveThreads),
+                                                  ColumnIndex(IsaColumn::kOffset)),
+                  "ISA sampling columns must match the renderer's column layout.");
     CalculateLineNumberWidth(m_entries.size());
 
-    // Keep the table ID stable to preserve users' column preferences.
+    // A new layout ID prevents saved dropdown layouts from restoring column settings.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
-    if(!ImGui::BeginTable("IsaCodeSamplingState", columns_count,
-                          m_table_flags | ImGuiTableFlags_Reorderable))
+    if(!ImGui::BeginTable("IsaCodeSamplingColumns", columns_count,
+                          m_table_flags | ImGuiTableFlags_Reorderable, ImVec2(0.0f, 0.0f),
+                          CalculateTableInnerWidth()))
     {
         ImGui::PopStyleVar();
         return;
@@ -467,6 +513,7 @@ IsaCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
     SetupColumns();
     RenderHeaders();
+    UpdateTableInnerWidth(ColumnIndex(IsaColumn::kInstruction));
     RenderTableContextMenu();
 
     const ImU32 background_color = m_settings.GetColor(Colors::kTransparent);
@@ -492,10 +539,12 @@ IsaCodeWidget::SetupColumns()
     // NoResize makes ImGui reapply the calculated widths after data or font changes.
     const ImGuiTableColumnFlags numeric_column_flags =
         ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed;
-    ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_NoHide | numeric_column_flags,
+    ImGui::TableSetupColumn("#",
+                            ImGuiTableColumnFlags_NoHide |
+                                ImGuiTableColumnFlags_NoReorder | numeric_column_flags,
                             m_line_num_width);
 
-    m_sampling_renderer.SetupColumn();
+    m_sampling_renderer.SetupColumns();
     char largest_offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
     std::snprintf(largest_offset_text, sizeof(largest_offset_text),
                   CODE_OBJECT_OFFSET_FORMAT,
@@ -516,7 +565,7 @@ IsaCodeWidget::RenderHeaders()
         CenterNextTextItem("#");
         ImGui::TableHeader("#");
     }
-    m_sampling_renderer.RenderHeader(ColumnIndex(IsaColumn::kSamplingState));
+    m_sampling_renderer.RenderHeaders(ColumnIndex(IsaColumn::kSamplingState));
     SamplingStateRenderer::RenderHeaderWithTooltip(
         ColumnIndex(IsaColumn::kOffset), "Offset", CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     SamplingStateRenderer::RenderHeaderWithTooltip(ColumnIndex(IsaColumn::kInstruction),
@@ -534,10 +583,8 @@ IsaCodeWidget::RenderLine(uint32_t index)
                        index + 1);
 
     ImGui::PushID(static_cast<int>(index));
-    if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kSamplingState)))
-    {
-        row_clicked |= m_sampling_renderer.RenderCell(isa_row, m_hottest_samples);
-    }
+    row_clicked |= m_sampling_renderer.RenderCells(
+        isa_row, m_hottest_samples, ColumnIndex(IsaColumn::kSamplingState));
     ImGui::PopID();
 
     if(ImGui::TableSetColumnIndex(ColumnIndex(IsaColumn::kOffset)))

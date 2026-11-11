@@ -269,7 +269,7 @@ enum class Colors
     kLogError,
     kLogCritical,
 
-    // PC-sampling stall-reason palette
+    // PC-sampling stall reasons and measured percentages
     kPcSamplingInstructionFetch,
     kPcSamplingAluDependency,
     kPcSamplingWaitcnt,
@@ -279,6 +279,7 @@ enum class Colors
     kPcSamplingPipelineStall,
     kPcSamplingOtherWait,
     kPcSamplingSleeping,
+    kPcSamplingMetricBar,
 
     // ISA mnemonic palette; operands retain the normal text colour.
     kIsaInternal,

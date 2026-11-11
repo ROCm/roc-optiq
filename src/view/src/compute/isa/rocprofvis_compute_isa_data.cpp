@@ -370,6 +370,116 @@ IsaDataBuilder::BuildStallReasons(
     return stall_reasons;
 }
 
+void
+IsaDataBuilder::AddIssueStateCount(IssueStateCounts& counts, uint64_t lookup_uuid,
+                                   uint64_t count)
+{
+    counts.invalid |= !AddSampleCount(counts.by_lookup[lookup_uuid], count);
+    counts.invalid |= !AddSampleCount(counts.total_count, count);
+}
+
+void
+IsaDataBuilder::MergeIssueStateCounts(IssueStateCounts&       total,
+                                      const IssueStateCounts& counts)
+{
+    total.missing |= counts.missing;
+    total.invalid |= counts.invalid;
+    total.invalid |= !AddSampleCount(total.sample_count, counts.sample_count);
+    for(const auto& [lookup_uuid, count] : counts.by_lookup)
+    {
+        AddIssueStateCount(total, lookup_uuid, count);
+    }
+}
+
+IsaDataBuilder::GroupedIssueStateCounts
+IsaDataBuilder::BuildIssueStateCounts(const PcSamplingData&    data,
+                                      const SampleAggregation& aggregation)
+{
+    GroupedIssueStateCounts counts_by_state;
+    counts_by_state.reserve(aggregation.sample_state_by_uuid.size());
+    for(const InstructionSample& sample : data.instruction_samples)
+    {
+        if(aggregation.sample_state_by_uuid.count(sample.pc_sample_state_uuid) == 0)
+        {
+            continue;
+        }
+        IssueStateCounts& counts = counts_by_state[sample.pc_sample_state_uuid];
+        if(sample.count)
+        {
+            AddIssueStateCount(counts, sample.instruction_sample_lookup_uuid,
+                               *sample.count);
+        }
+        else
+        {
+            counts.missing = true;
+        }
+    }
+    GroupedIssueStateCounts counts_by_instruction;
+    counts_by_instruction.reserve(aggregation.counts_by_instruction.size());
+    for(const auto& [state_uuid, state] : aggregation.sample_state_by_uuid)
+    {
+        IssueStateCounts& counts = counts_by_state[state_uuid];
+        counts.sample_count      = state->total_count;
+        counts.invalid |= counts.total_count > state->total_count;
+        // Validate before merging: an excess in one state cannot fill a gap in another.
+        // Unrecorded zero-sample states do not invalidate observed distributions.
+        counts.missing = state->total_count > 0 &&
+                         (counts.missing || counts.total_count < state->total_count);
+        MergeIssueStateCounts(counts_by_instruction[state->instruction_uuid], counts);
+    }
+    return counts_by_instruction;
+}
+
+IsaDataBuilder::IssueStateSummary
+IsaDataBuilder::SummarizeIssueStates(
+    const IssueStateCounts&                          counts,
+    const std::unordered_map<uint64_t, std::string>& text_by_lookup)
+{
+    IssueStateSummary summary;
+    if(counts.invalid)
+    {
+        summary.availability = SamplingAvailability::kInvalid;
+    }
+    else if(!counts.missing && !counts.by_lookup.empty())
+    {
+        summary.availability = SamplingAvailability::kValid;
+        summary.total_count  = counts.total_count;
+        summary.states.reserve(counts.by_lookup.size());
+        for(const auto& [lookup_uuid, count] : counts.by_lookup)
+        {
+            IssueState state;
+            state.lookup_uuid = lookup_uuid;
+            const auto text   = text_by_lookup.find(lookup_uuid);
+            if(text != text_by_lookup.end() && !text->second.empty())
+            {
+                state.text = text->second;
+            }
+            else
+            {
+                state.text = "Unknown issue state (lookup ID " +
+                             std::to_string(lookup_uuid) + ")";
+            }
+            state.count       = count;
+            state.count_text  = FormatSampleCount(count);
+            state.percent     = CalculatePercentage(count, counts.sample_count);
+            summary.states.push_back(std::move(state));
+        }
+        std::sort(summary.states.begin(), summary.states.end(),
+                  [](const IssueState& lhs, const IssueState& rhs) {
+                      if(lhs.count != rhs.count)
+                      {
+                          return lhs.count > rhs.count;
+                      }
+                      if(lhs.text != rhs.text)
+                      {
+                          return lhs.text < rhs.text;
+                      }
+                      return lhs.lookup_uuid < rhs.lookup_uuid;
+                  });
+    }
+    return summary;
+}
+
 double
 IsaDataBuilder::CalculatePercentage(uint64_t value, uint64_t total)
 {
@@ -594,7 +704,16 @@ IsaDataBuilder::PrepareSampling(const PcSamplingData& data)
     sampling.reason_text = BuildStallReasonText(data);
     sampling.reasons_by_instruction =
         BuildStallReasonCounts(data, aggregation, sampling.reason_text);
-    sampling.counts_by_instruction = std::move(aggregation.counts_by_instruction);
+    if(data.instruction_samples_loaded && !data.instruction_samples.empty())
+    {
+        for(const InstructionSampleLookup& lookup : data.instruction_sample_lookups)
+        {
+            sampling.issue_state_text.emplace(lookup.instruction_sample_lookup_uuid,
+                                              lookup.text);
+        }
+        sampling.issue_states_by_instruction = BuildIssueStateCounts(data, aggregation);
+    }
+    sampling.counts_by_instruction  = std::move(aggregation.counts_by_instruction);
     sampling.metrics_by_instruction = std::move(aggregation.metrics_by_instruction);
     return sampling;
 }
@@ -605,12 +724,14 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
 {
     const StallReasonCounts empty_reasons;
     const SampleMetrics     empty_metrics;
+    const IssueStateCounts  empty_issues;
     uint64_t                hottest_instruction_samples = 0;
     for(IsaRow& row : rows)
     {
         const auto counts_it  = sampling.counts_by_instruction.find(row.id);
         const auto metrics_it = sampling.metrics_by_instruction.find(row.id);
         const auto reasons_it = sampling.reasons_by_instruction.find(row.id);
+        const auto issues_it  = sampling.issue_states_by_instruction.find(row.id);
         UpdateSamplingRow(
             row,
             counts_it != sampling.counts_by_instruction.end() ? counts_it->second
@@ -619,7 +740,9 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
                                                                 : empty_metrics,
             reasons_it != sampling.reasons_by_instruction.end() ? reasons_it->second
                                                                 : empty_reasons,
-            sampling.reason_text);
+            issues_it != sampling.issue_states_by_instruction.end() ? issues_it->second
+                                                                    : empty_issues,
+            sampling);
         if(row.sampling.availability != SamplingAvailability::kInvalid)
         {
             hottest_instruction_samples =
@@ -630,15 +753,17 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
 }
 
 void
-IsaDataBuilder::UpdateSamplingRow(
-    SamplingRow& row, const SampleCounts& counts, const SampleMetrics& metrics,
-    const StallReasonCounts&                         reasons,
-    const std::unordered_map<uint64_t, std::string>& reason_text)
+IsaDataBuilder::UpdateSamplingRow(SamplingRow& row, const SampleCounts& counts,
+                                  const SampleMetrics&        metrics,
+                                  const StallReasonCounts&    reasons,
+                                  const IssueStateCounts&     issues,
+                                  const PreparedSamplingData& prepared)
 {
-    row.sample_counts                = counts;
-    row.sampling                     = SummarizeSampling(counts);
-    row.wave_occupancy               = SummarizePercentage(metrics.wave_occupancy);
-    row.active_threads               = SummarizePercentage(metrics.active_threads);
+    row.sample_counts  = counts;
+    row.sampling       = SummarizeSampling(counts);
+    row.wave_occupancy = SummarizePercentage(metrics.wave_occupancy);
+    row.active_threads = SummarizePercentage(metrics.active_threads);
+    row.issue_states   = SummarizeIssueStates(issues, prepared.issue_state_text);
     row.stall_reason_sample_count    = 0;
     row.stall_reason_counts_overflow = reasons.overflow;
     row.unclassified_stall_count     = 0;
@@ -647,7 +772,7 @@ IsaDataBuilder::UpdateSamplingRow(
     if(!reasons.overflow)
     {
         row.stall_reason_sample_count = reasons.total_count;
-        row.stall_reasons             = BuildStallReasons(reasons, reason_text);
+        row.stall_reasons             = BuildStallReasons(reasons, prepared.reason_text);
     }
     if(row.sampling.availability == SamplingAvailability::kValid)
     {
@@ -708,6 +833,7 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
         SampleCounts      counts{ 0, 0, 0 };
         SampleMetrics     metrics;
         StallReasonCounts reasons;
+        IssueStateCounts  issues;
         bool              has_samples = false;
     };
     const auto                                   locations = BuildSourceLocations(data);
@@ -742,13 +868,22 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
         {
             MergeStallReasonCounts(sampling.reasons, reasons->second);
         }
+        const auto issues = prepared.issue_states_by_instruction.find(instruction_uuid);
+        if(issues != prepared.issue_states_by_instruction.end())
+        {
+            MergeIssueStateCounts(sampling.issues, issues->second);
+        }
+        else if(counts.total_count > 0)
+        {
+            sampling.issues.missing = true;
+        }
     }
     uint64_t hottest_source_samples = 0;
     for(SourceRow& row : rows)
     {
         const SourceSampling& sampling = sampling_by_line.at(row.id);
         UpdateSamplingRow(row, sampling.has_samples ? sampling.counts : SampleCounts{},
-                          sampling.metrics, sampling.reasons, prepared.reason_text);
+                          sampling.metrics, sampling.reasons, sampling.issues, prepared);
         if(row.sampling.availability != SamplingAvailability::kInvalid)
         {
             hottest_source_samples =

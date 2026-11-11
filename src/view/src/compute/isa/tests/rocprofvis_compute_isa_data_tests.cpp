@@ -3,6 +3,7 @@
 
 #include "compute/isa/rocprofvis_compute_isa_data.h"
 
+#include <algorithm>
 #include <limits>
 
 #include <catch2/catch_approx.hpp>
@@ -1039,6 +1040,348 @@ TEST_CASE("The maximum representable reason count remains valid at the boundary"
     CHECK(source[0].stall_reason_sample_count == UINT64_MAX);
     REQUIRE_FALSE(isa[0].stall_reasons.empty());
     CHECK(isa[0].stall_reasons[0].bar_share == 1.0);
+}
+
+static PcSamplingData
+make_issue_sampling_data()
+{
+    PcSamplingData data             = make_source_sampling_data();
+    data.pc_sample_states           = { { 1, 10, 100, 80, 20 }, { 2, 20, 50, 10, 40 } };
+    data.instruction_sample_lookups = { { 1, "NO_INST" }, { 2, "VALU" } };
+    data.instruction_samples        = { { 1, 1, 20 }, { 1, 2, 80 }, { 2, 2, 50 } };
+    data.instruction_samples_loaded = true;
+    return data;
+}
+
+TEST_CASE("Issue states preserve the reported barrier and VALU counts",
+          "[isa][issue-states]")
+{
+    PcSamplingData data                                      = make_issue_sampling_data();
+    data.code_objects[0].kernel_symbols[0].instruction_lines = {
+        { 10, 7, 0x35C0, "s_barrier" }, { 20, 3, 0x26CC, "v_add_f64 v[0:1], v[2:3], 1.0" }
+    };
+    data.instruction_type_lookup_map = { { 7, "BARRIER" }, { 3, "VALU" } };
+    data.pc_sample_states = { { 1, 10, 1901, 252, 1649 }, { 2, 20, 9538, 2012, 7526 } };
+    data.instruction_sample_lookups.push_back({ 9, "BARRIER" });
+    data.instruction_samples = { { 1, 1, 1649 }, { 1, 9, 252 }, { 2, 2, 9538 } };
+    data.pc_sample_stall_reason_lookups = { { 1, "OTHER_WAIT" }, { 2, "BARRIER_WAIT" } };
+    data.pc_sample_stall_reasons        = { { 1, 1, 252 }, { 1, 2, 1649 } };
+    const auto prepared                 = IsaDataBuilder::PrepareSampling(data);
+    auto       rows                     = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, prepared);
+    REQUIRE(rows.size() == 2);
+    CHECK(rows[0].instruction_kind == IsaDataBuilder::InstructionKind::kBarrier);
+    CHECK(rows[0].issue_states.availability ==
+          IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(rows[0].issue_states.total_count == 1901);
+    REQUIRE(rows[0].issue_states.states.size() == 2);
+    const auto& no_inst = rows[0].issue_states.states[0];
+    CHECK(no_inst.text == "NO_INST");
+    CHECK(no_inst.count == 1649);
+    CHECK(no_inst.count_text == "1,649");
+    CHECK(no_inst.percent == Catch::Approx(1649.0 / 1901.0 * 100.0));
+    CHECK(rows[0].issue_states.states[1].text == "BARRIER");
+    CHECK(rows[0].issue_states.states[1].count == 252);
+    CHECK(rows[0].issue_states.states[1].percent ==
+          Catch::Approx(252.0 / 1901.0 * 100.0));
+    CHECK(rows[0].sample_counts.issue_count == 252);
+    CHECK(rows[0].sample_counts.stall_count == 1649);
+    REQUIRE(rows[0].stall_reasons.size() == 1);
+    CHECK(rows[0].stall_reasons[0].text == "BARRIER_WAIT");
+    CHECK(rows[0].stall_reasons[0].count == 1649);
+    REQUIRE(rows[1].issue_states.states.size() == 1);
+    CHECK(rows[1].issue_states.states[0].text == "VALU");
+    CHECK(rows[1].issue_states.states[0].count == 9538);
+    CHECK(rows[1].issue_states.states[0].percent == 100.0);
+    CHECK(rows[1].sample_counts.issue_count == 2012);
+}
+
+TEST_CASE("Issue states merge by instruction UUID and retain both branch outcomes",
+          "[isa][issue-states]")
+{
+    PcSamplingData data   = make_issue_sampling_data();
+    data.pc_sample_states = { { 1, 10, 100, 80, 20 },
+                              { 3, 10, 50, 10, 40 },
+                              { 2, 20, 50, 10, 40 } };
+    data.code_objects[0].kernel_symbols[0].instruction_lines[0] = {
+        10, 8, 0x40, "s_cbranch_scc1 590"
+    };
+    data.instruction_type_lookup_map = { { 8, "BRANCH" } };
+    data.code_objects[0].kernel_symbols[0].instruction_lines[1].code_object_offset = 0x40;
+    data.instruction_sample_lookups = { { 99, "BRANCH_NOT_TAKEN" },
+                                        { 7, "BRANCH_TAKEN" },
+                                        { 2, "VALU" } };
+    data.instruction_samples = { { 1, 99, 50 },          { 1, 99, 30 }, { 1, 7, 20 },
+                                 { 3, 99, 30 },          { 3, 7, 20 },  { 2, 2, 50 },
+                                 { 999, 99, UINT64_MAX } };
+    auto rows                = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    CHECK(rows[0].instruction_kind == IsaDataBuilder::InstructionKind::kBranch);
+    REQUIRE(rows[0].issue_states.states.size() == 2);
+    CHECK(rows[0].issue_states.total_count == 150);
+    CHECK(rows[0].issue_states.states[0].text == "BRANCH_NOT_TAKEN");
+    CHECK(rows[0].issue_states.states[0].count == 110);
+    CHECK(rows[0].issue_states.states[0].percent == Catch::Approx(110.0 / 150.0 * 100.0));
+    CHECK(rows[0].issue_states.states[1].text == "BRANCH_TAKEN");
+    CHECK(rows[0].issue_states.states[1].count == 40);
+    REQUIRE(rows[1].issue_states.states.size() == 1);
+    CHECK(rows[1].issue_states.states[0].text == "VALU");
+    CHECK(rows[1].issue_states.total_count == 50);
+}
+
+TEST_CASE("Incomplete issue distributions never publish partial counts or shares",
+          "[isa][issue-states][source]")
+{
+    using Availability  = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data = make_issue_sampling_data();
+    SECTION("Fetch incomplete") { data.instruction_samples_loaded = false; }
+    SECTION("No records") { data.instruction_samples.clear(); }
+    SECTION("NULL count") { data.instruction_samples[0].count.reset(); }
+    SECTION("Missing records for a contributing sample state")
+    {
+        data.pc_sample_states.push_back({ 3, 10, 10, 5, 5 });
+    }
+    SECTION("Recorded counts cover only part of the samples")
+    {
+        data.instruction_samples[0].count = 19;
+    }
+    SECTION("Known totals cannot imply that an unrecorded count was zero")
+    {
+        data.instruction_samples[0].count.reset();
+        data.instruction_samples[1].count = 100;
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa      = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source   = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    const IsaDataBuilder::SamplingRow* checked_rows[] = { &isa[0], &source[0] };
+    for(const IsaDataBuilder::SamplingRow* row : checked_rows)
+    {
+        CHECK(row->issue_states.availability == Availability::kMissing);
+        CHECK(row->issue_states.states.empty());
+        CHECK(row->issue_states.total_count == 0);
+        CHECK(row->sampling.availability == Availability::kValid);
+    }
+}
+
+TEST_CASE("Issue-state zero counts are recorded and zero-sample gaps do not contribute",
+          "[isa][issue-states]")
+{
+    PcSamplingData data               = make_issue_sampling_data();
+    data.instruction_samples[0].count = 0;
+    data.instruction_samples[1].count = 100;
+    uint64_t total                    = 100;
+    SECTION("Measured zero with observed samples") {}
+    SECTION("Measured zero with zero total samples")
+    {
+        total                             = 0;
+        data.pc_sample_states[0]          = { 1, 10, 0, 0, 0 };
+        data.instruction_samples[1].count = 0;
+    }
+    SECTION("An unrecorded zero-sample state")
+    {
+        data.pc_sample_states.push_back({ 3, 10, 0, std::nullopt, std::nullopt });
+    }
+    SECTION("NULL issue counts on a zero-sample state")
+    {
+        data.pc_sample_states.push_back({ 3, 10, 0, std::nullopt, std::nullopt });
+        data.instruction_samples.push_back({ 3, 1, std::nullopt });
+    }
+    auto rows = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    const auto& issues = rows[0].issue_states;
+    CHECK(issues.availability == IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(issues.total_count == total);
+    REQUIRE(issues.states.size() == 2);
+    const auto no_inst = std::find_if(
+        issues.states.begin(), issues.states.end(),
+        [](const IsaDataBuilder::IssueState& state) { return state.lookup_uuid == 1; });
+    REQUIRE(no_inst != issues.states.end());
+    CHECK(no_inst->text == "NO_INST");
+    CHECK(no_inst->count == 0);
+    CHECK(no_inst->count_text == "0");
+    CHECK(no_inst->percent == 0.0);
+}
+
+TEST_CASE("Issue-state labels retain captured names and deterministic unknown identities",
+          "[isa][issue-states]")
+{
+    PcSamplingData data             = make_issue_sampling_data();
+    data.instruction_sample_lookups = {
+        { 1, "SDK_FUTURE_STATE" }, { 2, "DUPLICATE" }, { 3, "DUPLICATE" }, { 4, "" }
+    };
+    data.instruction_samples = { { 1, 4, 20 }, { 1, 3, 20 }, { 1, 2, 20 },
+                                 { 1, 1, 20 }, { 1, 0, 20 }, { 2, 1, 50 } };
+    auto rows                = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    const std::vector<uint64_t> expected = { 2, 3, 1, 0, 4 };
+    REQUIRE(rows[0].issue_states.states.size() == expected.size());
+    for(size_t i = 0; i < expected.size(); i++)
+    {
+        CHECK(rows[0].issue_states.states[i].lookup_uuid == expected[i]);
+    }
+    CHECK(rows[0].issue_states.states[2].text == "SDK_FUTURE_STATE");
+    CHECK(rows[0].issue_states.states[3].text == "Unknown issue state (lookup ID 0)");
+    CHECK(rows[0].issue_states.states[4].text == "Unknown issue state (lookup ID 4)");
+    std::reverse(data.instruction_samples.begin(), data.instruction_samples.end());
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    for(size_t i = 0; i < expected.size(); i++)
+    {
+        CHECK(rows[0].issue_states.states[i].lookup_uuid == expected[i]);
+    }
+}
+
+TEST_CASE("Issue-state validity is independent of malformed or missing progress counts",
+          "[isa][issue-states]")
+{
+    PcSamplingData data = make_issue_sampling_data();
+    SECTION("Host-trap-style missing progress")
+    {
+        data.pc_sample_states[0].issue_count.reset();
+        data.pc_sample_states[0].stall_count.reset();
+    }
+    SECTION("Malformed progress counts") { data.pc_sample_states[0].issue_count = 101; }
+    auto rows = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    CHECK(rows[0].sampling.availability != IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(rows[0].issue_states.availability ==
+          IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(rows[0].issue_states.total_count == 100);
+    REQUIRE(rows[0].issue_states.states.size() == 2);
+    CHECK(rows[0].issue_states.states[0].count == 80);
+}
+
+TEST_CASE("Invalid issue contributors and overflow survive instruction and source merges",
+          "[isa][issue-states][source]")
+{
+    using Availability         = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data        = make_issue_sampling_data();
+    bool           source_only = false;
+    SECTION("Repeated lookup overflow")
+    {
+        data.instruction_samples = { { 1, 1, UINT64_MAX }, { 1, 1, 101 }, { 2, 2, 50 } };
+    }
+    SECTION("Distinct lookup overflow")
+    {
+        data.instruction_samples = { { 1, 1, UINT64_MAX }, { 1, 2, 101 }, { 2, 2, 50 } };
+    }
+    SECTION("Overflow across individually valid states of one instruction")
+    {
+        data.pc_sample_states    = { { 1, 10, UINT64_MAX, 0, UINT64_MAX },
+                                     { 3, 10, 1, 1, 0 } };
+        data.instruction_samples = { { 1, 1, UINT64_MAX }, { 3, 1, 1 } };
+    }
+    SECTION("Overflow across individually valid instructions of one source line")
+    {
+        source_only              = true;
+        data.pc_sample_states    = { { 1, 10, UINT64_MAX, 0, UINT64_MAX },
+                                     { 2, 20, 1, 1, 0 } };
+        data.instruction_samples = { { 1, 1, UINT64_MAX }, { 2, 1, 1 } };
+    }
+    SECTION("Opposite per-state mismatches cannot cancel")
+    {
+        data.pc_sample_states    = { { 1, 10, 50, 30, 20 }, { 3, 10, 50, 30, 20 } };
+        data.instruction_samples = { { 1, 1, 60 }, { 3, 1, 40 } };
+    }
+    SECTION("Known excess takes precedence over a NULL contributor")
+    {
+        data.instruction_samples = { { 1, 1, 101 },
+                                     { 1, 2, std::nullopt },
+                                     { 2, 2, 50 } };
+    }
+    SECTION("Positive issue count on a zero-sample state")
+    {
+        data.pc_sample_states.push_back({ 3, 10, 0, 0, 0 });
+        data.instruction_samples.push_back({ 3, 1, 1 });
+    }
+    const auto prepared = IsaDataBuilder::PrepareSampling(data);
+    auto       isa      = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source   = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    CHECK(isa[0].issue_states.availability ==
+          (source_only ? Availability::kValid : Availability::kInvalid));
+    if(!source_only)
+    {
+        CHECK(isa[0].issue_states.states.empty());
+        CHECK(isa[0].issue_states.total_count == 0);
+    }
+    CHECK(source[0].issue_states.availability == Availability::kInvalid);
+    CHECK(source[0].issue_states.states.empty());
+    CHECK(source[0].issue_states.total_count == 0);
+}
+
+TEST_CASE("The largest representable issue count remains valid",
+          "[isa][issue-states][source]")
+{
+    PcSamplingData data      = make_issue_sampling_data();
+    data.pc_sample_states    = { { 1, 10, UINT64_MAX, 0, UINT64_MAX } };
+    data.instruction_samples = { { 1, 1, UINT64_MAX }, { 1, 2, 0 } };
+    const auto prepared      = IsaDataBuilder::PrepareSampling(data);
+    auto       isa           = IsaDataBuilder::BuildInstructions(data, 1);
+    auto       source        = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    const IsaDataBuilder::SamplingRow* checked_rows[] = { &isa[0], &source[0] };
+    for(const IsaDataBuilder::SamplingRow* row : checked_rows)
+    {
+        CHECK(row->issue_states.availability ==
+              IsaDataBuilder::SamplingAvailability::kValid);
+        CHECK(row->issue_states.total_count == UINT64_MAX);
+        REQUIRE(row->issue_states.states.size() == 2);
+        CHECK(row->issue_states.states[0].count == UINT64_MAX);
+        CHECK(row->issue_states.states[0].percent == 100.0);
+        CHECK(row->issue_states.states[1].count == 0);
+    }
+}
+
+TEST_CASE("Source issue aggregation retains missing contributors and owned snapshots",
+          "[isa][issue-states][source]")
+{
+    using Availability      = IsaDataBuilder::SamplingAvailability;
+    PcSamplingData data     = make_issue_sampling_data();
+    const auto     prepared = IsaDataBuilder::PrepareSampling(data);
+    data.instruction_samples.clear();
+    data.instruction_sample_lookups.clear();
+    auto isa    = IsaDataBuilder::BuildInstructions(data, 1);
+    auto source = IsaDataBuilder::BuildSourceLines(data, 11);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    CHECK(source[0].issue_states.availability == Availability::kValid);
+    CHECK(source[0].issue_states.total_count == 150);
+    REQUIRE(source[0].issue_states.states.size() == 2);
+    CHECK(source[0].issue_states.states[0].text == "VALU");
+    CHECK(source[0].issue_states.states[0].count == 130);
+    CHECK(source[0].issue_states.states[0].percent ==
+          Catch::Approx(130.0 / 150.0 * 100.0));
+    CHECK(source[1].issue_states.availability == Availability::kMissing);
+
+    data.instruction_source_lines[1].source_line_uuid = 102;
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    CHECK(source[0].issue_states.total_count == 50);
+    REQUIRE(source[0].issue_states.states.size() == 1);
+    CHECK(source[0].issue_states.states[0].text == "VALU");
+    CHECK(source[1].issue_states.total_count == 100);
+
+    data = make_issue_sampling_data();
+    data.instruction_samples.pop_back();
+    const auto incomplete = IsaDataBuilder::PrepareSampling(data);
+    IsaDataBuilder::UpdateSampling(isa, incomplete);
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, incomplete);
+    CHECK(isa[0].issue_states.availability == Availability::kValid);
+    CHECK(isa[1].issue_states.availability == Availability::kMissing);
+    CHECK(source[0].issue_states.availability == Availability::kMissing);
+    CHECK(source[0].issue_states.states.empty());
+
+    IsaDataBuilder::UpdateSampling(isa, {});
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, {});
+    CHECK(isa[0].issue_states.availability == Availability::kMissing);
+    CHECK(isa[0].issue_states.states.empty());
+    CHECK(isa[0].issue_states.total_count == 0);
+    CHECK(source[0].issue_states.availability == Availability::kMissing);
+    CHECK(source[0].issue_states.states.empty());
+    CHECK(source[0].issue_states.total_count == 0);
 }
 
 }  // namespace View

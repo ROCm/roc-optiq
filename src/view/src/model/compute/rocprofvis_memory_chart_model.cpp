@@ -75,14 +75,14 @@ ParseDirection(const std::string& text)
 }
 
 // Content is an array whose elements are either a bare metric ref (a dotted-id
-// string) or an object { "metric": <ref>, "title": <string> }.
+// string) or an object { "metric_id": <ref>, "title": <string> }.
 MemChartContentItem
 ParseContentItem(jt::Json& element)
 {
     MemChartContentItem item;
     if(element.isObject())
     {
-        item.metric             = ReadMetricRef(element, "metric");
+        item.metric             = ReadMetricRef(element, "metric_id");
         item.metric.metric_name = ReadString(element, "metric_name");
         item.title              = ReadString(element, "title");
         item.category = ReadString(element, "category");
@@ -139,7 +139,7 @@ ParseArrow(jt::Json& node)
     arrow.from      = ReadString(node, "from");
     arrow.to        = ReadString(node, "to");
     arrow.direction = ParseDirection(ReadString(node, "direction", "forward"));
-    arrow.metric             = ReadMetricRef(node, "metric");
+    arrow.metric             = ReadMetricRef(node, "metric_id");
     arrow.metric.metric_name = ReadString(node, "metric_name");
     arrow.title              = ReadString(node, "title");
     arrow.category  = ReadString(node, "category");

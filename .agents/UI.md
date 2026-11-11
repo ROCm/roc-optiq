@@ -1514,7 +1514,8 @@ layout with a missing, numeric, or duplicate block id, or an arrow whose
 `from`/`to` names no block; the caller then falls back to the next layout
 source instead of drawing disconnected arrows.
 - `MemChartMetricRef` - references a metric by its full dotted id
-  `category.table.entry` (e.g. "3.1.0").
+  `category.table.entry` (e.g. "3.1.0"), read from a content item's or
+  arrow's `metric_id` key.
 - `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
   No ImGui is pulled into the model file.
 

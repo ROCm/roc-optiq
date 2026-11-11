@@ -129,12 +129,12 @@ TEST_CASE("metric_name is parsed and optional", "[memory_chart]")
         "version": 1,
         "blocks": [
             { "id": "l2", "content": [
-                { "metric": "3.1.52", "metric_name": "L2 Hit", "title": "Hit" },
-                { "metric": "3.1.1", "title": "No Name" }
+                { "metric_id": "3.1.52", "metric_name": "L2 Hit", "title": "Hit" },
+                { "metric_id": "3.1.1", "title": "No Name" }
             ]}
         ],
         "arrows": [
-            { "from": "l2", "to": "l2", "metric": "3.1.16", "metric_name": "Flat Read" },
+            { "from": "l2", "to": "l2", "metric_id": "3.1.16", "metric_name": "Flat Read" },
             { "from": "l2", "to": "l2" }
         ]
     })";
@@ -160,18 +160,18 @@ TEST_CASE("Remap replaces category-3 ids by metric name", "[memory_chart]")
         "version": 1,
         "blocks": [
             { "id": "l2", "content": [
-                { "metric": "3.1.1", "metric_name": "L2 Hit" },
-                { "metric": "9.9.9", "metric_name": "Shared" },
-                { "metric": "3.1.5", "metric_name": "" },
-                { "metric": "3.1.6", "metric_name": "Missing" }
+                { "metric_id": "3.1.1", "metric_name": "L2 Hit" },
+                { "metric_id": "9.9.9", "metric_name": "Shared" },
+                { "metric_id": "3.1.5", "metric_name": "" },
+                { "metric_id": "3.1.6", "metric_name": "Missing" }
             ], "children": [
                 { "id": "child", "content": [
-                    { "metric": "3.1.7", "metric_name": "Dup" }
+                    { "metric_id": "3.1.7", "metric_name": "Dup" }
                 ]}
             ]}
         ],
         "arrows": [
-            { "from": "l2", "to": "child", "metric": "1.1.1", "metric_name": "L2 Hit" },
+            { "from": "l2", "to": "child", "metric_id": "1.1.1", "metric_name": "L2 Hit" },
             { "from": "l2", "to": "child" }
         ]
     })";

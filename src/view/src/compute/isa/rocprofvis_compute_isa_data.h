@@ -171,6 +171,7 @@ public:
         SamplingAvailability    availability = SamplingAvailability::kMissing;
         uint64_t                total_count  = 0;
         std::vector<IssueState> states;
+        std::string             display_text;
     };
 
     // Owns normalized instruction sampling independently of source/ISA layer arrival.

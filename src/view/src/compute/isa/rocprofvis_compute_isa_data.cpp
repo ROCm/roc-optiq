@@ -476,6 +476,14 @@ IsaDataBuilder::SummarizeIssueStates(
                       }
                       return lhs.lookup_uuid < rhs.lookup_uuid;
                   });
+        for(const IssueState& state : summary.states)
+        {
+            if(!summary.display_text.empty())
+            {
+                summary.display_text += "; ";
+            }
+            summary.display_text += state.text + ": " + state.count_text;
+        }
     }
     return summary;
 }

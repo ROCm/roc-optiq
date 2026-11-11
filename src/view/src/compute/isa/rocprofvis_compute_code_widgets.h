@@ -107,6 +107,7 @@ private:
         kSamplingState,
         kWaveOccupancy,
         kActiveThreads,
+        kIssueStateCounts,
         kSourceText,
         kCount
     };
@@ -148,6 +149,7 @@ private:
         kSamplingState,
         kWaveOccupancy,
         kActiveThreads,
+        kIssueStateCounts,
         kOffset,
         kInstruction,
         kCount

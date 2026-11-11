@@ -28,7 +28,7 @@ struct ColorLegendEntry
     Colors      color;
 };
 
-// Renders sampling-state and optional percentage columns for ISA and source lines.
+// Renders sampling-state, issue-state counts, and percentage columns for code lines.
 class SamplingStateRenderer
 {
 public:
@@ -43,6 +43,7 @@ public:
         kSamplingState,
         kWaveOccupancy,
         kActiveThreads,
+        kIssueStateCounts,
         kCount
     };
 
@@ -117,13 +118,16 @@ private:
                                     const ImVec2& cell_size, float bar_width);
     [[nodiscard]] bool IsDisabled() const;
     static TooltipRows BuildTooltipRows(const SamplingRow& row);
-    TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows);
+    TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows,
+                                              Metric metric = Metric::kSamplingState);
     void RenderTooltipTable(const TooltipRows& rows, const TooltipTableLayout& layout,
-                            float mouse_wheel);
+                            float mouse_wheel, Metric metric = Metric::kSamplingState);
     const char*        GetMetricStatusText(const SamplingRow& row, Metric metric) const;
     void               RenderHeader(int column, Metric metric, CodePane pane);
     [[nodiscard]] bool RenderCell(const SamplingRow& row, uint64_t hottest_samples,
                                   Metric metric);
+    [[nodiscard]] bool RenderIssueStateCell(const SamplingRow& row);
+    void               RenderIssueStateTooltip(const SamplingRow& row);
     void               RenderMetricValue(const SamplingRow& row, Metric metric);
     void               RenderMetricTooltip(const SamplingRow& row, Metric metric);
     void               RenderMetricsSummary(const SamplingRow& row);

@@ -1139,8 +1139,13 @@ IDs. They remain readable after a later query fails; a successful empty query is
 loaded as well. Stall details are complete only after both reasons and lookups
 succeed. Instruction samples are complete only after records and lookup metadata
 load successfully; partial records after a lookup failure do not mark the group
-loaded. Retrying the same request reuses completed groups and queries the failed
-group again.
+loaded. After sample states complete, stall details and instruction samples are
+attempted independently: a stall failure does not prevent issue-state loading,
+and an issue-state failure does not invalidate completed stalls. Cancellation
+stops subsequent queries. The combined future reports a failure if either
+requested group fails, while completion properties identify usable groups.
+Retrying the same request reuses completed groups and queries incomplete groups
+again.
 
 `GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
 locking to the right mutex for each property ID.

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rocprofvis_compute_isa_data.h"
+#include "rocprofvis_compute_sampling_load_state.h"
 #include "rocprofvis_settings_manager.h"
 
 namespace RocProfVis
@@ -47,15 +48,6 @@ public:
         kCount
     };
 
-    enum class LoadState : uint32_t
-    {
-        kReady,
-        kLoading,
-        kLoadingDetails,
-        kTotalsOnly,
-        kFailed
-    };
-
     explicit SamplingStateRenderer(SettingsManager& settings);
 
     static void RenderHeaderWithTooltip(int column, const char* label,
@@ -65,7 +57,7 @@ public:
                                   size_t count);
 
     void SetupColumns();
-    void SetLoadState(LoadState state) { m_load_state = state; }
+    void SetLoadStates(const SamplingLoadStates& states) { m_load_states = states; }
     // Extends the native column menu; returns whether sampling should be retried.
     [[nodiscard]] bool RenderTableContextMenu();
     void               RenderHeaders(int first_column, CodePane pane = CodePane::kIsa);
@@ -116,7 +108,7 @@ private:
                                const ImVec2& cell_size);
     void               DrawBarValue(const BarPresentation& bar, const ImVec2& cell_start,
                                     const ImVec2& cell_size, float bar_width);
-    [[nodiscard]] bool IsDisabled() const;
+    [[nodiscard]] bool IsDisabled(Metric metric = Metric::kSamplingState) const;
     static TooltipRows BuildTooltipRows(const SamplingRow& row);
     TooltipTableLayout CalculateTooltipLayout(const TooltipRows& rows,
                                               Metric metric = Metric::kSamplingState);
@@ -138,7 +130,7 @@ private:
                                  const ImVec2& end);
 
     SettingsManager& m_settings;
-    LoadState        m_load_state = LoadState::kReady;
+    SamplingLoadStates m_load_states;
 };
 
 }  // namespace View

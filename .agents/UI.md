@@ -257,7 +257,9 @@ to the View. Specifically:
   `rocprofvis_view_render()` and sleeps unless
   `rocprofvis_view_wants_continuous_render()` or an input/event wake
   requires more frames. `test/test_main.cpp` is the UI test harness's
-  counterpart with its own frame loop.
+  counterpart with its own frame loop. Its `--run-tests` mode accepts
+  `--test-filter name-or-category` for targeted runs and fails if the filter selects
+  no tests.
 - `rocprofvis_app_shell.{h,cpp}` - startup code shared by both
   executables: log setup, common CLI options with `--help`/`--version`
   handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
@@ -1684,6 +1686,14 @@ The ISA implementation is organized as follows:
   table sizing, wrapping, and bounded scrolling without a color-swatch column.
   Separate table layout IDs prevent old saved column indices from applying to
   the expanded ISA/source tables.
+  `SamplingLoadStatus` in `rocprofvis_compute_sampling_load_state.h` resolves
+  completed sample-state, stall-detail, and instruction-sample groups into
+  separate `SamplingLoadStates::sampling` and `issue_states` states. Completed
+  groups stay ready during another group's failure or retry; empty completed
+  issue results stay ready with unavailable row values. The shared native menu
+  offers Refetch sampling data when either group failed. The request-level
+  `CodeLoadState` still owns submission, cancellation, and retry; it does not
+  determine whether a completed distribution is usable.
   Percentage cells and the Sampling State tooltip share `RenderMetricValue` and
   `GetMetricStatusText`, including loading, failure, invalid, no-sample, and
   unrecorded statuses. Percentage-cell tooltips show only the percentage with any brief
@@ -1741,7 +1751,13 @@ The ISA implementation is organized as follows:
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
   without a database or GPU. Issue-state cases cover the reported barrier/VALU
   samples, branch outcomes, missing versus zero, per-state mismatches, overflow,
-  unknown labels, source grouping, snapshot ownership, and clearing stale results.
+  unknown labels, source grouping, snapshot ownership, clearing stale results,
+  and independent loading/failure/retry states. The optional UI-test executable
+  also registers `compute_isa/issue_state_columns` from
+  `tests/rocprofvis_compute_sampling_ui_tests.cpp`. It exercises both code panes,
+  default-hidden columns, the native menu toggle, full issue-state tooltips,
+  preserved stall/issue breakdowns when the other group fails, and empty data.
+  Run `roc-optiq-tests --run-tests --test-filter compute_isa` with UI tests enabled.
 
 Layer completions refresh only their owned data: ISA completion builds instruction
 rows, source completion updates correlations and selected source text, and stalls
@@ -2063,6 +2079,8 @@ with a Retry button on failure. Retrying a layer retains other loaded panes.
 toast for each rejected submission or failed current-layer completion, including
 repeat Retry failures. ISA, source, and sample-count failures use Error; a stall
 failure with retained total counts uses Warning and explains the total-only view.
+Issue-state-only failures use Warning and identify issue-state counts, preserving
+completed stall bars; combined detail failures name both unavailable groups.
 Successful empty results, expected host-trap absence, cancellation, and stale
 callbacks do not produce failure notifications.
 
@@ -3791,6 +3809,8 @@ All under `agenticprofiling/`, compiled only with
   `compute/isa/rocprofvis_compute_code_widgets.h`.
 - `SamplingStateRenderer`, `HeaderTooltipText`, and static header renderer ->
   `compute/isa/rocprofvis_compute_sampling_state_renderer.h`.
+- `SamplingLoadStatus`, `SamplingLoadStates`, and `SamplingLoadState` ->
+  `compute/isa/rocprofvis_compute_sampling_load_state.h`.
 - `IsaDataBuilder`, `IssueStateCounts`, `IssueState`, `IssueStateSummary`, and
   `PreparedSamplingData` -> `compute/isa/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,

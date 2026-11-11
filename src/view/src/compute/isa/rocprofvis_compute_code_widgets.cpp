@@ -135,11 +135,10 @@ BaseCodeWidget::SetLoadState(CodeLoadState state)
 }
 
 void
-BaseCodeWidget::SetSamplingLoadState(SamplingStateRenderer::LoadState state)
+BaseCodeWidget::SetSamplingLoadStates(const SamplingLoadStates& states)
 {
-    m_sampling_renderer.SetLoadState(state);
-    if(state != SamplingStateRenderer::LoadState::kFailed &&
-       state != SamplingStateRenderer::LoadState::kTotalsOnly)
+    m_sampling_renderer.SetLoadStates(states);
+    if(!states.CanRetry())
     {
         m_retry_sampling = false;
     }

@@ -140,6 +140,7 @@ set(ISA_VIEW_FILES
     src/view/src/compute/isa/rocprofvis_compute_isa_data.h
     src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.cpp
     src/view/src/compute/isa/rocprofvis_compute_sampling_state_renderer.h
+    src/view/src/compute/isa/rocprofvis_compute_sampling_load_state.h
 )
 set(ISA_VIEW_TEST_FILES
     src/view/src/compute/isa/tests/rocprofvis_compute_isa_data_tests.cpp
@@ -545,6 +546,8 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # main.cpp) so production main.cpp stays pristine and free of any test references.
     set(TEST_TARGET ${TARGET_NAME}-tests)
     add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
+    target_sources(${TEST_TARGET} PRIVATE
+        src/view/src/compute/isa/tests/rocprofvis_compute_sampling_ui_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
     add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
     target_compile_options(${TEST_TARGET} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)

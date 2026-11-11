@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "compute/isa/rocprofvis_compute_isa_data.h"
+#include "compute/isa/rocprofvis_compute_sampling_load_state.h"
 
 #include <algorithm>
 #include <limits>
@@ -13,6 +14,80 @@ namespace RocProfVis
 {
 namespace View
 {
+
+TEST_CASE("Sampling groups retain independent states across failure and retry",
+          "[isa][issue-states][loading]")
+{
+    SamplingLoadStatus status;
+    SamplingLoadStates states = status.Resolve(true, false);
+    CHECK(states.sampling == SamplingLoadState::kLoading);
+    CHECK(states.issue_states == SamplingLoadState::kLoading);
+    CHECK_FALSE(states.CanRetry());
+
+    status.sample_states_loaded = true;
+    bool stall_failure          = false;
+    SECTION("Issue-state query fails") { status.stall_details_loaded = true; }
+    SECTION("Stall query fails")
+    {
+        stall_failure                     = true;
+        status.instruction_samples_loaded = true;
+    }
+    states = status.Resolve(false, true);
+    CHECK(states.sampling ==
+          (stall_failure ? SamplingLoadState::kTotalsOnly : SamplingLoadState::kReady));
+    CHECK(states.issue_states ==
+          (stall_failure ? SamplingLoadState::kReady : SamplingLoadState::kFailed));
+    CHECK(states.CanRetry());
+
+    states = status.Resolve(true, false);
+    CHECK(states.sampling == (stall_failure ? SamplingLoadState::kLoadingDetails
+                                            : SamplingLoadState::kReady));
+    CHECK(states.issue_states ==
+          (stall_failure ? SamplingLoadState::kReady : SamplingLoadState::kLoading));
+    CHECK_FALSE(states.CanRetry());
+
+    status.stall_details_loaded       = true;
+    status.instruction_samples_loaded = true;
+    states                            = status.Resolve(false, false);
+    CHECK(states.sampling == SamplingLoadState::kReady);
+    CHECK(states.issue_states == SamplingLoadState::kReady);
+    CHECK_FALSE(states.CanRetry());
+
+    // Selection reset must discard the previous kernel's completion state.
+    status = {};
+    states = status.Resolve(false, true);
+    CHECK(states.sampling == SamplingLoadState::kFailed);
+    CHECK(states.issue_states == SamplingLoadState::kFailed);
+    CHECK(states.CanRetry());
+    states = status.Resolve(true, false);
+    CHECK(states.sampling == SamplingLoadState::kLoading);
+    CHECK(states.issue_states == SamplingLoadState::kLoading);
+    CHECK_FALSE(states.CanRetry());
+}
+
+TEST_CASE("Empty optional issue data is ready and unavailable without a retry error",
+          "[isa][issue-states][loading]")
+{
+    PcSamplingData data;
+    data.sample_states_loaded       = true;
+    data.stall_details_loaded       = true;
+    data.instruction_samples_loaded = true;
+    data.code_objects = { { 1, { { 1, 1, { { 10, std::nullopt, 0, "s_barrier" } } } } } };
+    data.pc_sample_states = { { 1, 10, 100, 30, 70 } };
+    auto rows             = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    REQUIRE(rows.size() == 1);
+    CHECK(rows[0].sampling.availability == IsaDataBuilder::SamplingAvailability::kValid);
+    CHECK(rows[0].issue_states.availability ==
+          IsaDataBuilder::SamplingAvailability::kMissing);
+    CHECK(rows[0].issue_states.display_text.empty());
+    const SamplingLoadStatus status{ data.sample_states_loaded, data.stall_details_loaded,
+                                     data.instruction_samples_loaded };
+    const SamplingLoadStates states = status.Resolve(false, false);
+    CHECK(states.sampling == SamplingLoadState::kReady);
+    CHECK(states.issue_states == SamplingLoadState::kReady);
+    CHECK_FALSE(states.CanRetry());
+}
 
 static PcSamplingData
 make_isa_data()

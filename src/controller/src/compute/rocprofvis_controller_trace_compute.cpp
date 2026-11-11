@@ -546,7 +546,15 @@ ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* futu
             output.m_pc_sample_states_loaded = true;
         }
     }
-    if(result == kRocProfVisDmResultSuccess && !output.m_stalls_loaded)
+    if(result != kRocProfVisDmResultSuccess)
+    {
+        return result;
+    }
+    if(future && future->IsCancelled())
+    {
+        return kRocProfVisDmResultDbAbort;
+    }
+    if(!output.m_stalls_loaded)
     {
         result = FetchStalls(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
@@ -554,13 +562,22 @@ ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* futu
             output.m_stalls_loaded = true;
         }
     }
-    if(result == kRocProfVisDmResultSuccess && include_instruction_samples &&
-       !output.m_instruction_samples_loaded)
+    if(future && future->IsCancelled())
     {
-        result = FetchInstructionSamples(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess)
+        return kRocProfVisDmResultDbAbort;
+    }
+    // Both distributions depend on sample states, but neither depends on the other.
+    if(include_instruction_samples && !output.m_instruction_samples_loaded)
+    {
+        const rocprofvis_dm_result_t instruction_result =
+            FetchInstructionSamples(db, future, kernel_id, output);
+        if(instruction_result == kRocProfVisDmResultSuccess)
         {
             output.m_instruction_samples_loaded = true;
+        }
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            result = instruction_result;
         }
     }
     return result;

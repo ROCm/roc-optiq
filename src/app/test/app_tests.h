@@ -5,4 +5,5 @@
 struct ImGuiTestEngine;
 
 void RegisterAppTests(ImGuiTestEngine* e);
-
+void
+RegisterIsaSamplingTests(ImGuiTestEngine* engine);

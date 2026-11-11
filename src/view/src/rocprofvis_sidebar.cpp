@@ -753,6 +753,10 @@ SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
     {
         const ImGuiIO& io = ImGui::GetIO();
         m_timeline_selection->ClickTrack(track, m_row_order, io.KeyCtrl, io.KeyShift);
+        if(!io.KeyCtrl && !io.KeyShift)
+        {
+            ScrollToTrack(track);
+        }
     }
     if(!display)
     {

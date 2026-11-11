@@ -95,6 +95,7 @@ The **System Topology View** displays a hierarchical representation of the hardw
    :alt: System Topology View showing a hierarchical tree of hardware and software components including processors, queues, and threads
 
 - Click |eye| to show or hide tracks. Hiding a higher-level element automatically hides all underlying queues, streams, and events.
+- Click a track name to select the track and go to it in the :ref:`timeline`.
 - Click |scroll| to go to the track in the :ref:`timeline`. 
 - Right-click to choose sidebar context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
 

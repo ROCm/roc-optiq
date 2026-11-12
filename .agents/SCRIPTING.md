@@ -706,9 +706,10 @@ and a release build does not require a system Python.
   `ShowGeneratedScript`.
 - ~~Vendor embeddable CPython into the package; CI builds against it.~~
   In tree as `ROCPROFVIS_ENABLE_VENDOR_PYTHON` (§7). The MSI and the Windows
-  CI artifact carry it. In CI the per-platform workflows take an `enable_vendor_python`
-  input (default off); the controller's experimental jobs turn it on.
-  With scripting on and `enable_vendor_python` off, each workflow installs
+  CI artifact carry it. It follows the `ROCPROFVIS_ENABLE_EXPERIMENTAL`
+  umbrella (on with scripting), so the controller's experimental jobs build
+  with it. The per-platform workflows take a free-form `cmake_args` input;
+  with `-DROCPROFVIS_ENABLE_VENDOR_PYTHON=OFF` in it, each workflow installs
   the build machine's Python development files instead.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
 - ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and

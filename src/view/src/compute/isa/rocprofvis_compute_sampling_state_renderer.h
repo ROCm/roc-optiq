@@ -29,7 +29,7 @@ struct ColorLegendEntry
     Colors      color;
 };
 
-// Renders sampling-state, issue-state counts, and percentage columns for code lines.
+// Renders sampling-state, sampled-state, and percentage columns for code lines.
 class SamplingStateRenderer
 {
 public:
@@ -79,6 +79,7 @@ private:
         bool   show_value = false;
         // Borrow the row only while drawing an optional stacked breakdown.
         const SamplingRow* breakdown = nullptr;
+        const IsaDataBuilder::IssueStateSummary* issue_breakdown = nullptr;
     };
 
     static constexpr size_t SHARE_TEXT_CAPACITY = 32;
@@ -128,6 +129,8 @@ private:
     void               RenderFooter(const SamplingRow& row);
     void DrawStallReasonSegments(const SamplingRow& row, const ImVec2& start,
                                  const ImVec2& end);
+    void DrawIssueStateSegments(const IsaDataBuilder::IssueStateSummary& summary,
+                                const ImVec2& start, const ImVec2& end);
 
     SettingsManager& m_settings;
     SamplingLoadStates m_load_states;

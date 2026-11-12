@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <future>
 #include <memory>
@@ -25,6 +26,7 @@
 #include "rocprofvis_ai_tools_internal.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_json_utils.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_root_view.h"
@@ -76,13 +78,221 @@ constexpr const char* ASSISTANT_SKIPPED_TOOL_REPLY =
 // rather than a small one: cutting a live query off and telling the model it
 // timed out is worse than making the user wait, because the model answers
 // around the gap instead of reporting it. Past this the user is better served
-// by being told the query is too broad than by a spinner, and Clear cancels it
-// at any point.
+// by being told the query is too broad than by the activity card, and Clear
+// cancels it at any point. The card is what shows the wait is still moving;
+// this deadline is only the point we stop.
 constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
-// When a fetch passes this, the status starts counting up. Long enough that an
-// ordinary query never shows a timer, short enough that a slow one is visibly
-// working rather than stuck.
-constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
+// Longest name or search term a scope chip prints before it is cut.
+constexpr size_t   ASSISTANT_CHIP_TEXT_CHARS = 28;
+// Search terms a scope chip names before the rest become a count.
+constexpr size_t   ASSISTANT_CHIP_TERMS = 2;
+
+// A span of time, short enough for a chip.
+std::string
+FormatSpan(double ns)
+{
+    char buffer[32];
+    if(ns < 1.0e3)
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.0f ns", ns);
+    }
+    else if(ns < 1.0e6)
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.1f us", ns / 1.0e3);
+    }
+    else if(ns < 1.0e9)
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.1f ms", ns / 1.0e6);
+    }
+    else
+    {
+        std::snprintf(buffer, sizeof(buffer), "%.2f s", ns / 1.0e9);
+    }
+    return buffer;
+}
+
+// Cuts text for a chip without splitting a UTF-8 character.
+std::string
+ChipText(const std::string& text)
+{
+    if(text.size() <= ASSISTANT_CHIP_TEXT_CHARS)
+    {
+        return text;
+    }
+    size_t cut = ASSISTANT_CHIP_TEXT_CHARS - 3;
+    while(cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0u) == 0x80u)
+    {
+        --cut;
+    }
+    return text.substr(0, cut) + "...";
+}
+
+std::string
+CountOf(size_t count, const char* one, const char* many)
+{
+    return std::to_string(count) + " " + (count == 1 ? one : many);
+}
+
+/*
+ * What one call reads, as short facts for the activity card.
+ *
+ * A call that leaves out its tracks or window still reads something, and on a
+ * large trace that default is usually why the wait is long. So the defaults are
+ * spelled out the way the data tools resolve them: track_events and
+ * track_samples read every track of their kind, top_events the selected tracks
+ * or else all of them, and a window falls back to the selection or the whole
+ * trace - except for search and event_instances, which always default to the
+ * whole trace.
+ */
+std::vector<std::string>
+DescribeToolScope(const AssistantToolContext& context, const AssistantToolCall& call)
+{
+    std::vector<std::string>              chips;
+    std::pair<jt::Json::Status, jt::Json> parsed =
+        jt::Json::parse(call.arguments.empty() ? std::string("{}") : call.arguments);
+    if(parsed.first != jt::Json::success || !parsed.second.isObject())
+    {
+        return chips;
+    }
+    jt::Json&          args = parsed.second;
+    const std::string& tool = call.name;
+
+    const bool system_ready = !context.is_compute && context.data_provider != nullptr &&
+                              context.data_provider->GetState() == ProviderState::kReady;
+    const bool every_of_kind = tool == "track_events" || tool == "track_samples";
+    const bool by_operation  = tool == "top_events";
+    const bool selection_window =
+        every_of_kind || by_operation || tool == "track_statistics";
+    const bool whole_window = tool == "event_instances" || tool == "search_events";
+
+    if(system_ready && (every_of_kind || by_operation))
+    {
+        size_t named = 0;
+        if(args.contains("track_ids") && args["track_ids"].isArray())
+        {
+            named = args["track_ids"].getArray().size();
+        }
+        std::vector<uint64_t> selected;
+        if(named > 0)
+        {
+            chips.push_back(CountOf(named, "track", "tracks"));
+        }
+        else if(by_operation && context.timeline_selection != nullptr &&
+                context.timeline_selection->GetSelectedTracks(selected) &&
+                !selected.empty())
+        {
+            chips.push_back("selected tracks");
+        }
+        else
+        {
+            chips.push_back(tool == "track_samples"  ? "every counter track"
+                            : tool == "track_events" ? "every event track"
+                                                     : "every track");
+        }
+    }
+    if(system_ready && tool == "track_statistics" && args.contains("track_id"))
+    {
+        chips.push_back("track " + std::to_string(JsonU64(args, "track_id", 0)));
+    }
+    if(system_ready && (selection_window || whole_window))
+    {
+        const double start = JsonUtils::GetDouble(args, "start_ns", -1.0);
+        const double end   = JsonUtils::GetDouble(args, "end_ns", -1.0);
+        double       selected_start = 0.0;
+        double       selected_end   = 0.0;
+        if(std::isfinite(start) && std::isfinite(end) && start >= 0.0 && end > start)
+        {
+            chips.push_back(FormatSpan(end - start) + " window");
+        }
+        else if(selection_window && context.timeline_selection != nullptr &&
+                context.timeline_selection->HasValidTimeRangeSelection() &&
+                context.timeline_selection->GetSelectedTimeRange(selected_start,
+                                                                 selected_end))
+        {
+            chips.push_back("selection, " + FormatSpan(selected_end - selected_start));
+        }
+        else
+        {
+            const TimelineModel& timeline =
+                context.data_provider->DataModel().GetTimeline();
+            chips.push_back("whole trace, " +
+                            FormatSpan(timeline.GetEndTime() - timeline.GetStartTime()));
+        }
+    }
+
+    std::string category = JsonUtils::GetString(args, "category", "");
+    if(!category.empty())
+    {
+        std::replace(category.begin(), category.end(), '_', ' ');
+        chips.push_back(category);
+    }
+    const std::string name = JsonUtils::GetString(args, "name", "");
+    if(!name.empty() && tool != "switch_tab")
+    {
+        chips.push_back("\"" + ChipText(name) + "\"");
+    }
+    const std::vector<std::string> terms = JsonUtils::GetStringArray(args, "terms");
+    for(size_t i = 0; i < terms.size() && i < ASSISTANT_CHIP_TERMS; ++i)
+    {
+        chips.push_back("\"" + ChipText(terms[i]) + "\"");
+    }
+    if(terms.size() > ASSISTANT_CHIP_TERMS)
+    {
+        chips.push_back("+" + CountOf(terms.size() - ASSISTANT_CHIP_TERMS, "term",
+                                      "terms"));
+    }
+    const std::string kernel = JsonUtils::GetString(args, "kernel_name", "");
+    if(!kernel.empty())
+    {
+        chips.push_back(ChipText(kernel));
+    }
+    else if(args.contains("kernel_id"))
+    {
+        chips.push_back("kernel " + std::to_string(JsonU64(args, "kernel_id", 0)));
+    }
+    if(args.contains("metrics") && args["metrics"].isArray())
+    {
+        chips.push_back(CountOf(args["metrics"].getArray().size(), "metric", "metrics"));
+    }
+    if(JsonUtils::GetString(args, "scope", "") == "workload")
+    {
+        chips.push_back("workload values");
+    }
+
+    if(args.contains("filters") && args["filters"].isArray())
+    {
+        std::vector<std::string> columns;
+        for(jt::Json& filter : args["filters"].getArray())
+        {
+            const std::string column = JsonUtils::GetString(filter, "column", "");
+            if(!column.empty() &&
+               std::find(columns.begin(), columns.end(), column) == columns.end())
+            {
+                columns.push_back(column);
+            }
+        }
+        if(!columns.empty())
+        {
+            std::string text = "filtered by " + columns[0];
+            if(columns.size() > 1)
+            {
+                text += " +" + std::to_string(columns.size() - 1);
+            }
+            chips.push_back(text);
+        }
+    }
+    const std::string group_by = JsonUtils::GetString(args, "group_by", "");
+    if(!group_by.empty())
+    {
+        chips.push_back("grouped by " + group_by);
+    }
+    const std::string sort_by = JsonUtils::GetString(args, "sort_by", "");
+    if(!sort_by.empty())
+    {
+        chips.push_back("sorted by " + sort_by);
+    }
+    return chips;
+}
 
 }  // namespace
 
@@ -110,7 +320,12 @@ AssistantPanel::AssistantPanel()
 , m_scroll_to_bottom(false)
 , m_dock_width(ASSISTANT_DEFAULT_WIDTH)
 , m_phase(Phase::kIdle)
+, m_activity_started(std::chrono::steady_clock::now())
 , m_composer_height(0.0f)
+, m_activity_height(0.0f)
+, m_step_key(0)
+, m_stream_offset(0.0)
+, m_stream_speed(0.0f)
 , m_next_call_index(0)
 , m_tool_round(0)
 , m_force_final(false)
@@ -317,6 +532,9 @@ AssistantPanel::ResetTurn()
     m_fetch_wait      = FetchWait();
     m_status.clear();
     m_queued_question.clear();
+    m_turn_steps.clear();
+    m_step_key = 0;
+    m_activity_scope.clear();
 }
 
 // Abandons the reply we are waiting on. Cancel() closes the socket, so this
@@ -368,8 +586,22 @@ AssistantPanel::StartHttpRequest()
     request.messages.insert(request.messages.end(), m_conversation.begin(),
                             m_conversation.end());
 
-    m_phase = Phase::kHttpWait;
-    SetStatus("Thinking...");
+    m_phase            = Phase::kHttpWait;
+    m_activity_started = std::chrono::steady_clock::now();
+    // The final round writes the only prose the user reads. Earlier rounds are
+    // the model deciding which tool to call, which is a different wait.
+    if(m_force_final)
+    {
+        SetStatus("Working out what it means...");
+    }
+    else if(m_tool_round == 0)
+    {
+        SetStatus("Thinking...");
+    }
+    else
+    {
+        SetStatus("Choosing the next step...");
+    }
     spdlog::info("Assistant HTTP round {} ({} messages)", m_tool_round,
                  request.messages.size());
 
@@ -470,6 +702,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_next_call_index = 0;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
+    m_turn_steps.clear();
+    m_step_key = 0;
     PinTurnTrace();
     if(TryStartSummaryWarmup(question))
     {
@@ -718,7 +952,6 @@ AssistantPanel::BeginFinalAnswer()
         "already gathered and saying what they mean for this workload.";
     m_conversation.push_back(nudge);
     m_force_final = true;
-    SetStatus("Working out what it means...");
     StartHttpRequest();
 }
 
@@ -744,6 +977,21 @@ AssistantPanel::RunNextTool()
     const AssistantToolCall& call = m_pending_calls[m_next_call_index];
     SetStatus(AssistantToolStatusLabel(call.name));
     spdlog::info("Assistant tool {} ({})", call.name, call.id);
+
+    // A retry or a run that waited out a trace load comes back here for the
+    // same call. Its scope is read again, since a trace that has just
+    // finished loading changes it, but it is still one step.
+    const uint64_t step_key =
+        ((static_cast<uint64_t>(m_tool_round) << 32) | m_next_call_index) + 1;
+    if(step_key != m_step_key)
+    {
+        m_step_key = step_key;
+        if(call.name != "offer_next_steps")
+        {
+            m_turn_steps.push_back(call.name);
+        }
+    }
+    m_activity_scope = DescribeToolScope(MakeToolContext(), call);
 
     const AssistantToolStartResult started =
         StartAssistantTool(MakeToolContext(), call.name, call.arguments);
@@ -961,13 +1209,8 @@ AssistantPanel::PollToolFetch()
 
     if(pending && !timed_out)
     {
-        // Say how long, so a slow query reads as working rather than frozen.
-        if(elapsed.count() >= ASSISTANT_SLOW_FETCH_NOTICE_SECONDS &&
-           !m_fetch_wait.tool_name.empty())
-        {
-            SetStatus(AssistantToolStatusLabel(m_fetch_wait.tool_name) + " (" +
-                      std::to_string(elapsed.count()) + "s)");
-        }
+        // The activity card reads this same clock, so the status line stays
+        // put and a long read does not yank the transcript every second.
         return;
     }
 

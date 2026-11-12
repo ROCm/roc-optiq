@@ -2693,7 +2693,19 @@ in that same file's own handler table. A body without a schema entry is
 unreachable; a schema entry without a body comes back to the model as an
 unknown tool. The label list at the top of the schema file has to grow
 with it, since that is what `AssistantToolNameList` reports and what the
-panel shows as a status line.
+activity card titles while that tool runs. The card stays pinned under
+the transcript for the whole turn. Its stage follows the theme and
+draws only in the theme's accent family (`MakeStagePalette`): a white
+panel with the pressed accent for lit things on light, a panel below
+the background with the hover accent lifted toward white on dark. On it,
+trace lanes feed a compute die over a bus. A read scrolls the lanes into the die,
+thinking draws flow links between events, writing gathers them into one
+point, and a wait holds everything dim. Under it sit the title, chips,
+and one sentence about the wait. The chips come from
+`DescribeToolScope` in `rocprofvis_ai_assistant.cpp`, which spells out
+the tracks and window a read will really use when the call leaves them
+out. Between reads they list the steps so far by
+`AssistantToolStepLabel`, the third column of the label list.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
   singleton like `LogViewer`. Owns the transcript, the docked column,
   and the turn loop. The composer shows **Explain this view** on an

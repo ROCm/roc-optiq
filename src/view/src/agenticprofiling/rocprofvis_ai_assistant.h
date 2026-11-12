@@ -101,6 +101,11 @@ private:
     void RenderActivityChart(uint64_t track_id);
     void        RenderHeaderCard();
     void        RenderTranscript();
+    // Pinned under the transcript while a turn runs: an animated stage for the
+    // kind of wait, a title, chips for what the read covers or the steps so
+    // far, and one sentence about the wait. Live state, so it cannot outlive
+    // the turn.
+    void        RenderActivityCard();
     void        RenderMessageCard(size_t index, const ChatLine& line);
     void        RenderSelectableMessage(size_t index, const std::string& text,
                                         Colors text_color);
@@ -110,8 +115,8 @@ private:
     // after a turn.
     void RenderSuggestedActions();
     void RenderSplitter();
-    // Transient progress text, kept outside the transcript so it disappears
-    // with the spinner when the turn ends.
+    // Transient progress text. The activity card shows it, and both disappear
+    // when the turn ends.
     void SetStatus(const std::string& text);
     // Serializes the transcript to a Markdown string, shared by copy and export.
     std::string BuildTranscriptText() const;
@@ -161,9 +166,27 @@ private:
 
     std::string m_input;
     std::string m_status;
+    // When the current model wait began. A tool wait times itself from
+    // m_fetch_wait.started, which keeps counting across contention retries.
+    std::chrono::steady_clock::time_point m_activity_started;
     // Measured height of the composer block, so the transcript reserves exactly
     // the right amount instead of guessing and overflowing.
-    float                 m_composer_height;
+    float m_composer_height;
+    // Last measured height of the activity card, including the gap under it.
+    // The transcript reads this while a turn is running and ignores it once
+    // the turn is idle, so a finished card does not leave a hole.
+    float                 m_activity_height;
+    // Every tool this turn has run, in order, for the card's step chips.
+    std::vector<std::string> m_turn_steps;
+    // The call m_turn_steps recorded last, plus one, so the re-runs a busy or
+    // loading trace forces are not counted as new steps. Zero is none.
+    uint64_t m_step_key;
+    // What the running call reads, as short facts for the card.
+    std::vector<std::string> m_activity_scope;
+    // How far the card's lanes have scrolled. The speed eases toward each
+    // phase's own, so a change of phase glides instead of jumping.
+    double m_stream_offset;
+    float  m_stream_speed;
     std::vector<ChatLine> m_lines;
     // Parallel to m_lines. Text rows create one; charts do not. Cleared with
     // the transcript so a new conversation does not keep an old highlight.

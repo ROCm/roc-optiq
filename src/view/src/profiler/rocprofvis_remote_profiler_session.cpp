@@ -16,10 +16,12 @@ namespace View
 {
 
 RemoteProfilerSession::RemoteProfilerSession(
-    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file)
+    std::shared_ptr<RemoteUri> uri, bool fetch_trace,
+    std::function<void(const std::string&)> on_open_file)
 : m_uri(std::move(uri))
 , m_on_open_file(std::move(on_open_file))
 , m_session(nullptr)
+, m_fetch_trace(fetch_trace)
 , m_produced_trace(false)
 , m_remote_status_token(EventManager::InvalidSubscriptionToken)
 , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
@@ -290,7 +292,8 @@ RemoteProfilerSession::StartDownload()
     // failed read must clear any path already on the URI: it outlives a run,
     // and the next download must not fetch the previous run's file.
     std::string             path;
-    rocprofvis_result_t const result = GetTraceFilePath(path);
+    rocprofvis_result_t const result =
+        m_fetch_trace ? GetTraceFilePath(path) : kRocProfVisResultNotSupported;
     if(result == kRocProfVisResultNotSupported)
     {
         m_uri->GetRemoteResultPath().clear();

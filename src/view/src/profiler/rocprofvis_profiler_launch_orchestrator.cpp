@@ -131,7 +131,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
     // -> download -> open. Auth prompts / download progress surface via the SSH
     // popups rendered by the dialog.
     m_remote_session = std::make_unique<RemoteProfilerSession>(
-        request.remote_uri,
+        request.remote_uri, request.auto_load_trace,
         [this](const std::string& local_path)
         {
             // Honor the "Open trace when profiling completes" checkbox for remote

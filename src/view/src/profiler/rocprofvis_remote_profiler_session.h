@@ -54,9 +54,10 @@ public:
 
     // on_open_file is invoked with the local trace path once downloaded.
     // The remote path itself comes from the controller's scrape of the
-    // profiler's output. A run that produces no trace file finishes without
-    // downloading.
+    // profiler's output. A run that produces no trace file, or one launched
+    // with fetch_trace false, finishes without downloading.
     RemoteProfilerSession(std::shared_ptr<RemoteUri>               uri,
+                          bool                                    fetch_trace,
                           std::function<void(const std::string&)> on_open_file);
     ~RemoteProfilerSession() override;
 
@@ -98,6 +99,7 @@ private:
     std::shared_ptr<RemoteUri>              m_uri;
     std::function<void(const std::string&)> m_on_open_file;
     std::unique_ptr<SshSession>             m_session;
+    bool                                    m_fetch_trace;
     bool                                    m_produced_trace;
 
     EventManager::SubscriptionToken m_remote_status_token;

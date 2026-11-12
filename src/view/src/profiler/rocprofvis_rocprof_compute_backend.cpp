@@ -59,7 +59,7 @@ RocprofComputeSettings::FromJson(jt::Json const& json)
     }
 
     // Analyze
-    s.analyze_output_format_db = JsonUtils::GetBool(j, "analyze_output_format_db", false);
+    s.analyze_output_format_db = JsonUtils::GetBool(j, "analyze_output_format_db", true);
     if(j.contains("analyze_target"))
     {
         s.analyze_target = TargetSpec::FromJson(j["analyze_target"]);
@@ -197,8 +197,9 @@ bool
 RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
                                            TargetBrowseFn const& on_browse)
 {
-    const bool                is_remote = (config.connection == ConnectionType::kSsh);
-    std::vector<std::string>& recents   = GetRecentTargets(config.tool, config.operation);
+    const bool                is_remote      = (config.connection == ConnectionType::kSsh);
+    const bool                produces_trace = ProducesTrace(config);
+    std::vector<std::string>& recents        = GetRecentTargets(config.tool, config.operation);
 
     bool modified = false;
     if(config.operation == kRPVProfilerOperationAnalyze)
@@ -218,7 +219,9 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         modified |= RenderTargetPathRow(workload, m_settings.analyze_target.path,
                                         config.connection, on_browse,
                                         TargetLabelColumnWidth("Workload"));
-        modified |= RenderTargetAutoLoadRow(m_settings.analyze_target.auto_load_trace);
+        modified |= RenderTargetAutoLoadRow(
+            m_settings.analyze_target.auto_load_trace, produces_trace,
+            "Turn on \"ROCpd database\" output to get a trace.");
     }
     else
     {
@@ -248,6 +251,10 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         modified |=
             RenderTargetPathRow(output, m_settings.profile_target.output_directory,
                                 config.connection, on_browse, label_w);
+        modified |= RenderTargetAutoLoadRow(
+            m_settings.profile_target.auto_load_trace, produces_trace,
+            "Profile writes a workload folder. Run Analyze with \"ROCpd database\" "
+            "output to get a trace.");
     }
     return modified;
 }
@@ -286,6 +293,15 @@ RocprofComputeBackend::GetWarnings(LaunchConfig const& config) const
             "Performance counter collection is skipped when using PC sampling."});
     }
     return warnings;
+}
+
+bool
+RocprofComputeBackend::ProducesTrace(LaunchConfig const& config) const
+{
+    // Profile writes a workload folder, and analyze only writes a database
+    // with --output-format db.
+    return config.operation == kRPVProfilerOperationAnalyze &&
+           m_settings.analyze_output_format_db;
 }
 
 void

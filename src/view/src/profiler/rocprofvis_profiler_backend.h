@@ -194,6 +194,17 @@ public:
         return {};
     }
 
+    /**
+     * Whether a run with this config writes a trace Optiq can open. Decides
+     * whether auto-open is offered and requested; the trace path itself still
+     * comes from the controller. Defaults to true.
+     */
+    virtual bool ProducesTrace(LaunchConfig const& config) const
+    {
+        (void) config;
+        return true;
+    }
+
     // TODO(launcher-phase4): Full CLI import/export API
     //
     // Future work beyond the current --preset integration:

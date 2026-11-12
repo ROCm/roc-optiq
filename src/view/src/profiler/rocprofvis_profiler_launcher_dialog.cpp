@@ -1449,7 +1449,9 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     ProfilerLaunchOrchestrator::LaunchRequest request;
     BuildLaunchSpec(m_execution_cache, request.spec);
     request.is_remote       = is_remote;
-    request.auto_load_trace = target.auto_load_trace;
+    // A run that writes no trace is not asked to open (or, remotely, download)
+    // one, so it is not reported missing either.
+    request.auto_load_trace = target.auto_load_trace && backend->ProducesTrace(m_config);
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     request.remote_uri = is_remote ? m_remote_uri : nullptr;
 #endif

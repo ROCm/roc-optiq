@@ -40,6 +40,10 @@ jt::Json BuildAssistantToolsJson(bool is_compute);
 // covers both sets.
 std::string AssistantToolStatusLabel(const std::string& tool_name);
 
+// A few words naming a tool, for the step chips on the activity card. Falls
+// back to the raw name for one the model invented.
+std::string AssistantToolStepLabel(const std::string& tool_name);
+
 // Every tool name registered for this kind of trace, for telling the model when
 // it invents one or reaches for the other kind's.
 std::string AssistantToolNameList(bool is_compute);

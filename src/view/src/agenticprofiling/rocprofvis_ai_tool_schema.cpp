@@ -21,35 +21,37 @@ struct AssistantToolLabel
 {
     const char* name;
     const char* status;
+    // A few words for the step chips on the activity card.
+    const char* step;
 };
 
 // Every system-trace tool the model can call, with the line the panel shows
 // while it runs. One list keeps the status text and the "unknown tool" reply in
 // step with what BuildAssistantToolsJson registers.
 const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
-    { "trace_overview", "Reading the timeline overview..." },
-    { "get_summary", "Loading summary..." },
-    { "top_events", "Querying top events..." },
-    { "event_instances", "Loading event instances..." },
-    { "get_summary_event_metrics", "Loading event metrics..." },
-    { "get_summary_counter_stats", "Reading counter statistics..." },
-    { "list_tracks", "Listing tracks..." },
-    { "search_events", "Searching the trace..." },
-    { "track_events", "Reading track events..." },
-    { "track_samples", "Reading counter samples..." },
-    { "event_details", "Loading event details..." },
-    { "track_statistics", "Computing track statistics..." },
-    { "goto", "Moving the view..." },
-    { "show_panel", "Opening a panel..." },
-    { "switch_tab", "Switching tabs..." },
-    { "flow_arrows", "Adjusting flow arrows..." },
-    { "annotate", "Leaving a note..." },
-    { "bookmark", "Working with bookmarks..." },
-    { "measure", "Measuring..." },
-    { "reset_view", "Resetting the view..." },
-    { "offer_next_steps", "Offering next steps..." },
+    { "trace_overview", "Reading the timeline overview...", "Timeline overview" },
+    { "get_summary", "Loading summary...", "Summary" },
+    { "top_events", "Querying top events...", "Top events" },
+    { "event_instances", "Loading event instances...", "Event instances" },
+    { "get_summary_event_metrics", "Loading event metrics...", "Event metrics" },
+    { "get_summary_counter_stats", "Reading counter statistics...", "Counter stats" },
+    { "list_tracks", "Listing tracks...", "Track list" },
+    { "search_events", "Searching the trace...", "Search" },
+    { "track_events", "Reading track events...", "Track events" },
+    { "track_samples", "Reading counter samples...", "Counter samples" },
+    { "event_details", "Loading event details...", "Event details" },
+    { "track_statistics", "Computing track statistics...", "Track statistics" },
+    { "goto", "Moving the view...", "Moved the view" },
+    { "show_panel", "Opening a panel...", "Panel" },
+    { "switch_tab", "Switching tabs...", "Switched tabs" },
+    { "flow_arrows", "Adjusting flow arrows...", "Flow arrows" },
+    { "annotate", "Leaving a note...", "Note" },
+    { "bookmark", "Working with bookmarks...", "Bookmark" },
+    { "measure", "Measuring...", "Measure" },
+    { "reset_view", "Resetting the view...", "Reset view" },
+    { "offer_next_steps", "Offering next steps...", "Next steps" },
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
-    { "run_analysis_script", "Running an analysis script..." },
+    { "run_analysis_script", "Running an analysis script...", "Script" },
 #endif
 };
 
@@ -58,16 +60,16 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
 // reads a workload rather than a timeline. Scripting is absent on purpose -
 // optiq.table requires a system trace, so the tool would always fail.
 const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
-    { "compute_overview", "Reading the workload overview..." },
-    { "list_kernels", "Listing kernels..." },
-    { "kernel_summary", "Reading the kernel summary..." },
-    { "list_metrics", "Listing available metrics..." },
-    { "kernel_roofline", "Reading the roofline..." },
-    { "kernel_triage", "Reading the triage panel..." },
-    { "get_metrics", "Reading metric values..." },
-    { "kernel_pc_samples", "Reading PC samples..." },
-    { "switch_tab", "Switching tabs..." },
-    { "offer_next_steps", "Offering next steps..." },
+    { "compute_overview", "Reading the workload overview...", "Workload overview" },
+    { "list_kernels", "Listing kernels...", "Kernel list" },
+    { "kernel_summary", "Reading the kernel summary...", "Kernel summary" },
+    { "list_metrics", "Listing available metrics...", "Metric list" },
+    { "kernel_roofline", "Reading the roofline...", "Roofline" },
+    { "kernel_triage", "Reading the triage panel...", "Triage" },
+    { "get_metrics", "Reading metric values...", "Metrics" },
+    { "kernel_pc_samples", "Reading PC samples...", "PC samples" },
+    { "switch_tab", "Switching tabs...", "Switched tabs" },
+    { "offer_next_steps", "Offering next steps...", "Next steps" },
 };
 
 // Builds a JSON string array, for the enum of a tool parameter.
@@ -932,6 +934,27 @@ AssistantToolStatusLabel(const std::string& tool_name)
         }
     }
     return "Using " + tool_name + "...";
+}
+
+// The step chip for a tool, searching both sets like the status line does.
+std::string
+AssistantToolStepLabel(const std::string& tool_name)
+{
+    for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
+    {
+        if(tool_name == label.name)
+        {
+            return label.step;
+        }
+    }
+    for(const AssistantToolLabel& label : ASSISTANT_COMPUTE_TOOL_LABELS)
+    {
+        if(tool_name == label.name)
+        {
+            return label.step;
+        }
+    }
+    return tool_name;
 }
 
 }  // namespace View

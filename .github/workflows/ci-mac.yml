@@ -7,7 +7,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "14", "15", "26" ]'
+        default: '[ "15", "26" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -63,7 +63,7 @@ on:
       os_version:
         description: 'JSON array of OS versions to test'
         type: string
-        default: '[ "14", "15", "26" ]'
+        default: '[ "15", "26" ]'
       crypto_backend:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string

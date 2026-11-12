@@ -52,8 +52,9 @@ struct PcSamplingFailureFixture
         return value;
     }
 
-    void Initialize(const std::string& broken_table   = "",
-                    const std::string& schema_changes = "")
+    void Initialize(const std::string& broken_table               = "",
+                    const std::string& schema_changes             = "",
+                    bool               use_default_sampling_fetch = false)
     {
         database.Copy(std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
                           "rocprof_compute_23ed6f36.db",
@@ -129,9 +130,12 @@ struct PcSamplingFailureFixture
         REQUIRE(rocprofvis_controller_set_uint64(args.get(),
                                                  kRPVControllerPcSamplingArgsKernelId, 0,
                                                  kernel_id) == kRocProfVisResultSuccess);
-        REQUIRE(rocprofvis_controller_set_uint64(
-                    args.get(), kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0,
-                    0) == kRocProfVisResultSuccess);
+        if(!use_default_sampling_fetch)
+        {
+            REQUIRE(rocprofvis_controller_set_uint64(
+                        args.get(), kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0,
+                        0) == kRocProfVisResultSuccess);
+        }
     }
 
     void AddIsaTables()
@@ -172,6 +176,265 @@ struct PcSamplingFailureFixture
     }
 };
 
+constexpr const char* INSTRUCTION_SAMPLE_SCHEMA = R"sql(
+    ALTER TABLE compute_instruction_line ADD COLUMN instruction_type_uuid INTEGER;
+    UPDATE compute_instruction_line SET instruction_type_uuid = 1;
+    CREATE TABLE compute_instruction_type_lookup(
+        instruction_type_lookup_uuid INTEGER, text TEXT);
+    INSERT INTO compute_instruction_type_lookup VALUES(1, 'BARRIER');
+    CREATE TABLE compute_instruction_sample(instruction_sample_uuid INTEGER,
+        pc_sample_state_uuid INTEGER, instruction_sample_lookup_uuid INTEGER,
+        count INTEGER);
+    CREATE TABLE compute_instruction_sample_lookup(
+        instruction_sample_lookup_uuid INTEGER, text TEXT);
+    INSERT INTO compute_instruction_sample_lookup VALUES(1, 'NO_INST'), (2, 'BARRIER');
+    INSERT INTO compute_instruction_sample VALUES(1, 1, 1, 70), (2, 1, 2, 30);
+)sql";
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "Default PC sampling fetch accepts unavailable instruction samples",
+                 "[pc-sampling][instruction-samples]")
+{
+    std::string schema = INSTRUCTION_SAMPLE_SCHEMA;
+    SECTION("Both instruction-sample tables absent")
+    {
+        schema += "DROP TABLE compute_instruction_sample;"
+                  "DROP TABLE compute_instruction_sample_lookup;";
+    }
+    SECTION("Instruction-sample table absent")
+    {
+        schema += "DROP TABLE compute_instruction_sample;";
+    }
+    SECTION("Instruction-sample lookup table absent")
+    {
+        schema += "DROP TABLE compute_instruction_sample_lookup;";
+    }
+    SECTION("Instruction-sample tables empty")
+    {
+        schema += "DELETE FROM compute_instruction_sample;"
+                  "DELETE FROM compute_instruction_sample_lookup;";
+    }
+    SECTION("No instruction samples for this kernel")
+    {
+        schema += "UPDATE compute_instruction_sample SET pc_sample_state_uuid = 999;";
+    }
+    SECTION("All instruction metadata absent") { schema.clear(); }
+    Initialize("", schema, true);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 0);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateTotalCount) == 100);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateIssueCount) == 30);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateStallCount) == 70);
+    CHECK(Get(kRPVControllerPCSamplingNumPcSampleStallReasons) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 0);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSampleLookups) == 0);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "Instruction-sample counts distinguish unavailable data from zero",
+                 "[pc-sampling][instruction-samples]")
+{
+    bool        count_column_present = true;
+    std::string schema               = INSTRUCTION_SAMPLE_SCHEMA;
+    SECTION("NULL and measured zero")
+    {
+        schema += "UPDATE compute_instruction_sample SET count = NULL "
+                  "WHERE instruction_sample_uuid = 1;"
+                  "UPDATE compute_instruction_sample SET count = 0 "
+                  "WHERE instruction_sample_uuid = 2;";
+    }
+    SECTION("Count column absent")
+    {
+        count_column_present = false;
+        schema += "ALTER TABLE compute_instruction_sample DROP COLUMN count;";
+    }
+    Initialize("", schema, true);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    REQUIRE(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSampleLookups) == 2);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    uint64_t count = 123;
+    CHECK(rocprofvis_controller_get_uint64(sampling,
+                                           kRPVControllerPCSamplingInstructionSampleCount,
+                                           0, &count) == kRocProfVisResultNotLoaded);
+    CHECK(count == 123);
+    CHECK(rocprofvis_controller_get_uint64(
+              sampling, kRPVControllerPCSamplingInstructionSampleCount, 1, &count) ==
+          (count_column_present ? kRocProfVisResultSuccess : kRocProfVisResultNotLoaded));
+    CHECK(count == (count_column_present ? 0 : 123));
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleLookupUuid, 0) == 1);
+
+    REQUIRE(rocprofvis_controller_set_uint64(
+                sampling, kRPVControllerPCSamplingInstructionSampleCount, 0, 42) ==
+            kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount) == 42);
+    REQUIRE(rocprofvis_controller_set_uint64(
+                sampling, kRPVControllerPCSamplingNumInstructionSamples, 0, 2) ==
+            kRocProfVisResultSuccess);
+    CHECK(rocprofvis_controller_get_uint64(sampling,
+                                           kRPVControllerPCSamplingInstructionSampleCount,
+                                           0, &count) == kRocProfVisResultNotLoaded);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "Default PC sampling fetch retains instruction-sample counts",
+                 "[pc-sampling][instruction-samples]")
+{
+    Initialize("", INSTRUCTION_SAMPLE_SCHEMA, true);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 0);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    REQUIRE(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount, 0) == 70);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount, 1) == 30);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSampleLookups) == 2);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "Malformed instruction-sample tables still report query failures",
+                 "[pc-sampling][instruction-samples]")
+{
+    Initialize("", INSTRUCTION_SAMPLE_SCHEMA, true);
+    std::string table;
+    std::string column;
+    bool        samples_fetched = false;
+    SECTION("Instruction-sample query fails")
+    {
+        table  = "compute_instruction_sample";
+        column = "pc_sample_state_uuid";
+    }
+    SECTION("Lookup query fails after sample records load")
+    {
+        table           = "compute_instruction_sample_lookup";
+        column          = "text";
+        samples_fetched = true;
+    }
+    Execute("ALTER TABLE " + table + " RENAME COLUMN " + column + " TO broken_column;");
+    CHECK(Fetch() != kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 0);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) ==
+          (samples_fetched ? 2 : 0));
+
+    Execute("UPDATE compute_pc_sample_state SET total_count = 999;");
+    Execute("UPDATE compute_instruction_sample SET count = NULL "
+            "WHERE instruction_sample_uuid = 1;");
+    Execute("ALTER TABLE " + table + " RENAME COLUMN broken_column TO " + column + ";");
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSampleLookups) == 2);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStateTotalCount) == 100);
+    uint64_t count = 123;
+    CHECK(rocprofvis_controller_get_uint64(sampling,
+                                           kRPVControllerPCSamplingInstructionSampleCount,
+                                           0, &count) == kRocProfVisResultNotLoaded);
+    CHECK(count == 123);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "Stall failures do not prevent instruction samples from loading",
+                 "[pc-sampling][instruction-samples]")
+{
+    Initialize("", INSTRUCTION_SAMPLE_SCHEMA, true);
+    std::string table             = "compute_pc_sample_stall_reason";
+    std::string column            = "pc_sample_state_uuid";
+    bool        issue_query_fails = false;
+    SECTION("Stall reasons fail") {}
+    SECTION("Stall lookups fail")
+    {
+        table  = "compute_pc_sample_stall_reason_lookup";
+        column = "text";
+    }
+    SECTION("Both distributions fail") { issue_query_fails = true; }
+    Execute("ALTER TABLE " + table + " RENAME COLUMN " + column + " TO broken_column;");
+    if(issue_query_fails)
+    {
+        Execute("ALTER TABLE compute_instruction_sample "
+                "RENAME COLUMN pc_sample_state_uuid TO broken_column;");
+    }
+    CHECK(Fetch() != kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 0);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) ==
+          (issue_query_fails ? 0 : 1));
+    if(!issue_query_fails)
+    {
+        REQUIRE(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+        CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount) == 70);
+        CHECK(Get(kRPVControllerPCSamplingNumInstructionSampleLookups) == 2);
+        // A completed issue group must stay cached during the stall retry.
+        Execute("UPDATE compute_instruction_sample SET count = 999;");
+    }
+    Execute("ALTER TABLE " + table + " RENAME COLUMN broken_column TO " + column + ";");
+    if(issue_query_fails)
+    {
+        Execute("ALTER TABLE compute_instruction_sample "
+                "RENAME COLUMN broken_column TO pc_sample_state_uuid;");
+    }
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount) == 70);
+    CHECK(Get(kRPVControllerPCSamplingPcSampleStallReasonCount) == 70);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "A sample-state failure leaves both distributions incomplete",
+                 "[pc-sampling][instruction-samples]")
+{
+    Initialize("compute_pc_sample_state", INSTRUCTION_SAMPLE_SCHEMA, true);
+    CHECK(Fetch() != kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 0);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 0);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 0);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 0);
+    Execute("ALTER TABLE failed_query RENAME TO compute_pc_sample_state;");
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "An omitted instruction-sample fetch can be loaded later",
+                 "[pc-sampling][instruction-samples]")
+{
+    Initialize("", INSTRUCTION_SAMPLE_SCHEMA);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 0);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 0);
+    REQUIRE(rocprofvis_controller_set_uint64(
+                args.get(), kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0,
+                1) == kRocProfVisResultSuccess);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+}
+
+TEST_CASE_METHOD(PcSamplingFailureFixture,
+                 "An empty instruction-sample fetch remains completed in the cache",
+                 "[pc-sampling][instruction-samples]")
+{
+    Initialize("",
+               std::string(INSTRUCTION_SAMPLE_SCHEMA) +
+                   "DELETE FROM compute_instruction_sample;",
+               true);
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 0);
+    Execute("INSERT INTO compute_instruction_sample VALUES(1, 1, 1, 70);");
+    REQUIRE(Fetch() == kRocProfVisResultSuccess);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSamples) == 0);
+    CHECK(Get(kRPVControllerPCSamplingNumInstructionSampleLookups) == 0);
+}
 TEST_CASE_METHOD(PcSamplingFailureFixture,
                  "PC sampling loads counts when optional percentage columns are absent",
                  "[pc-sampling][sample-metrics]")

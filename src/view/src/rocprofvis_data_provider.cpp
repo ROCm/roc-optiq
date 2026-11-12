@@ -5184,8 +5184,6 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
                 m_trace_controller, args, future, pc_handle);
             break;
         case PcSamplingLayer::kStalls:
-            rocprofvis_controller_set_uint64(
-                args, kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0, 0);
             result = rocprofvis_controller_pc_sampling_fetch_stalls_async(
                 m_trace_controller, args, future, pc_handle);
             break;
@@ -5724,6 +5722,59 @@ DataProvider::LoadPcSamplingStallReasonLookups(KernelInfo&          kernel,
             &lookup.pc_sample_stall_reason_lookup_uuid);
         lookup.text = GetString(
             pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupText, i);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionSamples(KernelInfo&          kernel,
+                                               rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_samples = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumInstructionSamples, 0, &num_samples);
+
+    std::vector<InstructionSample>& samples = kernel.pc_sampling_data.instruction_samples;
+    samples.clear();
+    samples.resize(num_samples);
+    for(uint64_t i = 0; i < num_samples; i++)
+    {
+        InstructionSample& sample = samples[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleStateUuid, i,
+            &sample.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleLookupUuid, i,
+            &sample.instruction_sample_lookup_uuid);
+        uint64_t count = 0;
+        if(rocprofvis_controller_get_uint64(
+               pc_handle, kRPVControllerPCSamplingInstructionSampleCount, i, &count) ==
+           kRocProfVisResultSuccess)
+        {
+            sample.count = count;
+        }
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionSampleLookups(KernelInfo&          kernel,
+                                                     rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_lookups = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumInstructionSampleLookups, 0, &num_lookups);
+
+    std::vector<InstructionSampleLookup>& lookups =
+        kernel.pc_sampling_data.instruction_sample_lookups;
+    lookups.clear();
+    lookups.resize(num_lookups);
+    for(uint64_t i = 0; i < num_lookups; i++)
+    {
+        InstructionSampleLookup& lookup = lookups[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleLookupRecordUuid, i,
+            &lookup.instruction_sample_lookup_uuid);
+        lookup.text =
+            GetString(pc_handle, kRPVControllerPCSamplingInstructionSampleLookupText, i);
     }
 }
 
@@ -6297,9 +6348,10 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                     break;
                 case PcSamplingLayer::kStalls:
                 {
-                    PcSamplingData& data           = kernel->pc_sampling_data;
-                    uint64_t        states_loaded  = 0;
-                    uint64_t        details_loaded = 0;
+                    PcSamplingData& data                       = kernel->pc_sampling_data;
+                    uint64_t        states_loaded              = 0;
+                    uint64_t        details_loaded             = 0;
+                    uint64_t        instruction_samples_loaded = 0;
                     data.sample_states_loaded =
                         rocprofvis_controller_get_uint64(
                             pc_handle, kRPVControllerPCSamplingSampleStatesLoaded, 0,
@@ -6311,6 +6363,11 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                             pc_handle, kRPVControllerPCSamplingStallDetailsLoaded, 0,
                             &details_loaded) == kRocProfVisResultSuccess &&
                         details_loaded != 0;
+                    data.instruction_samples_loaded =
+                        rocprofvis_controller_get_uint64(
+                            pc_handle, kRPVControllerPCSamplingInstructionSamplesLoaded, 0,
+                            &instruction_samples_loaded) == kRocProfVisResultSuccess &&
+                        instruction_samples_loaded != 0;
                     if(data.sample_states_loaded)
                     {
                         LoadPcSamplingStates(*kernel, pc_handle);
@@ -6328,6 +6385,16 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                     {
                         data.pc_sample_stall_reasons.clear();
                         data.pc_sample_stall_reason_lookups.clear();
+                    }
+                    if(data.instruction_samples_loaded)
+                    {
+                        LoadPcSamplingInstructionSamples(*kernel, pc_handle);
+                        LoadPcSamplingInstructionSampleLookups(*kernel, pc_handle);
+                    }
+                    else
+                    {
+                        data.instruction_samples.clear();
+                        data.instruction_sample_lookups.clear();
                     }
                     break;
                 }

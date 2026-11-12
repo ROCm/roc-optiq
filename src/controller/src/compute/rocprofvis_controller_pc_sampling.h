@@ -123,10 +123,10 @@ private:
     };
     struct InstructionSample
     {
-        uint64_t instruction_sample_uuid        = 0;
-        uint64_t pc_sample_state_uuid           = 0;
-        uint64_t instruction_sample_lookup_uuid = 0;
-        uint64_t count                          = 0;
+        uint64_t                instruction_sample_uuid        = 0;
+        uint64_t                pc_sample_state_uuid           = 0;
+        uint64_t                instruction_sample_lookup_uuid = 0;
+        std::optional<uint64_t> count;
     };
     struct InstructionSampleLookup
     {

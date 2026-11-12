@@ -257,7 +257,9 @@ to the View. Specifically:
   `rocprofvis_view_render()` and sleeps unless
   `rocprofvis_view_wants_continuous_render()` or an input/event wake
   requires more frames. `test/test_main.cpp` is the UI test harness's
-  counterpart with its own frame loop.
+  counterpart with its own frame loop. Its `--run-tests` mode accepts
+  `--test-filter name-or-category` for targeted runs and fails if the filter selects
+  no tests.
 - `rocprofvis_app_shell.{h,cpp}` - startup code shared by both
   executables: log setup, common CLI options with `--help`/`--version`
   handling, `--backend`/`--file-dialog` parsing, the drop/close/resize
@@ -1649,25 +1651,28 @@ The ISA implementation is organized as follows:
 - `rocprofvis_compute_sampling_state_renderer.{h,cpp}` owns the sampling columns,
   bars, header color legend, tooltips, and sampled-percentage cells for
   `IsaDataBuilder::SamplingRow`.
-  Its `Metric` enum identifies Sampling State, wave occupancy, and active threads.
+  Its `Metric` enum identifies Sampling State, wave occupancy, active threads, and
+  issue-state counts.
   `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
   order. Compile-time assertions check the metric array against the enum, both
   widgets' sampling-column positions, and their total column counts. Sampling State
-  is visible by default; both percentage columns use
+  is visible by default; Sampled state and both percentage columns use
   `DefaultHide` and can be enabled independently through the native header menu.
-  Each cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
+  Each bar cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,
-  availability, and a `show_value` option. Only a stacked state bar borrows its input
-  row through `breakdown` for the duration of drawing; no per-row segment allocation
-  or retained row pointer is needed.
-  Line numbers use `NoReorder` and stay first. All three sampling columns are
+  availability, and a `show_value` option. A stacked stall bar borrows its row
+  through `breakdown`; an issue-state bar borrows its summary through
+  `issue_breakdown`, only for drawing. No per-row segment allocation or retained
+  row pointer is needed.
+  Line numbers use `NoReorder` and stay first. All four sampling columns are
   resizable, hideable, and reorderable. Their normal table headers retain context
   menus during loading/failure and share the existing header-tooltip content
   through `RenderHeaderWithTooltip`. Sampling State restores its color legend.
   Percentages use one
   decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
-  All modes share rectangular geometry, the `kBorderGray` outline around the filled
-  extent, clipping, and value-label layout. Sampling State uses `show_value = false`;
+  Bars share rectangular geometry and clipping. Sampling State and percentage bars
+  use the `kBorderGray` outline around the filled extent; Sampled state omits the
+  outline to reduce visual noise. Sampling State uses `show_value = false`;
   the two percentage modes use `true`. `DrawBarValue` uses `kTextOnAccent` inside
   fills that fit the label, or `kTextMain` beside short fills. Narrow columns that
   cannot fit either segment clip the same label in both colors at the fill boundary.
@@ -1675,9 +1680,37 @@ The ISA implementation is organized as follows:
   dim em dash. All modes share cell hit testing and forward clicks to row selection even
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
-  Metric cells and the Sampling State tooltip share `RenderMetricValue` and
+  Sampled state cells show a cached dominant-state label and share (for example,
+  `NO_INST 86.7%` or `Not taken 92%`) over a full-width distribution bar. Shares
+  use all samples in that row; hotness stays in Sampling State. The bar fills the
+  cell behind the label, using translucent colors and foreground `kTextMain` text
+  for readability in both themes. The default width fits the padded label, without
+  reserving a separate bar area. Narrow columns elide the label while retaining the
+  background distribution. Segments use cumulative
+  counts in stable SDK category order, with NO_INST first and branch outcomes
+  consistent across rows. Colors reuse ISA category hues, with a dedicated
+  `kPcSamplingBranchNotTaken` color in both themes. NO_INST and unknown states use
+  neutral gray. Single nonzero-state bars use subdued alpha, including when other
+  buckets record zero. Missing/invalid data uses the dim em dash; measured zero
+  shows 0 with no fill. The hover table preserves raw SDK labels, exact counts,
+  percentages, and matching color swatches. It also shows the row total, separately
+  validated Issued/Stalled counts and shares, and the main available stall reason.
+  An unavailable issue activity summary does not hide a complete SDK distribution.
+  The header explains per-row normalization and shows a compact state legend.
+  Tooltip sizing, wrapping, and bounded scrolling are shared with stall reasons.
+  Separate table layout IDs prevent old saved column indices from applying to
+  the expanded ISA/source tables.
+  `SamplingLoadStatus` in `rocprofvis_compute_sampling_load_state.h` resolves
+  completed sample-state, stall-detail, and instruction-sample groups into
+  separate `SamplingLoadStates::sampling` and `issue_states` states. Completed
+  groups stay ready during another group's failure or retry; empty completed
+  issue results stay ready with unavailable row values. The shared native menu
+  offers Refetch sampling data when either group failed. The request-level
+  `CodeLoadState` still owns submission, cancellation, and retry; it does not
+  determine whether a completed distribution is usable.
+  Percentage cells and the Sampling State tooltip share `RenderMetricValue` and
   `GetMetricStatusText`, including loading, failure, invalid, no-sample, and
-  unrecorded statuses. Metric-cell tooltips show only the percentage with any brief
+  unrecorded statuses. Percentage-cell tooltips show only the percentage with any brief
   availability status and the row's sample count. `CodePane` selects instruction
   or source aggregation explanations for headers only; cell tooltips and the
   Sampling State metric summary contain no descriptive paragraphs.
@@ -1700,8 +1733,9 @@ The ISA implementation is organized as follows:
   updates source mappings and sampling independently, and prepares count validity,
   percentages, reason identities, formatted legend counts, and reason/bar shares.
   `PrepareSampling` builds one owned `PreparedSamplingData` with instruction counts,
-  normalized reason counts, and lookup names. It holds no pointers into controller
-  result vectors. ISA and source projections consume the same const prepared data.
+  normalized reason counts, checked issue-state counts, and lookup names. It holds
+  no pointers into controller result vectors. ISA and source projections consume
+  the same const prepared data.
   `AccumulateSampleCounts` handles missing values, malformed contributors, and checked
   addition for both sample-state-to-instruction and instruction-to-source grouping.
   `SampleCounts::invalid_counts` preserves invalid contributors and saturated
@@ -1713,8 +1747,39 @@ The ISA implementation is organized as follows:
   `PreparedSamplingData::metrics_by_instruction`. Both instruction and source
   grouping reuse the same checked accumulator; progress-count validity does not
   determine whether either sampled metric is available.
+  Issue-state counts use `IssueStateCounts` and the existing checked addition helper.
+  `PrepareSampling` consumes completed instruction-sample groups, joins records by
+  sample-state UUID, validates each state against its total PC samples, then merges
+  by instruction UUID into `issue_states_by_instruction`. Missing records, NULL counts,
+  or incomplete positive-sample distributions remain missing; excess counts and
+  overflow remain invalid through later grouping. Unrecorded zero-sample states do
+  not invalidate observed distributions, while recorded zeros remain available.
+  `SamplingRow::issue_states` is an `IssueStateSummary`: missing/invalid results
+  publish no totals or breakdown entries. Valid entries retain captured lookup text,
+  formatted counts, and percentages of all samples, independently of issued/stalled
+  progress and static instruction types. Unknown/empty labels retain their lookup
+  identity. Entries sort by descending count, then label and lookup UUID. The
+  summary also caches `bar_order` indices sorted by category, label and UUID,
+  plus a `dominant_label` with a compact percentage and readable branch outcome.
+  A rounded dominant share below 100% uses `>99.9%` rather than implying no other
+  state was recorded. Each entry also caches an `IssueStateKind` from its captured label, independently of
+  lookup IDs, including case-insensitive and SDK-prefixed names. Unrecognized
+  states retain their captured labels and use the neutral fallback color. Source
+  grouping reuses the same accumulator through the existing primary mappings; the
+  prepared snapshot owns both counts and names, so later layer arrival is safe.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
-  without a database or GPU.
+  without a database or GPU. Issue-state cases cover the reported barrier/VALU
+  samples, branch outcomes, missing versus zero, per-state mismatches, overflow,
+  unknown labels, source grouping, snapshot ownership, clearing stale results,
+  and independent loading/failure/retry states. The optional UI-test executable
+  also registers `compute_isa/issue_state_columns` from
+  `tests/rocprofvis_compute_sampling_ui_tests.cpp`. It exercises both code panes,
+  default-hidden columns, the native menu toggle, actual colored bar rectangles,
+  state proportions and equal bar widths, visible dominant labels, distinct branch
+  outcomes, full tooltips including independent issue activity,
+  preserved stall/issue breakdowns when the other group fails, empty data, and
+  measured zero. Headless tests also cover stable issue-state category resolution.
+  Run `roc-optiq-tests --run-tests --test-filter compute_isa` with UI tests enabled.
 
 Layer completions refresh only their owned data: ISA completion builds instruction
 rows, source completion updates correlations and selected source text, and stalls
@@ -1774,9 +1839,9 @@ independent layers:
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
 - `kStalls` runs automatically whenever the view selects a kernel, independently
-  of column visibility. The View asks the controller for PC sample states plus stall-reason
-  rows and lookups, explicitly excluding instruction-sample metadata that this
-  view does not consume. The projection uses each state's UUID, instruction
+  of column visibility. The View asks the controller for PC sample states,
+  stall-reason rows and lookups, and instruction-sample metadata. The projection
+  currently uses each state's UUID, instruction
   UUID and total count, plus nullable issued/stall counts and wave-occupancy /
   active-thread percentages, together with the stall-reason rows and lookup text.
   A controller getter returns `kRocProfVisResultNotLoaded` for an unmeasured count
@@ -2014,8 +2079,17 @@ remain unset and measured zero remains present. The fields travel with completed
 sample states even when stall details fail, and the shared prepared snapshot feeds
 both ISA and source rows. Both code panes render the percentages through the
 shared `SamplingStateRenderer` metric cells and headers.
-Instruction-sample metadata and dispatch UUID remain available only on the
-controller handle.
+`PcSamplingData` also owns `InstructionSample` records and
+`InstructionSampleLookup` labels. `DataProvider::LoadPcSamplingInstructionSamples`
+and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
+into these vectors. Counts remain optional, preserving unrecorded values and
+measured zero. Fresh rows replace previous records on every load. Prepared issue-state
+data feeds the optional Sampled state column in ISA and source sampling rows.
+Dispatch UUID remains available only on the controller handle.
+Instruction samples are optional: absent sample/lookup tables or empty results
+must not downgrade the existing sampling columns. Missing instruction-sample
+counts remain unavailable, distinct from measured zero. The issue-state column
+uses the same unavailable placeholder as other sampling metrics.
 
 PC-sampling queries require compute schema 2.2 or newer. Each request layer keeps
 its `CodeLoadState` alongside queued/in-flight flags and a request token. Rejected
@@ -2027,16 +2101,21 @@ with a Retry button on failure. Retrying a layer retains other loaded panes.
 toast for each rejected submission or failed current-layer completion, including
 repeat Retry failures. ISA, source, and sample-count failures use Error; a stall
 failure with retained total counts uses Warning and explains the total-only view.
+Issue-state-only failures use Warning and identify issue-state counts, preserving
+completed stall bars; combined detail failures name both unavailable groups.
 Successful empty results, expected host-trap absence, cancellation, and stale
 callbacks do not produce failure notifications.
 
-The sampling request still contains sample states and stall details, but their
-completion is tracked independently. `DataProvider` reads the controller's
-`SampleStatesLoaded` and `StallDetailsLoaded` properties even after a failed
-sampling request, except cancellation or a superseded request. It copies only
-completed query groups into `PcSamplingData`; reasons are published together with
-their lookups. Explicit completion flags distinguish successful empty results from
-failed queries. The view prepares any retained sample counts for both panes.
+The sampling request contains sample states, stall details, and instruction
+samples, with independent completion flags. `DataProvider` reads the controller's
+`SampleStatesLoaded`, `StallDetailsLoaded`, and `InstructionSamplesLoaded` properties
+even after a failed sampling request, except cancellation or a superseded request.
+It copies only completed query groups into `PcSamplingData`; reasons and instruction
+samples are each published together with their corresponding lookups. An incomplete
+instruction-sample group clears both view-model vectors and leaves
+`instruction_samples_loaded` false, even if the controller has partial records.
+Successful empty results set the completion flag with empty vectors. The view
+prepares any retained sample counts for both panes.
 
 If sample counts loaded but stall details failed, Sampling State displays neutral
 total-sample bars with formatted sample counts and the existing hottest-row
@@ -3752,13 +3831,17 @@ All under `agenticprofiling/`, compiled only with
   `compute/isa/rocprofvis_compute_code_widgets.h`.
 - `SamplingStateRenderer`, `HeaderTooltipText`, and static header renderer ->
   `compute/isa/rocprofvis_compute_sampling_state_renderer.h`.
-- `IsaDataBuilder` -> `compute/isa/rocprofvis_compute_isa_data.h`.
+- `SamplingLoadStatus`, `SamplingLoadStates`, and `SamplingLoadState` ->
+  `compute/isa/rocprofvis_compute_sampling_load_state.h`.
+- `IsaDataBuilder`, `IssueStateCounts`, `IssueState`, `IssueStateSummary`, and
+  `PreparedSamplingData` -> `compute/isa/rocprofvis_compute_isa_data.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
 - `ComputeDataModel`, `ComputeKernelSelectionTable` ->
   `model/compute/rocprofvis_compute_data_model.h`.
-- `AvailableMetrics`, `PcSampleState`, `InstructionSourceLine`,
+- `AvailableMetrics`, `PcSampleState`, `InstructionSample`,
+  `InstructionSampleLookup`, `InstructionSourceLine`,
   `InstructionLine`, `KernelSymbol`, `CodeObjectStore`, `SourceLine`,
   `SourceFile`, `PcSamplingData`, `KernelInfo`, `WorkloadInfo`,
   `MetricValue`, `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->

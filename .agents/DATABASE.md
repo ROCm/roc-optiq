@@ -627,6 +627,13 @@ databases:
   for a physically absent percentage column, preserving sample counts and the
   other available metric. These flags reset before every metadata probe and default
   to unavailable if the probe returns no column. No schema migration is required.
+  Metadata also detects optional instruction-sample tables and their `count`
+  column. If either `compute_instruction_sample` or its lookup table is absent,
+  both instruction-sample queries return successful empty results. An absent
+  static instruction-type lookup table returns an empty type-lookup result.
+  When the sample tables exist, a missing count column is projected as `NULL`,
+  and stored NULL counts remain NULL rather than becoming zero. The controller
+  preserves those counts as optional values independently of stall availability.
 - `CallbackParseMetadata` reads only `schema_version` from
   `compute_metadata` to select the query dialect. The full row
   (`compute_version`, `git_version`, `schema_version`) is served to the
@@ -1745,6 +1752,9 @@ The compute model test covers the PC-sample-state query for schema 2.2 and 2.3.
 CTE fixtures exercise the real query factory, kernel filtering, and generic-table
 results without modifying the input database. They distinguish NULL percentages,
 measured zero, independent metric availability, and populated hotspot values.
+Instruction-sample and lookup CTE fixtures cover schema 2.2, 2.3, and 2.5,
+including NULL versus zero counts and kernel-scoped lookup filtering. Controller
+fixtures cover physically absent instruction-sample tables and count columns.
 Other PC-sampling query use cases still need matching fixtures when changed.
 
 Both accept `--input_file <path>` (Catch2 + Clara). When you add a

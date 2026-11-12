@@ -87,6 +87,20 @@ struct PcSampleStallReasonLookup
     std::string text;
 };
 
+// Sampled SDK issue/execution state, independent of the static ISA instruction type.
+struct InstructionSample
+{
+    uint64_t                pc_sample_state_uuid           = 0;
+    uint64_t                instruction_sample_lookup_uuid = 0;
+    std::optional<uint64_t> count;
+};
+
+struct InstructionSampleLookup
+{
+    uint64_t    instruction_sample_lookup_uuid = 0;
+    std::string text;
+};
+
 struct InstructionSourceLine
 {
     uint64_t instruction_uuid = 0;
@@ -140,9 +154,12 @@ struct PcSamplingData
     std::vector<PcSampleState>              pc_sample_states;
     std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
     std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
+    std::vector<InstructionSample>          instruction_samples;
+    std::vector<InstructionSampleLookup>    instruction_sample_lookups;
     // Completion is independent of row count: an empty successful query is loaded.
-    bool sample_states_loaded = false;
-    bool stall_details_loaded = false;
+    bool sample_states_loaded       = false;
+    bool stall_details_loaded       = false;
+    bool instruction_samples_loaded = false;
 };
 
 struct KernelInfo

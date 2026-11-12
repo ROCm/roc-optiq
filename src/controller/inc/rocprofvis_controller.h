@@ -312,6 +312,9 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
  * Fetch PC sample states and stall reasons for a specific kernel asynchronously.
  * Instruction sample metadata is also fetched unless the optional
  * kRPVControllerPcSamplingArgsIncludeInstructionSamples argument is zero.
+ * After sample states load, stall and instruction-sample groups are attempted
+ * independently. Completion properties identify usable groups even when another
+ * group fails. Retrying reuses completed groups and fetches incomplete groups.
  * @param controller The controller
  * @param args Input arguments (kernel id and optional instruction-sample flag)
  * @param result The future to wait on

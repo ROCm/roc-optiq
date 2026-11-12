@@ -607,77 +607,130 @@ namespace DataModel
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionTypeLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
-		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("2.2.0"))
-		{
-			result = kRocProfVisDmResultInvalidParameter;
-			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
-			{
-				query_out =
-					"SELECT DISTINCT l.instruction_type_lookup_uuid, "
-					"COALESCE(l.text, '') AS instruction_type_lookup_text "
-					"FROM compute_instruction_type_lookup l "
-					"JOIN compute_instruction_line il ON il.instruction_type_uuid = l.instruction_type_lookup_uuid "
-					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
-					"WHERE ks.kernel_uuid = ";
-				query_out += params[0].param_str;
-				query_out += " ORDER BY l.instruction_type_lookup_uuid";
-				result = kRocProfVisDmResultSuccess;
-			}
-		}
-		return result;
-	}
+    rocprofvis_dm_result_t
+    ComputeQueryFactory::GetComputeKernelInstructionTypeLookups(
+        rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+        rocprofvis_dm_string_t& query_out)
+    {
+        rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+        if(IsVersionGreaterOrEqual("2.2.0"))
+        {
+            result = kRocProfVisDmResultInvalidParameter;
+            if(num == 1 && params != nullptr &&
+               params[0].param_type == kRPVComputeParamKernelId)
+            {
+                if(m_db != nullptr && !m_db->m_has_instruction_type_lookups)
+                {
+                    query_out = "SELECT NULL AS instruction_type_lookup_uuid, "
+                                "NULL AS instruction_type_lookup_text WHERE 0";
+                }
+                else
+                {
+                    query_out =
+                        "SELECT DISTINCT l.instruction_type_lookup_uuid, "
+                        "COALESCE(l.text, '') AS instruction_type_lookup_text "
+                        "FROM compute_instruction_type_lookup l "
+                        "JOIN compute_instruction_line il ON il.instruction_type_uuid = "
+                        "l.instruction_type_lookup_uuid "
+                        "JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = "
+                        "il.kernel_symbol_uuid "
+                        "WHERE ks.kernel_uuid = ";
+                    query_out += params[0].param_str;
+                    query_out += " ORDER BY l.instruction_type_lookup_uuid";
+                }
+                result = kRocProfVisDmResultSuccess;
+            }
+        }
+        return result;
+    }
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionSamples(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
-		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("2.2.0"))
-		{
-			result = kRocProfVisDmResultInvalidParameter;
-			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
-			{
-				query_out =
-					"SELECT sm.instruction_sample_uuid, "
-					"sm.pc_sample_state_uuid AS instruction_sample_state_uuid, "
-					"sm.instruction_sample_lookup_uuid, "
-					"COALESCE(sm.count, 0) AS instruction_sample_count "
-					"FROM compute_instruction_sample sm "
-					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = sm.pc_sample_state_uuid "
-					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
-					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
-					"WHERE ks.kernel_uuid = ";
-				query_out += params[0].param_str;
-				query_out += " ORDER BY sm.instruction_sample_uuid";
-				result = kRocProfVisDmResultSuccess;
-			}
-		}
-		return result;
-	}
+    rocprofvis_dm_result_t
+    ComputeQueryFactory::GetComputeKernelInstructionSamples(
+        rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+        rocprofvis_dm_string_t& query_out)
+    {
+        rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+        if(IsVersionGreaterOrEqual("2.2.0"))
+        {
+            result = kRocProfVisDmResultInvalidParameter;
+            if(num == 1 && params != nullptr &&
+               params[0].param_type == kRPVComputeParamKernelId)
+            {
+                if(m_db != nullptr && !m_db->m_has_instruction_sample_tables)
+                {
+                    query_out = "SELECT NULL AS instruction_sample_uuid, "
+                                "NULL AS instruction_sample_state_uuid, "
+                                "NULL AS instruction_sample_lookup_uuid, "
+                                "NULL AS instruction_sample_count WHERE 0";
+                }
+                else
+                {
+                    query_out =
+                        "SELECT sm.instruction_sample_uuid, "
+                        "sm.pc_sample_state_uuid AS instruction_sample_state_uuid, "
+                        "sm.instruction_sample_lookup_uuid, ";
+                    query_out += m_db == nullptr || m_db->m_has_instruction_sample_count
+                                     ? "sm.count"
+                                     : "NULL";
+                    query_out += " AS instruction_sample_count "
+                                 "FROM compute_instruction_sample sm "
+                                 "JOIN compute_pc_sample_state s ON "
+                                 "s.pc_sample_state_uuid = sm.pc_sample_state_uuid "
+                                 "JOIN compute_instruction_line il ON "
+                                 "il.instruction_uuid = s.instruction_uuid "
+                                 "JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid "
+                                 "= il.kernel_symbol_uuid "
+                                 "WHERE ks.kernel_uuid = ";
+                    query_out += params[0].param_str;
+                    query_out += " ORDER BY sm.instruction_sample_uuid";
+                }
+                result = kRocProfVisDmResultSuccess;
+            }
+        }
+        return result;
+    }
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionSampleLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
-		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("2.2.0"))
-		{
-			result = kRocProfVisDmResultInvalidParameter;
-			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
-			{
-				query_out =
-					"SELECT DISTINCT l.instruction_sample_lookup_uuid "
-					"AS instruction_sample_lookup_record_uuid, "
-					"COALESCE(l.text, '') AS instruction_sample_lookup_text "
-					"FROM compute_instruction_sample_lookup l "
-					"JOIN compute_instruction_sample sm ON sm.instruction_sample_lookup_uuid = l.instruction_sample_lookup_uuid "
-					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = sm.pc_sample_state_uuid "
-					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
-					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
-					"WHERE ks.kernel_uuid = ";
-				query_out += params[0].param_str;
-				query_out += " ORDER BY l.instruction_sample_lookup_uuid";
-				result = kRocProfVisDmResultSuccess;
-			}
-		}
-		return result;
-	}
+    rocprofvis_dm_result_t
+    ComputeQueryFactory::GetComputeKernelInstructionSampleLookups(
+        rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+        rocprofvis_dm_string_t& query_out)
+    {
+        rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+        if(IsVersionGreaterOrEqual("2.2.0"))
+        {
+            result = kRocProfVisDmResultInvalidParameter;
+            if(num == 1 && params != nullptr &&
+               params[0].param_type == kRPVComputeParamKernelId)
+            {
+                if(m_db != nullptr && !m_db->m_has_instruction_sample_tables)
+                {
+                    query_out = "SELECT NULL AS instruction_sample_lookup_record_uuid, "
+                                "NULL AS instruction_sample_lookup_text WHERE 0";
+                }
+                else
+                {
+                    query_out = "SELECT DISTINCT l.instruction_sample_lookup_uuid "
+                                "AS instruction_sample_lookup_record_uuid, "
+                                "COALESCE(l.text, '') AS instruction_sample_lookup_text "
+                                "FROM compute_instruction_sample_lookup l "
+                                "JOIN compute_instruction_sample sm ON "
+                                "sm.instruction_sample_lookup_uuid = "
+                                "l.instruction_sample_lookup_uuid "
+                                "JOIN compute_pc_sample_state s ON "
+                                "s.pc_sample_state_uuid = sm.pc_sample_state_uuid "
+                                "JOIN compute_instruction_line il ON il.instruction_uuid "
+                                "= s.instruction_uuid "
+                                "JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid "
+                                "= il.kernel_symbol_uuid "
+                                "WHERE ks.kernel_uuid = ";
+                    query_out += params[0].param_str;
+                    query_out += " ORDER BY l.instruction_sample_lookup_uuid";
+                }
+                result = kRocProfVisDmResultSuccess;
+            }
+        }
+        return result;
+    }
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeMetadata(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		(void) num;
@@ -1180,6 +1233,17 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
                 "SELECT name FROM pragma_table_info('compute_pc_sample_state') "
                 "WHERE name IN ('wave_occupancy_percent', 'active_thread_percent');",
                 &CallbackDetectPcSamplingMetricColumns);
+            m_has_instruction_type_lookups =
+                CheckTableExists("compute_instruction_type_lookup", 0);
+            m_has_instruction_sample_tables =
+                CheckTableExists("compute_instruction_sample", 0) &&
+                CheckTableExists("compute_instruction_sample_lookup", 0);
+            m_has_instruction_sample_count = false;
+            ExecuteSQLQuery(
+                future, &tmp_db_instance,
+                "SELECT name FROM pragma_table_info('compute_instruction_sample') "
+                "WHERE name = 'count';",
+                &CallbackDetectInstructionSampleCountColumn);
             if (kRocProfVisDmResultSuccess != CreateIndexes()) break;
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
@@ -1551,6 +1615,19 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
         db->m_has_pc_wave_occupancy_percent |=
             strcmp(name, "wave_occupancy_percent") == 0;
         db->m_has_pc_active_thread_percent |= strcmp(name, "active_thread_percent") == 0;
+        callback_params->future->CountThisRow();
+        return 0;
+    }
+
+    int
+    ComputeDatabase::CallbackDetectInstructionSampleCountColumn(
+        void* data, int /*argc*/, sqlite3_stmt* /*stmt*/, char** /*azColName*/)
+    {
+        ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+        auto* callback_params =
+            static_cast<rocprofvis_db_query_callback_parameters*>(data);
+        auto* db = static_cast<ComputeDatabase*>(callback_params->db);
+        db->m_has_instruction_sample_count = true;
         callback_params->future->CountThisRow();
         return 0;
     }

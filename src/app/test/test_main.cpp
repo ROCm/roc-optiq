@@ -23,6 +23,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 // Frames left to render before the loop may sleep; see RENDER_FRAMES_AFTER_INPUT.
 static int g_frames_to_render = 1;
@@ -35,6 +36,8 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);
+    result &= cli_parser.AddOption("g", "test-filter",
+                                   "Filter headless UI tests by name or category", true);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -194,9 +197,11 @@ main(int argc, char** argv)
                                              "{} frames; queueing tests anyway",
                                              kHeadlessSettleFrameCap);
                             }
-                            // File load settled (or cap hit): queue every registered test.
+                            const std::string filter =
+                                cli_parser.GetOptionValue("test-filter");
                             ImGuiTestEngine_QueueTests(
-                                engine, ImGuiTestGroup_Tests, nullptr,
+                                engine, ImGuiTestGroup_Tests,
+                                filter.empty() ? nullptr : filter.c_str(),
                                 ImGuiTestRunFlags_RunFromCommandLine);
                             headless_tests_queued = true;
                         }
@@ -206,9 +211,15 @@ main(int argc, char** argv)
                             ImGuiTestEngine_GetTestList(engine, &tests);
                             int failed = 0;
                             int never_ran = 0;
+                            int selected  = 0;
                             std::cout << "\n=== headless UI test results ===\n";
                             for(ImGuiTest* test : tests)
                             {
+                                if(test->Output.Status == ImGuiTestStatus_Unknown)
+                                {
+                                    continue;
+                                }
+                                ++selected;
                                 const char* status = "UNKNOWN";
                                 switch(test->Output.Status)
                                 {
@@ -221,11 +232,20 @@ main(int argc, char** argv)
                                 }
                                 std::cout << "  [" << status << "] " << test->Category
                                           << "/" << test->Name << "\n";
+                                spdlog::info("UI test [{}] {}/{}", status, test->Category,
+                                             test->Name);
+                                if(test->Output.Status == ImGuiTestStatus_Error)
+                                {
+                                    spdlog::error("{}", test->Output.Log.GetText());
+                                }
                             }
-                            std::cout << "=== " << tests.Size << " tests, " << failed
+                            std::cout << "=== " << selected << " tests, " << failed
                                       << " failed, " << never_ran << " not run ===\n";
                             std::cout.flush();
-                            app_result_code = (failed > 0 || never_ran > 0) ? 1 : 0;
+                            spdlog::info("UI tests: {} selected, {} failed, {} not run",
+                                         selected, failed, never_ran);
+                            app_result_code =
+                                (failed > 0 || never_ran > 0 || selected == 0) ? 1 : 0;
                             glfwSetWindowShouldClose(window, GLFW_TRUE);
                         }
                     }

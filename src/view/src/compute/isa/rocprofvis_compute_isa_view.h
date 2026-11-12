@@ -120,7 +120,7 @@ private:
     SourcePane           m_source;
     PcSamplingFetchState m_stalls;
     IsaDataBuilder::PreparedSamplingData m_sampling_data;
-    bool                                 m_sample_counts_loaded = false;
+    SamplingLoadStatus                   m_sampling_status;
 
     LineSelection m_line_selection;
 

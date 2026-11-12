@@ -335,6 +335,7 @@ struct TabStateGuard
 
 void RegisterAppTests(ImGuiTestEngine* e)
 {
+    RegisterIsaSamplingTests(e);
     ImGuiTest* t = nullptr;
 
     t = IM_REGISTER_TEST(e, "app", "common_file_menu_exists");

@@ -62,6 +62,12 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 result = kRocProfVisResultSuccess;
                 break;
             }
+            case kRPVControllerPCSamplingInstructionSamplesLoaded:
+            {
+                *value = m_instruction_samples_loaded;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
             case kRPVControllerPCSamplingNumSourceFiles:
             {
                 (void)index;
@@ -485,20 +491,41 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             case kRPVControllerPCSamplingInstructionSampleUuid:
             case kRPVControllerPCSamplingInstructionSampleStateUuid:
             case kRPVControllerPCSamplingInstructionSampleLookupUuid:
-            case kRPVControllerPCSamplingInstructionSampleCount:
             {
                 if(index < m_instruction_samples.size())
                 {
                     const InstructionSample& sample = m_instruction_samples[index];
                     if(property == kRPVControllerPCSamplingInstructionSampleUuid)
+                    {
                         *value = sample.instruction_sample_uuid;
+                    }
                     else if(property == kRPVControllerPCSamplingInstructionSampleStateUuid)
+                    {
                         *value = sample.pc_sample_state_uuid;
-                    else if(property == kRPVControllerPCSamplingInstructionSampleLookupUuid)
-                        *value = sample.instruction_sample_lookup_uuid;
+                    }
                     else
-                        *value = sample.count;
+                    {
+                        *value = sample.instruction_sample_lookup_uuid;
+                    }
                     result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionSampleCount:
+            {
+                if(index < m_instruction_samples.size())
+                {
+                    const std::optional<uint64_t>& count =
+                        m_instruction_samples[index].count;
+                    if(count)
+                    {
+                        *value = *count;
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultNotLoaded;
+                    }
                 }
                 break;
             }
@@ -927,6 +954,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumInstructionSamples:
         {
             (void)index;
+            m_instruction_samples.clear();
             m_instruction_samples.resize(value);
             result = kRocProfVisResultSuccess;
             break;

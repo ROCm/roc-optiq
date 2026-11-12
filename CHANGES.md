@@ -34,6 +34,10 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 - rocpd schema 3.0.4 (`rocpd_hip_event`): HIP events appear on the timeline, in search, in the topology tree, and in data flow from region events.
 
+##### Welcome page
+
+- A **Tips & tricks** card under **Start** and **Recent** shows a new tip about a feature or shortcut each time ROCm Optiq starts. Use the arrows to browse the rest. Shortcuts in the tips show the keys currently set in **Edit** > **Preferences**.
+
 ##### Timeline and navigation
 
 - File Explorer-style track selection: In the timeline and the topology sidebar, click a track to select only that track, **Ctrl**+click to add or remove it, and **Shift**+click to select every track in between.

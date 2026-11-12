@@ -594,7 +594,17 @@ from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
 - `WelcomePage` (`welcome/rocprofvis_welcome_page.{h,cpp}`) is the
   no-tabs landing page. It renders Open Trace, recent files, and
   resource links using `FlexContainer`; do not recreate an empty state
-  in `AppWindow`.
+  in `AppWindow`. A Tips & tricks card sits in the left column under
+  Start + Recent, one flex gap below it. While the columns are side by
+  side, the shorter column's last card (Tips or Resources) is stretched
+  so both end level; each column records its height without the stretch
+  so the levelling does not feed back on itself. Tips are plain text in
+  the `kWelcomeTips` table; a `{name}` in a tip is replaced with the key
+  currently bound to the hotkey action whose settings key is `name`
+  (`HotkeyActionInfo::key`), and a tip whose key is unbound is skipped.
+  The page is built once per launch, and each launch shows the tip after
+  the last one seen, saved as `InternalSettings::next_welcome_tip`. Keep
+  every tip true to the current UI labels.
 - `CompareFilesDialog` (`rocprofvis_compare_files_dialog.{h,cpp}`)
   collects base and target traces. `AppWindow::OpenCompare()` routes
   them through `Project::OpenCompare()`,

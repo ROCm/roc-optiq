@@ -118,6 +118,19 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
   - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration.
   - Under **Options**, select **Show peak labels** to show or hide the labels on the roofline ceiling lines. 
+  - Use the Roofline **Menu position** control options to reposition the Roofline legend and menu. The options include: 
+    - Inside, Top Left
+    - Inside, Top Right
+    - Inside, Bottom Left
+    - Inside, Bottom Right
+    - Outside (which pushes the legend outside of the plot area)
+    
+    The roofline menu opens outside the plot by default.
+    
+    .. image:: ../images/Roofline-legend.png
+       :width: 400
+       :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
+
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
 - Use the filter dropdowns at the top of the **Roofline Analysis** pane to show or hide groups of chart elements together, instead of toggling them one by one in the **Custom** section of the |gear| menu:
 
@@ -125,20 +138,6 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - **Bandwidth Peak**: Enables ceilings of a specific cache or memory level.
   - **Kernel**: Enables kernel markers for a specific kernel.
   - **Kernel Bandwidth**: Enables kernel markers for a specific cache or memory level.
-- Use the Roofline **Legend/Menu position** control options to reposition the Roofline Legend/Menu. The options include: 
-
-  - Inside, Top Left
-  - Inside, Top Right
-  - Inside, Bottom Left
-  - Inside, Bottom Right
-  - Outside (which pushes the legend outside of the plot area)
-
-The roofline menu opens outside the plot by default. Use the **Legend/Menu position** control to move it.
-
-  .. image:: ../images/Roofline-legend.png
-     :width: 400
-     :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
-
 
 Summary View -- System Speed-of-Light
 -------------------------------------
@@ -195,7 +194,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 Kernel Details -- Memory Chart
 ------------------------------
 
-The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, gfx950, gfx94x including gfx940, and gfx115x). The chart can be panned with the scroll wheel or a trackpad.
+The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, ``gfx950``, ``gfx94x`` including ``gfx940``, and ``gfx115x``). The chart can be panned with the scroll wheel or a trackpad.
 
 Each cache or memory block presents its associated counter values and derived metrics, helping you understand memory behavior across the hardware memory hierarchy.
 
@@ -233,9 +232,11 @@ The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, whic
 ISA View
 ========
 
-**ISA View** is in **Tech Preview**, and its functionality might change.
+.. note::
 
-**ISA View** lists the instructions of the selected kernel's code object, with PC-sampling counts for each instruction. Select an instruction to see its type and stall reasons. When source file information is available, the view also shows the matching source lines.
+   **ISA View** is in **Tech Preview**, and its functionality might change.
+
+**ISA View** lists the instructions of the selected kernel's code object with PC-sampling counts for each instruction. Select an instruction to see its type and stall reasons. When source file information is available, the view also shows the matching source lines.
 
 .. _analysis-table:
 
@@ -300,10 +301,10 @@ Profile Details
 Baseline Comparison
 ===================
 
-The **Baseline Comparison** compares two workload measurements (baseline and target). Select **Metrics** or **Roofline** to choose the comparison.
+It compares two workload measurements (baseline and target). Select **Metrics** or **Roofline** to choose the comparison.
 
-Baseline Comparison -- Metrics
-------------------------------
+Baseline Comparison: Metrics
+----------------------------
 
 **Metrics** shows side-by-side the performance differences between the two measurements. If the loaded database has no metrics, this tab is disabled and a tooltip explains why. It's useful for scenarios such as: 
 
@@ -345,8 +346,8 @@ You can configure a delta-threshold for comparison metrics to suppress the noise
    :align: center
    :alt: Baseline Comparison delta-threshold control showing a numeric input field for suppressing minor metric deviations
 
-Baseline Comparison -- Roofline
--------------------------------
+Baseline Comparison: Roofline
+-----------------------------
 
 **Roofline** compares rooflines for two kernels in the same ROCm Compute Profiler database, including a kernel from another workload. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, **Peak Source** chooses the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
 

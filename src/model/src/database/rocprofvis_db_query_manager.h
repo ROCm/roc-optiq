@@ -9,7 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include "rocprofvis_db_query_builder.h"
-#include "rocprofvis_db_table_processor.h"
+#include "rocprofvis_db_systems.h"
 
 namespace RocProfVis
 {
@@ -64,8 +64,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
         // Database constructor
         // @param path - full path to database file
         QueryManager( rocprofvis_db_filename_t path, RpvSqliteExecuteQueryCallback callback_add_any_record) : 
-                        SystemDatabase(path), SqliteDatabase(this), m_callback_add_any_record(callback_add_any_record),
-            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
+                        SystemDatabase(path), SqliteDatabase(this), m_callback_add_any_record(callback_add_any_record) {};
         // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~QueryManager() {};
 
@@ -79,26 +78,6 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
         // Method to interrupt a running sqlite query
         // @param connection - sqlite connection running the query
         void InterruptQuery(void* connection) override { InterruptAsSqlite(connection); };
-
-        // worker method to execute database query
-        // @param query - database query 
-        // @param description - database description
-        // @param object - future object providing asynchronous execution mechanism 
-        // @return status of operation
-        rocprofvis_dm_result_t  ExecuteQuery(
-            rocprofvis_dm_charptr_t query,
-            rocprofvis_dm_charptr_t description,
-            Future* future) override; 
-
-        // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
-        // @param query - database query 
-        // @param file_path output path to write .CSV
-        // @param future - future object providing asynchronous execution mechanism 
-        // @return status of operation
-        rocprofvis_dm_result_t ExportTableCSV(
-            rocprofvis_dm_charptr_t query,
-            rocprofvis_dm_charptr_t file_path,
-            Future* future) override;
 
     protected:
         // ----------------------------------Query builders------------------------------------------
@@ -352,7 +331,13 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_handle_t handle,
             RpvCallback callback) override;
 
-        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+        rocprofvis_dm_result_t SummarizeNameDurations(
+            const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+            Future* future,
+            std::vector<rocprofvis_db_name_duration_t>& rows) override;
+
+        bool EventSummaryInSqlite() const override { return true; }
+
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
         virtual std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
 
@@ -369,11 +354,8 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
 
         RpvSqliteExecuteQueryCallback m_callback_add_any_record;
+
         std::mutex                    m_histogram_lock;
-
-    protected:
-        TableProcessor m_table_processor[kRPVTableDataTypesNum];
-
        
 };
 

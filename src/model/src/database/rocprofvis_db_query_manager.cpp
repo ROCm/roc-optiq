@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_query_manager.h"
+#include "rocprofvis_db_summary_cache.h"
 #include "rocprofvis_c_interface.h"
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <unordered_map>
 #include <filesystem>
 #include <system_error>
 
@@ -528,46 +533,6 @@ QueryManager::BuildEventSearchQuery(
         max_count, offset, count_only, query);
 }
 
-rocprofvis_dm_result_t  QueryManager::ExecuteQuery(
-    rocprofvis_dm_charptr_t query,
-    rocprofvis_dm_charptr_t description,
-    Future* future){
-
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    while (true)
-    {
-        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
-        ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties->metadata_loaded, ERROR_METADATA_IS_NOT_LOADED);
-        rocprofvis_dm_table_t table = BindObject()->FuncAddTable(BindObject()->trace_object, query, description);
-        ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
-        std::vector<rocprofvis_db_compound_query_command> commands;
-        std::set<uint32_t> tracks;
-        if (TableProcessor::IsCompoundQuery(query, queries, tracks,  commands))
-        {
-            auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
-            rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
-            if (it != commands.end())
-            {
-                data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
-            }
-            bool query_updated = !m_table_processor[data_type].IsCurrentQuery(queries);
-            m_table_processor[data_type].SaveCurrentQuery(queries);
-            if (kRocProfVisDmResultSuccess != m_table_processor[data_type].ExecuteCompoundQuery(future, queries, tracks, commands, table, query_updated)) break;
-        }
-        else
-        {
-            ShowProgress(100, "Direct database query is not supported!",kRPVDbSuccess, future);
-            return future->SetPromise(kRocProfVisDmResultNotSupported);
-        }
-
-        ShowProgress(100, "Query successfully executed!",kRPVDbSuccess, future);
-        return future->SetPromise(kRocProfVisDmResultSuccess);
-    }
-    ShowProgress(0, "Query could not be executed!", kRPVDbError, future );
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed); 
-}
-
 rocprofvis_dm_result_t  QueryManager::ReadTraceSlice( 
     rocprofvis_dm_timestamp_t start,
     rocprofvis_dm_timestamp_t end,
@@ -1009,41 +974,203 @@ std::string QueryManager::GetHistogramQuerySuffix()
 }
 
 
-rocprofvis_dm_result_t QueryManager::ExportTableCSV(rocprofvis_dm_charptr_t query,
-    rocprofvis_dm_charptr_t file_path,
-    Future* future)
+namespace
 {
-    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.", kRocProfVisDmResultInvalidParameter);
-    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    ROCPROFVIS_ASSERT_MSG_RETURN(BindObject()->trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
-    Future* internal_future = future->AddSubFuture();
-    result = ExecuteQuery(query, "ExportTableCSV", internal_future);
-    future->WaitAndDeleteSubFuture(internal_future);
-    if (result == kRocProfVisDmResultSuccess)
+
+struct duration_summary_collect
+{
+    QueryManager* db;
+    DbInstance* instance;
+    uint32_t schema;
+    std::unordered_map<std::string, rocprofvis_db_name_duration_t>* groups;
+};
+
+bool
+numeric_text(const std::string& text)
+{
+    if (text.empty()) return false;
+    size_t index = text[0] == '-' ? 1 : 0;
+    if (index >= text.size()) return false;
+    for (; index < text.size(); index++)
     {
-        rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
-        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
-        std::vector<rocprofvis_db_compound_query_command> commands;
-        std::set<uint32_t> tracks;
-        TableProcessor::IsCompoundQuery(query, queries, tracks,  commands);
-        auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
-        if (it != commands.end())
+        if (!std::isdigit(static_cast<unsigned char>(text[index]))) return false;
+    }
+    return true;
+}
+
+void
+add_duration_group(std::unordered_map<std::string, rocprofvis_db_name_duration_t>& groups,
+    const std::string& name, uint64_t count, uint64_t min_duration, uint64_t max_duration, uint64_t total_duration)
+{
+    if (count == 0) return;
+    rocprofvis_db_name_duration_t& group = groups[name];
+    if (group.count == 0)
+    {
+        group.min_duration = min_duration;
+        group.max_duration = max_duration;
+    }
+    else
+    {
+        group.min_duration = std::min(group.min_duration, min_duration);
+        group.max_duration = std::max(group.max_duration, max_duration);
+    }
+    group.count += count;
+    group.total_duration += total_duration;
+}
+
+int
+CollectDurationSummary(void* data, int argc, sqlite3_stmt* stmt, char** names)
+{
+    rocprofvis_db_query_callback_parameters* params = (rocprofvis_db_query_callback_parameters*) data;
+    if (params->future != nullptr && params->future->Interrupted()) return 1;
+    duration_summary_collect* collect = (duration_summary_collect*) params->handle;
+    if (argc < 5 || collect == nullptr || collect->db == nullptr || collect->groups == nullptr) return 1;
+
+    (void) names;
+    const unsigned char* text = sqlite3_column_text(stmt, 0);
+    std::string raw = text != nullptr ? reinterpret_cast<const char*>(text) : "";
+    std::string display = raw;
+    if (collect->schema == Builder::SCHEMA_INDEX_MEM_TYPE)
+    {
+        uint64_t type_index = 0;
+        if (numeric_text(raw)) type_index = std::strtoull(raw.c_str(), nullptr, 10);
+        else type_index = Builder::TypeEnumToInt(raw.c_str(), Builder::mem_alloc_types);
+        if (type_index < Builder::mem_alloc_types.size()) display = Builder::mem_alloc_types[type_index];
+    }
+    else if (numeric_text(raw) && collect->instance != nullptr)
+    {
+        bool numeric_string = false;
+        const char* resolved = PackedTable::ConvertSqlStringReference(
+            collect->db, collect->schema, std::strtoull(raw.c_str(), nullptr, 10),
+            collect->instance->GuidIndex(), numeric_string);
+        if (resolved != nullptr) display = resolved;
+    }
+
+    const int64_t count_value = sqlite3_column_int64(stmt, 1);
+    const int64_t min_value = sqlite3_column_int64(stmt, 2);
+    const int64_t max_value = sqlite3_column_int64(stmt, 3);
+    const int64_t total_value = sqlite3_column_int64(stmt, 4);
+    const uint64_t count = count_value > 0 ? static_cast<uint64_t>(count_value) : 0;
+    const uint64_t min_duration = min_value > 0 ? static_cast<uint64_t>(min_value) : 0;
+    const uint64_t max_duration = max_value > 0 ? static_cast<uint64_t>(max_value) : 0;
+    const uint64_t total_duration = total_value > 0 ? static_cast<uint64_t>(total_value) : 0;
+    add_duration_group(*collect->groups, display, count, min_duration, max_duration, total_duration);
+    return 0;
+}
+
+bool
+summary_name_column(const std::string& sql, std::string& alias, uint32_t& schema)
+{
+    if (sql.find("_sy_name") != std::string::npos)
+    {
+        alias = "_sy_name";
+        schema = Builder::SCHEMA_INDEX_EVENT_SYMBOL;
+        return true;
+    }
+    if (sql.find("_m_type") != std::string::npos)
+    {
+        alias = "_m_type";
+        schema = Builder::SCHEMA_INDEX_MEM_TYPE;
+        return true;
+    }
+    if (sql.find("_p_name") != std::string::npos)
+    {
+        alias = "_p_name";
+        schema = Builder::SCHEMA_INDEX_EVENT_NAME_PERFETTO;
+        return true;
+    }
+    if (sql.find("_s_name_rpd") != std::string::npos)
+    {
+        alias = "_s_name_rpd";
+        schema = Builder::SCHEMA_INDEX_EVENT_NAME_RPD;
+        return true;
+    }
+    if (sql.find("_s_name") != std::string::npos)
+    {
+        alias = "_s_name";
+        schema = Builder::SCHEMA_INDEX_EVENT_NAME;
+        return true;
+    }
+    return false;
+}
+
+}
+
+rocprofvis_dm_result_t
+QueryManager::SummarizeNameDurations(
+    const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+    Future* future,
+    std::vector<rocprofvis_db_name_duration_t>& rows)
+{
+    rows.clear();
+    if (future != nullptr && future->Interrupted()) return kRocProfVisDmResultDbAbort;
+
+    std::vector<std::string> sources;
+    sources.reserve(m_db_nodes.size());
+    for (const std::unique_ptr<rocprofvis_db_sqlite_db_node_t>& node : m_db_nodes)
+    {
+        if (node != nullptr && !node->filepath.empty()) sources.push_back(node->filepath);
+    }
+    if (sources.empty()) sources.emplace_back(Path());
+    const rocprofvis_dm_db_bind_struct* binding = BindObject();
+    const std::string cache_directory = SummaryCacheDirectory(
+        binding != nullptr ? binding->config_path : std::string(), sources);
+
+    std::unordered_map<std::string, rocprofvis_db_name_duration_t> groups;
+    for (const rocprofvis_db_duration_summary_query_t& request : queries)
+    {
+        if (future != nullptr && future->Interrupted()) return kRocProfVisDmResultDbAbort;
+        if (request.db_instance == nullptr || request.query.empty() || request.query.front() == '{')
         {
-            data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
-            result = m_table_processor[data_type].ExportToCSV(file_path);
-            if (result == kRocProfVisDmResultSuccess)
-            {
-                ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
-            }
+            return kRocProfVisDmResultNotSupported;
         }
+        const std::string cache_key = SummaryCacheKey(request);
+        std::vector<rocprofvis_db_name_duration_t> cached_rows;
+        if (SummaryCacheFind(cache_directory, cache_key, cached_rows))
+        {
+            MergeNameDurations(groups, cached_rows);
+            continue;
+        }
+        std::string inner = request.query;
+        while (!inner.empty() && (inner.back() == ';' || std::isspace(static_cast<unsigned char>(inner.back()))))
+        {
+            inner.pop_back();
+        }
+        std::string alias;
+        uint32_t schema = Builder::SCHEMA_INDEX_EVENT_NAME;
+        if (inner.find("duration") == std::string::npos || !summary_name_column(inner, alias, schema))
+        {
+            return kRocProfVisDmResultNotSupported;
+        }
+
+        const std::string sql = "SELECT " + alias + " AS name, COUNT(*) AS num_invocations, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration FROM (" + inner + ") GROUP BY " + alias;
+        std::unordered_map<std::string, rocprofvis_db_name_duration_t> request_groups;
+        duration_summary_collect collect;
+        collect.db = this;
+        collect.instance = request.db_instance;
+        collect.schema = schema;
+        collect.groups = &request_groups;
+        const rocprofvis_dm_result_t result = ExecuteSQLQuery(
+            future, request.db_instance, sql.c_str(), (rocprofvis_dm_handle_t) &collect, 0,
+            (RpvSqliteCallback) CollectDurationSummary);
+        if (result != kRocProfVisDmResultSuccess)
+        {
+            if (future != nullptr && future->Interrupted()) return kRocProfVisDmResultDbAbort;
+            return kRocProfVisDmResultNotSupported;
+        }
+        std::vector<rocprofvis_db_name_duration_t> request_rows;
+        NameDurationsFromGroups(request_groups, request_rows);
+        SummaryCacheStore(cache_directory, cache_key, request_rows);
+        MergeNameDurations(groups, request_rows);
     }
-    BindObject()->FuncRemoveTable(BindObject()->trace_object, query);
-    if (result != kRocProfVisDmResultSuccess)
+
+    rows.reserve(groups.size());
+    for (std::pair<const std::string, rocprofvis_db_name_duration_t>& entry : groups)
     {
-        ShowProgress(0, "CSV export failed", kRPVDbError, future);
+        entry.second.name = entry.first;
+        rows.push_back(std::move(entry.second));
     }
-    return future->SetPromise(result);
+    return kRocProfVisDmResultSuccess;
 }
 
 std::string QueryManager::TableColumnText(void* func, void* handle, char** azColName, int index) {

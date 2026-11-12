@@ -69,6 +69,11 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
 option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
 
+# TEMPORARY: gate the in-development Profiler Hub trace backend until it ships.
+# Default OFF so builds do not clone rocm-systems at configure time. Remove
+# this option and unwrap its guards when the feature graduates.
+option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" OFF)
+
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)

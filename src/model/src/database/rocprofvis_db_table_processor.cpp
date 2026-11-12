@@ -5,6 +5,11 @@
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_shared_types.h"
+#include "rocprofvis_c_interface.h"
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <sstream>
 #include <unordered_set>
 #include <fstream>
@@ -44,6 +49,154 @@ namespace DataModel
         return column;
     }
 
+    // In-memory form of ROCPROFVIS_DB_NAME_DURATION_SUMMARY_GROUP. SetupAggregation
+    // parses this. The summary query carries the reserved token instead, so a
+    // change to this list does not select or leave the SQLite summary path.
+    static const char* kNameDurationGroup =
+        "name, COUNT(*) AS num_invocations, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration";
+
+    static bool IsNameDurationSummary(const std::vector<rocprofvis_db_compound_query_command>& commands)
+    {
+        for (const rocprofvis_db_compound_query_command& command : commands)
+        {
+            if (command.name == "GROUP" &&
+                command.parameter == ROCPROFVIS_DB_NAME_DURATION_SUMMARY_GROUP)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static uint64_t SummaryMetric(const rocprofvis_db_name_duration_t& row, const std::string& column)
+    {
+        if (column == "num_invocations") return row.count;
+        if (column == "min_duration") return row.min_duration;
+        if (column == "max_duration") return row.max_duration;
+        return row.total_duration;
+    }
+
+    rocprofvis_dm_result_t TableProcessor::ExecuteNameDurationSummary(Future* future,
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
+        std::vector<rocprofvis_db_compound_query_command>& commands,
+        rocprofvis_dm_handle_t handle)
+    {
+        if (future != nullptr && future->Interrupted())
+        {
+            return kRocProfVisDmResultDbAbort;
+        }
+
+        std::vector<rocprofvis_db_duration_summary_query_t> requests;
+        for (const std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
+        {
+            for (const std::pair<const std::string, rocprofvis_db_compound_query_info>& compound_query : track.second)
+            {
+                rocprofvis_db_duration_summary_query_t request;
+                request.db_instance = m_db->DbInstancePtrAt(compound_query.second.guid_id);
+                request.track_id = track.first;
+                request.query = compound_query.first;
+                requests.push_back(std::move(request));
+            }
+        }
+
+        std::vector<rocprofvis_db_name_duration_t> rows;
+        rocprofvis_dm_result_t result = m_db->SummarizeNameDurations(requests, future, rows);
+        if (result != kRocProfVisDmResultSuccess)
+        {
+            return result;
+        }
+
+        bool ascending = false;
+        std::string sort_column = "total_duration";
+        auto command = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "SORT"; });
+        if (command != commands.end())
+        {
+            sort_column = ParseSortCommand(command->parameter, ascending);
+        }
+        std::sort(rows.begin(), rows.end(), [&](const rocprofvis_db_name_duration_t& left, const rocprofvis_db_name_duration_t& right) {
+            if (sort_column == "name")
+            {
+                const int compared = left.name.compare(right.name);
+                return ascending ? compared < 0 : compared > 0;
+            }
+            const uint64_t left_value = SummaryMetric(left, sort_column);
+            const uint64_t right_value = SummaryMetric(right, sort_column);
+            if (left_value == right_value)
+            {
+                return left.name < right.name;
+            }
+            return ascending ? left_value < right_value : left_value > right_value;
+        });
+
+        uint64_t offset = 0;
+        uint64_t limit = UINT64_MAX;
+        command = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "OFFSET"; });
+        if (command != commands.end())
+        {
+            offset = std::strtoull(command->parameter.c_str(), nullptr, 10);
+        }
+        command = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "LIMIT"; });
+        if (command != commands.end())
+        {
+            limit = std::strtoull(command->parameter.c_str(), nullptr, 10);
+        }
+
+        rocprofvis_dm_table_t table = handle;
+        const char* columns[] = { "name", "num_invocations", "min_duration", "max_duration", "total_duration" };
+        const rocprofvis_db_data_type_t types[] = { kRPVDataTypeString, kRPVDataTypeInt, kRPVDataTypeInt, kRPVDataTypeInt, kRPVDataTypeInt };
+        for (int index = 0; index < 5; index++)
+        {
+            result = m_db->BindObject()->FuncAddTableColumn(table, columns[index]);
+            if (result == kRocProfVisDmResultSuccess)
+            {
+                result = m_db->BindObject()->FuncAddTableColumnType(table, types[index]);
+            }
+            if (result != kRocProfVisDmResultSuccess)
+            {
+                return result;
+            }
+        }
+
+        uint64_t end = rows.size();
+        if (offset > end)
+        {
+            end = offset;
+        }
+        else if (limit < end - offset)
+        {
+            end = offset + limit;
+        }
+        for (uint64_t index = offset; index < end; index++)
+        {
+            rocprofvis_dm_table_row_t row = m_db->BindObject()->FuncAddTableRow(table);
+            const rocprofvis_db_name_duration_t& item = rows[index];
+            const std::string count = std::to_string(item.count);
+            const std::string min_duration = std::to_string(item.min_duration);
+            const std::string max_duration = std::to_string(item.max_duration);
+            const std::string total_duration = std::to_string(item.total_duration);
+            const char* cells[] = { item.name.c_str(), count.c_str(), min_duration.c_str(), max_duration.c_str(), total_duration.c_str() };
+            for (int cell = 0; cell < 5; cell++)
+            {
+                result = m_db->BindObject()->FuncAddTableRowCell(row, cells[cell]);
+                if (result != kRocProfVisDmResultSuccess)
+                {
+                    return result;
+                }
+            }
+        }
+
+        m_tracks.clear();
+        m_tables.clear();
+        m_merged_table.Clear();
+        m_merged_table.ClearAggregation();
+        m_last_filter_str.clear();
+        m_last_group_str.clear();
+        m_filter_lookup.clear();
+        m_sort_column.clear();
+        m_sort_order = true;
+        return kRocProfVisDmResultSuccess;
+    }
+
     rocprofvis_dm_result_t TableProcessor::ExecuteCompoundQuery(Future* future,
         std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
         std::set<uint32_t>& tracks,
@@ -56,6 +209,16 @@ namespace DataModel
         if (queries.size() > 0)
         {
             std::lock_guard<std::mutex> lock(m_lock);
+
+            if (IsNameDurationSummary(commands) && m_db->EventSummaryInSqlite())
+            {
+                result = ExecuteNameDurationSummary(future, queries, commands, handle);
+                if (result != kRocProfVisDmResultNotSupported)
+                {
+                    m_timer.restart(std::chrono::seconds(60));
+                    return result;
+                }
+            }
 
             std::set<uint32_t> removed_tracks;
             std::set<uint32_t> added_tracks;
@@ -223,7 +386,11 @@ namespace DataModel
         if(group && strlen(group))
         {
             query += "-- CMD: GROUP ";
-            if(group_cols && strlen(group_cols))
+            if(std::strcmp(group, ROCPROFVIS_DB_NAME_DURATION_SUMMARY_GROUP) == 0)
+            {
+                query += group;
+            }
+            else if(group_cols && strlen(group_cols))
             {
                 if(!FilterExpression::StartsWithSubstring(group, group_cols))
                 {
@@ -347,10 +514,9 @@ namespace DataModel
 
     bool TableProcessor::IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries)
     {
-        if(m_current_queries.size() && (*m_current_queries.begin()).second.size() && TABLE_QUERY_UNPACK_OP_TYPE((*(*m_current_queries.begin()).second.begin()).second.track))
-        {
-            return false;
-        }
+        // Search ids pack an operation into the track id. Their statements are
+        // compared like ordinary track queries, so the data request following a
+        // count request can reuse the rows already loaded.
         for(std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
         {
             if(m_current_queries.count(track.first) && track.second.size())
@@ -804,7 +970,11 @@ namespace DataModel
             if (m_last_group_str != it->parameter)
             {
                 m_last_group_str = Trim(it->parameter);
-                if (!m_last_group_str.empty())
+                const std::string agg_spec =
+                    m_last_group_str == ROCPROFVIS_DB_NAME_DURATION_SUMMARY_GROUP
+                        ? kNameDurationGroup
+                        : m_last_group_str;
+                if (!agg_spec.empty())
                 {
                     static int max_events_per_thread = 10000;
                     uint32_t use_threads = static_cast<uint32_t>((m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread);
@@ -815,7 +985,7 @@ namespace DataModel
                     std::vector<std::thread> threads;
                     uint32_t rows_per_task = thread_count == 0 ? 0u : static_cast<uint32_t>(m_merged_table.RowCount() / thread_count);
 
-                    if (m_merged_table.SetupAggregation(m_last_group_str, static_cast<int>(thread_count + 1)))
+                    if (m_merged_table.SetupAggregation(agg_spec, static_cast<int>(thread_count + 1)))
                     {
                         auto task = [&](uint32_t thread_index, uint32_t start_row, uint32_t end_row) {
                             for (uint32_t row_index = start_row; row_index < end_row; row_index++)
@@ -966,6 +1136,12 @@ namespace DataModel
         return kRocProfVisDmResultSuccess;
     }
 
+    uint32_t TableProcessor::AddPackedTable()
+    {
+        m_tables.push_back(std::make_unique<PackedTable>());
+        return (uint32_t) (m_tables.size() - 1);
+    }
+
     // SQLite row callback used by compound queries.
     // For each returned row, this method validates callback state, handles cancellation,
     // performs one-time per-query initialization, appends a row to the destination table,
@@ -988,38 +1164,45 @@ namespace DataModel
 
         int column_index = 0;
 
-        // One-time initialization for the first processed row of this query execution.
-        if (callback_params->future->GetProcessedRowsCount() == 0)
-        {
-            table_processor->m_tables[callback_params->track_id]->ResetTrackIdetifiers();
+        PackedTable* table = table_processor->m_tables[callback_params->track_id].get();
 
+        // Each operation owns a packed table. Initialize that table from the
+        // column names of its own query, independent of rows already stored
+        // for another operation.
+        if (table->ColumnCount() == 0)
+        {
+            table->ResetTrackIdetifiers();
             for (; column_index < argc; column_index++)
             {
                 auto it = Builder::table_view_schema.find(azColName[column_index]);
 
                 if (it != Builder::table_view_schema.end())
                 {
-                    table_processor->m_tables[callback_params->track_id]->AddColumn(it->second.public_name, it->second.type, static_cast<uint8_t>(column_index), it->second.index);
+                    table->AddColumn(it->second.public_name, it->second.type,
+                                     static_cast<uint8_t>(column_index), it->second.index);
                 }
-                db->GetTrackIdentifierIndices(column_index, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices);
+                db->GetTrackIdentifierIndices(column_index, azColName,
+                                              table->track_ids_indices);
             }
 
             auto it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
-            table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index), it->second.index); 
-            if (!table_processor->m_tables[callback_params->track_id]->track_ids_indices.is_pmc_identifier)
+            table->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index),
+                             it->second.index);
+            if (!table->track_ids_indices.is_pmc_identifier)
             {
                 it = Builder::table_view_schema.find(Builder::STREAM_TRACK_ID_PUBLIC_NAME);
-                table_processor->m_tables[callback_params->track_id]->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index), static_cast<uint8_t>(Builder::table_view_schema.size()));
+                table->AddColumn(it->first, it->second.type, static_cast<uint8_t>(column_index),
+                                 static_cast<uint8_t>(Builder::table_view_schema.size()));
             }
 
         }
 
         // Fetch column metadata and append a destination row before filling cell values.
-        auto columns = table_processor->m_tables[callback_params->track_id]->GetColumns();
-        table_processor->m_tables[callback_params->track_id]->AddRow();
+        const std::vector<ColumnDef>& columns = table->GetColumns();
+        table->AddRow();
         column_index = 0;
         uint64_t op = 0;
-        for (; column_index < table_processor->m_tables[callback_params->track_id]->ColumnCount(); column_index++)
+        for (; column_index < table->ColumnCount(); column_index++)
         {  
             if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_TRACK_ID)
             {
@@ -1030,20 +1213,20 @@ namespace DataModel
             {
                 uint64_t value = Builder::TypeEnumToInt(db->TableColumnText(func, stmt, azColName, 
                     columns[column_index].m_orig_index).c_str(), Builder::mem_alloc_types);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_LEVEL)
             {
                 uint64_t value = Builder::TypeEnumToInt(db->TableColumnText(func, stmt, azColName, 
                     columns[column_index].m_orig_index).c_str(), Builder::mem_alloc_levels);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_VALUE)
             {
                 double value = db->TableColumnDouble(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_OPERATION)
             {
                 op = db->TableColumnInt(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, op);
+                table->PlaceValue(column_index, op);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_ID)
             {
                 uint64_t id = db->TableColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
@@ -1051,29 +1234,29 @@ namespace DataModel
                 value.bitfield.event_id = id;
                 value.bitfield.event_node = callback_params->db_instance->GuidIndex();
                 value.bitfield.event_op = op;
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value.value);
+                table->PlaceValue(column_index, value.value);
             } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD ||
                 columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_CATEGORY_PERFETTO || 
                 columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_NAME_PERFETTO)
             {
                 uint64_t value = db->StringTableReference().ToInt(db->TableColumnText(func, stmt, azColName,
                     columns[column_index].m_orig_index).c_str());
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             }
             else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_NODE_ID)
             {
                 uint64_t value = 0;
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             }
             else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_END || columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_START)
             {
                 uint64_t value = db->TableColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value - db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()]);
+                table->PlaceValue(column_index, value - db->TraceProperties()->db_inst_start_time[callback_params->db_instance->GuidIndex()]);
             }
             else 
             {
                 uint64_t value = db->TableColumnInt64(func, stmt, azColName, columns[column_index].m_orig_index);
-                table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value);
+                table->PlaceValue(column_index, value);
             }
             
         }
@@ -1102,21 +1285,21 @@ namespace DataModel
             }
         }
 
-        table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index++, (uint64_t)track_id);
+        table->PlaceValue(column_index++, (uint64_t)track_id);
         if (op != kRocProfVisDmOperationNoOp)
         {
             if (op == kRocProfVisDmOperationLaunch || 
                 op == kRocProfVisDmOperationLaunchSample || 
-                table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
+                table->track_ids_indices.stream_index == -1 ||
                 !db->FindTrack(kRocProfVisDmStreamTrack,
-                   db->TableColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.pid_index),
-                db->TableColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
+                   db->TableColumnInt(func, stmt, azColName, table->track_ids_indices.pid_index),
+                db->TableColumnInt(func, stmt, azColName, table->track_ids_indices.stream_index),
                 callback_params->db_instance->GuidIndex(),
                 track_id))
             {
                 track_id = INVALID_INDEX;
             }
-            table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index,(uint64_t) track_id);
+            table->PlaceValue(column_index,(uint64_t) track_id);
         }
 
         callback_params->future->CountThisRow();

@@ -39,18 +39,11 @@ struct RuleRow
 // the directory is the whole artifact.
 constexpr RuleRow kComputeCapture[] = {
     {kKeyWorkloadDir, R"(Output directory:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
-    // Progress is two values off one line, and rules are flat, so the pattern
-    // appears twice with different groups. Compiling it twice is negligible.
-    {kKeyRunIndex, R"(\[Run\s+(\d+)/(\d+)\])", 1, ScrapePolicy::kLastMatch},
-    {kKeyRunTotal, R"(\[Run\s+(\d+)/(\d+)\])", 2, ScrapePolicy::kLastMatch},
 };
 
 // rocprof-compute analyze. "Created file:" carries a bare filename written
 // relative to the stage's working directory; the engine resolves it.
-// "Analysis mode =" is not the artifact. A trace is opened only when that
-// mode ends in "db" and the created file ends in ".db".
 constexpr RuleRow kComputeAnalyze[] = {
-    {kKeyAnalysisMode, R"(Analysis mode =\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
     {kKeyAnalysisDb, R"(Created file:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
 };
 

@@ -630,8 +630,7 @@ TEST_CASE("A flat config's operation selects the analyze trace", "[profiler][pip
     REQUIRE(config.SetToolDirectory(tool_dir.Path()) == kRocProfVisResultSuccess);
     REQUIRE(config.SetWorkingDirectory(cwd.Path().c_str()) == kRocProfVisResultSuccess);
     REQUIRE(config.AddProfilerArg("-c") == kRocProfVisResultSuccess);
-    REQUIRE(config.AddProfilerArg("echo 'Analysis mode = db'; echo 'Created file: result.db'") ==
-            kRocProfVisResultSuccess);
+    REQUIRE(config.AddProfilerArg("echo 'Created file: result.db'") == kRocProfVisResultSuccess);
 
     ProfilerProcessController controller;
     PipelineResult            run = run_pipeline(controller, config);
@@ -642,40 +641,15 @@ TEST_CASE("A flat config's operation selects the analyze trace", "[profiler][pip
     CHECK(std::filesystem::path(trace) == cwd.File("result.db"));
 }
 
-TEST_CASE("A non-db analyze and a capture produce no trace file", "[profiler][pipeline]")
+TEST_CASE("An analyze report and a capture are not trace files", "[profiler][pipeline]")
 {
     ScratchToolDir tool_dir(kRPVProfilerToolRocprofCompute);
 
-    SECTION("console analyze")
+    SECTION("analyze that wrote a report, not a database")
     {
         ProfilerConfig config;
         REQUIRE(config.AddStage(shell_stage(
-                    "Analyze", tool_dir,
-                    "echo 'Analysis mode = cli'; echo 'Created file: report.txt'",
-                    kRPVProfilerToolRocprofCompute, kRPVProfilerOperationAnalyze)) ==
-                kRocProfVisResultSuccess);
-
-        ProfilerProcessController controller;
-        PipelineResult            run = run_pipeline(controller, config);
-        REQUIRE(run.state == kRPVProfilerStateCompleted);
-
-        std::string trace = "untouched";
-        CHECK(controller.GetTraceFilePath(trace) == kRocProfVisResultNotSupported);
-        CHECK(trace == "untouched");
-
-        // The artifact is still the created file. Only the trace-file query
-        // decides it is not something to open.
-        std::string artifact;
-        REQUIRE(controller.GetArtifactPath(artifact) == kRocProfVisResultSuccess);
-        CHECK(std::filesystem::path(artifact).filename() == "report.txt");
-    }
-
-    SECTION("db mode that did not write a database")
-    {
-        ProfilerConfig config;
-        REQUIRE(config.AddStage(shell_stage(
-                    "Analyze", tool_dir,
-                    "echo 'Analysis mode = db'; echo 'Created file: report.txt'",
+                    "Analyze", tool_dir, "echo 'Created file: report.txt'",
                     kRPVProfilerToolRocprofCompute, kRPVProfilerOperationAnalyze)) ==
                 kRocProfVisResultSuccess);
 
@@ -686,6 +660,12 @@ TEST_CASE("A non-db analyze and a capture produce no trace file", "[profiler][pi
         std::string trace = "untouched";
         CHECK(controller.GetTraceFilePath(trace) == kRocProfVisResultNotAvailable);
         CHECK(trace == "untouched");
+
+        // The artifact is still the created file. Only the trace-file query
+        // decides it is not something to open.
+        std::string artifact;
+        REQUIRE(controller.GetArtifactPath(artifact) == kRocProfVisResultSuccess);
+        CHECK(std::filesystem::path(artifact).filename() == "report.txt");
     }
 
     SECTION("capture names a workload directory")
@@ -719,8 +699,7 @@ TEST_CASE("A flat config without an operation does not read analyze output",
     REQUIRE(config.SetTool(kRPVProfilerToolRocprofCompute) == kRocProfVisResultSuccess);
     REQUIRE(config.SetToolDirectory(tool_dir.Path()) == kRocProfVisResultSuccess);
     REQUIRE(config.AddProfilerArg("-c") == kRocProfVisResultSuccess);
-    REQUIRE(config.AddProfilerArg("echo 'Analysis mode = db'; echo 'Created file: /tmp/out.db'") ==
-            kRocProfVisResultSuccess);
+    REQUIRE(config.AddProfilerArg("echo 'Created file: /tmp/out.db'") == kRocProfVisResultSuccess);
 
     ProfilerProcessController controller;
     PipelineResult            run = run_pipeline(controller, config);

@@ -1704,33 +1704,6 @@ rocprofvis_result_t ProfilerProcessController::GetTraceFilePath(std::string& out
         return kRocProfVisResultNotSupported;
     }
 
-    if (m_artifact_key == ProfilerScrapeRules::kKeyAnalysisDb)
-    {
-        rocprofvis_profiler_scrape_status_t mode_status = kRPVProfilerScrapePending;
-        rocprofvis_result_t const declared =
-            m_scrape.GetStatus(ProfilerScrapeRules::kKeyAnalysisMode, mode_status);
-        if (declared != kRocProfVisResultSuccess)
-        {
-            return kRocProfVisResultNotSupported;
-        }
-        if (mode_status == kRPVProfilerScrapePending)
-        {
-            return kRocProfVisResultPending;
-        }
-
-        std::string mode;
-        // Console and file analyze print a report. Nothing to load, and that
-        // is not a failed scrape. Only a mode ending in "db" writes a database
-        // Optiq can open.
-        if (mode_status != kRPVProfilerScrapeResolved ||
-            m_scrape.GetValue(ProfilerScrapeRules::kKeyAnalysisMode, mode) !=
-                kRocProfVisResultSuccess ||
-            !Core::String::ends_with(mode, "db"))
-        {
-            return kRocProfVisResultNotSupported;
-        }
-    }
-
     std::string path;
     rocprofvis_result_t const result = ScrapedValueLocked(m_artifact_key, path);
     if (result != kRocProfVisResultSuccess)
@@ -1738,8 +1711,8 @@ rocprofvis_result_t ProfilerProcessController::GetTraceFilePath(std::string& out
         return result;
     }
 
-    // Analyze in db mode can still name a non-database file. A trace was
-    // expected, and this is not one.
+    // Analyze names whatever file it wrote, which is only a trace when it is a
+    // database.
     if (m_artifact_key == ProfilerScrapeRules::kKeyAnalysisDb &&
         !Core::String::ends_with(path, ".db"))
     {

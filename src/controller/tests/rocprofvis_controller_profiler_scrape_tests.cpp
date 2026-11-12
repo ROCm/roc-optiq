@@ -651,8 +651,7 @@ TEST_CASE("Remote scraped paths join with POSIX rules", "[profiler][scrape]")
     CHECK(resolve("/remote/work/out.db", "/elsewhere") == "/remote/work/out.db");
 }
 
-TEST_CASE("The shipped compute rules read progress and the output directory",
-          "[profiler][rules]")
+TEST_CASE("The shipped compute rules read the output directory", "[profiler][rules]")
 {
     ProfilerStageSpec stage;
     stage.tool      = kRPVProfilerToolRocprofCompute;
@@ -664,18 +663,10 @@ TEST_CASE("The shipped compute rules read progress and the output directory",
     REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
     engine.BeginStage(0);
     engine.Feed("Output directory: /tmp/wl\n");
-    engine.Feed("\x1b[36m[Run 1/3]\x1b[0m pass\n");
-    engine.Feed("\x1b[36m[Run 3/3]\x1b[0m pass\n");
     engine.EndStage("");
 
     std::string value;
     REQUIRE(engine.GetValue(ProfilerScrapeRules::kKeyWorkloadDir, value) ==
             kRocProfVisResultSuccess);
     CHECK(value == "/tmp/wl");
-    REQUIRE(engine.GetValue(ProfilerScrapeRules::kKeyRunIndex, value) ==
-            kRocProfVisResultSuccess);
-    CHECK(value == "3");
-    REQUIRE(engine.GetValue(ProfilerScrapeRules::kKeyRunTotal, value) ==
-            kRocProfVisResultSuccess);
-    CHECK(value == "3");
 }

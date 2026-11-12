@@ -40,12 +40,9 @@ namespace ProfilerScrapeRules
  * text: a caller passes one of these to get_scraped_value rather than
  * inventing a name that no rule will ever fill.
  */
-inline constexpr char const* kKeyWorkloadDir  = "workload_dir";
-inline constexpr char const* kKeyAnalysisDb   = "analysis_db";
-inline constexpr char const* kKeyAnalysisMode = "analysis_mode";
-inline constexpr char const* kKeyTraceDb      = "trace_db";
-inline constexpr char const* kKeyRunIndex    = "run_index";
-inline constexpr char const* kKeyRunTotal    = "run_total";
+inline constexpr char const* kKeyWorkloadDir = "workload_dir";
+inline constexpr char const* kKeyAnalysisDb  = "analysis_db";
+inline constexpr char const* kKeyTraceDb     = "trace_db";
 
 /*
  * Fills stage.scrape_rules for `stage` from its tool, operation, and version,

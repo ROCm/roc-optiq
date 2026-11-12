@@ -255,9 +255,9 @@ public:
 
     /*
      * The trace file to open or download. NotSupported when this run does not
-     * produce one (a workload directory, a non-db analyze, a probe): that is
-     * not a missing file. NotAvailable when a trace file was expected and the
-     * output did not name one. The path is already resolved against the stage
+     * produce one (a workload directory, a probe): that is not a missing file.
+     * NotAvailable when the output did not name a file, or analyze named one
+     * that is not a database. The path is already resolved against the stage
      * working directory. `out` is left untouched unless the result is Success.
      */
     rocprofvis_result_t GetTraceFilePath(std::string& out) const;

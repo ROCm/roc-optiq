@@ -980,17 +980,17 @@ Install
 
          sudo tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C /
 
-      This installs ROCm Optiq to ``/opt/rocm/extras-10/rocm-optiq``, the same location the package install uses.
+      This installs ROCm Optiq to ``/opt/rocm/rocm-optiq``.
 
       .. note::
 
-         To install to a different location, use that directory as ``OPTIQ_PATH`` in the next step. For example:
+         To install to a different location, extract the tarball to that location, and remember to use that as ``OPTIQ_PATH`` in the next step. For example:
 
          .. code-block:: shell
 
             # Set Optiq installation path
             OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
-            # Extract to the desired directory
+            # Extract to the set installation path
             mkdir -p $OPTIQ_INSTALL_PATH
             tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH
 
@@ -1006,7 +1006,7 @@ Install
          # Optiq Environment Setup
          tee --append ~/.bashrc << EOF
          # BEGIN Optiq environment configuration
-         export OPTIQ_PATH=/opt/rocm/extras-10/rocm-optiq
+         export OPTIQ_PATH=/opt/rocm/rocm-optiq
          export PATH=\$OPTIQ_PATH/bin:\$PATH
          # END Optiq environment configuration
          EOF
@@ -1019,7 +1019,7 @@ Install
 
          # Optiq Environment Setup
          sudo tee /etc/profile.d/set-optiq-env.sh << EOF
-         export OPTIQ_PATH=/opt/rocm/extras-10/rocm-optiq
+         export OPTIQ_PATH=/opt/rocm/rocm-optiq
          export PATH=\$OPTIQ_PATH/bin:\$PATH
          EOF
 
@@ -1055,17 +1055,17 @@ Install
 
          sudo tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C /
 
-      This installs ROCm Optiq to ``/opt/rocm/extras-10/rocm-optiq``, the same location the package install uses.
+      This installs ROCm Optiq to ``/opt/rocm/rocm-optiq``.
 
       .. note::
 
-         To install to a different location, use that directory as ``OPTIQ_PATH`` in the next step. For example:
+         To install to a different location, extract the tarball to that location, and remember to use that as ``OPTIQ_PATH`` in the next step. For example:
 
          .. code-block:: shell
-            
+
             # Set Optiq installation path
             OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
-            # Extract to the desired directory
+            # Extract to the set installation path
             mkdir -p $OPTIQ_INSTALL_PATH
             tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH
 
@@ -1081,7 +1081,7 @@ Install
          # Optiq Environment Setup
          tee --append ~/.bashrc << EOF
          # BEGIN Optiq environment configuration
-         export OPTIQ_PATH=/opt/rocm/extras-10/rocm-optiq
+         export OPTIQ_PATH=/opt/rocm/rocm-optiq
          export PATH=\$OPTIQ_PATH/bin:\$PATH
          # END Optiq environment configuration
          EOF
@@ -1094,7 +1094,7 @@ Install
 
          # Optiq Environment Setup
          sudo tee /etc/profile.d/set-optiq-env.sh << EOF
-         export OPTIQ_PATH=/opt/rocm/extras-10/rocm-optiq
+         export OPTIQ_PATH=/opt/rocm/rocm-optiq
          export PATH=\$OPTIQ_PATH/bin:\$PATH
          EOF
 
@@ -1130,17 +1130,17 @@ Install
 
          sudo tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C /
 
-      This installs ROCm Optiq to ``/opt/rocm/extras-10/rocm-optiq``, the same location the package install uses.
+      This installs ROCm Optiq to ``/opt/rocm/rocm-optiq``.
 
       .. note::
 
-         To install to a different location, use that directory as ``OPTIQ_PATH`` in the next step. For example:
+         To install to a different location, extract the tarball to that location, and remember to use that as ``OPTIQ_PATH`` in the next step. For example:
 
          .. code-block:: shell
 
             # Set Optiq installation path
             OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
-            # Extract to the desired directory
+            # Extract to the set installation path
             mkdir -p $OPTIQ_INSTALL_PATH
             tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH
 
@@ -1156,7 +1156,7 @@ Install
          # Optiq Environment Setup
          tee --append ~/.bashrc << EOF
          # BEGIN Optiq environment configuration
-         export OPTIQ_PATH=/opt/rocm/extras-10/rocm-optiq
+         export OPTIQ_PATH=/opt/rocm/rocm-optiq
          export PATH=\$OPTIQ_PATH/bin:\$PATH
          # END Optiq environment configuration
          EOF
@@ -1169,7 +1169,7 @@ Install
 
          # Optiq Environment Setup
          sudo tee /etc/profile.d/set-optiq-env.sh << EOF
-         export OPTIQ_PATH=/opt/rocm/extras-10/rocm-optiq
+         export OPTIQ_PATH=/opt/rocm/rocm-optiq
          export PATH=\$OPTIQ_PATH/bin:\$PATH
          EOF
 

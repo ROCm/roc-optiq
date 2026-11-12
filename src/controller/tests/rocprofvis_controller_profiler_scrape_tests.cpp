@@ -626,6 +626,25 @@ TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
     CHECK(value == "/run/rocpd-1234-0.db");
 }
 
+TEST_CASE("Runtime instrumentation reads the rocprof-sys trace", "[profiler][rules]")
+{
+    ProfilerStageSpec stage;
+    stage.tool = kRPVProfilerToolRocprofSysInstrument;
+    std::string artifact_key;
+    ProfilerScrapeRules::Apply(stage, artifact_key);
+    REQUIRE(artifact_key == ProfilerScrapeRules::kKeyTraceDb);
+
+    ProfilerScrapeEngine engine;
+    REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+    engine.BeginStage(0);
+    engine.Feed("[database][info] Database: rocpd-1234-0.db\n");
+    engine.EndStage("/run", true);
+
+    std::string value;
+    REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
+    CHECK(value == "/run/rocpd-1234-0.db");
+}
+
 TEST_CASE("Remote scraped paths join with POSIX rules", "[profiler][scrape]")
 {
     auto resolve = [](std::string const& printed, std::string const& cwd) {

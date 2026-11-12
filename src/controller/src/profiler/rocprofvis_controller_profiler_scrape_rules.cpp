@@ -47,9 +47,9 @@ constexpr RuleRow kComputeAnalyze[] = {
     {kKeyAnalysisDb, R"(Created file:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
 };
 
-// rocprof-sys run and sample. Last match wins within a row: the tool names the
-// database again when it finalizes, and the earlier mentions can be other
-// files.
+// rocprof-sys run, sample, and runtime instrument. Last match wins within a
+// row: the tool names the database again when it finalizes, and the earlier
+// mentions can be other files.
 //
 // Row order is the preference order, and it is the only reader of this log:
 // the "Database:" log line first, then the Output Summary box's "File:", then
@@ -90,9 +90,14 @@ constexpr RuleSet kRuleSets[] = {
      kRocprofSysTrace, std::size(kRocprofSysTrace)},
     {kRPVProfilerToolRocprofSysSample, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
      kRocprofSysTrace, std::size(kRocprofSysTrace)},
-    // rocprof-sys-instrument writes an instrumented binary whose path is not
-    // yet scraped, rocprof-sys-avail is a probe, and rocprofv3 is not wired up.
-    // All three run for their exit code and are absent on purpose.
+    // Runtime instrumentation runs the target under the same runtime as run,
+    // so it writes and reports the same database. With -o it rewrites the
+    // binary and exits instead; the trace is then unmatched, and the launcher
+    // is the one that knows not to expect it.
+    {kRPVProfilerToolRocprofSysInstrument, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
+     kRocprofSysTrace, std::size(kRocprofSysTrace)},
+    // rocprof-sys-avail is a probe and rocprofv3 is not wired up. Both run for
+    // their exit code and are absent on purpose.
 };
 
 bool version_at_least(RuleSet const& set, uint32_t major, uint32_t minor, uint32_t patch)

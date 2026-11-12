@@ -5,6 +5,8 @@
 #include "compute/isa/rocprofvis_compute_sampling_load_state.h"
 
 #include <algorithm>
+#include <cctype>
+#include <iterator>
 #include <limits>
 
 #include <catch2/catch_approx.hpp>
@@ -80,7 +82,6 @@ TEST_CASE("Empty optional issue data is ready and unavailable without a retry er
     CHECK(rows[0].sampling.availability == IsaDataBuilder::SamplingAvailability::kValid);
     CHECK(rows[0].issue_states.availability ==
           IsaDataBuilder::SamplingAvailability::kMissing);
-    CHECK(rows[0].issue_states.display_text.empty());
     const SamplingLoadStatus status{ data.sample_states_loaded, data.stall_details_loaded,
                                      data.instruction_samples_loaded };
     const SamplingLoadStates states = status.Resolve(false, false);
@@ -1149,8 +1150,12 @@ TEST_CASE("Issue states preserve the reported barrier and VALU counts",
     CHECK(rows[0].issue_states.availability ==
           IsaDataBuilder::SamplingAvailability::kValid);
     CHECK(rows[0].issue_states.total_count == 1901);
-    CHECK(rows[0].issue_states.display_text == "NO_INST: 1,649; BARRIER: 252");
+    CHECK(rows[0].issue_states.dominant_label == "NO_INST 86.7%");
     REQUIRE(rows[0].issue_states.states.size() == 2);
+    CHECK(rows[0].issue_states.states[0].kind ==
+          IsaDataBuilder::IssueStateKind::kNoInstruction);
+    CHECK(rows[0].issue_states.states[1].kind ==
+          IsaDataBuilder::IssueStateKind::kBarrier);
     const auto& no_inst = rows[0].issue_states.states[0];
     CHECK(no_inst.text == "NO_INST");
     CHECK(no_inst.count == 1649);
@@ -1168,8 +1173,9 @@ TEST_CASE("Issue states preserve the reported barrier and VALU counts",
     REQUIRE(rows[1].issue_states.states.size() == 1);
     CHECK(rows[1].issue_states.states[0].text == "VALU");
     CHECK(rows[1].issue_states.states[0].count == 9538);
-    CHECK(rows[1].issue_states.display_text == "VALU: 9,538");
+    CHECK(rows[1].issue_states.states[0].kind == IsaDataBuilder::IssueStateKind::kValu);
     CHECK(rows[1].issue_states.states[0].percent == 100.0);
+    CHECK(rows[1].issue_states.dominant_label == "VALU 100%");
     CHECK(rows[1].sample_counts.issue_count == 2012);
 }
 
@@ -1196,7 +1202,14 @@ TEST_CASE("Issue states merge by instruction UUID and retain both branch outcome
     CHECK(rows[0].instruction_kind == IsaDataBuilder::InstructionKind::kBranch);
     REQUIRE(rows[0].issue_states.states.size() == 2);
     CHECK(rows[0].issue_states.total_count == 150);
-    CHECK(rows[0].issue_states.display_text == "BRANCH_NOT_TAKEN: 110; BRANCH_TAKEN: 40");
+    CHECK(rows[0].issue_states.dominant_label == "Not taken 73.3%");
+    REQUIRE(rows[0].issue_states.bar_order.size() == 2);
+    CHECK(rows[0].issue_states.states[rows[0].issue_states.bar_order[0]].kind ==
+          IsaDataBuilder::IssueStateKind::kBranchTaken);
+    CHECK(rows[0].issue_states.states[0].kind ==
+          IsaDataBuilder::IssueStateKind::kBranchNotTaken);
+    CHECK(rows[0].issue_states.states[1].kind ==
+          IsaDataBuilder::IssueStateKind::kBranchTaken);
     CHECK(rows[0].issue_states.states[0].text == "BRANCH_NOT_TAKEN");
     CHECK(rows[0].issue_states.states[0].count == 110);
     CHECK(rows[0].issue_states.states[0].percent == Catch::Approx(110.0 / 150.0 * 100.0));
@@ -1239,7 +1252,8 @@ TEST_CASE("Incomplete issue distributions never publish partial counts or shares
         CHECK(row->issue_states.availability == Availability::kMissing);
         CHECK(row->issue_states.states.empty());
         CHECK(row->issue_states.total_count == 0);
-        CHECK(row->issue_states.display_text.empty());
+        CHECK(row->issue_states.bar_order.empty());
+        CHECK(row->issue_states.dominant_label.empty());
         CHECK(row->sampling.availability == Availability::kValid);
     }
 }
@@ -1272,6 +1286,7 @@ TEST_CASE("Issue-state zero counts are recorded and zero-sample gaps do not cont
     const auto& issues = rows[0].issue_states;
     CHECK(issues.availability == IsaDataBuilder::SamplingAvailability::kValid);
     CHECK(issues.total_count == total);
+    CHECK(issues.dominant_label == (total > 0 ? "VALU 100%" : ""));
     REQUIRE(issues.states.size() == 2);
     const auto no_inst = std::find_if(
         issues.states.begin(), issues.states.end(),
@@ -1280,8 +1295,7 @@ TEST_CASE("Issue-state zero counts are recorded and zero-sample gaps do not cont
     CHECK(no_inst->text == "NO_INST");
     CHECK(no_inst->count == 0);
     CHECK(no_inst->count_text == "0");
-    CHECK(issues.display_text ==
-          (total == 0 ? "NO_INST: 0; VALU: 0" : "VALU: 100; NO_INST: 0"));
+    CHECK(no_inst->kind == IsaDataBuilder::IssueStateKind::kNoInstruction);
     CHECK(no_inst->percent == 0.0);
 }
 
@@ -1303,6 +1317,8 @@ TEST_CASE("Issue-state labels retain captured names and deterministic unknown id
         CHECK(rows[0].issue_states.states[i].lookup_uuid == expected[i]);
     }
     CHECK(rows[0].issue_states.states[2].text == "SDK_FUTURE_STATE");
+    CHECK(rows[0].issue_states.states[2].kind ==
+          IsaDataBuilder::IssueStateKind::kUnknown);
     CHECK(rows[0].issue_states.states[3].text == "Unknown issue state (lookup ID 0)");
     CHECK(rows[0].issue_states.states[4].text == "Unknown issue state (lookup ID 4)");
     std::reverse(data.instruction_samples.begin(), data.instruction_samples.end());
@@ -1311,6 +1327,109 @@ TEST_CASE("Issue-state labels retain captured names and deterministic unknown id
     {
         CHECK(rows[0].issue_states.states[i].lookup_uuid == expected[i]);
     }
+}
+
+TEST_CASE("Issue-state bar categories use captured names independently of lookup IDs",
+          "[isa][issue-states]")
+{
+    PcSamplingData data   = make_issue_sampling_data();
+    data.pc_sample_states = { { 1, 10, 80, 40, 40 } };
+    data.instruction_samples.clear();
+    data.instruction_sample_lookups.clear();
+    bool lowercase  = false;
+    bool sdk_prefix = false;
+    SECTION("Canonical names") {}
+    SECTION("Lowercase names") { lowercase = true; }
+    SECTION("SDK-prefixed names") { sdk_prefix = true; }
+    for(size_t i = 0; i < std::size(IsaDataBuilder::ISSUE_STATES); ++i)
+    {
+        std::string text = IsaDataBuilder::ISSUE_STATES[i].name;
+        if(lowercase)
+        {
+            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+        }
+        if(sdk_prefix)
+        {
+            text = "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_" + text;
+        }
+        const uint64_t lookup_uuid = 100 + i;
+        data.instruction_sample_lookups.push_back({ lookup_uuid, text });
+        data.instruction_samples.push_back({ 1, lookup_uuid, 10 });
+    }
+    auto rows = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    REQUIRE(rows[0].issue_states.states.size() ==
+            std::size(IsaDataBuilder::ISSUE_STATES));
+    for(const IsaDataBuilder::IssueState& state : rows[0].issue_states.states)
+    {
+        const size_t index = static_cast<size_t>(state.lookup_uuid - 100);
+        REQUIRE(index < std::size(IsaDataBuilder::ISSUE_STATES));
+        CHECK(state.kind == IsaDataBuilder::ISSUE_STATES[index].kind);
+        CHECK(state.text == data.instruction_sample_lookups[index].text);
+        CHECK(state.percent == 12.5);
+    }
+}
+
+TEST_CASE("Issue-state distributions ignore invalid progress and reject incomplete data",
+          "[isa][issue-states][source]")
+{
+    PcSamplingData data                  = make_issue_sampling_data();
+    data.pc_sample_states[0].issue_count = 101;
+    auto prepared                        = IsaDataBuilder::PrepareSampling(data);
+    auto isa                             = IsaDataBuilder::BuildInstructions(data, 1);
+    auto source                          = IsaDataBuilder::BuildSourceLines(data, 11);
+    CHECK(IsaDataBuilder::UpdateSampling(isa, prepared) == 50);
+    CHECK(isa[0].issue_states.dominant_label == "VALU 80%");
+    CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared) == 0);
+    CHECK(source[0].issue_states.dominant_label == "VALU 86.7%");
+
+    data.instruction_samples[0].count.reset();
+    prepared = IsaDataBuilder::PrepareSampling(data);
+    IsaDataBuilder::UpdateSampling(isa, prepared);
+    CHECK(isa[0].issue_states.dominant_label.empty());
+    CHECK(isa[1].issue_states.dominant_label == "VALU 100%");
+    IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
+    CHECK(source[0].issue_states.dominant_label.empty());
+
+    isa.clear();
+    source.clear();
+    CHECK(IsaDataBuilder::UpdateSampling(isa, prepared) == 0);
+    CHECK(IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared) == 0);
+}
+
+TEST_CASE("Sampled-state bars keep category order when the dominant state changes",
+          "[isa][issue-states]")
+{
+    PcSamplingData data = make_issue_sampling_data();
+    auto           rows = IsaDataBuilder::BuildInstructions(data, 1);
+    for(bool mostly_no_inst : { false, true })
+    {
+        data.instruction_samples[0].count = mostly_no_inst ? 80 : 20;
+        data.instruction_samples[1].count = mostly_no_inst ? 20 : 80;
+        IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+        const auto& summary = rows[0].issue_states;
+        REQUIRE(summary.bar_order.size() == 2);
+        CHECK(summary.states[summary.bar_order[0]].kind ==
+              IsaDataBuilder::IssueStateKind::kNoInstruction);
+        CHECK(summary.states[summary.bar_order[1]].kind ==
+              IsaDataBuilder::IssueStateKind::kValu);
+        CHECK(summary.dominant_label == (mostly_no_inst ? "NO_INST 80%" : "VALU 80%"));
+    }
+}
+
+TEST_CASE("A rare secondary state is not rounded into a single-state label",
+          "[isa][issue-states]")
+{
+    PcSamplingData data               = make_issue_sampling_data();
+    data.pc_sample_states[0]          = { 1, 10, 10000, 100, 9900 };
+    data.instruction_samples[0].count = 1;
+    data.instruction_samples[1].count = 9999;
+    auto rows                         = IsaDataBuilder::BuildInstructions(data, 1);
+    IsaDataBuilder::UpdateSampling(rows, IsaDataBuilder::PrepareSampling(data));
+    CHECK(rows[0].issue_states.dominant_label == "VALU >99.9%");
+    CHECK(rows[0].issue_states.states[0].percent == Catch::Approx(99.99));
 }
 
 TEST_CASE("Issue-state validity is independent of malformed or missing progress counts",
@@ -1431,8 +1550,8 @@ TEST_CASE("Source issue aggregation retains missing contributors and owned snaps
     IsaDataBuilder::UpdateSourceSampling(source, data, 11, prepared);
     CHECK(source[0].issue_states.availability == Availability::kValid);
     CHECK(source[0].issue_states.total_count == 150);
-    CHECK(source[0].issue_states.display_text == "VALU: 130; NO_INST: 20");
     REQUIRE(source[0].issue_states.states.size() == 2);
+    CHECK(source[0].issue_states.states[0].kind == IsaDataBuilder::IssueStateKind::kValu);
     CHECK(source[0].issue_states.states[0].text == "VALU");
     CHECK(source[0].issue_states.states[0].count == 130);
     CHECK(source[0].issue_states.states[0].percent ==
@@ -1461,11 +1580,9 @@ TEST_CASE("Source issue aggregation retains missing contributors and owned snaps
     CHECK(isa[0].issue_states.availability == Availability::kMissing);
     CHECK(isa[0].issue_states.states.empty());
     CHECK(isa[0].issue_states.total_count == 0);
-    CHECK(isa[0].issue_states.display_text.empty());
     CHECK(source[0].issue_states.availability == Availability::kMissing);
     CHECK(source[0].issue_states.states.empty());
     CHECK(source[0].issue_states.total_count == 0);
-    CHECK(source[0].issue_states.display_text.empty());
 }
 
 }  // namespace View

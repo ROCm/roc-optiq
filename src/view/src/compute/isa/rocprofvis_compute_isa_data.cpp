@@ -19,6 +19,8 @@ static_assert(std::size(IsaDataBuilder::STALL_REASONS) ==
               static_cast<size_t>(IsaDataBuilder::StallReasonKind::kUnknown));
 static_assert(std::size(IsaDataBuilder::INSTRUCTION_TYPES) ==
               static_cast<size_t>(IsaDataBuilder::InstructionKind::kUnknown));
+static_assert(std::size(IsaDataBuilder::ISSUE_STATES) ==
+              static_cast<size_t>(IsaDataBuilder::IssueStateKind::kUnknown));
 
 const CodeObjectStore*
 IsaDataBuilder::FindCodeObject(const PcSamplingData& data, uint64_t code_object_uuid)
@@ -459,6 +461,7 @@ IsaDataBuilder::SummarizeIssueStates(
                 state.text = "Unknown issue state (lookup ID " +
                              std::to_string(lookup_uuid) + ")";
             }
+            state.kind        = ResolveIssueStateKind(state.text);
             state.count       = count;
             state.count_text  = FormatSampleCount(count);
             state.percent     = CalculatePercentage(count, counts.sample_count);
@@ -476,13 +479,52 @@ IsaDataBuilder::SummarizeIssueStates(
                       }
                       return lhs.lookup_uuid < rhs.lookup_uuid;
                   });
-        for(const IssueState& state : summary.states)
+        summary.bar_order.reserve(summary.states.size());
+        for(size_t i = 0; i < summary.states.size(); ++i)
         {
-            if(!summary.display_text.empty())
+            summary.bar_order.push_back(i);
+        }
+        std::sort(summary.bar_order.begin(), summary.bar_order.end(),
+                  [&summary](size_t lhs_index, size_t rhs_index) {
+                      const IssueState& lhs = summary.states[lhs_index];
+                      const IssueState& rhs = summary.states[rhs_index];
+                      if(lhs.kind != rhs.kind)
+                      {
+                          return lhs.kind < rhs.kind;
+                      }
+                      if(lhs.text != rhs.text)
+                      {
+                          return lhs.text < rhs.text;
+                      }
+                      return lhs.lookup_uuid < rhs.lookup_uuid;
+                  });
+        if(summary.total_count > 0)
+        {
+            const IssueState& dominant   = summary.states.front();
+            const size_t      kind_index = static_cast<size_t>(dominant.kind);
+            const char*       label      = kind_index < std::size(ISSUE_STATES)
+                                               ? ISSUE_STATES[kind_index].name
+                                               : dominant.text.c_str();
+            if(dominant.kind == IssueStateKind::kBranchTaken)
             {
-                summary.display_text += "; ";
+                label = "Taken";
             }
-            summary.display_text += state.text + ": " + state.count_text;
+            else if(dominant.kind == IssueStateKind::kBranchNotTaken)
+            {
+                label = "Not taken";
+            }
+            std::string percent = FormatSamplePercentage(
+                { SamplingAvailability::kValid, dominant.percent });
+            if(percent == "100.0%" && dominant.count < summary.total_count)
+            {
+                percent = ">99.9%";
+            }
+            else if(percent.size() >= 3 &&
+                    percent.compare(percent.size() - 3, 3, ".0%") == 0)
+            {
+                percent.erase(percent.size() - 3, 2);
+            }
+            summary.dominant_label = std::string(label) + " " + percent;
         }
     }
     return summary;
@@ -590,6 +632,27 @@ IsaDataBuilder::GetStallReasonName(StallReasonKind kind)
         }
     }
     return "Unknown";
+}
+
+IsaDataBuilder::IssueStateKind
+IsaDataBuilder::ResolveIssueStateKind(std::string_view text)
+{
+    std::string name(text);
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
+    constexpr std::string_view SDK_PREFIX = "ROCPROFILER_PC_SAMPLING_INSTRUCTION_TYPE_";
+    if(name.compare(0, SDK_PREFIX.size(), SDK_PREFIX) == 0)
+    {
+        name.erase(0, SDK_PREFIX.size());
+    }
+    for(const IssueStateInfo& state : ISSUE_STATES)
+    {
+        if(name == state.name)
+        {
+            return state.kind;
+        }
+    }
+    return IssueStateKind::kUnknown;
 }
 
 IsaDataBuilder::InstructionKind

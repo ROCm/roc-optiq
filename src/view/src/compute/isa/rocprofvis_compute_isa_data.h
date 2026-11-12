@@ -157,10 +157,41 @@ public:
     };
     using GroupedIssueStateCounts = std::unordered_map<uint64_t, IssueStateCounts>;
 
+    enum class IssueStateKind : uint32_t
+    {
+        kNoInstruction,
+        kValu,
+        kScalar,
+        kFlat,
+        kLds,
+        kBarrier,
+        kBranchTaken,
+        kBranchNotTaken,
+        kUnknown
+    };
+
+    struct IssueStateInfo
+    {
+        IssueStateKind kind;
+        const char*    name;
+    };
+
+    inline static constexpr IssueStateInfo ISSUE_STATES[] = {
+        { IssueStateKind::kNoInstruction, "NO_INST" },
+        { IssueStateKind::kValu, "VALU" },
+        { IssueStateKind::kScalar, "SCALAR" },
+        { IssueStateKind::kFlat, "FLAT" },
+        { IssueStateKind::kLds, "LDS" },
+        { IssueStateKind::kBarrier, "BARRIER" },
+        { IssueStateKind::kBranchTaken, "BRANCH_TAKEN" },
+        { IssueStateKind::kBranchNotTaken, "BRANCH_NOT_TAKEN" }
+    };
+
     struct IssueState
     {
         uint64_t    lookup_uuid = 0;
         std::string text;
+        IssueStateKind kind  = IssueStateKind::kUnknown;
         uint64_t    count = 0;
         std::string count_text;
         double      percent = 0.0;  // Share of all samples, independently of issued count.
@@ -171,7 +202,9 @@ public:
         SamplingAvailability    availability = SamplingAvailability::kMissing;
         uint64_t                total_count  = 0;
         std::vector<IssueState> states;
-        std::string             display_text;
+        // Stable category order for bars; tooltip entries stay sorted by count.
+        std::vector<size_t> bar_order;
+        std::string         dominant_label;
     };
 
     // Owns normalized instruction sampling independently of source/ISA layer arrival.
@@ -263,6 +296,7 @@ private:
 
     static bool AddSampleCount(uint64_t& total, uint64_t count);
     static InstructionKind ResolveInstructionKind(std::string_view text);
+    static IssueStateKind  ResolveIssueStateKind(std::string_view text);
     static void AccumulateSampleCounts(SampleCounts& total, const SampleCounts& counts);
     static SamplePercentage MakeSamplePercentage(uint64_t sample_count,
                                                  const std::optional<double>& percent);

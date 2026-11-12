@@ -1656,21 +1656,23 @@ The ISA implementation is organized as follows:
   `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
   order. Compile-time assertions check the metric array against the enum, both
   widgets' sampling-column positions, and their total column counts. Sampling State
-  is visible by default; Issue-state counts and both percentage columns use
+  is visible by default; Sampled state and both percentage columns use
   `DefaultHide` and can be enabled independently through the native header menu.
   Each bar cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,
-  availability, and a `show_value` option. Only a stacked state bar borrows its input
-  row through `breakdown` for the duration of drawing; no per-row segment allocation
-  or retained row pointer is needed.
+  availability, and a `show_value` option. A stacked stall bar borrows its row
+  through `breakdown`; an issue-state bar borrows its summary through
+  `issue_breakdown`, only for drawing. No per-row segment allocation or retained
+  row pointer is needed.
   Line numbers use `NoReorder` and stay first. All four sampling columns are
   resizable, hideable, and reorderable. Their normal table headers retain context
   menus during loading/failure and share the existing header-tooltip content
   through `RenderHeaderWithTooltip`. Sampling State restores its color legend.
   Percentages use one
   decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
-  All bar modes share rectangular geometry, the `kBorderGray` outline around the filled
-  extent, clipping, and value-label layout. Sampling State uses `show_value = false`;
+  Bars share rectangular geometry and clipping. Sampling State and percentage bars
+  use the `kBorderGray` outline around the filled extent; Sampled state omits the
+  outline to reduce visual noise. Sampling State uses `show_value = false`;
   the two percentage modes use `true`. `DrawBarValue` uses `kTextOnAccent` inside
   fills that fit the label, or `kTextMain` beside short fills. Narrow columns that
   cannot fit either segment clip the same label in both colors at the fill boundary.
@@ -1678,12 +1680,24 @@ The ISA implementation is organized as follows:
   dim em dash. All modes share cell hit testing and forward clicks to row selection even
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
-  Issue-state cells render the prepared `IssueStateSummary::display_text` as
-  `STATE: count; STATE: count`, elided to the column width. Missing/invalid data
-  uses the same dim em dash; recorded zero is displayed as zero. Hovering any
-  issue-state cell shows its availability status or the full neutral three-column
-  breakdown (state, samples, percent of all samples). It reuses the stall-tooltip
-  table sizing, wrapping, and bounded scrolling without a color-swatch column.
+  Sampled state cells show a cached dominant-state label and share (for example,
+  `NO_INST 86.7%` or `Not taken 92%`) over a full-width distribution bar. Shares
+  use all samples in that row; hotness stays in Sampling State. The bar fills the
+  cell behind the label, using translucent colors and foreground `kTextMain` text
+  for readability in both themes. The default width fits the padded label, without
+  reserving a separate bar area. Narrow columns elide the label while retaining the
+  background distribution. Segments use cumulative
+  counts in stable SDK category order, with NO_INST first and branch outcomes
+  consistent across rows. Colors reuse ISA category hues, with a dedicated
+  `kPcSamplingBranchNotTaken` color in both themes. NO_INST and unknown states use
+  neutral gray. Single nonzero-state bars use subdued alpha, including when other
+  buckets record zero. Missing/invalid data uses the dim em dash; measured zero
+  shows 0 with no fill. The hover table preserves raw SDK labels, exact counts,
+  percentages, and matching color swatches. It also shows the row total, separately
+  validated Issued/Stalled counts and shares, and the main available stall reason.
+  An unavailable issue activity summary does not hide a complete SDK distribution.
+  The header explains per-row normalization and shows a compact state legend.
+  Tooltip sizing, wrapping, and bounded scrolling are shared with stall reasons.
   Separate table layout IDs prevent old saved column indices from applying to
   the expanded ISA/source tables.
   `SamplingLoadStatus` in `rocprofvis_compute_sampling_load_state.h` resolves
@@ -1744,8 +1758,13 @@ The ISA implementation is organized as follows:
   publish no totals or breakdown entries. Valid entries retain captured lookup text,
   formatted counts, and percentages of all samples, independently of issued/stalled
   progress and static instruction types. Unknown/empty labels retain their lookup
-  identity. Entries sort by descending count, then label and lookup UUID; the
-  builder prepares the formatted display summary once per sampling update. Source
+  identity. Entries sort by descending count, then label and lookup UUID. The
+  summary also caches `bar_order` indices sorted by category, label and UUID,
+  plus a `dominant_label` with a compact percentage and readable branch outcome.
+  A rounded dominant share below 100% uses `>99.9%` rather than implying no other
+  state was recorded. Each entry also caches an `IssueStateKind` from its captured label, independently of
+  lookup IDs, including case-insensitive and SDK-prefixed names. Unrecognized
+  states retain their captured labels and use the neutral fallback color. Source
   grouping reuses the same accumulator through the existing primary mappings; the
   prepared snapshot owns both counts and names, so later layer arrival is safe.
   `roc-optiq-isa-data-tests` exercises this interpretation under `BUILD_TESTING`
@@ -1755,8 +1774,11 @@ The ISA implementation is organized as follows:
   and independent loading/failure/retry states. The optional UI-test executable
   also registers `compute_isa/issue_state_columns` from
   `tests/rocprofvis_compute_sampling_ui_tests.cpp`. It exercises both code panes,
-  default-hidden columns, the native menu toggle, full issue-state tooltips,
-  preserved stall/issue breakdowns when the other group fails, and empty data.
+  default-hidden columns, the native menu toggle, actual colored bar rectangles,
+  state proportions and equal bar widths, visible dominant labels, distinct branch
+  outcomes, full tooltips including independent issue activity,
+  preserved stall/issue breakdowns when the other group fails, empty data, and
+  measured zero. Headless tests also cover stable issue-state category resolution.
   Run `roc-optiq-tests --run-tests --test-filter compute_isa` with UI tests enabled.
 
 Layer completions refresh only their owned data: ISA completion builds instruction
@@ -2062,7 +2084,7 @@ shared `SamplingStateRenderer` metric cells and headers.
 and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
 into these vectors. Counts remain optional, preserving unrecorded values and
 measured zero. Fresh rows replace previous records on every load. Prepared issue-state
-data feeds the optional Issue-state counts column in ISA and source sampling rows.
+data feeds the optional Sampled state column in ISA and source sampling rows.
 Dispatch UUID remains available only on the controller handle.
 Instruction samples are optional: absent sample/lookup tables or empty results
 must not downgrade the existing sampling columns. Missing instruction-sample

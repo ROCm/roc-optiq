@@ -3,6 +3,8 @@
 
 #include "app_tests.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 
@@ -16,6 +18,32 @@ namespace RocProfVis
 {
 namespace View
 {
+
+// Inspect solid rectangles, excluding text glyphs and antialiased outlines.
+static float
+segment_width(const ImDrawList& draw_list, const ImRect& bounds, ImU32 color)
+{
+    const ImVec2 white_uv = ImGui::GetFontTexUvWhitePixel();
+    float        width    = 0.0f;
+    for(int i = 0; i + 3 < draw_list.VtxBuffer.Size; ++i)
+    {
+        const ImDrawVert* v     = &draw_list.VtxBuffer[i];
+        bool              solid = true;
+        for(int j = 0; j < 4; ++j)
+        {
+            solid &= (v[j].col & ~IM_COL32_A_MASK) == (color & ~IM_COL32_A_MASK) &&
+                     v[j].uv.x == white_uv.x && v[j].uv.y == white_uv.y;
+        }
+        if(solid && bounds.Contains(v[0].pos) && bounds.Contains(v[2].pos) &&
+           v[0].pos.x == v[3].pos.x && v[1].pos.x == v[2].pos.x &&
+           v[0].pos.y == v[1].pos.y && v[2].pos.y == v[3].pos.y &&
+           v[2].pos.y > v[0].pos.y)
+        {
+            width = std::max(width, v[2].pos.x - v[0].pos.x);
+        }
+    }
+    return width;
+}
 
 struct SamplingWidgetTestVars
 {
@@ -31,6 +59,12 @@ struct SamplingWidgetTestVars
     ImVec2                            issue_point;
     ImVec2                            stall_point;
     std::string                       text;
+    float                             issue_cell_width       = 0.0f;
+    float                             no_instruction_width   = 0.0f;
+    float                             barrier_width          = 0.0f;
+    float                             valu_width             = 0.0f;
+    float                             branch_taken_width     = 0.0f;
+    float                             branch_not_taken_width = 0.0f;
 
     void Load()
     {
@@ -59,10 +93,13 @@ struct SamplingWidgetTestVars
         data.pc_sample_stall_reason_lookups = { { 1, "BARRIER_WAIT" },
                                                 { 2, "OTHER_WAIT" } };
         data.pc_sample_stall_reasons = { { 1, 1, 1649 }, { 1, 2, 252 }, { 2, 2, 501 } };
-        data.instruction_sample_lookups = { { 1, "NO_INST" },
-                                            { 2, "BARRIER" },
-                                            { 3, "BRANCH_NOT_TAKEN" } };
-        data.instruction_samples  = { { 1, 1, 1649 }, { 1, 2, 252 }, { 2, 3, 501 } };
+        data.instruction_sample_lookups     = { { 1, "NO_INST" },
+                                                { 2, "BARRIER" },
+                                                { 3, "BRANCH_NOT_TAKEN" },
+                                                { 4, "BRANCH_TAKEN" } };
+        data.instruction_samples            = {
+            { 1, 1, 1649 }, { 1, 2, 252 }, { 2, 3, 461 }, { 2, 4, 40 }
+        };
         data.sample_states_loaded = true;
         data.stall_details_loaded = true;
         data.instruction_samples_loaded = true;
@@ -112,12 +149,34 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
         if(table && table->ColumnsCount > 4)
         {
             vars.issue_visible = table->Columns[4].IsEnabled;
+            vars.issue_cell_width =
+                table->Columns[4].WorkMaxX - table->Columns[4].WorkMinX;
             const float row_y  = table->RowPosY1 - ImGui::GetTextLineHeight() * 0.5f;
             vars.issue_point   = ImVec2(table->Columns[4].WorkMinX + 8.0f, row_y);
             vars.stall_point   = ImVec2(table->Columns[1].WorkMinX + 8.0f, row_y);
             vars.header_point =
                 ImVec2(table->Columns[1].WorkMinX + 8.0f,
                        table->OuterRect.Min.y + ImGui::GetTextLineHeight() * 0.5f);
+            const ImDrawList& draw_list   = *table->InnerWindow->DrawList;
+            const float       line_height = ImGui::GetTextLineHeight();
+            const ImRect      first_row(
+                ImVec2(table->Columns[4].WorkMinX, table->RowPosY1 - line_height),
+                ImVec2(table->Columns[4].WorkMaxX + 1.0f, table->RowPosY1));
+            const ImRect second_row(
+                ImVec2(first_row.Min.x, table->RowPosY1),
+                ImVec2(first_row.Max.x, table->RowPosY1 + line_height));
+            SettingsManager& settings = SettingsManager::GetInstance();
+            vars.no_instruction_width =
+                segment_width(draw_list, first_row, settings.GetColor(Colors::kTextDim));
+            vars.barrier_width = segment_width(draw_list, first_row,
+                                               settings.GetColor(Colors::kIsaBarrier));
+            vars.valu_width =
+                segment_width(draw_list, first_row, settings.GetColor(Colors::kIsaValu));
+            vars.branch_taken_width = segment_width(
+                draw_list, second_row, settings.GetColor(Colors::kIsaBranch));
+            vars.branch_not_taken_width =
+                segment_width(draw_list, second_row,
+                              settings.GetColor(Colors::kPcSamplingBranchNotTaken));
         }
         ImGui::End();
     };
@@ -138,23 +197,46 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
             ImGuiWindow* popup = GImGui->OpenPopupStack.back().Window;
             IM_CHECK(popup != nullptr);
             ctx->SetRef(ImGuiTestRef(popup->ID));
-            ctx->ItemClick("Issue-state counts");
+            ctx->ItemClick("Sampled state");
             ctx->PopupCloseAll();
             ctx->Yield(3);
             IM_CHECK(vars.issue_visible);
-            IM_CHECK(vars.text.find("NO_INST: 1,649; BARRIER: 252") != std::string::npos);
-            IM_CHECK(vars.text.find("BRANCH_NOT_TAKEN: 501") != std::string::npos);
+            IM_CHECK(vars.text.find("NO_INST 86.7%") != std::string::npos);
+            IM_CHECK(vars.text.find("Not taken 92%") != std::string::npos);
+            IM_CHECK(vars.text.find("NO_INST: 1,649") == std::string::npos);
+            IM_CHECK(vars.text.find("BRANCH_NOT_TAKEN:") == std::string::npos);
+            IM_CHECK(vars.no_instruction_width > 0.0f);
+            IM_CHECK(vars.barrier_width > 0.0f);
+            IM_CHECK(vars.branch_taken_width > 0.0f);
+            IM_CHECK(vars.branch_not_taken_width > 0.0f);
+            const float barrier_total = vars.no_instruction_width + vars.barrier_width;
+            const float branch_total =
+                vars.branch_taken_width + vars.branch_not_taken_width;
+            // The distribution fills the cell beneath the label, including its space.
+            IM_CHECK(std::abs(barrier_total / vars.issue_cell_width - 1.0f) < 0.001f);
+            IM_CHECK(std::abs(vars.no_instruction_width / barrier_total -
+                              1649.0f / 1901.0f) < 0.001f);
+            IM_CHECK(std::abs(branch_total / barrier_total - 1.0f) < 0.001f);
+            IM_CHECK(std::abs(vars.branch_taken_width / branch_total - 40.0f / 501.0f) <
+                     0.001f);
             ctx->SetRef("ISA sampling test");
             ctx->MouseMoveToPos(vars.issue_point);
             ctx->Yield(3);
             IM_CHECK(vars.text.find("86.7%") != std::string::npos);
             IM_CHECK(vars.text.find("13.3%") != std::string::npos);
+            IM_CHECK(vars.text.find("1,649") != std::string::npos);
+            IM_CHECK(vars.text.find("252") != std::string::npos);
+            IM_CHECK(vars.text.find("Issued: 252 (13.3%)") != std::string::npos);
+            IM_CHECK(vars.text.find("Stalled: 1,649 (86.7%)") != std::string::npos);
+            IM_CHECK(vars.text.find("Main stall: BARRIER_WAIT") != std::string::npos);
 
             vars.status.instruction_samples_loaded = false;
             vars.failed                            = true;
             ctx->Yield(3);
             IM_CHECK(vars.text.find("load failed") != std::string::npos);
             IM_CHECK(vars.text.find("NO_INST: 1,649") == std::string::npos);
+            IM_CHECK(vars.no_instruction_width == 0.0f);
+            IM_CHECK(vars.barrier_width == 0.0f);
             ctx->MouseMoveToPos(vars.header_point);
             ctx->MouseClick(ImGuiMouseButton_Right);
             ctx->Yield(2);
@@ -177,6 +259,30 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
             ctx->Yield(3);
             IM_CHECK(vars.text.find("86.7%") != std::string::npos);
         }
+        // Invalid progress must not stretch or hide a complete issue distribution.
+        vars.data.pc_sample_states[0].issue_count = 2000;
+        vars.Load();
+        vars.status = { true, true, true };
+        vars.failed = false;
+        ctx->Yield(3);
+        IM_CHECK(vars.no_instruction_width > 0.0f);
+        IM_CHECK(vars.barrier_width > 0.0f);
+        const float valid_issue_width = vars.no_instruction_width + vars.barrier_width;
+        const float valid_branch_width =
+            vars.branch_taken_width + vars.branch_not_taken_width;
+        IM_CHECK(std::abs(valid_branch_width / valid_issue_width - 1.0f) < 0.001f);
+        IM_CHECK(vars.text.find("inconsistent with total samples") != std::string::npos);
+        vars.data.pc_sample_states[0].issue_count = 252;
+        // A single recorded state does not imply all samples issued.
+        vars.data.instruction_sample_lookups.push_back({ 5, "VALU" });
+        vars.data.instruction_samples = { { 1, 5, 1901 }, { 2, 3, 461 }, { 2, 4, 40 } };
+        vars.Load();
+        ctx->Yield(3);
+        IM_CHECK(vars.text.find("VALU 100%") != std::string::npos);
+        IM_CHECK(vars.valu_width > 0.0f);
+        IM_CHECK(std::abs(vars.valu_width / valid_issue_width - 1.0f) < 0.001f);
+        IM_CHECK(vars.text.find("Issued: 252 (13.3%)") != std::string::npos);
+        IM_CHECK(vars.text.find("Stalled: 1,649 (86.7%)") != std::string::npos);
         vars.data.instruction_samples.clear();
         vars.Load();
         vars.status = { true, true, true };
@@ -184,5 +290,19 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
         ctx->Yield(3);
         IM_CHECK(vars.text.find("not recorded") != std::string::npos);
         IM_CHECK(vars.text.find("load failed") == std::string::npos);
+        IM_CHECK(vars.no_instruction_width == 0.0f);
+        IM_CHECK(vars.barrier_width == 0.0f);
+
+        vars.data.pc_sample_states[0] = { 1, 10, 0, 0, 0 };
+        vars.data.pc_sample_stall_reasons.clear();
+        vars.data.instruction_samples = { { 1, 1, 0 }, { 1, 2, 0 } };
+        vars.Load();
+        ctx->Yield(3);
+        IM_CHECK(vars.text.find("NO_INST") != std::string::npos);
+        IM_CHECK(vars.text.find("BARRIER") != std::string::npos);
+        IM_CHECK(vars.text.find("0.0%") != std::string::npos);
+        IM_CHECK(vars.text.find("not recorded") == std::string::npos);
+        IM_CHECK(vars.no_instruction_width == 0.0f);
+        IM_CHECK(vars.barrier_width == 0.0f);
     };
 }

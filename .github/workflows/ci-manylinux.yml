@@ -409,22 +409,41 @@ jobs:
           # Use the renamed file so repodata <location href> matches the S3 key
           mkdir -p rpm-repo
           cp "${RPM_SRC}" "rpm-repo/${RPM_NAME}"
-          createrepo_c rpm-repo/
+          # Match ROCm core: no sqlite DBs and unhashed metadata filenames, so
+          # each run overwrites the previous metadata instead of leaving a
+          # stale <sha256>-* set behind (the CI role cannot delete from S3).
+          MD_OPTS="--no-database --simple-md-filenames"
+          createrepo_c ${MD_OPTS} rpm-repo/
+
+          # Keep the nightly history: merge the metadata already published in
+          # S3 with the metadata for the new RPM. Only repodata is needed;
+          # <location href> entries are relative to the repo root, so the
+          # existing RPMs stay where they are.
+          mkdir -p old-repo/repodata
+          aws s3 cp --recursive "${S3_RPM_PREFIX}/repodata/" old-repo/repodata/ \
+            --no-progress || true
+          if [[ -f old-repo/repodata/repomd.xml ]]; then
+            # --omit-baseurl keeps hrefs relative instead of adding file:// bases
+            mergerepo_c ${MD_OPTS} --omit-baseurl \
+              --repo old-repo --repo rpm-repo -o merged-repo
+          else
+            echo "No existing RPM metadata in S3, publishing new repo only"
+            mkdir -p merged-repo
+            cp -r rpm-repo/repodata merged-repo/repodata
+          fi
 
           aws s3 cp \
             "rpm-repo/${RPM_NAME}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
             --no-progress
-          aws s3 cp --recursive rpm-repo/repodata \
+          # Upload repomd.xml last so it never points at metadata that has
+          # not been uploaded yet.
+          aws s3 cp --recursive merged-repo/repodata \
             "${S3_RPM_PREFIX}/repodata/" \
+            --exclude "repomd.xml" \
             --no-progress
-
-          # createrepo_c names metadata files <sha256>-<type>, so each run
-          # leaves the previous set behind. Prune anything repomd.xml no
-          # longer references (after the upload so clients never see a gap).
-          aws s3 sync rpm-repo/repodata \
-            "${S3_RPM_PREFIX}/repodata/" \
-            --delete \
+          aws s3 cp merged-repo/repodata/repomd.xml \
+            "${S3_RPM_PREFIX}/repodata/repomd.xml" \
             --no-progress
 
       - name: Upload Tarball to S3

@@ -1178,9 +1178,9 @@ Install
 
 .. selected-content:: os=macos
 
-   1. Download the ``*-macos.zip`` of the latest ROCm Optiq release from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page.
-   2. Unzip it, then drag and drop ``roc-optiq.app`` from the extracted folder to the ``Applications`` folder.
-   3. Launch ROCm Optiq from **Applications**.
+   1. Download the ``amdrocm10-roc-optiq-*.dmg`` of the latest ROCm Optiq release from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page.
+   2. Open the disk image, then drag and drop ``roc-optiq.app`` to the ``Applications`` folder.
+   3. Launch ROCm Optiq from ``Applications``.
 
    Settings, logs, and presets are stored at ``~/Library/Application Support/ROCm-Optiq/``.
 

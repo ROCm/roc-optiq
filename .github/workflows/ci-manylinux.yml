@@ -419,6 +419,14 @@ jobs:
             "${S3_RPM_PREFIX}/repodata/" \
             --no-progress
 
+          # createrepo_c names metadata files <sha256>-<type>, so each run
+          # leaves the previous set behind. Prune anything repomd.xml no
+          # longer references (after the upload so clients never see a gap).
+          aws s3 sync rpm-repo/repodata \
+            "${S3_RPM_PREFIX}/repodata/" \
+            --delete \
+            --no-progress
+
       - name: Upload Tarball to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |

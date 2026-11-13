@@ -64,7 +64,7 @@ Summary View
 
 The **Summary View** displays a high-level overview of the captured data. 
 
-Summary View -- Table
+Summary View: Table
 ---------------------
  
 The table in **Summary View** lists the top 10 longest-running kernels sorted by Total Execution Time. 
@@ -75,7 +75,7 @@ The table displays kernel names, the number of invocations, and statistics inclu
    :align: center
    :alt: Summary View table listing the top 10 longest-running kernels with invocation count and duration statistics
 
-Summary View -- Charts
+Summary View: Charts
 ----------------------
 
 Charts display as bar or pie charts.
@@ -101,7 +101,7 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :align: center
    :alt: Summary View bar chart displaying per-kernel invocation count and duration metrics
 
-Summary View -- Roofline chart
+Summary View: Roofline chart
 ------------------------------
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
@@ -113,7 +113,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
    :alt: Summary View roofline chart plotting kernel arithmetic intensity against performance relative to hardware memory and compute ceilings
 
 - The kernel performance at each cache level is displayed as individual dots in the roofline chart. 
-- Click |gear| to access the Roofline chart menu, which is shown in the picture below.
+- Click |gear| to access the roofline chart menu, which is shown in the picture below.
 
     .. image:: ../images/Roofline-legend.png
        :width: 400
@@ -124,7 +124,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
   - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration.
   - Under **Options**, select **Show peak labels** to show or hide the labels on the roofline ceiling lines. 
-  - Use the Roofline **Menu position** control options to reposition the Roofline legend and menu. The options include:
+  - Use the Roofline **Menu position** control options to reposition the roofline legend and menu. The options include:
 
     - Inside, Top Left
     - Inside, Top Right
@@ -142,11 +142,11 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - **Kernel**: Enables kernel markers for a specific kernel.
   - **Kernel Bandwidth**: Enables kernel markers for a specific cache or memory level.
 
-Summary View -- System Speed-of-Light
+Summary View: System Speed-of-Light
 -------------------------------------
 
 - Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels in the selected workload, highlighting utilization relative to peak architectural capabilities. 
-- The Summary View -- System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak, Percent-of-Peak**, and **Unit**. 
+- The Summary View's System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak, Percent-of-Peak**, and **Unit**. 
 - Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
 - Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
 - Hover over a metric name to see a tooltip with a detailed description. 
@@ -163,7 +163,7 @@ Kernel Details
 - **System Speed-of-Light**: A table view of kernel metrics with their unit, average, peak, and percentage of peak values.  
 - **Roofline analysis**: Displays kernel performance relative to the system's capabilities for the selected kernel. 
 
-Kernel Details -- Kernel Selection Table
+Kernel Details: Kernel Selection Table
 ----------------------------------------
 
 The **Kernel Selection Table** displays kernel information, including names and GPU metrics.
@@ -194,7 +194,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 - Hover over a clipped kernel name to view the full name in a tooltip.
 - Right-click a row or cell to **Copy Row Data** or **Copy Cell Data**. 
 
-Kernel Details -- Memory Chart
+Kernel Details: Memory Chart
 ------------------------------
 
 The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, ``gfx950``, ``gfx94x`` including ``gfx940``, and ``gfx115x``). The chart can be panned with the scroll wheel or a trackpad.
@@ -210,7 +210,7 @@ This visual diagram displays counter values and calculations to help you underst
 
 Select a kernel in the **Kernel Selection Table** or the **Kernel** dropdown to view the memory chart of the selected kernel. See :ref:`select-workload-kernel`. 
 
-Kernel Details -- System Speed-of-Light 
+Kernel Details: System Speed-of-Light 
 ---------------------------------------
 
 The **System Speed-of-Light** displays key kernel-level performance metrics to show the overall compute performance and hardware utilization.  
@@ -220,7 +220,7 @@ The **System Speed-of-Light** displays key kernel-level performance metrics to s
    :align: center
    :alt: System Speed-of-Light table showing kernel-level performance metrics with average, peak, and percentage-of-peak values
 
-Kernel Details -- Kernel Roofline Chart
+Kernel Details: Kernel Roofline Chart
 ---------------------------------------
 
 The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, which helps you determine whether the kernel is compute-bound or memory-bound. 
@@ -228,7 +228,7 @@ The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, whic
 - Click |gear| to show or hide rooflines or arithmetic intensity points.
 - Under **Options**, select **Show peak labels** to show or hide the labels on the roofline ceiling lines.
 - Hold your cursor over a dot to view detailed information of the kernel. 
-- Use the **Menu** position control to choose options to reposition the Roofline Legend/Menu.
+- Use the **Menu** position control to choose options to reposition the roofline legend and menu.
 
 .. _isa-view:
 
@@ -352,7 +352,7 @@ You can configure a delta-threshold for comparison metrics to suppress the noise
 Baseline Comparison: Roofline
 -----------------------------
 
-**Roofline** compares rooflines for two kernels in the same ROCm Compute Profiler database, including kernels from different workloads. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, use **Peak Source** option in the **Legend/Menu** to choose the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
+**Roofline** compares rooflines for two kernels in the same ROCm Compute Profiler database, including kernels from different workloads. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, use **Peak Source** option in the roofline menu to choose the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
 
 .. note::
 

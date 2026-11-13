@@ -91,7 +91,7 @@ private:
     SystemTable*                                   m_sample_table;
     EventSearchTable*                              m_search_table;
     MemoryManager*                                 m_mem_mgmt;
-    TopologyNode*                                  m_topology_root;
+    TopologyNode*                                  m_topology_root;  // null until the topology loads, and after a failed load
     std::array<std::mutex, kRPVDMTableNumUsecases> m_table_mutex;
     std::string                                    m_config_path;
 

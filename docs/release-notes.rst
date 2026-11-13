@@ -34,7 +34,7 @@ Trace formats
 Tables
 ^^^^^^
 
-* Table columns now auto-fit to their content and are capped in width, so long values (such as demangled kernel names) are elided. The full value stays in a hover tooltip. Columns resized by hand are left alone, and widths are re-fit when the result set changes.
+* Table columns now auto-fit to their content and are capped in width, so long values (such as demangled kernel names) are elided. The full value continues to be shown in a hover tooltip. Manually resized columns remain unaffected, and widths are re-fit when the result set changes.
 
 Timeline and navigation
 ^^^^^^^^^^^^^^^^^^^^^^^

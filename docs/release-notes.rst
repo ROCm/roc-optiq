@@ -49,7 +49,7 @@ Roofline
 ^^^^^^^^
 
 * Roofline comparison: compare a kernel against a baseline kernel, including a kernel from another workload, and choose whether hardware peaks come from the baseline or the compared workload.
-* Roofline option menus open outside the plot by default.
+* The option menus open outside the plot by default.
 * Roofline now has toggleable labels for hardware peaks.
 * **Profile Details** (formerly **Workload Details**) now includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
 

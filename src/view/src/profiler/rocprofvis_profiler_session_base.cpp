@@ -36,6 +36,13 @@ AllocProfilerConfig(const ProfilerLaunchSpec& spec)
         rocprofvis_profiler_config_free(config);
         config = nullptr;
     }
+    else if(rocprofvis_profiler_config_set_operation(config, spec.operation) !=
+            kRocProfVisResultSuccess)
+    {
+        spdlog::error("Failed to set profiler operation ({})", static_cast<int>(spec.operation));
+        rocprofvis_profiler_config_free(config);
+        config = nullptr;
+    }
     else
     {
         if(!spec.tool_directory.empty())
@@ -150,6 +157,33 @@ ProfilerSessionBase::GetOutput()
 
     buffer[length] = '\0';
     return std::string(buffer.data());
+}
+
+rocprofvis_result_t
+ProfilerSessionBase::GetTraceFilePath(std::string& out) const
+{
+    if(m_profiler == nullptr)
+    {
+        return kRocProfVisResultNotAvailable;
+    }
+
+    uint32_t            length = 0;
+    rocprofvis_result_t result =
+        rocprofvis_profiler_get_trace_path(m_profiler, nullptr, &length);
+    if(result != kRocProfVisResultSuccess || length == 0)
+    {
+        return result == kRocProfVisResultSuccess ? kRocProfVisResultNotAvailable : result;
+    }
+
+    std::vector<char> buffer(static_cast<size_t>(length) + 1, '\0');
+    result = rocprofvis_profiler_get_trace_path(m_profiler, buffer.data(), &length);
+    if(result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    out.assign(buffer.data(), length);
+    return kRocProfVisResultSuccess;
 }
 
 void

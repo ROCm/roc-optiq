@@ -63,6 +63,9 @@ public:
     rocprofvis_controller_object_type_t GetType(void) final;
 
     rocprofvis_result_t SetTool(rocprofvis_profiler_tool_t tool);
+    // Selects the scrape rules with the tool. A flat config (no stages) carries
+    // it here; a staged config carries it on each stage.
+    rocprofvis_result_t SetOperation(rocprofvis_profiler_operation_t operation);
     rocprofvis_result_t SetToolDirectory(char const* directory);
     rocprofvis_result_t SetOutputDirectory(char const* path);
     rocprofvis_result_t SetWorkingDirectory(char const* path);
@@ -93,6 +96,7 @@ public:
     void ApplyStage(ProfilerStageSpec const& stage, std::string const& resolved_tool_path);
 
     rocprofvis_profiler_tool_t GetTool() const { return m_tool; }
+    rocprofvis_profiler_operation_t GetOperation() const { return m_operation; }
     std::string const& GetToolDirectory() const { return m_tool_directory; }
 
     // Local absolute path for argv[0]. Must succeed before exec.
@@ -134,6 +138,8 @@ public:
 private:
     // Named tool; filename comes from the tool table, never from a caller path.
     rocprofvis_profiler_tool_t m_tool;
+    // With m_tool, selects the scrape rules for a flat (no-stage) config.
+    rocprofvis_profiler_operation_t m_operation;
     std::string m_tool_directory;      // search dir only; empty = default search
     std::string m_resolved_tool_path;  // argv[0] after resolve
     // Not on argv (see BuildArgv). Unread for now; kept for a later per-stage
@@ -247,6 +253,15 @@ public:
      */
     rocprofvis_result_t GetArtifactPath(std::string& out) const;
 
+    /*
+     * The trace file to open or download. NotSupported when this run does not
+     * produce one (a workload directory, a probe): that is not a missing file.
+     * NotAvailable when the output did not name a file, or analyze named one
+     * that is not a database. The path is already resolved against the stage
+     * working directory. `out` is left untouched unless the result is Success.
+     */
+    rocprofvis_result_t GetTraceFilePath(std::string& out) const;
+
     rocprofvis_result_t GetScrapedValue(std::string const& key, std::string& out) const;
 
     rocprofvis_result_t GetScrapeStatus(std::string const&                   key,
@@ -295,6 +310,9 @@ private:
     // value when resolved, Pending while it may still arrive, NotAvailable once
     // it cannot, InvalidArgument when no stage declares the key at all.
     rocprofvis_result_t ScrapedValueLocked(std::string const& key, std::string& out) const;
+    // Remote output names files on the other host, so a relative path is joined
+    // with POSIX rules rather than this machine's filesystem.
+    bool PosixScrapePaths() const;
 
     std::unique_ptr<IProfilerExecutor> m_executor;
     std::unique_ptr<ProfilerConfig> m_config;

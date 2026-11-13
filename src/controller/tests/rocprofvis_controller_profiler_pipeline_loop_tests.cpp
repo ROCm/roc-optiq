@@ -617,6 +617,101 @@ TEST_CASE("A failed relocation keeps the artifact and stays resolved",
     CHECK(run.output.find("leaving it at the original path") != std::string::npos);
 }
 
+TEST_CASE("A flat config's operation selects the analyze trace", "[profiler][pipeline]")
+{
+    ScratchToolDir tool_dir(kRPVProfilerToolRocprofCompute);
+    ScratchDir     cwd("pipeline trace file");
+
+    // The launcher does not build stages. The operation on the flat config is
+    // what makes this output an analyze database rather than unread text.
+    ProfilerConfig config;
+    REQUIRE(config.SetTool(kRPVProfilerToolRocprofCompute) == kRocProfVisResultSuccess);
+    REQUIRE(config.SetOperation(kRPVProfilerOperationAnalyze) == kRocProfVisResultSuccess);
+    REQUIRE(config.SetToolDirectory(tool_dir.Path()) == kRocProfVisResultSuccess);
+    REQUIRE(config.SetWorkingDirectory(cwd.Path().c_str()) == kRocProfVisResultSuccess);
+    REQUIRE(config.AddProfilerArg("-c") == kRocProfVisResultSuccess);
+    REQUIRE(config.AddProfilerArg("echo 'Created file: result.db'") == kRocProfVisResultSuccess);
+
+    ProfilerProcessController controller;
+    PipelineResult            run = run_pipeline(controller, config);
+    REQUIRE(run.state == kRPVProfilerStateCompleted);
+
+    std::string trace;
+    REQUIRE(controller.GetTraceFilePath(trace) == kRocProfVisResultSuccess);
+    CHECK(std::filesystem::path(trace) == cwd.File("result.db"));
+}
+
+TEST_CASE("An analyze report and a capture are not trace files", "[profiler][pipeline]")
+{
+    ScratchToolDir tool_dir(kRPVProfilerToolRocprofCompute);
+
+    SECTION("analyze that wrote a report, not a database")
+    {
+        ProfilerConfig config;
+        REQUIRE(config.AddStage(shell_stage(
+                    "Analyze", tool_dir, "echo 'Created file: report.txt'",
+                    kRPVProfilerToolRocprofCompute, kRPVProfilerOperationAnalyze)) ==
+                kRocProfVisResultSuccess);
+
+        ProfilerProcessController controller;
+        PipelineResult            run = run_pipeline(controller, config);
+        REQUIRE(run.state == kRPVProfilerStateCompleted);
+
+        std::string trace = "untouched";
+        CHECK(controller.GetTraceFilePath(trace) == kRocProfVisResultNotAvailable);
+        CHECK(trace == "untouched");
+
+        // The artifact is still the created file. Only the trace-file query
+        // decides it is not something to open.
+        std::string artifact;
+        REQUIRE(controller.GetArtifactPath(artifact) == kRocProfVisResultSuccess);
+        CHECK(std::filesystem::path(artifact).filename() == "report.txt");
+    }
+
+    SECTION("capture names a workload directory")
+    {
+        ProfilerConfig config;
+        REQUIRE(config.AddStage(shell_stage(
+                    "Capture", tool_dir, "echo 'Output directory: /tmp/wl'",
+                    kRPVProfilerToolRocprofCompute, kRPVProfilerOperationCapture)) ==
+                kRocProfVisResultSuccess);
+
+        ProfilerProcessController controller;
+        PipelineResult            run = run_pipeline(controller, config);
+        REQUIRE(run.state == kRPVProfilerStateCompleted);
+
+        std::string artifact;
+        REQUIRE(controller.GetArtifactPath(artifact) == kRocProfVisResultSuccess);
+        CHECK(artifact == "/tmp/wl");
+
+        std::string trace = "untouched";
+        CHECK(controller.GetTraceFilePath(trace) == kRocProfVisResultNotSupported);
+        CHECK(trace == "untouched");
+    }
+}
+
+TEST_CASE("A flat config without an operation does not read analyze output",
+          "[profiler][pipeline]")
+{
+    ScratchToolDir tool_dir(kRPVProfilerToolRocprofCompute);
+
+    ProfilerConfig config;
+    REQUIRE(config.SetTool(kRPVProfilerToolRocprofCompute) == kRocProfVisResultSuccess);
+    REQUIRE(config.SetToolDirectory(tool_dir.Path()) == kRocProfVisResultSuccess);
+    REQUIRE(config.AddProfilerArg("-c") == kRocProfVisResultSuccess);
+    REQUIRE(config.AddProfilerArg("echo 'Created file: /tmp/out.db'") == kRocProfVisResultSuccess);
+
+    ProfilerProcessController controller;
+    PipelineResult            run = run_pipeline(controller, config);
+    REQUIRE(run.state == kRPVProfilerStateCompleted);
+
+    // Default operation selects no compute rules, so the printed database is
+    // not a trace file. The launcher has to pass the operation.
+    std::string trace = "untouched";
+    CHECK(controller.GetTraceFilePath(trace) == kRocProfVisResultNotSupported);
+    CHECK(trace == "untouched");
+}
+
 #endif  // !_WIN32
 
 }  // namespace

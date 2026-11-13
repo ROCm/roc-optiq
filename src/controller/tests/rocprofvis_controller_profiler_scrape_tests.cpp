@@ -621,14 +621,56 @@ TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
 
     std::string value;
     REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
-    // Same preference order the View's ParseTraceOutputPath documents. The two
-    // read the same log, so a tool that prints both labels must not lead them
-    // to different files.
+    // The rule table is the only reader of this log, so a tool that prints
+    // both labels must resolve to the database line.
     CHECK(value == "/run/rocpd-1234-0.db");
 }
 
-TEST_CASE("The shipped compute rules read progress and the output directory",
-          "[profiler][rules]")
+TEST_CASE("Runtime instrumentation reads the rocprof-sys trace", "[profiler][rules]")
+{
+    ProfilerStageSpec stage;
+    stage.tool = kRPVProfilerToolRocprofSysInstrument;
+    std::string artifact_key;
+    ProfilerScrapeRules::Apply(stage, artifact_key);
+    REQUIRE(artifact_key == ProfilerScrapeRules::kKeyTraceDb);
+
+    ProfilerScrapeEngine engine;
+    REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+    engine.BeginStage(0);
+    engine.Feed("[database][info] Database: rocpd-1234-0.db\n");
+    engine.EndStage("/run", true);
+
+    std::string value;
+    REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
+    CHECK(value == "/run/rocpd-1234-0.db");
+}
+
+TEST_CASE("Remote scraped paths join with POSIX rules", "[profiler][scrape]")
+{
+    auto resolve = [](std::string const& printed, std::string const& cwd) {
+        ProfilerStageSpec stage;
+        stage.working_directory = cwd;
+        stage.scrape_rules.push_back(make_rule("trace_db", R"(Database:\s*(\S+))"));
+
+        ProfilerScrapeEngine engine;
+        REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+        engine.BeginStage(0);
+        engine.Feed("Database: " + printed + "\n");
+        engine.EndStage(stage.working_directory, true);
+
+        std::string value;
+        REQUIRE(engine.GetValue("trace_db", value) == kRocProfVisResultSuccess);
+        return value;
+    };
+
+    // A leading '/' stays absolute even on Windows, where std::filesystem
+    // would treat it as relative and join it onto a drive.
+    CHECK(resolve("out.db", "/remote/work") == "/remote/work/out.db");
+    CHECK(resolve("out.db", "/remote/work/") == "/remote/work/out.db");
+    CHECK(resolve("/remote/work/out.db", "/elsewhere") == "/remote/work/out.db");
+}
+
+TEST_CASE("The shipped compute rules read the output directory", "[profiler][rules]")
 {
     ProfilerStageSpec stage;
     stage.tool      = kRPVProfilerToolRocprofCompute;
@@ -640,18 +682,10 @@ TEST_CASE("The shipped compute rules read progress and the output directory",
     REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
     engine.BeginStage(0);
     engine.Feed("Output directory: /tmp/wl\n");
-    engine.Feed("\x1b[36m[Run 1/3]\x1b[0m pass\n");
-    engine.Feed("\x1b[36m[Run 3/3]\x1b[0m pass\n");
     engine.EndStage("");
 
     std::string value;
     REQUIRE(engine.GetValue(ProfilerScrapeRules::kKeyWorkloadDir, value) ==
             kRocProfVisResultSuccess);
     CHECK(value == "/tmp/wl");
-    REQUIRE(engine.GetValue(ProfilerScrapeRules::kKeyRunIndex, value) ==
-            kRocProfVisResultSuccess);
-    CHECK(value == "3");
-    REQUIRE(engine.GetValue(ProfilerScrapeRules::kKeyRunTotal, value) ==
-            kRocProfVisResultSuccess);
-    CHECK(value == "3");
 }

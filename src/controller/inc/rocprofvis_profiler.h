@@ -65,6 +65,16 @@ void rocprofvis_profiler_config_free(rocprofvis_profiler_config_t* config);
 rocprofvis_result_t rocprofvis_profiler_config_set_tool(rocprofvis_profiler_config_t* config, rocprofvis_profiler_tool_t tool);
 
 /*
+* What the tool is being asked to do. Together with the tool this selects the
+* scrape rules applied to a flat config (one with no stages). Defaults to
+* kRPVProfilerOperationDefault, which is what rocprof-sys uses.
+* @param config The profiler config object.
+* @param operation The operation. Rejects a value this build does not know.
+* @returns kRocProfVisResultSuccess, or kRocProfVisResultInvalidEnum.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_set_operation(rocprofvis_profiler_config_t* config, rocprofvis_profiler_operation_t operation);
+
+/*
 * Directory to search for the tool (non-standard ROCm install). Filename still
 * comes from the tool table. Must be absolute (remote: on the remote host).
 * When set, no fallback to $ROCM_PATH or $PATH. Empty restores the default.
@@ -215,6 +225,23 @@ rocprofvis_result_t rocprofvis_profiler_get_state(rocprofvis_profiler_t* profile
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length);
+
+/*
+* Path of the trace file this run produced, already resolved against the
+* stage working directory (a POSIX join when the run was remote). This is the
+* only trace path: callers do not parse profiler output themselves.
+* Success copies the path. NotSupported means this run does not produce a
+* trace file. NotAvailable means one was expected and the output did not name
+* it. Pending means the stage that would name it has not finished. Same
+* string-getter convention as rocprofvis_profiler_get_output. Any result other
+* than Success leaves the buffer untouched.
+* @param profiler The profiler session.
+* @param buffer Destination, or null to query length.
+* @param length In: bytes to copy. Out: bytes available, or bytes copied.
+* @returns kRocProfVisResultSuccess, NotSupported, NotAvailable, Pending, or
+*          an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length);
 
 /*
 * Drops captured output so later get_output calls only return new data.

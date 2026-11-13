@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_profiler_cmdline.h"
 #include "rocprofvis_controller_profiler_scrape_rules.h"
 #include "rocprofvis_controller_profiler_tool.h"
+#include "rocprofvis_core_string_utils.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "rocprofvis_controller_ssh_profiler_executor.h"
@@ -67,6 +68,7 @@ void append_diagnostic(std::string& output_text, std::string const& text)
 ProfilerConfig::ProfilerConfig()
     : Handle(0, 0)
     , m_tool(kRPVProfilerToolNone)
+    , m_operation(kRPVProfilerOperationDefault)
     , m_tool_directory()
     , m_resolved_tool_path()
     , m_output_directory()
@@ -95,6 +97,16 @@ rocprofvis_result_t ProfilerConfig::SetTool(rocprofvis_profiler_tool_t tool)
         return kRocProfVisResultInvalidEnum;
     }
     m_tool = tool;
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::SetOperation(rocprofvis_profiler_operation_t operation)
+{
+    if (operation >= __kRPVProfilerOperationLast)
+    {
+        return kRocProfVisResultInvalidEnum;
+    }
+    m_operation = operation;
     return kRocProfVisResultSuccess;
 }
 
@@ -970,8 +982,9 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
         // in the console when a key is missing (and, if so, when lines were
         // too long to scan).
         ProfilerStageSpec stage;
-        stage.tool              = m_config->GetTool();
-        stage.tool_directory    = m_config->GetToolDirectory();
+        stage.tool               = m_config->GetTool();
+        stage.operation          = m_config->GetOperation();
+        stage.tool_directory     = m_config->GetToolDirectory();
         stage.python_environment = m_config->GetPythonEnvironment();
         stage.argv              = m_config->GetProfilerArgv();
         stage.working_directory = m_config->GetWorkingDirectory();
@@ -1432,7 +1445,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
         // stays set - the ending is not going back to UpdateState, and a second
         // Cancel on a finished run should say NotSupported.
         DrainExecutorLocked();
-        m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+        m_scrape.EndStage(m_stages[m_current_stage].working_directory, PosixScrapePaths());
 
         m_stage_states[m_current_stage] = kRPVProfilerStateFailed;
         m_failing_stage                 = static_cast<int32_t>(m_current_stage);
@@ -1453,7 +1466,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
     // to UpdateState would not work, since it no longer finalises a cancelled
     // run.
     DrainExecutorLocked();
-    m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+    m_scrape.EndStage(m_stages[m_current_stage].working_directory, PosixScrapePaths());
 
     m_exit_code = executor->GetExitCode();
 
@@ -1544,7 +1557,7 @@ void ProfilerProcessController::FinishStageLocked(int exit_code)
 {
     m_exit_code = exit_code;
 
-    m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+    m_scrape.EndStage(m_stages[m_current_stage].working_directory, PosixScrapePaths());
 
     if (exit_code != 0)
     {
@@ -1678,6 +1691,41 @@ rocprofvis_result_t ProfilerProcessController::GetArtifactPath(std::string& out)
         return kRocProfVisResultNotAvailable;
     }
     return ScrapedValueLocked(m_artifact_key, out);
+}
+
+rocprofvis_result_t ProfilerProcessController::GetTraceFilePath(std::string& out) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // A workload directory is the capture's artifact, and a probe or an
+    // instrument run declares none. Neither is a trace file to open.
+    if (m_artifact_key.empty() || m_artifact_key == ProfilerScrapeRules::kKeyWorkloadDir)
+    {
+        return kRocProfVisResultNotSupported;
+    }
+
+    std::string path;
+    rocprofvis_result_t const result = ScrapedValueLocked(m_artifact_key, path);
+    if (result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    // Analyze names whatever file it wrote, which is only a trace when it is a
+    // database.
+    if (m_artifact_key == ProfilerScrapeRules::kKeyAnalysisDb &&
+        !Core::String::ends_with(path, ".db"))
+    {
+        return kRocProfVisResultNotAvailable;
+    }
+
+    out = std::move(path);
+    return kRocProfVisResultSuccess;
+}
+
+bool ProfilerProcessController::PosixScrapePaths() const
+{
+    return m_config != nullptr && m_config->GetConnectionType() == ConnectionType::kSsh;
 }
 
 rocprofvis_result_t ProfilerProcessController::GetScrapedValue(std::string const& key,

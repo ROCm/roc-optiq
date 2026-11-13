@@ -65,9 +65,30 @@ bool is_absolute_path(std::string const& path)
 #endif
 }
 
-std::string resolve_scraped_path(std::string const& value, std::string const& working_directory)
+std::string resolve_scraped_path(std::string const& value, std::string const& working_directory,
+                                 bool posix_paths)
 {
-    if (value.empty() || is_absolute_path(value) || working_directory.empty())
+    if (value.empty() || working_directory.empty())
+    {
+        return value;
+    }
+
+    // A remote path is a string on the other host. std::filesystem would apply
+    // this machine's rules, and on Windows a leading '/' is not absolute.
+    if (posix_paths)
+    {
+        if (value.front() == '/')
+        {
+            return value;
+        }
+        if (working_directory.back() == '/')
+        {
+            return working_directory + value;
+        }
+        return working_directory + "/" + value;
+    }
+
+    if (is_absolute_path(value))
     {
         return value;
     }
@@ -348,7 +369,7 @@ void ProfilerScrapeEngine::match_line(std::string const& raw_line)
     }
 }
 
-void ProfilerScrapeEngine::EndStage(std::string const& working_directory)
+void ProfilerScrapeEngine::EndStage(std::string const& working_directory, bool posix_paths)
 {
     if (!m_stage_open)
     {
@@ -388,9 +409,9 @@ void ProfilerScrapeEngine::EndStage(std::string const& working_directory)
 
         if (slot.status == kRPVProfilerScrapeResolved)
         {
-            slot.value = resolve_scraped_path(slot.value, working_directory);
+            slot.value = resolve_scraped_path(slot.value, working_directory, posix_paths);
             if (slot.has_expected &&
-                slot.value != resolve_scraped_path(slot.expected, working_directory))
+                slot.value != resolve_scraped_path(slot.expected, working_directory, posix_paths))
             {
                 spdlog::warn("Scraped '{}' is '{}' but the expected value was '{}'; "
                              "using the scraped value",
@@ -407,7 +428,7 @@ void ProfilerScrapeEngine::EndStage(std::string const& working_directory)
                              slot.expected);
                 // Resolved the same way a scraped value would be, so a caller
                 // cannot tell the two apart by shape.
-                slot.value  = resolve_scraped_path(slot.expected, working_directory);
+                slot.value  = resolve_scraped_path(slot.expected, working_directory, posix_paths);
                 slot.status = kRPVProfilerScrapeResolved;
             }
             else if (slot.status == kRPVProfilerScrapePending)

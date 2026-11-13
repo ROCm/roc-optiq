@@ -123,19 +123,6 @@ struct LaunchConfig
 std::vector<std::string> SplitArguments(std::string const& arguments);
 
 /**
- * Resolves an output path a profiler printed against the directory it ran in.
- * A relative path is joined onto working_directory; an absolute path, or an
- * empty working_directory (the run inherited the directory the path is later
- * read from), is returned unchanged. Remote paths follow POSIX rules whatever
- * this host is.
- * @param path: the path as the profiler printed it; empty stays empty.
- * @param working_directory: the run's working directory (TargetSpec::working_directory).
- * @param remote: true for an SSH run, whose paths are on the remote host.
- */
-std::string ResolveOutputPath(std::string const& path, std::string const& working_directory,
-                              bool remote);
-
-/**
  * The executable name of a profiler tool ("rocprof-sys-run"), as the controller
  * spells it. Empty for kRPVProfilerToolNone. Use for labels and for a command
  * preview when the tool could not be resolved to a real path.

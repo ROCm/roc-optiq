@@ -130,9 +130,12 @@ bool RenderTargetArgumentsRow(std::string& arguments, float label_w);
 
 /**
  * Renders the "open the trace when profiling finishes" checkbox. Returns true
- * if it was toggled.
+ * if it was toggled. When not enabled it is drawn disabled and unchecked,
+ * auto_load_trace is left as it was, and disabled_reason (if any) is shown as
+ * its tooltip.
  */
-bool RenderTargetAutoLoadRow(bool& auto_load_trace);
+bool RenderTargetAutoLoadRow(bool& auto_load_trace, bool enabled = true,
+                             char const* disabled_reason = nullptr);
 
 /**
  * Renders the "where are the profiler tools" row: an optional directory that

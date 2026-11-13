@@ -4,14 +4,19 @@
 #include "rocprofvis_welcome_page.h"
 
 #include "imgui.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <list>
+#include <string>
 #include <utility>
 
 namespace RocProfVis
@@ -74,6 +79,10 @@ constexpr float WELCOME_RECENT_SPACING_EM = 0.55f;
 constexpr float WELCOME_RECENT_HOVER_ALPHA = 0.28f;
 constexpr float WELCOME_RECENT_ACTIVE_ALPHA = 0.40f;
 
+// Tips & tricks.
+constexpr float WELCOME_TIP_SPACING_EM = 0.35f;
+constexpr float WELCOME_TIP_NAV_GAP_EM = 0.45f;
+
 // Backdrop logo.
 constexpr float WELCOME_LOGO_WIDTH_FRACTION     = 0.42f;
 constexpr float WELCOME_LOGO_HEIGHT_FRACTION    = 0.56f;
@@ -117,6 +126,187 @@ constexpr ResourceGroup kResourceGroups[] = {
       "https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/",
       "https://github.com/ROCm/rocm-systems/tree/develop/projects/rocprofiler-compute" },
 };
+
+// One Welcome page tip. A {name} in the text stands for the key bound to the
+// hotkey action whose settings key is name, so a remapped shortcut reads the
+// way the user set it.
+struct WelcomeTip
+{
+    const char* topic;
+    const char* text;
+};
+
+// Topics alternate so that consecutive launches show different areas. Every
+// menu and button name here is the label the UI shows.
+constexpr WelcomeTip kWelcomeTips[] = {
+    { "Getting started", "Drag a .db, .rpd, or .rpv file onto the window to open it." },
+    { "Navigation",
+      "{zoom_in} and {zoom_out} zoom at the mouse and {pan_left} and {pan_right} pan. "
+      "Hold {speed_boost} to move twice as fast." },
+    { "Large traces",
+      "Start with Show Minimap on the toolbar. It maps event density across the whole "
+      "trace, so you can go straight to where the work is." },
+    { "Time ranges",
+      "Hold {region_select} and drag on the timeline to select a range. "
+      "{zoom_to_selection} zooms to it and {clear_selection} clears it." },
+    { "Idle time",
+      "Gaps between kernels on a busy GPU queue are time the GPU sat idle. Check the CPU "
+      "thread tracks at the same moment to see why." },
+    { "Bookmarks",
+      "{bookmark_save_1} saves the view as bookmark 1 and {bookmark_restore_1} jumps "
+      "back. Bookmark both ends of a slowdown to flip between them." },
+    { "Top Events",
+      "Look at total duration, not just the average: a short kernel called thousands of "
+      "times can cost more than one slow kernel." },
+    { "Tracks",
+      "Hover a track name to see its full name, its track ID, and how many events or "
+      "samples it holds." },
+    { "Time ranges",
+      "Select a few events and press {toggle_mark} to make their span the time range. "
+      "The Event Table and Top Events then cover only that span." },
+    { "Roofline",
+      "Kernels left of the roofline's ridge point are memory-bound; kernels to the right "
+      "of it are compute-bound." },
+    { "Streams and queues",
+      "Compare HIP stream tracks with HSA queue tracks: streams show what your code "
+      "asked for, queues show what the GPU actually ran." },
+    { "Event Table",
+      "The advanced filter takes conditions like duration > 2000 to pull out outliers. "
+      "Time columns are in nanoseconds." },
+    { "Topology",
+      "Right-click a track name and choose Reveal in topology to find it in the System "
+      "Topology sidebar." },
+    { "Event details",
+      "Event Details lists an event's flow links and call stack. Right-click an entry "
+      "and choose Go To Event to follow the chain." },
+    { "Metrics", "Hover a metric name in Table View to read what it measures." },
+    { "Sharing",
+      "With a time range selected, Edit > Save Trace Selection writes just that range to "
+      "a smaller trace that opens faster." },
+    { "Search",
+      "Search for several names at once by quoting each one, like \"gemm\"\"memcpy\"." },
+    { "Tables",
+      "Right-click a column header to hide columns or size them to fit." },
+    { "Projects",
+      "File > Save As writes a .rpv project that keeps your track layout, bookmarks, and "
+      "annotations." },
+    { "Measure",
+      "The Measure button on the toolbar drops two rulers you can snap to event edges, "
+      "to time the gap between two events exactly." },
+    { "Kernels",
+      "In the Kernel Selection Table, filter names with LIKE %gemm% and metrics with > "
+      "or <, then click Apply Filters." },
+    { "Queue utilization",
+      "The utilization pill on a queue track covers the visible time, or only the "
+      "selected range when one is set." },
+    { "Flow arrows",
+      "Flow Render Style on the toolbar switches arrows between fan, which shows what "
+      "one event led to, and chain, which follows them in order." },
+    { "Annotations",
+      "Right-click the timeline and choose Add Annotation to leave a note on a track for "
+      "whoever opens the project next." },
+    { "Metrics",
+      "In Table View, right-click a metric and choose Send metric to kernel details to "
+      "compare it across every kernel." },
+    { "Exporting",
+      "Right-click a row in the Event Table or Top Events and choose Export To File to "
+      "save it as CSV." },
+    { "Tracks",
+      "Track Options applies to every selected track at once. Compact Mode fits tall "
+      "flame graphs into less space." },
+    { "Counters",
+      "Click the min or max value beside a counter track to set its scale, and the reset "
+      "button to put it back." },
+    { "Annotations",
+      "Use Lock Position on an annotation so it can't be dragged by accident." },
+    { "Roofline",
+      "Turn on Scale kernel marker size to duration so the kernels that cost the most "
+      "stand out." },
+    { "Timeline",
+      "Hover a dense cluster of events to see how many of each kind it holds." },
+    { "Baseline Comparison",
+      "Set a percentage threshold to highlight only the differences above it." },
+    { "Topology",
+      "Hiding a process in the System Topology sidebar hides every queue, stream, and "
+      "thread under it." },
+    { "Baseline Comparison",
+      "Compare two kernels in the same workload, not just two runs of it." },
+    { "Presets",
+      "Pin the metrics you check on every kernel and save them as a preset to bring them "
+      "back in one click." },
+    { "Shortcuts",
+      "Every shortcut in these tips can be changed in Edit > Preferences, and the tips "
+      "show your keys." },
+    { "Anywhere",
+      "Optiq doesn't need ROCm installed. Copy a trace to any Windows, Linux, or macOS "
+      "machine and open it there." },
+    { "Command line",
+      "roc-optiq -f trace.db opens a trace from a terminal, and --file-dialog imgui "
+      "helps when running over SSH." },
+    { "Cleanup",
+      "File > Database > Full Cleanup removes the metadata Optiq adds to a trace file." },
+};
+constexpr size_t WELCOME_TIP_COUNT = sizeof(kWelcomeTips) / sizeof(kWelcomeTips[0]);
+
+// The key bound to a hotkey action, found by its settings key. Empty when no
+// action has that key or nothing is bound to it.
+std::string
+BoundKeyText(const std::string& action_key)
+{
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+    {
+        const HotkeyActionId action = static_cast<HotkeyActionId>(i);
+        if(action_key != HotkeyManager::GetActionInfo(action).key)
+        {
+            continue;
+        }
+        const HotkeyBinding binding = HotkeyManager::GetInstance().GetBinding(action);
+        const ImGuiKeyChord chord =
+            binding.primary != ImGuiKey_None ? binding.primary : binding.alternate;
+        return chord == ImGuiKey_None ? std::string()
+                                      : HotkeyManager::KeyChordToString(chord);
+    }
+    return std::string();
+}
+
+// Fills in a tip's {name} keys. False when one of them is unbound, so the tip is
+// skipped rather than asking the user to press "None".
+bool
+ExpandTip(const WelcomeTip& tip, std::string& out)
+{
+    out.clear();
+    for(const char* c = tip.text; *c != '\0'; ++c)
+    {
+        const char* close = *c == '{' ? std::strchr(c, '}') : nullptr;
+        if(close == nullptr)
+        {
+            out += *c;
+            continue;
+        }
+        const std::string key = BoundKeyText(std::string(c + 1, close));
+        if(key.empty())
+        {
+            return false;
+        }
+        out += key;
+        c = close;
+    }
+    return true;
+}
+
+// Stretches the card being drawn by exactly extra pixels. A card ends at its
+// last item's bottom edge, which is one item spacing above the cursor.
+void
+ExtendCard(float extra)
+{
+    if(extra <= 0.0f)
+    {
+        return;
+    }
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetStyle().ItemSpacing.y +
+                         extra);
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+}
 
 // Dim wrapped paragraph used for subtitles and hint text.
 void
@@ -407,6 +597,10 @@ SectionHeader(SettingsManager& settings, const char* title,
 WelcomePage::WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recent)
     : m_on_open_file(std::move(on_open_file))
     , m_on_open_recent(std::move(on_open_recent))
+    , m_tip_index(0)
+    , m_column_heights{ 0.0f, 0.0f }
+    , m_column_stretch{ 0.0f, 0.0f }
+    , m_side_by_side(false)
 {
     // Two flex cards: left = Start + Recent, right = Resources. The grow ratios
     // keep Resources the wider panel; the min widths (set per-frame in Render)
@@ -417,6 +611,15 @@ WelcomePage::WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recen
         { "welcome_left", left, 0.0f, 0.0f, WELCOME_MAIN_COL_FRACTION },
         { "welcome_right", right, 0.0f, 0.0f, 1.0f - WELCOME_MAIN_COL_FRACTION },
     };
+
+    // The page is built once per launch, so this is where a launch moves on to
+    // a new tip. Starting one before the saved tip and stepping forward lands on
+    // it, or on the next showable one if its keys are unbound.
+    const size_t saved =
+        SettingsManager::GetInstance().GetInternalSettings().next_welcome_tip %
+        WELCOME_TIP_COUNT;
+    m_tip_index = (saved + WELCOME_TIP_COUNT - 1) % WELCOME_TIP_COUNT;
+    StepTip(true);
 }
 
 void
@@ -461,6 +664,10 @@ WelcomePage::Render()
     m_flex.gap                = font_size * WELCOME_COLUMN_GAP_EM;
     m_flex.items[0].min_width = font_size * WELCOME_MAIN_COL_MIN_EM;
     m_flex.items[1].min_width = font_size * WELCOME_MAIN_COL_MIN_EM;
+    // The flex keeps both cards on one row only while both minimum widths fit.
+    m_side_by_side = m_flex.items[0].min_width + m_flex.gap +
+                         m_flex.items[1].min_width <=
+                     ImGui::GetContentRegionAvail().x;
     m_flex.Render();
 
     ImGui::PopStyleVar();  // welcome_body ItemSpacing
@@ -509,6 +716,10 @@ WelcomePage::RenderLeftCard()
 {
     SettingsManager& settings  = SettingsManager::GetInstance();
     const float      font_size = ImGui::GetFontSize();
+    const float      start_y   = ImGui::GetCursorPosY();
+    const float      stretch =
+        m_side_by_side ? std::max(0.0f, m_column_heights[1] - m_column_heights[0])
+                       : 0.0f;
 
     BeginCard(settings, "welcome_card_left");
 
@@ -596,6 +807,14 @@ WelcomePage::RenderLeftCard()
     }
 
     EndCard();
+
+    // The tips card sits one flex gap below, the same gap the columns keep from
+    // each other, rather than the body's item spacing.
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetStyle().ItemSpacing.y +
+                         m_flex.gap);
+    RenderTipsCard(stretch);
+    m_column_heights[0] = ImGui::GetCursorPosY() - start_y - m_column_stretch[0];
+    m_column_stretch[0] = stretch;
 }
 
 void
@@ -603,6 +822,10 @@ WelcomePage::RenderResourcesCard()
 {
     SettingsManager& settings  = SettingsManager::GetInstance();
     const float      font_size = ImGui::GetFontSize();
+    const float      start_y   = ImGui::GetCursorPosY();
+    const float      stretch =
+        m_side_by_side ? std::max(0.0f, m_column_heights[0] - m_column_heights[1])
+                       : 0.0f;
 
     BeginCard(settings, "welcome_card_right");
     SectionHeader(settings, "Resources",
@@ -615,9 +838,113 @@ WelcomePage::RenderResourcesCard()
         {
             DrawResourceGroup(settings, group, inner_w);
         }
+        ExtendCard(stretch);
         ImGui::PopStyleVar();
     }
     EndCard();
+    m_column_heights[1] = ImGui::GetCursorPosY() - start_y - m_column_stretch[1];
+    m_column_stretch[1] = stretch;
+}
+
+void
+WelcomePage::RenderTipsCard(float extra_height)
+{
+    SettingsManager& settings  = SettingsManager::GetInstance();
+    const float      font_size = ImGui::GetFontSize();
+
+    // A key can be unbound in Preferences while the page is up, which would
+    // leave the tip on screen asking for a key that no longer does anything.
+    std::string text;
+    if(!ExpandTip(kWelcomeTips[m_tip_index], text))
+    {
+        StepTip(true);
+        ExpandTip(kWelcomeTips[m_tip_index], text);
+    }
+
+    BeginCard(settings, "welcome_card_tips");
+    SectionHeader(settings, "Tips & tricks");
+    const float gap = font_size * WELCOME_TIP_NAV_GAP_EM;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(gap, font_size * WELCOME_TIP_SPACING_EM));
+
+    // Topic on the left; previous, position, and next on the right of the row.
+    const float row_x = ImGui::GetCursorPosX();
+    const float row_w = ImGui::GetContentRegionAvail().x;
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
+    ImGui::TextUnformatted(kWelcomeTips[m_tip_index].topic);
+    ImGui::PopStyleColor();
+
+    char position[32];
+    std::snprintf(position, sizeof(position), "%zu of %zu", m_tip_index + 1,
+                  WELCOME_TIP_COUNT);
+    const float button = ImGui::GetTextLineHeight();
+    const float nav_w  = button * 2.0f + gap * 2.0f + ImGui::CalcTextSize(position).x;
+    ImFont*     icons  = settings.GetFontManager().GetFont(FontType::kIcon);
+    const ImU32 idle   = settings.GetColor(Colors::kTransparent);
+    const ImU32 hover  = settings.GetColor(Colors::kButtonHovered);
+    const ImU32 press  = settings.GetColor(Colors::kButtonActive);
+    ImGui::SameLine(std::max(row_x, row_x + row_w - nav_w), 0.0f);
+    const bool previous =
+        IconButton(ICON_CHEVRON_LEFT, icons, ImVec2(button, button), "Previous tip",
+                   false, ImVec2(0.0f, 0.0f), idle, hover, press, "welcome_tip_previous",
+                   font_size);
+    ImGui::SameLine(0.0f, gap);
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted(position);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0.0f, gap);
+    const bool next =
+        IconButton(ICON_CHEVRON_RIGHT, icons, ImVec2(button, button), "Next tip", false,
+                   ImVec2(0.0f, 0.0f), idle, hover, press, "welcome_tip_next", font_size);
+
+    // Every tip takes the tallest one's height, so browsing never moves the
+    // rest of the page.
+    const float wrap_w  = ImGui::GetContentRegionAvail().x;
+    float       tallest = 0.0f;
+    std::string other;
+    for(const WelcomeTip& tip : kWelcomeTips)
+    {
+        if(ExpandTip(tip, other))
+        {
+            tallest = std::max(
+                tallest, ImGui::CalcTextSize(other.c_str(), nullptr, false, wrap_w).y);
+        }
+    }
+    const float shown = ImGui::CalcTextSize(text.c_str(), nullptr, false, wrap_w).y;
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrap_w);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::Dummy(ImVec2(0.0f, std::max(0.0f, tallest - shown)));
+
+    ExtendCard(extra_height);
+    ImGui::PopStyleVar();
+    EndCard();
+
+    if(previous)
+    {
+        StepTip(false);
+    }
+    else if(next)
+    {
+        StepTip(true);
+    }
+}
+
+void
+WelcomePage::StepTip(bool forward)
+{
+    std::string unused;
+    for(size_t tried = 0; tried < WELCOME_TIP_COUNT; ++tried)
+    {
+        m_tip_index = forward ? (m_tip_index + 1) % WELCOME_TIP_COUNT
+                              : (m_tip_index + WELCOME_TIP_COUNT - 1) % WELCOME_TIP_COUNT;
+        if(ExpandTip(kWelcomeTips[m_tip_index], unused))
+        {
+            break;
+        }
+    }
+    SettingsManager::GetInstance().GetInternalSettings().next_welcome_tip =
+        static_cast<uint32_t>((m_tip_index + 1) % WELCOME_TIP_COUNT);
 }
 
 }  // namespace View

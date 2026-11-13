@@ -876,6 +876,7 @@ SettingsManager::SerializeInternalSettings(jt::Json& json)
     {
         is[JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES][i++] = file;
     }
+    is[JSON_KEY_SETTINGS_INTERNAL_NEXT_WELCOME_TIP] = m_internalsettings.next_welcome_tip;
 }
 
 void
@@ -891,6 +892,12 @@ SettingsManager::DeserializeInternalSettings(jt::Json& json)
                 m_internalsettings.recent_files.emplace_back(entry.getString());
             }
         }
+    }
+    if(is[JSON_KEY_SETTINGS_INTERNAL_NEXT_WELCOME_TIP].isLong())
+    {
+        const int64_t next = is[JSON_KEY_SETTINGS_INTERNAL_NEXT_WELCOME_TIP].getLong();
+        m_internalsettings.next_welcome_tip =
+            next < 0 || next > UINT32_MAX ? 0 : static_cast<uint32_t>(next);
     }
 }
 

@@ -5,6 +5,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
 #include "rocprofvis_compute_selection.h"
+#include "rocprofvis_compute_table_view.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -395,14 +396,17 @@ ComputeKernelDetailsView::CreatePanes(DataProvider& data_provider,
         std::make_unique<ComputeMemoryChartPane>(compare, data_provider, selection);
     m_panes[static_cast<size_t>(ComputePane::kRoofline)] =
         std::make_unique<ComputeRooflinePane>(compare, data_provider);
+    std::shared_ptr<ComputeTableView> table_view =
+        std::make_shared<ComputeTableView>(data_provider, selection, has_available_metrics);
     m_panes[static_cast<size_t>(ComputePane::kMetricTables)] =
-        std::make_unique<ComputeMetricTablesPane>(compare, data_provider, selection,
-                                                  has_available_metrics);
+        std::make_unique<ComputeMetricTablesPane>(compare, table_view);
     m_panes[static_cast<size_t>(ComputePane::kIsa)] =
         std::make_unique<ComputeIsaPane>(compare, data_provider, has_isa_lines);
     m_panes[static_cast<size_t>(ComputePane::kWorkloadDetails)] =
         std::make_unique<ComputeWorkloadPane>(compare, data_provider, selection);
-    static_assert(static_cast<int32_t>(ComputePane::kWorkloadDetails) + 1 == PANE_COUNT,
+    m_panes[static_cast<size_t>(ComputePane::kPinnedMetrics)] =
+        std::make_unique<ComputePinnedMetricsPane>(compare, table_view);
+    static_assert(static_cast<int32_t>(ComputePane::kPinnedMetrics) + 1 == PANE_COUNT,
                   "CreatePanes creates every ComputePane");
 }
 
@@ -563,6 +567,7 @@ ComputeKernelDetailsView::PaneVisibleSetting(ComputePane pane) const
         case ComputePane::kMetricTables: return settings.show_compute_metric_tables;
         case ComputePane::kIsa: return settings.show_compute_isa;
         case ComputePane::kWorkloadDetails: return settings.show_compute_workload_details;
+        case ComputePane::kPinnedMetrics: return settings.show_compute_pinned_metrics;
         case ComputePane::kMemoryChart:
         case ComputePane::kCount: break;
     }
@@ -884,6 +889,18 @@ ComputeKernelDetailsView::UpdatePaneMinSizes()
         workspace_min = std::max(workspace_min, needed);
     }
     m_root_split->SetMinRightWidth(workspace_min);
+}
+
+void
+ComputeKernelDetailsView::UpdatePanesShown()
+{
+    const ComputePane maximized = MaximizedPane();
+    for(int32_t i = 0; i < PANE_COUNT; ++i)
+    {
+        const ComputePane pane = PaneAt(i);
+        Pane(pane).SetShown(maximized != ComputePane::kCount ? pane == maximized
+                                                              : ActiveSlotOf(pane) >= 0);
+    }
 }
 
 ImVec2
@@ -2165,6 +2182,7 @@ ComputeKernelDetailsView::Render()
     {
         RebuildLayout(state);
     }
+    UpdatePanesShown();
 
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, WORKSPACE_SCROLLBAR_SIZE);
     ImGui::BeginChild("kernel_details", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding,

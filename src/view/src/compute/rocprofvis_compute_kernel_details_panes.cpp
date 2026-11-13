@@ -68,6 +68,10 @@ ComputeKernelDetailsPane::Update()
 {}
 
 void
+ComputeKernelDetailsPane::SetShown(bool)
+{}
+
+void
 ComputeKernelDetailsPane::OnWorkloadSelected(uint32_t)
 {}
 
@@ -432,12 +436,10 @@ ComputeRooflinePane::ApplyCompare(bool target_changed)
     }
 }
 
-ComputeMetricTablesPane::ComputeMetricTablesPane(
-    const IKernelCompare& compare, DataProvider& data_provider,
-    std::shared_ptr<ComputeSelection> compute_selection, bool has_available_metrics)
+ComputeMetricTablesPane::ComputeMetricTablesPane(const IKernelCompare&             compare,
+                                                 std::shared_ptr<ComputeTableView> table_view)
 : ComputeKernelDetailsPane(compare)
-, m_table_view(std::make_shared<ComputeTableView>(data_provider, compute_selection,
-                                                  has_available_metrics))
+, m_table_view(std::move(table_view))
 {
     m_table_view->SetChromeless(true);
 }
@@ -486,6 +488,30 @@ ComputeMetricTablesPane::ApplyCompare(bool)
     {
         m_table_view->ClearCompareTarget();
     }
+}
+
+ComputePinnedMetricsPane::ComputePinnedMetricsPane(const IKernelCompare&             compare,
+                                                   std::shared_ptr<ComputeTableView> table_view)
+: ComputeKernelDetailsPane(compare)
+, m_table_view(std::move(table_view))
+{}
+
+const char*
+ComputePinnedMetricsPane::Title() const
+{
+    return "Pinned Metrics";
+}
+
+void
+ComputePinnedMetricsPane::RenderBody(bool)
+{
+    m_table_view->RenderPinnedMetricsPane();
+}
+
+void
+ComputePinnedMetricsPane::SetShown(bool shown)
+{
+    m_table_view->SetPinnedMetricsPaneShown(shown);
 }
 
 ComputeIsaPane::ComputeIsaPane(const IKernelCompare& compare, DataProvider& data_provider,

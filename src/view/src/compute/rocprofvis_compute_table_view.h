@@ -41,6 +41,11 @@ public:
     // Skip the card and title, for a container that draws its own pane header.
     void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
 
+    // The pinned metrics alone, filling the space given (a pane of their own).
+    void RenderPinnedMetricsPane();
+    // While the pins have a pane of their own, Render() leaves them out.
+    void SetPinnedMetricsPaneShown(bool shown) { m_pinned_pane_shown = shown; }
+
     // Compare with this kernel (B), possibly of another workload, until
     // ClearCompareTarget().
     void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
@@ -123,8 +128,9 @@ private:
     // changes; keys a workload lacks are simply not listed.
     std::set<uint64_t> m_enabled_tables;
     std::string        m_picker_filter;
-    HeaderRequest      m_header_request = HeaderRequest::kNone;
-    bool               m_chromeless     = false;
+    HeaderRequest      m_header_request    = HeaderRequest::kNone;
+    bool               m_chromeless        = false;
+    bool               m_pinned_pane_shown = false;
     // Render's listing, refilled every frame: it points into the model.
     std::vector<ListedTable> m_listed_tables;
 

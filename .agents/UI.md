@@ -1512,7 +1512,14 @@ Concrete panels (each owns its widget, chromeless):
   / bandwidth combos.
 - `ComputeMetricTablesPane` - `ComputeTableView` (opt-in metric tables); min
   width in frame heights for its toolbar, wider while comparing (Compare
-  options).
+  options). `CreatePanes` makes the table view and shares it with
+  `ComputePinnedMetricsPane`; only this panel `Update`s it.
+- `ComputePinnedMetricsPane` - the same view's pins alone
+  (`RenderPinnedMetricsPane`), so they stay in view while the tables scroll or
+  are in another box. `SetShown`, called for every panel each frame
+  (`UpdatePanesShown`: in a box, or maximized), forwards to
+  `SetPinnedMetricsPaneShown`, which drops the pinned header from Metric
+  Tables while this panel is shown.
 - `ComputeIsaPane` (sided) - `ComputeIsaView`, created only when the database
   has ISA lines. One view that `ShowKernel`s B, since the data provider has a
   single PC-sampling callback.
@@ -1532,8 +1539,8 @@ least the whole tree's width. When the panels' minimum widths would take more
 than `PANE_MIN_MAX_WORKSPACE_SHARE` of the workspace, they are scaled down
 together so a gutter always has room to move. `LAYOUT_TEMPLATES` holds each template's name,
 box count and unit rectangles (the Layout menu thumbnails). Each box shows one `ComputePane`
-(`kMemoryChart`, `kRoofline`, `kMetricTables`, `kIsa`, `kWorkloadDetails`;
-append only) or is empty; a panel lives in one box at most, so `AssignSlot` swaps when the
+(`kMemoryChart`, `kRoofline`, `kMetricTables`, `kIsa`, `kWorkloadDetails`,
+`kPinnedMetrics`; append only) or is empty; a panel lives in one box at most, so `AssignSlot` swaps when the
 panel is shown elsewhere. The kernel rail is the only place kernels are
 chosen (the compute toolbar has no workload / kernel combos): Table mode shows
 `m_kernel_metric_table`, which lists every workload's kernels, and List mode
@@ -1761,7 +1768,9 @@ view. `FetchAllMetrics()` still fetches every table so turning one on needs no
 round trip; `m_metrics_loading` separates "Loading..." from "No data". Pinning
 is delegated to `PinnedMetricTable`, shown as a "Pinned Metrics" header while
 anything is pinned, fixed between the toolbar and the scrolling list and at
-most `PINNED_MAX_HEIGHT_RATIO` of the pane (`RenderPinnedMetrics`). If a
+most `PINNED_MAX_HEIGHT_RATIO` of the pane (`RenderPinnedMetrics`), unless the
+Pinned Metrics panel is shown, which then has them alone at full height
+(`RenderPinnedMetricsPane`). If a
 workload has no available metric tables, `FetchAllMetrics()`
 leaves the view empty without submitting an invalid zero-selector request;
 when the whole database has none, the pane shows `NO_METRICS_MESSAGE`.
@@ -2434,7 +2443,7 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `show_details_panel`, `show_sidebar`, `show_histogram`,
   `show_summary`, and the Kernel Details layout: `show_compute_kernel_list`,
   `show_compute_memory_chart`, `show_compute_roofline`, `show_compute_metric_tables`, `show_compute_isa`,
-  `compute_layout_template`, `compute_layout_slots`, `compute_maximized`,
+  `show_compute_workload_details`, `show_compute_pinned_metrics`, `compute_layout_template`, `compute_layout_slots`, `compute_maximized`,
   `compute_maximized_pane`, `compute_kernel_list_table`).
 - `GetColor(Colors)` returns an `ImU32`. The `Colors` enum lists
   every themed color (background tiers, accents, table borders,

@@ -1345,6 +1345,8 @@ AppWindow::RenderViewMenu(Project* project)
         ImGui::MenuItem("Show Memory Chart", nullptr, &settings.show_compute_memory_chart);
         ImGui::MenuItem("Show Roofline", nullptr, &settings.show_compute_roofline);
         ImGui::MenuItem("Show Metric Tables", nullptr, &settings.show_compute_metric_tables);
+        ImGui::MenuItem("Show Pinned Metrics", nullptr,
+                        &settings.show_compute_pinned_metrics);
         ImGui::MenuItem("Show ISA", nullptr, &settings.show_compute_isa);
         ImGui::MenuItem("Show Workload Details", nullptr,
                         &settings.show_compute_workload_details);

@@ -1247,6 +1247,8 @@ constexpr AppWindowBoolSetting APP_WINDOW_COMPUTE_BOOL_SETTINGS[] = {
     { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA, &AppWindowSettings::show_compute_isa },
     { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_WORKLOAD_DETAILS,
       &AppWindowSettings::show_compute_workload_details },
+    { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_PINNED_METRICS,
+      &AppWindowSettings::show_compute_pinned_metrics },
     { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED, &AppWindowSettings::compute_maximized },
     { JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST_TABLE,
       &AppWindowSettings::compute_kernel_list_table },

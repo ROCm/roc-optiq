@@ -81,6 +81,8 @@ public:
     // Smallest box the panel fits in, in pixels at the current font.
     virtual ImVec2      MinSize() const;
     virtual void        Update();
+    // Whether the panel is drawn this frame: in a box, or maximized.
+    virtual void        SetShown(bool shown);
 
     virtual void OnWorkloadSelected(uint32_t workload_id);
     virtual void OnKernelSelected(uint32_t kernel_id);
@@ -193,9 +195,8 @@ private:
 class ComputeMetricTablesPane : public ComputeKernelDetailsPane
 {
 public:
-    ComputeMetricTablesPane(const IKernelCompare& compare, DataProvider& data_provider,
-                            std::shared_ptr<ComputeSelection> compute_selection,
-                            bool                              has_available_metrics);
+    ComputeMetricTablesPane(const IKernelCompare&             compare,
+                            std::shared_ptr<ComputeTableView> table_view);
 
     const char* Title() const override;
     void        RenderBody(bool maximized) override;
@@ -205,6 +206,22 @@ public:
     void        ApplyCompare(bool target_changed) override;
 
     friend struct ComputeKernelDetailsViewTestPeer;
+
+private:
+    std::shared_ptr<ComputeTableView> m_table_view;
+};
+
+// The metric tables' pins in a panel of their own, so they stay in view; the
+// Metric Tables panel leaves them out while this one is shown.
+class ComputePinnedMetricsPane : public ComputeKernelDetailsPane
+{
+public:
+    ComputePinnedMetricsPane(const IKernelCompare&             compare,
+                             std::shared_ptr<ComputeTableView> table_view);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    void        SetShown(bool shown) override;
 
 private:
     std::shared_ptr<ComputeTableView> m_table_view;

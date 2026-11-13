@@ -34,6 +34,7 @@ enum class ComputePane : int32_t
     kMetricTables,
     kIsa,
     kWorkloadDetails,
+    kPinnedMetrics,
     kCount
 };
 
@@ -169,6 +170,7 @@ private:
     int32_t     HSplitNode(int32_t left, int32_t right, float ratio);
     int32_t     VSplitNode(int32_t top, int32_t bottom, float ratio);
     void        UpdatePaneMinSizes();
+    void        UpdatePanesShown();
     // Gives the splits under `node` their sides' minimum sizes, with the panels'
     // minimum widths scaled by `width_scale`; returns the node's own minimum size.
     ImVec2      ApplyNodeMinSizes(int32_t node, float width_scale);

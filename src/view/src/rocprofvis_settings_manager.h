@@ -144,6 +144,7 @@ typedef struct AppWindowSettings
     bool    show_compute_metric_tables    = true;
     bool    show_compute_isa              = true;
     bool    show_compute_workload_details = false;
+    bool    show_compute_pinned_metrics   = false;
     int32_t compute_layout_template       = 0;
     // Pane per box; -1 = empty.
     int32_t compute_layout_slots[COMPUTE_LAYOUT_MAX_SLOTS] = { 0, 1, 2, 3 };
@@ -373,6 +374,8 @@ constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES =
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA = "show_compute_isa";
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_WORKLOAD_DETAILS =
     "show_compute_workload_details";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_PINNED_METRICS =
+    "show_compute_pinned_metrics";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";

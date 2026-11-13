@@ -25,6 +25,9 @@ constexpr const char* JSON_KEY_COMPARE_COLUMNS   = "compare_columns";
 constexpr const char* JSON_KEY_COMPARE_UNMATCHED = "compare_unmatched";
 constexpr const char* JSON_KEY_COMPARE_HIGHLIGHT = "compare_highlight";
 
+constexpr const char* PINNED_PANE_EMPTY_MESSAGE =
+    "Pin a metric in Metric Tables to see it here.";
+
 // Width of the Tables picker, in frame heights (matches the toolbar combos).
 constexpr float TABLE_PICKER_WIDTH_FRAMES = 12.0f;
 // Tallest the picker popup grows, as a fraction of the main viewport height.
@@ -375,7 +378,10 @@ ComputeTableView::Render()
     {
         ListTables(*workload, m_listed_tables);
         RenderToolbar(m_listed_tables);
-        RenderPinnedMetrics();
+        if(!m_pinned_pane_shown)
+        {
+            RenderPinnedMetrics();
+        }
         ImGui::BeginChild("metric_tables_scroll", ImVec2(0, 0));
         RenderTables(m_listed_tables);
         ImGui::EndChild();
@@ -590,6 +596,23 @@ ComputeTableView::ApplyHeaderRequest()
     {
         ImGui::SetNextItemOpen(m_header_request == HeaderRequest::kExpandAll);
     }
+}
+
+void
+ComputeTableView::RenderPinnedMetricsPane()
+{
+    if(!m_has_available_metrics)
+    {
+        ImGui::TextDisabled("%s", NO_METRICS_MESSAGE);
+        return;
+    }
+    if(m_pinned_metrics.empty())
+    {
+        ImGui::TextDisabled("%s", PINNED_PANE_EMPTY_MESSAGE);
+        return;
+    }
+    m_pinned_metric_table.SetMaxHeight(ImGui::GetContentRegionAvail().y);
+    m_pinned_metric_table.Render();
 }
 
 void

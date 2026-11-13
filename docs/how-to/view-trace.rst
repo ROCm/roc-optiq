@@ -155,7 +155,8 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 Select a track
 ^^^^^^^^^^^^^^
 
-Use the following actions to select tracks in the **Timeline View** or the **System Topology View**. 
+Use the following actions to select tracks in the **Timeline View** or the **System Topology View**.
+
 - Click a track in the **Description** area to select only that track.
 - Press and hold **Ctrl** while clicking a track to add it to the selection or remove it.
 - Press and hold **Shift** while clicking a track to select every track between it and the track you last clicked. Hold **Ctrl** as well to add those tracks to the current selection.
@@ -326,7 +327,7 @@ This section provides an interface for multiple data perspectives, offering gran
   
   .. tip::
 
-     - Table columns fit their content up to a maximum width. A long value, such as a demangled kernel name, is shortened in the cell. Hover the cell to see the full value. A column you resize by hand keeps that width.
+     - Table columns fit their content up to a maximum width. A long value, such as a demangled kernel name, is truncated in the cell. Hover over the cell to see the full value. A column you resize manually keeps that width.
      - Right-click on the column headers to show/hide columns, size a column to fit, or size all columns to fit your screen.
      - Right-click on a table row and select **Go To Event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
@@ -338,7 +339,7 @@ This section provides an interface for multiple data perspectives, offering gran
   - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. You can open any of the events in the call stack hierarchy by right clicking and choose **Go To Event**.
   - You can also right-click on a cell in the **Flow Data** or **Call Stack Data** table for copy/export actions.
 
-- **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on). For ROCprofiler-SDK traces, **Track Details** and the topology tree show the operating-system process ID. Processes loaded from different files stay separate.
+- **Track Details**: Shows additional information about the track that is not visible on the timeline.  It lists the node the track belongs to and that node's properties, the owning process, and the track type (thread, counter, queue, and so on). For ROCprofiler-SDK traces, **Track Details** and the topology tree show the operating-system process ID. Processes loaded from different files stay separate.
 
   - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. The statistics display at full precision, without rounding or truncation.
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
@@ -383,12 +384,11 @@ Summary View
 
 The **Summary View** has these tabs:
 
-* **Overview** shows the event composition for the trace and a card for each category that has data. Each card shows total duration and invocation count, and a chart of the operations that used the most execution time. Those entries also report percent of total duration and mean duration. **Details** opens that category's tab.
-* **System Topology** breaks down counter data and event composition (Kernel Executions, Memory Operations, and Thread Operations) across the trace's topology. Expand a topology item to view its event composition for a specific node, processor, process, or thread. Click the arrow in the **Counters** column of a row to show that item's counter values on the right.
-* **Kernel Executions** shows a pie chart, a bar chart, and a table of kernel executions. Table columns are **Name**, **Invocation(s)**, **Total Duration**, **Total Duration (%)**, **Avg Duration**, **Max Duration**, and **Min Duration**. Select a row to list the matching kernel executions.
-* **Thread Operations** shows a pie chart, a bar chart, and a table of thread operations. The table uses the same columns as **Kernel Executions**. Select a row to list the matching thread operations.
-
-A **Memory Operations** tab is shown when the trace contains memory operations. It uses the same charts, table columns, and row selection as **Kernel Executions** and **Thread Operations**.
+*  **Overview** shows trace-level metrics (**Trace Span**, **Tracked Events**, **Nodes**, and **GPUs**), an **Event Composition** bar showing each category's share of total execution time, and a card for each category that has data. Each card shows total duration and invocation count, and a **Top by Duration** list of the operations that used the most execution time, along with each entry's percent of total duration. The **Details** button opens that category's tab in a new **Summary** window.
+* **System Topology** breaks down counter data and event composition (**Kernel Executions**, **Memory Operations**, and **Thread Operations**) across the trace's topology. Expand a topology item to view its event composition for a specific node, processor, process, or thread. Click the arrow in the **Counters** column of a row to show that item's counter values on the right.
+* **Kernel Executions** shows a pie chart, a bar chart, and a table of kernel executions (select each by clicking its icon). Table columns are **Name**, **Invocation(s)**, **Total Duration**, **Total Duration (%)**, **Avg Duration**, **Max Duration**, and **Min Duration**. Select a row to list the matching kernel executions.
+* **Thread Operations** shows a pie chart, a bar chart, and a table of thread operations (select each by clicking its icon). The table uses the same columns as **Kernel Executions**. Select a row to list the matching thread operations.
+* **Memory Operations** (only shown when the trace contains memory operations) shows the same charts, table columns, and row selection as **Kernel Executions** and **Thread Operations**.
 
 .. _minimap:
 
@@ -435,7 +435,7 @@ Search for events using the search box on the main **Toolbar**.
     .. image:: ../images/search-advanced-options.png
        :width: 800
        :alt: Search box on the main toolbar with advanced options
-	 
+
   - |search-advanced| will glow to indicate **Advanced** options are active.
  
 

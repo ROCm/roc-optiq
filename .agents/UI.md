@@ -1514,7 +1514,8 @@ layout with a missing, numeric, or duplicate block id, or an arrow whose
 `from`/`to` names no block; the caller then falls back to the next layout
 source instead of drawing disconnected arrows.
 - `MemChartMetricRef` - references a metric by its full dotted id
-  `category.table.entry` (e.g. "3.1.0").
+  `category.table.entry` (e.g. "3.1.0"), read from a content item's or
+  arrow's `metric_id` key.
 - `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
   No ImGui is pulled into the model file.
 
@@ -1523,7 +1524,7 @@ table (block rows + arrow rows keyed by block id). `LoadWorkloadLayout()`
 resolves a layout in priority order: a temporary dev override at
 `<config-dir>/memory_chart.json` (forced template, metric ids remapped; remove
 once template selection is stable) -> the per-workload JSON blob in
-`compute_workload.memory_chart_extdata` (dotted metric ids, used as authored)
+`compute_workload.memory_chart_layout_extdata` (dotted metric ids, used as authored)
 -> an **architecture-specific embedded layout** (picked from the workload's
 `gpu_arch`: an exact key such as gfx950, else a family file whose trailing
 `x` is a wildcard, e.g. `gfx115x` for gfx1151; metric ids are remapped by

@@ -28,34 +28,10 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
-      enable_remote:
-        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
-        type: boolean
-        default: false
-      enable_profiler:
-        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
-        type: boolean
-        default: false
-      enable_agentic_profiling:
-        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
-        type: boolean
-        default: false
-      enable_scripting:
-        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
-        type: boolean
-        default: false
-      enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
-        type: boolean
-        default: false
-      enable_trace_compare:
-        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
-        type: boolean
-        default: false
-      enable_multi_window:
-        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
-        type: boolean
-        default: false
+      cmake_args:
+        description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
+        type: string
+        default: ''
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -104,34 +80,10 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
-      enable_remote:
-        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
-        type: boolean
-        default: false
-      enable_profiler:
-        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
-        type: boolean
-        default: false
-      enable_agentic_profiling:
-        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
-        type: boolean
-        default: false
-      enable_scripting:
-        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
-        type: boolean
-        default: false
-      enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
-        type: boolean
-        default: false
-      enable_trace_compare:
-        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
-        type: boolean
-        default: false
-      enable_multi_window:
-        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
-        type: boolean
-        default: false
+      cmake_args:
+        description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
+        type: string
+        default: ''
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -154,13 +106,7 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
-  ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
-  ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
-  ENABLE_VENDOR_PYTHON: ${{ (inputs.enable_vendor_python == true || inputs.enable_vendor_python == 'true') && 'ON' || 'OFF' }}
-  ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
-  ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
+  CMAKE_ARGS: ${{ inputs.cmake_args }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
   S3_ROOT_DIRECTORY: 'v5/rocm/extras/rocoptiq'
 
@@ -198,7 +144,7 @@ jobs:
           echo "LD_LIBRARY_PATH=/opt/openssl-3/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
       - name: Select Embeddable Python
-        if: env.ENABLE_SCRIPTING == 'ON' && env.ENABLE_VENDOR_PYTHON == 'OFF'
+        if: contains(inputs.cmake_args, 'ENABLE_VENDOR_PYTHON=OFF')
         run: |
           # /opt/python/cp3xx on PATH is the static manylinux CPython. It has an
           # interpreter and no libpython, so FindPython3 Development.Embed fails.
@@ -232,16 +178,10 @@ jobs:
           CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
           CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
-          cmake -B "${BUILD_DIR}" \
-            --preset "${CMAKE_CONFIG_PRESET}" \
-            -DROCPROFVIS_ENABLE_INTERNAL_BANNER="${ENABLE_INTERNAL_BANNER}" \
-            -DROCPROFVIS_ENABLE_REMOTE="${ENABLE_REMOTE}" \
-            -DROCPROFVIS_ENABLE_PROFILER="${ENABLE_PROFILER}" \
-            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING="${ENABLE_AGENTIC_PROFILING}" \
-            -DROCPROFVIS_ENABLE_SCRIPTING="${ENABLE_SCRIPTING}" \
-            -DROCPROFVIS_ENABLE_VENDOR_PYTHON="${ENABLE_VENDOR_PYTHON}" \
-            -DROCPROFVIS_ENABLE_TRACE_COMPARE="${ENABLE_TRACE_COMPARE}" \
-            -DROCPROFVIS_MULTI_WINDOW="${ENABLE_MULTI_WINDOW}" \
+          cmake -B ${{ env.BUILD_DIR }} \
+            --preset ${{ inputs.cmake_config_preset }} \
+            -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
+            ${CMAKE_ARGS} \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND="${CRYPTO_BACKEND}" \
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \

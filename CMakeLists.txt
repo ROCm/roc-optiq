@@ -34,15 +34,26 @@ option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
+# Umbrella switch for every in-development feature below. It only changes their
+# defaults, so an explicit -DROCPROFVIS_ENABLE_<X>=OFF still wins. The CI
+# experimental builds set it, so adding or removing a feature here needs no
+# workflow change.
+option(ROCPROFVIS_ENABLE_EXPERIMENTAL "Default every in-development feature to ON" OFF)
+if(ROCPROFVIS_ENABLE_EXPERIMENTAL)
+    set(ROCPROFVIS_EXPERIMENTAL_DEFAULT ON)
+else()
+    set(ROCPROFVIS_EXPERIMENTAL_DEFAULT OFF)
+endif()
+
 # TEMPORARY: gate the in-development profiler-launch and remote/SSH features
 # until they ship. Both default OFF so release builds exclude the UI, the
 # dependent sources, and (for remote) the libssh2/mbedtls stack and its
 # submodules. Remove these options and unwrap their guards when the features
 # graduate.
-option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
-option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
-option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
-option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
+option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 # Only meaningful with scripting: downloads a pinned CPython and ships it with
 # the app. OFF builds against this machine's Python, which then only runs here.
 include(CMakeDependentOption)
@@ -66,8 +77,8 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 # until they ship. Both default OFF so release builds exclude their UI and
 # dependent sources. Remove these options and unwrap their guards when the
 # features graduate.
-option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
-option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")

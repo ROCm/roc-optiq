@@ -101,7 +101,7 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :align: center
    :alt: Summary View bar chart displaying per-kernel invocation count and duration metrics
 
-Summary View -- Roofline Chart
+Summary View -- Roofline chart
 ------------------------------
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
@@ -113,7 +113,13 @@ Showing where kernels are positioned relative to these rooflines helps determine
    :alt: Summary View roofline chart plotting kernel arithmetic intensity against performance relative to hardware memory and compute ceilings
 
 - The kernel performance at each cache level is displayed as individual dots in the roofline chart. 
-- Click |gear| in the menu to adjust your view:
+- Click |gear| to access the Roofline chart menu, which is shown in the picture below.
+
+    .. image:: ../images/Roofline-legend.png
+       :width: 400
+       :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
+
+    To adjust your view of the chart:
 
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
   - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration.
@@ -127,11 +133,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
     - Outside (which pushes the legend outside of the plot area)
     
     The roofline menu opens outside the plot by default.
-    
-    .. image:: ../images/Roofline-legend.png
-       :width: 400
-       :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
-
+ 
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
 - Use the filter dropdowns at the top of the **Roofline Analysis** pane to show or hide groups of chart elements together, instead of toggling them one by one in the **Custom** section of the |gear| menu:
 

@@ -176,13 +176,14 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/optiq-ci-manylinux:latest
+      image: ghcr.io/rocm/optiq-ci-manylinux@sha256:21a37da72e6875d7cb8beaa8dd6031b7d33dc5c48bd519afeefb6aec987b98fb
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           submodules: true
+          persist-credentials: false
 
       - name: Install OpenSSL 3
         if: inputs.crypto_backend == 'OpenSSL'
@@ -227,29 +228,32 @@ jobs:
           echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
       - name: Build, Make, and Verify Installation
+        env:
+          CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
-          cmake -B ${{ env.BUILD_DIR }} \
-            --preset ${{ inputs.cmake_config_preset }} \
-            -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
-            -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
-            -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
-            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
-            -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
-            -DROCPROFVIS_ENABLE_VENDOR_PYTHON=${{ env.ENABLE_VENDOR_PYTHON }} \
-            -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
-            -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
+          cmake -B "${BUILD_DIR}" \
+            --preset "${CMAKE_CONFIG_PRESET}" \
+            -DROCPROFVIS_ENABLE_INTERNAL_BANNER="${ENABLE_INTERNAL_BANNER}" \
+            -DROCPROFVIS_ENABLE_REMOTE="${ENABLE_REMOTE}" \
+            -DROCPROFVIS_ENABLE_PROFILER="${ENABLE_PROFILER}" \
+            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING="${ENABLE_AGENTIC_PROFILING}" \
+            -DROCPROFVIS_ENABLE_SCRIPTING="${ENABLE_SCRIPTING}" \
+            -DROCPROFVIS_ENABLE_VENDOR_PYTHON="${ENABLE_VENDOR_PYTHON}" \
+            -DROCPROFVIS_ENABLE_TRACE_COMPARE="${ENABLE_TRACE_COMPARE}" \
+            -DROCPROFVIS_MULTI_WINDOW="${ENABLE_MULTI_WINDOW}" \
             -DGLFW_LINK_STATIC=ON \
-            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            -DCRYPTO_BACKEND="${CRYPTO_BACKEND}" \
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
             ${Python3_ROOT_DIR:+-DPython3_ROOT_DIR="${Python3_ROOT_DIR}"} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
             -DROCM_PACKAGE_NAME="amdrocm${ROCM_VERSION}-roc-optiq" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"
-          cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
-          if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
-            echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
+          cmake --build "${BUILD_DIR}" --parallel 4 --target package
+          if [ -e "${BUILD_DIR}/${BUILD_FILE_NAME}" ]; then
+            echo "✅ ${BUILD_FILE_NAME} has been successfully built!"
           else
-            echo "❌ ${{ env.BUILD_FILE_NAME }} was not built!"
+            echo "❌ ${BUILD_FILE_NAME} was not built!"
             exit 1
           fi
 
@@ -266,7 +270,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-manylinux${{ inputs.artifact_suffix }}
           path: |
@@ -284,7 +288,7 @@ jobs:
 
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-manylinux-release${{ inputs.artifact_suffix }}
           path: |
@@ -293,8 +297,11 @@ jobs:
 
       - name: Resolve S3 secrets
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        env:
+          S3_BUCKET_ENV: ${{ inputs.s3_bucket_env }}
+          S3_ROOT_INPUT: ${{ inputs.s3_root_directory }}
         run: |
-          case "${{ inputs.s3_bucket_env }}" in
+          case "${S3_BUCKET_ENV}" in
             dev)
               echo "S3_BUCKET=${{ secrets.AWS_DEV_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_DEV_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
@@ -316,21 +323,25 @@ jobs:
             legacy-nightly)
               echo "S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> "$GITHUB_ENV"
-              S3_BASE="${{ inputs.s3_root_directory }}"
+              S3_BASE="${S3_ROOT_INPUT}"
               if [[ -z "${S3_BASE}" ]]; then
                 S3_BASE="nightly"
+              fi
+              if [[ ! "${S3_BASE}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+                echo "Invalid s3_root_directory: ${S3_BASE}"
+                exit 1
               fi
               echo "S3_ROOT_DIRECTORY=${S3_BASE}/$(date +%Y_%m_%d)/manylinux" >> "$GITHUB_ENV"
               ;;
             *)
-              echo "Unknown s3_bucket_env: ${{ inputs.s3_bucket_env }}"
+              echo "Unknown s3_bucket_env: ${S3_BUCKET_ENV}"
               exit 1
               ;;
           esac
 
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.S3_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}

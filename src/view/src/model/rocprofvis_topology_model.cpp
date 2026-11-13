@@ -109,6 +109,7 @@ TopologyTree::Finalize()
     // Before BuildTrackOrder(): it walks GetNodes(), so the node order has to
     // be settled first for the track order to match the rows.
     OrderNodes();
+    RankProcesses();
     BuildTrackOrder();
     CountProcessors();
     m_revision++;
@@ -270,6 +271,25 @@ TopologyTree::OrderNodes()
     for(size_t rank = 0; rank < nodes.size(); rank++)
     {
         static_cast<NodeInfo*>(nodes[rank])->display_index = rank + 1;
+    }
+}
+
+void
+TopologyTree::RankProcesses()
+{
+    size_t rank = 0;
+    for(const TopologyNode* node : GetNodes())
+    {
+        std::vector<TopologyNode*> processes = node->GetChildren(TopologyNodeType::kProcess);
+        std::sort(processes.begin(), processes.end(),
+                  [](const TopologyNode* lhs, const TopologyNode* rhs) {
+                      return lhs->GetId() < rhs->GetId();
+                  });
+        for(TopologyNode* process : processes)
+        {
+            rank++;
+            static_cast<ProcessInfo*>(process)->display_index = rank;
+        }
     }
 }
 

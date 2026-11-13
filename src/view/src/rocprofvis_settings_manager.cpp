@@ -534,6 +534,39 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
 }
 
 void
+SettingsManager::SerializeTrackSettings(jt::Json& json)
+{
+    jt::Json& ts = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_TRACKS];
+    ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR] =
+        static_cast<int>(m_usersettings.track_settings.decorator);
+    ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH] = m_usersettings.track_settings.decorator_width;
+}
+
+void
+SettingsManager::DeserializeTrackSettings(jt::Json& json)
+{
+    if(json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_TRACKS].isObject())
+    {
+        jt::Json& ts = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_TRACKS];
+        if(ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR].isLong())
+        {
+            const int64_t mode = ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR].getLong();
+            if(mode >= 0 && mode < static_cast<int64_t>(TrackDecoratorMode::kCount))
+            {
+                m_usersettings.track_settings.decorator =
+                    static_cast<TrackDecoratorMode>(mode);
+            }
+        }
+        if(ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH].isLong())
+        {
+            m_usersettings.track_settings.decorator_width = static_cast<int>(std::clamp<int64_t>(
+                ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH].getLong(),
+                TRACK_DECORATOR_WIDTH_MIN, TRACK_DECORATOR_WIDTH_MAX));
+        }
+    }
+}
+
+void
 SettingsManager::SaveSettingsJson()
 {
     jt::Json settings_json;
@@ -542,6 +575,7 @@ SettingsManager::SaveSettingsJson()
     SerializeInternalSettings(settings_json);
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
+    SerializeTrackSettings(settings_json);
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
     SerializeProfilerSettings(settings_json);
@@ -574,6 +608,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeInternalSettings(result.second);
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
+        DeserializeTrackSettings(result.second);
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
@@ -678,6 +713,7 @@ SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
       { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
+        TrackSettings{ TrackDecoratorMode::kTrackType, TRACK_DECORATOR_WIDTH_DEFAULT },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
         AssistantSettings{}, false })

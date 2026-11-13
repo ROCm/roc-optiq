@@ -1142,13 +1142,15 @@ void RegisterAppTests(ImGuiTestEngine* e)
         if (peer.TableWidgetCount() == 0) return;
         ctx->Yield(3);
 
-        // Shown tables render embedded (no window of their own) inside the pane's
-        // "metric_tables_scroll" child, which "//Main Window/**/" can't reach.
+        // Shown tables render inside the pane's "metric_tables_scroll" child, which
+        // "//Main Window/**/" can't reach. A tall table scrolls in its own child
+        // window under it, so take the outer list: gathering items from it reaches
+        // into those children too.
         auto find_table_window = [&]() -> ImGuiWindow*
         {
             ImGuiWindow* found = nullptr;
             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-                if (w->WasActive && strstr(w->Name, "metric_tables_scroll"))
+                if (found == nullptr && w->WasActive && strstr(w->Name, "metric_tables_scroll"))
                     found = w;
             return found;
         };

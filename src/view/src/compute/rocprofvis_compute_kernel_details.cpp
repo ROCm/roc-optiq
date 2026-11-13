@@ -44,6 +44,13 @@ constexpr float RAIL_TABLE_RATIO = 0.45f;  // kernel table | workspace
 constexpr float PANE_MIN_FRAMES          = 5.0f;
 constexpr float PANE_MIN_WIDTH_EMS       = 12.0f;
 constexpr float WORKSPACE_MIN_WIDTH_EMS  = 20.0f;
+// Panels whose toolbars lay combos side by side get crushed sooner.
+constexpr float ROOFLINE_MIN_WIDTH_EMS                 = 44.0f;
+constexpr float METRIC_TABLES_MIN_WIDTH_FRAMES         = 18.0f;
+constexpr float METRIC_TABLES_COMPARE_MIN_WIDTH_FRAMES = 25.0f;
+// Most of the workspace's width the panels' minimum widths may claim, so a
+// gutter always has room to move.
+constexpr float PANE_MIN_MAX_WORKSPACE_SHARE = 0.85f;
 constexpr float RAIL_LIST_MIN_WIDTH_EMS  = 11.0f;
 constexpr float RAIL_TABLE_MIN_WIDTH_EMS = 24.0f;
 
@@ -810,9 +817,17 @@ ComputeKernelDetailsView::CurrentLayoutState() const
 void
 ComputeKernelDetailsView::RebuildLayout(const LayoutState& state)
 {
-    m_hsplits.clear();
-    m_vsplits.clear();
-    m_root_split->SetRight(state.maximized ? m_maximized_pane : BuildTemplate(state.layout));
+    m_layout_nodes.clear();
+    m_layout_root = NO_LAYOUT_NODE;
+    if(state.maximized)
+    {
+        m_root_split->SetRight(m_maximized_pane);
+    }
+    else
+    {
+        m_layout_root = BuildTemplate(state.layout);
+        m_root_split->SetRight(m_layout_nodes[static_cast<size_t>(m_layout_root)].item);
+    }
     // Maximize fills the whole tab, so the kernel rail steps aside too; kernels
     // are picked again once restored.
     m_rail_pane->m_visible = state.kernel_rail && !state.maximized;
@@ -820,73 +835,147 @@ ComputeKernelDetailsView::RebuildLayout(const LayoutState& state)
     m_layout_built         = true;
 }
 
-LayoutItem::Ptr
-ComputeKernelDetailsView::HSplitPane(const LayoutItem::Ptr& left, const LayoutItem::Ptr& right,
-                                     float ratio)
+
+int32_t
+ComputeKernelDetailsView::BoxNode(int32_t slot)
 {
-    std::shared_ptr<HSplitContainer> split = std::make_shared<HSplitContainer>(left, right);
-    split->SetSplit(ratio);
-    split->SetSplitterSize(PANE_GUTTER);
-    m_hsplits.push_back(split);
-    return MakeSplitPane(split);
+    LayoutNode node{ slot, nullptr, nullptr, NO_LAYOUT_NODE, NO_LAYOUT_NODE,
+                     m_slot_panes[static_cast<size_t>(slot)] };
+    m_layout_nodes.push_back(std::move(node));
+    return static_cast<int32_t>(m_layout_nodes.size()) - 1;
 }
 
-LayoutItem::Ptr
-ComputeKernelDetailsView::VSplitPane(const LayoutItem::Ptr& top, const LayoutItem::Ptr& bottom,
-                                     float ratio)
+int32_t
+ComputeKernelDetailsView::HSplitNode(int32_t left, int32_t right, float ratio)
 {
-    std::shared_ptr<VSplitContainer> split = std::make_shared<VSplitContainer>(top, bottom);
+    const LayoutItem::Ptr left_item  = m_layout_nodes[static_cast<size_t>(left)].item;
+    const LayoutItem::Ptr right_item = m_layout_nodes[static_cast<size_t>(right)].item;
+    std::shared_ptr<HSplitContainer> split =
+        std::make_shared<HSplitContainer>(left_item, right_item);
     split->SetSplit(ratio);
     split->SetSplitterSize(PANE_GUTTER);
-    m_vsplits.push_back(split);
-    return MakeSplitPane(split);
+    LayoutNode node{ NO_LAYOUT_NODE, split, nullptr, left, right, MakeSplitPane(split) };
+    m_layout_nodes.push_back(std::move(node));
+    return static_cast<int32_t>(m_layout_nodes.size()) - 1;
 }
 
-LayoutItem::Ptr
+int32_t
+ComputeKernelDetailsView::VSplitNode(int32_t top, int32_t bottom, float ratio)
+{
+    const LayoutItem::Ptr top_item    = m_layout_nodes[static_cast<size_t>(top)].item;
+    const LayoutItem::Ptr bottom_item = m_layout_nodes[static_cast<size_t>(bottom)].item;
+    std::shared_ptr<VSplitContainer> split =
+        std::make_shared<VSplitContainer>(top_item, bottom_item);
+    split->SetSplit(ratio);
+    split->SetSplitterSize(PANE_GUTTER);
+    LayoutNode node{ NO_LAYOUT_NODE, nullptr, split, top, bottom, MakeSplitPane(split) };
+    m_layout_nodes.push_back(std::move(node));
+    return static_cast<int32_t>(m_layout_nodes.size()) - 1;
+}
+
+int32_t
 ComputeKernelDetailsView::BuildTemplate(ComputeLayoutTemplate layout)
 {
-    const std::array<LayoutItem::Ptr, COMPUTE_LAYOUT_MAX_SLOTS>& box = m_slot_panes;
     switch(layout)
     {
-        case ComputeLayoutTemplate::kSingle: return box[0];
-        case ComputeLayoutTemplate::kSideBySide: return HSplitPane(box[0], box[1], HALF);
-        case ComputeLayoutTemplate::kStacked: return VSplitPane(box[0], box[1], HALF);
+        case ComputeLayoutTemplate::kSingle: return BoxNode(0);
+        case ComputeLayoutTemplate::kSideBySide:
+            return HSplitNode(BoxNode(0), BoxNode(1), HALF);
+        case ComputeLayoutTemplate::kStacked:
+            return VSplitNode(BoxNode(0), BoxNode(1), HALF);
         case ComputeLayoutTemplate::kMainRight:
-            return HSplitPane(box[0], VSplitPane(box[1], box[2], HALF), MAIN_SPLIT_RATIO);
+            return HSplitNode(BoxNode(0), VSplitNode(BoxNode(1), BoxNode(2), HALF),
+                              MAIN_SPLIT_RATIO);
         case ComputeLayoutTemplate::kThreeColumns:
-            return HSplitPane(box[0], HSplitPane(box[1], box[2], HALF), THIRD);
+            return HSplitNode(BoxNode(0), HSplitNode(BoxNode(1), BoxNode(2), HALF),
+                              THIRD);
         case ComputeLayoutTemplate::kMainThreeBelow:
-            return VSplitPane(
-                box[0], HSplitPane(box[1], HSplitPane(box[2], box[3], HALF), THIRD),
+            return VSplitNode(
+                BoxNode(0),
+                HSplitNode(BoxNode(1), HSplitNode(BoxNode(2), BoxNode(3), HALF), THIRD),
                 MAIN_SPLIT_RATIO);
         case ComputeLayoutTemplate::kGrid:
-            return VSplitPane(HSplitPane(box[0], box[1], HALF),
-                              HSplitPane(box[2], box[3], HALF), HALF);
+            return VSplitNode(HSplitNode(BoxNode(0), BoxNode(1), HALF),
+                              HSplitNode(BoxNode(2), BoxNode(3), HALF), HALF);
         case ComputeLayoutTemplate::kMainBelow:
         case ComputeLayoutTemplate::kCount: break;
     }
-    return VSplitPane(box[0], HSplitPane(box[1], box[2], HALF), MAIN_SPLIT_RATIO);
+    return VSplitNode(BoxNode(0), HSplitNode(BoxNode(1), BoxNode(2), HALF),
+                      MAIN_SPLIT_RATIO);
 }
 
 void
 ComputeKernelDetailsView::UpdatePaneMinSizes()
 {
-    const float frame_h = ImGui::GetFrameHeightWithSpacing();
+    const float em       = ImGui::GetFontSize();
+    const float rail_min = em * (WindowSettings().compute_kernel_list_table
+                                     ? RAIL_TABLE_MIN_WIDTH_EMS
+                                     : RAIL_LIST_MIN_WIDTH_EMS);
+    m_root_split->SetMinLeftWidth(rail_min);
+    float workspace_min = em * WORKSPACE_MIN_WIDTH_EMS;
+    if(m_layout_root != NO_LAYOUT_NODE)
+    {
+        // Panels that want more room than the workspace has would pin every
+        // gutter between them, so their minimums shrink together to fit.
+        const float total_w = ImGui::GetContentRegionAvail().x;
+        const float rail_w =
+            m_rail_pane->m_visible
+                ? std::max(rail_min, total_w * m_root_split->GetSplit()) + PANE_GUTTER
+                : 0.0f;
+        const float limit  = (total_w - rail_w) * PANE_MIN_MAX_WORKSPACE_SHARE;
+        float       needed = ApplyNodeMinSizes(m_layout_root, 1.0f).x;
+        if(limit > 0.0f && needed > limit)
+        {
+            needed = ApplyNodeMinSizes(m_layout_root, limit / needed).x;
+        }
+        workspace_min = std::max(workspace_min, needed);
+    }
+    m_root_split->SetMinRightWidth(workspace_min);
+}
+
+ImVec2
+ComputeKernelDetailsView::ApplyNodeMinSizes(int32_t node, float width_scale)
+{
+    const LayoutNode& item = m_layout_nodes[static_cast<size_t>(node)];
+    if(item.hsplit)
+    {
+        const ImVec2 left  = ApplyNodeMinSizes(item.first, width_scale);
+        const ImVec2 right = ApplyNodeMinSizes(item.second, width_scale);
+        item.hsplit->SetMinLeftWidth(left.x);
+        item.hsplit->SetMinRightWidth(right.x);
+        return ImVec2(left.x + PANE_GUTTER + right.x, std::max(left.y, right.y));
+    }
+    if(item.vsplit)
+    {
+        const ImVec2 top    = ApplyNodeMinSizes(item.first, width_scale);
+        const ImVec2 bottom = ApplyNodeMinSizes(item.second, width_scale);
+        item.vsplit->SetMinTopHeight(top.y);
+        item.vsplit->SetMinBottomHeight(bottom.y);
+        return ImVec2(std::max(top.x, bottom.x), top.y + PANE_GUTTER + bottom.y);
+    }
+    ImVec2 size = PaneMinSize(SlotPane(item.slot));
+    size.x *= width_scale;
+    return size;
+}
+
+ImVec2
+ComputeKernelDetailsView::PaneMinSize(ComputePane pane) const
+{
     const float em      = ImGui::GetFontSize();
-    m_root_split->SetMinLeftWidth(em * (WindowSettings().compute_kernel_list_table
-                                            ? RAIL_TABLE_MIN_WIDTH_EMS
-                                            : RAIL_LIST_MIN_WIDTH_EMS));
-    m_root_split->SetMinRightWidth(em * WORKSPACE_MIN_WIDTH_EMS);
-    for(const std::shared_ptr<HSplitContainer>& split : m_hsplits)
+    const float frame_h = ImGui::GetFrameHeightWithSpacing();
+    ImVec2      size(em * PANE_MIN_WIDTH_EMS, frame_h * PANE_MIN_FRAMES);
+    if(pane == ComputePane::kRoofline)
     {
-        split->SetMinLeftWidth(em * PANE_MIN_WIDTH_EMS);
-        split->SetMinRightWidth(em * PANE_MIN_WIDTH_EMS);
+        size.x = em * ROOFLINE_MIN_WIDTH_EMS;
     }
-    for(const std::shared_ptr<VSplitContainer>& split : m_vsplits)
+    else if(pane == ComputePane::kMetricTables)
     {
-        split->SetMinTopHeight(frame_h * PANE_MIN_FRAMES);
-        split->SetMinBottomHeight(frame_h * PANE_MIN_FRAMES);
+        // The Compare combo joins the tables' toolbar while comparing.
+        size.x = ImGui::GetFrameHeight() * (m_compare.enabled
+                                                ? METRIC_TABLES_COMPARE_MIN_WIDTH_FRAMES
+                                                : METRIC_TABLES_MIN_WIDTH_FRAMES);
     }
+    return size;
 }
 
 void
@@ -1024,14 +1113,16 @@ ComputeKernelDetailsView::RenderPaneHeader(const char* title, int32_t slot, bool
 {
     SettingsManager&  settings   = SettingsManager::GetInstance();
     const ImGuiStyle& style      = settings.GetDefaultStyle();
-    ImFont*           title_font = settings.GetFontManager().GetFont(FontType::kDefault);
-    const float       title_px   = settings.GetFontManager().GetFontSize(FontSize::kMedLarge);
     const float       button_gap = style.ItemSpacing.x * 0.5f;
 
     // Title: in a box it is the drag handle (move cursor) - dragging it onto
-    // another box swaps their panels.
-    ImGui::PushFont(title_font, title_px);
-    const ImVec2 text_size = ImGui::CalcTextSize(title);
+    // another box swaps their panels. PushFont takes an unscaled size; the
+    // title is drawn at the scaled size it was measured at.
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault),
+                    settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+    ImFont*      title_font = ImGui::GetFont();
+    const float  title_px   = ImGui::GetFontSize();
+    const ImVec2 text_size  = ImGui::CalcTextSize(title);
     ImGui::PopFont();
     const ImVec2 title_min  = ImGui::GetCursorScreenPos();
     const ImVec2 title_size(text_size.x + TITLE_HANDLE_PAD_X * 2.0f,
@@ -2013,6 +2104,7 @@ ComputeKernelDetailsView::SwapCompare()
     // the follow rule against the new B.
     m_compare.baseline_workload_id = b_workload;
     m_compare.baseline_kernel_id   = b_kernel;
+    m_table_view->SwapComparePins();
     m_compute_selection->Select(b_workload, b_kernel);
     ApplyCompare(true);
 }
@@ -2141,32 +2233,48 @@ ComputeKernelDetailsView::RenderCompareCard()
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
                           ImGuiChildFlags_AlwaysUseWindowPadding);
 
-    // A and B at the card's full width, each with its workload when there are
-    // several. Both are picked in the list below.
+    // A and B at the card's full width, each with its workload directly under the
+    // kernel name when there are several. Both are picked in the list below.
     auto side_row = [&](const char* letter, Colors color, const char* tooltip,
                         const KernelInfo* kernel, const WorkloadInfo* workload,
                         const char* missing) {
-        // ElidedText draws into a child of fixed id; one scope per row.
-        ImGui::PushID(letter);
+        const bool workload_line = several_workloads && workload != nullptr;
         Badge(letter, color, tooltip);
         ImGui::SameLine();
         const float text_x = ImGui::GetCursorPosX();
+        if(workload_line)
+        {
+            ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+        }
         ImGui::AlignTextToFramePadding();
+        std::string name;
         if(kernel)
         {
-            ElidedText(kernel->name.c_str(), ImGui::GetContentRegionAvail().x,
-                       KERNEL_TOOLTIP_WIDTH);
+            name = ElideWithEllipsis(kernel->name, ImGui::GetContentRegionAvail().x,
+                                     KERNEL_NAME_MAX_CHARS);
+            ImGui::TextUnformatted(name.c_str());
         }
         else
         {
             ImGui::TextDisabled("%s", missing);
         }
-        if(several_workloads && workload)
+        if(workload_line)
+        {
+            ImGui::PopStyleVar();
+        }
+        if(kernel && name != kernel->name && ImGui::IsItemHovered())
+        {
+            BeginTooltipStyled();
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + KERNEL_TOOLTIP_WIDTH);
+            ImGui::TextUnformatted(kernel->name.c_str());
+            ImGui::PopTextWrapPos();
+            EndTooltipStyled();
+        }
+        if(workload_line)
         {
             ImGui::SetCursorPosX(text_x);
             ImGui::TextDisabled("%s", workload->name.c_str());
         }
-        ImGui::PopID();
     };
     side_row("A", Colors::kComparisonBase, "A: the selected kernel", a_kernel, a_workload,
              "No kernel selected");
@@ -2252,11 +2360,11 @@ ComputeKernelDetailsView::Render()
     {
         RebuildLayout(state);
     }
-    UpdatePaneMinSizes();
 
     ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, WORKSPACE_SCROLLBAR_SIZE);
     ImGui::BeginChild("kernel_details", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    UpdatePaneMinSizes();
     // Splits size their children from the space left, so no spacing may be added
     // between a child and its gutter.
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));

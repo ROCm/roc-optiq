@@ -868,15 +868,11 @@ KernelMetricTable::Render()
                             ImGui::SetScrollHereY(0.5f);
                             m_scroll_to_selected = false;
                         }
-                        // The compare target's row.
-                        if(row_workload == m_marked_workload_id &&
-                           data[row][ID_COLUMN_INDEX] == marked_kernel_id)
-                        {
-                            ImGui::TableSetBgColor(
-                                ImGuiTableBgTarget_RowBg1,
-                                ApplyAlpha(settings.GetColor(Colors::kComparisonTarget),
-                                           MARKED_ROW_ALPHA));
-                        }
+                        // The compare target's row is tinted by the same selectable
+                        // that draws the selection, so both highlights match.
+                        const bool is_marked = !is_selected &&
+                                               row_workload == m_marked_workload_id &&
+                                               data[row][ID_COLUMN_INDEX] == marked_kernel_id;
                         const std::string* workload_label =
                             workload_column ? &WorkloadName(row_workload) : nullptr;
 
@@ -912,8 +908,21 @@ KernelMetricTable::Render()
 
                             if(!selectable_placed && is_visible && is_enabled)
                             {
-                                if(ImGui::Selectable(cell.c_str(), is_selected,
-                                                     ImGuiSelectableFlags_SpanAllColumns))
+                                if(is_marked)
+                                {
+                                    ImGui::PushStyleColor(
+                                        ImGuiCol_Header,
+                                        ApplyAlpha(settings.GetColor(Colors::kComparisonTarget),
+                                                   MARKED_ROW_ALPHA));
+                                }
+                                const bool clicked =
+                                    ImGui::Selectable(cell.c_str(), is_selected || is_marked,
+                                                      ImGuiSelectableFlags_SpanAllColumns);
+                                if(is_marked)
+                                {
+                                    ImGui::PopStyleColor();
+                                }
+                                if(clicked)
                                 {
                                     if(is_selected)
                                     {

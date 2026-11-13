@@ -24,6 +24,7 @@ namespace View
 
 // Row keys of metrics only B has carry this bit so they cannot collide with A's.
 constexpr uint32_t COMPARE_B_ONLY_ENTRY_BIT = 1u << 31;
+constexpr const char* COMPARE_ONLY_IN_B_TOOLTIP = "Only in B";
 // Faintest shading of a changed value, so small changes still show.
 constexpr float  COMPARE_HIGHLIGHT_MIN_ALPHA = 0.1f;
 constexpr double PERCENT                     = 100.0;
@@ -66,6 +67,39 @@ FindMetricTable(const WorkloadInfo* workload, uint32_t category_id, uint32_t tab
     std::unordered_map<uint32_t, AvailableMetrics::Table>::const_iterator table =
         category->second.tables.find(table_id);
     return table != category->second.tables.end() ? &table->second : nullptr;
+}
+
+// `table`'s entry `entry_id`; null when the table is null or lacks it.
+static const AvailableMetrics::Entry*
+FindMetricEntry(const AvailableMetrics::Table* table, uint32_t entry_id)
+{
+    if(!table)
+    {
+        return nullptr;
+    }
+    std::unordered_map<uint32_t, AvailableMetrics::Entry&>::const_iterator it =
+        table->entries.find(entry_id);
+    return it != table->entries.end() ? &it->second : nullptr;
+}
+
+static MetricId
+BOnlyRowKey(const MetricId& metric_id)
+{
+    return { metric_id.category_id, metric_id.table_id,
+             metric_id.entry_id | COMPARE_B_ONLY_ENTRY_BIT };
+}
+
+static bool
+IsBOnlyRowKey(const MetricId& key)
+{
+    return (key.entry_id & COMPARE_B_ONLY_ENTRY_BIT) != 0;
+}
+
+// The metric a row key stands for.
+static MetricId
+RowKeyMetricId(const MetricId& key)
+{
+    return { key.category_id, key.table_id, key.entry_id & ~COMPARE_B_ONLY_ENTRY_BIT };
 }
 
 // "Avg A", "Avg Δ%", ...; just the suffix for a table's single unnamed value.
@@ -117,6 +151,28 @@ MatchCompareEntry(const AvailableMetrics::Table* b_table,
         }
     }
     return nullptr;
+}
+
+MetricId
+SwappedComparePinKey(const MetricId& key, const WorkloadInfo* a_workload,
+                     const WorkloadInfo* b_workload)
+{
+    const MetricId metric_id = RowKeyMetricId(key);
+    if(IsBOnlyRowKey(key))
+    {
+        return metric_id;
+    }
+    const AvailableMetrics::Entry* a_entry = FindMetricEntry(
+        FindMetricTable(a_workload, metric_id.category_id, metric_id.table_id),
+        metric_id.entry_id);
+    if(!a_entry)
+    {
+        return key;
+    }
+    const AvailableMetrics::Entry* b_entry = MatchCompareEntry(
+        FindMetricTable(b_workload, metric_id.category_id, metric_id.table_id), *a_entry);
+    return b_entry ? MetricId{ b_entry->category_id, b_entry->table_id, b_entry->id }
+                   : BOnlyRowKey(metric_id);
 }
 
 // A's value names, then any only B has; one unnamed value when neither lists any.
@@ -213,7 +269,9 @@ FillCompareCells(MetricTableBase::Row& row, const CompareValueColumns& value,
     std::string       delta_text;
     std::string       pct_text;
     std::string       tooltip;
-    ImU32             shade = 0;
+    ImU32             shade   = 0;
+    ImU32             a_shade = 0;
+    ImU32             b_shade = 0;
     if(a && b)
     {
         // Compared as shown, so a difference too small to show is no change.
@@ -235,11 +293,14 @@ FillCompareCells(MetricTableBase::Row& row, const CompareValueColumns& value,
         const double change = has_pct ? std::fabs(pct) : PERCENT;
         if(delta != 0.0 && change >= options.highlight_pct)
         {
-            const Colors color =
+            SettingsManager& settings = SettingsManager::GetInstance();
+            const Colors     color =
                 delta > 0.0 ? Colors::kComparisonGreater : Colors::kComparisonLesser;
             const float alpha = std::clamp(static_cast<float>(change / PERCENT),
                                            COMPARE_HIGHLIGHT_MIN_ALPHA, 1.0f);
-            shade = ApplyAlpha(SettingsManager::GetInstance().GetColor(color), alpha);
+            shade   = ApplyAlpha(settings.GetColor(color), alpha);
+            a_shade = ApplyAlpha(settings.GetColor(Colors::kComparisonBase), alpha);
+            b_shade = ApplyAlpha(settings.GetColor(Colors::kComparisonTarget), alpha);
         }
     }
 
@@ -255,8 +316,8 @@ FillCompareCells(MetricTableBase::Row& row, const CompareValueColumns& value,
         cell.tooltip  = cell_tooltip;
         cell.bg_color = bg;
     };
-    set_cell(MetricCompareColumn::kA, a_text, std::string(), 0);
-    set_cell(MetricCompareColumn::kB, b_text, std::string(), 0);
+    set_cell(MetricCompareColumn::kA, a_text, std::string(), a_shade);
+    set_cell(MetricCompareColumn::kB, b_text, std::string(), b_shade);
     set_cell(MetricCompareColumn::kDelta, delta_text, tooltip, shade);
     set_cell(MetricCompareColumn::kDeltaPct, pct_text, tooltip, shade);
 }
@@ -273,6 +334,18 @@ FillCompareValues(MetricTableBase::Row&                   row,
         FillCompareCells(row, value, MetricValueOf(a, value.value_name),
                          MetricValueOf(b, value.value_name), options);
     }
+}
+
+bool
+MetricTableBase::RowOrder::operator()(const MetricId& lhs, const MetricId& rhs) const
+{
+    const MetricId lhs_id = RowKeyMetricId(lhs);
+    const MetricId rhs_id = RowKeyMetricId(rhs);
+    if(!(lhs_id == rhs_id))
+    {
+        return lhs_id < rhs_id;
+    }
+    return !IsBOnlyRowKey(lhs) && IsBOnlyRowKey(rhs);
 }
 
 MetricTableBase::MetricTableBase(std::string event_source_id)
@@ -303,6 +376,12 @@ MetricTableBase::SetEmbedded(bool embedded)
 {
     m_embedded = embedded;
     m_no_panel = embedded;
+}
+
+void
+MetricTableBase::SetMaxHeight(float max_height)
+{
+    m_max_height = max_height;
 }
 
 void
@@ -360,18 +439,26 @@ MetricTableBase::Render()
     const float row_hover_height =
         ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
-    // Embedded: every row, no vertical scroll (the container scrolls). A table
-    // that keeps ScrollX is still a child window, where a height of 0 would fill
-    // the container, so it is sized to its rows plus the horizontal scrollbar.
+    // Embedded: as tall as its rows, which scroll under the frozen header row
+    // past m_max_height. A table that keeps ScrollX is still a child window,
+    // where a height of 0 would fill the container, so it is sized to its rows
+    // plus the horizontal scrollbar.
     ImGuiTableFlags table_flags = m_table_flags;
     float           table_h     = 0.0f;
     if(m_embedded)
     {
-        table_flags &= ~ImGuiTableFlags_ScrollY;
-        if(table_flags & ImGuiTableFlags_ScrollX)
+        const bool  scroll_x = (table_flags & ImGuiTableFlags_ScrollX) != 0;
+        const float rows_h   = (scroll_x ? style.ScrollbarSize : 0.0f) +
+                             row_hover_height * static_cast<float>(m_rows.size() + 1);
+        if(m_max_height > 0.0f && rows_h > m_max_height)
         {
-            table_h = style.ScrollbarSize +
-                      row_hover_height * static_cast<float>(m_rows.size() + 1);
+            table_flags |= ImGuiTableFlags_ScrollY;
+            table_h = m_max_height;
+        }
+        else
+        {
+            table_flags &= ~ImGuiTableFlags_ScrollY;
+            table_h = scroll_x ? rows_h : 0.0f;
         }
     }
     else
@@ -457,10 +544,20 @@ MetricTableBase::Render()
 void
 MetricTableBase::ChangePinState(const MetricId& metric_id)
 {
-    auto it = m_rows.find(metric_id);
+    RowMap::iterator it = m_rows.find(metric_id);
     if(it != m_rows.end())
     {
         it->second.pinned = !it->second.pinned;
+    }
+}
+
+void
+MetricTableBase::TogglePin(const MetricId& key)
+{
+    ChangePinState(key);
+    if(m_pin_metric_clicked)
+    {
+        m_pin_metric_clicked(key);
     }
 }
 
@@ -496,9 +593,7 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
     {
         if(IconMenuItem(ICON_CHAIN, "Pin metric"))
         {
-            row.second.pinned = !row.second.pinned;
-            m_pin_metric_clicked(
-                { row.first.category_id, row.first.table_id, row.first.entry_id });
+            TogglePin(row.first);
         }
         if(!m_event_source_id.empty() &&
            IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
@@ -556,18 +651,11 @@ void
 MetricTableBase::RenderPinCheckBox(std::pair<const MetricId, Row>& row)
 {
     ImGui::TableNextColumn();
-    if(!row.second.pinnable)
-    {
-        return;
-    }
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-    if(ImGui::Checkbox("", &m_rows[row.first].pinned))
+    bool pinned = row.second.pinned;
+    if(ImGui::Checkbox("", &pinned))
     {
-        if(m_pin_metric_clicked)
-        {
-            m_pin_metric_clicked(
-                { row.first.category_id, row.first.table_id, row.first.entry_id });
-        }
+        TogglePin(row.first);
     }
     ImGui::PopStyleVar();
 }
@@ -622,7 +710,7 @@ MetricTableBase::FillDefaultColumns(std::map<uint32_t, std::string>& columns,
 bool
 MetricTableBase::IsMetricPinned(MetricId metric_id)
 {
-    auto it = m_rows.find(metric_id);
+    RowMap::const_iterator it = m_rows.find(metric_id);
     return it != m_rows.end() && it->second.pinned;
 }
 
@@ -688,7 +776,7 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         }
         // Value columns only (not the pin, id, name or unit). A B-only row has no
         // metric id of A's to send.
-        if(IsValueColumn(column_index) && row.second.pinnable)
+        if(IsValueColumn(column_index) && !IsBOnlyRowKey(row.first))
         {
             if(!m_event_source_id.empty() &&
                IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
@@ -827,11 +915,10 @@ MetricTable::PopulateComparison(uint32_t category_id, const AvailableMetrics::Ta
             }
             Row row;
             FillEntryCells(*entry, row);
-            row.values[1].tooltip = "Only in B";
-            row.pinnable          = false;
+            row.values[1].tooltip = COMPARE_ONLY_IN_B_TOOLTIP;
             row.unmatched         = true;
             FillCompareValues(row, values, nullptr, get_b(entry->id).get(), options);
-            m_rows[MetricId{ category_id, b_table->id, entry->id | COMPARE_B_ONLY_ENTRY_BIT }] =
+            m_rows[BOnlyRowKey(MetricId{ category_id, b_table->id, entry->id })] =
                 std::move(row);
         }
     }
@@ -886,7 +973,7 @@ PinnedMetricTable::Update()
         return;
     }
 
-    std::map<MetricId, Row>         new_rows;
+    RowMap                          new_rows;
     std::map<uint32_t, std::string> new_columns;
     uint32_t                        new_last_column_index = 0;
 
@@ -894,15 +981,14 @@ PinnedMetricTable::Update()
 
     for(const auto& metric_id : m_pending_pinned_ids)
     {
-        if(!HasMetricInCurrentWorkload(metric_id))
-        {
-            FillUnavailableRow(metric_id, new_rows);
-            continue;
-        }
-
         if(m_compare)
         {
             FillCompareRow(metric_id, new_columns, new_last_column_index, new_rows);
+            continue;
+        }
+        if(!HasMetricInCurrentWorkload(metric_id))
+        {
+            FillUnavailableRow(metric_id, new_rows);
             continue;
         }
         UpdateColumns(metric_id, new_columns, new_last_column_index);
@@ -932,7 +1018,8 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
             }
         }
 
-        if(IsValueColumn(column_index))
+        // A pin A's workload lacks (shown from B) has no metric of A's to send.
+        if(IsValueColumn(column_index) && HasMetricInCurrentWorkload(row.first))
         {
             if(!m_event_source_id.empty() &&
                IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
@@ -982,37 +1069,55 @@ PinnedMetricTable::ClearCompareSource()
 }
 
 void
-PinnedMetricTable::FillCompareRow(const MetricId&                  metric_id,
+PinnedMetricTable::FillCompareRow(const MetricId&                  key,
                                   std::map<uint32_t, std::string>& columns,
                                   uint32_t&                        last_column_index,
-                                  std::map<MetricId, Row>&         rows)
+                                  RowMap&                          rows)
 {
-    ComputeDataModel&              model = m_data_provider.ComputeModel();
-    const AvailableMetrics::Table& table =
-        GetTable(metric_id, m_compute_selection->GetSelectedWorkload());
+    const bool                     b_only    = IsBOnlyRowKey(key);
+    const MetricId                 metric_id = RowKeyMetricId(key);
+    ComputeDataModel&              model     = m_data_provider.ComputeModel();
+    const AvailableMetrics::Table* a_table   = FindMetricTable(
+        model.GetWorkload(m_compute_selection->GetSelectedWorkload()), metric_id.category_id,
+        metric_id.table_id);
     const AvailableMetrics::Table* b_table =
         FindMetricTable(model.GetWorkload(m_compare->workload_id), metric_id.category_id,
                         metric_id.table_id);
+    const AvailableMetrics::Entry* a_entry =
+        b_only ? nullptr : FindMetricEntry(a_table, metric_id.entry_id);
+    const AvailableMetrics::Entry* b_entry =
+        b_only ? FindMetricEntry(b_table, metric_id.entry_id)
+               : (a_entry ? MatchCompareEntry(b_table, *a_entry) : nullptr);
+    if(!a_entry && !b_entry)
+    {
+        FillUnavailableRow(key, rows);
+        return;
+    }
     // Pins mix tables, so columns are the union of every pin's.
     const std::vector<CompareValueColumns> values = AddCompareColumns(
-        &table, b_table, m_compare->options, columns, last_column_index);
+        a_table, b_table, m_compare->options, columns, last_column_index);
 
     Row row;
     row.pinned = true;
-    FillMandatoryColumns(metric_id, table, row);
-    const AvailableMetrics::Entry* b_entry =
-        MatchCompareEntry(b_table, table.entries.at(metric_id.entry_id));
-    row.unmatched = b_entry == nullptr;
+    FillMandatoryColumns(metric_id, a_entry ? *a_table : *b_table, row);
+    if(!a_entry)
+    {
+        row.values[1].tooltip = COMPARE_ONLY_IN_B_TOOLTIP;
+    }
+    row.unmatched = !a_entry || !b_entry;
 
-    const std::shared_ptr<MetricValue> a_value = model.GetKernelMetricValue(
-        m_client_id, m_compute_selection->GetSelectedKernel(), metric_id);
+    const std::shared_ptr<MetricValue> a_value =
+        a_entry ? model.GetKernelMetricValue(m_client_id,
+                                             m_compute_selection->GetSelectedKernel(),
+                                             metric_id)
+                : nullptr;
     const std::shared_ptr<MetricValue> b_value =
         b_entry ? model.GetKernelMetricValue(m_compare->client_id, m_compare->kernel_id,
                                              b_entry->category_id, b_entry->table_id,
                                              b_entry->id)
                 : nullptr;
     FillCompareValues(row, values, a_value.get(), b_value.get(), m_compare->options);
-    rows[metric_id] = std::move(row);
+    rows[key] = std::move(row);
 }
 
 void
@@ -1097,20 +1202,20 @@ PinnedMetricTable::RenderEmptyTable()
 }
 
 void
-PinnedMetricTable::FillUnavailableRow(const MetricId& metric_id,
-                                      std::map<MetricId, Row>& rows)
+PinnedMetricTable::FillUnavailableRow(const MetricId& key,
+                                      RowMap&         rows)
 {
     Row row;
     row.pinned = true;
-    row.values[1].value = metric_id.ToString();
+    row.values[1].value = RowKeyMetricId(key).ToString();
     row.values[LAST_INDEX].value = "";
-    rows[metric_id] = std::move(row);
+    rows[key] = std::move(row);
 }
 
 void
 PinnedMetricTable::FillTableRow(const MetricId&                    metric_id,
                                 const std::map<uint32_t, std::string>& columns,
-                                std::map<MetricId, Row>&           rows)
+                                RowMap&                            rows)
 {
     Row row;
     row.pinned = true;

@@ -45,6 +45,9 @@ public:
     // ClearCompareTarget().
     void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
     void ClearCompareTarget();
+    // Call before A and B trade places (the selection becomes B and B the old
+    // selection), so each pin keeps naming the same metric.
+    void SwapComparePins();
 
 private:
     enum class HeaderRequest : uint8_t
@@ -72,6 +75,8 @@ private:
     void RenderToolbar(const std::vector<ListedTable>& listed);
     void RenderTablePicker(const std::vector<ListedTable>& listed);
     void RenderCompareOptions();
+    // Above the scrolling list of tables, so the pins stay in view.
+    void RenderPinnedMetrics();
     void RenderTables(const std::vector<ListedTable>& listed);
     void RenderEmptyState();
     void ApplyHeaderRequest();

@@ -31,6 +31,12 @@ constexpr float TABLE_PICKER_WIDTH_FRAMES = 12.0f;
 constexpr float TABLE_PICKER_MAX_HEIGHT_RATIO = 0.6f;
 // Width of the Compare options combo, in frame heights.
 constexpr float COMPARE_OPTIONS_WIDTH_FRAMES = 6.0f;
+// Share of the pane below the toolbar the pinned metrics may take; the listed
+// tables keep the rest.
+constexpr float PINNED_MAX_HEIGHT_RATIO = 0.5f;
+// Shortest a table whose rows scroll gets, in frame heights, however small the
+// pane.
+constexpr float MIN_TABLE_HEIGHT_FRAMES = 5.0f;
 
 // Shown until the user picks otherwise: System Speed-of-Light, the headline
 // per-kernel table.
@@ -60,6 +66,12 @@ TableLabel(uint32_t category_id, const AvailableMetrics::Table& table)
 {
     return std::to_string(category_id) + "." + std::to_string(table.id) + "  " +
            table.name;
+}
+
+static float
+MinTableHeight()
+{
+    return ImGui::GetFrameHeight() * MIN_TABLE_HEIGHT_FRAMES;
 }
 
 ComputeTableView::ComputeTableView(DataProvider&                     data_provider,
@@ -188,6 +200,25 @@ ComputeTableView::ClearCompareTarget()
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_compare_client_id);
     RebuildTableDataCache();
     RefreshPins();
+}
+
+void
+ComputeTableView::SwapComparePins()
+{
+    if(!m_compare_active)
+    {
+        return;
+    }
+    ComputeDataModel&   model = m_data_provider.ComputeModel();
+    const WorkloadInfo* a_workload =
+        model.GetWorkload(m_compute_selection->GetSelectedWorkload());
+    const WorkloadInfo* b_workload = model.GetWorkload(m_compare_workload_id);
+    std::set<MetricId>  swapped;
+    for(const MetricId& key : m_pinned_metrics)
+    {
+        swapped.insert(SwappedComparePinKey(key, a_workload, b_workload));
+    }
+    m_pinned_metrics.swap(swapped);
 }
 
 void
@@ -360,6 +391,7 @@ ComputeTableView::Render()
     {
         ListTables(*workload, m_listed_tables);
         RenderToolbar(m_listed_tables);
+        RenderPinnedMetrics();
         ImGui::BeginChild("metric_tables_scroll", ImVec2(0, 0));
         RenderTables(m_listed_tables);
         ImGui::EndChild();
@@ -577,21 +609,31 @@ ComputeTableView::ApplyHeaderRequest()
 }
 
 void
-ComputeTableView::RenderTables(const std::vector<ListedTable>& listed)
+ComputeTableView::RenderPinnedMetrics()
 {
-    bool any_shown = false;
     if(!m_pinned_metrics.empty())
     {
-        any_shown = true;
+        const float max_h = ImGui::GetContentRegionAvail().y * PINNED_MAX_HEIGHT_RATIO -
+                            ImGui::GetFrameHeightWithSpacing();
         ApplyHeaderRequest();
         if(ImGui::CollapsingHeader("Pinned Metrics###pinned_metrics",
                                    ImGuiTreeNodeFlags_DefaultOpen))
         {
+            m_pinned_metric_table.SetMaxHeight(std::max(max_h, MinTableHeight()));
             m_pinned_metric_table.Render();
             ImGui::Spacing();
         }
     }
+}
 
+void
+ComputeTableView::RenderTables(const std::vector<ListedTable>& listed)
+{
+    // Each table fits the list's view with its collapsing header, so its column
+    // headers and horizontal scrollbar can be seen together.
+    const float max_table_h = std::max(
+        ImGui::GetWindowHeight() - ImGui::GetFrameHeightWithSpacing(), MinTableHeight());
+    bool any_shown = !m_pinned_metrics.empty();
     for(const ListedTable& table : listed)
     {
         const uint64_t key = table.Key();
@@ -615,6 +657,7 @@ ComputeTableView::RenderTables(const std::vector<ListedTable>& listed)
             std::unordered_map<uint64_t, MetricTable>::iterator it = m_table_widgets.find(key);
             if(it != m_table_widgets.end())
             {
+                it->second.SetMaxHeight(max_table_h);
                 it->second.Render();
             }
             else

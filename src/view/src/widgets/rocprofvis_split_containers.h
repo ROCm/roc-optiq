@@ -46,7 +46,8 @@ public:
     virtual ~SplitContainerBase() = default;
     virtual void Render() override;
 
-    void SetSplit(float ratio) { m_split_ratio = ratio; };
+    void  SetSplit(float ratio) { m_split_ratio = ratio; };
+    float GetSplit() const { return m_split_ratio; };
     void SetSplitSpacing(float spacing) { m_split_spacing = spacing; };
     void ShowSplitter(bool show) { m_always_show_splitter = show; };
     // Thickness of the draggable gutter between the two children.

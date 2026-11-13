@@ -800,8 +800,10 @@ subclassing this; don't roll your own.**
 (Defined here, shared between Compute views.)
 
 - `class MetricTableBase : public RocWidget` - rows of `MetricId`->`Row`
-  with optional pin checkbox column. `RenderTooltip`, `RenderRowValues`,
-  `RenderUnitValue`, `FillDefaultColumns`, `AddMetricToKernelDetails`.
+  (`RowMap`, ordered by `RowOrder`) with optional pin checkbox column.
+  `RenderTooltip`, `RenderRowValues`, `RenderUnitValue`, `FillDefaultColumns`,
+  `AddMetricToKernelDetails`. `SetEmbedded` drops the card and title;
+  `SetMaxHeight` bounds an embedded table, whose rows then scroll.
 - `class MetricTable : public MetricTableBase` - normal "all metrics in
   this table" view; `Populate(table, get_value_lambda)`.
 - `class PinnedMetricTable : public MetricTableBase` - the cross-table
@@ -1701,13 +1703,17 @@ Speed-of-Light (`DEFAULT_SHOWN_TABLE`) is listed until the user turns more on
 lists every `AvailableMetrics` table grouped by category, with a search
 filter and Show all / Hide all for the filtered set. Shown tables
 (`m_enabled_tables`, keyed by `MetricId::GetTableKey`) render in category
-order under closable `CollapsingHeader`s, with expand/collapse-all buttons;
-their `MetricTable`s are `SetEmbedded(true)` (no card, title or inner scroll -
-the pane's `metric_tables_scroll` child scrolls). `FetchAllMetrics()` still
-fetches every table so turning one on needs no round trip; `m_metrics_loading`
-separates "Loading..." from "No data". Pinning is delegated to
-`PinnedMetricTable`, shown as a "Pinned Metrics" header while anything is
-pinned. If a workload has no available metric tables, `FetchAllMetrics()`
+order under closable `CollapsingHeader`s, with expand/collapse-all buttons,
+inside the pane's scrolling `metric_tables_scroll` child. Their `MetricTable`s
+are `SetEmbedded(true)` (no card or title) with `SetMaxHeight` set to the
+child's visible height less a header, so a longer table scrolls its rows under
+its frozen header row (and id/name columns) with its horizontal scrollbar in
+view. `FetchAllMetrics()` still fetches every table so turning one on needs no
+round trip; `m_metrics_loading` separates "Loading..." from "No data". Pinning
+is delegated to `PinnedMetricTable`, shown as a "Pinned Metrics" header while
+anything is pinned, fixed between the toolbar and the scrolling list and at
+most `PINNED_MAX_HEIGHT_RATIO` of the pane (`RenderPinnedMetrics`). If a
+workload has no available metric tables, `FetchAllMetrics()`
 leaves the view empty without submitting an invalid zero-selector request;
 when the whole database has none, the pane shows `NO_METRICS_MESSAGE`.
 Persistent via nested `Preset` (pins, shown tables under `"tables"`, and the
@@ -1723,11 +1729,18 @@ and headers tag one-sided tables "A only" / "B only". Each table is built with
 `PinnedMetricTable::SetCompareSource`: per value the `MetricCompareOptions`
 columns (A, B, delta, delta % of A; default A, B, delta %), metrics paired by
 id then by name (ids can shift between architectures; unpaired ones dimmed,
-B-only rows unpinnable and keyed with `COMPARE_B_ONLY_ENTRY_BIT`, hidden with
-"Metrics only one side has" off) and delta cells shaded by direction with an
-alpha that grows with the change, from `highlight_pct` up. Deltas are taken
-from the values as printed (two decimals), so a change too small to show is
-no change. The Compare combo
+hidden with "Metrics only one side has" off). B-only rows are keyed with
+`COMPARE_B_ONLY_ENTRY_BIT` and `MetricTableBase::RowOrder` lists them by id
+among A's (after A's row of the same id); pinning one pins that key, so it
+stays apart from A's metric of the same id, and the pins show it as B's metric
+with an empty A while comparing (unavailable otherwise). Swap calls
+`SwapComparePins()` first, so every pin keeps naming the same metric once A and
+B trade places (`SwappedComparePinKey`: A's metric becomes its match in the new
+A, else B-only; a B-only metric becomes A's).
+Changed values are shaded from `highlight_pct` up with an alpha that grows with
+the change: A and B cells in `kComparisonBase` / `kComparisonTarget`, delta
+cells by direction. Deltas are taken from the values as printed (two
+decimals), so a change too small to show is no change. The Compare combo
 next to the Tables picker edits the options.
 
 ### `ComputeSummaryView` and `ComputeTopKernels` (`rocprofvis_compute_summary.{h,cpp}`)

@@ -104,6 +104,20 @@ private:
         bool                  kernel_rail = false;
     };
 
+    static constexpr int32_t NO_LAYOUT_NODE = -1;
+
+    // A node of the current template's split tree: a box, or a split of two
+    // nodes (indices into m_layout_nodes).
+    struct LayoutNode
+    {
+        int32_t                          slot;  // The box, for a leaf; else NO_LAYOUT_NODE.
+        std::shared_ptr<HSplitContainer> hsplit;
+        std::shared_ptr<VSplitContainer> vsplit;
+        int32_t                          first;
+        int32_t                          second;
+        LayoutItem::Ptr                  item;
+    };
+
     // One header button; either an icon-font glyph or a text label.
     struct HeaderButton
     {
@@ -169,15 +183,21 @@ private:
     void           SyncPanelToggles();
 
     // Split tree.
-    LayoutState     CurrentLayoutState() const;
-    void            RebuildLayout(const LayoutState& state);
-    LayoutItem::Ptr BuildTemplate(ComputeLayoutTemplate layout);
-    LayoutItem::Ptr HSplitPane(const LayoutItem::Ptr& left, const LayoutItem::Ptr& right,
-                               float ratio);
-    LayoutItem::Ptr VSplitPane(const LayoutItem::Ptr& top, const LayoutItem::Ptr& bottom,
-                               float ratio);
-    void            UpdatePaneMinSizes();
-    void            SetKernelRailTableMode(bool table);
+    LayoutState CurrentLayoutState() const;
+    void        RebuildLayout(const LayoutState& state);
+    // Builds `layout`'s tree into m_layout_nodes; returns the root node.
+    int32_t     BuildTemplate(ComputeLayoutTemplate layout);
+    int32_t     BoxNode(int32_t slot);
+    int32_t     HSplitNode(int32_t left, int32_t right, float ratio);
+    int32_t     VSplitNode(int32_t top, int32_t bottom, float ratio);
+    void        UpdatePaneMinSizes();
+    // Gives the splits under `node` their sides' minimum sizes, with the panels'
+    // minimum widths scaled by `width_scale`; returns the node's own minimum size.
+    ImVec2      ApplyNodeMinSizes(int32_t node, float width_scale);
+    // Smallest box a panel fits in; panels with horizontal toolbars need more
+    // width.
+    ImVec2      PaneMinSize(ComputePane pane) const;
+    void        SetKernelRailTableMode(bool table);
 
     // Drawing.
     void RenderLayoutMenu();
@@ -249,8 +269,8 @@ private:
     LayoutItem::Ptr                                      m_rail_pane;
 
     std::shared_ptr<HSplitContainer>              m_root_split;  // rail | workspace
-    std::vector<std::shared_ptr<HSplitContainer>> m_hsplits;     // Current template's splits.
-    std::vector<std::shared_ptr<VSplitContainer>> m_vsplits;
+    std::vector<LayoutNode>                       m_layout_nodes;  // Current template's tree.
+    int32_t                                       m_layout_root = NO_LAYOUT_NODE;
     LayoutState                                   m_built_layout;
     bool                                          m_layout_built = false;
 

@@ -277,7 +277,7 @@ app and is not added. The default backend also needs the `mbedtls` submodule;
 `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL and does not build mbedTLS. A
 non-recursive clone must initialize the ones it will use before configuring
 with this option on:
-`git submodule update --init thirdparty/cpp-httplib thirdparty/ImGuiTextSelect thirdparty/mbedtls`.
+`git submodule update --init --recursive thirdparty/cpp-httplib thirdparty/ImGuiTextSelect thirdparty/mbedtls`.
 Configure fails with an explicit message if `thirdparty/cpp-httplib` or
 `thirdparty/ImGuiTextSelect` is still empty.
 

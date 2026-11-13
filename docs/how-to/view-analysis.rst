@@ -352,7 +352,7 @@ You can configure a delta-threshold for comparison metrics to suppress the noise
 Baseline Comparison: Roofline
 -----------------------------
 
-**Roofline** compares rooflines for two kernels in the same ROCm Compute Profiler database, including kernels from different workloads. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, use **Peak Source** option in the roofline menu to choose the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
+**Roofline** compares rooflines for two kernels in the same ROCm Compute Profiler database, including kernels from different workloads. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, use **Peak Source** option in the **Legend/Menu** to choose the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
 
 .. note::
 

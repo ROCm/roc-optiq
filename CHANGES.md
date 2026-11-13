@@ -2,6 +2,12 @@
 
 Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
 
+## ROCm Optiq 1.3.0 (unreleased)
+
+### Resolved issues
+
+- Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
+
 ## ROCm Optiq 1.2.0
 
 ### Added
@@ -79,7 +85,6 @@ These features are in progress and available for preview only (build from source
 - Fixed saving a trimmed trace over the open trace was possible. It is now refused, and the destination is replaced only after the trim succeeds.
 - Fixed the table not refreshing when a filter box was cleared with its X or when Reset Filter was used.
 - Fixed app icon not present in desktop app menus or taskbar in Linux environments (DEB/RPM packages).
-- Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
 
 ## ROCm Optiq 1.1.0
 

@@ -775,6 +775,15 @@ AssistantPanel::RenderContextTooltip(const ContextLoad& load, float fill,
     ImGui::TextWrapped("%s", about.c_str());
     ImGui::PopStyleColor();
 
+    // Stays in the context block. The usage table below is what the endpoint
+    // reported, and the disclaimer does not cover it.
+    ImGui::Spacing();
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("Context figures are estimates. Actual values may vary.");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();

@@ -136,14 +136,15 @@ jobs:
         os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           submodules: true
+          persist-credentials: false
 
       - name: Cache Vulkan SDK
         id: cache-vulkan
-        uses: actions/cache@v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/VulkanSDK/${{ env.VULKAN_SDK_VERSION }}
           key: vulkan-sdk-mac-${{ env.VULKAN_SDK_VERSION }}-${{ matrix.os-version }}
@@ -259,10 +260,14 @@ jobs:
           python3 --version
 
       - name: Build, Make, and Verify Installation
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          INPUTS_CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
+          INPUTS_CMAKE_BUILD_PRESET: ${{ inputs.cmake_build_preset }}
         run: |
-          mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
-          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} \
-            --preset "${{ inputs.cmake_config_preset }}" \
+          mkdir -p ${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET}
+          cmake -B ${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET} \
+            --preset "${INPUTS_CMAKE_CONFIG_PRESET}" \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
             ${CMAKE_ARGS} \
             -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} \
@@ -270,10 +275,10 @@ jobs:
             -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" \
             -DVulkan_LIBRARY="$Vulkan_LIBRARY" \
             -DROCPROFVIS_MOLTENVK_LIBRARY="$MoltenVK_LIBRARY"
-          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4 --target package
-          ls -l ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
+          cmake --build ${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET} --preset "${INPUTS_CMAKE_BUILD_PRESET}" --parallel 4 --target package
+          ls -l ${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET}
 
-          APP="${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app"
+          APP="${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET}/${{ env.BUILD_FILE_NAME }}.app"
           if [ -d "${APP}" ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }}.app has been successfully built!"
           else
@@ -294,8 +299,10 @@ jobs:
         id: run_tests
         continue-on-error: true
         timeout-minutes: 10
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
         run: |
-          cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
+          cd ${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET}
           ctest \
             --output-on-failure \
             --no-tests=error \
@@ -303,7 +310,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-mac-${{ matrix.os-version }}${{ inputs.artifact_suffix }}
           path: |
@@ -312,14 +319,16 @@ jobs:
           retention-days: 7
 
       - name: Prepare Distribution Artifacts
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
         run: |
           mkdir ${{ env.DIST_DIR }}/
-          cp -a ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/
+          cp -a ${{ env.BUILD_DIR }}/${INPUTS_CMAKE_CONFIG_PRESET}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-macos-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
           path: |
@@ -328,13 +337,15 @@ jobs:
       
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload Build to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
         run: |
           ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
           if [ -z "${{ env.RELEASE_VERSION }}" ]; then
@@ -344,7 +355,7 @@ jobs:
             echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
             S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
           fi
-          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/mac/${{ matrix.os-version }}/ \
+          aws s3 cp ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/mac/${MATRIX_OS_VERSION}/ \
             --no-progress
       
       - name: Announce Test Failure

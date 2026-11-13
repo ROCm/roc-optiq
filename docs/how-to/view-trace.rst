@@ -435,7 +435,7 @@ Search for events using the search box on the main **Toolbar**.
     .. image:: ../images/search-advanced-options.png
        :width: 800
        :alt: Search box on the main toolbar with advanced options
-	 
+
   - |search-advanced| will glow to indicate **Advanced** options are active.
  
 

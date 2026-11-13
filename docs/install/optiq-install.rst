@@ -442,7 +442,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: shell
 
@@ -510,7 +510,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: shell
 
@@ -578,7 +578,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: shell
 
@@ -640,7 +640,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -702,7 +702,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -764,7 +764,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -826,7 +826,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -888,7 +888,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -950,7 +950,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 

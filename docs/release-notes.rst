@@ -84,7 +84,7 @@ Resolved issues
 * Fixed a leaked row-count query when a table had nothing to count.
 * Fixed invalid table filter feedback. Improved error notifications when table filters are invalid.
 * Fixed the kernel selection table disappearing when a filter matches no rows.
-* Fixed Linux tarball extracts at the install prefix. It no longer wraps its contents in a ``<package>-<version>-<system>/`` directory, matching the .deb and .rpm layout.
+* Fixed Linux tarball extraction path: it no longer wraps its contents in a ``<package>-<version>-<system>/`` directory, matching the .deb and .rpm layout.
 * Fixed missing dependencies in Debian packages.
 * Fixed commit hash missing from Linux builds.
 * Fixed process ID not read correctly in some trace files.

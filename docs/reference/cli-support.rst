@@ -14,6 +14,6 @@ Command                 Description                                             
 ``-h, --help``          Display all supported command-line arguments.                                                                                                 ``roc-optiq.exe -h`` 
 ``-v, --version``       Print the installed ROCm Optiq version. Pass ``hash`` to also print the git commit. Unstamped builds print ``unknown``.                       ``roc-optiq.exe -v hash`` 
 ``-f, --file``          Open a trace or project file.                                                                                                                 ``roc-optiq.exe -f C:\traces\my_trace.db`` 
-``-b, --backend``       Set or force ROCm Optiq to use a specific rendering backend: ``auto`` (default), ``vulkan``, or ``opengl``.                                   ``roc-optiq.exe --b opengl``
+``-b, --backend``       Set or force ROCm Optiq to use a specific rendering backend: ``auto`` (default), ``vulkan``, or ``opengl``.                                   ``roc-optiq.exe -b opengl``
 ``-d, --file-dialog``   Set file dialog backend: ``auto`` (default), ``native`` (system file dialog), or ``imgui`` (built-in). Use ``imgui`` when running over SSH.   ``roc-optiq.exe --file-dialog imgui``
 ======================  ============================================================================================================================================  =============================================

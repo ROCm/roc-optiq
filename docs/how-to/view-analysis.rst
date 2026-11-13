@@ -118,7 +118,8 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
   - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration.
   - Under **Options**, select **Show peak labels** to show or hide the labels on the roofline ceiling lines. 
-  - Use the Roofline **Menu position** control options to reposition the Roofline legend and menu. The options include: 
+  - Use the Roofline **Menu position** control options to reposition the Roofline legend and menu. The options include:
+
     - Inside, Top Left
     - Inside, Top Right
     - Inside, Bottom Left
@@ -315,7 +316,7 @@ Baseline Comparison: Metrics
 
 **Baseline Comparison** presents a unified table of available metrics for both runs, making it easy to identify regressions, improvements, and other behavior changes. 
 
-Use the dropdowns to select the baseline, target workload, and kernel. The comparison table updates to show statistics for the selected selections. 
+Use the dropdowns to select the baseline, target workload, and kernel. The comparison table updates to show statistics for the selections. 
 You can also compare two kernels within the same workload.
 
 .. image:: ../images/baseline-comparison.png

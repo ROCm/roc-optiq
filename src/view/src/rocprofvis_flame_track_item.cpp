@@ -980,11 +980,12 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        // The child clips at m_track_content_height. The highlight rect is inset by
-        // half the stroke and AddRect centers that stroke, so a steady outline
-        // reaches ANTI_ALIASING_WORKAROUND above the box. A search pulse grows the
-        // stroke by HIGHLIGHT_PULSE_EXTRA, so keep that extra reach too.
-        const float outline_overhang = ANTI_ALIASING_WORKAROUND + HIGHLIGHT_PULSE_EXTRA;
+        // The child clips at m_track_content_height. The highlight rect's top edge is
+        // half a stroke less ANTI_ALIASING_WORKAROUND below the box's, so a steady
+        // outline reaches ANTI_ALIASING_WORKAROUND above the box. A pulse widens the
+        // stroke and moves the rect out, reaching up to HIGHLIGHT_PULSE_EXTRA further.
+        constexpr float outline_overhang =
+            ANTI_ALIASING_WORKAROUND + HIGHLIGHT_PULSE_EXTRA;
         if(start_position.y >= m_track_content_height + outline_overhang)
         {
             continue;

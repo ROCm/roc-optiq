@@ -31,7 +31,8 @@ constexpr float Y_AXIS_LABEL_SPACING_FACTOR = 2.5f;
 constexpr float Y_AXIS_LABEL_MIN_TRACK_HEIGHT = 2.0f * DEFAULT_TRACK_HEIGHT;
 // Samples this close outside the chart are still drawn: the outline's
 // anti-aliased fringe reaches into the chart.
-constexpr float VISIBLE_SAMPLE_MARGIN_PX = 4.0f;
+constexpr float VISIBLE_SAMPLE_MARGIN_PX   = 4.0f;
+constexpr float MIN_SINGLE_SAMPLE_WIDTH_PX = 1.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
                              TimelineTrackOptions&               track_options,
@@ -218,7 +219,8 @@ LineTrackItem::BoxPlotRender(float graph_width)
         if(data_len == 1)
         {
             // If there is only one box, make sure it is visible by giving it a minimum width
-            point_end.x = std::max(point_end.x, point_start.x + 1.0f);
+            point_end.x =
+                std::max(point_end.x, point_start.x + MIN_SINGLE_SAMPLE_WIDTH_PX);
         }
 
         ImU32 fill_color = base_fill_color;
@@ -251,14 +253,38 @@ LineTrackItem::BoxPlotRender(float graph_width)
             draw_list->AddLine(point_end, next_point_start, outline_color,
                                DEFAULT_LINE_THICKNESS);
         }
+    }
 
-        if(ImGui::IsMouseHoveringRect(ImVec2(point_start.x, 0.0f),
-                                      ImVec2(point_end.x, bottom_of_chart)) &&
-           ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
-                                  ImGuiHoveredFlags_NoPopupHierarchy) &&
-           TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+    // Resolve hover independently of the culled draw range so culling cannot
+    // suppress a sample's tooltip. Counter samples are ordered by start time.
+    const ImVec2 window_pos = ImGui::GetWindowPos();
+    const ImVec2 mouse_pos  = ImGui::GetIO().MousePos;
+    if(data_len > 0 &&
+       ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
+                              ImGuiHoveredFlags_NoPopupHierarchy) &&
+       TimelineFocusManager::GetInstance().GetFocusedLayer() == Layer::kNone)
+    {
+        const float mouse_px     = mouse_pos.x - window_pos.x;
+        const float mouse_max_px = mouse_px + ImGui::GetStyle().TouchExtraPadding.x;
+        const auto  after_mouse  = std::partition_point(
+            m_data.cbegin(), m_data.cend(),
+            [this, mouse_max_px](const TraceCounter& sample) {
+                return m_tpt->RawTimeToPixel(sample.m_start_ts) <= mouse_max_px;
+            });
+        if(after_mouse != m_data.cbegin())
         {
-            hovered_idx = static_cast<int>(i);
+            const size_t index = static_cast<size_t>(after_mouse - m_data.cbegin()) - 1;
+            const float  start_px = m_tpt->RawTimeToPixel(m_data[index].m_start_ts);
+            float        end_px   = m_tpt->RawTimeToPixel(m_data[index].m_end_ts);
+            if(data_len == 1)
+            {
+                end_px = std::max(end_px, start_px + MIN_SINGLE_SAMPLE_WIDTH_PX);
+            }
+            if(ImGui::IsMouseHoveringRect(ImVec2(window_pos.x + start_px, 0.0f),
+                                          ImVec2(window_pos.x + end_px, bottom_of_chart)))
+            {
+                hovered_idx = static_cast<int>(index);
+            }
         }
     }
 

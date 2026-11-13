@@ -182,16 +182,19 @@ jobs:
         os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           submodules: true
+          persist-credentials: false
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
         run: |
           dnf install -y 'dnf-command(config-manager)'
-          if [ "${{ matrix.os-version }}" = "8" ]; then
+          if [ "${MATRIX_OS_VERSION}" = "8" ]; then
             dnf config-manager --set-enabled powertools
           else
             dnf config-manager --set-enabled crb
@@ -214,11 +217,13 @@ jobs:
 
       - name: Install Python development files
         if: env.ENABLE_SCRIPTING == 'ON' && env.VENDOR_PYTHON == 'OFF'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
         run: |
           # Rocky 8's default python3 is 3.6, below the 3.8 FindPython3 requirement.
           # The image already has a python3.12 interpreter, and FindPython3 picks
           # it over any older stream, so its devel package is the one that counts.
-          if [ "${{ matrix.os-version }}" = "8" ]; then
+          if [ "${MATRIX_OS_VERSION}" = "8" ]; then
             dnf install -y python3.12 python3.12-devel
             python3.12 --version
           else
@@ -227,16 +232,20 @@ jobs:
           fi
 
       - name: Build, Make, and Verify Installation
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          INPUTS_CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
           source /opt/vulkan/**/setup-env.sh
-          if [ "${{ matrix.os-version }}" = "8" ]; then
+          if [ "${MATRIX_OS_VERSION}" = "8" ]; then
             source /opt/rh/gcc-toolset-11/enable
             EXTRA_LINK_FLAGS="-ldl -ltbb"
           else
             EXTRA_LINK_FLAGS=""
           fi
           cmake -B ${{ env.BUILD_DIR }} \
-            --preset ${{ inputs.cmake_config_preset }} \
+            --preset ${INPUTS_CMAKE_CONFIG_PRESET} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
             -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
             -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
@@ -246,7 +255,7 @@ jobs:
             -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
             -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DGLFW_LINK_STATIC=ON \
-            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            -DCRYPTO_BACKEND=${INPUTS_CRYPTO_BACKEND} \
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
             ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
@@ -270,7 +279,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-rhel-${{ matrix.os-version }}${{ inputs.artifact_suffix }}
           path: |
@@ -287,7 +296,7 @@ jobs:
 
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-rhel-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
           path: |
@@ -296,7 +305,7 @@ jobs:
       
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
@@ -309,6 +318,8 @@ jobs:
 
       - name: Upload Build to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
         run: |
           if [ -z "${{ env.RELEASE_VERSION }}" ]; then
             echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
@@ -317,7 +328,7 @@ jobs:
             echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
             S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
           fi
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/rhel/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/rhel/${MATRIX_OS_VERSION}/ \
             --no-progress
 
       - name: Announce Test Failure

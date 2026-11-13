@@ -74,7 +74,7 @@ Resolved issues
 
 * Fixed kernel dispatch durations wrapping above about 4.29 seconds in the **Top Kernels** table and its bar chart, pie chart, and tooltips. Durations are stored as 64-bit nanosecond counts.
 * Fixed incorrect averages when a grouped query was merged across threads. Per-thread averages are now weighted, and MAX no longer starts at the smallest positive double.
-* Fixed table CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, due to a full disk).
+* Fixed table CSV export incorrectly reporting success when the path was unwritable, the filter was invalid, the export was cancelled, or the final write failed (for example, due to a full disk).
 * Fixed tables restoring another table's column layout from a previous session.
 * Fixed **Top Events** tables displaying incorrectly when they had no results.
 * Fixed **Track Details** showing PID 0 for counter tracks.

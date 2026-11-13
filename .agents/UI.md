@@ -1464,31 +1464,74 @@ compare target's (`ShowWorkload(id)` until `FollowSelection()`, mirroring
 
 ### `ComputeKernelDetailsView` (`rocprofvis_compute_kernel_details.{h,cpp}`)
 
-Per-kernel workspace. Composes (all chromeless - the view draws each pane's
-card and header itself):
-- `m_kernel_metric_table` (`KernelMetricTable`, fill mode) - the full kernel
-  table with "add metric" workflow, shown in the kernel rail's Table mode.
-- `m_memory_chart` (`ComputeMemoryChartView`) - the cache-hierarchy
-  schematic. It draws at actual size, stretched to its box's height and
-  scrolled, unless `SetFitToView` (the header's "Fit" toggle, default off)
-  shrinks it to fit. In a box too small to read it (`SetAutoCompact`: under
-  60% of its width or 50% of its height) it becomes a fitted, centred overview;
-  maximized it is always actual size.
-- `m_memory_chart_b` - the compare target's chart (`SetSource`), with the
-  layout of B's own workload.
-- `m_roofline` (`Roofline`; `SetMode` switches `SingleKernel` / `Compare`).
-- `m_table_view` (`ComputeTableView`) - opt-in metric tables.
-- `m_isa_view` (`ComputeIsaView`) - created only when the database has
-  ISA lines; otherwise there is no ISA pane.
-- `m_workload_view` (`ComputeWorkloadView`) - the Workload Details pane.
+Per-kernel workspace: the kernel rail (`m_kernel_metric_table`,
+`KernelMetricTable` in fill mode - the full kernel table with "add metric"
+workflow, shown in the rail's Table mode), the box layout, and the compare
+state. The workspace panels are pane wrappers (below); the view reaches them
+only through their base class.
+
+#### Pane wrappers (`rocprofvis_compute_kernel_details_panes.{h,cpp}`)
+
+`ComputeKernelDetailsPane` is the abstract panel. The view owns one per
+`ComputePane` (`m_panes`, all created, available or not), draws its card and
+header (title drag handle, panel picker, maximize / restore, hide) and asks it
+for everything panel-specific:
+- `Title()`, `IsAvailable()` (ISA without ISA lines is not).
+- `HeaderButtons()` - its own buttons (`HeaderButton`: icon or label,
+  tooltip, active, `id`), drawn before maximize and hide;
+  `OnHeaderButton(id)` handles a click. At most `MAX_HEADER_BUTTONS`.
+- `RenderBody(maximized)`.
+- `MinSize()` - the smallest box it fits in, in pixels at the current font
+  (`DefaultMinSize()`: 12 em x 5 frames, also used for empty boxes).
+- `Update()`, `OnWorkloadSelected` / `OnKernelSelected` /
+  `OnMetricsFetched(client_id)` (forwarded from the view's event handlers),
+  `OnCompareStarted()`, `OnCompareSwapping()` (before A and B trade places;
+  the metric tables remap their pins) and `ApplyCompare(target_changed)`.
+- `SaveLayout` / `LoadLayout` / `ResetLayout` - its own settings as keys of
+  the layout preset's JSON object.
+
+Panels read the comparison through `IKernelCompare` (`IsComparing`,
+`CompareWorkloadId` / `CompareKernelId` for B, `DeltaAvailable`), which the
+view implements privately. `ComputeSidedPane` adds the A / B header buttons
+and `m_side` (`CompareSide`; `ShownSide()` is A while not comparing;
+`ShowSide()` = the button's effect, then the panel's own `ApplyCompare`).
+Concrete panels (each owns its widget, chromeless):
+- `ComputeMemoryChartPane` (sided) - `m_chart` (`ComputeMemoryChartView`), the
+  cache-hierarchy schematic, and `m_chart_b`, the compare target's chart
+  (`SetSource`) with the layout of B's own workload. Adds B - A (only when
+  `DeltaAvailable()`; `OnCompareStarted` opens on it) and Fit (A and B share
+  it, saved as `fit_memory_chart`). It draws at actual size, stretched to its
+  box's height and scrolled, unless `SetFitToView` (Fit, default off) shrinks
+  it to fit. In a box too small to read it (`SetAutoCompact`: under 60% of its
+  width or 50% of its height) it becomes a fitted, centred overview without
+  Fit; maximized it is always actual size. Delta sets
+  `m_chart.SetDeltaTarget(&m_chart_b)`; B's metrics arriving refresh A's
+  delta values.
+- `ComputeRooflinePane` - `Roofline` (`SetMode` switches `SingleKernel` /
+  `Compare`); min width `ROOFLINE_MIN_WIDTH_EMS` for its three labelled peak
+  / bandwidth combos.
+- `ComputeMetricTablesPane` - `ComputeTableView` (opt-in metric tables); min
+  width in frame heights for its toolbar, wider while comparing (Compare
+  options).
+- `ComputeIsaPane` (sided) - `ComputeIsaView`, created only when the database
+  has ISA lines. One view that `ShowKernel`s B, since the data provider has a
+  single PC-sampling callback.
+- `ComputeWorkloadPane` (sided) - `ComputeWorkloadView`; `ShowWorkload`s B's
+  workload and notes when it is A's too.
 
 Layout: `HSplit(kernel rail | workspace)`, all gutters `PANE_GUTTER` and
 draggable. The workspace is a box layout, `ComputeLayoutTemplate` (Single,
 Side by Side, Stacked, Main + Two Below (default), Main + Two Right, Three
 Columns, Main + Three Below, 2 x 2 Grid; append only - stored as ints), built
 by `BuildTemplate()` from nested splits over up to `COMPUTE_LAYOUT_MAX_SLOTS`
-box panes. `LAYOUT_TEMPLATES` holds each template's name, box count and unit
-rectangles (the Layout menu thumbnails). Each box shows one `ComputePane`
+box panes, recorded as a tree (`m_layout_nodes`: a box or a split of two
+nodes). Every frame `UpdatePaneMinSizes()` walks the tree: each split side gets
+the minimum size of the panel(s) on it (across the split, the sum plus the
+gutter; along it, the largest), and the workspace side of the rail split at
+least the whole tree's width. When the panels' minimum widths would take more
+than `PANE_MIN_MAX_WORKSPACE_SHARE` of the workspace, they are scaled down
+together so a gutter always has room to move. `LAYOUT_TEMPLATES` holds each template's name,
+box count and unit rectangles (the Layout menu thumbnails). Each box shows one `ComputePane`
 (`kMemoryChart`, `kRoofline`, `kMetricTables`, `kIsa`, `kWorkloadDetails`;
 append only) or is empty; a panel lives in one box at most, so `AssignSlot` swaps when the
 panel is shown elsewhere. The kernel rail is the only place kernels are
@@ -1511,16 +1554,22 @@ change to them (View > Compute Profiler Panels, the Panels checklist) as a
 show/hide request and then mirrors the boxes back. `RebuildLayout()` rebuilds
 the tree only when the template, maximize or kernel rail change; box contents
 change without a rebuild. Box headers (`RenderPaneHeader`): the title is a drag
-handle (ImGui drag-drop payload `PANE_DRAG_PAYLOAD`; `HandleSlotDrop` highlights
-the box under the cursor and swaps on drop), the arrow opens the panel picker,
-then maximize / restore (maximize fills the tab and hides the kernel rail;
-double-clicking the title toggles it) and hide (empties the box). Empty boxes
-offer the panels not shown. `RenderLayoutControls()` draws the Layout combo
-(thumbnails, Reset layout) and the Panels checklist; `ComputeView::RenderToolbar()`
+handle (ImGui drag-drop payload `PANE_DRAG_PAYLOAD`), the arrow opens the panel
+picker, then the panel's own buttons, maximize / restore (maximize fills the tab
+and hides the kernel rail; double-clicking the title toggles it) and hide
+(empties the box). The title is measured and drawn at the font's scaled size
+(`ImGui::GetFontSize()` after `PushFont`), so it matches on any DPI. Each box's
+card child is its drop target: right after `EndChild` it is the last item, so
+`HandleSlotDrop` uses the public `BeginDragDropTarget()` (as `TimelineView`
+does for track reordering), highlights the box and swaps on drop. Empty boxes
+offer the panels not shown. Kernel Details uses no `imgui_internal.h` API.
+`RenderLayoutControls()` draws the Layout combo (thumbnails, Reset layout; the
+closed combo's thumbnail and name are drawn with the draw list over its frame,
+clipped before the arrow) and the Panels checklist; `ComputeView::RenderToolbar()`
 puts them at the left of the app toolbar, on the same row as Presets (right-aligned),
 so the workspace has no toolbar row of its own. The nested `Preset` saves the layout
-with user presets (`PresetManager::ComputeKernelDetailsLayout`). Each leaf pane
-comes from `MakeRenderPane()`: the pane itself carries zero item spacing (a
+with user presets (`PresetManager::ComputeKernelDetailsLayout`), including each
+panel's `SaveLayout` keys. Each leaf pane comes from `MakeRenderPane()`: the pane itself carries zero item spacing (a
 `VSplitContainer` advances past each pane with the pane's spacing, which
 would widen the gutter) and its content is wrapped to get normal spacing.
 
@@ -1530,9 +1579,10 @@ clicking a tab makes it A; each tab's right-hand marker column shows the A / B
 badges and, on hover, a B button that makes that kernel B (clicking B's badge
 stops comparing); tab and kernel-table context menus offer "Compare with this
 kernel (B)" (`KernelMetricTable::SetCompareCallback`). While on,
-`RenderCompareCard()` sits above the list: A and B at full width (with their
-workloads when there are several), Follow A, Swap, the GPU architectures and
-Stop. There is no compare control elsewhere. Selecting in the rail uses
+`RenderCompareCard()` sits above the list: A and B at full width (each name
+elided with a full-name tooltip, its workload directly under it when there are
+several; both rows lay out identically), Follow A, Swap, the GPU architectures
+and Stop. There is no compare control elsewhere. Selecting in the rail uses
 `ComputeSelection::Select(workload, kernel)`, one notification even across
 workloads (`SelectWorkload` alone picks the workload's busiest kernel, the top
 of the list). Rules:
@@ -1542,24 +1592,23 @@ of the list). Rules:
   `baseline_*`): selecting B as A swaps them; otherwise with
   `follow_by_name` (default on, saved in presets) and B in another workload,
   B moves to A's namesake there. `SwapCompare()` presets `baseline_*` so its
-  own selection events do not re-run the follow rule.
-- `ApplyCompare(target_changed)` pushes the state to every panel: roofline
-  `SetMode(Compare)` + `SetCompareTarget`, `ComputeTableView::SetCompareTarget`,
-  `m_memory_chart_b` layout / source / fetch, and the A / B / delta sides.
+  own selection events do not re-run the follow rule, and calls every panel's
+  `OnCompareSwapping()` before it changes the selection.
+- `EnableCompare()` calls every panel's `OnCompareStarted()` (sides back to
+  A; the memory chart opens on B - A when available).
+- `ApplyCompare(target_changed)` marks B in the kernel table and calls every
+  panel's `ApplyCompare`: roofline `SetMode(Compare)` + `SetCompareTarget`,
+  `ComputeTableView::SetCompareTarget`, `m_chart_b` layout / source / fetch,
+  and the A / B / delta sides.
 - B - A in the memory chart needs the same layout, so `DeltaAvailable()` is
   "same workload or same `WorkloadArch`"; otherwise the chart header offers
   A and B only and the bar shows the architectures in warning colour.
-  `m_memory_chart_side` / `m_isa_side` / `m_workload_side` (`PaneSide()`)
-  pick what the chart, ISA and workload details show (header buttons A / B,
-  plus delta for the chart); delta sets `m_memory_chart.SetDeltaTarget(
-  &m_memory_chart_b)`. The ISA pane is one view that `ShowKernel`s B, since
-  the data provider has a single PC-sampling callback; Workload Details
-  likewise `ShowWorkload`s B's workload and notes when it is A's too.
 - `SetCompareTarget()` ignores A itself.
 
 Handles `kComputeWorkloadSelectionChanged`,
-`kComputeKernelSelectionChanged`, `kComputeMetricsFetched` (A's and B's
-charts), `kNewTableData`, `kComputeShowMetricInKernelDetails` events.
+`kComputeKernelSelectionChanged`, `kComputeMetricsFetched` (forwarded to the
+panels: A's and B's charts), `kNewTableData`, `kComputeShowMetricInKernelDetails`
+events.
 
 ### `Roofline` (`rocprofvis_compute_roofline.{h,cpp}`)
 
@@ -1734,7 +1783,8 @@ hidden with "Metrics only one side has" off). B-only rows are keyed with
 among A's (after A's row of the same id); pinning one pins that key, so it
 stays apart from A's metric of the same id, and the pins show it as B's metric
 with an empty A while comparing (unavailable otherwise). Swap calls
-`SwapComparePins()` first, so every pin keeps naming the same metric once A and
+`SwapComparePins()` first (through the Metric Tables panel's
+`OnCompareSwapping()`), so every pin keeps naming the same metric once A and
 B trade places (`SwappedComparePinKey`: A's metric becomes its match in the new
 A, else B-only; a B-only metric becomes A's).
 Changed values are shaded from `highlight_pct` up with an alpha that grows with

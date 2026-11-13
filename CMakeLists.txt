@@ -217,6 +217,7 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_view.cpp
     src/view/src/compute/rocprofvis_compute_table_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_details.cpp
+    src/view/src/compute/rocprofvis_compute_kernel_details_panes.cpp
     src/view/src/compute/rocprofvis_compute_memory_chart.cpp
     src/view/src/model/compute/rocprofvis_memory_chart_model.cpp
     src/view/src/compute/rocprofvis_compute_selection.cpp

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "rocprofvis_compute_memory_chart.h"
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_presets.h"
 #include "rocprofvis_settings_manager.h"
@@ -22,10 +22,6 @@ namespace View
 
 class DataProvider;
 class ComputeSelection;
-class ComputeIsaView;
-class ComputeTableView;
-class ComputeWorkloadView;
-class Roofline;
 class KernelMetricTable;
 struct KernelInfo;
 
@@ -57,15 +53,6 @@ enum class ComputeLayoutTemplate : int32_t
     kCount
 };
 
-// What a panel shows while comparing: the selected kernel (A), the compare
-// target (B), or B - A.
-enum class CompareSide : uint8_t
-{
-    kA,
-    kB,
-    kDelta,
-};
-
 // Per-kernel workspace. A kernel rail on the left lists every workload's
 // kernels as vertical tabs (or the full kernel metric table) and is where A and
 // B are chosen; the rest is a box layout
@@ -75,11 +62,13 @@ enum class CompareSide : uint8_t
 // maximize live in AppWindowSettings (so they persist and match View > Compute
 // Profiler Panels) and are saved with user presets.
 //
-// Compare sets a second kernel (B, from any workload) against the selection
-// (A): the roofline plots both, metric tables add B and difference columns, and
-// the memory chart, ISA and workload details switch between A, B and (memory
-// chart, same GPU architecture only) B - A.
-class ComputeKernelDetailsView : public RocWidget
+// Each panel is a ComputeKernelDetailsPane; this view handles the boxes, the
+// kernel rail and the comparison, and reaches the panels only through that
+// interface. Compare sets a second kernel (B, from any workload) against the
+// selection (A): the roofline plots both, metric tables add B and difference
+// columns, and the memory chart, ISA and workload details switch between A, B
+// and (memory chart, same GPU architecture only) B - A.
+class ComputeKernelDetailsView : public RocWidget, private IKernelCompare
 {
 public:
     ComputeKernelDetailsView(DataProvider&                     data_provider,
@@ -104,27 +93,16 @@ private:
         bool                  kernel_rail = false;
     };
 
-    static constexpr int32_t NO_LAYOUT_NODE = -1;
-
     // A node of the current template's split tree: a box, or a split of two
     // nodes (indices into m_layout_nodes).
     struct LayoutNode
     {
-        int32_t                          slot;  // The box, for a leaf; else NO_LAYOUT_NODE.
+        int32_t                          slot;  // The box, for a leaf; else -1.
         std::shared_ptr<HSplitContainer> hsplit;
         std::shared_ptr<VSplitContainer> vsplit;
         int32_t                          first;
         int32_t                          second;
         LayoutItem::Ptr                  item;
-    };
-
-    // One header button; either an icon-font glyph or a text label.
-    struct HeaderButton
-    {
-        const char* icon;
-        const char* label;
-        const char* tooltip;
-        bool        active;
     };
 
     // The compare target (B) and how it follows the selection (A).
@@ -141,8 +119,8 @@ private:
         uint32_t baseline_kernel_id;
     };
 
-    // Saves the layout (template, boxes, maximize, kernel rail, chart fit) with
-    // user presets; Reset() restores the default arrangement.
+    // Saves the layout (template, boxes, maximize, kernel rail, the panels' own
+    // settings) with user presets; Reset() restores the default arrangement.
     class Preset : public PresetComponent
     {
     public:
@@ -157,14 +135,16 @@ private:
     };
 
     void SubscribeToEvents();
-    void CreatePanes();
+    void CreatePanes(DataProvider& data_provider, bool has_available_metrics,
+                     bool has_isa_lines);
+    void CreateLayoutItems();
 
     // Panels and boxes.
+    ComputeKernelDetailsPane& Pane(ComputePane pane) const;
     bool           IsPaneAvailable(ComputePane pane) const;
     // The available panel a stored pane value names, or kCount.
     ComputePane    AvailablePane(int32_t value) const;
     bool&          PaneVisibleSetting(ComputePane pane) const;
-    const char*    PaneTitle(ComputePane pane) const;
     ComputeLayoutTemplate CurrentTemplate() const;
     int32_t        ActiveSlotCount() const;
     ComputePane    SlotPane(int32_t slot) const;
@@ -176,8 +156,6 @@ private:
     void           PlacePane(ComputePane pane);
     void           SetTemplate(ComputeLayoutTemplate layout);
     void           ResetLayout();
-    // A and B share one Fit setting, so switching sides keeps the view.
-    void           SetMemoryChartFit(bool fit);
     // Applies Panels / View-menu toggles to the boxes, then mirrors the boxes
     // back into the toggles.
     void           SyncPanelToggles();
@@ -194,9 +172,7 @@ private:
     // Gives the splits under `node` their sides' minimum sizes, with the panels'
     // minimum widths scaled by `width_scale`; returns the node's own minimum size.
     ImVec2      ApplyNodeMinSizes(int32_t node, float width_scale);
-    // Smallest box a panel fits in; panels with horizontal toolbars need more
-    // width.
-    ImVec2      PaneMinSize(ComputePane pane) const;
+    ImVec2      SlotMinSize(int32_t slot) const;
     void        SetKernelRailTableMode(bool table);
 
     // Drawing.
@@ -204,21 +180,18 @@ private:
     void RenderPanelsMenu();
     // Title (a drag handle for box `slot` when `draggable`, followed by the
     // box's panel picker when `pickable`), then buttons right-aligned. Returns
-    // the clicked button index or -1; title_double_clicked reports a
+    // the clicked button's index or -1; title_double_clicked reports a
     // double-click on the title.
-    int  RenderPaneHeader(const char* title, int32_t slot, bool draggable, bool pickable,
-                          const HeaderButton* buttons, int count,
-                          bool& title_double_clicked);
+    int32_t RenderPaneHeader(const char* title, int32_t slot, bool draggable,
+                             bool pickable,
+                             const ComputeKernelDetailsPane::HeaderButton* buttons,
+                             int32_t count, bool& title_double_clicked);
     void RenderPanelPicker(int32_t slot);
     void RenderSlot(int32_t slot);
     void RenderPane(ComputePane pane, int32_t slot);
-    void RenderPaneBody(ComputePane pane, int32_t slot);
-    // Which side a panel shows while comparing; null for panels that show both.
-    CompareSide* PaneSide(ComputePane pane);
-    // What a panel set to `side` shows: `side` while comparing, else A.
-    CompareSide  ShownSide(CompareSide side) const;
     void RenderEmptySlot(int32_t slot);
-    void HandleSlotDrop(int32_t slot, const ImVec2& slot_min, const ImVec2& slot_max);
+    // Makes the last item, box `slot`'s card, the drop target for box titles.
+    void HandleSlotDrop(int32_t slot);
     void RenderKernelRail();
     void RenderKernelList();
     // The kernel table's sort and filters, when they reorder or narrow the list.
@@ -231,6 +204,10 @@ private:
     void RefreshKernelList();
 
     // Comparison.
+    bool     IsComparing() const override;
+    uint32_t CompareWorkloadId() const override;
+    uint32_t CompareKernelId() const override;
+    bool     DeltaAvailable() const override;
     bool CanCompare() const;
     void EnableCompare();
     void DisableCompare();
@@ -239,27 +216,22 @@ private:
     void SwapCompare();
     // Applies the compare rules to a selection change (see CompareState).
     void OnBaselineChanged();
-    // Pushes the comparison to the panels; `target_changed` refetches B.
+    // Pushes the comparison to the kernel rail and every panel; `target_changed`
+    // refetches B.
     void ApplyCompare(bool target_changed);
-    bool DeltaAvailable() const;
     const KernelInfo* FindKernelByName(uint32_t workload_id, const std::string& name) const;
     std::vector<const KernelInfo*> KernelsByDuration(uint32_t workload_id) const;
-    ComputeMemoryChartView&        DisplayedMemoryChart();
     // A and B, Follow A, Swap, the architectures and Stop, above the kernel list.
     void RenderCompareCard();
 
-    DataProvider&          m_data_provider;
-    ComputeMemoryChartView m_memory_chart;
-    // The compare target's chart; its own layout, so B of another GPU
-    // architecture draws its own hierarchy.
-    ComputeMemoryChartView m_memory_chart_b;
+    DataProvider& m_data_provider;
 
     std::shared_ptr<ComputeSelection>  m_compute_selection;
-    std::shared_ptr<Roofline>          m_roofline;
     std::shared_ptr<KernelMetricTable> m_kernel_metric_table;
-    std::shared_ptr<ComputeTableView>  m_table_view;
-    std::shared_ptr<ComputeIsaView>    m_isa_view;  // Null when the database has no ISA lines.
-    std::shared_ptr<ComputeWorkloadView> m_workload_view;
+    // Indexed by ComputePane; every panel exists, available or not.
+    std::array<std::unique_ptr<ComputeKernelDetailsPane>,
+               static_cast<size_t>(ComputePane::kCount)>
+        m_panes;
 
     uint64_t m_client_id;
 
@@ -268,11 +240,11 @@ private:
     LayoutItem::Ptr                                      m_maximized_pane;
     LayoutItem::Ptr                                      m_rail_pane;
 
-    std::shared_ptr<HSplitContainer>              m_root_split;  // rail | workspace
-    std::vector<LayoutNode>                       m_layout_nodes;  // Current template's tree.
-    int32_t                                       m_layout_root = NO_LAYOUT_NODE;
-    LayoutState                                   m_built_layout;
-    bool                                          m_layout_built = false;
+    std::shared_ptr<HSplitContainer> m_root_split;  // rail | workspace
+    std::vector<LayoutNode>          m_layout_nodes;  // Current template's tree.
+    int32_t                          m_layout_root;  // Its root node, or -1.
+    LayoutState                      m_built_layout;
+    bool                             m_layout_built = false;
 
     // Panel toggles as last mirrored from the boxes; a difference is a user toggle.
     std::array<bool, static_cast<size_t>(ComputePane::kCount)> m_synced_toggles{};
@@ -302,11 +274,6 @@ private:
     uint32_t                 m_kernel_list_selection_workload;
 
     CompareState m_compare;
-    CompareSide  m_memory_chart_side = CompareSide::kA;
-    CompareSide  m_isa_side          = CompareSide::kA;
-    CompareSide  m_workload_side     = CompareSide::kA;
-    // Workload whose layout m_memory_chart_b has loaded.
-    uint32_t     m_memory_chart_b_workload;
 
     std::unique_ptr<Preset> m_preset;
 

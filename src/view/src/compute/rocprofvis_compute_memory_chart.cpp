@@ -59,6 +59,14 @@ static constexpr float AUTO_COMPACT_MIN_HEIGHT_SHARE = 0.5f;
 // Kept free around a chart sized to its space (stretched or fitted), so float
 // rounding can never tip it or its parent into showing a scrollbar.
 static constexpr float FILL_SLACK = 1.0f;
+// Layout inputs (widths, heights, font size) closer than this are unchanged.
+static constexpr float LAYOUT_SIZE_TOLERANCE = 0.01f;
+
+static bool
+SizeChanged(float a, float b)
+{
+    return std::fabs(a - b) > LAYOUT_SIZE_TOLERANCE;
+}
 
 static constexpr const char* CHART_UNAVAILABLE_TEXT =
     "Memory chart is N/A for this workload.";
@@ -1954,8 +1962,8 @@ ComputeMemoryChartView::Render()
 
     // Recompute geometry only when an input to it changes; otherwise reuse the
     // cached blocks/routes/canvas from the last frame and just redraw them.
-    if(m_layout_dirty || avail.x != m_cached_layout_width ||
-       font_size != m_cached_font_size)
+    if(m_layout_dirty || SizeChanged(avail.x, m_cached_layout_width) ||
+       SizeChanged(font_size, m_cached_font_size))
     {
         LayoutCanvas(avail.x, 0.0f);
         m_natural_canvas_w    = m_canvas_w;
@@ -1978,7 +1986,7 @@ ComputeMemoryChartView::Render()
     // extra height grows the canvas one-for-one.
     const float extra_height =
         (!fit && fill_h > m_natural_canvas_h) ? fill_h - m_natural_canvas_h : 0.0f;
-    if(extra_height != m_layout_extra_height)
+    if(SizeChanged(extra_height, m_layout_extra_height))
     {
         LayoutCanvas(avail.x, extra_height);
     }

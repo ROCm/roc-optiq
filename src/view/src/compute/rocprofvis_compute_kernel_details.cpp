@@ -3,22 +3,16 @@
 
 #include "rocprofvis_compute_kernel_details.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "isa/rocprofvis_compute_isa_view.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
-#include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_selection.h"
-#include "rocprofvis_compute_table_view.h"
-#include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
-#include "imgui_internal.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cfloat>
 #include <cstdio>
 #include <functional>
@@ -40,14 +34,9 @@ constexpr float TWO_THIRDS       = 2.0f / 3.0f;
 constexpr float RAIL_LIST_RATIO  = 0.17f;  // kernel tabs | workspace
 constexpr float RAIL_TABLE_RATIO = 0.45f;  // kernel table | workspace
 
-// Smallest pane sizes, in frame heights / font sizes so they scale with the UI font.
-constexpr float PANE_MIN_FRAMES          = 5.0f;
-constexpr float PANE_MIN_WIDTH_EMS       = 12.0f;
+// Smallest rail and workspace widths, in font sizes so they scale with the UI
+// font; the panels set their own (ComputeKernelDetailsPane::MinSize).
 constexpr float WORKSPACE_MIN_WIDTH_EMS  = 20.0f;
-// Panels whose toolbars lay combos side by side get crushed sooner.
-constexpr float ROOFLINE_MIN_WIDTH_EMS                 = 44.0f;
-constexpr float METRIC_TABLES_MIN_WIDTH_FRAMES         = 18.0f;
-constexpr float METRIC_TABLES_COMPARE_MIN_WIDTH_FRAMES = 25.0f;
 // Most of the workspace's width the panels' minimum widths may claim, so a
 // gutter always has room to move.
 constexpr float PANE_MIN_MAX_WORKSPACE_SHARE = 0.85f;
@@ -75,6 +64,7 @@ constexpr float       DROP_BORDER_THICKNESS  = 2.0f;
 constexpr float       DROP_LABEL_PAD         = 6.0f;
 constexpr int32_t     MAXIMIZED_SLOT         = -1;
 constexpr int32_t     EMPTY_SLOT_VALUE       = -1;
+constexpr int32_t     NO_LAYOUT_NODE         = -1;
 
 // Kernel tab geometry.
 constexpr float  KERNEL_TAB_PAD          = 6.0f;
@@ -96,8 +86,9 @@ constexpr float COMPARE_BADGE_ROUNDING     = 3.0f;
 constexpr float COMPARE_BADGE_HOVER_ALPHA  = 0.5f;
 // Most of a kernel tab the A / B marker column may take on a narrow rail.
 constexpr float KERNEL_TAB_SLOT_MAX_SHARE  = 0.5f;
-// Most buttons a pane header carries (A, B, B - A, Fit, maximize, hide).
-constexpr int MAX_PANE_HEADER_BUTTONS = 6;
+// Header buttons every box's panel carries after its own: maximize (or
+// restore) and hide.
+constexpr int32_t COMMON_PANE_HEADER_BUTTONS = 2;
 
 constexpr const char* JSON_KEY_LAYOUT_TEMPLATE          = "template";
 constexpr const char* JSON_KEY_LAYOUT_SLOTS             = "slots";
@@ -105,7 +96,6 @@ constexpr const char* JSON_KEY_LAYOUT_MAXIMIZED         = "maximized";
 constexpr const char* JSON_KEY_LAYOUT_MAXIMIZED_PANE    = "maximized_pane";
 constexpr const char* JSON_KEY_LAYOUT_KERNEL_LIST       = "kernel_list";
 constexpr const char* JSON_KEY_LAYOUT_KERNEL_LIST_TABLE = "kernel_list_table";
-constexpr const char* JSON_KEY_LAYOUT_FIT_MEMORY_CHART  = "fit_memory_chart";
 constexpr const char* JSON_KEY_COMPARE_FOLLOW_BY_NAME   = "compare_follow_by_name";
 }  // namespace
 
@@ -161,6 +151,10 @@ static const ComputeLayoutTemplate LAYOUT_MENU_ORDER[] = {
 };
 
 constexpr int32_t PANE_COUNT = static_cast<int32_t>(ComputePane::kCount);
+static_assert(COMPUTE_LAYOUT_MAX_SLOTS <= PANE_COUNT,
+              "ResetLayout gives each box a distinct panel");
+constexpr int32_t MAX_PANE_HEADER_BUTTONS =
+    ComputeKernelDetailsPane::MAX_HEADER_BUTTONS + COMMON_PANE_HEADER_BUTTONS;
 
 static const LayoutTemplateInfo&
 TemplateInfo(ComputeLayoutTemplate layout)
@@ -192,22 +186,6 @@ static float
 RailSplitRatio(bool table)
 {
     return table ? RAIL_TABLE_RATIO : RAIL_LIST_RATIO;
-}
-
-static bool
-ContainsIgnoreCase(const std::string& text, const std::string& needle)
-{
-    if(needle.empty())
-    {
-        return true;
-    }
-    std::string::const_iterator it =
-        std::search(text.begin(), text.end(), needle.begin(), needle.end(),
-                    [](char a, char b) {
-                        return std::tolower(static_cast<unsigned char>(a)) ==
-                               std::tolower(static_cast<unsigned char>(b));
-                    });
-    return it != text.end();
 }
 
 // Draws a template's boxes into [min, min + size].
@@ -355,17 +333,12 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     bool has_available_metrics, bool has_isa_lines)
 : RocWidget()
 , m_data_provider(data_provider)
-, m_memory_chart(data_provider, compute_selection)
-, m_memory_chart_b(data_provider, compute_selection)
 , m_compute_selection(compute_selection)
-, m_roofline(nullptr)
 , m_kernel_metric_table(nullptr)
-, m_table_view(nullptr)
-, m_isa_view(nullptr)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
+, m_layout_root(NO_LAYOUT_NODE)
 , m_kernel_list_selection(ComputeSelection::INVALID_SELECTION_ID)
 , m_kernel_list_selection_workload(ComputeSelection::INVALID_SELECTION_ID)
-, m_memory_chart_b_workload(ComputeSelection::INVALID_SELECTION_ID)
 , m_preset(nullptr)
 , m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
@@ -377,15 +350,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     m_compare.kernel_id            = ComputeSelection::INVALID_SELECTION_ID;
     m_compare.baseline_workload_id = ComputeSelection::INVALID_SELECTION_ID;
     m_compare.baseline_kernel_id   = ComputeSelection::INVALID_SELECTION_ID;
-    // B's chart never follows the selection.
-    m_memory_chart_b.SetSource(ComputeSelection::INVALID_SELECTION_ID,
-                               ComputeSelection::INVALID_SELECTION_ID);
-    SubscribeToEvents();
 
-    // Panes draw their own header (title + buttons), so the widgets skip theirs.
-    m_roofline =
-        std::make_shared<RocProfVis::View::Roofline>(data_provider, Roofline::SingleKernel);
-    m_roofline->SetChromeless(true);
     m_kernel_metric_table =
         std::make_shared<RocProfVis::View::KernelMetricTable>(data_provider,
                                                               compute_selection);
@@ -395,16 +360,10 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
         [this](uint32_t workload_id, uint32_t kernel_id) {
             SetCompareTarget(workload_id, kernel_id);
         });
-    m_table_view = std::make_shared<ComputeTableView>(data_provider, compute_selection,
-                                                      has_available_metrics);
-    m_table_view->SetChromeless(true);
-    if(has_isa_lines)
-    {
-        m_isa_view = std::make_shared<ComputeIsaView>(data_provider);
-    }
-    m_workload_view = std::make_shared<ComputeWorkloadView>(data_provider, compute_selection);
+    CreatePanes(data_provider, has_available_metrics, has_isa_lines);
+    SubscribeToEvents();
 
-    CreatePanes();
+    CreateLayoutItems();
     m_preset      = std::make_unique<Preset>(*this);
     m_widget_name = GenUniqueName("ComputeKernelDetailsView");
 }
@@ -427,7 +386,28 @@ ComputeKernelDetailsView::~ComputeKernelDetailsView()
 }
 
 void
-ComputeKernelDetailsView::CreatePanes()
+ComputeKernelDetailsView::CreatePanes(DataProvider& data_provider,
+                                      bool has_available_metrics, bool has_isa_lines)
+{
+    const IKernelCompare&                    compare   = *this;
+    const std::shared_ptr<ComputeSelection>& selection = m_compute_selection;
+    m_panes[static_cast<size_t>(ComputePane::kMemoryChart)] =
+        std::make_unique<ComputeMemoryChartPane>(compare, data_provider, selection);
+    m_panes[static_cast<size_t>(ComputePane::kRoofline)] =
+        std::make_unique<ComputeRooflinePane>(compare, data_provider);
+    m_panes[static_cast<size_t>(ComputePane::kMetricTables)] =
+        std::make_unique<ComputeMetricTablesPane>(compare, data_provider, selection,
+                                                  has_available_metrics);
+    m_panes[static_cast<size_t>(ComputePane::kIsa)] =
+        std::make_unique<ComputeIsaPane>(compare, data_provider, has_isa_lines);
+    m_panes[static_cast<size_t>(ComputePane::kWorkloadDetails)] =
+        std::make_unique<ComputeWorkloadPane>(compare, data_provider, selection);
+    static_assert(static_cast<int32_t>(ComputePane::kWorkloadDetails) + 1 == PANE_COUNT,
+                  "CreatePanes creates every ComputePane");
+}
+
+void
+ComputeKernelDetailsView::CreateLayoutItems()
 {
     for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
     {
@@ -455,14 +435,13 @@ ComputeKernelDetailsView::SubscribeToEvents()
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            m_memory_chart.LoadWorkloadLayout(evt->GetId());
+            for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
+            {
+                pane->OnWorkloadSelected(evt->GetId());
+            }
             if(m_kernel_metric_table)
             {
                 m_kernel_metric_table->FetchData(evt->GetId());
-            }
-            if(m_roofline)
-            {
-                m_roofline->SetWorkload(evt->GetId());
             }
         }
     };
@@ -475,10 +454,9 @@ ComputeKernelDetailsView::SubscribeToEvents()
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            m_memory_chart.FetchMemChartMetrics();
-            if(m_roofline)
+            for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
             {
-                m_roofline->SetKernel(evt->GetId());
+                pane->OnKernelSelected(evt->GetId());
             }
             OnBaselineChanged();
         }
@@ -492,15 +470,9 @@ ComputeKernelDetailsView::SubscribeToEvents()
         auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            if(m_memory_chart.GetClientId() == evt->GetClientId())
+            for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
             {
-                m_memory_chart.UpdateMetrics();
-            }
-            else if(m_memory_chart_b.GetClientId() == evt->GetClientId())
-            {
-                m_memory_chart_b.UpdateMetrics();
-                // A's B - A values read B's metrics.
-                m_memory_chart.RefreshValues();
+                pane->OnMetricsFetched(evt->GetClientId());
             }
         }
     };
@@ -550,26 +522,27 @@ ComputeKernelDetailsView::SubscribeToEvents()
 void
 ComputeKernelDetailsView::Update()
 {
-    if(m_roofline)
-    {
-        m_roofline->Update();
-    }
     if(m_kernel_metric_table)
     {
         m_kernel_metric_table->Update();
     }
-    m_table_view->Update();
-    if(m_isa_view)
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
     {
-        m_isa_view->Update();
+        pane->Update();
     }
-    m_workload_view->Update();
+}
+
+ComputeKernelDetailsPane&
+ComputeKernelDetailsView::Pane(ComputePane pane) const
+{
+    IM_ASSERT(pane != ComputePane::kCount);
+    return *m_panes[static_cast<size_t>(pane)];
 }
 
 bool
 ComputeKernelDetailsView::IsPaneAvailable(ComputePane pane) const
 {
-    return pane != ComputePane::kCount && (pane != ComputePane::kIsa || m_isa_view != nullptr);
+    return pane != ComputePane::kCount && Pane(pane).IsAvailable();
 }
 
 ComputePane
@@ -594,21 +567,6 @@ ComputeKernelDetailsView::PaneVisibleSetting(ComputePane pane) const
         case ComputePane::kCount: break;
     }
     return settings.show_compute_memory_chart;
-}
-
-const char*
-ComputeKernelDetailsView::PaneTitle(ComputePane pane) const
-{
-    switch(pane)
-    {
-        case ComputePane::kRoofline: return "Roofline";
-        case ComputePane::kMetricTables: return "Metric Tables";
-        case ComputePane::kIsa: return "ISA";
-        case ComputePane::kWorkloadDetails: return "Workload Details";
-        case ComputePane::kMemoryChart:
-        case ComputePane::kCount: break;
-    }
-    return "Memory Chart";
 }
 
 ComputeLayoutTemplate
@@ -752,19 +710,15 @@ ComputeKernelDetailsView::ResetLayout()
     settings.compute_layout_template = static_cast<int32_t>(ComputeLayoutTemplate::kMainBelow);
     for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
     {
-        settings.compute_layout_slots[slot] = slot < PANE_COUNT ? slot : EMPTY_SLOT_VALUE;
+        settings.compute_layout_slots[slot] = slot;
     }
     settings.compute_maximized        = false;
     settings.show_compute_kernel_list = true;
     SetKernelRailTableMode(false);
-    SetMemoryChartFit(false);
-}
-
-void
-ComputeKernelDetailsView::SetMemoryChartFit(bool fit)
-{
-    m_memory_chart.SetFitToView(fit);
-    m_memory_chart_b.SetFitToView(fit);
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
+    {
+        pane->ResetLayout();
+    }
 }
 
 void
@@ -834,7 +788,6 @@ ComputeKernelDetailsView::RebuildLayout(const LayoutState& state)
     m_built_layout         = state;
     m_layout_built         = true;
 }
-
 
 int32_t
 ComputeKernelDetailsView::BoxNode(int32_t slot)
@@ -953,29 +906,17 @@ ComputeKernelDetailsView::ApplyNodeMinSizes(int32_t node, float width_scale)
         item.vsplit->SetMinBottomHeight(bottom.y);
         return ImVec2(std::max(top.x, bottom.x), top.y + PANE_GUTTER + bottom.y);
     }
-    ImVec2 size = PaneMinSize(SlotPane(item.slot));
+    ImVec2 size = SlotMinSize(item.slot);
     size.x *= width_scale;
     return size;
 }
 
 ImVec2
-ComputeKernelDetailsView::PaneMinSize(ComputePane pane) const
+ComputeKernelDetailsView::SlotMinSize(int32_t slot) const
 {
-    const float em      = ImGui::GetFontSize();
-    const float frame_h = ImGui::GetFrameHeightWithSpacing();
-    ImVec2      size(em * PANE_MIN_WIDTH_EMS, frame_h * PANE_MIN_FRAMES);
-    if(pane == ComputePane::kRoofline)
-    {
-        size.x = em * ROOFLINE_MIN_WIDTH_EMS;
-    }
-    else if(pane == ComputePane::kMetricTables)
-    {
-        // The Compare combo joins the tables' toolbar while comparing.
-        size.x = ImGui::GetFrameHeight() * (m_compare.enabled
-                                                ? METRIC_TABLES_COMPARE_MIN_WIDTH_FRAMES
-                                                : METRIC_TABLES_MIN_WIDTH_FRAMES);
-    }
-    return size;
+    const ComputePane pane = SlotPane(slot);
+    return pane == ComputePane::kCount ? ComputeKernelDetailsPane::DefaultMinSize()
+                                       : Pane(pane).MinSize();
 }
 
 void
@@ -1012,8 +953,7 @@ ComputeKernelDetailsView::RenderLayoutMenu()
     ImGui::SameLine();
     ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * LAYOUT_COMBO_WIDTH_FRAMES);
     PushComboStyles();
-    if(ImGui::BeginCombo("##compute_layout", "",
-                         ImGuiComboFlags_CustomPreview | ImGuiComboFlags_HeightLargest))
+    if(ImGui::BeginCombo("##compute_layout", "", ImGuiComboFlags_HeightLargest))
     {
         const float row_h   = ImGui::GetFrameHeight() * LAYOUT_ROW_HEIGHT_FRAMES;
         const float thumb_h = row_h - THUMBNAIL_INSET * 2.0f;
@@ -1046,16 +986,28 @@ ComputeKernelDetailsView::RenderLayoutMenu()
         }
         ImGui::EndCombo();
     }
-    if(ImGui::BeginComboPreview())
+    // The preview, the template's thumbnail and name, is drawn over the combo's
+    // frame (the last item again once the popup has ended), left of its arrow.
+    if(ImGui::IsItemVisible())
     {
-        const float  thumb_h = ImGui::GetTextLineHeight();
-        const ImVec2 thumb_size(thumb_h * THUMBNAIL_ASPECT, thumb_h);
-        const ImVec2 pos = ImGui::GetCursorScreenPos();
-        ImGui::Dummy(thumb_size);
-        DrawLayoutThumbnail(ImGui::GetWindowDrawList(), pos, thumb_size, current, dim);
-        ImGui::SameLine(0.0f, THUMBNAIL_LABEL_GAP);
-        ImGui::TextUnformatted(TemplateInfo(current).name);
-        ImGui::EndComboPreview();
+        const ImGuiStyle& style     = ImGui::GetStyle();
+        const ImVec2      frame_min = ImGui::GetItemRectMin();
+        const ImVec2      frame_max = ImGui::GetItemRectMax();
+        const float       thumb_h   = ImGui::GetTextLineHeight();
+        const ImVec2      thumb_size(thumb_h * THUMBNAIL_ASPECT, thumb_h);
+        const ImVec2      thumb_min(frame_min.x + style.FramePadding.x,
+                                    frame_min.y + style.FramePadding.y);
+        ImDrawList*       draw_list = ImGui::GetWindowDrawList();
+        draw_list->PushClipRect(frame_min,
+                                ImVec2(std::max(frame_min.x,
+                                                frame_max.x - ImGui::GetFrameHeight()),
+                                       frame_max.y),
+                                true);
+        DrawLayoutThumbnail(draw_list, thumb_min, thumb_size, current, dim);
+        draw_list->AddText(
+            ImVec2(thumb_min.x + thumb_size.x + THUMBNAIL_LABEL_GAP, thumb_min.y),
+            ImGui::GetColorU32(ImGuiCol_Text), TemplateInfo(current).name);
+        draw_list->PopClipRect();
     }
     PopComboStyles();
     if(ImGui::IsItemHovered())
@@ -1098,7 +1050,7 @@ ComputeKernelDetailsView::RenderPanelsMenu()
             if(IsPaneAvailable(pane))
             {
                 // Applied to the boxes by SyncPanelToggles next frame.
-                ImGui::Checkbox(PaneTitle(pane), &PaneVisibleSetting(pane));
+                ImGui::Checkbox(Pane(pane).Title(), &PaneVisibleSetting(pane));
             }
         }
         ImGui::EndCombo();
@@ -1106,10 +1058,11 @@ ComputeKernelDetailsView::RenderPanelsMenu()
     PopComboStyles();
 }
 
-int
-ComputeKernelDetailsView::RenderPaneHeader(const char* title, int32_t slot, bool draggable,
-                                           bool pickable, const HeaderButton* buttons,
-                                           int count, bool& title_double_clicked)
+int32_t
+ComputeKernelDetailsView::RenderPaneHeader(
+    const char* title, int32_t slot, bool draggable, bool pickable,
+    const ComputeKernelDetailsPane::HeaderButton* buttons, int32_t count,
+    bool& title_double_clicked)
 {
     SettingsManager&  settings   = SettingsManager::GetInstance();
     const ImGuiStyle& style      = settings.GetDefaultStyle();
@@ -1174,21 +1127,21 @@ ComputeKernelDetailsView::RenderPaneHeader(const char* title, int32_t slot, bool
         RenderPanelPicker(slot);
     }
 
-    int clicked = -1;
+    int32_t clicked = -1;
     if(count > 0)
     {
         // Right-align the buttons on the title's row.
         float buttons_w = button_gap * static_cast<float>(count - 1);
-        for(int i = 0; i < count; ++i)
+        for(int32_t i = 0; i < count; ++i)
         {
             buttons_w += buttons[i].icon ? IconWidth(buttons[i].icon)
                                          : ImGui::CalcTextSize(buttons[i].label).x;
             buttons_w += style.FramePadding.x * 2.0f;
         }
         SameLineRightAligned(buttons_w);
-        for(int i = 0; i < count; ++i)
+        for(int32_t i = 0; i < count; ++i)
         {
-            const HeaderButton& button = buttons[i];
+            const ComputeKernelDetailsPane::HeaderButton& button = buttons[i];
             if(i > 0)
             {
                 ImGui::SameLine(0.0f, button_gap);
@@ -1245,7 +1198,7 @@ ComputeKernelDetailsView::RenderPanelPicker(int32_t slot)
         // A panel shown elsewhere trades places with this box's panel.
         const int32_t where = ActiveSlotOf(pane);
         const char*   hint  = where >= 0 && where != slot ? "swap" : nullptr;
-        if(ImGui::MenuItem(PaneTitle(pane), hint, pane == current))
+        if(ImGui::MenuItem(Pane(pane).Title(), hint, pane == current))
         {
             AssignSlot(slot, pane);
         }
@@ -1264,9 +1217,6 @@ ComputeKernelDetailsView::RenderPanelPicker(int32_t slot)
 void
 ComputeKernelDetailsView::RenderSlot(int32_t slot)
 {
-    const ImVec2 slot_min = ImGui::GetWindowPos();
-    const ImVec2 slot_max(slot_min.x + ImGui::GetWindowWidth(),
-                          slot_min.y + ImGui::GetWindowHeight());
     const ComputePane pane = SlotPane(slot);
     if(pane == ComputePane::kCount)
     {
@@ -1276,25 +1226,25 @@ ComputeKernelDetailsView::RenderSlot(int32_t slot)
     {
         RenderPane(pane, slot);
     }
-    HandleSlotDrop(slot, slot_min, slot_max);
 }
 
 void
-ComputeKernelDetailsView::HandleSlotDrop(int32_t slot, const ImVec2& slot_min,
-                                         const ImVec2& slot_max)
+ComputeKernelDetailsView::HandleSlotDrop(int32_t slot)
 {
-    const ImGuiPayload* payload = ImGui::GetDragDropPayload();
-    if(!payload || !payload->IsDataType(PANE_DRAG_PAYLOAD))
+    if(!ImGui::BeginDragDropTarget())
     {
         return;
     }
-    const int32_t source = *static_cast<const int32_t*>(payload->Data);
-    if(source != slot && ImGui::IsMouseHoveringRect(slot_min, slot_max, false))
+    const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+    if(payload && payload->IsDataType(PANE_DRAG_PAYLOAD) &&
+       *static_cast<const int32_t*>(payload->Data) != slot)
     {
         // Highlight the box under the cursor and say what the drop will do.
         SettingsManager& settings = SettingsManager::GetInstance();
         const ImU32      accent   = settings.GetColor(Colors::kAccent);
         const float      rounding = settings.GetDefaultStyle().ChildRounding;
+        const ImVec2     slot_min = ImGui::GetItemRectMin();
+        const ImVec2     slot_max = ImGui::GetItemRectMax();
         ImDrawList*      overlay  = ImGui::GetForegroundDrawList();
         overlay->AddRectFilled(slot_min, slot_max, ApplyAlpha(accent, DROP_FILL_ALPHA), rounding);
         overlay->AddRect(slot_min, slot_max, accent, rounding, 0, DROP_BORDER_THICKNESS);
@@ -1302,7 +1252,7 @@ ComputeKernelDetailsView::HandleSlotDrop(int32_t slot, const ImVec2& slot_min,
         const ComputePane target = SlotPane(slot);
         const std::string label  = target == ComputePane::kCount
                                        ? std::string("Move here")
-                                       : std::string("Swap with ") + PaneTitle(target);
+                                       : std::string("Swap with ") + Pane(target).Title();
         const ImVec2      text   = ImGui::CalcTextSize(label.c_str());
         const ImVec2      center((slot_min.x + slot_max.x) * 0.5f,
                                  (slot_min.y + slot_max.y) * 0.5f);
@@ -1316,205 +1266,82 @@ ComputeKernelDetailsView::HandleSlotDrop(int32_t slot, const ImVec2& slot_min,
         overlay->AddText(ImVec2(pill_min.x + DROP_LABEL_PAD, pill_min.y + DROP_LABEL_PAD),
                          settings.GetColor(Colors::kTextMain), label.c_str());
     }
-    if(ImGui::BeginDragDropTargetCustom(ImRect(slot_min, slot_max), ImGui::GetID("box_drop")))
+    if(const ImGuiPayload* dropped = ImGui::AcceptDragDropPayload(
+           PANE_DRAG_PAYLOAD, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
     {
-        if(const ImGuiPayload* dropped = ImGui::AcceptDragDropPayload(
-               PANE_DRAG_PAYLOAD, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
-        {
-            SwapSlots(*static_cast<const int32_t*>(dropped->Data), slot);
-        }
-        ImGui::EndDragDropTarget();
+        SwapSlots(*static_cast<const int32_t*>(dropped->Data), slot);
     }
+    ImGui::EndDragDropTarget();
 }
 
 void
 ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
 {
-    enum class HeaderAction : uint8_t
-    {
-        kNone,
-        kShowA,
-        kShowB,
-        kShowDelta,
-        kFit,
-        kMaximize,
-        kRestore,
-        kHide,
-    };
+    AppWindowSettings&        settings  = WindowSettings();
+    ComputeKernelDetailsPane& panel     = Pane(pane);
+    const bool                maximized = slot == MAXIMIZED_SLOT;
 
-    AppWindowSettings& settings  = WindowSettings();
-    const bool         maximized = slot == MAXIMIZED_SLOT;
-
-    HeaderButton buttons[MAX_PANE_HEADER_BUTTONS];
-    HeaderAction actions[MAX_PANE_HEADER_BUTTONS];
-    int          count      = 0;
-    auto         add_button = [&buttons, &actions, &count](const HeaderButton& button,
-                                                         HeaderAction        action) {
-        IM_ASSERT(count < MAX_PANE_HEADER_BUTTONS);
-        buttons[count] = button;
-        actions[count] = action;
-        count++;
-    };
-    // While comparing, the memory chart, ISA and workload details show one side
-    // at a time.
-    CompareSide* side = m_compare.enabled ? PaneSide(pane) : nullptr;
-    if(side)
-    {
-        const bool  workload  = pane == ComputePane::kWorkloadDetails;
-        const bool  delta     = pane == ComputePane::kMemoryChart && DeltaAvailable();
-        const char* b_tooltip = "Show B (the compare target)";
-        if(workload)
-        {
-            b_tooltip = "Show B's workload (the compare target's)";
-        }
-        else if(pane == ComputePane::kMemoryChart && !delta)
-        {
-            b_tooltip = "Show B (the compare target). B - A needs A and B on the\n"
-                        "same GPU architecture.";
-        }
-        add_button({ nullptr, "A",
-                     workload ? "Show A's workload (the selected kernel's)"
-                              : "Show A (the selected kernel)",
-                     *side == CompareSide::kA },
-                   HeaderAction::kShowA);
-        add_button({ nullptr, "B", b_tooltip, *side == CompareSide::kB },
-                   HeaderAction::kShowB);
-        if(delta)
-        {
-            add_button({ nullptr, "\xCE\x94", "Show B - A (how B differs from A)",
-                         *side == CompareSide::kDelta },
-                       HeaderAction::kShowDelta);
-        }
-    }
-    // A compact (overview) chart is always fitted, so Fit only applies at size.
-    if(pane == ComputePane::kMemoryChart && !DisplayedMemoryChart().IsCompact())
-    {
-        add_button({ nullptr, "Fit",
-                     "Shrink the whole chart to fit the box (off: actual size, scroll)",
-                     m_memory_chart.GetFitToView() },
-                   HeaderAction::kFit);
-    }
+    // The panel's own buttons, then maximize (or restore) and hide.
+    ComputeKernelDetailsPane::HeaderButton buttons[MAX_PANE_HEADER_BUTTONS];
+    const int32_t maximize_button = panel.HeaderButtons(buttons);
+    const int32_t hide_button     = maximize_button + 1;
+    IM_ASSERT(maximize_button <= ComputeKernelDetailsPane::MAX_HEADER_BUTTONS);
     if(maximized)
     {
-        add_button({ ICON_ARROWS_SHRINK, nullptr, "Restore the layout", false },
-                   HeaderAction::kRestore);
+        buttons[maximize_button] = { ICON_ARROWS_SHRINK, nullptr, "Restore the layout",
+                                     false, maximize_button };
     }
     else
     {
-        add_button({ ICON_ARROWS_EXPAND, nullptr,
-                     "Maximize: fill the tab, hiding the other boxes and kernels",
-                     false },
-                   HeaderAction::kMaximize);
+        buttons[maximize_button] = {
+            ICON_ARROWS_EXPAND, nullptr,
+            "Maximize: fill the tab, hiding the other boxes and kernels", false,
+            maximize_button
+        };
     }
-    add_button({ ICON_X_CIRCLED, nullptr,
-                 "Hide (empties the box; turn it back on from Panels)", false },
-               HeaderAction::kHide);
+    buttons[hide_button] = { ICON_X_CIRCLED, nullptr,
+                             "Hide (empties the box; turn it back on from Panels)", false,
+                             hide_button };
 
     BeginPaneCard("pane_card");
-    bool      title_double_clicked = false;
-    const int clicked = RenderPaneHeader(PaneTitle(pane), slot, !maximized, !maximized,
-                                         buttons, count, title_double_clicked);
+    bool          title_double_clicked = false;
+    const int32_t clicked =
+        RenderPaneHeader(panel.Title(), slot, !maximized, !maximized, buttons,
+                         hide_button + 1, title_double_clicked);
     ImGui::BeginChild("pane_body", ImVec2(0, 0));
-    RenderPaneBody(pane, slot);
+    panel.RenderBody(maximized);
     ImGui::EndChild();
     EndPaneCard();
+    if(!maximized)
+    {
+        HandleSlotDrop(slot);
+    }
 
     // Settings changes take effect as a relayout on the next frame. Double-clicking
     // the title toggles maximize.
-    HeaderAction action = clicked >= 0 ? actions[clicked] : HeaderAction::kNone;
-    if(title_double_clicked)
+    const bool toggle_maximize = title_double_clicked || clicked == maximize_button;
+    if(toggle_maximize && maximized)
     {
-        action = maximized ? HeaderAction::kRestore : HeaderAction::kMaximize;
+        settings.compute_maximized = false;
     }
-    switch(action)
+    else if(toggle_maximize)
     {
-        case HeaderAction::kMaximize:
-            settings.compute_maximized_pane = static_cast<int32_t>(pane);
-            settings.compute_maximized      = true;
-            break;
-        case HeaderAction::kRestore: settings.compute_maximized = false; break;
-        case HeaderAction::kHide:
+        settings.compute_maximized_pane = static_cast<int32_t>(pane);
+        settings.compute_maximized      = true;
+    }
+    else if(clicked == hide_button)
+    {
+        const int32_t box = ActiveSlotOf(pane);
+        if(box >= 0)
         {
-            const int32_t box = ActiveSlotOf(pane);
-            if(box >= 0)
-            {
-                ClearSlot(box);
-            }
-            settings.compute_maximized = false;
-            break;
+            ClearSlot(box);
         }
-        case HeaderAction::kShowA:
-        case HeaderAction::kShowB:
-        case HeaderAction::kShowDelta:
-            if(side)
-            {
-                *side = action == HeaderAction::kShowA   ? CompareSide::kA
-                        : action == HeaderAction::kShowB ? CompareSide::kB
-                                                         : CompareSide::kDelta;
-                ApplyCompare(false);
-            }
-            break;
-        case HeaderAction::kFit:
-            SetMemoryChartFit(!m_memory_chart.GetFitToView());
-            break;
-        case HeaderAction::kNone: break;
+        settings.compute_maximized = false;
     }
-}
-
-void
-ComputeKernelDetailsView::RenderPaneBody(ComputePane pane, int32_t slot)
-{
-    switch(pane)
+    else if(clicked >= 0)
     {
-        case ComputePane::kMemoryChart:
-        {
-            // Maximized it is always at actual size; in a box it falls back to a
-            // fitted overview when the box is too small to read it.
-            ComputeMemoryChartView& chart = DisplayedMemoryChart();
-            chart.SetAutoCompact(slot != MAXIMIZED_SLOT);
-            chart.Render();
-            break;
-        }
-        case ComputePane::kRoofline: m_roofline->Render(); break;
-        case ComputePane::kMetricTables: m_table_view->Render(); break;
-        case ComputePane::kIsa:
-            if(m_isa_view)
-            {
-                m_isa_view->Render();
-            }
-            break;
-        case ComputePane::kWorkloadDetails:
-            // B of A's workload shows the same details, so say it is not stale.
-            if(ShownSide(m_workload_side) == CompareSide::kB &&
-               m_compare.workload_id == m_compute_selection->GetSelectedWorkload())
-            {
-                ImGui::TextDisabled("A and B are in the same workload.");
-            }
-            m_workload_view->Render();
-            break;
-        case ComputePane::kCount: break;
+        panel.OnHeaderButton(buttons[clicked].id);
     }
-}
-
-CompareSide*
-ComputeKernelDetailsView::PaneSide(ComputePane pane)
-{
-    switch(pane)
-    {
-        case ComputePane::kMemoryChart: return &m_memory_chart_side;
-        case ComputePane::kIsa: return &m_isa_side;
-        case ComputePane::kWorkloadDetails: return &m_workload_side;
-        case ComputePane::kRoofline:
-        case ComputePane::kMetricTables:
-        case ComputePane::kCount: break;
-    }
-    return nullptr;
-}
-
-CompareSide
-ComputeKernelDetailsView::ShownSide(CompareSide side) const
-{
-    return m_compare.enabled ? side : CompareSide::kA;
 }
 
 void
@@ -1548,7 +1375,7 @@ ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
         float row_w = style.ItemSpacing.x * static_cast<float>(unshown_count - 1);
         for(size_t i = 0; i < unshown_count; ++i)
         {
-            row_w += ImGui::CalcTextSize(PaneTitle(unshown[i])).x +
+            row_w += ImGui::CalcTextSize(Pane(unshown[i]).Title()).x +
                      style.FramePadding.x * 2.0f;
         }
         CenterNextItem(row_w);
@@ -1558,7 +1385,7 @@ ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
             {
                 ImGui::SameLine();
             }
-            if(ImGui::Button(PaneTitle(unshown[i])))
+            if(ImGui::Button(Pane(unshown[i]).Title()))
             {
                 AssignSlot(slot, unshown[i]);
             }
@@ -1566,30 +1393,33 @@ ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
     }
     ImGui::EndChild();
     EndPaneCard();
+    HandleSlotDrop(slot);
 }
 
 void
 ComputeKernelDetailsView::RenderKernelRail()
 {
     // Indices of the header buttons below.
-    constexpr int LIST_BUTTON  = 0;
-    constexpr int TABLE_BUTTON = 1;
-    constexpr int HIDE_BUTTON  = 2;
+    constexpr int32_t LIST_BUTTON  = 0;
+    constexpr int32_t TABLE_BUTTON = 1;
+    constexpr int32_t HIDE_BUTTON  = 2;
 
-    AppWindowSettings& settings  = WindowSettings();
-    const bool         table     = settings.compute_kernel_list_table;
-    const HeaderButton buttons[] = {
-        { nullptr, "List", "Kernels as tabs, by total duration", !table },
+    AppWindowSettings& settings = WindowSettings();
+    const bool         table    = settings.compute_kernel_list_table;
+    const ComputeKernelDetailsPane::HeaderButton buttons[] = {
+        { nullptr, "List", "Kernels as tabs, by total duration", !table, LIST_BUTTON },
         { nullptr, "Table", "Full kernel table: sort, filter and add metric columns",
-          table },
-        { ICON_X_CIRCLED, nullptr, "Hide (turn it back on from Panels)", false },
+          table, TABLE_BUTTON },
+        { ICON_X_CIRCLED, nullptr, "Hide (turn it back on from Panels)", false,
+          HIDE_BUTTON },
     };
 
     BeginPaneCard("kernel_rail_card");
-    bool      title_double_clicked = false;
-    const int clicked =
+    bool          title_double_clicked = false;
+    const int32_t clicked =
         RenderPaneHeader("Kernels", -1, false, false, buttons,
-                         static_cast<int>(IM_ARRAYSIZE(buttons)), title_double_clicked);
+                         static_cast<int32_t>(IM_ARRAYSIZE(buttons)),
+                         title_double_clicked);
     ImGui::BeginChild("kernel_rail_body", ImVec2(0, 0), ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if(m_compare.enabled)
@@ -1667,8 +1497,8 @@ ComputeKernelDetailsView::RenderKernelList()
     const bool                any_listed = !shown.empty();
     shown.erase(std::remove_if(shown.begin(), shown.end(),
                                [this](const ListedKernel& item) {
-                                   return !ContainsIgnoreCase(item.kernel->name,
-                                                              m_kernel_filter);
+                                   return !contains_ignore_case(item.kernel->name,
+                                                                m_kernel_filter);
                                }),
                 shown.end());
     // Several workloads get a header per workload while the order keeps each
@@ -2008,6 +1838,24 @@ ComputeKernelDetailsView::FindKernelByName(uint32_t workload_id, const std::stri
 }
 
 bool
+ComputeKernelDetailsView::IsComparing() const
+{
+    return m_compare.enabled;
+}
+
+uint32_t
+ComputeKernelDetailsView::CompareWorkloadId() const
+{
+    return m_compare.workload_id;
+}
+
+uint32_t
+ComputeKernelDetailsView::CompareKernelId() const
+{
+    return m_compare.kernel_id;
+}
+
+bool
 ComputeKernelDetailsView::DeltaAvailable() const
 {
     if(!m_compare.enabled)
@@ -2025,13 +1873,6 @@ ComputeKernelDetailsView::DeltaAvailable() const
            ComputeMemoryChartView::WorkloadArch(model.GetWorkload(m_compare.workload_id));
 }
 
-ComputeMemoryChartView&
-ComputeKernelDetailsView::DisplayedMemoryChart()
-{
-    return ShownSide(m_memory_chart_side) == CompareSide::kB ? m_memory_chart_b
-                                                              : m_memory_chart;
-}
-
 void
 ComputeKernelDetailsView::EnableCompare()
 {
@@ -2047,10 +1888,10 @@ ComputeKernelDetailsView::EnableCompare()
     m_compare.enabled              = true;
     m_compare.baseline_workload_id = a_workload;
     m_compare.baseline_kernel_id   = a_kernel;
-    // Open on the difference where there is one to show.
-    m_memory_chart_side = DeltaAvailable() ? CompareSide::kDelta : CompareSide::kA;
-    m_isa_side          = CompareSide::kA;
-    m_workload_side     = CompareSide::kA;
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
+    {
+        pane->OnCompareStarted();
+    }
     ApplyCompare(true);
 }
 
@@ -2104,7 +1945,10 @@ ComputeKernelDetailsView::SwapCompare()
     // the follow rule against the new B.
     m_compare.baseline_workload_id = b_workload;
     m_compare.baseline_kernel_id   = b_kernel;
-    m_table_view->SwapComparePins();
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
+    {
+        pane->OnCompareSwapping();
+    }
     m_compute_selection->Select(b_workload, b_kernel);
     ApplyCompare(true);
 }
@@ -2157,58 +2001,19 @@ ComputeKernelDetailsView::OnBaselineChanged()
 void
 ComputeKernelDetailsView::ApplyCompare(bool target_changed)
 {
-    const uint32_t workload_id = m_compare.workload_id;
-    const uint32_t kernel_id   = m_compare.kernel_id;
     if(m_compare.enabled)
     {
-        m_roofline->SetMode(Roofline::Compare);
-        m_table_view->SetCompareTarget(workload_id, kernel_id);
-        m_kernel_metric_table->SetMarkedKernel(workload_id, kernel_id);
-        if(target_changed)
-        {
-            m_roofline->SetCompareTarget(workload_id, kernel_id);
-            if(workload_id != m_memory_chart_b_workload)
-            {
-                m_memory_chart_b.LoadWorkloadLayout(workload_id);
-                m_memory_chart_b_workload = workload_id;
-            }
-            m_memory_chart_b.SetSource(workload_id, kernel_id);
-            m_memory_chart_b.FetchMemChartMetrics();
-        }
-        if(m_memory_chart_side == CompareSide::kDelta && !DeltaAvailable())
-        {
-            m_memory_chart_side = CompareSide::kA;
-        }
+        m_kernel_metric_table->SetMarkedKernel(m_compare.workload_id,
+                                               m_compare.kernel_id);
     }
     else
     {
-        m_roofline->SetMode(Roofline::SingleKernel);
-        m_table_view->ClearCompareTarget();
         m_kernel_metric_table->SetMarkedKernel(ComputeSelection::INVALID_SELECTION_ID,
                                                ComputeSelection::INVALID_SELECTION_ID);
     }
-
-    m_memory_chart.SetDeltaTarget(ShownSide(m_memory_chart_side) == CompareSide::kDelta
-                                      ? &m_memory_chart_b
-                                      : nullptr);
-    if(m_isa_view)
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
     {
-        if(ShownSide(m_isa_side) == CompareSide::kB)
-        {
-            m_isa_view->ShowKernel(workload_id, kernel_id);
-        }
-        else
-        {
-            m_isa_view->FollowSelection();
-        }
-    }
-    if(ShownSide(m_workload_side) == CompareSide::kB)
-    {
-        m_workload_view->ShowWorkload(workload_id);
-    }
-    else
-    {
-        m_workload_view->FollowSelection();
+        pane->ApplyCompare(target_changed);
     }
 }
 
@@ -2394,8 +2199,11 @@ ComputeKernelDetailsView::Preset::ToJson(jt::Json& json)
     json[JSON_KEY_LAYOUT_MAXIMIZED_PANE]    = settings.compute_maximized_pane;
     json[JSON_KEY_LAYOUT_KERNEL_LIST]       = settings.show_compute_kernel_list;
     json[JSON_KEY_LAYOUT_KERNEL_LIST_TABLE] = settings.compute_kernel_list_table;
-    json[JSON_KEY_LAYOUT_FIT_MEMORY_CHART]  = m_widget.m_memory_chart.GetFitToView();
     json[JSON_KEY_COMPARE_FOLLOW_BY_NAME]   = m_widget.m_compare.follow_by_name;
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_widget.m_panes)
+    {
+        pane->SaveLayout(json);
+    }
     return true;
 }
 
@@ -2454,10 +2262,14 @@ ComputeKernelDetailsView::Preset::FromJson(jt::Json& json)
     bool table = settings.compute_kernel_list_table;
     read_bool(JSON_KEY_LAYOUT_KERNEL_LIST_TABLE, table);
     m_widget.SetKernelRailTableMode(table);
-    bool fit = m_widget.m_memory_chart.GetFitToView();
-    read_bool(JSON_KEY_LAYOUT_FIT_MEMORY_CHART, fit);
-    m_widget.SetMemoryChartFit(fit);
     read_bool(JSON_KEY_COMPARE_FOLLOW_BY_NAME, m_widget.m_compare.follow_by_name);
+    for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_widget.m_panes)
+    {
+        if(!pane->LoadLayout(json))
+        {
+            result = false;
+        }
+    }
     return result;
 }
 

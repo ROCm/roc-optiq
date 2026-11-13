@@ -7,10 +7,10 @@
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cfloat>
 
 namespace RocProfVis
@@ -42,22 +42,6 @@ constexpr float MIN_TABLE_HEIGHT_FRAMES = 5.0f;
 // per-kernel table.
 constexpr uint64_t DEFAULT_SHOWN_TABLE =
     MetricId::GetTableKey(METRIC_CAT_SOL, METRIC_TABLE_SOL);
-
-static bool
-ContainsIgnoreCase(const std::string& text, const std::string& needle)
-{
-    if(needle.empty())
-    {
-        return true;
-    }
-    std::string::const_iterator it =
-        std::search(text.begin(), text.end(), needle.begin(), needle.end(),
-                    [](char a, char b) {
-                        return std::tolower(static_cast<unsigned char>(a)) ==
-                               std::tolower(static_cast<unsigned char>(b));
-                    });
-    return it != text.end();
-}
 
 // "2.1  System Speed-of-Light": the dotted prefix matches the metric ids shown
 // in the table's rows.
@@ -494,8 +478,8 @@ ComputeTableView::RenderTablePicker(const std::vector<ListedTable>& listed)
         for(const ListedTable& table : listed)
         {
             const std::string label = TableLabel(table.category_id, table.Named());
-            if(!ContainsIgnoreCase(*table.category_name, m_picker_filter) &&
-               !ContainsIgnoreCase(label, m_picker_filter))
+            if(!contains_ignore_case(*table.category_name, m_picker_filter) &&
+               !contains_ignore_case(label, m_picker_filter))
             {
                 continue;
             }

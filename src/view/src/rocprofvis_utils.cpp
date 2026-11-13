@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_utils.h"
+#include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <cmath>
@@ -878,4 +879,20 @@ bool
 RocProfVis::View::is_usable_time_range(double start_ns, double end_ns)
 {
     return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
+}
+
+bool
+RocProfVis::View::contains_ignore_case(const std::string& text, const std::string& needle)
+{
+    if(needle.empty())
+    {
+        return true;
+    }
+    std::string::const_iterator it =
+        std::search(text.begin(), text.end(), needle.begin(), needle.end(),
+                    [](char a, char b) {
+                        return std::tolower(static_cast<unsigned char>(a)) ==
+                               std::tolower(static_cast<unsigned char>(b));
+                    });
+    return it != text.end();
 }

@@ -259,6 +259,13 @@ full_number_format(double number);
 bool
 parse_compact_number(std::string_view input, std::string_view units, double& out_value);
 
+/**
+ * @brief Whether `text` contains `needle`, ignoring ASCII case.
+ * @return true for an empty needle.
+ */
+bool
+contains_ignore_case(const std::string& text, const std::string& needle);
+
 bool 
 open_url(const std::string& url);
 

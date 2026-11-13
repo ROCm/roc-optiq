@@ -177,7 +177,13 @@ struct ComputeKernelDetailsViewTestPeer
 {
     ComputeKernelDetailsView& v;
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
-    ComputeTableView*  TableViewPtr() const { return v.m_table_view.get(); }
+    ComputeTableView*  TableViewPtr() const
+    {
+        const ComputeMetricTablesPane* pane =
+            dynamic_cast<const ComputeMetricTablesPane*>(
+                PanePtr(ComputePane::kMetricTables));
+        return pane ? pane->m_table_view.get() : nullptr;
+    }
     // Same effect as picking B in the compare bar (turns comparing on).
     void     CompareWith(uint32_t workload_id, uint32_t kernel_id)
     {
@@ -190,24 +196,37 @@ struct ComputeKernelDetailsViewTestPeer
     bool     DeltaAvailable() const { return v.DeltaAvailable(); }
     bool     MemoryChartShowsDelta() const
     {
-        return v.m_memory_chart_side == CompareSide::kDelta;
+        return PaneShows(ComputePane::kMemoryChart, CompareSide::kDelta);
     }
-    Roofline* RooflinePtr() const { return v.m_roofline.get(); }
-    ComputeIsaView* IsaViewPtr() const { return v.m_isa_view.get(); }
-    bool            IsaShowsB() const { return v.m_isa_side == CompareSide::kB; }
-    // Same effect as the ISA pane's A / B header buttons.
-    void ShowIsaSide(CompareSide side)
+    Roofline* RooflinePtr() const
     {
-        v.m_isa_side = side;
-        v.ApplyCompare(false);
+        const ComputeRooflinePane* pane =
+            dynamic_cast<const ComputeRooflinePane*>(PanePtr(ComputePane::kRoofline));
+        return pane ? pane->m_roofline.get() : nullptr;
     }
-    ComputeWorkloadView* WorkloadViewPtr() const { return v.m_workload_view.get(); }
-    bool WorkloadShowsB() const { return v.m_workload_side == CompareSide::kB; }
+    ComputeIsaView* IsaViewPtr() const
+    {
+        const ComputeIsaPane* pane =
+            dynamic_cast<const ComputeIsaPane*>(PanePtr(ComputePane::kIsa));
+        return pane ? pane->m_isa_view.get() : nullptr;
+    }
+    bool IsaShowsB() const { return PaneShows(ComputePane::kIsa, CompareSide::kB); }
+    // Same effect as the ISA pane's A / B header buttons.
+    void ShowIsaSide(CompareSide side) { ShowPaneSide(ComputePane::kIsa, side); }
+    ComputeWorkloadView* WorkloadViewPtr() const
+    {
+        const ComputeWorkloadPane* pane = dynamic_cast<const ComputeWorkloadPane*>(
+            PanePtr(ComputePane::kWorkloadDetails));
+        return pane ? pane->m_workload_view.get() : nullptr;
+    }
+    bool WorkloadShowsB() const
+    {
+        return PaneShows(ComputePane::kWorkloadDetails, CompareSide::kB);
+    }
     // Same effect as the Workload Details pane's A / B header buttons.
     void ShowWorkloadSide(CompareSide side)
     {
-        v.m_workload_side = side;
-        v.ApplyCompare(false);
+        ShowPaneSide(ComputePane::kWorkloadDetails, side);
     }
     // The rail List's kernels (workload, kernel), in order, before its search.
     std::vector<std::pair<uint32_t, uint32_t>> ListedKernels() const
@@ -224,8 +243,29 @@ struct ComputeKernelDetailsViewTestPeer
     void SetKernelRailTable(bool table) { v.SetKernelRailTableMode(table); }
     void ShowMemoryChartSide(CompareSide side)
     {
-        v.m_memory_chart_side = side;
-        v.ApplyCompare(false);
+        ShowPaneSide(ComputePane::kMemoryChart, side);
+    }
+
+private:
+    ComputeKernelDetailsPane* PanePtr(ComputePane pane) const
+    {
+        return v.m_panes[static_cast<size_t>(pane)].get();
+    }
+    ComputeSidedPane* SidedPane(ComputePane pane) const
+    {
+        return dynamic_cast<ComputeSidedPane*>(PanePtr(pane));
+    }
+    bool PaneShows(ComputePane pane, CompareSide side) const
+    {
+        const ComputeSidedPane* sided = SidedPane(pane);
+        return sided && sided->m_side == side;
+    }
+    void ShowPaneSide(ComputePane pane, CompareSide side)
+    {
+        if(ComputeSidedPane* sided = SidedPane(pane))
+        {
+            sided->ShowSide(side);
+        }
     }
 };
 

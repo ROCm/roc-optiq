@@ -12,6 +12,9 @@ namespace RocProfVis
 namespace DataModel
 {
 
+// OpenAsSqlite checks out one connection per node and keeps it until CloseAsSqlite.
+constexpr size_t SERVICE_CONNECTIONS_PER_NODE = 1;
+
 void SqliteDatabase::CreateDbNodes(std::vector<std::string>& multinode_files) {
     uint32_t node_id = 0;
     for (auto file : multinode_files)
@@ -220,7 +223,10 @@ rocprofvis_dm_result_t SqliteDatabase::CloseAsSqlite()
             spdlog::debug("Error : At the time of closing only one active connection should remain!");
             result = kRocProfVisDmResultUnknownError;
         }
-        ReleaseConnection(*node->m_connections_inuse.begin());
+        if (!node->m_connections_inuse.empty())
+        {
+            ReleaseConnection(*node->m_connections_inuse.begin());
+        }
 
         for (auto it = node->m_available_connections.begin(); it != node->m_available_connections.end(); ++it)
         {
@@ -246,38 +252,37 @@ SqliteDatabase::InterruptAsSqlite(void* connection) {
 sqlite3* SqliteDatabase::GetConnection(uint32_t db_node_id) 
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(db_node_id < m_db_nodes.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
-    std::unique_lock<std::mutex> lock(m_db_nodes[db_node_id]->m_mutex);
-    if(!m_db_nodes[db_node_id]->m_available_connections.empty())
+    rocprofvis_db_sqlite_db_node_t* node = m_db_nodes[db_node_id].get();
+    std::unique_lock<std::mutex>    lock(node->m_mutex);
+    sqlite3*                        conn = nullptr;
+    if(node->m_available_connections.empty())
     {
-
-        auto it = std::prev(m_db_nodes[db_node_id]->m_available_connections.end());
-        m_db_nodes[db_node_id]->m_connections_inuse.insert(*it);
-        sqlite3* conn = *it;
-        m_db_nodes[db_node_id]->m_available_connections.erase(it);
-        return conn;
-    }
-    else
-    {
-        
-        sqlite3* conn;
-        size_t   thread_count = std::thread::hardware_concurrency();
-        if(m_db_nodes[db_node_id]->m_connections_inuse.size() > thread_count ||
-           kRocProfVisDmResultSuccess != OpenConnection(db_node_id, &conn))
+        // The service connection is never released before CloseAsSqlite, so a wait
+        // can only end while a query connection is checked out.
+        size_t in_use   = node->m_connections_inuse.size();
+        bool   can_wait = in_use > SERVICE_CONNECTIONS_PER_NODE;
+        bool   at_limit = can_wait && in_use > std::thread::hardware_concurrency();
+        if(!at_limit && kRocProfVisDmResultSuccess == OpenConnection(db_node_id, &conn))
         {
-            m_db_nodes[db_node_id]->m_inuse_cv.wait(lock, [&] { return !m_db_nodes[db_node_id]->m_available_connections.empty(); });
-           
-           auto it = std::prev(m_db_nodes[db_node_id]->m_available_connections.end());
-           m_db_nodes[db_node_id]->m_connections_inuse.insert(*it);
-           sqlite3* available_conn = *it;
-           m_db_nodes[db_node_id]->m_available_connections.erase(it);
-           return available_conn;
+            node->m_connections_inuse.insert(conn);
+        }
+        else if(can_wait)
+        {
+            node->m_inuse_cv.wait(lock, [node] { return !node->m_available_connections.empty(); });
         }
         else
         {
-            m_db_nodes[db_node_id]->m_connections_inuse.insert(conn);
-            return conn;
+            spdlog::error("Cannot open a connection to database {}", node->filepath);
         }
     }
+    if(conn == nullptr && !node->m_available_connections.empty())
+    {
+        auto it = std::prev(node->m_available_connections.end());
+        conn    = *it;
+        node->m_connections_inuse.insert(conn);
+        node->m_available_connections.erase(it);
+    }
+    return conn;
 }
 
 sqlite3*
@@ -599,6 +604,10 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance,
     rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
     params->db_instance = db_instance;
     sqlite3* conn = GetConnection(db_instance->FileIndex());
+    if (conn == nullptr)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
     std::string query_str = query;
     std::string guid_str = m_db->GuidAt(db_instance->GuidIndex());
     ReplaceAllSubstrings(query_str, "%GUID%", guid_str);
@@ -654,6 +663,10 @@ rocprofvis_dm_result_t
 SqliteDatabase::DropSQLTable(const char* table_name, uint32_t db_node_id)
 {
     sqlite3* conn = GetConnection(db_node_id);
+    if (conn == nullptr)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
 
     std::string query = "DROP TABLE IF EXISTS ";
@@ -670,6 +683,10 @@ rocprofvis_dm_result_t
 SqliteDatabase::DropSQLIndex(const char* index_name, uint32_t db_node_id)
 {
     sqlite3* conn = GetConnection(db_node_id);
+    if (conn == nullptr)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
 
     std::string query = "DROP INDEX IF EXISTS ";
@@ -686,6 +703,10 @@ std::vector<std::string> SqliteDatabase::GetRocpdIndexes(uint32_t db_node_id)
 {
     std::vector<std::string> indexes;
     sqlite3* conn = GetConnection(db_node_id);
+    if (conn == nullptr)
+    {
+        return indexes;
+    }
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
     const char* query =
         "SELECT name FROM sqlite_master "
@@ -695,18 +716,15 @@ std::vector<std::string> SqliteDatabase::GetRocpdIndexes(uint32_t db_node_id)
 
     sqlite3_stmt* stmt = nullptr;
 
-    if (sqlite3_prepare_v2(conn, query, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(conn, query, -1, &stmt, nullptr) == SQLITE_OK)
     {
-        // handle error if needed
-        return indexes;
-    }
-
-    while (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        const unsigned char* text = sqlite3_column_text(stmt, 0);
-        if (text)
+        while (sqlite3_step(stmt) == SQLITE_ROW)
         {
-            indexes.emplace_back(reinterpret_cast<const char*>(text));
+            const unsigned char* text = sqlite3_column_text(stmt, 0);
+            if (text)
+            {
+                indexes.emplace_back(reinterpret_cast<const char*>(text));
+            }
         }
     }
 
@@ -776,6 +794,10 @@ SqliteDatabase::CreateSQLTable(
                                 uint32_t db_node_id)
 {
     sqlite3* conn = GetConnection(db_node_id);
+    if (conn == nullptr)
+    {
+        return kRocProfVisDmResultDbAccessFailed;
+    }
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
     while(true)
     {

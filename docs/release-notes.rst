@@ -3,42 +3,86 @@
    :keywords: ROCm Optiq, release notes, ROCm
 
 ***********************************************
-ROCm Optiq 1.1.0 release notes
+ROCm Optiq 1.2.0 release notes
 ***********************************************
 
 These release notes describe notable changes since the previous ROCm Optiq release.
 
 Release highlights
-------------------
+==================
 
-This release improves the ROCm Optiq user experience with enhanced timeline interactions, time-range analysis, search, and filtering. It also includes fixes for stability, display, and data presentation issues.
+This release expands trace summary, compute comparison, and trace-format support. It also includes fixes for duration reporting, tables, trace data, and packaging.
 
 Added
------
+=====
 
-* Sortable timeline tracks: Right-click the track-list header (or use the down-arrow at its bottom) to sort tracks by **Topology**, **Default** (track type), or a remembered **Custom** order. **Drag-to-reorder** becomes the **Custom** order, and the choice persists per project.
-* Draggable measurement duration label: The label can now be dragged (its connecting line and notches follow it), and the ruler timestamps are split to top left and bottom right so they no longer overlap.
-* Time-range selection indicators across the timeline, tables, and overview: Per-track analysis statistics pills are tinted blue while a selection is active. The events and top-events tables show a **Limited to time-range selection** vs **Full trace** scope indicator, and the overview histogram greys out bars outside the selection, marks the selection's start and end, and draws a duration bracket.
+ROCm Systems Profiler traces
+----------------------------
+Summary
+^^^^^^^
 
-Changed
--------
+* The **Summary** view covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top entries also report percent of total duration and mean duration.
+* **Details** on a category card opens that category's tab, with pie and bar charts and a table of its operations.
+* A **System Topology** tab shows the system topology and counters.
 
-* Search enhancements: Memory events are now included in search for supported formats, plus a new **Advanced** search mode for finer control.
-* Simplified table filter UI. Original filter options are available via **Advanced mode**.
-* Clipped the macOS app icon to a squircle to match other icons in the Dock, while keeping the white-on-red design fully opaque.
-* CI: Linux targets now built as ManyLinux binaries.
+Trace formats
+^^^^^^^^^^^^^
+
+* ROCpd schema 3.0.4 adds the ``rocpd_hip_event`` table. When that table contains rows, ROCm Optiq shows those HIP API events on the timeline, in search, in the topology tree, and in data flow from region events. HIP API events are not listed in **Top Events**.
+
+Tables
+^^^^^^
+
+* Table columns auto-fit to their content and are capped in width, so long values (such as demangled kernel names) are elided. The full value stays in a hover tooltip. Columns resized by hand are left alone, and widths are re-fit when the result set changes.
+
+Timeline and navigation
+^^^^^^^^^^^^^^^^^^^^^^^
+
+* File Explorer-style track selection: In the timeline and the System Topology sidebar, click a track to select only that track. Hold **Ctrl** and click to add a track to the selection or remove it. Hold **Shift** and click to select every track between the last track and the one you click.
+
+
+ROCm Compute Profiler analysis data
+-----------------------------------
+Roofline
+^^^^^^^^
+
+* Roofline comparison: compare a kernel against a baseline kernel, including a kernel from another workload, and choose whether hardware peaks come from the baseline or the compared workload.
+* Roofline option menus open outside the plot by default.
+* Roofline has toggleable labels for hardware peaks.
+* **Profile Details** (formerly **Workload Details**) includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
+
+Memory chart
+^^^^^^^^^^^^
+
+* Architecture-specific memory-chart layouts: gfx950, gfx94x (including gfx940), and gfx115x (RDNA 3.5).
+* The chart can be panned with the scroll wheel or a trackpad.
+
+ISA View
+^^^^^^^^
+
+* ISA View is included in the release build and marked **Tech Preview**, because the collected data format is still under development.
+
+Binaries / build
+----------------
+
+* Official builds print the git commit hash with ``--version``. A build that was not stamped prints ``unknown``.
 
 Resolved issues
----------------
+===============
 
-* Fixed incorrect table row count and missing rows under specific scenarios.
-* Fixed memory-chart values exceeding 100% (schema 2.0.0 or higher).
-* Memory manager: Fixed intermittent crashes, permanent pool retention, and unbounded memory growth from stranded pooled objects.
-* Fixed the UI rendering at half size on HiDPI Linux (XWayland) displays.
-* Fixed the description-column resize panning the timeline.
-* Fixed timeline tracks flickering during fast vertical scroll.
-* Fixed a crash opening a compute ``.db`` when a roofline ceiling category is empty (uncaught ``std::out_of_range``); the **Roofline** tab now shows "No data available."
-* Fixed a crash in **Baseline Comparison** when a kernel with a non-finite (Inf) metric is compared to itself.
-* Fixed the version number reported by the Windows installer.
-* Fixed topology node order that is inconsistent between target environments.
-* Fixed memory chart layout and metrics for the gfx950 and gfx940 series.
+* Fixed kernel dispatch durations wrapping above about 4.29 seconds in the **Top Kernels** table and its bar chart, pie chart, and tooltips. Durations are stored as 64-bit nanosecond counts.
+* Fixed incorrect averages when a grouped query was merged across threads. Per-thread averages are now weighted, and MAX no longer starts at the smallest positive double.
+* Fixed table CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, a full disk).
+* Fixed tables restoring another table's column layout from a previous session.
+* Fixed **Top Events** tables displaying incorrectly when they had no results.
+* Fixed **Track Details** showing PID 0 for counter tracks.
+* Fixed rocpd sample tracks missing their PMC samples.
+* Fixed a crash when a table filter could not be parsed.
+* Fixed a hang on macOS.
+* Fixed a leaked row-count query when a table had nothing to count.
+* Fixed invalid table filter feedback. Improved error notifications when table filters are invalid.
+* Fixed the kernel selection table disappearing when a filter matches no rows.
+* Fixed Linux tarball extracts at the install prefix. It no longer wraps its contents in a ``<package>-<version>-<system>/`` directory, matching the .deb and .rpm layout.
+* Fixed missing dependencies in Debian packages.
+* Fixed commit hash missing from Linux builds.
+* Fixed process id not read correctly in some trace files.

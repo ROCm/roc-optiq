@@ -32,6 +32,7 @@ namespace View
 inline constexpr float MIN_LABEL_WIDTH          = 40.0f;
 inline constexpr float HIGHLIGHT_THICKNESS      = 4.0f;
 inline constexpr float HIGHLIGHT_THICKNESS_HALF = HIGHLIGHT_THICKNESS / 2;
+inline constexpr float HIGHLIGHT_PULSE_EXTRA    = 1.5f;
 inline constexpr float TOOLTIP_OFFSET           = 16.0f;
 inline constexpr int   MAX_CHARACTERS_PER_LINE  = 40;
 inline constexpr float MAX_TABLE_HEIGHT         = 300.0f;
@@ -979,9 +980,12 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        // Levels below the track's height are clipped. A selection outline can
-        // reach up to HIGHLIGHT_THICKNESS above its box, so keep that margin.
-        if(start_position.y >= m_track_content_height + HIGHLIGHT_THICKNESS)
+        // The child clips at m_track_content_height. The highlight rect is inset by
+        // half the stroke and AddRect centers that stroke, so a steady outline
+        // reaches ANTI_ALIASING_WORKAROUND above the box. A search pulse grows the
+        // stroke by HIGHLIGHT_PULSE_EXTRA, so keep that extra reach too.
+        const float outline_overhang = ANTI_ALIASING_WORKAROUND + HIGHLIGHT_PULSE_EXTRA;
+        if(start_position.y >= m_track_content_height + outline_overhang)
         {
             continue;
         }
@@ -1039,7 +1043,7 @@ FlameTrackItem::RenderChart(float graph_width)
             if(!persistent)
             {
                 float pulse = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
-                thickness   = HIGHLIGHT_THICKNESS + pulse * 1.5f;
+                thickness   = HIGHLIGHT_THICKNESS + pulse * HIGHLIGHT_PULSE_EXTRA;
 
                 ImU32 a      = (border_color >> 24) & 0xFF;
                 ImU32 new_a  = static_cast<ImU32>(a * (0.5f + 0.5f * pulse));

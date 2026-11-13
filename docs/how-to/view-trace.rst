@@ -385,7 +385,7 @@ Summary View
 The **Summary View** has these tabs:
 
 *  **Overview** shows trace-level metrics (**Trace Span**, **Tracked Events**, **Nodes**, and **GPUs**), an **Event Composition** bar showing each category's share of total execution time, and a card for each category that has data. Each card shows total duration and invocation count, and a **Top by Duration** list of the operations that used the most execution time, along with each entry's percent of total duration. The **Details** button opens that category's tab in a new **Summary** window.
-* **System Topology** shows the system topology and **Counters**, grouped by trace → node → processor → process → thread.
+* **System Topology** displays the system topology. **Counters** are grouped hierarchically by trace, node, processor, process, and thread — each level nested inside the one before it. For example, a thread belongs to a process, which belongs to a processor, and so on up to the trace.
 * **Kernel Executions** shows a pie chart, a bar chart, and a table of kernel executions (select each by clicking its icon). Table columns are **Name**, **Invocation(s)**, **Total Duration**, **Total Duration (%)**, **Avg Duration**, **Max Duration**, and **Min Duration**. Select a row to list the matching kernel executions.
 * **Thread Operations** shows a pie chart, a bar chart, and a table of thread operations (select each by clicking its icon). The table uses the same columns as **Kernel Executions**. Select a row to list the matching thread operations.
 * **Memory Operations** (only shown when the trace contains memory operations) shows the same charts, table columns, and row selection as **Kernel Executions** and **Thread Operations**.

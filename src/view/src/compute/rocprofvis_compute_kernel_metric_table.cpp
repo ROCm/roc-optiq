@@ -15,7 +15,6 @@
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstdlib>
 
@@ -909,26 +908,6 @@ KernelMetricTable::RenderColumnFilter(int column_index)
 void
 KernelMetricTable::ApplyFilters()
 {
-    // Validate each filter before applying
-    for(size_t i = 0; i < m_pending_column_filters.size(); i++)
-    {
-        const ColumnFilter& filter = m_pending_column_filters[i];
-        if(!filter.is_active || strlen(filter.filter_text) == 0)
-            continue;
-
-        bool is_numeric_column = (i != NAME_COLUMN_INDEX);  // Name Column is text, others are numeric
-
-        if(!ValidateFilterExpression(filter.filter_text, is_numeric_column))
-        {
-            spdlog::warn("Invalid filter expression for column {}: {}", i, filter.filter_text);
-            NotificationManager::GetInstance().Show(
-                "Invalid filter expression: " + std::string(filter.filter_text),
-                NotificationLevel::Error);
-
-            return;  // Don't apply invalid filters
-        }
-    }
-
     m_column_filters = m_pending_column_filters;
     m_fetch_requested = true;
 }
@@ -996,53 +975,6 @@ KernelMetricTable::RenderBarChartContextMenu(int col)
         ImGui::EndPopup();
     }
     ImGui::PopID();
-}
-
-bool
-KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_column)
-{
-    std::string trimmed(expr);
-    // Trim whitespace
-    trimmed.erase(0, trimmed.find_first_not_of(" \t\n\r"));
-    trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
-
-    if(trimmed.empty()) return true;
-
-    if(is_numeric_column)
-    {
-        // Must be: operator + number
-        // Check for operators followed by numbers
-        static const std::vector<std::string> ops = {">=", "<=", "!=", ">", "<", "="};
-        for(const auto& op : ops)
-        {
-            if(trimmed.find(op) == 0)
-            {
-                std::string value = trimmed.substr(op.length());
-                // Trim value
-                value.erase(0, value.find_first_not_of(" \t\n\r"));
-                value.erase(value.find_last_not_of(" \t\n\r") + 1);
-                // Check if value is numeric
-                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '.'))
-                {
-                    return true;
-                }
-                return false;
-            }
-        }
-        return false;
-    }
-    else
-    {
-        // Text column: LIKE operator required
-        auto starts_with_like = [](const std::string& str) {
-            if(str.length() < 4) return false;
-            std::string prefix = str.substr(0, 4);
-            std::transform(prefix.begin(), prefix.end(), prefix.begin(),
-                [](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
-            return prefix == "like";
-        };
-        return starts_with_like(trimmed);
-    }
 }
 
 KernelMetricTable::Preset::Preset(KernelMetricTable& widget)

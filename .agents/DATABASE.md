@@ -153,7 +153,8 @@ rocprofvis_dm_charptr_t  rocprofvis_db_future_get_error_message(future);
 
 `rocprofvis_db_future_get_error_message` returns a message the last
 operation left for the user (set with `Future::SetErrorMessage`, e.g. a
-table filter the table processor could not apply), or an empty string.
+table filter the table processor or the compute pivot could not apply),
+or an empty string.
 
 The progress callback `rocprofvis_db_progress_callback_t` receives:
 
@@ -626,8 +627,11 @@ databases:
   (`compute_version`, `git_version`, `schema_version`) is served to the
   controller by the `kRPVComputeFetchMetadata` use case through
   `CallbackGetComputeGeneric`; it is valid for every schema version.
-- Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
-  the kernel x metric pivot table from a JSON plan (`jt::Json`).
+- Pivot construction: `BuildKernelMetricsMatrix(future, table, plan)`
+  builds the kernel x metric pivot table from a JSON plan (`jt::Json`).
+  A column filter it can't parse or evaluate still succeeds, with every
+  column and no rows, and leaves "Could not apply filter: ..." on the
+  future.
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
   kernels to stamp mean / median into the table.
 
@@ -1242,7 +1246,13 @@ instruction-to-symbol, symbol-to-kernel, symbol-to-code-object,
 state-to-instruction, and stall-reason-to-state joins.
 
 `GetComputeKernelInstructionLines` selects the fields needed for the
-initial ISA display (formerly "Code View").
+initial ISA display (formerly "Code View"), including the resolved instruction
+type text from `compute_instruction_type_lookup`. The lookup is left-joined so
+an instruction without type metadata remains in the result. Its
+`instruction_type_uuid` stays NULL rather than being reported as zero, and the
+joined type text is empty. The controller keeps that UUID optional and builds
+the UUID-to-text map from present ids only, so lookup id 0 stays distinct from
+a missing type.
 
 `GetComputeWorkloadTopKernels` also returns `has_isa_lines`. For schema
 2.2 and newer it derives the value from kernel-symbol/instruction-line
@@ -1541,7 +1551,11 @@ There are two distinct flows:
   containing only the time range `[start, end]`. Tables marked
   `kRocOptiqTableCopyWhenTrimmed` are copied; those marked
   `kRocOptiqTableDisposeWhenTrimmed` are dropped from the new file
-  and rebuilt on next open.
+  and rebuilt on next open. `SaveTrimmedDataAsync` refuses a destination
+  that is one of the trace's own files (`IsSourceFile`), trims into a
+  temporary file beside the destination, and renames it over the
+  destination only on success. The per-subclass `SaveTrimmedData`
+  returns its result; the async wrapper sets the promise.
 
 ## 11. CFFI / Python Bindings
 

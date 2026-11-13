@@ -53,13 +53,17 @@ public:
     };
 
     // on_open_file is invoked with the local trace path once downloaded.
-    // parse_trace_path is invoked with the remote profiler's captured stdout
-    // once profiling completes; it must return the remote trace file path the
-    // profiler produced (or empty if it cannot be determined), which drives the
-    // SFTP download. May be null, in which case any path already set on the URI
-    // is used.
+    // has_output_file and parse_trace_path are invoked with the remote
+    // profiler's captured stdout once profiling completes. has_output_file
+    // decides whether the run produced a file at all; when it returns false the
+    // workflow finishes without downloading. Otherwise parse_trace_path must
+    // return the remote trace file path the profiler produced (or empty if it
+    // cannot be determined), which drives the SFTP download. Either may be null:
+    // a null has_output_file means a file is expected, and a null
+    // parse_trace_path means any path already set on the URI is used.
     RemoteProfilerSession(std::shared_ptr<RemoteUri>                     uri,
                           std::function<void(const std::string&)>       on_open_file,
+                          std::function<bool(const std::string&)>        has_output_file  = nullptr,
                           std::function<std::string(const std::string&)> parse_trace_path = nullptr);
     ~RemoteProfilerSession() override;
 
@@ -95,6 +99,7 @@ private:
 
     std::shared_ptr<RemoteUri>                     m_uri;
     std::function<void(const std::string&)>        m_on_open_file;
+    std::function<bool(const std::string&)>        m_has_output_file;
     std::function<std::string(const std::string&)> m_parse_trace_path;
     std::unique_ptr<SshSession>                    m_session;
 

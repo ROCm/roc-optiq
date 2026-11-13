@@ -808,7 +808,10 @@ namespace DataModel
                 {
                     static int max_events_per_thread = 10000;
                     uint32_t use_threads = static_cast<uint32_t>((m_merged_table.RowCount()+max_events_per_thread) / max_events_per_thread);
-                    uint32_t thread_count = std::thread::hardware_concurrency() - 1;
+                    // The split loop below needs at least one thread. hardware_concurrency()
+                    // is 1 on a single-CPU host and 0 when it can't tell.
+                    uint32_t hw_threads   = std::thread::hardware_concurrency();
+                    uint32_t thread_count = hw_threads > 1 ? hw_threads - 1 : 1;
                     if (use_threads < thread_count)
                         thread_count = use_threads;
 

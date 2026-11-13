@@ -193,10 +193,11 @@ jobs:
         os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           submodules: recursive
+          persist-credentials: false
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
@@ -212,10 +213,13 @@ jobs:
           python3 --version
 
       - name: Build, Make, and Verify Installation
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          INPUTS_CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
           source /opt/vulkan/**/setup-env.sh
           cmake -B ${{ env.BUILD_DIR }} \
-            --preset ${{ inputs.cmake_config_preset }} \
+            --preset ${INPUTS_CMAKE_CONFIG_PRESET} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
             -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
             -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
@@ -225,7 +229,7 @@ jobs:
             -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
             -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} \
-            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
+            -DCRYPTO_BACKEND=${INPUTS_CRYPTO_BACKEND}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target ${{ env.BUILD_TARGETS }}
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
@@ -266,7 +270,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-ubuntu-${{ matrix.os-version }}${{ inputs.artifact_suffix }}
           path: |
@@ -283,7 +287,7 @@ jobs:
       
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-ubuntu-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
           path: |
@@ -292,7 +296,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
@@ -313,6 +317,8 @@ jobs:
 
       - name: Upload Build to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
         run: |
           if [ -z "${{ env.RELEASE_VERSION }}" ]; then
             echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
@@ -321,7 +327,7 @@ jobs:
             echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
             S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
           fi
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/ubuntu/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/ubuntu/${MATRIX_OS_VERSION}/ \
             --no-progress
 
       - name: Announce Test Failure

@@ -10,7 +10,7 @@ project(${TARGET_NAME})
 set(PROJECT_VERSION_MAJOR 1)
 set(PROJECT_VERSION_MINOR 2)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 0)
+set(PROJECT_VERSION_BUILD 2)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -49,6 +49,12 @@ include(CMakeDependentOption)
 cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
     "Vendor a pinned CPython for embedded Python analysis scripts" ON
     "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
+# Only meaningful with Ask Optiq: lets it read compute traces as well as system
+# traces. OFF compiles the compute tools out, and Ask Optiq turns a compute tab
+# away.
+cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    "Let the Ask Optiq assistant read compute traces (in development)" ON
+    "ROCPROFVIS_ENABLE_AGENTIC_PROFILING" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -75,6 +81,9 @@ endif(ROCPROFVIS_ENABLE_REMOTE)
 if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING")
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_COMPUTE")
+endif(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
 if(ROCPROFVIS_ENABLE_SCRIPTING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
 endif(ROCPROFVIS_ENABLE_SCRIPTING)
@@ -269,6 +278,8 @@ list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_profiler_backend.h
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.h
     src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
     src/view/src/profiler/rocprofvis_launch_preset_manager.h
     src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
@@ -310,6 +321,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_compute_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.h
@@ -892,8 +904,13 @@ include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 # Archive generators wrap the prefix in <package>-<version>-<system>/. DEB and
-# RPM do not. Leave it off so the tarball extracts onto / at the install prefix.
+# RPM do not. Leave it off so the tarball has no wrapper directory.
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+# The tarball drops the install prefix too, so it extracts flat into the current
+# directory like the other ROCm extras (RVS, MIGraphX). DEB and RPM keep it.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocprofvis_cpack_config.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake" @ONLY)
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake")
 
 set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
 # Detect Linux distro for additional package types
@@ -961,6 +978,48 @@ endif()
 
 # Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
 set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
+
+# Linux desktop entry and hicolor icons, so desktop shells list the app in
+# search and show its icon. Shells only scan XDG_DATA_DIRS (/usr/share by
+# default), not the /opt prefix, hence the absolute destinations.
+# EXCLUDE_FROM_ALL keeps them to the per-component DEB/RPM installs: the TGZ
+# archive and a plain `cmake --install` cannot stage absolute paths and would
+# write to the build machine's /usr/share instead.
+if(UNIX AND NOT APPLE)
+    set(LINUX_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop.in"
+        "${LINUX_DESKTOP_FILE}"
+        @ONLY)
+    install(FILES "${LINUX_DESKTOP_FILE}"
+            DESTINATION /usr/share/applications
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+            DESTINATION /usr/share/icons
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+
+    # These directories belong to the filesystem and hicolor-icon-theme packages.
+    # CPack's RPM claims every parent directory it does not exclude, and its
+    # default exclusions stop at /usr/share.
+    list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+         /usr/share/applications /usr/share/icons /usr/share/icons/hicolor)
+    file(GLOB LINUX_ICON_SIZES LIST_DIRECTORIES true
+         RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+         "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor/*")
+    foreach(ICON_SIZE ${LINUX_ICON_SIZES})
+        list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+             /usr/share/icons/hicolor/${ICON_SIZE}
+             /usr/share/icons/hicolor/${ICON_SIZE}/apps)
+    endforeach()
+
+    find_program(DESKTOP_FILE_VALIDATE desktop-file-validate)
+    if(BUILD_TESTING AND DESKTOP_FILE_VALIDATE)
+        add_test(NAME ${TARGET_NAME}-desktop-entry
+                 COMMAND ${DESKTOP_FILE_VALIDATE} "${LINUX_DESKTOP_FILE}")
+    endif()
+endif()
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)

@@ -20,7 +20,8 @@ class CLIParser;
 // The product name. U+2122 is the trademark sign, drawn as a raised "TM".
 constexpr const char* APP_NAME = "ROCm\u2122 Optiq";
 // APP_NAME for text that may not be read as UTF-8: terminals, and the X11
-// WM_CLASS property, which is Latin-1.
+// WM_CLASS property, which is Latin-1. StartupWMClass in
+// resources/linux/roc-optiq.desktop.in must match it.
 constexpr const char* APP_NAME_ASCII = "ROCm(TM) Optiq";
 
 static_assert(sizeof("\u2122") == 4 && "\u2122"[0] == '\xE2' && "\u2122"[1] == '\x84' &&

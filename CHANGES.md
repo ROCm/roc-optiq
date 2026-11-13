@@ -67,6 +67,18 @@ These features are in progress and available for preview only (build from source
 - Fixed a crash when a table filter could not be parsed.
 - Fixed a macOS hang in the job system: a worker could signal a job after that job had already been freed.
 - Fixed a leaked row-count query when a table had nothing to count.
+- Fixed invalid table filter feedback. Improved error notifications when table filters are invalid.
+- Fixed the kernel selection table disappearing when a filter matches no rows.
+- Fixed the Linux tarball extracting into `/opt/rocm/...`. It is now flat (`bin/`, `lib/`, `share/` at the root) and extracts into the current directory, matching other ROCm extras such as RVS. The .deb and .rpm still install under the prefix.
+- Fixed missing dependencies in Debian packages.
+- Fixed commit hash missing from Linux builds.
+- Fixed process id not read correctly in some trace files.
+- Fixed event details, flows, and call stacks not loading when a second event was selected while another event's details were still loading.
+- Fixed histogram counts being incorrect when a query was split.
+- Fixed HIP events were not trimmed by time and were lost when saving a trimmed trace.
+- Fixed saving a trimmed trace over the open trace was possible. It is now refused, and the destination is replaced only after the trim succeeds.
+- Fixed the table not refreshing when a filter box was cleared with its X or when Reset Filter was used.
+- Fixed app icon not present in desktop app menus or taskbar in Linux environments (DEB/RPM packages).
 - Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
 
 ## ROCm Optiq 1.1.0

@@ -263,6 +263,14 @@ the option off, none of the three is compiled and the panel, its toolbar
 buttons, its View-menu entry, and its settings page are all absent. Sources
 live under `src/view/src/agenticprofiling/`.
 
+Reading compute traces is a separate, in-development part of the assistant with
+its own switch, `ROCPROFVIS_ENABLE_AGENTIC_COMPUTE`. It defaults ON whenever
+`ROCPROFVIS_ENABLE_AGENTIC_PROFILING` is on and is forced OFF without it.
+Configure with `-DROCPROFVIS_ENABLE_AGENTIC_COMPUTE=OFF` to build the assistant
+for system traces only: the compute tools are compiled out, and on a compute tab
+the assistant answers that this build reads system traces only. System traces
+behave the same either way.
+
 `cpp-httplib` and `ImGuiTextSelect` are submodules. `ImGuiTextSelect` is pinned
 to v1.3.2 and compiled as `textselect.cpp`; its own CMakeLists is an example
 app and is not added. The default backend also needs the `mbedtls` submodule;

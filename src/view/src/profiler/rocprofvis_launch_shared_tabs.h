@@ -58,9 +58,9 @@ bool ToggleSwitch(const char* label, bool* value);
 // Advance width of a ToggleSwitch, for laying out controls beside it.
 float ToggleSwitchWidth();
 
-// A small rounded "tag": tinted background + accent border + accent text.
-// Advances the cursor by the chip size (use SameLine to place several).
-void Chip(const char* label, ImU32 accent_color);
+void HelpTip(const char* tooltip);
+
+void HelpMarker(char const* env_var, char const* desc);
 
 // Result of interacting with an EditablePill.
 enum class PillAction
@@ -75,31 +75,64 @@ enum class PillAction
 // command-line argument and environment-variable lists.
 PillAction EditablePill(const char* label, ImU32 accent_color);
 
-// Lays out a set of tags as wrapping accent chips, prefixed by a dim label.
-// Used for the live "this run will..." configuration summary.
-void RenderConfigChips(const char* lead_label, std::vector<std::string> const& tags);
-
 // A filled, rounded status badge with contrasting text - used for the run
 // status (Running / Completed / Failed).
 void StatusPill(const char* label, ImU32 bg_color);
 
+// =============================================================================
+// Target card rows
+//
+// Building blocks for IProfilerBackend::RenderTargetSection. Each backend lays
+// out the rows its tool needs; the rows share one label column so the inputs
+// and Browse buttons line up.
+// =============================================================================
+
 /**
- * Renders the Target section: executable, arguments, output dir. TargetSpec::
- * working_directory is deliberately not exposed here - it is honored at launch
- * but currently only settable through a saved profile.
- * The connection-mode selector lives in the launcher dialog (ProfilerLauncher
- * Dialog::RenderRemoteSection), next to the dialog-owned SSH options; the mode
- * is passed in here so labels read "Remote ...".
- *
- * In local mode the Browse buttons open the OS file/path pickers. In remote
- * (SSH) mode they instead invoke the supplied callbacks (which open the shared
- * remote file browser); when a remote callback is not supplied the corresponding
- * Browse button is disabled, preserving the prior behavior.
- * Returns true if any field was modified.
+ * Width of the Target card's label column: fits `widest_label`, floored at the
+ * shared minimum.
  */
-bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window,
-                         const std::function<void()>& on_remote_browse_program = {},
-                         const std::function<void()>& on_remote_browse_output  = {});
+float TargetLabelColumnWidth(const char* widest_label);
+
+// Everything one path row needs. Grouped rather than positional because most of
+// these are strings, and a transposed pair would compile cleanly.
+struct TargetPathRow
+{
+    // Row label, e.g. "Program".
+    const char* label = "";
+    // ImGui id suffix, unique within the card.
+    const char* id = "";
+    // Placeholder shown while the field is empty.
+    const char* hint = "";
+    // Title of the local file/path picker, passed to the browse handler.
+    const char* browse_title = "";
+    BrowseKind  kind = File;
+    // Recently used values offered in a dropdown (local mode only); nullptr or
+    // empty hides the dropdown.
+    std::vector<std::string> const* recents = nullptr;
+    // Tooltip of the dropdown button, e.g. "Recent programs".
+    const char* recents_tooltip = "";
+};
+
+/**
+ * Renders a labelled path input with a Browse button and an optional recents
+ * dropdown (local mode only). Browse calls `on_browse`, and is disabled when
+ * that is empty. Returns true if the path was edited or picked from the recents
+ * this frame; a Browse pick lands later and is reported by the handler.
+ */
+bool RenderTargetPathRow(TargetPathRow const& row, std::string& path, ConnectionType connection,
+                         TargetBrowseFn const& on_browse, float label_w);
+
+/**
+ * Renders the free-form target arguments input, passed to the program after
+ * word-splitting (see SplitArguments). Returns true if it was modified.
+ */
+bool RenderTargetArgumentsRow(std::string& arguments, float label_w);
+
+/**
+ * Renders the "open the trace when profiling finishes" checkbox. Returns true
+ * if it was toggled.
+ */
+bool RenderTargetAutoLoadRow(bool& auto_load_trace);
 
 /**
  * Renders the "where are the profiler tools" row: an optional directory that
@@ -108,27 +141,25 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
  *
  * Note this is a *directory*, never a path to an executable - the filename comes
  * from the controller's tool table, so nothing the user types here can name a
- * different program to run. In remote mode it is a directory on the remote host,
- * so the local path picker does not apply and Browse is driven by the supplied
- * callback (disabled when none is given), matching RenderTargetSection.
+ * different program to run. In remote mode it is a directory on the remote host.
+ * Browse calls `on_browse` (disabled when empty), matching RenderTargetPathRow.
  * `resolved_hint`, when non-empty, is shown beneath the field as the absolute
  * path this selection currently resolves to.
- * Returns true if the field was modified.
+ * Returns true if the field was edited this frame.
  */
 bool RenderToolLocationSection(std::string& tool_directory, ConnectionType connection,
-                               AppWindow* app_window, std::string const& resolved_hint,
-                               const std::function<void()>& on_remote_browse_directory = {});
+                               std::string const& resolved_hint, TargetBrowseFn const& on_browse);
 
 /**
- * Renders the command that will actually run, from the same inputs handed to
- * the launch: the resolved binary, the merged env block, and the complete argv
- * produced by IProfilerBackend::FlattenToExecution. For display only - tokens
- * are not shell-quoted.
+ * Renders the "Python venv" row: an optional virtual environment the profiler
+ * runs in, for tools that are Python scripts (rocprof-compute). Like the tools
+ * folder this is a *directory*, never a command - the controller composes the
+ * activation itself. In remote mode it is a directory on the remote host.
+ * Browse calls `on_browse` (disabled when empty).
+ * Returns true if the field was edited this frame.
  */
-std::string BuildCommandPreviewString(
-    std::string const& tool_path,
-    std::vector<std::pair<std::string, std::string>> const& env_vars,
-    std::vector<std::string> const& argv);
+bool RenderPythonEnvironmentSection(std::string& python_environment, ConnectionType connection,
+                                    TargetBrowseFn const& on_browse);
 
 /**
  * A code panel - the Command Preview, the run output: a card holding a header
@@ -206,6 +237,8 @@ bool RenderOutputConsole(
 /**
  * Renders the "Saved Profile" bar (Optiq JSON presets):
  * dropdown, save, save-as, delete buttons.
+ * @param config_reset: set to true when "Reset Options to Defaults" reset the
+ * backend's settings and `config` this frame, false otherwise.
  * Returns the name of a profile to load (empty if none selected).
  */
 std::string RenderSavedProfileBar(
@@ -214,7 +247,8 @@ std::string RenderSavedProfileBar(
     std::string& current_preset_name,
     LaunchConfig& config,
     IProfilerBackend const* backend,
-    AppWindow* app_window);
+    AppWindow* app_window,
+    bool& config_reset);
 
 } // namespace View
 } // namespace RocProfVis

@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <chrono>
 #include <string>
 
 #ifdef _WIN32
@@ -64,6 +65,25 @@ namespace RocProfVis
 {
 namespace Controller
 {
+
+    // WaitSocket's bound: past this, a socket that should be ready is treated
+    // as a failure (connect, auth, channel setup, transfers).
+    constexpr int WAIT_SOCKET_TIMEOUT_MS = 10000;
+    // ExecuteCommand's read loop waits this long per pass. A remote command can
+    // be silent indefinitely, so a timeout there only means "check cancel and
+    // wait again"; keeping it short keeps cancellation responsive.
+    constexpr int EXEC_POLL_TIMEOUT_MS = 250;
+    // Keepalive interval while a remote command runs. Each keepalive asks the
+    // server for a reply, so a live connection is heard from at least this often
+    // even while the command prints nothing.
+    constexpr int EXEC_KEEPALIVE_INTERVAL_S = 3;
+    // While a remote command runs, the connection counts as lost once nothing at all
+    // has arrived from the server for this long - about three missed keepalives.
+    constexpr int EXEC_DEAD_PEER_TIMEOUT_S = 10;
+    // Exit code reported for a remote process that ended on a signal, which
+    // carries no exit status (shell convention: 128 + signal; the signal number
+    // itself is not reported by SSH, only its name).
+    constexpr int EXIT_CODE_KILLED_BY_SIGNAL = 128;
 
     rocprofvis_controller_object_type_t SshConnection::GetType(void) 
     {
@@ -430,36 +450,44 @@ namespace Controller
 
     bool SshClient::WaitSocket(SshConnection* connection)
     {
+        return WaitSocketFor(connection, WAIT_SOCKET_TIMEOUT_MS) == WaitResult::Ready;
+    }
+
+    SshClient::WaitResult SshClient::WaitSocketFor(SshConnection* connection, int timeout_ms, bool inbound_only)
+    {
         struct timeval timeout;
         fd_set fdread, fdwrite, fdex;
 
         socket_t sock = connection->GetSocket();
         int dir = libssh2_session_block_directions(connection->GetSession());
 
-        timeout.tv_sec = 10;
-        timeout.tv_usec = 0;
+        timeout.tv_sec = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
 
         FD_ZERO(&fdread);
         FD_ZERO(&fdwrite);
         FD_ZERO(&fdex);
 
-        if (dir & LIBSSH2_SESSION_BLOCK_INBOUND)
+        if (inbound_only || (dir & LIBSSH2_SESSION_BLOCK_INBOUND))
             FD_SET(sock, &fdread);
 
-        if (dir & LIBSSH2_SESSION_BLOCK_OUTBOUND)
+        if (!inbound_only && (dir & LIBSSH2_SESSION_BLOCK_OUTBOUND))
             FD_SET(sock, &fdwrite);
 
         FD_SET(sock, &fdex);
 
         int rc = select(static_cast<int>(sock + 1), &fdread, &fdwrite, &fdex, &timeout);
 
+        WaitResult result = WaitResult::Error;
         if (rc > 0)
-            return true;   // ready
-
-        if (rc == 0)
-            return false;  // timeout
-
-        return false;      // error
+        {
+            result = WaitResult::Ready;
+        }
+        else if (rc == 0)
+        {
+            result = WaitResult::Timeout;
+        }
+        return result;
     }
 
 
@@ -484,7 +512,7 @@ namespace Controller
 
     void SshClient::DeleteConnection(
         SshConnection* connection) {
-        auto it = std::find_if(m_connections.begin(), m_connections.end(), [connection](std::unique_ptr<SshConnection>& c) {return connection->GetSession() == c->GetSession() && connection->GetSocket() == c->GetSocket(); });
+        auto it = std::find_if(m_connections.begin(), m_connections.end(), [connection](std::unique_ptr<SshConnection>& c) {return c.get() == connection; });
         if (it != m_connections.end())
         {
             if (it->get()->IsConnected())
@@ -599,6 +627,7 @@ namespace Controller
         std::string err;
         connection->GetSshBridge()->SetStatus(kRPVControllerSshAuthenticating);
         // ---- host key check ----
+        SshClient::Result host_key_result = Result::Success;
         {
             KnownHosts kh(connection->GetSession());
             bool       loaded = kh.Load();
@@ -626,20 +655,16 @@ namespace Controller
                 {
                     err = "Authentication bridge not initialized";
                     spdlog::error("[ssh] {}", err);
-                    connection->GetSshBridge()->SaveError(err);
-                    connection->Disconnect();
-                    return Result::AuthError;
+                    host_key_result = Result::AuthError;
                 }
-                if(*decision == HostKeyDecision::Reject)
+                else if(*decision == HostKeyDecision::Reject)
                 {
-                    connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
                         ? "Host key mismatch - connection rejected."
                         : "Host key not trusted.";
-                    connection->GetSshBridge()->SaveError(err);
-                    return Result::AuthError;
+                    host_key_result = Result::Cancelled;
                 }
-                if(*decision == HostKeyDecision::TrustPermanently)
+                else if(*decision == HostKeyDecision::TrustPermanently)
                 {
                     kh.Add(connection->GetHost(), connection->GetPort());
                     if(!kh.Save())
@@ -652,10 +677,14 @@ namespace Controller
             else if(m == KnownHostMatch::Failure)
             {
                 err = "Host key check failed";
-                connection->GetSshBridge()->SaveError(err);
-                connection->Disconnect();
-                return Result::AuthError;
+                host_key_result = Result::AuthError;
             }
+        }
+        if (host_key_result != Result::Success)
+        {
+            connection->GetSshBridge()->SaveError(err);
+            connection->Disconnect();
+            return host_key_result;
         }
 
         if (IsCancelRequested(connection, future))
@@ -927,6 +956,13 @@ namespace Controller
         }
 
         char buffer[4096];
+        bool transport_failed = false;
+
+        // The command may run silently for a long time, so idle output is not a failure. 
+        // Keepalives stop the idle connection from being dropped in between, and their 
+        // replies are what tells a silent command apart from a dead connection.
+        SetKeepAlive(connection, EXEC_KEEPALIVE_INTERVAL_S);
+        std::chrono::steady_clock::time_point last_inbound = std::chrono::steady_clock::now();
 
         while (true)
         {
@@ -956,12 +992,58 @@ namespace Controller
                 got_data = true;
             }
 
+            // A broken channel never reports EOF, so a read error has to end the loop.
+            if ((n1 < 0 && n1 != LIBSSH2_ERROR_EAGAIN) || (n2 < 0 && n2 != LIBSSH2_ERROR_EAGAIN))
+            {
+                output = "Network failure while executing remote command";
+                connection->GetSshBridge()->SaveError(output);
+                transport_failed = true;
+                break;
+            }
+
+            if (got_data)
+            {
+                last_inbound = std::chrono::steady_clock::now();
+            }
+
             if (n1 == LIBSSH2_ERROR_EAGAIN && n2 == LIBSSH2_ERROR_EAGAIN)
             {
-                if (!WaitSocket(connection))
+                // Readability only: the loop writes nothing but keepalives, which go
+                // out on a timer from the Timeout path. Waiting for writable as well
+                // would wake on a pending keepalive and spin without flushing it.
+                WaitResult wait = WaitSocketFor(connection, EXEC_POLL_TIMEOUT_MS, true);
+                if (wait == WaitResult::Timeout)
                 {
-                    output = "Network failure while execuing";
+                    // Sends only once the configured interval has elapsed. EAGAIN
+                    // only means the request could not be written yet.
+                    int seconds_to_next = 0;
+                    int keepalive_rc    = libssh2_keepalive_send(connection->GetSession(), &seconds_to_next);
+                    if (keepalive_rc < 0 && keepalive_rc != LIBSSH2_ERROR_EAGAIN)
+                    {
+                        output = "Network failure while executing remote command";
+                        connection->GetSshBridge()->SaveError(output);
+                        transport_failed = true;
+                        break;
+                    }
+                    else if (std::chrono::steady_clock::now() - last_inbound >= std::chrono::seconds(EXEC_DEAD_PEER_TIMEOUT_S))
+                    {
+                        output = "No response from the remote host for " + std::to_string(EXEC_DEAD_PEER_TIMEOUT_S) + " seconds";
+                        connection->GetSshBridge()->SaveError(output);
+                        transport_failed = true;
+                        break;
+                    }
+                }
+                else if (wait == WaitResult::Ready)
+                {
+                    // Data arrived. Includes keepalive replies, which libssh2 consumes
+                    // on the next read.
+                    last_inbound = std::chrono::steady_clock::now();
+                }
+                else if (wait == WaitResult::Error)
+                {
+                    output = "Network failure while executing remote command";
                     connection->GetSshBridge()->SaveError(output);
+                    transport_failed = true;
                     break;
                 }
             }
@@ -977,14 +1059,38 @@ namespace Controller
 
         libssh2_channel_wait_closed(channel);
 
-        exit_code = libssh2_channel_get_exit_status(channel);
+        if (transport_failed)
+        {
+            // The command's outcome is unknown; leave exit_code at -1 rather than
+            // reading a status that never arrived.
+            output = "Connection lost before the remote command finished";
+        }
+        else
+        {
+            // A process killed by a signal sends exit-signal instead of
+            // exit-status, and get_exit_status then reads as 0 - which would
+            // report the kill as a success.
+            char*  exit_signal     = nullptr;
+            size_t exit_signal_len = 0;
+            libssh2_channel_get_exit_signal(channel, &exit_signal, &exit_signal_len, nullptr, nullptr, nullptr, nullptr);
+            if (exit_signal != nullptr)
+            {
+                exit_code = EXIT_CODE_KILLED_BY_SIGNAL;
+                output    = "Remote command terminated by signal " + std::string(exit_signal, exit_signal_len);
+                libssh2_free(connection->GetSession(), exit_signal);
+            }
+            else
+            {
+                exit_code = libssh2_channel_get_exit_status(channel);
+                output    = "Exit code : " + std::to_string(exit_code);
+            }
+        }
 
         if (exit_code_out != nullptr)
         {
             *exit_code_out = exit_code;
         }
 
-        output = "Exit code : " + std::to_string(exit_code);
         connection->GetSshBridge()->AddStdOut(output.data(), output.size());
 
         libssh2_channel_free(channel);
@@ -992,6 +1098,11 @@ namespace Controller
         if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
+        }
+
+        if (transport_failed)
+        {
+            return Result::ChannelError;
         }
 
         return Result::Success;
@@ -1461,6 +1572,7 @@ namespace Controller
         {
             libssh2_session_disconnect(m_session, "Normal Shutdown");
             libssh2_session_free(m_session);
+            m_session = nullptr;
         }
 
         if (m_socket != kInvalidSocket)

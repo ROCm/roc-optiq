@@ -69,7 +69,9 @@ struct RocProfVisControllerFixture
     };
     struct KernelInfo
     {
-        uint64_t id = 0;
+        uint64_t             id            = 0;
+        rocprofvis_handle_t* handle        = nullptr;
+        bool                 has_isa_lines = false;
     };
     struct WorkloadInfo
     {
@@ -583,10 +585,86 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE((has_isa_lines == 0 || has_isa_lines == 1));
 
-                workload.kernels.push_back(KernelInfo{ kernel_id });
+                workload.kernels.push_back(
+                    KernelInfo{ kernel_id, kernel_handle, has_isa_lines != 0 });
             }
 
             REQUIRE(!workload.kernels.empty());
+        }
+    }
+
+    // Fetches ISA lines for schema-2.2 kernels and verifies that the resolved
+    // instruction type is readable through each instruction-line property.
+    // Unavailable instruction types return empty text. Dedicated synthetic
+    // PC-sampling tests cover exact lookup names and unavailable values in CI.
+    // Older compute fixtures have no ISA lines, so they do not enter this path.
+    // Fixture Reads: m_controller, m_workloads[].kernels
+    SECTION("Controller Load PC Sampling Instruction Types")
+    {
+        for(const WorkloadInfo& workload : m_workloads)
+        {
+            for(const KernelInfo& kernel : workload.kernels)
+            {
+                if(!kernel.has_isa_lines)
+                {
+                    continue;
+                }
+
+                rocprofvis_handle_t* pc_sampling_handle = nullptr;
+                rocprofvis_result_t  result = rocprofvis_controller_get_object(
+                    kernel.handle, kRPVControllerKernelPcSampling, 0,
+                    &pc_sampling_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(pc_sampling_handle != nullptr);
+
+                rocprofvis_controller_arguments_t* args =
+                    rocprofvis_controller_arguments_alloc();
+                REQUIRE(args != nullptr);
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerPcSamplingArgsKernelId, 0, kernel.id);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                rocprofvis_controller_future_t* future =
+                    rocprofvis_controller_future_alloc();
+                REQUIRE(future != nullptr);
+                result = rocprofvis_controller_pc_sampling_fetch_isa_lines_async(
+                    m_controller, args, future, pc_sampling_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_future_wait(future, FLT_MAX);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                uint64_t future_result = 0;
+                result                 = rocprofvis_controller_get_uint64(
+                    future, kRPVControllerFutureResult, 0, &future_result);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(future_result == kRocProfVisResultSuccess);
+
+                uint64_t num_instruction_lines = 0;
+                result = rocprofvis_controller_get_uint64(
+                    pc_sampling_handle, kRPVControllerPCSamplingNumInstructionLines, 0,
+                    &num_instruction_lines);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(num_instruction_lines > 0);
+
+                for(uint64_t i = 0; i < num_instruction_lines; i++)
+                {
+                    uint32_t length = 0;
+                    result          = rocprofvis_controller_get_string(
+                        pc_sampling_handle,
+                        kRPVControllerPCSamplingInstructionLineInstructionType, i,
+                        nullptr, &length);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    std::string instruction_type(length, '\0');
+                    result = rocprofvis_controller_get_string(
+                        pc_sampling_handle,
+                        kRPVControllerPCSamplingInstructionLineInstructionType, i,
+                        instruction_type.data(), &length);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                }
+
+                rocprofvis_controller_future_free(future);
+                rocprofvis_controller_arguments_free(args);
+            }
         }
     }
 
@@ -1426,6 +1504,107 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                         }
                     }
                 }
+            }
+
+            if(workload_idx == 0)
+            {
+                struct FilterCase
+                {
+                    const char* expression;
+                    const char* error;  // null when nothing is reported
+                };
+                // An invalid filter succeeds with every column and no rows, and is
+                // reported. Invalid filters are listed twice: the model would serve a
+                // table it already holds for the same query without running it, or
+                // reporting the filter, again.
+                const FilterCase filter_cases[] = {
+                    { "5", "Could not apply filter: Expected an operator after "
+                           "\"duration_ns_sum\", but found \"5\"" },
+                    { "5", "Could not apply filter: Expected an operator after "
+                           "\"duration_ns_sum\", but found \"5\"" },
+                    { "> no_such_column",
+                      "Could not apply filter: Unknown column \"no_such_column\"" },
+                    { "> no_such_column",
+                      "Could not apply filter: Unknown column \"no_such_column\"" },
+                    { "> 0", nullptr },
+                };
+                const uint64_t duration_sum_column = 2;
+                for(const FilterCase& filter_case : filter_cases)
+                {
+                    spdlog::info("Fetching pivot table with filter: {0}",
+                                 filter_case.expression);
+                    result = rocprofvis_controller_set_uint64(
+                        (rocprofvis_handle_t*) args, kRPVControllerCPTArgsNumColumnFilters,
+                        0, 1);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_set_uint64(
+                        (rocprofvis_handle_t*) args,
+                        kRPVControllerCPTArgsFilterColumnIndexIndexed, 0,
+                        duration_sum_column);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_set_string(
+                        (rocprofvis_handle_t*) args,
+                        kRPVControllerCPTArgsFilterExpressionIndexed, 0,
+                        filter_case.expression);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    rocprofvis_controller_future_t* filter_future =
+                        rocprofvis_controller_future_alloc();
+                    REQUIRE(filter_future != nullptr);
+                    rocprofvis_controller_array_t* filter_array =
+                        rocprofvis_controller_array_alloc(0);
+                    REQUIRE(filter_array != nullptr);
+
+                    result = rocprofvis_controller_table_fetch_async(
+                        m_controller, table_handle, args, filter_future, filter_array);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    result = rocprofvis_controller_future_wait(filter_future, FLT_MAX);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    uint64_t filter_result = kRocProfVisResultSuccess;
+                    result = rocprofvis_controller_get_uint64(
+                        filter_future, kRPVControllerFutureResult, 0, &filter_result);
+                    spdlog::info("Pivot table fetch result: {0}", filter_result);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE(filter_result == kRocProfVisResultSuccess);
+
+                    uint32_t error_length = 0;
+                    result = rocprofvis_controller_get_string(
+                        filter_future, kRPVControllerFutureLastErrorMessage, 0, nullptr,
+                        &error_length);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    std::string error(error_length, '\0');
+                    if(error_length > 0)
+                    {
+                        result = rocprofvis_controller_get_string(
+                            filter_future, kRPVControllerFutureLastErrorMessage, 0,
+                            error.data(), &error_length);
+                        REQUIRE(result == kRocProfVisResultSuccess);
+                    }
+                    spdlog::info("Pivot table filter error message: {0}", error);
+                    REQUIRE(error == (filter_case.error ? filter_case.error : ""));
+
+                    uint64_t filtered_columns = 0;
+                    result = rocprofvis_controller_get_uint64(
+                        (rocprofvis_handle_t*) table_handle, kRPVControllerTableNumColumns,
+                        0, &filtered_columns);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE(filtered_columns == num_columns);
+
+                    uint64_t filtered_rows = 0;
+                    result = rocprofvis_controller_get_uint64(
+                        (rocprofvis_handle_t*) filter_array, kRPVControllerArrayNumEntries,
+                        0, &filtered_rows);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE(filtered_rows == (filter_case.error ? 0 : num_rows));
+
+                    rocprofvis_controller_array_free(filter_array);
+                    rocprofvis_controller_future_free(filter_future);
+                }
+                result = rocprofvis_controller_set_uint64(
+                    (rocprofvis_handle_t*) args, kRPVControllerCPTArgsNumColumnFilters, 0,
+                    0);
+                REQUIRE(result == kRocProfVisResultSuccess);
             }
 
             spdlog::info("Free pivot table resources");

@@ -9,6 +9,7 @@
 #include "rocprofvis_compute_kernel_metric_table.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 #include "imgui.h"
 
@@ -186,6 +187,11 @@ ComputeKernelDetailsView::SubscribeToEvents()
 
             if(table_data_event->GetRequestID() == DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID)
             {
+                if(!table_data_event->GetErrorMessage().empty())
+                {
+                    NotificationManager::GetInstance().Show(table_data_event->GetErrorMessage(),
+                                                            NotificationLevel::Error);
+                }
                 m_kernel_metric_table->HandleNewData();
             }
         }

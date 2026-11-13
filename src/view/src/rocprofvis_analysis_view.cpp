@@ -26,6 +26,13 @@ constexpr uint64_t TABLE_DEFAULT_SORT_COLUMN = 1;
 // Middle dot between the row and track counts of a card summary.
 constexpr const char* SUMMARY_SEPARATOR = " \xC2\xB7 ";
 
+// The compare panes and Ask Optiq both read the event and sample tables, so a
+// shared client id would give them one request slot.
+static_assert(COMPARE_CLIENT_ID[COMPARE_SOURCE_A] != DataProvider::ASSISTANT_CLIENT_ID,
+              "Compare pane A and the assistant need client ids of their own.");
+static_assert(COMPARE_CLIENT_ID[COMPARE_SOURCE_B] != DataProvider::ASSISTANT_CLIENT_ID,
+              "Compare pane B and the assistant need client ids of their own.");
+
 AnalysisView::AnalysisView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotation_manager)
@@ -217,7 +224,7 @@ AnalysisView::ActiveTab()
 }
 
 bool
-AnalysisView::SelectTab(const std::string& name)
+AnalysisView::SelectTab(const std::string& name, std::string& selected_label)
 {
     if(!m_tab_container)
     {
@@ -228,6 +235,7 @@ AnalysisView::SelectTab(const std::string& name)
     {
         return false;
     }
+    selected_label = match->m_label;
     m_tab_container->SetActiveTab(match->m_id);
     return true;
 }

@@ -72,6 +72,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
         // Method to open sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Open() override { return OpenAsSqlite(); };
+        bool IsSourceFile(rocprofvis_dm_charptr_t path) override;
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close()  override { return CloseAsSqlite(); };
@@ -368,6 +369,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
 
         RpvSqliteExecuteQueryCallback m_callback_add_any_record;
+        std::mutex                    m_histogram_lock;
 
     protected:
         TableProcessor m_table_processor[kRPVTableDataTypesNum];

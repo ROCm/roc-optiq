@@ -11,6 +11,7 @@
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
 #include "rocprofvis_launch_shared_tabs.h"
+#include "rocprofvis_profiles_document.h"
 // TEMPORARY (remote/SSH): the SSH connection authoring UI is only available
 // when remote support is built. Remove this guard when the remote feature
 // graduates.
@@ -21,11 +22,9 @@
 #include "remote/rocprofvis_ssh_fetch.h"
 #include "remote/rocprofvis_remote_file_browser.h"
 #endif
-#include "imgui.h"
 #include <memory>
 #include <string>
 #include <vector>
-#include <functional>
 #include <utility>
 
 namespace RocProfVis
@@ -34,6 +33,9 @@ namespace View
 {
 
 class AppWindow;
+class HSplitContainer;
+class SettingsManager;
+class VFixedContainer;
 
 class ProfilerLauncherDialog
 {
@@ -73,6 +75,7 @@ private:
     {
         rocprofvis_profiler_tool_t tool = kRPVProfilerToolNone;
         std::string                directory;
+        std::string                python_environment;
         bool                       ssh       = false;
         bool                       populated = false;
 
@@ -91,6 +94,9 @@ private:
     void HandleStateTransition(rocprofvis_profiler_state_t new_state);
     void RebuildComposedOutput();
     void RefreshExecutionCache();
+    // The process spec for `cache`: what a launch runs and what the command
+    // preview shows, so the two cannot differ.
+    void BuildLaunchSpec(ExecutionCache const& cache, ProfilerLaunchSpec& spec) const;
     void RefreshToolPath(bool force);
 
     bool IsSshMode() const
@@ -102,6 +108,13 @@ private:
         return false;
 #endif
     }
+    // Id of the run destination's launch environment: LOCAL_LAUNCH_ENVIRONMENT_ID,
+    // or the selected SSH connection's id (empty when none is selected).
+    std::string ActiveLaunchEnvironmentId() const;
+    // Loads the active run destination's tools folder and Python environment
+    // into m_config. Call whenever the destination changes; closes the
+    // Environment window so unsaved edits cannot land on another destination.
+    void ApplyLaunchEnvironment();
     // Forces m_config.tool to be one the current backend actually offers, falling
     // back to its first tool. Call after anything that can change either side of
     // that pairing - a backend switch, or loading a profile that may name a tool
@@ -111,30 +124,34 @@ private:
     // Display name of the currently selected tool, for the combo and the title.
     std::string CurrentToolDisplayName() const;
 
+    void RenderToolbar();
+
     // Top-level view routing: the dialog is either in "configure" mode (author
     // the launch) or "run" mode (a focused output console shown once a run has
     // been launched). m_show_run_view selects which is rendered.
-    void RenderConfigureView();
-    void RenderRunView();
+    void RenderContent();
+    void RenderConfigureOptions();
+    void RenderConfigureCMD();
+    void RenderMessages();
+    void RenderStatusBar();
 
-    void RenderToolbar();
-    void RenderMainContent();
     // Under "Where to run": why the tool could not be resolved, or that a
     // configured tool directory is deciding which build runs.
     void RenderToolResolutionNotice();
     // Deeper, less-common backend settings, shown in a separate floating window
-    // opened from the "Advanced Options..." button.
+    // opened from the Profiling Options card's Advanced button.
     void RenderAdvancedWindow();
+    // Where the profiler tools and their Python environment live, shown in a
+    // separate floating window opened from the "Where to run" card's Advanced
+    // button. Applies to every backend.
+    void RenderToolLocationsWindow();
     // Combined "Arguments & Environment" card on the main launcher form:
     // command-line args (one edit box, added as pills) lead, environment
     // variables (name/value, added as pills) grow below. Clicking a pill pulls
     // it back into the editor to edit/remove.
     void RenderArgsEnvPanel();
-    void RenderButtonRow();
-    // Buttons for the run view: Cancel while running; Run Again / Back to
-    // Configuration / Open Trace / Close once the run has finished.
-    void RenderRunButtonRow();
-    // One-line "what is being run" summary shown atop the run view.
+    // One-line "what is being run" summary of the current configuration,
+    // captured into m_run_summary at launch for the run view.
     std::string BuildRunSummary() const;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // TEMPORARY (remote/SSH): SSH connection selector + popups.
@@ -158,7 +175,14 @@ private:
     // Lazily constructs m_remote_file_browser (bound to the shared RemoteUri).
     void EnsureRemoteFileBrowser();
 #endif
-    void AddRecentTarget(std::string const& exe);
+    // Browse handler for path fields: the local file/path picker, or in SSH mode
+    // the shared remote file browser. Writes the pick into the field and marks
+    // the execution cache dirty. Empty in SSH mode until a connection is set up,
+    // which disables Browse there.
+    TargetBrowseFn MakeBrowseFn();
+    // Moves `path` to the front of `recents` (a ProfilerSettings recent list)
+    // and saves the profiler settings.
+    void AddRecentPath(std::vector<std::string>& recents, std::string const& path);
 
     AppWindow* m_app_window;
 
@@ -193,10 +217,11 @@ private:
     bool m_show_run_view;
     // Whether the separate "Advanced Options" window is open.
     bool m_show_advanced_window;
-    // Width (px) of the command-preview panel; user-adjustable via the splitter.
-    // Seeded to ~1/3 of the form width the first time the content is laid out.
-    float m_preview_width;
-    bool  m_preview_width_initialized;
+    // Whether the separate "Tool Locations" window is open.
+    bool m_show_tool_locations_window;
+    // The Environment window's fields while it is open. Applied to m_config and
+    // saved for the active run destination only on OK.
+    LaunchEnvironment m_environment_edit;
     // "Add" edit-box buffers for the Arguments & Environment panel.
     std::string m_arg_input;
     std::string m_env_name_input;
@@ -231,12 +256,23 @@ private:
     std::string m_output_text;
     std::string m_output_preamble;
     std::string m_output_epilogue;
+    // BuildRunSummary() as of the last launch, so the run view describes the
+    // run rather than whatever the configuration has been edited to since.
+    std::string m_run_summary;
     std::string m_process_output_raw;
     std::string m_process_output_stripped;
     std::string m_error_message;
 
+    std::vector<WarningMessage> m_messages;
+
     // UI state
     bool m_auto_scroll_output;
+    bool m_bring_to_front_on_focus;
+
+    std::unique_ptr<VFixedContainer> m_container;
+    std::unique_ptr<HSplitContainer> m_configure_container;
+
+    SettingsManager& m_settings;
 };
 
 }  // namespace View

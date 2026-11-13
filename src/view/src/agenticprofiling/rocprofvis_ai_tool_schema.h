@@ -28,13 +28,21 @@ namespace View
  */
 
 // The tool schema sent with every request. Thread-safe: reads no view state.
-jt::Json BuildAssistantToolsJson();
+//
+// The two trace kinds have disjoint tool sets, so the schema is chosen by kind
+// rather than merged: naming a system tool to a compute turn would have the
+// model reach for tracks and events that a compute trace does not have, and
+// answering that with "unknown tool" costs a round for nothing.
+jt::Json BuildAssistantToolsJson(bool is_compute);
 
-// The line the panel shows under the transcript while a named tool runs.
+// The line the panel shows under the transcript while a named tool runs. Not
+// split by trace kind - no name means two different things - so one lookup
+// covers both sets.
 std::string AssistantToolStatusLabel(const std::string& tool_name);
 
-// Every registered tool name, for telling the model when it invents one.
-std::string AssistantToolNameList();
+// Every tool name registered for this kind of trace, for telling the model when
+// it invents one or reaches for the other kind's.
+std::string AssistantToolNameList(bool is_compute);
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -85,6 +85,14 @@ namespace Controller
             Cancelled
         };
 
+        // Outcome of waiting on the session socket.
+        enum class WaitResult
+        {
+            Ready,
+            Timeout,
+            Error
+        };
+
         enum class KeyType {
             KEY_UNKNOWN,
             KEY_RSA,
@@ -133,8 +141,11 @@ namespace Controller
         // Executes `command` on the remote host, streaming stdout/stderr into
         // the connection's bridge. If `exit_code` is non-null, the remote
         // process's exit status (from libssh2_channel_get_exit_status) is written
-        // to it. The returned Result reflects the SSH transport outcome
-        // (Success/Cancelled/transport errors), NOT the remote process exit code.
+        // to it; a process killed by a signal reports no status and is written
+        // as a non-zero code instead. The returned Result reflects the SSH
+        // transport outcome (Success/Cancelled/transport errors), NOT the remote
+        // process exit code. The command may stay silent for any length of time:
+        // only a socket error or cancellation ends it early.
         static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future, int* exit_code = nullptr);
         static Result DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future);
         static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
@@ -146,6 +157,12 @@ namespace Controller
         // Waits (bounded) for the session socket to be ready in the direction
         // libssh2 is blocked on. False on timeout or socket error.
         static bool WaitSocket(SshConnection* connection);
+
+        // As WaitSocket, but waits up to `timeout_ms` and tells a timeout apart
+        // from a socket error, for callers where silence is not a failure.
+        // `inbound_only` waits for readability alone, whatever direction libssh2
+        // reports, so Ready always means data arrived.
+        static WaitResult WaitSocketFor(SshConnection* connection, int timeout_ms, bool inbound_only = false);
 
     private:
 

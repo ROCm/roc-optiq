@@ -247,7 +247,7 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
     SECTION("the tool is found under its own name in the configured directory")
     {
         REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, tool_dir.Path(),
-                                          resolved) == kRocProfVisResultSuccess);
+                                          "", resolved) == kRocProfVisResultSuccess);
         CHECK(resolved == tool_dir.ToolPath());
     }
 
@@ -255,23 +255,23 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
     {
         // The child may be given a working directory of its own, so a relative
         // directory would not mean the same thing to it as to us.
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "build/bin", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "build/bin", "", resolved) ==
               kRocProfVisResultInvalidArgument);
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "./bin", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "./bin", "", resolved) ==
               kRocProfVisResultInvalidArgument);
     }
 
     SECTION("a directory that does not hold the tool is a failure, not a different tool")
     {
         // The directory has rocprof-sys-run in it but not rocprofv3.
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, tool_dir.Path(), resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, tool_dir.Path(), "", resolved) ==
               kRocProfVisResultToolNotFound);
     }
 
     SECTION("a directory that does not exist is a failure")
     {
         CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, kMissingToolDirectory,
-                                        resolved) == kRocProfVisResultToolNotFound);
+                                        "", resolved) == kRocProfVisResultToolNotFound);
     }
 
     SECTION("a directory cannot name the executable")
@@ -280,12 +280,12 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
         // not a thing. The filename is the tool table's to choose, and this is
         // what stops a directory from being a path to an arbitrary program.
         CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, kRealExecutable,
-                                        resolved) == kRocProfVisResultToolNotFound);
+                                        "", resolved) == kRocProfVisResultToolNotFound);
     }
 
     SECTION("an unknown tool cannot be conjured out of a directory")
     {
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolNone, tool_dir.Path(), resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolNone, tool_dir.Path(), "", resolved) ==
               kRocProfVisResultInvalidArgument);
     }
 }
@@ -368,7 +368,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
         ScopedEnv path("PATH", path_dir.string());
 
-        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
                 kRocProfVisResultSuccess);
         CHECK(resolved == in_rocm.string());
     }
@@ -383,7 +383,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         // skipped rather than ending the search.
         ScopedEnv path("PATH", ":" + (scratch / "missing").string() + ":" + path_dir.string());
 
-        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
                 kRocProfVisResultSuccess);
         CHECK(resolved == in_path.string());
     }
@@ -397,7 +397,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
         ScopedEnv path("PATH", path_dir.string());
 
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
               kRocProfVisResultToolNotFound);
     }
 
@@ -406,7 +406,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
         ScopedEnv path("PATH", path_dir.string());
 
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, "", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, "", "", resolved) ==
               kRocProfVisResultToolNotFound);
     }
 
@@ -422,7 +422,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
             ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
             ScopedEnv path("PATH", "elsewhere");
 
-            REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+            REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
                     kRocProfVisResultSuccess);
             CHECK(std::filesystem::path(resolved).is_absolute());
         }
@@ -443,7 +443,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv path("PATH", path_dir.string());
 
         REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, chosen_dir.string(),
-                                          resolved) == kRocProfVisResultSuccess);
+                                          "", resolved) == kRocProfVisResultSuccess);
         CHECK(resolved == in_chosen.string());
 
         // And when the configured directory lacks the tool, an installed copy
@@ -452,7 +452,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         // other one is the confusion they were trying to end.
         std::filesystem::remove(in_chosen);
         CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, chosen_dir.string(),
-                                        resolved) == kRocProfVisResultToolNotFound);
+                                        "", resolved) == kRocProfVisResultToolNotFound);
     }
 
     std::filesystem::remove_all(scratch);
@@ -478,7 +478,8 @@ TEST_CASE("The C ABI reports tool names with the shared string convention", "[pr
     length = 0;
     CHECK(rocprofvis_profiler_tool_get_binary_name(kRPVProfilerToolNone, nullptr, &length) ==
           kRocProfVisResultInvalidEnum);
-    CHECK(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolNone, nullptr, nullptr, &length) ==
+    CHECK(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolNone, nullptr, nullptr, nullptr,
+                                                &length) ==
           kRocProfVisResultInvalidArgument);
 }
 
@@ -488,20 +489,20 @@ TEST_CASE("The C ABI resolves a tool inside a configured directory", "[profiler]
 
     uint32_t length = 0;
     REQUIRE(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolRocprofSysRun,
-                                                  tool_dir.Path().c_str(), nullptr,
+                                                  tool_dir.Path().c_str(), nullptr, nullptr,
                                                   &length) == kRocProfVisResultSuccess);
     REQUIRE(length == tool_dir.ToolPath().size());
 
     std::vector<char> buffer(length + 1, '\0');
     REQUIRE(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolRocprofSysRun,
-                                                  tool_dir.Path().c_str(), buffer.data(),
+                                                  tool_dir.Path().c_str(), nullptr, buffer.data(),
                                                   &length) == kRocProfVisResultSuccess);
     CHECK(std::string(buffer.data()) == tool_dir.ToolPath());
 
     // A directory without the tool reports that, rather than reaching past it.
     length = 0;
     CHECK(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolRocprofV3,
-                                                tool_dir.Path().c_str(), nullptr,
+                                                tool_dir.Path().c_str(), nullptr, nullptr,
                                                 &length) == kRocProfVisResultToolNotFound);
 }
 

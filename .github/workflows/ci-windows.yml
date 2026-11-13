@@ -195,14 +195,15 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           submodules: recursive
+          persist-credentials: false
       
       - name: Cache Vulkan SDK
         id: cache-vulkan
-        uses: actions/cache@v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
           key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}-${{ matrix.os-version }}
@@ -224,7 +225,7 @@ jobs:
 
       - name: Install Python
         if: env.ENABLE_SCRIPTING == 'ON' && env.VENDOR_PYTHON == 'OFF'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
 
@@ -283,11 +284,15 @@ jobs:
           echo $tools | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Build, Make, and Verify Installation
+        env:
+          INPUTS_CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          INPUTS_CMAKE_BUILD_PRESET: ${{ inputs.cmake_build_preset }}
         run: |
           mkdir build
 
           $opensslArgs = @()
-          if ("${{ inputs.crypto_backend }}" -eq "OpenSSL") {
+          if ("${env:INPUTS_CRYPTO_BACKEND}" -eq "OpenSSL") {
             # Prefer the install tree resolved above over any other OpenSSL on PATH.
             if ($env:OPENSSL_ROOT_DIR) {
               $opensslArgs += "-DOPENSSL_ROOT_DIR=$($env:OPENSSL_ROOT_DIR)"
@@ -301,7 +306,7 @@ jobs:
             }
           }
           $cmakeArgs = @(
-            "--preset", "${{ inputs.cmake_config_preset }}",
+            "--preset", "${env:INPUTS_CMAKE_CONFIG_PRESET}",
             "-DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}",
             "-DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }}",
             "-DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }}",
@@ -311,11 +316,11 @@ jobs:
             "-DROCPROFVIS_ENABLE_VENDOR_PYTHON=${{ env.VENDOR_PYTHON }}",
             "-DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }}",
             "-DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }}",
-            "-DCRYPTO_BACKEND=${{ inputs.crypto_backend }}"
+            "-DCRYPTO_BACKEND=${env:INPUTS_CRYPTO_BACKEND}"
           ) + $opensslArgs
           cmake @cmakeArgs
-          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
-          if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
+          cmake --build ${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET} --preset "${env:INPUTS_CMAKE_BUILD_PRESET}" --parallel 4
+          if (Test-Path "${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
           } else {
             Write-Host "❌ $env:BUILD_FILE_NAME was not built!"
@@ -326,8 +331,10 @@ jobs:
         id: run_tests
         continue-on-error: true
         timeout-minutes: 10
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
         run: |
-          cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
+          cd ${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET}
           ctest `
             -C ${{ env.BINARY_DIR }} `
             --output-on-failure `
@@ -336,7 +343,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-windows-${{ matrix.os-version }}${{ inputs.artifact_suffix }}
           path: |
@@ -345,8 +352,10 @@ jobs:
           retention-days: 7
 
       - name: Prepare Distribution Artifacts
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
         run: |
-          $Build = "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}"
+          $Build = "${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET}"
           # The runtime component installs flat on Windows: the executable, its
           # DLLs, the license notices and, in a scripting build, python\.
           cmake --install $Build --config ${{ env.BINARY_DIR }} --component RV_RUNTIME `
@@ -356,15 +365,18 @@ jobs:
           Get-ChildItem "${{ env.DIST_DIR }}"
 
       - name: Build MSI Installer
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          INPUTS_CMAKE_BUILD_PRESET: ${{ inputs.cmake_build_preset }}
         run: |
-          cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --target PACKAGE_WIX
+          cmake --build ${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET} --preset "${env:INPUTS_CMAKE_BUILD_PRESET}" --target PACKAGE_WIX
           mkdir ${{ env.INSTALLER_DIR }} -Force
-          Copy-Item "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/*.msi" "${{ env.INSTALLER_DIR }}/"
+          Copy-Item "${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET}/*.msi" "${{ env.INSTALLER_DIR }}/"
           Get-ChildItem "${{ env.INSTALLER_DIR }}"
       
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-windows-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
           path: | 
@@ -373,7 +385,7 @@ jobs:
 
       - name: Upload GitHub Installer Artifact
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-windows-${{ matrix.os-version }}-installer${{ inputs.artifact_suffix }}
           path: |
@@ -382,13 +394,16 @@ jobs:
 
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload Build to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
+          INPUTS_ARTIFACT_SUFFIX: ${{ inputs.artifact_suffix }}
         run: |
           $timestamp = Get-Date -Format "yyyy_MM_dd"
           if (-not $env:RELEASE_VERSION) {
@@ -401,7 +416,7 @@ jobs:
           $S3_DEST = "s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/windows/"
 
           # Upload the distribution as a single zip instead of many loose files.
-          $zipPath = Join-Path $env:RUNNER_TEMP "${{ env.BUILD_FILE_NAME }}-windows-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP "${{ env.BUILD_FILE_NAME }}-windows-${env:MATRIX_OS_VERSION}-release${env:INPUTS_ARTIFACT_SUFFIX}.zip"
           Compress-Archive -Path "${{ env.DIST_DIR }}/*" -DestinationPath $zipPath -Force
           aws s3 cp $zipPath $S3_DEST --no-progress
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

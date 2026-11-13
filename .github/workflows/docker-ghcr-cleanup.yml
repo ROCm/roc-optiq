@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Clean up GHCR optiq-ci-${{ matrix.os }} Docker Images
-        uses: dataaxiom/ghcr-cleanup-action@v1
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           package: optiq-ci-${{ matrix.os }}
           dry-run: ${{ github.event_name == 'pull_request' }}

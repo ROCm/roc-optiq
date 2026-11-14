@@ -750,50 +750,43 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
     }
 
     SettingsManager&  settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style    = ImGui::GetStyle();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup(ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
     ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
 
-    if(ImGui::BeginPopupModal(popup_id, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-                                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+    if(ImGui::BeginPopupModal(
+           popup_id, nullptr,
+           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
+               ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+               ImGuiWindowFlags_NoScrollWithMouse))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, 4.0f));
-
-        BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true,
+        BeginPanelCard("##remote_dl_header", PanelCardTone::kPanel, style.WindowPadding, true,
                        &settings);
         {
-            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings, settings.GetFontManager().GetFontSize(FontSize::kMedium));
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-            ImGui::BeginGroup();
-            ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-            ImGui::TextUnformatted("Remote Download");
-            ImGui::PopFont();
             ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
             ImGui::TextUnformatted("Fetching the trace over SSH.");
             ImGui::PopStyleColor();
-            ImGui::EndGroup();
         }
         EndPanelCard();
 
-        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f), true,
+        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, style.WindowPadding, true,
                        &settings);
         {
             ImGui::TextWrapped("%s", file_name ? file_name : "");
             ImGui::Spacing();
             if(total > 0)
             {
-                const float frac =
-                    std::min(1.0f, static_cast<float>(downloaded) / static_cast<float>(total));
-                const std::string label = format_byte_size(downloaded) + " of " +
-                                          format_byte_size(total) + "  (" +
-                                          std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
+                const float       frac = std::min(1.0f, static_cast<float>(downloaded) /
+                                                            static_cast<float>(total));
+                const std::string label =
+                    format_byte_size(downloaded) + " of " + format_byte_size(total) +
+                    "  (" + std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
                 ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
             }
             else
@@ -809,7 +802,6 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
             show = false;
         }
 
-        ImGui::PopStyleVar();  // ItemSpacing
         ImGui::EndPopup();
     }
     else
@@ -818,9 +810,6 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
         // reopened on the next download.
         show = false;
     }
-
-    ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
-    popup_style.PopStyles();
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

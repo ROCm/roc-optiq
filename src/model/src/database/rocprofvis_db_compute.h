@@ -155,8 +155,8 @@ namespace DataModel
         ComputeQueryFactory m_query_factory;
         std::string m_db_version;
         // True when the compute_workload table has the optional
-        // memory_chart_extdata column (detected once at metadata load).
-        bool m_has_memory_chart_extdata = false;
+        // memory_chart_layout_extdata column (detected once at metadata load).
+        bool m_has_memory_chart_layout_extdata = false;
         std::unordered_map<uint32_t, KernelStats> m_kernel_stats;
         std::vector<MetricRow> m_metric_rows;
         std::mutex m_mutex;

@@ -6,6 +6,7 @@
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_json_utils.h"
+#include "rocprofvis_settings_manager.h"
 #include "imgui.h"
 #include <sstream>
 #include <algorithm>
@@ -128,23 +129,6 @@ namespace
 // ==================================================================================
 // ImGui helpers
 // ==================================================================================
-
-void HelpMarker(char const* env_var, char const* desc)
-{
-    // Frame-align so the "(?)" sits level with the field/toggle/label it follows.
-    ImGui::SameLine();
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-        ImGui::TextUnformatted(env_var);
-        ImGui::Separator();
-        ImGui::TextUnformatted(desc);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-}
 
 // Shared control widths so combos/inputs across the advanced tabs are neither
 // full-window-wide nor ragged.
@@ -412,6 +396,13 @@ RocprofSysSettings RocprofSysSettings::FromJson(jt::Json const& json)
     s.instr_exclude    = safe_string(j, "instr_exclude", "");
     s.min_instructions = safe_int(j, "min_instructions", 0);
 
+    // Target
+    s.target = TargetSpec::FromJson(j.contains("target") ? j["target"] : jt::Json());
+
+    // Extra arguments
+    s.extra_arguments = ExtraArguments::FromJson(
+        j.contains("extra_arguments") ? j["extra_arguments"] : jt::Json());
+
     return s;
 }
 
@@ -493,6 +484,12 @@ jt::Json RocprofSysSettings::ToJson() const
     p["instr_exclude"]    = instr_exclude;
     p["min_instructions"] = static_cast<long>(min_instructions);
 
+    // Target
+    p["target"] = target.ToJson();
+
+    // Extra arguments
+    p["extra_arguments"] = extra_arguments.ToJson();
+
     return p;
 }
 
@@ -517,47 +514,112 @@ const char* RocprofSysBackend::DisplayName() const
 std::vector<ToolOption> RocprofSysBackend::GetTools() const
 {
     return {
-        {kRPVProfilerToolRocprofSysRun,        "Run"},
-        {kRPVProfilerToolRocprofSysSample,     "Sample"},
-        {kRPVProfilerToolRocprofSysInstrument, "Instrument"},
+        {kRPVProfilerToolRocprofSysRun,        kRPVProfilerOperationDefault, "Run"},
+        {kRPVProfilerToolRocprofSysSample,     kRPVProfilerOperationDefault, "Sample"},
+        {kRPVProfilerToolRocprofSysInstrument, kRPVProfilerOperationDefault, "Instrument"},
     };
 }
 
-std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t tool) const
+// General: the everyday controls (preset, output format, trace window).
+// Always visible in the launcher.
+TabDescriptor RocprofSysBackend::GetOptions(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation) const
 {
+    (void)tool;
+    (void)operation;
+    return {"general", "General", [this]() {
+        return const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
+    }};
+}
+
+// Advanced: power-user detail, grouped by domain and tucked into the Advanced
+// window so the common case stays simple.
+std::vector<TabDescriptor> RocprofSysBackend::GetAdvancedOptions(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation) const
+{
+    (void)operation;
     std::vector<TabDescriptor> tabs;
 
-    // General: the everyday controls (preset, output format, trace window).
-    // Always visible in the launcher.
-    tabs.push_back({"general", "General", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
-    }, false});
-
-    // Advanced: power-user detail, grouped by domain and tucked under the
-    // collapsible "Advanced Options" section so the common case stays simple.
     tabs.push_back({"sampling", "Sampling", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }, true});
+        return const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }});
     tabs.push_back({"rocm", "ROCm", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }, true});
+        return const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }});
     tabs.push_back({"perfetto", "Perfetto", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }, true});
+        return const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }});
     tabs.push_back({"process_sampling", "Process", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); },
-        true});
+        return const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); }});
     tabs.push_back({"parallelism", "Parallelism", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderParallelismTab(); }, true});
+        return const_cast<RocprofSysBackend*>(this)->RenderParallelismTab(); }});
 
     if (tool == kRPVProfilerToolRocprofSysInstrument)
     {
         tabs.push_back({"instrument", "Instrument", [this]() {
-            return const_cast<RocprofSysBackend*>(this)->RenderInstrumentTab(); },
-            true});
+            return const_cast<RocprofSysBackend*>(this)->RenderInstrumentTab(); }});
     }
 
     tabs.push_back({"advanced", "Logging", [this]() {
-        return const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }, true});
+        return const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }});
 
     return tabs;
+}
+
+// ==================================================================================
+// Target section
+// ==================================================================================
+
+// TargetSpec::working_directory is deliberately not exposed here - it is honored
+// at launch but currently only settable through a saved profile.
+TargetSpec const&
+RocprofSysBackend::GetTarget(rocprofvis_profiler_operation_t operation) const
+{
+    (void)operation;
+    return m_settings.target;
+}
+
+// One list shared by every rocprof-sys tool.
+ExtraArguments& RocprofSysBackend::GetExtraArguments(rocprofvis_profiler_operation_t operation)
+{
+    (void)operation;
+    return m_settings.extra_arguments;
+}
+
+// One list shared by every rocprof-sys tool: they all profile a program.
+std::vector<std::string>&
+RocprofSysBackend::GetRecentTargets(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation)
+{
+    (void)tool;
+    (void)operation;
+    return SettingsManager::Get().GetRecentTargets(Id());
+}
+
+bool
+RocprofSysBackend::RenderTargetSection(LaunchConfig const& config, TargetBrowseFn const& on_browse)
+{
+    const bool  is_remote = (config.connection == ConnectionType::kSsh);
+    const float label_w   = TargetLabelColumnWidth("Output folder");
+
+    TargetPathRow program;
+    program.label           = "Program";
+    program.id              = "TargetExe";
+    program.hint            = is_remote ? "/remote/path/to/app" : "/path/to/app  (or a name on $PATH)";
+    program.browse_title    = "Choose Program";
+    program.kind            = File;
+    program.recents         = &GetRecentTargets(config.tool, config.operation);
+    program.recents_tooltip = "Recent programs";
+
+    TargetPathRow output;
+    output.label        = "Output folder";
+    output.id           = "OutputDir";
+    output.hint         = is_remote ? "remote folder for results" : "folder for results";
+    output.browse_title = "Choose Output Directory";
+    output.kind         = Directory;
+
+    bool modified = false;
+    modified |= RenderTargetPathRow(program, m_settings.target.path, config.connection, on_browse,
+                                    label_w);
+    modified |= RenderTargetArgumentsRow(m_settings.target.arguments, label_w);
+    modified |= RenderTargetPathRow(output, m_settings.target.output_directory, config.connection,
+                                    on_browse, label_w);
+    modified |= RenderTargetAutoLoadRow(m_settings.target.auto_load_trace);
+    return modified;
 }
 
 // ==================================================================================
@@ -566,11 +628,12 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
 
 std::string RocprofSysBackend::Validate(LaunchConfig const& config) const
 {
-    if (config.target.executable.empty())
+    (void)config;
+    if (m_settings.target.path.empty())
     {
         return "Target executable is required";
     }
-    if (config.target.output_directory.empty())
+    if (m_settings.target.output_directory.empty())
     {
         return "Output directory is required";
     }
@@ -589,9 +652,9 @@ std::string RocprofSysBackend::Validate(LaunchConfig const& config) const
                "(they are mutually exclusive)";
     }
 
-    // Overflow event duplicate in extra_env
-    auto it = config.extra_env.find("ROCPROFSYS_SAMPLING_OVERFLOW_EVENT");
-    if (it != config.extra_env.end() &&
+    // Overflow event duplicate in the extra environment variables
+    auto it = m_settings.extra_arguments.env.find("ROCPROFSYS_SAMPLING_OVERFLOW_EVENT");
+    if (it != m_settings.extra_arguments.env.end() &&
         !it->second.empty() &&
         it->second != m_settings.sampling_overflow_event)
     {
@@ -654,14 +717,14 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     }
 
     // Deprecated env aliases in raw env vars
-    auto perfetto_it = config.extra_env.find("ROCPROFSYS_USE_PERFETTO");
-    if (perfetto_it != config.extra_env.end())
+    auto perfetto_it = m_settings.extra_arguments.env.find("ROCPROFSYS_USE_PERFETTO");
+    if (perfetto_it != m_settings.extra_arguments.env.end())
     {
         warnings.push_back({WarningMessage::kWarning,
             "ROCPROFSYS_USE_PERFETTO is deprecated -- use ROCPROFSYS_TRACE instead"});
     }
-    auto timemory_it = config.extra_env.find("ROCPROFSYS_USE_TIMEMORY");
-    if (timemory_it != config.extra_env.end())
+    auto timemory_it = m_settings.extra_arguments.env.find("ROCPROFSYS_USE_TIMEMORY");
+    if (timemory_it != m_settings.extra_arguments.env.end())
     {
         warnings.push_back({WarningMessage::kWarning,
             "ROCPROFSYS_USE_TIMEMORY is deprecated -- use ROCPROFSYS_PROFILE instead"});
@@ -670,83 +733,15 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     return warnings;
 }
 
-std::vector<std::string> RocprofSysBackend::GetSummaryTags(
-    LaunchConfig const& config) const
-{
-    std::vector<std::string> tags;
-
-    // Output format (what the run will produce).
-    std::string output;
-    if (m_settings.trace_backend && m_settings.use_rocpd)
-    {
-        output = "Perfetto + ROCpd";
-    }
-    else if (m_settings.trace_backend)
-    {
-        output = "Perfetto trace";
-    }
-    else if (m_settings.use_rocpd)
-    {
-        output = "ROCpd database";
-    }
-    else
-    {
-        output = "No trace output";
-    }
-    tags.push_back(output);
-
-    // Instrument does not accept --preset, so never label the run with a
-    // preset that FlattenToExecution will not emit.
-    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
-    {
-        tags.push_back("Runtime instrumentation");
-    }
-    else
-    {
-        tags.push_back(m_settings.rocprof_preset.empty()
-                           ? std::string("none")
-                           : m_settings.rocprof_preset);
-    }
-
-    return tags;
-}
-
 // ==================================================================================
 // FlattenToExecution -- only emits non-default values
 // ==================================================================================
-
-// extra_argv is the override hatch: last among the profiler's own flags, still
-// ahead of "--". Tokens past the separator belong to the target.
-static void AppendExtraArgv(
-    LaunchConfig const& config, std::vector<std::string>& argv_out)
-{
-    for (auto const& arg : config.extra_argv)
-    {
-        argv_out.push_back(arg);
-    }
-}
-
-static void AppendTargetArgv(
-    LaunchConfig const& config, std::vector<std::string>& argv_out)
-{
-    if (config.target.executable.empty())
-    {
-        return;
-    }
-
-    argv_out.push_back("--");
-    argv_out.push_back(config.target.executable);
-
-    for (auto const& arg : SplitArguments(config.target.arguments))
-    {
-        argv_out.push_back(arg);
-    }
-}
 
 void RocprofSysBackend::EmitCuratedEnv(
     LaunchConfig const& config,
     std::vector<std::pair<std::string, std::string>>& env_out) const
 {
+    (void)config;
     RocprofSysSettings defaults = RocprofSysSettings::FromJson(jt::Json());
 
     auto emit_bool = [&](char const* env_name, bool val, bool def)
@@ -779,9 +774,9 @@ void RocprofSysBackend::EmitCuratedEnv(
             env_out.emplace_back(env_name, std::to_string(val));
     };
 
-    if (!config.target.output_directory.empty())
+    if (!m_settings.target.output_directory.empty())
     {
-        env_out.emplace_back("ROCPROFSYS_OUTPUT_PATH", config.target.output_directory);
+        env_out.emplace_back("ROCPROFSYS_OUTPUT_PATH", m_settings.target.output_directory);
     }
 
     // Legacy ROCPROFSYS_MODE is intentionally not emitted; the individual
@@ -927,15 +922,15 @@ void RocprofSysBackend::FlattenRunOrSample(
             std::string("--trace=") + (m_settings.trace_backend ? "true" : "false"));
     }
 
-    AppendExtraArgv(config, argv_out);
+    m_settings.extra_arguments.Argv(argv_out);
 
-    if (!config.target.output_directory.empty())
+    if (!m_settings.target.output_directory.empty())
     {
         argv_out.push_back("--output");
-        argv_out.push_back(config.target.output_directory);
+        argv_out.push_back(m_settings.target.output_directory);
     }
 
-    AppendTargetArgv(config, argv_out);
+    m_settings.target.Argv(true, argv_out);
 }
 
 void RocprofSysBackend::FlattenInstrumentRuntime(
@@ -967,8 +962,8 @@ void RocprofSysBackend::FlattenInstrumentRuntime(
         argv_out.push_back(std::to_string(m_settings.min_instructions));
     }
 
-    AppendExtraArgv(config, argv_out);
-    AppendTargetArgv(config, argv_out);
+    m_settings.extra_arguments.Argv(argv_out);
+    m_settings.target.Argv(true, argv_out);
 }
 
 void RocprofSysBackend::FlattenToExecution(
@@ -992,8 +987,9 @@ void RocprofSysBackend::FlattenToExecution(
 // ParseTraceOutputPath
 // ==================================================================================
 
-std::string RocprofSysBackend::ParseTraceOutputPath(std::string const& profiler_stdout) const
+std::string RocprofSysBackend::ParseTraceOutputPath(rocprofvis_profiler_operation_t operation, std::string const& profiler_stdout) const
 {
+    (void)operation;
     // rocprof-sys reports the rocpd database path it produced in a couple of
     // places, e.g.:
     //   [...]database.cpp:151 database][info] Database: /path/rocpd-<pid>-0.db
@@ -1093,15 +1089,20 @@ std::string RocprofSysBackend::ParseTraceOutputPath(std::string const& profiler_
         unlabelled = token.text;
     }
 
+    std::string trace_path;
     if (!labelled_database.empty())
     {
-        return labelled_database;
+        trace_path = labelled_database;
     }
-    if (!labelled_file.empty())
+    else if (!labelled_file.empty())
     {
-        return labelled_file;
+        trace_path = labelled_file;
     }
-    return unlabelled;
+    else
+    {
+        trace_path = unlabelled;
+    }
+    return trace_path;
 }
 
 // ==================================================================================
@@ -1221,7 +1222,7 @@ bool RocprofSysBackend::RenderGeneralTraceOptions()
     ImGui::TextUnformatted("Region");
     ImGui::SameLine(label_w);
     // Reserve room for the trailing "(?)" so it neither overlaps nor clips.
-    const float region_trail = gs.ItemSpacing.x * 2.0f + ImGui::CalcTextSize("(?)").x;
+    const float region_trail = gs.ItemSpacing.x * 2.0f + ImGui::GetTextLineHeight();
     ImGui::SetNextItemWidth(-region_trail);
     changed |= InputTextStringWithHint("##TraceRegion",
                                        "ROCTX regions (comma-separated)",
@@ -1300,7 +1301,7 @@ bool RocprofSysBackend::RenderBackendsTab()
     const float output_col_w =
         std::max(kOutputColW, toggle_w + gs.ItemSpacing.x +
                                   ImGui::CalcTextSize("ROCpd database").x +
-                                  gs.ItemSpacing.x + ImGui::CalcTextSize("(?)").x +
+                                  gs.ItemSpacing.x + ImGui::GetTextLineHeight() +
                                   gs.ItemSpacing.x);
 
     auto render_output_format = [&]() {

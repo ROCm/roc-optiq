@@ -10,7 +10,7 @@ project(${TARGET_NAME})
 set(PROJECT_VERSION_MAJOR 1)
 set(PROJECT_VERSION_MINOR 2)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 1)
+set(PROJECT_VERSION_BUILD 2)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -49,6 +49,12 @@ include(CMakeDependentOption)
 cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
     "Vendor a pinned CPython for embedded Python analysis scripts" ON
     "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
+# Only meaningful with Ask Optiq: lets it read compute traces as well as system
+# traces. OFF compiles the compute tools out, and Ask Optiq turns a compute tab
+# away.
+cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    "Let the Ask Optiq assistant read compute traces (in development)" ON
+    "ROCPROFVIS_ENABLE_AGENTIC_PROFILING" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -80,6 +86,9 @@ endif(ROCPROFVIS_ENABLE_REMOTE)
 if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING")
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_COMPUTE")
+endif(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
 if(ROCPROFVIS_ENABLE_SCRIPTING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
 endif(ROCPROFVIS_ENABLE_SCRIPTING)
@@ -274,6 +283,8 @@ list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_profiler_backend.h
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.h
     src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
     src/view/src/profiler/rocprofvis_launch_preset_manager.h
     src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
@@ -315,6 +326,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_compute_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.h
@@ -897,8 +909,13 @@ include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 # Archive generators wrap the prefix in <package>-<version>-<system>/. DEB and
-# RPM do not. Leave it off so the tarball extracts onto / at the install prefix.
+# RPM do not. Leave it off so the tarball has no wrapper directory.
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+# The tarball drops the install prefix too, so it extracts flat into the current
+# directory like the other ROCm extras (RVS, MIGraphX). DEB and RPM keep it.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocprofvis_cpack_config.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake" @ONLY)
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake")
 
 set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
 # Detect Linux distro for additional package types

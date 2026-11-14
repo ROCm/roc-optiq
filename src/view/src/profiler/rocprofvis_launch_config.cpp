@@ -6,6 +6,8 @@
 #include "rocprofvis_profiler.h"
 #include "spdlog/spdlog.h"
 
+#include <filesystem>
+
 namespace RocProfVis
 {
 namespace View
@@ -14,9 +16,6 @@ namespace View
 LaunchConfig::LaunchConfig()
     : profiler_id("rocprof-sys")
     , connection(ConnectionType::kLocal)
-    , target()
-    , extra_env()
-    , extra_argv()
     , backend_payload()
 {
 }
@@ -26,30 +25,11 @@ jt::Json LaunchConfig::ToJson() const
     jt::Json json;
     json["profiler_id"] = profiler_id;
     json["tool"] = static_cast<int32_t>(tool);
-    json["tool_directory"] = tool_directory;
+    json["operation"] = static_cast<int32_t>(operation);
 
     jt::Json& conn = json["connection"];
     conn["type"] = (connection == ConnectionType::kLocal) ? "local" : "ssh";
     conn["ssh_connection_ref"] = ssh_connection_ref;
-
-    jt::Json& tgt = json["target"];
-    tgt["executable"] = target.executable;
-    tgt["arguments"] = target.arguments;
-    tgt["working_directory"] = target.working_directory;
-    tgt["output_directory"] = target.output_directory;
-    tgt["auto_load_trace"] = target.auto_load_trace;
-
-    jt::Json& env = json["extra_env"];
-    for (auto const& kv : extra_env)
-    {
-        env[kv.first] = kv.second;
-    }
-
-    int argv_idx = 0;
-    for (auto const& arg : extra_argv)
-    {
-        json["extra_argv"][argv_idx++] = arg;
-    }
 
     json["backend_payload"] = backend_payload;
 
@@ -62,8 +42,9 @@ LaunchConfig LaunchConfig::FromJson(jt::Json const& json)
     jt::Json& j = const_cast<jt::Json&>(json);
 
     cfg.profiler_id    = JsonUtils::GetString(j, "profiler_id", cfg.profiler_id);
-    cfg.tool_directory = JsonUtils::GetString(j, "tool_directory", cfg.tool_directory);
     cfg.tool           = ToolFromInt(JsonUtils::GetInt(j, "tool", kRPVProfilerToolNone));
+    cfg.operation      = OperationFromInt(
+        JsonUtils::GetInt(j, "operation", kRPVProfilerOperationDefault));
 
     if (j.contains("connection"))
     {
@@ -75,39 +56,132 @@ LaunchConfig LaunchConfig::FromJson(jt::Json const& json)
         cfg.ssh_connection_ref = JsonUtils::GetString(conn, "ssh_connection_ref", "");
     }
 
-    if (j.contains("target"))
-    {
-        jt::Json& tgt = j["target"];
-        cfg.target.executable        = JsonUtils::GetString(tgt, "executable", cfg.target.executable);
-        cfg.target.arguments         = JsonUtils::GetString(tgt, "arguments", cfg.target.arguments);
-        cfg.target.working_directory = JsonUtils::GetString(tgt, "working_directory", cfg.target.working_directory);
-        cfg.target.output_directory  = JsonUtils::GetString(tgt, "output_directory", cfg.target.output_directory);
-        cfg.target.auto_load_trace   = JsonUtils::GetBool(tgt, "auto_load_trace", cfg.target.auto_load_trace);
-    }
-
-    if (j.contains("extra_env"))
-    {
-        jt::Json& env = j["extra_env"];
-        if (env.isObject())
-        {
-            for (auto& kv : env.getObject())
-            {
-                if (kv.second.isString())
-                {
-                    cfg.extra_env[kv.first] = kv.second.getString();
-                }
-            }
-        }
-    }
-
-    cfg.extra_argv = JsonUtils::GetStringArray(j, "extra_argv");
-
     if (j.contains("backend_payload"))
     {
         cfg.backend_payload = j["backend_payload"];
     }
 
     return cfg;
+}
+
+jt::Json
+ExtraArguments::ToJson() const
+{
+    jt::Json json;
+
+    jt::Json& env_json = json["extra_env"];
+    env_json.setObject();
+    for (std::pair<std::string const, std::string> const& kv : env)
+    {
+        env_json[kv.first] = kv.second;
+    }
+
+    jt::Json& argv_json = json["extra_argv"];
+    argv_json.setArray();
+    for (std::string const& entry : argv)
+    {
+        argv_json.getArray().push_back(entry);
+    }
+
+    return json;
+}
+
+ExtraArguments
+ExtraArguments::FromJson(jt::Json const& json)
+{
+    ExtraArguments extra;
+    jt::Json&      j = const_cast<jt::Json&>(json);
+
+    if (j.contains("extra_env") && j["extra_env"].isObject())
+    {
+        for (std::pair<std::string const, jt::Json>& kv : j["extra_env"].getObject())
+        {
+            if (kv.second.isString())
+            {
+                extra.env[kv.first] = kv.second.getString();
+            }
+        }
+    }
+    extra.argv = JsonUtils::GetStringArray(j, "extra_argv");
+
+    return extra;
+}
+
+void
+ExtraArguments::Argv(std::vector<std::string>& argv_out) const
+{
+    for(std::string const& entry : argv)
+    {
+        argv_out.push_back(entry);
+    }
+}
+
+jt::Json
+TargetSpec::ToJson() const
+{
+    jt::Json json;
+    json["executable"]        = path;
+    json["arguments"]         = arguments;
+    json["working_directory"] = working_directory;
+    json["output_directory"]  = output_directory;
+    json["auto_load_trace"]   = auto_load_trace;
+    return json;
+}
+
+TargetSpec
+TargetSpec::FromJson(jt::Json const& json)
+{
+    TargetSpec target;
+    jt::Json&  j             = const_cast<jt::Json&>(json);
+    target.path              = JsonUtils::GetString(j, "executable", target.path);
+    target.arguments         = JsonUtils::GetString(j, "arguments", target.arguments);
+    target.working_directory = JsonUtils::GetString(j, "working_directory", target.working_directory);
+    target.output_directory  = JsonUtils::GetString(j, "output_directory", target.output_directory);
+    target.auto_load_trace   = JsonUtils::GetBool(j, "auto_load_trace", target.auto_load_trace);
+    return target;
+}
+
+void
+TargetSpec::Argv(bool executable, std::vector<std::string>& argv_out) const
+{
+    if(!path.empty())
+    {
+        if(executable)
+        {
+            argv_out.push_back("--");
+        }
+        argv_out.push_back(path);
+
+        if(executable)
+        {
+            for(std::string const& arg : SplitArguments(arguments))
+            {
+                argv_out.push_back(arg);
+            }
+        }
+    }
+}
+
+std::string
+ResolveOutputPath(std::string const& path, std::string const& working_directory, bool remote)
+{
+    std::string resolved = path;
+    if (!path.empty() && !working_directory.empty())
+    {
+        if (remote)
+        {
+            if (path.front() != '/')
+            {
+                resolved = (working_directory.back() == '/') ? working_directory + path
+                                                             : working_directory + "/" + path;
+            }
+        }
+        else if (std::filesystem::path(path).is_relative())
+        {
+            resolved = (std::filesystem::path(working_directory) / path).lexically_normal().string();
+        }
+    }
+    return resolved;
 }
 
 std::vector<std::string> SplitArguments(std::string const& arguments)
@@ -217,23 +291,42 @@ rocprofvis_profiler_tool_t ToolFromInt(int32_t value)
     return static_cast<rocprofvis_profiler_tool_t>(value);
 }
 
+rocprofvis_profiler_operation_t OperationFromInt(int32_t value)
+{
+    // Signed test first, for the same reason as ToolFromInt. 0 is valid here:
+    // it is kRPVProfilerOperationDefault.
+    bool const is_operation =
+        (value >= 0) && (static_cast<uint32_t>(value) < __kRPVProfilerOperationLast);
+    if (!is_operation)
+    {
+        spdlog::warn("Ignoring unknown profiler operation {} in a saved launch profile",
+                     value);
+        return kRPVProfilerOperationDefault;
+    }
+    return static_cast<rocprofvis_profiler_operation_t>(value);
+}
+
 std::string ResolveToolPath(rocprofvis_profiler_tool_t tool,
                             std::string const&         tool_directory,
+                            std::string const&         python_environment,
                             std::string&               out_error)
 {
     out_error.clear();
 
     char const* directory = tool_directory.empty() ? nullptr : tool_directory.c_str();
+    char const* environment =
+        python_environment.empty() ? nullptr : python_environment.c_str();
 
     // The search runs on the length query, so that first call is the one that
     // reports why a tool could not be resolved.
     uint32_t            length = 0;
     rocprofvis_result_t result =
-        rocprofvis_profiler_tool_resolve_path(tool, directory, nullptr, &length);
+        rocprofvis_profiler_tool_resolve_path(tool, directory, environment, nullptr, &length);
     if (result == kRocProfVisResultSuccess && length > 0)
     {
         std::vector<char> buffer(length + 1, '\0');
-        result = rocprofvis_profiler_tool_resolve_path(tool, directory, buffer.data(), &length);
+        result = rocprofvis_profiler_tool_resolve_path(tool, directory, environment,
+                                                       buffer.data(), &length);
         if (result == kRocProfVisResultSuccess)
         {
             buffer[length] = '\0';
@@ -254,9 +347,22 @@ std::string ResolveToolPath(rocprofvis_profiler_tool_t tool,
                                       "$ROCM_PATH or $PATH points at it.");
             break;
         case kRocProfVisResultInvalidArgument:
-            out_error = tool_directory.empty()
-                            ? std::string("No profiler tool selected")
-                            : ("The tool directory must be an absolute path: " + tool_directory);
+            if (!tool_directory.empty() && !std::filesystem::path(tool_directory).is_absolute())
+            {
+                out_error = "The tool directory must be an absolute path: " + tool_directory;
+            }
+#ifndef _WIN32
+            else if (!python_environment.empty() &&
+                     !std::filesystem::path(python_environment).is_absolute())
+            {
+                out_error = "The Python environment must be an absolute path: " +
+                            python_environment;
+            }
+#endif
+            else
+            {
+                out_error = "No profiler tool selected";
+            }
             break;
         default:
             out_error = "Could not determine which " +

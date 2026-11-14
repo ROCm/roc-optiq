@@ -43,7 +43,7 @@ namespace DataModel
 		{"workload_sub_name", kRPVComputeColumnWorkloadSubName},
 		{"sys_info_extdata", kRPVComputeColumnWorkloadSysInfo},
 		{"profiling_config_extdata", kRPVComputeColumnWorkloadProfileConfig},
-		{"memory_chart_extdata", kRPVComputeColumnWorkloadMemoryChart},
+		{"memory_chart_layout_extdata", kRPVComputeColumnWorkloadMemoryChart},
 		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
 		{"kernel_uuid", kRPVComputeColumnKernelUUID},
 		{"kernel_name", kRPVComputeColumnKernelName},
@@ -159,9 +159,9 @@ namespace DataModel
 			query_out += "sub_name as workload_sub_name, ";
 			query_out += "sys_info_extdata, ";
 			query_out += "profiling_config_extdata ";
-      if (m_db != nullptr && m_db->m_has_memory_chart_extdata)
+      if (m_db != nullptr && m_db->m_has_memory_chart_layout_extdata)
 		  {
-			  query_out += ", memory_chart_extdata ";
+			  query_out += ", memory_chart_layout_extdata ";
 		  }
 			query_out += "FROM ";
 			query_out += "compute_workload";
@@ -1162,9 +1162,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		{			
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
 			m_query_factory.SetVersion(m_db_version.c_str());
-			// Best-effort detection of the optional memory_chart_extdata column so
+			// Best-effort detection of the optional memory_chart_layout_extdata column so
 			// the workload query includes it only when present.
-			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_extdata';", &CallbackDetectMemoryChartColumn);
+			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_layout_extdata';", &CallbackDetectMemoryChartColumn);
 			if (kRocProfVisDmResultSuccess != CreateIndexes()) break;
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
@@ -1517,7 +1517,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
 		// A returned row means the column exists in compute_workload.
-		db->m_has_memory_chart_extdata = true;
+		db->m_has_memory_chart_layout_extdata = true;
 		callback_params->future->CountThisRow();
 		return 0;
 	}

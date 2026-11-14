@@ -51,6 +51,7 @@ struct ProfilerStageSpec
     // base rules for the tool. Only ever read by the rule table.
     std::string                                      tool_version;
     std::string                                      tool_directory;
+    std::string                                      python_environment;
     std::vector<std::string>                         argv;
     std::string                                      working_directory;
     std::vector<std::pair<std::string, std::string>> env;

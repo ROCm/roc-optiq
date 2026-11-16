@@ -16,7 +16,7 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 .. grid:: 2
    :gutter: 3
 
-    .. grid-item-card:: Install
+   .. grid-item-card:: Install
 
       * :doc:`Install ROCm Optiq <install/optiq-install>`
 

@@ -627,7 +627,7 @@ TEST_CASE("A flat config's operation selects the analyze trace", "[profiler][pip
     ProfilerConfig config;
     REQUIRE(config.SetTool(kRPVProfilerToolRocprofCompute) == kRocProfVisResultSuccess);
     REQUIRE(config.SetOperation(kRPVProfilerOperationAnalyze) == kRocProfVisResultSuccess);
-    REQUIRE(config.SetToolDirectory(tool_dir.Path()) == kRocProfVisResultSuccess);
+    REQUIRE(config.SetToolDirectory(tool_dir.Path().c_str()) == kRocProfVisResultSuccess);
     REQUIRE(config.SetWorkingDirectory(cwd.Path().c_str()) == kRocProfVisResultSuccess);
     REQUIRE(config.AddProfilerArg("-c") == kRocProfVisResultSuccess);
     REQUIRE(config.AddProfilerArg("echo 'Created file: result.db'") == kRocProfVisResultSuccess);
@@ -697,7 +697,7 @@ TEST_CASE("A flat config without an operation does not read analyze output",
 
     ProfilerConfig config;
     REQUIRE(config.SetTool(kRPVProfilerToolRocprofCompute) == kRocProfVisResultSuccess);
-    REQUIRE(config.SetToolDirectory(tool_dir.Path()) == kRocProfVisResultSuccess);
+    REQUIRE(config.SetToolDirectory(tool_dir.Path().c_str()) == kRocProfVisResultSuccess);
     REQUIRE(config.AddProfilerArg("-c") == kRocProfVisResultSuccess);
     REQUIRE(config.AddProfilerArg("echo 'Created file: /tmp/out.db'") == kRocProfVisResultSuccess);
 

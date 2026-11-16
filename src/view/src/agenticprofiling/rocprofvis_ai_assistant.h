@@ -156,6 +156,9 @@ private:
 
     bool  m_visible;
     bool  m_scroll_to_bottom;
+    // A single-line input lets go of the caret on Enter, and Send takes it, so
+    // the frame after a send hands it back.
+    bool  m_focus_input;
     float m_dock_width;
     Phase m_phase;
 

@@ -29,5 +29,16 @@ namespace View
  */
 std::string AssistantSystemPrompt(bool is_compute);
 
+/**
+ * @brief The whole system message of the follow-up request, which writes the
+ * buttons under an answer once it is on screen.
+ *
+ * That request carries nothing but the question and the answer, so this is all
+ * it knows about what the analyst can do. It is split by trace kind like the
+ * main prompt: a follow-up the analyst cannot act on only earns an apology when
+ * it is clicked.
+ */
+std::string AssistantNextStepsPrompt(bool is_compute);
+
 }  // namespace View
 }  // namespace RocProfVis

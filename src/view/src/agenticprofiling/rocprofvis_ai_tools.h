@@ -126,12 +126,9 @@ struct AssistantToolStartResult
     // Ask the panel to draw the timeline activity strip under this result.
     bool                  chart          = false;
     uint64_t              chart_track_id = INVALID_UINT64_INDEX;
-    // When true, replace the stacked follow-up buttons under the transcript.
-    bool                     set_next_steps = false;
-    std::vector<std::string> next_steps;
     // How long the panel waits before calling this a timeout. Zero takes the
     // default, which suits a query; a tool waiting on the user needs longer.
-    uint32_t                 timeout_seconds = 0;
+    uint32_t              timeout_seconds = 0;
 };
 
 // One track's row from the minimap, in [0,1]. The rows of a set share one

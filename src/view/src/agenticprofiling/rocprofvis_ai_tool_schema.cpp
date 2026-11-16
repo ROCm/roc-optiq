@@ -47,16 +47,15 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "bookmark", "Working with bookmarks..." },
     { "measure", "Measuring..." },
     { "reset_view", "Resetting the view..." },
-    { "offer_next_steps", "Offering next steps..." },
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     { "run_analysis_script", "Running an analysis script..." },
 #endif
 };
 
-// The compute-trace set. Only the two UI tools that mean the same thing on
-// either kind of trace are repeated from the list above; everything else here
-// reads a workload rather than a timeline. Scripting is absent on purpose -
-// optiq.table requires a system trace, so the tool would always fail.
+// The compute-trace set. Only switch_tab, the one UI tool that means the same
+// thing on either kind of trace, is repeated from the list above; everything
+// else here reads a workload rather than a timeline. Scripting is absent on
+// purpose - optiq.table requires a system trace, so the tool would always fail.
 const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
     { "compute_overview", "Reading the workload overview..." },
     { "list_kernels", "Listing kernels..." },
@@ -67,7 +66,6 @@ const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
     { "get_metrics", "Reading metric values..." },
     { "kernel_pc_samples", "Reading PC samples..." },
     { "switch_tab", "Switching tabs..." },
-    { "offer_next_steps", "Offering next steps..." },
 };
 
 // Builds a JSON string array, for the enum of a tool parameter.
@@ -528,25 +526,6 @@ MakeAssistantToolsJson()
             "the user asked you to reset the view.",
             reset_params);
 
-    jt::Json next_params = ObjectParams();
-    AddParam(next_params, "steps", "array",
-             "Two or three short follow-ups the user can click, most useful first. "
-             "Each is a complete thing they would type, under 80 characters.");
-    next_params["properties"]["steps"]["items"]["type"] = "string";
-    next_params["required"][0] = "steps";
-    AddTool(tools, 19, "offer_next_steps",
-            "Puts stacked buttons under the chat for what to look at next. Call it "
-            "as the last tool of an investigation, then write your answer in the "
-            "response after it. Do not list those same options in the prose.\n"
-            "The best follow-ups are the questions your answer raised but could "
-            "not settle - the distribution behind a mean, whether a cadence is "
-            "regular, how much two tracks really overlap, where a total actually "
-            "goes. Offer those even when answering them would need a script: the "
-            "user clicking one is exactly what makes writing it worthwhile, and a "
-            "question you can already answer in one call is a weak thing to "
-            "offer.",
-            next_params);
-
     jt::Json counter_params = ObjectParams();
     AddParam(counter_params, "name", "string",
              "Counter name, exact or a substring. Omit to page through every "
@@ -562,7 +541,7 @@ MakeAssistantToolsJson()
              "Names to list when no name is given (default 20, max 200).");
     AddParam(counter_params, "offset", "integer",
              "Names to skip. Use with limit to page through a long counter list.");
-    AddTool(tools, 20, "get_summary_counter_stats",
+    AddTool(tools, 19, "get_summary_counter_stats",
             "Read the summarized hardware counters at the trace, one node or one "
             "device (GPU/CPU) - processes and threads have none: mean, min, max "
             "and std_dev over the "
@@ -583,7 +562,7 @@ MakeAssistantToolsJson()
              "Python source, shown to the user before it runs. Report findings "
              "with optiq.result.text(...); nothing else is returned.");
     script_params["required"][0] = "script";
-    AddTool(tools, 21, "run_analysis_script",
+    AddTool(tools, 20, "run_analysis_script",
             "Offer a Python script that analyses this trace. It does not run on "
             "its own: the editor opens with your source and the user presses Run "
             "or Reject, so write it to be read as well as executed - clear names, "
@@ -862,32 +841,6 @@ MakeAssistantComputeToolsJson()
             "Switch between the open traces. Only call this when the user asked "
             "you to change tabs. Call with no name to list what is open.",
             tab_params);
-
-    jt::Json next_params = ObjectParams();
-    AddParam(next_params, "steps", "array",
-             "Two or three short follow-ups the user can click, most useful first. "
-             "Each is a complete thing they would type, under 80 characters.");
-    next_params["properties"]["steps"]["items"]["type"] = "string";
-    next_params["required"][0] = "steps";
-    AddTool(tools, 9, "offer_next_steps",
-            "Puts stacked buttons under the chat for what to look at next. Call it "
-            "as the last tool of an investigation, then write your answer in the "
-            "response after it. Do not list those same options in the prose.\n"
-            "Every step must be answerable from THIS profile with the tools you "
-            "have. You are looking at one workload and there is nothing to compare "
-            "it against: you cannot open a second trace, re-run the code, profile a "
-            "modified kernel, or read a system trace. So never offer to compare "
-            "against a fixed, tiled, padded, coalesced or otherwise improved "
-            "version, and never offer to measure what a change would do - clicking "
-            "it only produces an apology. Offer another metric table, another "
-            "kernel in this workload, or a different reading of what you already "
-            "have.\n"
-            "The best follow-ups are the questions your answer raised but could "
-            "not settle - which cache is missing, whether occupancy is the limit, "
-            "how another kernel in this same workload compares, what the "
-            "instruction mix says. A question you can already answer in one call "
-            "is a weak thing to offer.",
-            next_params);
 
     return tools;
 }

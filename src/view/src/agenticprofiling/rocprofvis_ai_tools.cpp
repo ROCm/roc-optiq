@@ -213,40 +213,33 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
                           "Bad arguments");
     }
 
-    // Next-step buttons are a UI side-effect, so they are the one tool that
-    // does not need an open trace.
-    if(tool_name != "offer_next_steps")
+    if(context.data_provider == nullptr)
     {
-        if(context.data_provider == nullptr)
-        {
-            return DoneResult("No trace is open.", "No trace");
-        }
+        return DoneResult("No trace is open.", "No trace");
+    }
 #ifndef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
-        // Without compute support Ask Optiq reads system traces only. Refused
-        // once here rather than in every tool: the panel is a singleton, so a
-        // compute tab can be in front even when the panel was opened on a
-        // system trace.
-        if(context.is_compute)
-        {
-            return DoneResult(
-                "This is a compute trace, and this build of Ask Optiq reads system "
-                "traces only. Tell the user to open a system trace to ask about it.",
-                "Compute trace");
-        }
+    // Without compute support Ask Optiq reads system traces only. Refused once
+    // here rather than in every tool: the panel is a singleton, so a compute tab
+    // can be in front even when the panel was opened on a system trace.
+    if(context.is_compute)
+    {
+        return DoneResult(
+            "This is a compute trace, and this build of Ask Optiq reads system "
+            "traces only. Tell the user to open a system trace to ask about it.",
+            "Compute trace");
+    }
 #endif
-        // Park rather than fail. Loading a large trace takes far longer than a
-        // round trip to the model, so answering "not ready" straight away only
-        // teaches it to retry into the same wall, or to answer without the data
-        // it asked for.
-        if(context.data_provider->GetState() != ProviderState::kReady)
-        {
-            AssistantToolStartResult waiting;
-            waiting.pending         = true;
-            waiting.fetch.kind      = AssistantFetchKind::kTraceLoading;
-            waiting.status_line     = "Waiting for the trace to finish loading...";
-            waiting.timeout_seconds = ASSISTANT_TRACE_LOADING_TIMEOUT_SECONDS;
-            return waiting;
-        }
+    // Park rather than fail. Loading a large trace takes far longer than a round
+    // trip to the model, so answering "not ready" straight away only teaches it
+    // to retry into the same wall, or to answer without the data it asked for.
+    if(context.data_provider->GetState() != ProviderState::kReady)
+    {
+        AssistantToolStartResult waiting;
+        waiting.pending         = true;
+        waiting.fetch.kind      = AssistantFetchKind::kTraceLoading;
+        waiting.status_line     = "Waiting for the trace to finish loading...";
+        waiting.timeout_seconds = ASSISTANT_TRACE_LOADING_TIMEOUT_SECONDS;
+        return waiting;
     }
 
     // The two trace kinds have disjoint tool sets, and the schema the model was

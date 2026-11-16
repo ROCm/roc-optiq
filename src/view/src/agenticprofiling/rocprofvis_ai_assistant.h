@@ -106,8 +106,8 @@ private:
                                         Colors text_color);
     TextSelect* MessageSelect(size_t index);
     void        RenderComposer();
-    // Explain this view on an empty chat, or the model's offered follow-ups
-    // after a turn.
+    // Explain this view on an empty chat, the follow-ups after a turn, or the
+    // slots holding their place while they are written.
     void RenderSuggestedActions();
     void RenderSplitter();
     // Transient progress text, kept outside the transcript so it disappears
@@ -120,6 +120,13 @@ private:
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
     void CancelPendingRequest();
+    // Asks for the follow-up buttons once the answer is on screen: a request of
+    // its own, tools off, carrying only the question and the answer. It runs on
+    // its own call so it never makes the panel Busy - the user can type while it
+    // loads, and the next send or Clear cancels it.
+    void StartNextStepsRequest(const std::string& answer);
+    void PollNextStepsRequest();
+    void CancelNextStepsRequest();
     void StartHttpRequest();
     void PollToolFetch();
     void HandleHttpResult(const AssistantChatResult& result);
@@ -156,6 +163,10 @@ private:
 
     bool  m_visible;
     bool  m_scroll_to_bottom;
+    // Whether the transcript showed its newest line last frame. The buttons that
+    // replace the placeholder slots can be taller, which shrinks the transcript
+    // under a reader who was following the newest line.
+    bool  m_transcript_at_bottom;
     float m_dock_width;
     Phase m_phase;
 
@@ -193,11 +204,18 @@ private:
     // the same trace does not repeat it; a different one does.
     std::string m_briefed_project_id;
     FetchWait   m_fetch_wait;
-    // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
+    // Clickable follow-ups for the last answer. Cleared on a new turn.
+    static constexpr size_t  MAX_NEXT_STEPS = 3;
     std::vector<std::string> m_next_steps;
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
+    // The follow-up request, apart from m_call so it never makes the panel
+    // Busy, and when it went out, so the placeholder slots start their first
+    // sweep on an empty track.
+    std::shared_ptr<AssistantChatCall>    m_steps_call;
+    std::future<AssistantChatResult>      m_steps_pending;
+    std::chrono::steady_clock::time_point m_steps_started;
 };
 
 }  // namespace View

@@ -19,6 +19,7 @@
 #include "imgui.h"
 #include "textselect.hpp"
 
+#include "animations/rocprofvis_loading_slots.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
 #include "rocprofvis_appwindow.h"
@@ -504,6 +505,7 @@ AssistantPanel::RenderTranscript()
         ImGui::SetScrollHereY(1.0f);
         m_scroll_to_bottom = false;
     }
+    m_transcript_at_bottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY();
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
@@ -690,7 +692,8 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
 }
 
 // Stacked follow-ups under the transcript: Explain this view on an empty chat,
-// or the model's offered next steps after a turn.
+// the follow-ups after a turn, and slots holding their place while the
+// follow-up request is still out.
 void
 AssistantPanel::RenderSuggestedActions()
 {
@@ -699,14 +702,26 @@ AssistantPanel::RenderSuggestedActions()
     const bool configured =
         provider != nullptr && !provider->endpoint_url.empty();
 
+    const bool loading_steps = m_steps_pending.valid();
     const bool show_explain = m_lines.empty() && m_next_steps.empty() && !Busy();
-    if(!show_explain && m_next_steps.empty())
+    if(!show_explain && !loading_steps && m_next_steps.empty())
     {
         return;
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+
+    if(loading_steps)
+    {
+        const std::chrono::duration<float> waited =
+            std::chrono::steady_clock::now() - m_steps_started;
+        RenderLoadingSlots(MAX_NEXT_STEPS, waited.count(), &settings);
+        ImGui::PopStyleVar(2);
+        ImGui::Spacing();
+        return;
+    }
+
     ImGui::BeginDisabled(Busy() || !configured);
 
     if(show_explain)

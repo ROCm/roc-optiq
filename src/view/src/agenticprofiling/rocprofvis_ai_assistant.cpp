@@ -7,6 +7,7 @@
 #include <cfloat>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <future>
 #include <memory>
 #include <sstream>
@@ -24,6 +25,7 @@
 #include "rocprofvis_ai_tool_schema.h"
 #include "rocprofvis_ai_tools_internal.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_render_scheduler.h"
@@ -83,6 +85,128 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
+// A follow-up longer than this is prose the model wrapped around the list, so it
+// is dropped rather than cut off mid-question. Twice what the prompt asks for,
+// which leaves room for one that ran a little long.
+constexpr size_t   ASSISTANT_MAX_NEXT_STEP_CHARS = 160;
+// List markers a model puts in front of a follow-up despite being asked not to.
+// The last is a bullet point, U+2022.
+constexpr const char* ASSISTANT_NEXT_STEP_BULLETS[] = { "- ", "* ", "\xE2\x80\xA2 " };
+
+// One pair of marks a model wraps a follow-up in.
+struct NextStepWrapper
+{
+    const char* open;
+    const char* close;
+};
+// Bold, straight quotes, code, and curly quotes (U+201C and U+201D).
+constexpr NextStepWrapper ASSISTANT_NEXT_STEP_WRAPPERS[] = {
+    { "**", "**" }, { "\"", "\"" }, { "`", "`" }, { "\xE2\x80\x9C", "\xE2\x80\x9D" }
+};
+
+// Abandons one request. Cancel() closes the socket, so the wait returns at once
+// instead of blocking out the endpoint's read timeout.
+void
+AbandonCall(std::shared_ptr<AssistantChatCall>& call,
+            std::future<AssistantChatResult>&   pending)
+{
+    if(call != nullptr)
+    {
+        call->Cancel();
+    }
+    if(pending.valid())
+    {
+        pending.wait();
+        pending = std::future<AssistantChatResult>();
+    }
+    call.reset();
+}
+
+// Points a request at the active endpoint. False when none is configured.
+bool
+AddressRequest(AssistantChatRequest& request)
+{
+    SettingsManager&         settings = SettingsManager::GetInstance();
+    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
+    if(provider == nullptr)
+    {
+        return false;
+    }
+    AssistantProvider endpoint = *provider;
+    ApplyAssistantEndpointDefaults(endpoint);
+    request.endpoint_url = endpoint.endpoint_url;
+    request.model        = endpoint.model;
+    settings.GetAssistantToken(endpoint.name, request.api_token);
+    return true;
+}
+
+// Drops a leading "1." or "1)", or a bullet.
+std::string
+StripListMarker(const std::string& line)
+{
+    size_t digits = 0;
+    while(digits < line.size() && line[digits] >= '0' && line[digits] <= '9')
+    {
+        ++digits;
+    }
+    if(digits > 0 && digits < line.size() && (line[digits] == '.' || line[digits] == ')'))
+    {
+        return line.substr(digits + 1);
+    }
+    for(const char* bullet : ASSISTANT_NEXT_STEP_BULLETS)
+    {
+        if(Core::String::starts_with(line, bullet))
+        {
+            return line.substr(std::strlen(bullet));
+        }
+    }
+    return line;
+}
+
+// Drops one pair of wrapping marks from a follow-up.
+std::string
+UnwrapNextStep(const std::string& step)
+{
+    for(const NextStepWrapper& wrapper : ASSISTANT_NEXT_STEP_WRAPPERS)
+    {
+        const size_t open  = std::strlen(wrapper.open);
+        const size_t close = std::strlen(wrapper.close);
+        if(step.size() > open + close && Core::String::starts_with(step, wrapper.open) &&
+           Core::String::ends_with(step, wrapper.close))
+        {
+            return Core::String::trim_copy(step.substr(open, step.size() - open - close));
+        }
+    }
+    return step;
+}
+
+// Turns the follow-up reply into button labels, one per line, without the
+// numbering, bullets or quotes the model was asked to leave out. Blank lines,
+// code fences, a heading introducing the list, and lines too long to be a
+// follow-up are skipped.
+std::vector<std::string>
+ParseNextSteps(const std::string& reply, size_t max_steps)
+{
+    std::vector<std::string> steps;
+    std::istringstream       lines(reply);
+    std::string              line;
+    while(steps.size() < max_steps && std::getline(lines, line))
+    {
+        std::string step = Core::String::trim_copy(line);
+        if(Core::String::starts_with(step, "```"))
+        {
+            continue;
+        }
+        step = UnwrapNextStep(Core::String::trim_copy(StripListMarker(step)));
+        if(step.empty() || Core::String::ends_with(step, ":") ||
+           step.size() > ASSISTANT_MAX_NEXT_STEP_CHARS)
+        {
+            continue;
+        }
+        steps.push_back(step);
+    }
+    return steps;
+}
 
 }  // namespace
 
@@ -108,6 +232,7 @@ AssistantPanel::DestroyInstance()
 AssistantPanel::AssistantPanel()
 : m_visible(false)
 , m_scroll_to_bottom(false)
+, m_transcript_at_bottom(true)
 , m_dock_width(ASSISTANT_DEFAULT_WIDTH)
 , m_phase(Phase::kIdle)
 , m_composer_height(0.0f)
@@ -124,6 +249,7 @@ AssistantPanel::AssistantPanel()
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
+    CancelNextStepsRequest();
 }
 
 void
@@ -292,13 +418,14 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
         out << "Explain this view. Call compute_overview, then kernel_roofline with "
                "the kernel_id of the kernel that owns the most time, so the "
                "explanation uses real kernel names and numbers. Stay on the tools "
-               "that need no query, and offer the deeper dives as next steps.\n";
+               "that need no query, and leave the deeper dives for the user to "
+               "choose.\n";
     }
     else
     {
         out << "Explain this view. Call trace_overview and get_summary so the "
                "explanation uses real kernel names and numbers, keep it to the "
-               "overview pass, and offer the deeper dives as next steps.\n";
+               "overview pass, and leave the deeper dives for the user to choose.\n";
     }
     return out.str();
 }
@@ -307,6 +434,7 @@ void
 AssistantPanel::ResetTurn()
 {
     CancelPendingRequest();
+    CancelNextStepsRequest();
     ResetAssistantPcRead();
     m_phase           = Phase::kIdle;
     m_pending_calls.clear();
@@ -319,43 +447,98 @@ AssistantPanel::ResetTurn()
     m_queued_question.clear();
 }
 
-// Abandons the reply we are waiting on. Cancel() closes the socket, so this
-// returns immediately instead of blocking out the endpoint's read timeout.
+// Abandons the reply we are waiting on.
 void
 AssistantPanel::CancelPendingRequest()
 {
-    if(m_call != nullptr)
+    AbandonCall(m_call, m_pending);
+}
+
+void
+AssistantPanel::CancelNextStepsRequest()
+{
+    AbandonCall(m_steps_call, m_steps_pending);
+}
+
+void
+AssistantPanel::StartNextStepsRequest(const std::string& answer)
+{
+    AssistantChatRequest request;
+    if(!AddressRequest(request))
     {
-        m_call->Cancel();
+        return;
     }
-    if(m_pending.valid())
+    request.enable_tools = false;
+
+    std::string question;
+    for(size_t i = m_lines.size(); i-- > 0;)
     {
-        m_pending.wait();
-        m_pending = std::future<AssistantChatResult>();
+        if(m_lines[i].speaker == Speaker::kUser)
+        {
+            question = m_lines[i].text;
+            break;
+        }
     }
-    m_call.reset();
+
+    AssistantMessage system_message;
+    system_message.role    = "system";
+    system_message.content = AssistantNextStepsPrompt(m_turn_is_compute);
+    request.messages.push_back(system_message);
+
+    AssistantMessage user_message;
+    user_message.role    = "user";
+    user_message.content = "Question:\n" + question + "\n\nAnswer:\n" + answer;
+    request.messages.push_back(user_message);
+
+    spdlog::info("Assistant follow-up request");
+    m_steps_started = std::chrono::steady_clock::now();
+    m_steps_call    = std::make_shared<AssistantChatCall>();
+    m_steps_pending = std::async(std::launch::async, [call = m_steps_call, request]() {
+        return call->Send(request);
+    });
+}
+
+void
+AssistantPanel::PollNextStepsRequest()
+{
+    if(!m_steps_pending.valid())
+    {
+        return;
+    }
+    RenderScheduler::GetInstance().RequestRender();
+    if(m_steps_pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+    {
+        return;
+    }
+    const AssistantChatResult result = m_steps_pending.get();
+    m_steps_call.reset();
+
+    // The buttons are a convenience, so a failed request costs only them - never
+    // a line in the transcript or a notification.
+    if(!result.ok)
+    {
+        spdlog::warn("Assistant follow-up request failed: {}", result.error);
+        return;
+    }
+    spdlog::debug("Assistant follow-ups:\n{}", result.reply);
+    m_next_steps = ParseNextSteps(result.reply, MAX_NEXT_STEPS);
+    if(!m_next_steps.empty() && m_transcript_at_bottom)
+    {
+        m_scroll_to_bottom = true;
+    }
 }
 
 void
 AssistantPanel::StartHttpRequest()
 {
-    SettingsManager&         settings = SettingsManager::GetInstance();
-    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
-    if(provider == nullptr)
+    AssistantChatRequest request;
+    if(!AddressRequest(request))
     {
         ResetTurn();
         AppendLine(Speaker::kStatus,
                    "Set the URL, model, and key in Edit > Preferences > Assistant.");
         return;
     }
-
-    AssistantProvider endpoint = *provider;
-    ApplyAssistantEndpointDefaults(endpoint);
-
-    AssistantChatRequest request;
-    request.endpoint_url = endpoint.endpoint_url;
-    request.model        = endpoint.model;
-    settings.GetAssistantToken(endpoint.name, request.api_token);
     request.enable_tools  = !m_force_final;
     request.compute_tools = m_turn_is_compute;
 
@@ -451,6 +634,7 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
+    CancelNextStepsRequest();
     m_next_steps.clear();
 
     const std::string display =
@@ -679,6 +863,12 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
     assistant_message.role    = "assistant";
     assistant_message.content = reply;
     m_conversation.push_back(assistant_message);
+
+    // The fallback above is not an answer worth building follow-ups on.
+    if(!result.reply.empty())
+    {
+        StartNextStepsRequest(reply);
+    }
 }
 
 // Queues one round of tool calls, or gives up on gathering once the budget for
@@ -754,10 +944,6 @@ AssistantPanel::RunNextTool()
     if(started.chart)
     {
         AppendChart(started.chart_track_id);
-    }
-    if(started.set_next_steps)
-    {
-        m_next_steps = started.next_steps;
     }
 
     if(started.pending)
@@ -1048,10 +1234,12 @@ AssistantPanel::PollToolFetch()
 
 // Advances the turn once a frame: the HTTP reply first, then any fetch a tool
 // is waiting on. Tools run only from here, never Render(), so they cannot
-// reorder panels halfway through the frame that draws them.
+// reorder panels halfway through the frame that draws them. The follow-ups for
+// the last answer are polled alongside, since they never block a turn.
 void
 AssistantPanel::Update()
 {
+    PollNextStepsRequest();
     if(m_pending.valid())
     {
         RenderScheduler::GetInstance().RequestRender();

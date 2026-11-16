@@ -67,6 +67,16 @@ constexpr int ASSISTANT_MAX_OUTPUT_TOKENS = 4096;
 // A malformed reply could otherwise name an unbounded number of tools.
 constexpr size_t ASSISTANT_MAX_HARMONY_CALLS = 4;
 
+// Largest reply read. A real one is far smaller; this stops a URL that points at
+// something other than a chat endpoint from buffering the 100 MB httplib allows.
+constexpr size_t ASSISTANT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+// Longest provider error shown. Toasts size to their text, so a page of it would
+// draw one wider than the screen.
+constexpr size_t        ASSISTANT_MAX_ERROR_CHARS = 500;
+constexpr unsigned char UTF8_CONTINUATION_MASK    = 0xC0;
+constexpr unsigned char UTF8_CONTINUATION_BITS    = 0x80;
+
 constexpr char ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
 constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
@@ -509,6 +519,25 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
     }
 }
 
+// Cuts a provider's message to ASSISTANT_MAX_ERROR_CHARS, backing off to the start
+// of a character so the cut does not split a UTF-8 sequence.
+std::string
+ClampErrorText(std::string text)
+{
+    if(text.size() > ASSISTANT_MAX_ERROR_CHARS)
+    {
+        size_t cut = ASSISTANT_MAX_ERROR_CHARS;
+        while(cut > 0 && (static_cast<unsigned char>(text[cut]) & UTF8_CONTINUATION_MASK) ==
+                             UTF8_CONTINUATION_BITS)
+        {
+            --cut;
+        }
+        text.resize(cut);
+        text += "...";
+    }
+    return text;
+}
+
 // Pulls the provider's error message out of a response body, if it is one.
 std::string
 ErrorText(jt::Json& root)
@@ -518,15 +547,15 @@ ErrorText(jt::Json& root)
         jt::Json& error = root["error"];
         if(error.isString())
         {
-            return error.getString();
+            return ClampErrorText(error.getString());
         }
         const std::string message = JsonString(error, "message");
-        return message.empty() ? "The endpoint returned an error." : message;
+        return message.empty() ? "The endpoint returned an error." : ClampErrorText(message);
     }
     // A rejected key can come back as a bare {"message": "..."}.
     if(!root.contains("choices"))
     {
-        return JsonString(root, "message");
+        return ClampErrorText(JsonString(root, "message"));
     }
     return std::string();
 }
@@ -812,6 +841,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     client.set_connection_timeout(ASSISTANT_CONNECT_TIMEOUT_SECONDS);
     client.set_read_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
     client.set_write_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
+    client.set_payload_max_length(ASSISTANT_MAX_RESPONSE_BYTES);
     // Redirects are deliberately not followed. cpp-httplib drops only a fixed
     // set of headers when a redirect crosses to another host, and the Azure
     // subscription key is not one of them, so following one could hand the key

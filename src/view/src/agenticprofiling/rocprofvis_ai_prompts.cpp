@@ -609,17 +609,19 @@ constexpr const char* ASSISTANT_SCRIPT_PROMPT =
  * The follow-up request.
  *
  * Once an answer is on screen the panel asks, in a request of its own, for the
- * buttons under it. That request carries nothing but the user's question and
- * the answer, so this is everything it knows - including what the analyst can
- * actually do, because a follow-up the analyst cannot act on only earns an
- * apology when it is clicked. Split by trace kind for the same reason the main
- * prompt is.
+ * buttons under it. That request carries the question, the answer, the briefing
+ * and the user's earlier questions, but none of the tool results, so this is
+ * everything it knows about what the analyst can actually do - and a follow-up
+ * the analyst cannot act on only earns an apology when it is clicked. Split by
+ * trace kind for the same reason the main prompt is.
  */
 constexpr const char* ASSISTANT_NEXT_STEPS_OPENING =
     "You write the follow-up buttons shown under an answer from Optiq's onboard "
     "analyst, the assistant built into ROCm Optiq, a GPU/CPU profiler. You are "
-    "given the user's question and the analyst's answer. Clicking a button sends "
-    "its text to the analyst as the user's next message.\n"
+    "given the user's question and the analyst's answer, usually with a briefing "
+    "on the trace - its devices, what the user has selected, and its headline "
+    "totals - and the questions the user asked before this one. Clicking a "
+    "button sends its text to the analyst as the user's next message.\n"
     "Reply with two or three follow-ups, most useful first, one per line and "
     "nothing else - no numbering, bullets, quotes, heading or commentary. Each is "
     "a complete thing the user would type, in their own words, under 80 "
@@ -627,11 +629,12 @@ constexpr const char* ASSISTANT_NEXT_STEPS_OPENING =
     "After an overview, offer the dives that would confirm the suspicion the "
     "answer landed on, or the places most worth a look if it found none. After a "
     "dive, offer the next thread worth pulling. The best follow-ups are the "
-    "questions the answer raised but could not settle; one it already settled, "
-    "or one a single quick lookup would, is a weak thing to offer.\n"
-    "Use the names the answer used - the kernel, track, queue or window - so the "
-    "analyst knows exactly what to read, and never name one it did not "
-    "mention.\n";
+    "questions the answer raised but could not settle. One the answer already "
+    "settled, one a single quick lookup would settle, or one the user has already "
+    "asked is a weak thing to offer.\n"
+    "Use the names the answer or the briefing used - the kernel, device, track, "
+    "queue or window - so the analyst knows exactly what to read, and never name "
+    "one that neither of them mentions.\n";
 
 constexpr const char* ASSISTANT_NEXT_STEPS_SYSTEM_TRACE =
     "The analyst is reading a system trace: events on a timeline across CPU "

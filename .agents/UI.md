@@ -2748,8 +2748,10 @@ Rules that are easy to get wrong here:
   user reads.
 - **The follow-up buttons are a request of their own, after the
   answer.** `StartNextStepsRequest` sends `AssistantNextStepsPrompt`
-  plus only the question and the answer, tools off, on a second
-  `AssistantChatCall` (`m_steps_call`). It never makes the panel
+  plus the question, the answer, the briefing (only while the answer's
+  trace is still in front) and the user's last eight earlier
+  questions, tools off, on a second `AssistantChatCall`
+  (`m_steps_call`). It never makes the panel
   `Busy()`, so the composer stays usable while the slots animate; the
   next send and Clear cancel it, and a failure costs only the buttons,
   never a transcript line. Do not turn them back into a tool: a tool

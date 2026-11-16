@@ -121,9 +121,10 @@ private:
     void ResetTurn();
     void CancelPendingRequest();
     // Asks for the follow-up buttons once the answer is on screen: a request of
-    // its own, tools off, carrying only the question and the answer. It runs on
-    // its own call so it never makes the panel Busy - the user can type while it
-    // loads, and the next send or Clear cancels it.
+    // its own, tools off, carrying the question, the answer, the briefing and the
+    // user's earlier questions, but none of the tool results. It runs on its own
+    // call so it never makes the panel Busy - the user can type while it loads,
+    // and the next send or Clear cancels it.
     void StartNextStepsRequest(const std::string& answer);
     void PollNextStepsRequest();
     void CancelNextStepsRequest();

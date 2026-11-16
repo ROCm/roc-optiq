@@ -89,6 +89,10 @@ constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
 // is dropped rather than cut off mid-question. Twice what the prompt asks for,
 // which leaves room for one that ran a little long.
 constexpr size_t   ASSISTANT_MAX_NEXT_STEP_CHARS = 160;
+// How many of the user's earlier questions the follow-up request sees, so it
+// does not offer ground they have already covered. The most recent ones, since
+// a long chat has moved on from where it started.
+constexpr size_t   ASSISTANT_NEXT_STEPS_EARLIER_QUESTIONS = 8;
 // List markers a model puts in front of a follow-up despite being asked not to.
 // The last is a bullet point, U+2022.
 constexpr const char* ASSISTANT_NEXT_STEP_BULLETS[] = { "- ", "* ", "\xE2\x80\xA2 " };
@@ -470,15 +474,41 @@ AssistantPanel::StartNextStepsRequest(const std::string& answer)
     }
     request.enable_tools = false;
 
-    std::string question;
-    for(size_t i = m_lines.size(); i-- > 0;)
+    // The last of these is the question just answered.
+    std::vector<std::string> questions;
+    for(const ChatLine& line : m_lines)
     {
-        if(m_lines[i].speaker == Speaker::kUser)
+        if(line.speaker == Speaker::kUser)
         {
-            question = m_lines[i].text;
-            break;
+            questions.push_back(line.text);
         }
     }
+
+    std::ostringstream content;
+    // Only while the trace in front is still the one the answer is about:
+    // describing another would point the follow-ups at the wrong trace.
+    if(!m_turn_project_id.empty() && CurrentProjectId() == m_turn_project_id)
+    {
+        content << "Briefing for the current Optiq view:\n"
+                << BuildAssistantBriefing(MakeToolContext()) << "\n";
+    }
+    const size_t earlier = questions.empty() ? 0 : questions.size() - 1;
+    const size_t first   = earlier > ASSISTANT_NEXT_STEPS_EARLIER_QUESTIONS
+                               ? earlier - ASSISTANT_NEXT_STEPS_EARLIER_QUESTIONS
+                               : 0;
+    if(first < earlier)
+    {
+        content << "Earlier questions in this chat, oldest first:\n";
+        for(size_t i = first; i < earlier; ++i)
+        {
+            content << "- " << questions[i] << "\n";
+        }
+        content << "\n";
+    }
+    content << "Question:\n"
+            << (questions.empty() ? std::string() : questions.back()) << "\n\n"
+            << "Answer:\n"
+            << answer;
 
     AssistantMessage system_message;
     system_message.role    = "system";
@@ -487,7 +517,7 @@ AssistantPanel::StartNextStepsRequest(const std::string& answer)
 
     AssistantMessage user_message;
     user_message.role    = "user";
-    user_message.content = "Question:\n" + question + "\n\nAnswer:\n" + answer;
+    user_message.content = content.str();
     request.messages.push_back(user_message);
 
     spdlog::info("Assistant follow-up request");

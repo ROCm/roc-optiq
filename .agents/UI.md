@@ -2669,11 +2669,11 @@ Layered, transport at the bottom and the panel at the top:
   script. **It offers rather than runs** - `OptiqActions::ProposeScript`
   fills the Script tab of the details panel and selects it, and the user
   presses Run or Reject, so the model cannot execute code unattended.
-  That wait is on a person, so the tool sets its own `timeout_seconds`
-  (`ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS`, 300s) instead of the fetch
-  default (`ASSISTANT_FETCH_TIMEOUT_SECONDS`, 350s), and the panel asks
-  `AssistantScriptFetchPending` rather than polling a request id,
-  because an approval has no request behind it. **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
+  The wait is on a person reading the script, so it has its own
+  `timeout_seconds` (`ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS`, 300s),
+  separate from the data-fetch default (`ASSISTANT_FETCH_TIMEOUT_SECONDS`,
+  350s). The panel asks `AssistantScriptFetchPending` rather than polling
+  a request id, because an approval has no request behind it. **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
   on**; with it off the handler table is empty, the schema never
   registers the tool, and the prompt never names it, so the model is
   not offered something that would always fail. It owns

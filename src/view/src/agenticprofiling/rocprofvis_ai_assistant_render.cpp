@@ -40,6 +40,9 @@ namespace
 constexpr float  ASSISTANT_MIN_WIDTH      = 440.0f;
 constexpr float  ASSISTANT_MAX_WIDTH      = 900.0f;
 constexpr float  ASSISTANT_SPLITTER_WIDTH = 6.0f;
+// The panel never takes more than this share of the window, so a narrow window
+// still leaves the main view usable.
+constexpr float  ASSISTANT_MAX_WINDOW_SHARE = 0.5f;
 // Same padding the remote/profiler dialogs use.
 constexpr ImVec2 ASSISTANT_WINDOW_PADDING = ImVec2(14.0f, 12.0f);
 constexpr ImVec2 ASSISTANT_CARD_PADDING   = ImVec2(14.0f, 10.0f);
@@ -310,7 +313,16 @@ AssistantPanel::Render()
 float
 AssistantPanel::DockedWidth() const
 {
-    return m_visible ? m_dock_width + ASSISTANT_SPLITTER_WIDTH : 0.0f;
+    return m_visible ? DockWidth() + ASSISTANT_SPLITTER_WIDTH : 0.0f;
+}
+
+// m_dock_width keeps the width the user dragged to, so it comes back once the
+// window is wide enough again.
+float
+AssistantPanel::DockWidth() const
+{
+    return std::min(m_dock_width,
+                    ImGui::GetMainViewport()->WorkSize.x * ASSISTANT_MAX_WINDOW_SHARE);
 }
 
 // Drag handle between the main view and the panel, matching the topology
@@ -332,8 +344,9 @@ AssistantPanel::RenderSplitter()
     }
     if(active)
     {
-        // Dragging left widens the panel, so the delta is negated.
-        m_dock_width = std::clamp(m_dock_width - ImGui::GetIO().MouseDelta.x,
+        // Dragging left widens the panel, so the delta is negated. It starts from
+        // the width on screen, so a panel the window has squeezed answers at once.
+        m_dock_width = std::clamp(DockWidth() - ImGui::GetIO().MouseDelta.x,
                                   ASSISTANT_MIN_WIDTH, ASSISTANT_MAX_WIDTH);
     }
 
@@ -364,7 +377,7 @@ AssistantPanel::RenderDocked()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
     // Only the transcript scrolls; the header and composer are pinned.
-    ImGui::BeginChild("##assistant_dock", ImVec2(m_dock_width, 0.0f),
+    ImGui::BeginChild("##assistant_dock", ImVec2(DockWidth(), 0.0f),
                       ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 

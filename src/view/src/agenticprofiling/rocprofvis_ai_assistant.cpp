@@ -743,7 +743,12 @@ AssistantPanel::RunNextTool()
 
     const AssistantToolCall& call = m_pending_calls[m_next_call_index];
     SetStatus(AssistantToolStatusLabel(call.name));
-    spdlog::info("Assistant tool {} ({})", call.name, call.id);
+    // A tool kept waiting on a busy shared request re-runs every frame, so only
+    // its first run is logged.
+    if(m_fetch_retries == 0)
+    {
+        spdlog::info("Assistant tool {} ({})", call.name, call.id);
+    }
 
     const AssistantToolStartResult started =
         StartAssistantTool(MakeToolContext(), call.name, call.arguments);

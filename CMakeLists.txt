@@ -508,6 +508,26 @@ if(BUILD_TESTING)
     target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
     add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
 
+    # Ask Optiq's filter builder turns model input into table filters, so its
+    # whitelists and escaping are tested on their own.
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+        set(ASSISTANT_QUERY_TEST_NAME ${TARGET_NAME}-assistant-query-tests)
+        add_executable(${ASSISTANT_QUERY_TEST_NAME}
+            src/view/test/rocprofvis_ai_tool_query_tests.cpp
+            src/view/src/agenticprofiling/rocprofvis_ai_tool_query.cpp
+            src/view/src/agenticprofiling/rocprofvis_ai_tool_query.h
+            src/view/src/model/rocprofvis_tables_model.cpp
+            src/view/src/rocprofvis_json_utils.cpp)
+        target_include_directories(${ASSISTANT_QUERY_TEST_NAME} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
+        target_link_libraries(${ASSISTANT_QUERY_TEST_NAME} PRIVATE
+            ${TARGET_NAME}-core json spdlog Catch2::Catch2WithMain)
+        add_test(NAME ${ASSISTANT_QUERY_TEST_NAME} COMMAND ${ASSISTANT_QUERY_TEST_NAME})
+    endif()
+
     # ISA sampling interpretation is independent of ImGui, a database, and a GPU.
     set(ISA_DATA_TEST_NAME ${TARGET_NAME}-isa-data-tests)
     add_executable(${ISA_DATA_TEST_NAME}

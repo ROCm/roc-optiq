@@ -135,9 +135,12 @@ SplitMessageLines(const std::string& text)
 void
 AssistantPanel::RenderActivityChart(uint64_t track_id)
 {
+    // The card's frame and title are already drawn, so an empty chart says why
+    // rather than leaving a blank box.
     const AssistantToolContext context = MakeToolContext();
     if(context.data_provider == nullptr)
     {
+        ImGui::TextDisabled("No trace is open.");
         return;
     }
 
@@ -153,6 +156,7 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
         GetAssistantActivityBins(context, track_id, bin_count);
     if(bins.empty())
     {
+        ImGui::TextDisabled("No activity to show for this trace.");
         return;
     }
 
@@ -295,8 +299,15 @@ AssistantPanel::RenderToolbarButton()
     ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Open the assistant. Configure the URL and key in "
-                         "Edit > Preferences > Assistant.");
+        if(GetInstance()->m_visible)
+        {
+            SetTooltipStyled("Close the assistant.");
+        }
+        else
+        {
+            SetTooltipStyled("Open the assistant. Configure the URL and key in "
+                             "Edit > Preferences > Assistant.");
+        }
     }
 }
 
@@ -941,8 +952,12 @@ AssistantPanel::RenderComposer()
 
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(m_lines.empty() && m_input.empty() && !Busy());
+    // While a turn runs this is also the only way to stop it.
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
-                  ImVec2(icon_size, icon_size), "Clear the conversation", false,
+                  ImVec2(icon_size, icon_size),
+                  Busy() ? "Stop this answer and clear the conversation"
+                         : "Clear the conversation",
+                  false,
                   ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),
                   settings.GetColor(Colors::kButtonActive)))

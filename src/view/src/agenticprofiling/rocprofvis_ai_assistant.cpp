@@ -459,7 +459,17 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     AppendLine(Speaker::kUser, display);
     m_input.clear();
 
-    if(explain_view)
+    // A trace of the other kind comes with other tools, and the history holds calls
+    // to the old ones and rows from the old trace, so the model starts fresh.
+    const bool kind_changed = PinTurnTrace() && !m_conversation.empty();
+    if(kind_changed && !explain_view)
+    {
+        AppendLine(Speaker::kStatus,
+                   std::string(m_turn_is_compute ? "Switched to a compute workload"
+                                                 : "Switched to a system trace") +
+                       ", so earlier answers are not carried over.");
+    }
+    if(explain_view || kind_changed)
     {
         m_conversation.clear();
         m_tool_round  = 0;
@@ -470,7 +480,6 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_next_call_index = 0;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
-    PinTurnTrace();
     if(TryStartSummaryWarmup(question))
     {
         return;

@@ -711,18 +711,30 @@ AssistantPanel::RenderSuggestedActions()
 
     if(show_explain)
     {
+        // With nothing open every tool is refused, so the rounds would only end in
+        // the model asking for a trace.
+        const bool trace_open = !CurrentProjectId().empty();
+        ImGui::BeginDisabled(!trace_open);
         if(AccentButton("Explain this view", ImVec2(-FLT_MIN, 0.0f), &settings))
         {
             SendCurrentInput(true);
         }
         ImGui::EndDisabled();
+        ImGui::EndDisabled();
         ImGui::PopStyleVar(2);
         if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
-            SetTooltipStyled(
-                "Runs a self-directed investigation: timeline overview, summary, top "
-                "events, then drills into the worst offenders and moves the timeline "
-                "to what it found.");
+            if(trace_open)
+            {
+                SetTooltipStyled(
+                    "Runs a self-directed investigation: timeline overview, summary, "
+                    "top events, then drills into the worst offenders and moves the "
+                    "timeline to what it found.");
+            }
+            else
+            {
+                SetTooltipStyled("Open a trace first.");
+            }
         }
         ImGui::Spacing();
         return;

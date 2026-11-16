@@ -373,7 +373,7 @@ SummaryScopeLabel(const SummaryInfo::AggregateMetrics& metrics)
         {
             if(metrics.info.process)
             {
-                label = "process " + std::to_string(metrics.info.process->GetId()) +
+                label = "process " + std::to_string(metrics.info.process->pid) +
                         ": " + metrics.info.process->command;
             }
             break;
@@ -1508,6 +1508,13 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     {
         return "No trace is open. Open a .db / .rpd file first.";
     }
+    // A compute workload shares none of the vocabulary below - no topology, no
+    // timeline selection, no GPU summary - so it is described next to the tools
+    // that read it rather than here.
+    if(context.is_compute)
+    {
+        return BuildAssistantComputeBriefing(context);
+    }
 
     std::ostringstream out;
     out << "trace_name: " << context.trace_name << "\n";
@@ -2315,21 +2322,16 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
             "Missing event_uuid");
     }
 
+    // Event fetches are keyed by event, so these are this event's ids. A fetch the
+    // event panel already has in flight for it is reused, not duplicated.
     const std::vector<uint64_t> request_ids = {
-        DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID,
-        DataProvider::EVENT_FLOW_DATA_REQUEST_ID,
-        DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventExtendedData),
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventFlowDetails),
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventCallStack)
     };
-    // These request ids are shared with the event panel, and re-issuing one
-    // that is already in flight would drop its future on the floor.
-    for(uint64_t request_id : request_ids)
-    {
-        if(context.data_provider->IsRequestPending(request_id))
-        {
-            return DoneResult("Event details are already loading. Try again.",
-                              "Busy");
-        }
-    }
 
     const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
     // FetchEvent seeds name/duration from loaded track data and chains the
@@ -2581,9 +2583,27 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         return FormatTrackStatistics(context, fetch.track_id);
     }
+    if(fetch.kind == AssistantFetchKind::kComputeMetrics)
+    {
+        return FinishAssistantComputeFetch(context, fetch);
+    }
     if(fetch.kind == AssistantFetchKind::kScript)
     {
         return FinishAssistantScriptFetch(context);
+    }
+    // switch_tab's reply is already the prefix; the wait only had to see the
+    // trace come forward.
+    if(fetch.kind == AssistantFetchKind::kTabSwitch)
+    {
+        return std::string();
+    }
+    // kernel_pc_samples answers by running again once each layer lands, so a
+    // layer only gets here if a read set started_fetch.
+    if(fetch.kind == AssistantFetchKind::kPcSampling)
+    {
+        ROCPROFVIS_ASSERT_MSG(false, "A PC sampling layer reached FinishAssistantFetch.");
+        return "The PC samples were read but not formatted. Call kernel_pc_samples "
+               "again to read them.";
     }
     return "Fetch finished with nothing to report.";
 }

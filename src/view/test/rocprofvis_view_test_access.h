@@ -177,7 +177,7 @@ struct CompareFilesDialogTestPeer
 {
     const CompareFilesDialog& v;
     bool                      CanCompare() const { return v.CanCompare(); }
-    std::string               PairProblem() const { return v.PairProblem(); }
+    const std::string&        PairProblem() const { return v.m_pair_problem; }
     const std::string&        SlotPath(size_t slot) const { return v.m_slots[slot].path; }
     const std::string& SlotProblem(size_t slot) const { return v.m_slots[slot].problem; }
 };
@@ -496,7 +496,7 @@ struct TraceViewTestPeer
 
 struct SummaryViewTestPeer
 {
-    const SummaryView& v;
+    SummaryView& v;
     SummaryTopEvents* TopEventsPtr(rocprofvis_analysis_summary_category_t category) const
     {
         return v.m_top_events[category].get();
@@ -504,6 +504,8 @@ struct SummaryViewTestPeer
     TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
     bool                     CompareMode() const { return v.m_compare_mode; }
     bool                     Loading() const { return v.Loading(); }
+    bool                     Failed() const { return v.Failed(); }
+    void                     Retry() { v.Retry(); }
     SummaryCompareTopEvents* CompareTopEventsPtr(
         rocprofvis_analysis_summary_category_t category) const
     {

@@ -14,6 +14,7 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 namespace RocProfVis
@@ -31,6 +32,8 @@ inline constexpr float    NAME_LABEL_HITBOX_PADDING_Y    = 3.0f;
 inline constexpr float    META_WINDOW_PADDING_Y          = 2.0f;
 inline constexpr float    META_FRAME_PADDING_Y           = 4.0f;
 inline constexpr float    META_ITEM_SPACING_Y            = 3.0f;
+// A pill's minimum width is set every frame; a change smaller than this is not one.
+inline constexpr float    PILL_MIN_WIDTH_TOLERANCE       = 0.01f;
 constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -66,6 +69,8 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
 , m_node_color_index(0)
 , m_node_display_index(0)
 , m_node_pill(nullptr)
+, m_type_color_index(std::nullopt)
+, m_process_color_index(std::nullopt)
 , m_options(nullptr)
 , m_timeline_track_options(track_options)
 , m_selected(false)
@@ -83,6 +88,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
     m_name           = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetNodeColor(track_info);
+    SetDecoratorColors(track_info);
     SetDefaultPillLabel(track_info);
 
     EventManager::EventHandler selected_changed_handler =
@@ -323,6 +329,11 @@ TrackItem::RenderMetaArea()
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
+        // The strip widens the left gutter, so the grip and everything after it
+        // shift right instead of overlapping it.
+        const float decorator_width = RenderDecorator();
+        m_reorder_grip_width        = DEFAULT_GRIP_WIDTH + decorator_width;
+
         // handle mouse click
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
@@ -350,7 +361,7 @@ TrackItem::RenderMetaArea()
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
 
         ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
+            ImVec2(decorator_width + (DEFAULT_GRIP_WIDTH - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
@@ -709,10 +720,12 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         }
         case TrackInfo::TrackType::InstrumentedThread:
         {
+            const ProcessInfo* process_info =
+                tdm.GetProcess(track_info->topology.process_id);
             if(const ThreadInfo* thread_info =
                    tdm.GetThread(track_info->topology.id.value,
                                  ThreadInfo::Kind::kInstrumented);
-               thread_info && thread_info->tid == track_info->topology.process_id)
+               thread_info && process_info && thread_info->tid == process_info->pid)
             {
                 pill->Activate();
                 pill->SetLabel("MAIN THREAD");
@@ -763,7 +776,9 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
     TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    std::string process_id_str = std::to_string(track_info->topology.process_id);
+    const ProcessInfo* process_info = tdm.GetProcess(track_info->topology.process_id);
+    std::string        process_id_str =
+        process_info ? std::to_string(process_info->pid) : std::string("N/A");
 
     bool show_process_id = tdm.ProcessCount() > 1;
 
@@ -781,9 +796,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::SampledThread:
         {
             std::string process_name_path;
-            if(const ProcessInfo* process_info =
-                   tdm.GetProcess(track_info->topology.process_id);
-               process_info)
+            if(process_info)
             {
                 process_name_path += process_info->command;
             }
@@ -922,6 +935,67 @@ TrackItem::SetNodeColor(const TrackInfo* track_info)
     m_node_pill->SetAccentColor(m_node_color_index);
     m_node_pill->SetTooltip("Node " + std::to_string(m_node_display_index) + ": " +
                             m_node_name);
+}
+
+void
+TrackItem::SetDecoratorColors(const TrackInfo* track_info)
+{
+    if(track_info->topology.type != TrackInfo::TrackType::Unknown)
+    {
+        m_type_color_index = static_cast<size_t>(track_info->topology.type);
+    }
+
+    const ProcessInfo* process = m_data_provider.DataModel().GetTopology().GetProcess(
+        track_info->topology.process_id);
+    if(process && process->display_index > 0)
+    {
+        m_process_color_index = process->display_index - 1;
+    }
+}
+
+float
+TrackItem::RenderDecorator()
+{
+    std::optional<size_t> color_index;
+    bool                  reverse_wheel = false;
+    switch(m_settings.GetTrackDecoratorMode())
+    {
+        case TrackDecoratorMode::kTrackType:
+        {
+            color_index = m_type_color_index;
+            break;
+        }
+        case TrackDecoratorMode::kProcess:
+        {
+            color_index   = m_process_color_index;
+            reverse_wheel = true;
+            break;
+        }
+        default:
+        {
+            return 0.0f;
+        }
+    }
+
+    // Every track reserves the column, including tracks with no color, so the
+    // labels stay aligned.
+    const float width = static_cast<float>(m_settings.GetTrackDecoratorWidth());
+
+    // Resolved per frame so the strip follows theme changes. Process ranks walk
+    // the wheel from the end: node pills walk it from the start, and the first
+    // node and the first process would otherwise share a swatch.
+    const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
+    if(color_index && !wheel.empty())
+    {
+        const size_t slot = *color_index % wheel.size();
+        const size_t index =
+            reverse_wheel ? (wheel.size() - 1 - slot) : slot;
+        const ImVec2 strip_min = ImGui::GetWindowPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            strip_min, strip_min + ImVec2(width, ImGui::GetWindowSize().y),
+            wheel[index]);
+    }
+    return width;
 }
 
 Pill*
@@ -1191,7 +1265,7 @@ Pill::SetTextColor(std::optional<Colors> color)
 void
 Pill::SetMinWidth(float width)
 {
-    if(width != m_min_width)
+    if(std::abs(width - m_min_width) > PILL_MIN_WIDTH_TOLERANCE)
     {
         m_min_width = width;
         CalculateSize();

@@ -117,10 +117,20 @@ CompareFilesDialog::CheckPair()
     if(picks != m_checked_picks)
     {
         m_checked_picks = picks;
-        m_same_run      = !m_slots[0].path.empty() && !m_slots[1].path.empty() &&
-                     m_slots[0].problem.empty() && m_slots[1].problem.empty() &&
-                     rocprofvis_controller_compare_same_run(m_slots[0].path.c_str(),
-                                                            m_slots[1].path.c_str());
+        m_pair_problem.clear();
+        const bool      both_picked = !picks[0].empty() && !picks[1].empty();
+        std::error_code ec;
+        if(both_picked && std::filesystem::equivalent(picks[0], picks[1], ec))
+        {
+            m_pair_problem = "The baseline and the target are the same file. Pick two "
+                             "different traces.";
+        }
+        else if(both_picked && m_slots[0].problem.empty() && m_slots[1].problem.empty() &&
+                rocprofvis_controller_compare_same_run(picks[0].c_str(), picks[1].c_str()))
+        {
+            m_pair_problem = "These two files are copies of the same trace and cannot be "
+                             "compared. Pick traces from two different profiling runs.";
+        }
     }
 }
 
@@ -138,31 +148,12 @@ CompareFilesDialog::Close()
     ImGui::CloseCurrentPopup();
 }
 
-std::string
-CompareFilesDialog::PairProblem() const
-{
-    std::string     problem;
-    std::error_code ec;
-    if(!m_slots[0].path.empty() && !m_slots[1].path.empty() &&
-       std::filesystem::equivalent(m_slots[0].path, m_slots[1].path, ec))
-    {
-        problem =
-            "The baseline and the target are the same file. Pick two different traces.";
-    }
-    else if(m_same_run)
-    {
-        problem = "These two files are copies of the same trace and cannot be compared. "
-                  "Pick traces from two different profiling runs.";
-    }
-    return problem;
-}
-
 bool
 CompareFilesDialog::CanCompare() const
 {
     return !m_slots[0].path.empty() && !m_slots[1].path.empty() &&
            m_slots[0].problem.empty() && m_slots[1].problem.empty() &&
-           PairProblem().empty();
+           m_pair_problem.empty();
 }
 
 void
@@ -227,12 +218,11 @@ CompareFilesDialog::Render()
         RenderSlot(FileSlot::kSecond, slot_size);
 
         CheckPair();
-        const std::string pair_problem = PairProblem();
-        if(!pair_problem.empty())
+        if(!m_pair_problem.empty())
         {
             ImGui::Spacing();
             ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
-            ImGui::TextWrapped("%s", pair_problem.c_str());
+            ImGui::TextWrapped("%s", m_pair_problem.c_str());
             ImGui::PopStyleColor();
         }
 

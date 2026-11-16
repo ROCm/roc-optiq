@@ -312,7 +312,7 @@ ColorKindForCategory(const std::string& category, const std::string& label)
     if(category == "util") return MemChartColorKind::kUtil;
     if(category == "hit") return MemChartColorKind::kHit;
     if(category == "stall") return MemChartColorKind::kStall;
-    return MemChartColorKind::kNeutral;  // "misc" / anything else.
+    return MemChartColorKind::kNeutral;  // "neutral" / anything else.
 }
 
 static bool

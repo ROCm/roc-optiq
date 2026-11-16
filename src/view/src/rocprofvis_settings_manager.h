@@ -5,12 +5,15 @@
 
 #include "imgui.h"
 #include "json.h"
+#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_font_manager.h"
 #include <array>
 #include <filesystem>
 #include <list>
 #include <map>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -19,6 +22,16 @@ namespace View
 {
 
 enum class TimeFormat;
+
+// What the color strip on a track's left edge encodes. Persisted as an int, so
+// append new modes before kCount.
+enum class TrackDecoratorMode : uint32_t
+{
+    kNone,
+    kTrackType,
+    kProcess,
+    kCount
+};
 
 typedef struct DisplaySettings
 {
@@ -33,6 +46,16 @@ typedef struct UnitSettings
 {
     TimeFormat time_format;
 } UnitSettings;
+
+constexpr int TRACK_DECORATOR_WIDTH_MIN     = 1;
+constexpr int TRACK_DECORATOR_WIDTH_MAX     = 10;
+constexpr int TRACK_DECORATOR_WIDTH_DEFAULT = 3;
+
+typedef struct TrackSettings
+{
+    TrackDecoratorMode decorator;        // what the strip on a track's left edge color-codes
+    int                decorator_width;  // strip width in pixels
+} TrackSettings;
 
 // Persisted UI state for the log viewer window. level_mask packs one bit per
 // spdlog severity level (bit i => level i enabled).
@@ -92,6 +115,7 @@ typedef struct UserSettings
 {
     DisplaySettings   display_settings;
     UnitSettings      unit_settings;
+    TrackSettings     track_settings;
     bool              dont_ask_before_tab_closing;
     bool              dont_ask_before_exit;
     int               log_viewer_max_entries;
@@ -117,10 +141,10 @@ typedef struct InternalSettings
 // because a remote profile needs a directory on the remote host.
 typedef struct ProfilerSettings
 {
-    std::string profiler_output_directory;
-    bool        auto_load_trace = true;
-    std::vector<std::string> recent_targets;
-    std::string last_preset_name;
+    // Most recent first, keyed as described at SettingsManager::GetRecentTargets.
+    std::unordered_map<std::string, std::vector<std::string>> recent_targets;
+    // Each profiler's last selected launch profile, keyed by profiler id.
+    std::unordered_map<std::string, std::string> last_preset_names;
     std::string last_profiler_id;
     std::string last_ssh_connection_id;
 } ProfilerSettings;
@@ -277,6 +301,16 @@ enum class Colors
     kPcSamplingOtherWait,
     kPcSamplingSleeping,
 
+    // ISA mnemonic palette; operands retain the normal text colour.
+    kIsaInternal,
+    kIsaMatrix,
+    kIsaScalar,
+    kIsaBranch,
+    kIsaValu,
+    kIsaFlat,
+    kIsaLds,
+    kIsaBarrier,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -295,6 +329,10 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS     = "show_node_col
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR = "compact_sidebar";
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
+
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_TRACKS        = "tracks";
+constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR       = "decorator";
+constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH = "decorator_width";
 
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 constexpr size_t      MAX_RECENT_FILES                       = 5;
@@ -338,8 +376,6 @@ constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 
 class SettingsManager
 {
@@ -357,6 +393,11 @@ public:
     // Styling
     bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
     bool CompactSidebar() const { return m_usersettings.display_settings.compact_sidebar; }
+    TrackDecoratorMode GetTrackDecoratorMode() const
+    {
+        return m_usersettings.track_settings.decorator;
+    }
+    int GetTrackDecoratorWidth() const { return m_usersettings.track_settings.decorator_width; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
@@ -388,6 +429,17 @@ public:
     // Profiler settings
     ProfilerSettings& GetProfilerSettings();
     void SaveProfilerSettings();
+    /*
+     * The recent target list for a profiler, optionally narrowed to one tool and
+     * one operation; created empty on first use. The list is keyed by the
+     * profiler id followed by each supplied enum value, so a caller that passes
+     * only the profiler id gets one list shared by all of its tools. The
+     * reference stays valid as other lists are added.
+     */
+    std::vector<std::string>& GetRecentTargets(
+        std::string const&                             profiler_id,
+        std::optional<rocprofvis_profiler_tool_t>      tool      = std::nullopt,
+        std::optional<rocprofvis_profiler_operation_t> operation = std::nullopt);
 
     // The route the assistant should use, or nullptr when none is configured.
     const AssistantProvider* GetActiveAssistantProvider() const;
@@ -433,6 +485,9 @@ private:
     void SerializeUnitSettings(jt::Json& json);
     void DeserializeUnitSettings(jt::Json& json);
     void ApplyUserUnitSettings(const UserSettings& old_settings);
+
+    void SerializeTrackSettings(jt::Json& json);
+    void DeserializeTrackSettings(jt::Json& json);
 
     void SerializeInternalSettings(jt::Json& json);
     void DeserializeInternalSettings(jt::Json& json);

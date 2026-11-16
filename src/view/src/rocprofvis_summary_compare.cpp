@@ -65,9 +65,12 @@ format_duration(double ns, SettingsManager& settings)
 }
 
 static std::string
-format_signed_duration(double ns, SettingsManager& settings)
+format_signed_duration(double ns, SettingsManager& settings, bool include_units = true)
 {
-    return std::string(ns < 0.0 ? "-" : "+") + format_duration(std::abs(ns), settings);
+    return std::string(ns < 0.0 ? "-" : "+") +
+           nanosecond_to_formatted_str(std::abs(ns),
+                                       settings.GetUserSettings().unit_settings.time_format,
+                                       include_units);
 }
 
 static uint64_t
@@ -115,12 +118,8 @@ render_difference(double a, double b, SettingsManager& settings)
     }
     const ImVec4 color = ImGui::ColorConvertU32ToFloat4(settings.GetColor(
         delta > 0.0 ? Colors::kComparisonGreater : Colors::kComparisonLesser));
-    ImGui::TextColored(
-        color, "%s",
-        (std::string(delta < 0.0 ? "-" : "+") +
-         nanosecond_to_formatted_str(
-             std::abs(delta), settings.GetUserSettings().unit_settings.time_format))
-            .c_str());
+    // The column header carries the unit.
+    ImGui::TextColored(color, "%s", format_signed_duration(delta, settings, false).c_str());
 }
 
 // The change of one event across the sources, worded for events that only one
@@ -195,9 +194,7 @@ SummaryEventDiff::RelativeChange() const
     return a > 0.0 ? DeltaNs() / a : (DeltaNs() > 0.0 ? HUGE_VAL : 0.0);
 }
 
-// Pairs the sources' top events by name, largest change first. The "Others"
-// remainder is left out: it holds different events on each side.
-static std::vector<SummaryEventDiff>
+std::vector<SummaryEventDiff>
 diff_top_events(
     const std::array<const SummaryInfo::TopOpEvents*, COMPARE_SOURCE_COUNT>& sources)
 {
@@ -380,42 +377,35 @@ SummaryCompareOverview::Render()
 
     RenderComposition(width);
 
-    size_t shown = 0;
+    std::vector<rocprofvis_analysis_summary_category_t> shown;
     for(size_t category = 0; category < __kRPVAnalysisSummaryCategoryLast; category++)
     {
-        shown += (m_facts[COMPARE_SOURCE_A].category_ns[category] > 0.0 ||
-                  m_facts[COMPARE_SOURCE_B].category_ns[category] > 0.0)
-                     ? 1
-                     : 0;
+        if(m_facts[COMPARE_SOURCE_A].category_ns[category] > 0.0 ||
+           m_facts[COMPARE_SOURCE_B].category_ns[category] > 0.0)
+        {
+            shown.push_back(static_cast<rocprofvis_analysis_summary_category_t>(category));
+        }
     }
-    if(shown > 0)
+    if(!shown.empty())
     {
         // Header, one line per source and the change between them.
         ImGui::PushFont(nullptr,
                         m_settings.GetFontManager().GetFontSize(FontSize::kLarge));
         const float total_height = ImGui::GetTextLineHeightWithSpacing();
         ImGui::PopFont();
+        const float  count = static_cast<float>(shown.size());
         const ImVec2 tile_size(
-            (width - static_cast<float>(shown - 1) * style.ItemSpacing.x) /
-                static_cast<float>(shown),
+            (width - (count - 1.0f) * style.ItemSpacing.x) / count,
             2.0f * style.WindowPadding.y + ImGui::GetFrameHeightWithSpacing() +
                 static_cast<float>(COMPARE_SOURCE_COUNT) * total_height +
                 ImGui::GetTextLineHeightWithSpacing());
-        bool same_line = false;
-        for(size_t category = 0; category < __kRPVAnalysisSummaryCategoryLast; category++)
+        for(size_t i = 0; i < shown.size(); i++)
         {
-            if(m_facts[COMPARE_SOURCE_A].category_ns[category] > 0.0 ||
-               m_facts[COMPARE_SOURCE_B].category_ns[category] > 0.0)
+            if(i > 0)
             {
-                if(same_line)
-                {
-                    ImGui::SameLine();
-                }
-                RenderCategory(
-                    static_cast<rocprofvis_analysis_summary_category_t>(category),
-                    tile_size);
-                same_line = true;
+                ImGui::SameLine();
             }
+            RenderCategory(shown[i], tile_size);
         }
     }
     ImGui::PopStyleVar(3);
@@ -479,13 +469,7 @@ SummaryCompareOverview::RenderFigure(const char* label, double a, double b, bool
     for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
     {
         ImGui::PushID(static_cast<int>(source));
-        const CompareSourceInfo* info =
-            m_data_provider.DataModel().GetCompareSource(source);
-        if(info)
-        {
-            RenderCompareSourceBadge(*info, m_settings);
-            ImGui::SameLine();
-        }
+        RenderSourceBadge(source);
         const std::string text =
             is_time ? format_duration(values[source], m_settings)
                     : std::to_string(static_cast<uint64_t>(values[source]));
@@ -634,12 +618,7 @@ SummaryCompareOverview::RenderCategory(rocprofvis_analysis_summary_category_t ca
     for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
     {
         ImGui::PushID(static_cast<int>(source));
-        if(const CompareSourceInfo* info =
-               m_data_provider.DataModel().GetCompareSource(source))
-        {
-            RenderCompareSourceBadge(*info, m_settings);
-            ImGui::SameLine();
-        }
+        RenderSourceBadge(source);
         ImGui::TextUnformatted(
             format_duration(m_facts[source].category_ns[category], m_settings).c_str());
         const std::string calls = CountLabel(m_facts[source].category_calls[category],
@@ -663,10 +642,19 @@ SummaryCompareOverview::RenderCategory(rocprofvis_analysis_summary_category_t ca
     ImGui::PopID();
 }
 
+void
+SummaryCompareOverview::RenderSourceBadge(size_t source) const
+{
+    if(const CompareSourceInfo* info = m_data_provider.DataModel().GetCompareSource(source))
+    {
+        RenderCompareSourceBadge(*info, m_settings);
+        ImGui::SameLine();
+    }
+}
+
 SummaryCompareTopEvents::SummaryCompareTopEvents(
     DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
-    rocprofvis_analysis_summary_category_t category, TableType table_type,
-    rocprofvis_controller_table_type_t request_table_type, RequestType request_type)
+    rocprofvis_analysis_summary_category_t category)
 : m_category(category)
 , m_filters()
 , m_op_events({})
@@ -683,13 +671,14 @@ SummaryCompareTopEvents::SummaryCompareTopEvents(
 , m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
 {
-    m_widget_name = GenUniqueName("summary_compare_top_events");
+    m_widget_name                         = GenUniqueName("summary_compare_top_events");
+    const SummaryInstanceTableType& table = SUMMARY_INSTANCE_TABLES[category];
     for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
     {
         m_instances[source] = std::make_unique<SummaryInstanceTable>(
-            dp, timeline_selection, category, table_type, request_table_type,
-            RequestIdBuilder::MakeClientRequestId(
-                request_type, DataProvider::CompareSourceClientId(source)),
+            dp, timeline_selection, category, table.table_type, table.request_table_type,
+            RequestIdBuilder::MakeClientRequestId(table.request_type,
+                                                  COMPARE_CLIENT_ID[source]),
             source);
     }
     m_instance_split = MakeCompareSplit(std::make_shared<RocCustomWidget>([this]() {
@@ -772,6 +761,90 @@ SummaryCompareTopEvents::Empty() const
     return empty;
 }
 
+bool
+SummaryCompareTopEvents::IsFilterChoice(size_t                               level,
+                                        const SummaryInfo::AggregateMetrics& child) const
+{
+    bool choice = false;
+    switch(child.type)
+    {
+        case kRPVAnalysisSummaryAggregationLevelNode:
+        {
+            choice = level == 0 && child.info.node;
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcessor:
+        {
+            choice = level == 1 && child.info.processor &&
+                     (m_category == kRPVAnalysisSummaryCategoryKernel
+                          ? child.info.processor->type == kRPVControllerProcessorTypeGPU
+                          : m_category == kRPVAnalysisSummaryCategoryMemory);
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcess:
+        {
+            choice = level == 1 && child.info.process &&
+                     m_category == kRPVAnalysisSummaryCategoryThread;
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelThread:
+        {
+            choice = level == 2 && child.info.thread;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    return choice;
+}
+
+SummaryCompareTopEvents::FilterOption
+SummaryCompareTopEvents::MakeFilterOption(
+    const SummaryInfo::AggregateMetrics&                 child,
+    const std::optional<rocprofvis_dm_query_criteria_t>& criteria) const
+{
+    FilterOption option;
+    option.metrics.fill(nullptr);
+    option.criteria = criteria.value_or(rocprofvis_dm_query_criteria_t{});
+    switch(child.type)
+    {
+        case kRPVAnalysisSummaryAggregationLevelNode:
+        {
+            option.entry             = child.info.node;
+            option.label             = child.info.node->host_name;
+            option.criteria->node_id = child.info.node->GetId();
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcessor:
+        {
+            option.entry = child.info.processor;
+            m_data_provider.DataModel().GetTopology().GetProcessorTypeLabel(
+                *child.info.processor, option.label);
+            option.label += ": " + child.info.processor->product_name;
+            option.criteria->agent_id = child.info.processor->GetId();
+            break;
+        }
+        case kRPVAnalysisSummaryAggregationLevelProcess:
+        {
+            option.entry = child.info.process;
+            option.label = "Process " + std::to_string(child.info.process->pid) + ": " +
+                           child.info.process->command;
+            option.criteria->process_id = child.info.process->GetId();
+            break;
+        }
+        default:
+        {
+            option.entry               = child.info.thread;
+            option.label               = child.info.thread->GetName();
+            option.criteria->thread_id = child.info.thread->GetId();
+            break;
+        }
+    }
+    return option;
+}
+
 void
 SummaryCompareTopEvents::RebuildFilterLevel(size_t level)
 {
@@ -780,10 +853,9 @@ SummaryCompareTopEvents::RebuildFilterLevel(size_t level)
     filter.selected = 0;
 
     FilterOption all;
-    all.label = "All";
-    all.metrics.fill(nullptr);
     if(level == 0)
     {
+        all.criteria = std::nullopt;
         for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
         {
             const SummaryModel* summary = SourceSummary(source);
@@ -792,118 +864,40 @@ SummaryCompareTopEvents::RebuildFilterLevel(size_t level)
     }
     else
     {
-        const FilterLevel&  parent        = m_filters[level - 1];
-        const FilterOption& parent_option = parent.options[parent.selected];
-        all.metrics                       = parent_option.metrics;
-        all.criteria                      = parent_option.criteria;
+        const FilterLevel& parent = m_filters[level - 1];
+        all                       = parent.options[parent.selected];
     }
+    all.label = "All";
+    all.entry = nullptr;
     filter.options.push_back(all);
 
     // Below an "All" the deeper levels have nothing to choose from.
-    if(level > 0 && m_filters[level - 1].selected == 0)
+    if(level == 0 || m_filters[level - 1].selected > 0)
     {
-        return;
-    }
-
-    // The sources share one topology tree, so the same node, device, process or
-    // thread is the same info pointer on both sides.
-    std::unordered_map<const void*, size_t> option_of;
-    for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-    {
-        const SummaryModel*                  summary = SourceSummary(source);
-        const SummaryInfo::AggregateMetrics* parent  = all.metrics[source];
-        if(!summary || !parent)
+        std::unordered_map<const void*, size_t> option_of;
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
         {
-            continue;
-        }
-        for(const SummaryInfo::AggregateMetrics& child : parent->sub_metrics)
-        {
-            bool accept = false;
-            switch(child.type)
-            {
-                case kRPVAnalysisSummaryAggregationLevelNode:
-                {
-                    accept = level == 0 && child.info.node;
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelProcessor:
-                {
-                    accept = level == 1 && child.info.processor &&
-                             (m_category == kRPVAnalysisSummaryCategoryKernel
-                                  ? child.info.processor->type ==
-                                        kRPVControllerProcessorTypeGPU
-                                  : m_category == kRPVAnalysisSummaryCategoryMemory);
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelProcess:
-                {
-                    accept = level == 1 && child.info.process &&
-                             m_category == kRPVAnalysisSummaryCategoryThread;
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelThread:
-                {
-                    accept = level == 2 && child.info.thread;
-                    break;
-                }
-                default:
-                {
-                    break;
-                }
-            }
-            if(!accept || op_invocations(summary->TopOpEvents(child, m_category)) == 0)
+            const SummaryModel*                  summary = SourceSummary(source);
+            const SummaryInfo::AggregateMetrics* parent  = all.metrics[source];
+            if(!summary || !parent)
             {
                 continue;
             }
-
-            FilterOption option;
-            option.metrics.fill(nullptr);
-            rocprofvis_dm_query_criteria_t criteria =
-                all.criteria.value_or(rocprofvis_dm_query_criteria_t{});
-            const void* entry = nullptr;
-            switch(child.type)
+            for(const SummaryInfo::AggregateMetrics& child : parent->sub_metrics)
             {
-                case kRPVAnalysisSummaryAggregationLevelNode:
+                if(IsFilterChoice(level, child) &&
+                   op_invocations(summary->TopOpEvents(child, m_category)) > 0)
                 {
-                    entry            = child.info.node;
-                    option.label     = child.info.node->host_name;
-                    criteria.node_id = child.info.node->GetId();
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelProcessor:
-                {
-                    entry = child.info.processor;
-                    m_data_provider.DataModel().GetTopology().GetProcessorTypeLabel(
-                        *child.info.processor, option.label);
-                    option.label += ": " + child.info.processor->product_name;
-                    criteria.agent_id = child.info.processor->GetId();
-                    break;
-                }
-                case kRPVAnalysisSummaryAggregationLevelProcess:
-                {
-                    entry        = child.info.process;
-                    option.label = "Process " +
-                                   std::to_string(child.info.process->GetId()) + ": " +
-                                   child.info.process->command;
-                    criteria.process_id = child.info.process->GetId();
-                    break;
-                }
-                default:
-                {
-                    entry              = child.info.thread;
-                    option.label       = child.info.thread->GetName();
-                    criteria.thread_id = child.info.thread->GetId();
-                    break;
+                    FilterOption option = MakeFilterOption(child, all.criteria);
+                    auto         it     = option_of.find(option.entry);
+                    if(it == option_of.end())
+                    {
+                        it = option_of.emplace(option.entry, filter.options.size()).first;
+                        filter.options.push_back(std::move(option));
+                    }
+                    filter.options[it->second].metrics[source] = &child;
                 }
             }
-            option.criteria = criteria;
-            auto it         = option_of.find(entry);
-            if(it == option_of.end())
-            {
-                it = option_of.emplace(entry, filter.options.size()).first;
-                filter.options.push_back(std::move(option));
-            }
-            filter.options[it->second].metrics[source] = &child;
         }
     }
 }

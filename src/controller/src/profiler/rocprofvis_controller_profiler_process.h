@@ -66,6 +66,7 @@ public:
     rocprofvis_result_t SetToolDirectory(char const* directory);
     rocprofvis_result_t SetOutputDirectory(char const* path);
     rocprofvis_result_t SetWorkingDirectory(char const* path);
+    rocprofvis_result_t SetPythonEnvironment(char const* path);
     rocprofvis_result_t AddEnvVar(char const* name, char const* value);
     rocprofvis_result_t AddProfilerArg(char const* arg);
     rocprofvis_result_t SetConnectionLocal();
@@ -105,14 +106,27 @@ public:
     // child exit 126. Remote cwd cannot be checked from here.
     rocprofvis_result_t ValidateWorkingDirectory() const;
 
+    // Local: the venv is absolute and has bin/activate. Remote: absolute only,
+    // since the remote filesystem cannot be checked from here. Windows local
+    // launches ignore the venv, so it is not checked there.
+    rocprofvis_result_t ValidatePythonEnvironment(bool remote) const;
+
     // argv[0]; empty until ResolveToolPath or ResolveToolPathRemote succeeds.
     std::string const& GetResolvedToolPath() const { return m_resolved_tool_path; }
 
     std::string const& GetOutputDirectory() const { return m_output_directory; }
     std::string const& GetWorkingDirectory() const { return m_working_directory; }
+    std::string const& GetPythonEnvironment() const { return m_python_environment; }
 
     std::vector<std::pair<std::string, std::string>> const& GetEnvVars() const { return m_env_vars; }
     std::vector<std::string> const& GetProfilerArgv() const { return m_profiler_argv; }
+
+    // The command a launch of this config runs, for display (Cmdline::ToPreviewString),
+    // with its env composed exactly as the local or remote launch composes it. A
+    // local preview shows the inherited PATH as "$PATH". argv0 is passed in: it
+    // is what the caller resolved for display, so previewing does not repeat
+    // the filesystem search.
+    std::string GetCommandPreview(bool remote, std::string const& argv0) const;
 
     ConnectionType GetConnectionType() const { return m_connection_type; }
     SshConnectionInfo const& GetSshInfo() const { return m_ssh_info; }
@@ -127,6 +141,9 @@ private:
     std::string m_output_directory;
     // Child cwd only (chdir after fork / lpCurrentDirectory / remote "cd").
     std::string m_working_directory;
+    // Python virtual environment directory; empty for none. A directory, never
+    // a command: the activation is composed here (see Cmdline).
+    std::string m_python_environment;
 
     std::vector<std::pair<std::string, std::string>> m_env_vars;
     std::vector<std::string> m_profiler_argv;

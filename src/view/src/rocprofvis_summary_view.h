@@ -9,9 +9,12 @@
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "widgets/rocprofvis_widget.h"
+#include <array>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 
 struct ImPlotStyle;
 
@@ -44,6 +47,25 @@ inline constexpr std::pair<const char*, size_t>
         { "Thread Operations", 3 }
     };
 
+// The table a summary category lists an event's instances through.
+struct SummaryInstanceTableType
+{
+    TableType                          table_type;
+    rocprofvis_controller_table_type_t request_table_type;
+    RequestType                        request_type;
+};
+
+// In rocprofvis_analysis_summary_category_t order.
+inline constexpr SummaryInstanceTableType
+    SUMMARY_INSTANCE_TABLES[__kRPVAnalysisSummaryCategoryLast] = {
+        { TableType::kSummaryKernelTable, kRPVControllerTableTypeSummaryKernelInstances,
+          RequestType::kFetchSummaryKernelInstanceTable },
+        { TableType::kSummaryMemoryTable, kRPVControllerTableTypeSummaryMemoryInstances,
+          RequestType::kFetchSummaryMemoryInstanceTable },
+        { TableType::kSummaryThreadTable, kRPVControllerTableTypeSummaryThreadInstances,
+          RequestType::kFetchSummaryThreadInstanceTable }
+    };
+
 class SummaryView : public RocWidget
 {
     friend struct SummaryViewTestPeer;
@@ -55,17 +77,44 @@ public:
     void Render() override;
 
 private:
-    ImVec2 MinSize() const;
-    ImVec2 PreferredSize() const;
-    // Issues the next fetch the summary is missing: the trace's, or each compare
-    // source's in turn so the two never compete for the database.
-    void  UpdateFetch();
-    bool  Loading() const;
+    // One summary the panel shows: the whole trace's, or one compare source's.
+    struct SummaryFetch
+    {
+        std::optional<uint64_t> source;
+        uint64_t                request_id;
+        // Topology revision last asked for. A summary takes on the revision only
+        // when its fetch succeeds, so one asked for and not taken on failed.
+        uint64_t requested_revision;
+        float    progress;
+    };
+
+    void CreateTraceViews(std::shared_ptr<TimelineSelection> timeline_selection);
+    void CreateCompareViews(std::shared_ptr<TimelineSelection> timeline_selection);
+    void Subscribe();
+    void HandleFetched();
+    void HandleTimeFormatChanged();
+    void HandleProgress(std::shared_ptr<RocEvent> e);
+
+    ImVec2              MinSize() const;
+    ImVec2              PreferredSize() const;
+    const SummaryModel* Summary(const SummaryFetch& fetch) const;
+    bool                IsLoaded(const SummaryFetch& fetch) const;
+    bool                IsFailed(const SummaryFetch& fetch) const;
+    // Issues the next fetch a summary is missing, one at a time so compare sources
+    // never compete for the database.
+    void UpdateFetch();
+    bool Loading() const;
+    // Nothing is loading any more and a summary did not arrive.
+    bool  Failed() const;
+    void  Retry();
     float Progress() const;
     void  RebuildTabs();
+    void  RenderFailure();
     void  RenderSourceTopology(size_t source);
 
-    std::unique_ptr<TabContainer>    m_tab_container;
+    std::unique_ptr<TabContainer> m_tab_container;
+    std::vector<SummaryFetch>     m_fetches;
+
     std::shared_ptr<SummaryOverview> m_overview;
     std::shared_ptr<SummaryTopology> m_topology;
     std::array<std::shared_ptr<SummaryTopEvents>, __kRPVAnalysisSummaryCategoryLast>
@@ -78,14 +127,10 @@ private:
     std::shared_ptr<VSplitContainer>                                   m_compare_topology;
     std::array<std::shared_ptr<SummaryCompareTopEvents>,
                __kRPVAnalysisSummaryCategoryLast>
-                                               m_compare_top_events;
-    std::array<uint64_t, COMPARE_SOURCE_COUNT> m_source_fetched_revision;
-    std::array<float, COMPARE_SOURCE_COUNT>    m_source_progress;
+        m_compare_top_events;
 
-    uint64_t m_fetched_revision;
-    bool     m_data_changed;
-    bool     m_init_window;
-    float    m_progress;
+    bool m_data_changed;
+    bool m_init_window;
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;

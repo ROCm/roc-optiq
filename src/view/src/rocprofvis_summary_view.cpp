@@ -42,6 +42,8 @@ constexpr const char* DISPLAY_NAMES_TOP_EVENT_TYPES[] = {
 };
 constexpr const char* DISPLAY_NAMES_METRIC_TYPES[] = { "Trace", "Node", "Processor",
                                                        "Process", "Thread" };
+constexpr const char* SUMMARY_FAILED_TEXT = "The summary could not be computed.";
+constexpr const char* RETRY_LABEL         = "Retry";
 
 static bool
 has_counters(const SummaryModel& summary)
@@ -52,7 +54,8 @@ has_counters(const SummaryModel& summary)
 
 SummaryView::SummaryView(DataProvider&                      dp,
                          std::shared_ptr<TimelineSelection> timeline_selection)
-: m_tab_container(nullptr)
+: m_tab_container(std::make_unique<TabContainer>())
+, m_fetches()
 , m_overview(nullptr)
 , m_topology(nullptr)
 , m_top_events({})
@@ -61,162 +64,148 @@ SummaryView::SummaryView(DataProvider&                      dp,
 , m_source_topology({})
 , m_compare_topology(nullptr)
 , m_compare_top_events({})
-, m_source_fetched_revision({})
-, m_source_progress({})
-, m_fetched_revision(0)
 , m_data_changed(false)
 , m_init_window(true)
-, m_progress(0.0f)
 , m_data_provider(dp)
 , m_settings(SettingsManager::GetInstance())
 , m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
 , m_progress_token(EventManager::InvalidSubscriptionToken)
 {
-    m_tab_container = std::make_unique<TabContainer>();
     // The tooltips would only repeat the tab ids.
     m_tab_container->SetAllowToolTips(false);
     if(m_compare_mode)
     {
-        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-        {
-            m_source_topology[source] = std::make_shared<SummaryTopology>(
-                m_data_provider, *m_data_provider.DataModel().GetSourceSummary(source));
-        }
-        m_compare_overview = std::make_shared<SummaryCompareOverview>(
-            m_data_provider, m_source_topology, *m_tab_container);
-        // Each topology splits its table from its counters, so the two stack
-        // rather than share the width.
-        m_compare_topology = MakeCompareStack(std::make_shared<RocCustomWidget>([this]() {
-                                                  RenderSourceTopology(COMPARE_SOURCE_A);
-                                              }),
-                                              std::make_shared<RocCustomWidget>([this]() {
-                                                  RenderSourceTopology(COMPARE_SOURCE_B);
-                                              }));
-        m_compare_top_events[kRPVAnalysisSummaryCategoryKernel] =
-            std::make_shared<SummaryCompareTopEvents>(
-                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
-                TableType::kSummaryKernelTable,
-                kRPVControllerTableTypeSummaryKernelInstances,
-                RequestType::kFetchSummaryKernelInstanceTable);
-        m_compare_top_events[kRPVAnalysisSummaryCategoryMemory] =
-            std::make_shared<SummaryCompareTopEvents>(
-                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryMemory,
-                TableType::kSummaryMemoryTable,
-                kRPVControllerTableTypeSummaryMemoryInstances,
-                RequestType::kFetchSummaryMemoryInstanceTable);
-        m_compare_top_events[kRPVAnalysisSummaryCategoryThread] =
-            std::make_shared<SummaryCompareTopEvents>(
-                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
-                TableType::kSummaryThreadTable,
-                kRPVControllerTableTypeSummaryThreadInstances,
-                RequestType::kFetchSummaryThreadInstanceTable);
+        CreateCompareViews(timeline_selection);
     }
     else
     {
-        m_topology = std::make_shared<SummaryTopology>(
-            m_data_provider, m_data_provider.DataModel().GetSummary());
-        m_top_events[kRPVAnalysisSummaryCategoryKernel] =
-            std::make_shared<SummaryTopEvents>(
-                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryKernel,
-                TableType::kSummaryKernelTable,
-                kRPVControllerTableTypeSummaryKernelInstances,
-                DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID);
-        m_top_events[kRPVAnalysisSummaryCategoryMemory] =
-            std::make_shared<SummaryTopEvents>(
-                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryMemory,
-                TableType::kSummaryMemoryTable,
-                kRPVControllerTableTypeSummaryMemoryInstances,
-                DataProvider::SUMMARY_MEMORY_INSTANCE_TABLE_REQUEST_ID);
-        m_top_events[kRPVAnalysisSummaryCategoryThread] =
-            std::make_shared<SummaryTopEvents>(
-                m_data_provider, timeline_selection, kRPVAnalysisSummaryCategoryThread,
-                TableType::kSummaryThreadTable,
-                kRPVControllerTableTypeSummaryThreadInstances,
-                DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID);
-        m_overview = std::make_shared<SummaryOverview>(
-            m_data_provider, m_topology, m_top_events, *m_tab_container.get());
+        CreateTraceViews(timeline_selection);
     }
-    m_data_provider.SetSummaryDataReadyCallback([this]() {
-        if(m_topology)
-        {
-            m_topology->Fetched();
-        }
-        for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
-        {
-            if(top_events)
-            {
-                top_events->Fetched();
-            }
-        }
-        if(m_compare_overview)
-        {
-            m_compare_overview->Fetched();
-        }
+    Subscribe();
+}
+
+void
+SummaryView::CreateTraceViews(std::shared_ptr<TimelineSelection> timeline_selection)
+{
+    m_fetches.push_back({ std::nullopt, DataProvider::SUMMARY_REQUEST_ID, 0, 0.0f });
+    m_topology = std::make_shared<SummaryTopology>(
+        m_data_provider, m_data_provider.DataModel().GetSummary());
+    for(size_t category = 0; category < __kRPVAnalysisSummaryCategoryLast; category++)
+    {
+        const SummaryInstanceTableType& table = SUMMARY_INSTANCE_TABLES[category];
+        m_top_events[category]                = std::make_shared<SummaryTopEvents>(
+            m_data_provider, timeline_selection,
+            static_cast<rocprofvis_analysis_summary_category_t>(category), table.table_type,
+            table.request_table_type, RequestIdBuilder::MakeRequestId(table.request_type));
+    }
+    m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_topology,
+                                                   m_top_events, *m_tab_container);
+}
+
+void
+SummaryView::CreateCompareViews(std::shared_ptr<TimelineSelection> timeline_selection)
+{
+    for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+    {
+        m_fetches.push_back({ source,
+                              RequestIdBuilder::MakeClientRequestId(
+                                  RequestType::kFetchSummary, COMPARE_CLIENT_ID[source]),
+                              0, 0.0f });
+        m_source_topology[source] = std::make_shared<SummaryTopology>(
+            m_data_provider, *m_data_provider.DataModel().GetSourceSummary(source));
+    }
+    m_compare_overview = std::make_shared<SummaryCompareOverview>(
+        m_data_provider, m_source_topology, *m_tab_container);
+    // Each topology splits its table from its counters, so the two stack rather than
+    // share the width.
+    m_compare_topology = MakeCompareStack(
+        std::make_shared<RocCustomWidget>(
+            [this]() { RenderSourceTopology(COMPARE_SOURCE_A); }),
+        std::make_shared<RocCustomWidget>(
+            [this]() { RenderSourceTopology(COMPARE_SOURCE_B); }));
+    for(size_t category = 0; category < __kRPVAnalysisSummaryCategoryLast; category++)
+    {
+        m_compare_top_events[category] = std::make_shared<SummaryCompareTopEvents>(
+            m_data_provider, timeline_selection,
+            static_cast<rocprofvis_analysis_summary_category_t>(category));
+    }
+}
+
+void
+SummaryView::Subscribe()
+{
+    m_data_provider.SetSummaryDataReadyCallback([this]() { HandleFetched(); });
+    m_time_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged),
+        [this](std::shared_ptr<RocEvent>) { HandleTimeFormatChanged(); });
+    m_progress_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRequestProgressUpdate),
+        [this](std::shared_ptr<RocEvent> e) { HandleProgress(e); });
+}
+
+void
+SummaryView::HandleFetched()
+{
+    if(m_compare_mode)
+    {
+        m_compare_overview->Fetched();
         for(std::shared_ptr<SummaryTopology>& topology : m_source_topology)
         {
-            if(topology)
-            {
-                topology->Fetched();
-            }
+            topology->Fetched();
         }
         for(std::shared_ptr<SummaryCompareTopEvents>& top_events : m_compare_top_events)
         {
-            if(top_events)
+            top_events->Fetched();
+        }
+    }
+    else
+    {
+        m_topology->Fetched();
+        for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
+        {
+            top_events->Fetched();
+        }
+    }
+    m_data_changed = true;
+}
+
+void
+SummaryView::HandleTimeFormatChanged()
+{
+    m_data_provider.DataModel().GetSummary().UpdateValueStrings();
+    if(m_compare_mode)
+    {
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            m_data_provider.DataModel().GetSourceSummary(source)->UpdateValueStrings();
+            m_source_topology[source]->TimeFormatChanged();
+        }
+    }
+    else
+    {
+        m_topology->TimeFormatChanged();
+        for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
+        {
+            top_events->TimeFormatChanged();
+        }
+    }
+}
+
+void
+SummaryView::HandleProgress(std::shared_ptr<RocEvent> e)
+{
+    std::shared_ptr<RequestProgressUpdateEvent> event =
+        std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
+    if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+    {
+        for(SummaryFetch& fetch : m_fetches)
+        {
+            if(event->GetRequestID() == fetch.request_id)
             {
-                top_events->Fetched();
+                fetch.progress = event->GetProgressPercent() / 100.0f;
             }
         }
-        m_data_changed = true;
-    });
-    m_time_format_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kTimeFormatChanged),
-        [this](std::shared_ptr<RocEvent> e) {
-            (void) e;
-            m_data_provider.DataModel().GetSummary().UpdateValueStrings();
-            if(m_topology)
-            {
-                m_topology->TimeFormatChanged();
-            }
-            for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
-            {
-                if(top_events)
-                {
-                    top_events->TimeFormatChanged();
-                }
-            }
-            for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-            {
-                if(SummaryModel* summary =
-                       m_data_provider.DataModel().GetSourceSummary(source))
-                {
-                    summary->UpdateValueStrings();
-                }
-                if(m_source_topology[source])
-                {
-                    m_source_topology[source]->TimeFormatChanged();
-                }
-            }
-        });
-    m_progress_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kRequestProgressUpdate),
-        [this](std::shared_ptr<RocEvent> e) {
-            std::shared_ptr<RequestProgressUpdateEvent> event =
-                std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
-            if(event && event->GetRequestType() == RequestType::kFetchSummary &&
-               event->GetSourceId() == m_data_provider.GetTraceFilePath())
-            {
-                const float progress = event->GetProgressPercent() / 100.0f;
-                m_progress           = progress;
-                for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-                {
-                    if(event->GetRequestID() ==
-                       DataProvider::SourceSummaryRequestId(source))
-                    {
-                        m_source_progress[source] = progress;
-                    }
-                }
-            }
-        });
+    }
 }
 
 SummaryView::~SummaryView()
@@ -227,90 +216,104 @@ SummaryView::~SummaryView()
         static_cast<int>(RocEvents::kRequestProgressUpdate), m_progress_token);
 }
 
+const SummaryModel*
+SummaryView::Summary(const SummaryFetch& fetch) const
+{
+    const TraceDataModel& model = m_data_provider.DataModel();
+    return fetch.source ? model.GetSourceSummary(fetch.source.value()) : &model.GetSummary();
+}
+
+bool
+SummaryView::IsLoaded(const SummaryFetch& fetch) const
+{
+    const SummaryModel* summary = Summary(fetch);
+    return summary &&
+           summary->GetRevision() >= m_data_provider.DataModel().GetTopology().GetRevision();
+}
+
+bool
+SummaryView::IsFailed(const SummaryFetch& fetch) const
+{
+    return !IsLoaded(fetch) &&
+           fetch.requested_revision >=
+               m_data_provider.DataModel().GetTopology().GetRevision() &&
+           !m_data_provider.IsRequestPending(fetch.request_id);
+}
+
 void
 SummaryView::UpdateFetch()
 {
     const uint64_t revision = m_data_provider.DataModel().GetTopology().GetRevision();
-    if(!m_compare_mode)
+    bool           busy     = false;
+    for(const SummaryFetch& fetch : m_fetches)
     {
-        if(m_fetched_revision < revision &&
-           !m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
-        {
-            if(m_fetched_revision <
-               m_data_provider.DataModel().GetSummary().GetRevision())
-            {
-                m_fetched_revision =
-                    m_data_provider.DataModel().GetSummary().GetRevision();
-            }
-            else if(m_data_provider.FetchSummary())
-            {
-                m_fetched_revision = revision;
-                m_progress         = 0.0f;
-            }
-        }
-        return;
+        busy = busy || m_data_provider.IsRequestPending(fetch.request_id);
     }
-
-    for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+    for(size_t i = 0; i < m_fetches.size() && !busy; i++)
     {
-        if(m_data_provider.IsRequestPending(DataProvider::SourceSummaryRequestId(source)))
+        SummaryFetch& fetch = m_fetches[i];
+        if(!IsLoaded(fetch) && fetch.requested_revision < revision)
         {
-            break;
-        }
-        if(m_source_fetched_revision[source] < revision)
-        {
-            if(m_data_provider.FetchSourceSummary(source))
+            const bool issued =
+                fetch.source
+                    ? m_data_provider.FetchSourceSummary(fetch.source.value(),
+                                                         fetch.request_id)
+                    : m_data_provider.FetchSummary();
+            if(issued)
             {
-                m_source_fetched_revision[source] = revision;
-                m_source_progress[source]         = 0.0f;
+                fetch.requested_revision = revision;
+                fetch.progress           = 0.0f;
             }
-            break;
+            busy = true;
         }
     }
-    m_fetched_revision = *std::min_element(m_source_fetched_revision.begin(),
-                                           m_source_fetched_revision.end());
 }
 
 bool
 SummaryView::Loading() const
 {
-    bool loading =
-        m_fetched_revision < m_data_provider.DataModel().GetTopology().GetRevision();
-    if(m_compare_mode)
+    bool loading = false;
+    for(const SummaryFetch& fetch : m_fetches)
     {
-        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-        {
-            loading = loading || m_data_provider.IsRequestPending(
-                                     DataProvider::SourceSummaryRequestId(source));
-        }
-    }
-    else
-    {
-        loading =
-            loading || m_data_provider.IsRequestPending(DataProvider::SUMMARY_REQUEST_ID);
+        loading = loading || (!IsLoaded(fetch) && !IsFailed(fetch));
     }
     return loading;
+}
+
+bool
+SummaryView::Failed() const
+{
+    bool failed = false;
+    for(const SummaryFetch& fetch : m_fetches)
+    {
+        failed = failed || IsFailed(fetch);
+    }
+    return failed && !Loading();
+}
+
+void
+SummaryView::Retry()
+{
+    for(SummaryFetch& fetch : m_fetches)
+    {
+        if(IsFailed(fetch))
+        {
+            fetch.requested_revision = 0;
+        }
+    }
 }
 
 float
 SummaryView::Progress() const
 {
-    float progress = m_progress;
-    if(m_compare_mode)
+    // Each summary is an equal share of the bar; compare sources load one after the
+    // other.
+    float progress = 0.0f;
+    for(const SummaryFetch& fetch : m_fetches)
     {
-        // The sources load one after the other, each a share of the bar.
-        progress = 0.0f;
-        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-        {
-            const bool done =
-                m_source_fetched_revision[source] >=
-                    m_data_provider.DataModel().GetTopology().GetRevision() &&
-                !m_data_provider.IsRequestPending(
-                    DataProvider::SourceSummaryRequestId(source));
-            progress += (done ? 1.0f : m_source_progress[source]) * COMPARE_EVEN_SPLIT;
-        }
+        progress += IsLoaded(fetch) ? 1.0f : fetch.progress;
     }
-    return progress;
+    return progress / static_cast<float>(m_fetches.size());
 }
 
 void
@@ -321,19 +324,18 @@ SummaryView::RebuildTabs()
         m_tab_container->RemoveTab(0);
     }
     // Counters without events still fill the overview and the topology.
+    bool any = false;
+    for(const SummaryFetch& fetch : m_fetches)
+    {
+        const SummaryModel* summary = Summary(fetch);
+        any = any || (summary && has_counters(*summary));
+    }
     if(m_compare_mode)
     {
-        bool any = false;
         for(const std::shared_ptr<SummaryCompareTopEvents>& top_events :
             m_compare_top_events)
         {
             any = any || !top_events->Empty();
-        }
-        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-        {
-            const SummaryModel* summary =
-                m_data_provider.DataModel().GetSourceSummary(source);
-            any = any || (summary && has_counters(*summary));
         }
         if(any)
         {
@@ -353,24 +355,20 @@ SummaryView::RebuildTabs()
         }
         return;
     }
-    bool any = has_counters(m_data_provider.DataModel().GetSummary());
     for(const std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
     {
-        any = any || (top_events && !top_events->Empty());
+        any = any || !top_events->Empty();
     }
-    if(any && m_overview)
+    if(any)
     {
         m_tab_container->AddTab(
             RocWidget::CreateTabItem("Overview", "overview", m_overview));
-    }
-    if(any && m_topology)
-    {
         m_tab_container->AddTab(
             RocWidget::CreateTabItem("System Topology", "topology", m_topology));
     }
     for(size_t i = 0; i < m_top_events.size(); i++)
     {
-        if(m_top_events[i] && !m_top_events[i]->Empty())
+        if(!m_top_events[i]->Empty())
         {
             m_tab_container->AddTab(RocWidget::CreateTabItem(
                 DISPLAY_PROPS_EVENT_TYPES[i].first, DISPLAY_PROPS_EVENT_TYPES[i].first,
@@ -394,10 +392,33 @@ SummaryView::RenderSourceTopology(size_t source)
 }
 
 void
+SummaryView::RenderFailure()
+{
+    const ImGuiStyle& style     = ImGui::GetStyle();
+    const ImVec2      origin    = ImGui::GetCursorPos();
+    const ImVec2      region    = ImGui::GetContentRegionAvail();
+    const ImVec2      text_size = ImGui::CalcTextSize(SUMMARY_FAILED_TEXT);
+    const float button_width = ImGui::CalcTextSize(RETRY_LABEL).x + 2.0f * style.FramePadding.x;
+    const float height       = text_size.y + style.ItemSpacing.y + ImGui::GetFrameHeight();
+    ImGui::SetCursorPos(
+        origin + ImVec2(0.5f * (region.x - text_size.x), 0.5f * (region.y - height)));
+    ImGui::TextDisabled("%s", SUMMARY_FAILED_TEXT);
+    ImGui::SetCursorPosX(origin.x + 0.5f * (region.x - button_width));
+    if(ImGui::Button(RETRY_LABEL))
+    {
+        Retry();
+    }
+}
+
+void
 SummaryView::Update()
 {
-    if(m_data_provider.GetState() == ProviderState::kReady &&
-       m_settings.GetAppWindowSettings().show_summary)
+    if(!m_settings.GetAppWindowSettings().show_summary)
+    {
+        // A closed panel forgets its failures, so opening it again retries them.
+        Retry();
+    }
+    else if(m_data_provider.GetState() == ProviderState::kReady)
     {
         UpdateFetch();
     }
@@ -478,23 +499,11 @@ SummaryView::Render()
             ImGui::BeginChild(
                 "summary_clamped_view", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-            const uint64_t revision =
-                m_data_provider.DataModel().GetTopology().GetRevision();
-            bool stale = false;
-            if(m_compare_mode)
+            if(Failed())
             {
-                for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
-                {
-                    const SummaryModel* summary =
-                        m_data_provider.DataModel().GetSourceSummary(source);
-                    stale = stale || !summary || summary->GetRevision() < revision;
-                }
+                RenderFailure();
             }
-            else
-            {
-                stale = m_data_provider.DataModel().GetSummary().GetRevision() < revision;
-            }
-            if(m_tab_container->GetTabs().empty() || stale)
+            else if(m_tab_container->GetTabs().empty())
             {
                 ImGui::SetCursorPos((ImGui::GetContentRegionAvail() -
                                      ImGui::CalcTextSize("No data available.")) *
@@ -1154,7 +1163,7 @@ SummaryTopology::CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
                     "%s %llu: ",
                     DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
                         metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)],
-                    metrics.info.process->GetId());
+                    metrics.info.process->pid);
                 if(metrics.info.process->command.size())
                 {
                     ImGui::SameLine(0.0f, 0.0f);
@@ -1638,7 +1647,7 @@ SummaryTopEvents::Update()
                                                     __kRPVAnalysisSummaryAggregationLevelFirst)]) +
                                                 " " +
                                                 std::to_string(
-                                                    metric.info.process->GetId()) +
+                                                    metric.info.process->pid) +
                                                 ": " + metric.info.process->command);
                                             m_filters[i].query.push_back(
                                                 m_filters[i - 1].query

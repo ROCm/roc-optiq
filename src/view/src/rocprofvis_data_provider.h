@@ -11,7 +11,6 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 
 
-#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -56,9 +55,6 @@ public:
     static const uint64_t EVENT_TABLE_REQUEST_ID;
     static const uint64_t SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t EVENT_EXTENDED_DATA_REQUEST_ID;
-    static const uint64_t EVENT_FLOW_DATA_REQUEST_ID;
-    static const uint64_t EVENT_CALL_STACK_DATA_REQUEST_ID;
     static const uint64_t SAVE_TRIMMED_TRACE_REQUEST_ID;
     static const uint64_t CLEANUP_DATABASE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
@@ -78,30 +74,33 @@ public:
     static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
 
-    // Ask Optiq's table reads. A background reader sharing the ids above would
+    // Ask Optiq's reads. A background reader sharing the ids above would
     // be refused whenever a tab happened to be loading, and - worse - would
     // overwrite the rows that tab is showing once it was not. Its own client id
     // gives it its own request ids, its own controller tables, and its own
     // model slots, so the two never meet. Anything else that reads tables
     // without being a tab wants the same treatment and a client id of its own.
-    static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
-    static const uint64_t     ASSISTANT_EVENT_TABLE_REQUEST_ID;
-    static const uint64_t     ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
-    static const uint64_t     ASSISTANT_EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t     ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
-    static const uint64_t     ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
+    //
+    // On a compute trace the same id partitions FetchMetrics: the request id
+    // comes from MakeClientRequestId and the values land in their own
+    // ComputeDataModel store, which is what lets the assistant read metrics
+    // while a metric table is showing its own.
+    //
+    // Not 1 or 2: those are COMPARE_CLIENT_ID, and the compare panes build
+    // their event, sample and top-events request ids from them - the same
+    // request types the assistant reads.
+    static constexpr uint64_t ASSISTANT_CLIENT_ID = 3;
+    static_assert(ASSISTANT_CLIENT_ID < RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID,
+                  "The assistant's client id must stay inside the reserved band, or "
+                  "IdGenerator will eventually hand it to a widget.");
+    static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    static const uint64_t ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
 #endif
-
-    /* Client id the views of one compare source tag their requests with, so the
-     * two sources' fetches of the same kind never share a request id. They sit
-     * past the assistant's id, whose requests are of the same kinds.
-     */
-    static constexpr uint64_t CompareSourceClientId(uint64_t source)
-    {
-        return ASSISTANT_CLIENT_ID + 1 + source;
-    }
 
     DataProvider();
     ~DataProvider();
@@ -220,10 +219,9 @@ public:
 
     // Summarizes the whole trace into DataModel().GetSummary().
     bool FetchSummary();
-    // Summarizes one compare source into DataModel().GetSourceSummary(source).
-    bool FetchSourceSummary(uint64_t source);
-    // Request id FetchSourceSummary uses for that source.
-    static uint64_t SourceSummaryRequestId(uint64_t source);
+    // Summarizes one compare source into DataModel().GetSourceSummary(source), under
+    // the caller's request id so the two sources' summaries never share one.
+    bool FetchSourceSummary(uint64_t source, uint64_t request_id);
 
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
@@ -303,6 +301,10 @@ public:
     ComputeDataModel& ComputeModel();
 
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
+    // Whether the last metrics fetch this client issued landed. A failed fetch
+    // adds nothing to the client's store, which otherwise reads the same as a
+    // fetch of metrics the trace does not record. False before the first.
+    bool LastMetricsFetchSucceeded(uint64_t client_id) const;
     bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
     bool FetchPcSampling(const PcSamplingRequestParams& params);
 
@@ -338,10 +340,9 @@ private:
         rocprofvis_controller_table_type_t table_type, uint64_t client_id);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
-    // Holds an event detail fetch whose request id is in flight; true when held.
-    bool QueueEventFetch(RequestType type, uint64_t request_id, uint64_t event_id);
-    // Issues the next held fetch of a type once its request id is free again.
-    void IssueQueuedEventFetch(RequestType type);
+    // True when the request in flight under an event's request ID is for that event,
+    // so it already covers a new fetch.
+    bool IsPendingEventFetch(const RequestInfo& pending, uint64_t event_id) const;
 
     // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
@@ -506,9 +507,11 @@ private:
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle,
                                           uint64_t refreshed_source_file_uuid);
-    inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
-                                      rocprofvis_handle_t* pc_handle,
-                                      uint64_t             index);
+    inline void LoadPcSamplingInstructionLine(
+        InstructionLine&                          instruction_line,
+        std::unordered_map<uint64_t, std::string>& instruction_type_lookup_map,
+        rocprofvis_handle_t*                       pc_handle,
+        uint64_t                                   index);
     inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
                                          rocprofvis_handle_t* pc_handle,
                                          uint64_t             index);
@@ -558,10 +561,8 @@ private:
     // in-flight request is being cancelled. Keyed by the per-layer request ID.
     std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
 
-    // Event detail requests share one id per type (the assistant waits on those
-    // ids), so details for a second event selected while the first are loading
-    // wait here instead of being dropped.
-    std::map<RequestType, std::deque<uint64_t>> m_queued_event_fetches;
+    // Outcome of each client's most recent metrics fetch, by client id.
+    std::unordered_map<uint64_t, bool> m_metrics_fetch_succeeded;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,

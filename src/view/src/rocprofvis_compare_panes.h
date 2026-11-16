@@ -39,6 +39,12 @@ constexpr const char* COMPARE_SOURCE_ROLE[COMPARE_SOURCE_COUNT] = { "Baseline",
 // Both sources start with an equal share of the width.
 constexpr float COMPARE_EVEN_SPLIT = 1.0f / COMPARE_SOURCE_COUNT;
 
+/* Client ids that keep the two sources' requests for one controller table type
+ * apart. They start at one because zero is what the pooled, single source
+ * request ids use.
+ */
+constexpr uint64_t COMPARE_CLIENT_ID[COMPARE_SOURCE_COUNT] = { 1, 2 };
+
 /* Whether the trace was opened as an A/B compare project. The side by side
  * layouts need both sources, a plain trace has none.
  */

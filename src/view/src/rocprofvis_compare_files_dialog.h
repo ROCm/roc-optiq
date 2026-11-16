@@ -62,12 +62,10 @@ private:
     void            RenderSlot(FileSlot slot, const ImVec2& size);
     void            RenderRecent(FileSlot slot);
     void            Close();
-    // Reads whether the two picks come from one profiling run, once per pair of picks:
-    // it opens both databases.
+    // Checks the two picks against each other once per pair of picks, since it
+    // opens both databases.
     void CheckPair();
-    // Why the two picks cannot be compared together; empty when they can.
-    std::string PairProblem() const;
-    bool        CanCompare() const;
+    bool CanCompare() const;
 
     BrowseCallback             m_browse_callback;
     OpenCallback               m_open_callback;
@@ -75,8 +73,8 @@ private:
     bool                       m_is_open     = false;
     std::array<SlotFile, 2>    m_slots;
     std::array<std::string, 2> m_checked_picks;
-    // The checked picks are copies of one trace, which cannot be compared.
-    bool m_same_run = false;
+    // Why the checked picks cannot be compared together; empty when they can.
+    std::string m_pair_problem;
 };
 
 }  // namespace View

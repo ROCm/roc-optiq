@@ -81,7 +81,7 @@ TraceDataModel::BuildTrackName(uint64_t track_id) const
             }
             if(process_info && tdm.ProcessCount() > 1)
             {
-                name += " (PID:" + std::to_string(process_info->GetId()) + ")";
+                name += " (PID:" + std::to_string(process_info->pid) + ")";
             }
             break;
         }
@@ -112,7 +112,7 @@ TraceDataModel::BuildTrackName(uint64_t track_id) const
             name = track_info->sub_name;
             if(process_info && tdm.ProcessCount() > 1)
             {
-                name += " (PID:" + std::to_string(process_info->GetId()) + ")";
+                name += " (PID:" + std::to_string(process_info->pid) + ")";
             }
             break;
         }

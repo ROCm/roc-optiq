@@ -30,6 +30,14 @@ class Thread;
 class Counter;
 class SummaryMetrics;
 
+// Properties used to present one category of top events.
+struct top_event_properties_t
+{
+    std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast> ops;
+    std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>  events;
+    rocprofvis_property_t                                                       name;
+};
+
 class Analysis
 {
 public:
@@ -94,7 +102,12 @@ private:
     // scoped to that file and counters from the other sources are left out.
     rocprofvis_result_t FetchSummaryMetrics(SystemTrace* trace, double start, double end, const c_optional_uint64_t& file_id, SummaryMetrics& output, Future* future) const;
 
-    rocprofvis_result_t FetchTopEvents(rocprofvis_dm_trace_t dm_handle, const std::vector<rocprofvis_dm_event_operation_t>& ops, const rocprofvis_dm_query_criteria_t& criteria, double start, double end, const std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>& op_properties, const std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>& event_properties, rocprofvis_property_t event_name_property, SummaryMetrics& output, Future* future) const;
+    rocprofvis_result_t FetchTopEvents(
+        rocprofvis_dm_trace_t                               dm_handle,
+        const std::vector<rocprofvis_dm_event_operation_t>& ops,
+        const rocprofvis_dm_query_criteria_t& criteria, double start, double end,
+        const top_event_properties_t& properties, SummaryMetrics& output,
+        Future* future) const;
 
     rocprofvis_result_t FetchCounterStatistics(rocprofvis_dm_trace_t dm_handle, Processor* processor, Counter* counter, double start, double end, SummaryMetrics& output, Future* future) const;
     

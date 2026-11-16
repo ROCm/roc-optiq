@@ -50,6 +50,13 @@ struct SummaryEventDiff
     double RelativeChange() const;
 };
 
+/* Pairs the sources' top events by name, largest change first. The "Others"
+ * remainder is left out: it holds different events on each side.
+ */
+std::vector<SummaryEventDiff>
+diff_top_events(
+    const std::array<const SummaryInfo::TopOpEvents*, COMPARE_SOURCE_COUNT>& sources);
+
 /* The compare form of the summary overview, built from the single trace
  * overview's tiles: each source's figures with the change between them and
  * the event composition of each.
@@ -81,6 +88,8 @@ private:
     void RenderFigure(const char* label, double a, double b, bool is_time, ImVec2 size);
     void RenderComposition(float width);
     void RenderCategory(rocprofvis_analysis_summary_category_t category, ImVec2 size);
+    // The source's chip, then the cursor on the same line for its value.
+    void RenderSourceBadge(size_t source) const;
 
     std::array<SourceFacts, COMPARE_SOURCE_COUNT>                      m_facts;
     std::array<std::shared_ptr<SummaryTopology>, COMPARE_SOURCE_COUNT> m_topology;
@@ -103,10 +112,7 @@ class SummaryCompareTopEvents : public RocWidget
 public:
     SummaryCompareTopEvents(DataProvider&                          dp,
                             std::shared_ptr<TimelineSelection>     timeline_selection,
-                            rocprofvis_analysis_summary_category_t category,
-                            TableType                              table_type,
-                            rocprofvis_controller_table_type_t     request_table_type,
-                            RequestType                            request_type);
+                            rocprofvis_analysis_summary_category_t category);
     ~SummaryCompareTopEvents();
     void Update() override;
     void Render() override;
@@ -132,6 +138,9 @@ private:
     struct FilterOption
     {
         std::string label;
+        // The node, device, process or thread chosen; the sources share one topology
+        // tree, so the same choice is the same pointer on both sides.
+        const void* entry;
         // Null where a source has no events under this option.
         std::array<const SummaryInfo::AggregateMetrics*, COMPARE_SOURCE_COUNT> metrics;
         std::optional<rocprofvis_dm_query_criteria_t>                          criteria;
@@ -143,6 +152,12 @@ private:
         std::vector<FilterOption> options;  // The first is "All"
     };
 
+    // Whether a child of the level above is one of this category's choices at level.
+    bool IsFilterChoice(size_t level, const SummaryInfo::AggregateMetrics& child) const;
+    // The choice a child stands for, with the criteria above narrowed to it.
+    FilterOption MakeFilterOption(
+        const SummaryInfo::AggregateMetrics&                 child,
+        const std::optional<rocprofvis_dm_query_criteria_t>& criteria) const;
     void RebuildFilterLevel(size_t level);
     void RebuildRows();
     void SortRows();

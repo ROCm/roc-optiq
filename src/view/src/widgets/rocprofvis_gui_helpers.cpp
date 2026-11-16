@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -749,50 +750,43 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
     }
 
     SettingsManager&  settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style    = ImGui::GetStyle();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
     popup_style.CenterPopup(ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
     ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
 
-    if(ImGui::BeginPopupModal(popup_id, nullptr,
-                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-                                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+    if(ImGui::BeginPopupModal(
+           popup_id, nullptr,
+           ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
+               ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+               ImGuiWindowFlags_NoScrollWithMouse))
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, 4.0f));
-
-        BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true,
+        BeginPanelCard("##remote_dl_header", PanelCardTone::kPanel, style.WindowPadding, true,
                        &settings);
         {
-            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings, settings.GetFontManager().GetFontSize(FontSize::kMedium));
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-            ImGui::BeginGroup();
-            ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-            ImGui::TextUnformatted("Remote Download");
-            ImGui::PopFont();
             ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
             ImGui::TextUnformatted("Fetching the trace over SSH.");
             ImGui::PopStyleColor();
-            ImGui::EndGroup();
         }
         EndPanelCard();
 
-        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f), true,
+        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, style.WindowPadding, true,
                        &settings);
         {
             ImGui::TextWrapped("%s", file_name ? file_name : "");
             ImGui::Spacing();
             if(total > 0)
             {
-                const float frac =
-                    std::min(1.0f, static_cast<float>(downloaded) / static_cast<float>(total));
-                const std::string label = format_byte_size(downloaded) + " of " +
-                                          format_byte_size(total) + "  (" +
-                                          std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
+                const float       frac = std::min(1.0f, static_cast<float>(downloaded) /
+                                                            static_cast<float>(total));
+                const std::string label =
+                    format_byte_size(downloaded) + " of " + format_byte_size(total) +
+                    "  (" + std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
                 ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
             }
             else
@@ -808,7 +802,6 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
             show = false;
         }
 
-        ImGui::PopStyleVar();  // ItemSpacing
         ImGui::EndPopup();
     }
     else
@@ -817,9 +810,6 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
         // reopened on the next download.
         show = false;
     }
-
-    ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
-    popup_style.PopStyles();
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
@@ -986,10 +976,11 @@ IconBeginMenu(const char* icon, const char* label)
 }
 
 bool
-CopyableTextUnformatted(
-    const char* text, std::string_view unique_id, std::string_view notification,
-    bool one_click_copy, bool context_menu,
-    std::function<void(const char* value_to_copy)> menu_func)
+CopyableTextUnformatted(const char* text, std::string_view unique_id,
+                        std::string_view notification, bool one_click_copy,
+                        bool                                           context_menu,
+                        std::function<void(const char* value_to_copy)> menu_func,
+                        const TextColorRange*                          color_range)
 {
     bool clicked = false;
     if(!unique_id.empty())
@@ -1038,8 +1029,32 @@ CopyableTextUnformatted(
         PopContextMenuStyles();
     }
 
-    ImGui::SetCursorScreenPos(text_position);
-    ImGui::TextUnformatted(text);
+    const size_t text_length = color_range ? std::strlen(text) : 0;
+    if(color_range && color_range->begin < color_range->end &&
+       color_range->end <= text_length)
+    {
+        // Retain TextUnformatted's layout, baseline, logging, and hover bounds.
+        ImGui::SetCursorScreenPos(text_position);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::TextUnformatted(text);
+        ImGui::PopStyleColor();
+        const ImVec2 draw_position = ImGui::GetItemRectMin();
+        ImDrawList*  draw_list     = ImGui::GetWindowDrawList();
+        const ImU32  text_color    = ImGui::GetColorU32(ImGuiCol_Text);
+        const char*  begin         = text + color_range->begin;
+        const char*  end           = text + color_range->end;
+        draw_list->AddText(draw_position, text_color, text, begin);
+        ImVec2 position(draw_position.x + ImGui::CalcTextSize(text, begin).x,
+                        draw_position.y);
+        draw_list->AddText(position, ImGui::GetColorU32(color_range->color), begin, end);
+        position.x += ImGui::CalcTextSize(begin, end).x;
+        draw_list->AddText(position, text_color, end, text + text_length);
+    }
+    else
+    {
+        ImGui::SetCursorScreenPos(text_position);
+        ImGui::TextUnformatted(text);
+    }
 
     if(one_click_copy)
     {

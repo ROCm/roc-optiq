@@ -201,10 +201,16 @@ class SystemDatabase : public Database
                                                   rocprofvis_dm_string_t file_path,
                                                   rocprofvis_db_future_t object);
 
+       // Writes the time range to new_db_path and returns the result. It does not set
+       // the future's promise: SaveTrimmedDataAsync does, once the file is in place.
        virtual rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
                                                       rocprofvis_dm_timestamp_t end,
                                                       rocprofvis_dm_charptr_t new_db_path,
                                                       Future* future) = 0;
+
+       // True when path is one of the files this trace reads, which a trim must not
+       // overwrite.
+       virtual bool IsSourceFile(rocprofvis_dm_charptr_t path) = 0;
 
        rocprofvis_dm_result_t SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                                    rocprofvis_dm_timestamp_t end,

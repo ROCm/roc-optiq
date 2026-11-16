@@ -61,10 +61,16 @@ public:
         std::shared_ptr<RemoteUri> remote_uri;
 #endif
 
+        // Backend-specific check of the profiler's stdout for whether the run
+        // produced an output file at all. When false, trace resolution, the
+        // remote download and the remote cache directory are all skipped.
+        std::function<bool(std::string const&)> has_output_file;
+
         // Backend-specific scraper that derives the produced trace path from the
         // profiler's stdout. Used for the local trace resolution and forwarded
-        // to the remote session for its download target.
-        std::function<std::string(const std::string&)> parse_trace;
+        // to the remote session for its download target. Only consulted when
+        // has_output_file is true.
+        std::function<std::string(std::string const&)> parse_trace;
     };
 
     explicit ProfilerLaunchOrchestrator(AppWindow* app_window);
@@ -160,7 +166,8 @@ private:
     bool                        m_is_remote;
     bool                        m_auto_load_trace;
 
-    std::function<std::string(const std::string&)> m_parse_trace;
+    std::function<bool(std::string const&)>        m_has_output_file;
+    std::function<std::string(std::string const&)> m_parse_trace;
 
     std::string m_raw_output;
     bool        m_output_dirty;

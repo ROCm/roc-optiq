@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_profiler_process.h"
 
 #include <cctype>
+#include <cstdlib>
 #include <sstream>
 
 namespace RocProfVis
@@ -105,6 +106,77 @@ std::vector<std::pair<std::string, std::string>> BuildEnv(ProfilerConfig const& 
     return config.GetEnvVars();
 }
 
+std::vector<std::pair<std::string, std::string>> BuildLocalEnv(ProfilerConfig const& config)
+{
+    char const* inherited = std::getenv("PATH");
+    return ComposeLocalEnv(BuildEnv(config), config.GetPythonEnvironment(),
+                           inherited != nullptr ? inherited : "");
+}
+
+std::vector<std::pair<std::string, std::string>> ComposeLocalEnv(
+    std::vector<std::pair<std::string, std::string>> const& env,
+    std::string const&                                      python_environment,
+    std::string const&                                      inherited_path)
+{
+    std::vector<std::pair<std::string, std::string>> composed = env;
+#ifndef _WIN32
+    if (!python_environment.empty())
+    {
+        // A PATH the user set gets <venv>/bin in front in place, as
+        // ComposeRemoteEnv does; without one, the inherited PATH is the base.
+        std::string venv_bin  = PythonEnvironmentPath(python_environment, "bin");
+        bool        user_path = false;
+        for (std::pair<std::string, std::string>& kv : composed)
+        {
+            if (kv.first == "PATH")
+            {
+                kv.second = kv.second.empty() ? venv_bin : venv_bin + ":" + kv.second;
+                user_path = true;
+            }
+        }
+        if (!user_path)
+        {
+            composed.emplace_back("PATH", inherited_path.empty() ? venv_bin
+                                                                 : venv_bin + ":" + inherited_path);
+        }
+        composed.emplace_back("VIRTUAL_ENV", python_environment);
+    }
+#else
+    (void)python_environment;
+    (void)inherited_path;
+#endif
+    return composed;
+}
+
+std::vector<std::pair<std::string, std::string>> ComposeRemoteEnv(
+    std::vector<std::pair<std::string, std::string>> const& env,
+    std::string const&                                      python_environment)
+{
+    std::vector<std::pair<std::string, std::string>> composed = env;
+    if (!python_environment.empty())
+    {
+        // Keeps <venv>/bin first, as ComposeLocalEnv does: a plain assignment
+        // after activate would replace the PATH it just set.
+        std::string venv_bin = PythonEnvironmentPath(python_environment, "bin");
+        for (std::pair<std::string, std::string>& kv : composed)
+        {
+            if (kv.first == "PATH")
+            {
+                kv.second = kv.second.empty() ? venv_bin : venv_bin + ":" + kv.second;
+            }
+        }
+    }
+    return composed;
+}
+
+std::string PythonEnvironmentPath(std::string const& python_environment,
+                                  std::string const& relative)
+{
+    return (!python_environment.empty() && python_environment.back() == '/')
+               ? python_environment + relative
+               : python_environment + "/" + relative;
+}
+
 bool IsValidEnvName(std::string const& name)
 {
     if (name.empty())
@@ -128,7 +200,8 @@ bool IsValidEnvName(std::string const& name)
 std::string ToPosixShellCommand(
     std::vector<std::string> const&                         argv,
     std::vector<std::pair<std::string, std::string>> const& env,
-    std::string const&                                      working_dir)
+    std::string const&                                      working_dir,
+    std::string const&                                      python_environment)
 {
     std::ostringstream oss;
     bool               first = true;
@@ -139,7 +212,20 @@ std::string ToPosixShellCommand(
         first = false;
     }
 
-    for (auto const& kv : env)
+    if (!python_environment.empty())
+    {
+        if (!first)
+        {
+            oss << ' ';
+        }
+        // "." rather than "source": the latter is not POSIX sh.
+        oss << ". "
+            << posix_shell_quote(PythonEnvironmentPath(python_environment, "bin/activate"))
+            << " &&";
+        first = false;
+    }
+
+    for (std::pair<std::string, std::string> const& kv : ComposeRemoteEnv(env, python_environment))
     {
         // Name is emitted unquoted; skip invalid ones (AddEnvVar already rejects).
         if (!IsValidEnvName(kv.first))
@@ -164,7 +250,7 @@ std::string ToPosixShellCommand(
         first = false;
     }
 
-    return oss.str();
+    return python_environment.empty() ? oss.str() : "sh -c " + posix_shell_quote(oss.str());
 }
 
 std::string ToWindowsCommandLine(std::vector<std::string> const& argv)
@@ -211,6 +297,59 @@ std::string ToDisplayString(
     }
 
     return oss.str();
+}
+
+std::string ToPreviewString(
+    std::vector<std::string> const&                         argv,
+    std::vector<std::pair<std::string, std::string>> const& env,
+    std::string const&                                      working_dir,
+    std::string const&                                      python_environment,
+    bool                                                    remote)
+{
+    std::ostringstream preview;
+
+    if (!working_dir.empty())
+    {
+        preview << "cd " << working_dir << " && \\\n";
+    }
+    if (remote && !python_environment.empty())
+    {
+        preview << ". " << PythonEnvironmentPath(python_environment, "bin/activate")
+                << " && \\\n";
+    }
+    for (std::pair<std::string, std::string> const& kv : env)
+    {
+        preview << kv.first << '=' << kv.second << " \\\n";
+    }
+
+    // Only line breaks are added: each flag starts a continuation line (its
+    // value stays beside it), and everything after "--" is the target's own
+    // command line.
+    constexpr char const* CONTINUATION = " \\\n    ";
+    for (size_t i = 0; i < argv.size(); i++)
+    {
+        std::string const& arg = argv[i];
+        if (i == 0)
+        {
+            preview << arg;
+        }
+        else if (arg == "--")
+        {
+            preview << CONTINUATION << arg;
+            for (size_t j = i + 1; j < argv.size(); j++)
+            {
+                preview << ' ' << argv[j];
+            }
+            break;
+        }
+        else
+        {
+            bool const is_flag = arg.size() > 1 && arg[0] == '-';
+            preview << (is_flag ? CONTINUATION : " ") << arg;
+        }
+    }
+
+    return preview.str();
 }
 
 } // namespace Cmdline

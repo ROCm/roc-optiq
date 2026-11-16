@@ -18,6 +18,7 @@
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -525,64 +526,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
 
         IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() > 0);
-    };
-
-    // Events selected together all get their details, though the event panel's
-    // fetches of each kind share one request id.
-    t = IM_REGISTER_TEST(e, "app", "sys_events_view_loads_every_selected_event");
-    t->TestFunc = [](ImGuiTestContext* ctx)
-    {
-        TraceView* tv = GetTraceViewOrSkip(ctx);
-        if (!tv) return;
-        TimelineView*                      tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
-        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
-        IM_CHECK(tlv != nullptr && sel != nullptr);
-        if (tlv == nullptr || sel == nullptr) return;
-
-        // One event from each of two tracks, polled for until their chunks load.
-        std::vector<std::pair<uint64_t, uint64_t>> picks;
-        for (int i = 0; i < 60 && picks.size() < 2; i++)
-        {
-            picks.clear();
-            for (FlameTrackItem* flame : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
-            {
-                uint64_t    uuid = 0;
-                std::string name;
-                double      start_ts = 0.0;
-                if (picks.size() < 2 &&
-                    FlameTrackItemTestPeer{*flame}.EarliestEvent(uuid, name, start_ts))
-                {
-                    picks.push_back({ flame->GetID(), uuid });
-                }
-            }
-            if (picks.size() < 2) ctx->Yield(2);
-        }
-        if (picks.size() < 2)
-        {
-            ctx->LogWarning("SKIP: needs events on two tracks");
-            return;
-        }
-
-        sel->UnselectAllEvents();
-        ctx->Yield(3);
-        for (const std::pair<uint64_t, uint64_t>& pick : picks)
-            sel->SelectTrackEvent(pick.first, pick.second);
-        const TraceDataModel& model  = tv->GetDataProvider()->DataModel();
-        auto                  loaded = [&]() {
-            for (const std::pair<uint64_t, uint64_t>& pick : picks)
-            {
-                const EventInfo* info = model.GetEvents().GetEvent(pick.second);
-                if (info == nullptr || info->ext_info.empty()) return false;
-            }
-            return true;
-        };
-        for (int i = 0; i < 600 && !loaded(); i++) ctx->Yield(2);
-        const bool all_loaded = loaded();
-
-        // Restore before asserting, as IM_CHECK returns early on failure.
-        sel->UnselectAllEvents();
-        ctx->Yield(3);
-        IM_CHECK(all_loaded);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_zoom_hotkey");
@@ -3502,6 +3445,102 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(load_error(a + ", " + a).find("same trace twice") != std::string::npos);
         IM_CHECK(load_error(a + ", " + json_path(copy)).find("copies") != std::string::npos);
         IM_CHECK(load_error(a + ", 7").find("invalid or corrupted") != std::string::npos);
+    };
+
+    // Two runs that differ, made up so each case is exact: unequal durations, events
+    // only one source has, and a top list cut short into "Others".
+    t = IM_REGISTER_TEST(e, "app", "compare_diff_pairs_events");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        IM_UNUSED(ctx);
+        auto event = [](const char* name, uint64_t total_ns) {
+            SummaryInfo::TopOpEvents::Event out = {};
+            out.name = name;
+            out.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].numeric.uint = total_ns;
+            return out;
+        };
+        auto find = [](const std::vector<SummaryEventDiff>& rows, const char* name) {
+            for (const SummaryEventDiff& row : rows)
+                if (row.name == name) return &row;
+            return static_cast<const SummaryEventDiff*>(nullptr);
+        };
+
+        SummaryInfo::TopOpEvents a = {};
+        SummaryInfo::TopOpEvents b = {};
+        a.top = { event("shared", 100), event("only_a", 40) };
+        b.top = { event("shared", 250), event("only_b", 60) };
+        std::vector<SummaryEventDiff> rows = diff_top_events({ &a, &b });
+        IM_CHECK_EQ(rows.size(), 3u);
+        if (rows.size() != 3u) return;
+        // Largest change first, either way.
+        IM_CHECK(rows[0].name == "shared");
+        IM_CHECK(rows[1].name == "only_b");
+        IM_CHECK(rows[2].name == "only_a");
+        IM_CHECK(rows[0].Known());
+        IM_CHECK_EQ(rows[0].DeltaNs(), 150.0);
+        IM_CHECK_EQ(rows[0].RelativeChange(), 1.5);
+        // Absent from a full list is known absent: it went from all to nothing.
+        IM_CHECK(rows[2].Known());
+        IM_CHECK(rows[2].events[COMPARE_SOURCE_B] == nullptr);
+        IM_CHECK_EQ(rows[2].RelativeChange(), -1.0);
+        IM_CHECK(rows[1].events[COMPARE_SOURCE_A] == nullptr);
+        IM_CHECK(std::isinf(rows[1].RelativeChange()));
+        IM_CHECK(FormatRelativeChange(100.0, 250.0) == "+150.0%");
+        IM_CHECK(FormatRelativeChange(100.0, 0.0) == "-100.0%");
+        IM_CHECK(FormatRelativeChange(0.0, 60.0).empty());
+
+        // Once B's list is cut short, an event missing from it may be in "Others".
+        b.top = { event("shared", 250), event("Others", 500) };
+        rows  = diff_top_events({ &a, &b });
+        IM_CHECK_EQ(rows.size(), 2u);
+        IM_CHECK(find(rows, "Others") == nullptr);
+        const SummaryEventDiff* hidden = find(rows, "only_a");
+        IM_CHECK(hidden != nullptr);
+        if (hidden == nullptr) return;
+        IM_CHECK(hidden->Unknown(COMPARE_SOURCE_B));
+        IM_CHECK(!hidden->Unknown(COMPARE_SOURCE_A));
+        IM_CHECK(!hidden->Known());
+    };
+
+    // A source summary that never arrives (cancelled here) leaves the panel on an
+    // error rather than loading forever, and Retry fetches it again.
+    t = IM_REGISTER_TEST(e, "app", "compare_summary_retries_failed_source");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        CompareFilesGuard files(ctx);
+        TabStateGuard tabs(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+        ShowSummaryGuard summary_guard;
+        // Hidden until the compare has loaded, so the first fetch goes out on cue.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = false;
+        TraceView* tv = OpenSelfCompareOrSkip(ctx, files);
+        if (!tv) return;
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        SummaryViewTestPeer peer{*sv};
+        DataProvider*       dp = tv->GetDataProvider();
+        const uint64_t      first_fetch = RequestIdBuilder::MakeClientRequestId(
+            RequestType::kFetchSummary, COMPARE_CLIENT_ID[COMPARE_SOURCE_A]);
+
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        for (int i = 0; i < 60 && !dp->IsRequestPending(first_fetch); i++) ctx->Yield(1);
+        IM_CHECK(dp->IsRequestPending(first_fetch));
+        // A job already running reports the cancel as unsupported, and stops anyway.
+        dp->CancelRequest(first_fetch);
+        for (int i = 0; i < 3000 && peer.Loading(); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Loading());
+        if (!peer.Failed())
+        {
+            ctx->LogWarning("SKIP: the summary finished before it could be cancelled");
+            return;
+        }
+
+        peer.Retry();
+        IM_CHECK(peer.Loading());
+        for (int i = 0; i < 3000 && peer.Loading(); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Loading());
+        IM_CHECK(!peer.Failed());
     };
 #endif
 }

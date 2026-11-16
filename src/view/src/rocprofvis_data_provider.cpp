@@ -37,12 +37,6 @@ const uint64_t DataProvider::SAMPLE_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchTrackSampleTable);
 const uint64_t DataProvider::EVENT_SEARCH_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchEventSearchTable);
-const uint64_t DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID =
-    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventExtendedData);
-const uint64_t DataProvider::EVENT_FLOW_DATA_REQUEST_ID =
-    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventFlowDetails);
-const uint64_t DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID =
-    RequestIdBuilder::MakeRequestId(RequestType::kFetchEventCallStack);
 const uint64_t DataProvider::SAVE_TRIMMED_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kSaveTrimmedTrace);
 const uint64_t DataProvider::CLEANUP_DATABASE_REQUEST_ID =
@@ -154,7 +148,6 @@ DataProvider::FreeRequests()
     cleanup_work.requests        = std::move(m_requests);
     m_requests.clear();
     m_pc_sampling_replacements.clear();
-    m_queued_event_fetches.clear();
 
     CleanupDetachedResources(std::move(cleanup_work));
 }
@@ -188,7 +181,6 @@ DataProvider::DetachCleanupWork()
 
     m_requests.clear();
     m_pc_sampling_replacements.clear();
-    m_queued_event_fetches.clear();
     m_trace_controller = nullptr;
     m_trace_timeline   = nullptr;
     m_model.Clear();
@@ -1072,12 +1064,18 @@ DataProvider::ParseProcessData(rocprofvis_handle_t* process_handle,
     result = rocprofvis_controller_get_double(
         process_handle, kRPVControllerProcessEndTime, 0, &process_info.end_time);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    result = rocprofvis_controller_get_uint64(process_handle, kRPVControllerProcessPid, 0,
+                                              &process_info.pid);
+    if(result != kRocProfVisResultSuccess)
+    {
+        process_info.pid = process_info.GetId() & TOPOLOGY_ID_MASK;
+    }
     process_info.command = GetString(process_handle, kRPVControllerProcessCommand, 0);
     process_info.environment =
         GetString(process_handle, kRPVControllerProcessEnvironment, 0);
     process_info.SetName(process_info.command);
     process_info.SetHeader(process_info.command + " (" +
-                           std::to_string(process_info.GetId()) + ")");
+                           std::to_string(process_info.pid) + ")");
 }
 
 void
@@ -2614,17 +2612,10 @@ DataProvider::FetchSummary()
 }
 
 bool
-DataProvider::FetchSourceSummary(uint64_t source)
+DataProvider::FetchSourceSummary(uint64_t source, uint64_t request_id)
 {
     return m_model.GetSourceSummary(source) != nullptr &&
-           IssueSummaryRequest(SourceSummaryRequestId(source), source);
-}
-
-uint64_t
-DataProvider::SourceSummaryRequestId(uint64_t source)
-{
-    return RequestIdBuilder::MakeClientRequestId(RequestType::kFetchSummary,
-                                                 CompareSourceClientId(source));
+           IssueSummaryRequest(request_id, source);
 }
 
 bool
@@ -2823,9 +2814,6 @@ DataProvider::HandleRequests()
 {
     if(m_requests.size() > 0)
     {
-        // Held fetches are issued after the loop, since a new request can rehash
-        // m_requests under the iterator.
-        std::vector<RequestType> freed_types;
         for(auto it = m_requests.begin(); it != m_requests.end();)
         {
             RequestInfo&        req = it->second;
@@ -2874,16 +2862,11 @@ DataProvider::HandleRequests()
                         }
                     }
                 }
-                freed_types.push_back(erased_type);
             }
             else
             {
                 ++it;
             }
-        }
-        for(RequestType type : freed_types)
-        {
-            IssueQueuedEventFetch(type);
         }
     }
 }
@@ -2961,7 +2944,7 @@ DataProvider::ProcessEventCallStackRequest(RequestInfo& req)
 
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
-    if(event_params)
+    if(event_params && req.response_code == kRocProfVisResultSuccess)
     {
         EventInfo* event_info = const_cast<EventInfo*>(
             m_model.GetEvents().GetEvent(event_params->m_event_id));
@@ -3044,15 +3027,16 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
 
-    uint64_t event_id = INVALID_UINT64_INDEX;
+    uint64_t event_id = event_params ? event_params->m_event_id : INVALID_UINT64_INDEX;
     bool success = false;
-    if(event_params && m_model.GetEvents().EventCount() > 0)
+    if(event_params && req.response_code == kRocProfVisResultSuccess &&
+       m_model.GetEvents().EventCount() > 0)
     {
-        event_id = event_params->m_event_id;
         EventInfo* event_info = m_model.GetEvents().GetEvent(event_params->m_event_id);
         if(event_info)
         {
             event_info->ext_info.clear();
+            event_info->args.clear();
 
             for(uint64_t j = 0; j < prop_count; j++)
             {
@@ -3066,14 +3050,19 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                     continue;
                 }
 
-                uint64_t data_type;  // rocprofvis_controller_primitive_type_t
-                uint64_t data_enum;  // rocprofvis_event_data_category_enum_t
+                uint64_t data_type = 0;  // rocprofvis_controller_primitive_type_t
+                uint64_t data_enum = 0;  // rocprofvis_event_data_category_enum_t
                 result = rocprofvis_controller_get_uint64(ext_data_handle,
                                                           kRPVControllerExtDataType, 0,
                                                           (uint64_t*) &data_type);
                 result = rocprofvis_controller_get_uint64(
                     ext_data_handle, kRPVControllerExtDataCategoryEnum, 0,
                     (uint64_t*) &data_enum);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    spdlog::warn("Failed to get extended data category for entry {}", j);
+                    continue;
+                }
 
                 // skip this item if it is argument data, it will be handled below
                 if(data_enum != kRocProfVisEventArgumentData)
@@ -3253,7 +3242,7 @@ DataProvider::ProcessEventFlowDetailsRequest(RequestInfo& req)
     std::shared_ptr<EventRequestParams> event_params =
         std::dynamic_pointer_cast<EventRequestParams>(req.custom_params);
 
-    if(event_params)
+    if(event_params && req.response_code == kRocProfVisResultSuccess)
     {
         EventInfo* event_info = m_model.GetEvents().GetEvent(event_params->m_event_id);
         if(event_info)
@@ -3585,6 +3574,8 @@ DataProvider::CreateSummaryData(SummaryModel&        summary,
         rocprofvis_analysis_summary_aggregation_level_t aggregation_level =
             static_cast<rocprofvis_analysis_summary_aggregation_level_t>(uint64_data);
 
+        // The controller's metrics are a tree of the same shape as the summary, and
+        // sub_metrics_idx is the path from the root to the node this call fills.
         SummaryInfo::AggregateMetrics& root_summary = summary.GetSummaryData();
 
         if(aggregation_level == __kRPVAnalysisSummaryAggregationLevelFirst)
@@ -3609,6 +3600,9 @@ DataProvider::CreateSummaryData(SummaryModel&        summary,
                 metrics_handle, kRPVAnalysisSummaryMetricPropertyMetadata, 0,
                 &metadata_handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && metadata_handle);
+            // Each level points at its topology node and holds the event lists of its
+            // kind: a processor's GPU or CPU events, a process's or thread's launches,
+            // and all of them rolled up on a node and on the trace.
             switch(aggregation_level)
             {
                 case kRPVAnalysisSummaryAggregationLevelTrace:
@@ -3680,6 +3674,8 @@ DataProvider::CreateSummaryData(SummaryModel&        summary,
                 metrics_handle, kRPVAnalysisSummaryMetricPropertyNumSubMetrics, 0,
                 &uint64_data);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            // Sized once before any child fills in, so the children never move while a
+            // deeper call walks the path to one of them.
             output.sub_metrics.resize(uint64_data);
             for(size_t j = 0; j < output.sub_metrics.size(); j++)
             {
@@ -4812,60 +4808,17 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 }
 
 bool
-DataProvider::QueueEventFetch(RequestType type, uint64_t request_id, uint64_t event_id)
+DataProvider::IsPendingEventFetch(const RequestInfo& pending, uint64_t event_id) const
 {
-    if(m_requests.count(request_id) == 0)
+    std::shared_ptr<EventRequestParams> pending_params =
+        std::dynamic_pointer_cast<EventRequestParams>(pending.custom_params);
+    const bool same_event = pending_params && pending_params->m_event_id == event_id;
+    if(!same_event)
     {
-        return false;
+        spdlog::warn("Event {} shares request id {:x} with an in-flight fetch", event_id,
+                     pending.request_id);
     }
-    m_queued_event_fetches[type].push_back(event_id);
-    return true;
-}
-
-void
-DataProvider::IssueQueuedEventFetch(RequestType type)
-{
-    auto queued = m_queued_event_fetches.find(type);
-    if(queued == m_queued_event_fetches.end())
-    {
-        return;
-    }
-    // Events deselected while they waited are skipped, since their details would be
-    // dropped on arrival. A fetch that fails to start moves on to the next one, or the
-    // rest would wait for a completion that never comes.
-    bool issued = false;
-    while(!issued && !queued->second.empty())
-    {
-        const uint64_t event_id = queued->second.front();
-        queued->second.pop_front();
-        if(m_model.GetEvents().GetEvent(event_id) == nullptr)
-        {
-            continue;
-        }
-        switch(type)
-        {
-            case RequestType::kFetchEventExtendedData:
-            {
-                issued = FetchEventExtData(event_id);
-                break;
-            }
-            case RequestType::kFetchEventFlowDetails:
-            {
-                issued = FetchEventFlowDetails(event_id);
-                break;
-            }
-            case RequestType::kFetchEventCallStack:
-            {
-                issued = FetchEventCallStackData(event_id);
-                break;
-            }
-            default:
-            {
-                issued = true;
-                break;
-            }
-        }
-    }
+    return same_event;
 }
 
 bool
@@ -4877,10 +4830,12 @@ DataProvider::FetchEventExtData(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-    if(QueueEventFetch(RequestType::kFetchEventExtendedData,
-                       EVENT_EXTENDED_DATA_REQUEST_ID, event_id))
+    const uint64_t request_id = RequestIdBuilder::MakeEventDataRequestId(
+        event_id, RequestType::kFetchEventExtendedData);
+    auto pending = m_requests.find(request_id);
+    if(pending != m_requests.end())
     {
-        return true;
+        return IsPendingEventFetch(pending->second, event_id);
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4899,7 +4854,7 @@ DataProvider::FetchEventExtData(uint64_t event_id)
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
-        request_info.request_id         = EVENT_EXTENDED_DATA_REQUEST_ID;
+        request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventExtendedData;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
@@ -4926,10 +4881,12 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-    if(QueueEventFetch(RequestType::kFetchEventFlowDetails, EVENT_FLOW_DATA_REQUEST_ID,
-                       event_id))
+    const uint64_t request_id = RequestIdBuilder::MakeEventDataRequestId(
+        event_id, RequestType::kFetchEventFlowDetails);
+    auto pending = m_requests.find(request_id);
+    if(pending != m_requests.end())
     {
-        return true;
+        return IsPendingEventFetch(pending->second, event_id);
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4948,7 +4905,7 @@ DataProvider::FetchEventFlowDetails(uint64_t event_id)
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
-        request_info.request_id         = EVENT_FLOW_DATA_REQUEST_ID;
+        request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventFlowDetails;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
@@ -4975,10 +4932,12 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
                       static_cast<int>(m_state));
         return false;
     }
-    if(QueueEventFetch(RequestType::kFetchEventCallStack,
-                       EVENT_CALL_STACK_DATA_REQUEST_ID, event_id))
+    const uint64_t request_id = RequestIdBuilder::MakeEventDataRequestId(
+        event_id, RequestType::kFetchEventCallStack);
+    auto pending = m_requests.find(request_id);
+    if(pending != m_requests.end())
     {
-        return true;
+        return IsPendingEventFetch(pending->second, event_id);
     }
 
     auto future   = rocprofvis_controller_future_alloc();
@@ -4997,7 +4956,7 @@ DataProvider::FetchEventCallStackData(uint64_t event_id)
         request_info.request_future     = future;
         request_info.request_obj_handle = nullptr;
         request_info.request_args       = nullptr;
-        request_info.request_id         = EVENT_CALL_STACK_DATA_REQUEST_ID;
+        request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
         request_info.request_type       = RequestType::kFetchEventCallStack;
         request_info.custom_params      = std::make_shared<EventRequestParams>(event_id);
@@ -5083,13 +5042,6 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
             rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumKernels, 0,
                                              metrics_params.m_kernel_ids.size());
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        for(size_t i = 0; i < metrics_params.m_kernel_ids.size(); i++)
-        {
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerMetricArgsKernelIdIndexed, i,
-                static_cast<uint64_t>(metrics_params.m_kernel_ids[i]));
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        }
         result =
             rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumMetrics, 0,
                                              metrics_params.m_metric_ids.size());
@@ -5132,6 +5084,9 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
         {
             spdlog::error("Failed to fetch metrics, result: {}",
                           static_cast<int>(result));
+            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_arguments_free(args);
+            rocprofvis_controller_metrics_container_free(output);
             return false;
         }
     }
@@ -5140,6 +5095,13 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
         spdlog::debug("Request for metrics is already pending");
     }
     return false;
+}
+
+bool
+DataProvider::LastMetricsFetchSucceeded(uint64_t client_id) const
+{
+    auto it = m_metrics_fetch_succeeded.find(client_id);
+    return it != m_metrics_fetch_succeeded.end() && it->second;
 }
 
 bool
@@ -5665,6 +5627,7 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
 
     kernel.pc_sampling_data.code_objects.clear();
     kernel.pc_sampling_data.code_objects.resize(num_code_objects);
+    kernel.pc_sampling_data.instruction_type_lookup_map.clear();
     std::unordered_map<uint64_t, CodeObjectStore*> code_objects_by_uuid;
     code_objects_by_uuid.reserve(num_code_objects);
     for(uint64_t i = 0; i < num_code_objects; i++)
@@ -5714,7 +5677,9 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
             continue;
         }
         InstructionLine instruction_line;
-        LoadPcSamplingInstructionLine(instruction_line, pc_handle, ii);
+        LoadPcSamplingInstructionLine(
+            instruction_line, kernel.pc_sampling_data.instruction_type_lookup_map,
+            pc_handle, ii);
         kernel_symbol_it->second->instruction_lines.emplace_back(std::move(instruction_line));
     }
 }
@@ -5732,15 +5697,31 @@ DataProvider::LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
         &kernel_symbol.code_object_uuid);
 }
 
-inline void
-DataProvider::LoadPcSamplingInstructionLine(InstructionLine&     instruction_line,
-                                            rocprofvis_handle_t* pc_handle,
-                                            uint64_t             index)
+inline void DataProvider::LoadPcSamplingInstructionLine(
+    InstructionLine&                          instruction_line,
+    std::unordered_map<uint64_t, std::string>& instruction_type_lookup_map,
+    rocprofvis_handle_t*                       pc_handle,
+    uint64_t                                   index)
 {
     uint64_t instruction_uuid = 0;
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingInstructionLineUuid, index,
                                      &instruction_uuid);
     instruction_line.instruction_uuid = instruction_uuid;
+    instruction_line.instruction_type_uuid.reset();
+    uint64_t instruction_type_uuid = 0;
+    if(rocprofvis_controller_get_uint64(
+           pc_handle, kRPVControllerPCSamplingInstructionLineInstructionTypeUuid, index,
+           &instruction_type_uuid) == kRocProfVisResultSuccess)
+    {
+        instruction_line.instruction_type_uuid = instruction_type_uuid;
+        const auto [lookup_it, inserted] =
+            instruction_type_lookup_map.try_emplace(instruction_type_uuid);
+        if(inserted)
+        {
+            lookup_it->second = GetString(
+                pc_handle, kRPVControllerPCSamplingInstructionLineInstructionType, index);
+        }
+    }
     rocprofvis_controller_get_uint64(
         pc_handle, kRPVControllerPCSamplingInstructionLineCodeObjectOffset, index,
         &instruction_line.code_object_offset);
@@ -6188,6 +6169,12 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
     }
     std::shared_ptr<MetricsRequestParams> request_params =
         std::dynamic_pointer_cast<MetricsRequestParams>(req.custom_params);
+    if(request_params)
+    {
+        m_metrics_fetch_succeeded[request_params->m_client_id] =
+            req.request_obj_handle != nullptr &&
+            req.response_code == kRocProfVisResultSuccess;
+    }
     if(req.request_obj_handle && request_params)
     {
         rocprofvis_controller_metrics_container_t* container = req.request_obj_handle;
@@ -6408,12 +6395,12 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
+    KernelInfo*          kernel =
+        m_compute_model.GetKernelInfoMutable(params->m_workload_id, params->m_kernel_id);
 
     if(pc_handle && req.response_code != kRocProfVisResultCancelled &&
        (success || params->m_layer == PcSamplingLayer::kStalls))
     {
-        KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
-            params->m_workload_id, params->m_kernel_id);
         if(kernel)
         {
             switch(params->m_layer)
@@ -6475,6 +6462,65 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     if(!success && req.response_code != kRocProfVisResultCancelled)
     {
         spdlog::warn("PC sampling request failed with code {}", req.response_code);
+    }
+
+    // A cancelled read is left unmarked, so whoever still wants the layer reads
+    // it again. A source file is recorded as read only when its lines landed;
+    // a failed or unsupported read is recorded apart from that, so the same
+    // call does not ask for it again, and does not take back a file whose
+    // lines already did.
+    if(kernel && req.response_code != kRocProfVisResultCancelled)
+    {
+        PcSamplingLayerState outcome = PcSamplingLayerState::kFailed;
+        if(success && pc_handle)
+        {
+            outcome = PcSamplingLayerState::kRead;
+        }
+        else if(req.response_code == kRocProfVisResultNotSupported)
+        {
+            outcome = PcSamplingLayerState::kUnsupported;
+        }
+        PcSamplingData&            data    = kernel->pc_sampling_data;
+        switch(params->m_layer)
+        {
+            case PcSamplingLayer::kIsa:
+                data.isa_state = outcome;
+                break;
+            case PcSamplingLayer::kSource:
+                if(data.source_state != PcSamplingLayerState::kRead)
+                {
+                    data.source_state = outcome;
+                }
+                if(completed_source_file_uuid != 0)
+                {
+                    const std::vector<uint64_t>::iterator read = std::find(
+                        data.source_files_read.begin(), data.source_files_read.end(),
+                        completed_source_file_uuid);
+                    const std::vector<uint64_t>::iterator failed = std::find(
+                        data.source_files_failed.begin(), data.source_files_failed.end(),
+                        completed_source_file_uuid);
+                    if(outcome == PcSamplingLayerState::kRead)
+                    {
+                        if(read == data.source_files_read.end())
+                        {
+                            data.source_files_read.push_back(completed_source_file_uuid);
+                        }
+                        if(failed != data.source_files_failed.end())
+                        {
+                            data.source_files_failed.erase(failed);
+                        }
+                    }
+                    else if(read == data.source_files_read.end() &&
+                            failed == data.source_files_failed.end())
+                    {
+                        data.source_files_failed.push_back(completed_source_file_uuid);
+                    }
+                }
+                break;
+            case PcSamplingLayer::kStalls:
+                data.stalls_state = outcome;
+                break;
+        }
     }
 
     req.request_obj_handle = nullptr;

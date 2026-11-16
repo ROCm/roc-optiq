@@ -156,7 +156,11 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
         GetAssistantActivityBins(context, track_id, bin_count);
     if(bins.empty())
     {
-        ImGui::TextDisabled("No activity to show for this trace.");
+        // Empty means the trace has no minimap, or this track has no row in it.
+        // Only the overview chart is the whole trace.
+        ImGui::TextDisabled(track_id == INVALID_UINT64_INDEX
+                                ? "No activity to show for this trace."
+                                : "No activity to show for this track.");
         return;
     }
 

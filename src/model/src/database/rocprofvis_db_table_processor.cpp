@@ -514,9 +514,12 @@ namespace DataModel
 
     bool TableProcessor::IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries)
     {
-        // Search ids pack an operation into the track id. Their statements are
-        // compared like ordinary track queries, so the data request following a
-        // count request can reuse the rows already loaded.
+        if(!m_db->ReuseSearchQueryRows() && m_current_queries.size() &&
+           (*m_current_queries.begin()).second.size() &&
+           TABLE_QUERY_UNPACK_OP_TYPE((*(*m_current_queries.begin()).second.begin()).second.track))
+        {
+            return false;
+        }
         for(std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
         {
             if(m_current_queries.count(track.first) && track.second.size())

@@ -77,40 +77,44 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
         }
     }
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
-    if (db_type == rocprofvis_db_type_t::kProfilerHub) {
-        RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::ProfilerHub(filename);
-        if (kRocProfVisDmResultSuccess == db->Open()) {
-            return db;
+    if (db_type == rocprofvis_db_type_t::kProfilerHub)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::ProfilerHub(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            } else {
+                delete db;
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database using profiler hub!",
+                    nullptr);
+            }
         }
-        else {
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database using profiler hub!",
-                nullptr);
+        catch(std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
         }
-    }
-    else
+    } else
 #endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
-            if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
-            {
-                try {
-                    RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::GoogleTraceProcessor(filename);
-                    if (kRocProfVisDmResultSuccess == db->Open()) {
-                        return db;
-                    }
-                    else {
-                        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open Chrome Trace or Perfetto output!",
-                            nullptr);
-                    }
-                }
-                catch (std::exception ex)
-                {
-                    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
-                        RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
-                }
+    if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::GoogleTraceProcessor(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            } else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open Chrome Trace or Perfetto output!",
+                    nullptr);
             }
-            else
+        }
+        catch(std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
 #endif
-
     if (db_type == rocprofvis_db_type_t::kRocpdSqlite)
     {
         try {

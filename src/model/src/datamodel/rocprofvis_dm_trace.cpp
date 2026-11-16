@@ -876,6 +876,9 @@ rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMNumberOfNodesUint64:
             *value = NumberOfDbInstances();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMHistogramAlignedUInt64:
+            *value = m_parameters.histogram_aligned ? 1 : 0;
+            return kRocProfVisDmResultSuccess;
         default:
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
     }
@@ -958,6 +961,8 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMHistogramNumBuckets";
         case kRPVDMHistogramBucketSize:
             return "kRPVDMHistogramBucketSize";
+        case kRPVDMHistogramAlignedUInt64:
+            return "kRPVDMHistogramAlignedUInt64";
         default:
             return "Unknown property";
     }   

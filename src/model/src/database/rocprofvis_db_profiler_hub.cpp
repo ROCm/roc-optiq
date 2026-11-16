@@ -174,10 +174,37 @@ ProfilerHub::Open()
     return kRocProfVisDmResultSuccess;
 }
 
+bool
+ProfilerHub::IsSourceFile(rocprofvis_dm_charptr_t path)
+{
+    std::error_code error;
+    if(std::filesystem::equivalent(path, Path(), error))
+    {
+        return true;
+    }
+    std::vector<std::string> files;
+    if(HubYamlFiles(Path(), files))
+    {
+        for(const std::string& file : files)
+        {
+            if(std::filesystem::equivalent(path, file, error))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 rocprofvis_dm_result_t
 ProfilerHub::Close()
 {
+    if(m_ph_trace == nullptr)
+    {
+        return kRocProfVisDmResultSuccess;
+    }
     ph_result_t result = ph_ctx_free(m_ph_trace);
+    m_ph_trace         = nullptr;
     return result == PH_RESULT_SUCCESS ? kRocProfVisDmResultSuccess
                                        : kRocProfVisDmResultUnknownError;
 }
@@ -684,6 +711,9 @@ ProfilerHub::BuildHistogram(Future* future)
 
     TraceProperties()->histogram_bucket_size  = histogram.bucket_size;
     TraceProperties()->histogram_bucket_count = histogram.bucket_count;
+    // The hub grid starts at origin_ts for every source, while each source's
+    // track timestamps are relative to its own start.
+    TraceProperties()->histogram_aligned = false;
     // if(!TraceProperties()->db_inst_start_time.empty() && histogram.bucket_count > 0)
     //{
     //     TraceProperties()->db_inst_start_time[0] = histogram.origin_ts;

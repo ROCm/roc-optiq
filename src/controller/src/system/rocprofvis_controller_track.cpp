@@ -511,12 +511,13 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
     constexpr uint32_t max_threads_per_range = 2;
     uint32_t num_events_per_range =
         GetNumberOfEventsForTimeRange(fetch_range.start, fetch_range.end);
-    // A zero histogram used to skip the read. Per-source bucket grids do not
-    // share one origin, so a track that overlaps this window can still sum
-    // to 0 and then draw nothing. The events table does not use this grid.
+    bool histogram_aligned =
+        rocprofvis_dm_get_property_as_uint64(trace, kRPVDMHistogramAlignedUInt64, 0) != 0;
     if (num_events_per_range == 0 && kRocProfVisDmPmcTrack != dm_track_type &&
-        (end <= GetStartTimestamp() || start >= GetEndTimestamp()))
+        (histogram_aligned || end <= GetStartTimestamp() || start >= GetEndTimestamp()))
+    {
         return kRocProfVisResultSuccess;
+    }
     int num_threads = (num_events_per_range + thread_max_events) / thread_max_events;
     if (num_threads > max_threads_per_range)
         num_threads = max_threads_per_range;

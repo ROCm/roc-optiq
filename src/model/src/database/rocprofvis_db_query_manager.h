@@ -336,7 +336,9 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             Future* future,
             std::vector<rocprofvis_db_name_duration_t>& rows) override;
 
-        bool EventSummaryInSqlite() const override { return true; }
+        // SummarizeNameDurations does not apply the FILTER command yet, so the
+        // summary stays on the in-memory aggregation path
+        bool EventSummaryInSqlite() const override { return false; }
 
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
         virtual std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }

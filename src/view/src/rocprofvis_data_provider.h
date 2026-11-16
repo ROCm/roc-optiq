@@ -213,10 +213,6 @@ public:
     bool FetchTable(const TableRequestParams& table_params);
 
     bool FetchSummary();
-    // Whether the last summary request completed with an error. A caller that
-    // retries after an in-flight request needs this to distinguish an empty
-    // summary from one that has not been requested yet.
-    bool SummaryFetchFailed() const;
 
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
@@ -250,7 +246,9 @@ public:
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
-    void SetSummaryDataReadyCallback(const std::function<void()>& callback);
+    // Called when the summary request finishes. The argument is true only when
+    // the summary was written. TraceView turns this into a SummaryEvent.
+    void SetSummaryDataReadyCallback(const std::function<void(bool)>& callback);
     void SetTraceLoadedCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
@@ -419,7 +417,6 @@ private:
     rocprofvis_controller_timeline_t* m_trace_timeline;
 
     ProviderState m_state;
-    bool          m_summary_fetch_failed;
 
     // Data model aggregating all trace data
     TraceDataModel m_model;
@@ -442,7 +439,7 @@ private:
         m_event_data_ready_callback;
 
     // Called when summary data has changed
-    std::function<void()> m_summary_data_ready_callback;
+    std::function<void(bool)> m_summary_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
     // Callback when database cleanup has completed

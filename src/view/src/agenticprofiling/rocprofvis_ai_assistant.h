@@ -123,7 +123,11 @@ private:
         std::chrono::steady_clock::time_point started;
         // Zero takes the default fetch deadline. A tool waiting on the user
         // rather than on a query sets its own, much longer.
-        uint32_t              timeout_seconds = 0;
+        uint32_t timeout_seconds = 0;
+        // Set from SummaryEvent while parked on a summary. A failure stops this
+        // wait instead of asking the provider for the same summary again.
+        bool summary_settled   = false;
+        bool summary_succeeded = false;
     };
 
     // A cancelled HTTP call reaped from Update() instead of joined in the tab
@@ -147,6 +151,9 @@ private:
     // Forgets what the model was told, keeping the transcript on screen.
     void ResetHistory(Conversation& conversation);
     void HandleTabClosed(const std::string& project_id);
+    // A summary finished on some trace. Recorded only when this turn is parked
+    // on that trace's summary, whoever started the request.
+    void HandleSummaryEvent(const SummaryEvent& event);
 
     void AppendLine(Speaker speaker, const std::string& text);
     void        AppendChart(const std::string& project_id, uint64_t track_id);
@@ -241,6 +248,7 @@ private:
     FetchWait   m_fetch_wait;
 
     EventManager::SubscriptionToken m_tab_closed_token;
+    EventManager::SubscriptionToken m_summary_event_token;
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;

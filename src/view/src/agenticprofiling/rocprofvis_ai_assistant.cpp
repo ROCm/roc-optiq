@@ -108,6 +108,7 @@ AssistantPanel::AssistantPanel()
 , m_stop_tool_queue(false)
 , m_fetch_retries(0)
 , m_tab_closed_token(EventManager::InvalidSubscriptionToken)
+, m_summary_event_token(EventManager::InvalidSubscriptionToken)
 {
     m_widget_name = GenUniqueName("AssistantPanel");
 
@@ -125,6 +126,17 @@ AssistantPanel::AssistantPanel()
                 HandleTabClosed(tab_event->GetTabId());
             }
         });
+
+    m_summary_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kSummaryComplete),
+        [this](std::shared_ptr<RocEvent> event) {
+            std::shared_ptr<SummaryEvent> summary_event =
+                std::dynamic_pointer_cast<SummaryEvent>(event);
+            if(summary_event != nullptr)
+            {
+                HandleSummaryEvent(*summary_event);
+            }
+        });
 }
 
 // Aborts anything in flight, so quitting mid-answer does not wait on the network.
@@ -133,6 +145,8 @@ AssistantPanel::~AssistantPanel()
     CancelPendingRequest();
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tab_closed_token);
+    EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSummaryComplete),
+                                             m_summary_event_token);
 }
 
 void
@@ -182,6 +196,29 @@ AssistantPanel::ResetHistory(Conversation& conversation)
     conversation.messages.clear();
     conversation.briefed = false;
     conversation.links_announced.clear();
+}
+
+void
+AssistantPanel::HandleSummaryEvent(const SummaryEvent& event)
+{
+    if(!m_fetch_wait.active)
+    {
+        return;
+    }
+    const AssistantFetchKind kind = m_fetch_wait.fetch.kind;
+    if(kind != AssistantFetchKind::kSummary && kind != AssistantFetchKind::kCompareTraces)
+    {
+        return;
+    }
+    const std::string& waited =
+        m_fetch_wait.fetch.project_id.empty() ? m_turn_project_id
+                                              : m_fetch_wait.fetch.project_id;
+    if(event.GetSourceId() != waited)
+    {
+        return;
+    }
+    m_fetch_wait.summary_settled   = true;
+    m_fetch_wait.summary_succeeded = event.Succeeded();
 }
 
 void
@@ -1064,6 +1101,30 @@ AssistantPanel::PollToolFetch()
     {
         m_fetch_wait = FetchWait();
         BeginQueuedTurn();
+        return;
+    }
+
+    // The summary request this wait was parked on finished without writing one.
+    // Reporting it here stops compare_traces from requesting that same summary
+    // again on the re-entry that follows a completed wait.
+    if(m_fetch_wait.summary_settled && !m_fetch_wait.summary_succeeded &&
+       (m_fetch_wait.fetch.kind == AssistantFetchKind::kSummary ||
+        m_fetch_wait.fetch.kind == AssistantFetchKind::kCompareTraces))
+    {
+        const std::string name =
+            context.trace_name.empty() ? std::string("this trace") : context.trace_name;
+        if(m_fetch_wait.fetch.kind == AssistantFetchKind::kCompareTraces)
+        {
+            FinishCurrentTool(
+                "The summary of " + name +
+                " failed to load, so the runs cannot be compared. Call get_summary on "
+                "that trace to retry, or use top_events on each trace instead.");
+        }
+        else
+        {
+            FinishCurrentTool("The summary of " + name +
+                              " failed to load. Use top_events or track_events instead.");
+        }
         return;
     }
 

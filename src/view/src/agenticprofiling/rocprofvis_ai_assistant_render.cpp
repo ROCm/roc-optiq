@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
@@ -472,6 +473,23 @@ AssistantPanel::RenderTranscript()
     ImGui::BeginChild("assistant_history", ImVec2(0.0f, -composer_height),
                       ImGuiChildFlags_Borders);
 
+    // The reader went looking at something earlier. Stop following, or the next
+    // frame pulls them back down. Messages are child windows, so the wheel has
+    // to count over them too.
+    const ImRect scrollbar =
+        ImGui::GetWindowScrollbarRect(ImGui::GetCurrentWindow(), ImGuiAxis_Y);
+    const bool scrollbar_clicked =
+        scrollbar.GetWidth() > 0.0f &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        ImGui::IsMouseHoveringRect(scrollbar.Min, scrollbar.Max);
+    if((ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::GetIO().MouseWheel > 0.0f) ||
+       scrollbar_clicked)
+    {
+        m_scroll_to_bottom     = false;
+        m_scroll_settle_frames = 0;
+    }
+
     if(m_lines.empty())
     {
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
@@ -499,10 +517,22 @@ AssistantPanel::RenderTranscript()
         PanelFieldLabel(m_status.c_str(), false, &settings);
     }
 
+    // Kept up for several frames. The request is only applied the next time this
+    // child begins, and the app draws on demand, so without another frame asked
+    // for the view never moves. A message's height is also not final on the
+    // frame it first appears.
     if(m_scroll_to_bottom)
     {
         ImGui::SetScrollHereY(1.0f);
-        m_scroll_to_bottom = false;
+        if(m_scroll_settle_frames > 0)
+        {
+            --m_scroll_settle_frames;
+            RenderScheduler::GetInstance().RequestRender();
+        }
+        else
+        {
+            m_scroll_to_bottom = false;
+        }
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);

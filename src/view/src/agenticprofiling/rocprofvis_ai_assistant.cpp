@@ -83,6 +83,11 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
+// Frames to keep pinning the transcript after something new lands. The scroll
+// request is applied the frame after it is made, and a message's real height
+// arrives a frame after it is first drawn, so fewer than this leaves the view
+// where it was.
+constexpr uint32_t ASSISTANT_SCROLL_SETTLE_FRAMES = 4;
 
 }  // namespace
 
@@ -108,6 +113,7 @@ AssistantPanel::DestroyInstance()
 AssistantPanel::AssistantPanel()
 : m_visible(false)
 , m_scroll_to_bottom(false)
+, m_scroll_settle_frames(0)
 , m_dock_width(ASSISTANT_DEFAULT_WIDTH)
 , m_phase(Phase::kIdle)
 , m_composer_height(0.0f)
@@ -151,7 +157,14 @@ AssistantPanel::AppendLine(Speaker speaker, const std::string& text)
     line.speaker = speaker;
     line.text    = text;
     m_lines.push_back(line);
-    m_scroll_to_bottom = true;
+    FollowTranscript();
+}
+
+void
+AssistantPanel::FollowTranscript()
+{
+    m_scroll_to_bottom     = true;
+    m_scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
 }
 
 // Adds an activity strip for one track, or the whole trace when track_id is
@@ -172,14 +185,25 @@ AssistantPanel::AppendChart(uint64_t track_id)
     line.speaker  = Speaker::kChart;
     line.track_id = track_id;
     m_lines.push_back(line);
-    m_scroll_to_bottom = true;
+    FollowTranscript();
 }
 
 void
 AssistantPanel::SetStatus(const std::string& text)
 {
-    m_status           = text;
-    m_scroll_to_bottom = true;
+    // The slow-fetch timer rewrites this every frame. Restarting the pin each
+    // time would drag the reader back down the moment they scrolled up, so a
+    // repeat changes nothing, and a new line only extends a pin that is already
+    // on. The answer itself still pins, through AppendLine.
+    if(text == m_status)
+    {
+        return;
+    }
+    m_status = text;
+    if(m_scroll_to_bottom)
+    {
+        m_scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
+    }
 }
 
 // Resolves what the tools may touch, from whichever trace is in front. Rebuilt
@@ -972,7 +996,7 @@ AssistantPanel::PollToolFetch()
     }
 
     // The warmup has no tool call to answer, so the queued question goes out
-    // whether it landed or timed out — but only on the same trace it started on.
+    // whether it landed or timed out - but only on the same trace it started on.
     if(m_fetch_wait.warmup)
     {
         m_fetch_wait = FetchWait();

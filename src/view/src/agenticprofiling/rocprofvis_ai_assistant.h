@@ -97,6 +97,9 @@ private:
     ~AssistantPanel() override;
 
     void AppendLine(Speaker speaker, const std::string& text);
+    // Pins the transcript on whatever just arrived, for long enough that the
+    // view actually moves. One frame never does.
+    void FollowTranscript();
     void AppendChart(uint64_t track_id);
     void RenderActivityChart(uint64_t track_id);
     void        RenderHeaderCard();
@@ -156,6 +159,10 @@ private:
 
     bool  m_visible;
     bool  m_scroll_to_bottom;
+    // Frames still to spend pinning the transcript. ImGui applies a scroll
+    // request on the next frame, and a new message's height is not final until
+    // then, so the pin has to outlast the frame that asked for it.
+    uint32_t m_scroll_settle_frames;
     float m_dock_width;
     Phase m_phase;
 

@@ -907,7 +907,9 @@ AssistantPanel::RenderComposer()
                      gap * ASSISTANT_COMPOSER_GAP_COUNT);
 
     ImGui::SetNextItemWidth(input_width);
-    if(m_focus_input)
+    // A focused text item suppresses hotkeys. The box is read-only while a turn
+    // is running, so hold the request until it can take keys again.
+    if(m_focus_input && !Busy())
     {
         ImGui::SetKeyboardFocusHere();
         m_focus_input = false;
@@ -915,10 +917,10 @@ AssistantPanel::RenderComposer()
     InputTextStringWithHint("##assistant_input",
                             Busy() ? "Working..." : "Ask about this trace...", m_input,
                             input_flags);
-    const bool submitted =
-        ImGui::IsItemFocused() &&
-        (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) &&
-        !ImGui::GetIO().KeyShift && !Busy();
+    const bool submitted = ImGui::IsItemFocused() &&
+                           (ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) &&
+                           !ImGui::GetIO().KeyShift && !Busy();
 
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(Busy() || m_input.empty());

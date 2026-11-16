@@ -146,7 +146,7 @@ Summary View: System Speed-of-Light
 -------------------------------------
 
 - Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels in the selected workload, highlighting utilization relative to peak architectural capabilities. 
-- The Summary View's System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak, Percent-of-Peak**, and **Unit**. 
+- The **Summary View**'s System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak**, **Percent-of-Peak**, and **Unit**. 
 - Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
 - Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
 - Hover over a metric name to see a tooltip with a detailed description. 
@@ -304,7 +304,7 @@ Profile Details
 Baseline Comparison
 ===================
 
-It compares two workload measurements (baseline and target). Select **Metrics** or **Roofline** to choose the comparison.
+Baseline Comparison compares two workload measurements (baseline and target). Select **Metrics** or **Roofline** to choose the comparison.
 
 Baseline Comparison: Metrics
 ----------------------------

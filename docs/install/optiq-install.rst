@@ -1022,7 +1022,7 @@ Install
 
       .. note::
 
-         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in the last step, use the same path in this step for ``OPTIQ_PATH``.
+         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in Step 3, use the same path in this step for ``OPTIQ_PATH``.
 
    5. Verify your installation:
 
@@ -1095,7 +1095,7 @@ Install
 
       .. note::
 
-         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in the last step, use the same path in this step for ``OPTIQ_PATH``.
+         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in Step 3, use the same path in this step for ``OPTIQ_PATH``.
 
    5. Verify your installation:
 
@@ -1168,7 +1168,7 @@ Install
 
       .. note::
 
-         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in the last step, use the same path in this step for ``OPTIQ_PATH``.
+         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in Step 3, use the same path in this step for ``OPTIQ_PATH``.
 
    5. Verify your installation:
 

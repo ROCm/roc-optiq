@@ -2851,6 +2851,17 @@ Rules that are easy to get wrong here:
 - **Tools only ever run from `Update()`.** They toggle panel
   visibility and rebuild layout, so running them from `Render()` would
   mutate widgets halfway through the frame that draws them.
+- **Moving to new transcript content takes several frames.**
+  Non-answer activity calls `FollowTranscript` and stays at the bottom;
+  a complete assistant answer calls `ShowAnswerStart` and puts that
+  card's first line at the top, so a long answer is read from its
+  beginning rather than its conclusion. Both keep their scroll target
+  alive while `RenderTranscript` requests the next few frames. ImGui
+  applies `SetScrollHereY` on the following frame, and a message's child
+  height settles after that. Scrolling upward or clicking the scrollbar
+  cancels either target. `SetStatus` only extends a bottom follow already
+  in progress, so a slow-fetch timer cannot drag a reader back down
+  after they scroll away.
 - **A tool only formats rows from a fetch it started.** Several table
   request IDs and result slots are shared with the normal UI. If a tool
   finds one busy, it waits for that owner and retries its own query

@@ -113,7 +113,9 @@ AssistantPanel::DestroyInstance()
 AssistantPanel::AssistantPanel()
 : m_visible(false)
 , m_scroll_to_bottom(false)
+, m_scroll_to_answer(false)
 , m_scroll_settle_frames(0)
+, m_scroll_target_line(0)
 , m_dock_width(ASSISTANT_DEFAULT_WIDTH)
 , m_phase(Phase::kIdle)
 , m_composer_height(0.0f)
@@ -157,14 +159,31 @@ AssistantPanel::AppendLine(Speaker speaker, const std::string& text)
     line.speaker = speaker;
     line.text    = text;
     m_lines.push_back(line);
-    FollowTranscript();
+    if(speaker == Speaker::kAssistant)
+    {
+        ShowAnswerStart(m_lines.size() - 1);
+    }
+    else
+    {
+        FollowTranscript();
+    }
 }
 
 void
 AssistantPanel::FollowTranscript()
 {
     m_scroll_to_bottom     = true;
+    m_scroll_to_answer     = false;
     m_scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
+}
+
+void
+AssistantPanel::ShowAnswerStart(size_t line_index)
+{
+    m_scroll_to_bottom     = false;
+    m_scroll_to_answer     = true;
+    m_scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
+    m_scroll_target_line   = line_index;
 }
 
 // Adds an activity strip for one track, or the whole trace when track_id is

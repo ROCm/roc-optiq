@@ -474,8 +474,8 @@ AssistantPanel::RenderTranscript()
                       ImGuiChildFlags_Borders);
 
     // The reader went looking at something earlier. Stop following, or the next
-    // frame pulls them back down. Messages are child windows, so the wheel has
-    // to count over them too.
+    // frame pulls them back to our target. Messages are child windows, so the
+    // wheel has to count over them too.
     const ImRect scrollbar =
         ImGui::GetWindowScrollbarRect(ImGui::GetCurrentWindow(), ImGuiAxis_Y);
     const bool scrollbar_clicked =
@@ -487,6 +487,7 @@ AssistantPanel::RenderTranscript()
        scrollbar_clicked)
     {
         m_scroll_to_bottom     = false;
+        m_scroll_to_answer     = false;
         m_scroll_settle_frames = 0;
     }
 
@@ -504,6 +505,10 @@ AssistantPanel::RenderTranscript()
     for(size_t i = 0; i < m_lines.size(); ++i)
     {
         RenderMessageCard(i, m_lines[i]);
+        if(m_scroll_to_answer && i == m_scroll_target_line)
+        {
+            ImGui::SetScrollHereY(0.0f);
+        }
     }
 
     // Drawn from live state rather than stored, so it cannot outlive its turn.
@@ -521,18 +526,20 @@ AssistantPanel::RenderTranscript()
     // child begins, and the app draws on demand, so without another frame asked
     // for the view never moves. A message's height is also not final on the
     // frame it first appears.
+    const bool following = m_scroll_to_bottom || m_scroll_to_answer;
     if(m_scroll_to_bottom)
     {
         ImGui::SetScrollHereY(1.0f);
-        if(m_scroll_settle_frames > 0)
-        {
-            --m_scroll_settle_frames;
-            RenderScheduler::GetInstance().RequestRender();
-        }
-        else
-        {
-            m_scroll_to_bottom = false;
-        }
+    }
+    if(following && m_scroll_settle_frames > 0)
+    {
+        --m_scroll_settle_frames;
+        RenderScheduler::GetInstance().RequestRender();
+    }
+    else if(following)
+    {
+        m_scroll_to_bottom = false;
+        m_scroll_to_answer = false;
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);

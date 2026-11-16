@@ -97,9 +97,12 @@ private:
     ~AssistantPanel() override;
 
     void AppendLine(Speaker speaker, const std::string& text);
-    // Pins the transcript on whatever just arrived, for long enough that the
-    // view actually moves. One frame never does.
+    // Pins the transcript to its newest activity, for long enough that the view
+    // actually moves. One frame never does.
     void FollowTranscript();
+    // Puts the first line of a complete assistant answer at the top instead of
+    // skipping the reader to its conclusion.
+    void ShowAnswerStart(size_t line_index);
     void AppendChart(uint64_t track_id);
     void RenderActivityChart(uint64_t track_id);
     void        RenderHeaderCard();
@@ -157,14 +160,16 @@ private:
 
     static AssistantPanel* s_instance;
 
-    bool  m_visible;
-    bool  m_scroll_to_bottom;
+    bool     m_visible;
+    bool     m_scroll_to_bottom;
+    bool     m_scroll_to_answer;
     // Frames still to spend pinning the transcript. ImGui applies a scroll
     // request on the next frame, and a new message's height is not final until
     // then, so the pin has to outlast the frame that asked for it.
     uint32_t m_scroll_settle_frames;
-    float m_dock_width;
-    Phase m_phase;
+    size_t   m_scroll_target_line;
+    float    m_dock_width;
+    Phase    m_phase;
 
     std::string m_input;
     std::string m_status;

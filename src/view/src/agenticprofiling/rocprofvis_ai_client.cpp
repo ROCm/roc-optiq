@@ -71,9 +71,9 @@ constexpr size_t ASSISTANT_MAX_HARMONY_CALLS = 4;
 // something other than a chat endpoint from buffering the 100 MB httplib allows.
 constexpr size_t ASSISTANT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
-// Longest provider error shown. Toasts size to their text, so a page of it would
-// draw one wider than the screen.
-constexpr size_t        ASSISTANT_MAX_ERROR_CHARS = 500;
+// Longest provider error shown, in bytes. text.size() counts bytes, and toasts
+// size to their text, so a page of it would draw one wider than the screen.
+constexpr size_t        ASSISTANT_MAX_ERROR_BYTES = 500;
 constexpr unsigned char UTF8_CONTINUATION_MASK    = 0xC0;
 constexpr unsigned char UTF8_CONTINUATION_BITS    = 0x80;
 
@@ -519,16 +519,16 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
     }
 }
 
-// Cuts a provider's message to ASSISTANT_MAX_ERROR_CHARS, backing off to the start
-// of a character so the cut does not split a UTF-8 sequence.
+// Cuts a provider's message to ASSISTANT_MAX_ERROR_BYTES, backing off to the
+// start of a character so the cut does not split a UTF-8 sequence.
 std::string
 ClampErrorText(std::string text)
 {
-    if(text.size() > ASSISTANT_MAX_ERROR_CHARS)
+    if(text.size() > ASSISTANT_MAX_ERROR_BYTES)
     {
-        size_t cut = ASSISTANT_MAX_ERROR_CHARS;
-        while(cut > 0 && (static_cast<unsigned char>(text[cut]) & UTF8_CONTINUATION_MASK) ==
-                             UTF8_CONTINUATION_BITS)
+        size_t cut = ASSISTANT_MAX_ERROR_BYTES;
+        while(cut > 0 && (static_cast<unsigned char>(text[cut]) &
+                          UTF8_CONTINUATION_MASK) == UTF8_CONTINUATION_BITS)
         {
             --cut;
         }
@@ -550,7 +550,8 @@ ErrorText(jt::Json& root)
             return ClampErrorText(error.getString());
         }
         const std::string message = JsonString(error, "message");
-        return message.empty() ? "The endpoint returned an error." : ClampErrorText(message);
+        return message.empty() ? "The endpoint returned an error."
+                               : ClampErrorText(message);
     }
     // A rejected key can come back as a bare {"message": "..."}.
     if(!root.contains("choices"))
@@ -841,6 +842,8 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     client.set_connection_timeout(ASSISTANT_CONNECT_TIMEOUT_SECONDS);
     client.set_read_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
     client.set_write_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
+    // Past this, httplib stops reading and reports Error::Read, the same failure
+    // as a dropped connection, so the panel cannot say which one happened.
     client.set_payload_max_length(ASSISTANT_MAX_RESPONSE_BYTES);
     // Redirects are deliberately not followed. cpp-httplib drops only a fixed
     // set of headers when a redirect crosses to another host, and the Azure

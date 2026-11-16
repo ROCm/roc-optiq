@@ -214,9 +214,16 @@ SettingsPanel::RenderAssistantSettings()
     ImGui::TextUnformatted("API key");
     ImGui::Separator();
 
-    const bool token_stored =
-        m_settings.HasAssistantToken(provider.name) && !m_assistant_clear_token;
-    if(token_stored && m_assistant_token_draft.empty())
+    if(!m_assistant_token_stored)
+    {
+        m_assistant_token_stored = m_settings.HasAssistantToken(provider.name);
+    }
+    const bool token_stored = m_assistant_token_stored.value() && !m_assistant_clear_token;
+    if(m_assistant_clear_token)
+    {
+        ImGui::TextWrapped("The stored key will be removed when you press OK.");
+    }
+    else if(token_stored && m_assistant_token_draft.empty())
     {
         ImGui::TextUnformatted("A key is stored. Leave the field blank to keep it.");
     }
@@ -257,12 +264,15 @@ SettingsPanel::RenderAssistantSettings()
     }
     ImGui::PopID();
 
+    ImGui::BeginDisabled(m_assistant_clear_token ||
+                         (!m_assistant_token_stored.value() && m_assistant_token_draft.empty()));
     if(ImGui::Button("Clear stored key"))
     {
         m_assistant_token_draft.clear();
         m_assistant_clear_token = true;
         m_settings_changed      = true;
     }
+    ImGui::EndDisabled();
 }
 
 // Called from OK, so nothing typed on this page reaches the credential store
@@ -301,6 +311,7 @@ SettingsPanel::DiscardAssistantTokenEdits()
     m_assistant_token_draft.clear();
     m_assistant_orphaned_providers.clear();
     m_assistant_clear_token = false;
+    m_assistant_token_stored.reset();
 }
 
 // The endpoint being edited, which is the key its token is stored under.
@@ -332,6 +343,7 @@ SettingsPanel::ResetAssistantOptions()
     m_usersettings.assistant.providers.clear();
     m_usersettings.assistant.providers.push_back(default_provider);
     m_usersettings.assistant.active = 0;
+    m_assistant_token_stored.reset();
     m_assistant_token_draft.clear();
     // The default endpoint has nothing configured now, so its key should go too.
     m_assistant_clear_token = true;

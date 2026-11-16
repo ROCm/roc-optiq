@@ -766,6 +766,12 @@ InterpretResponse(const httplib::Response& response, const std::string& url,
     else
     {
         ParseChatCompletion(parsed.second, allow_tool_calls, result);
+        // A refusal in a shape other than OpenAI's has no error text of its own, and
+        // "no choices" would send the user to fix a URL when the key was the problem.
+        if(response.status >= ASSISTANT_FIRST_ERROR_STATUS && ErrorText(parsed.second).empty())
+        {
+            result.error = ResponseError(response.status, response.body);
+        }
     }
 
     // A 404 is nearly always the URL being shaped wrong, so name what we asked

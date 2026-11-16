@@ -323,6 +323,8 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
     src/view/src/agenticprofiling/rocprofvis_ai_compute_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_endpoint.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_endpoint.h
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.h
     src/view/src/agenticprofiling/rocprofvis_ai_script_tools.cpp
@@ -519,6 +521,20 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
+
+    # Ask Optiq's endpoint URL handling is string work, testable without a
+    # network, a key, or the UI.
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+        set(ASSISTANT_ENDPOINT_TEST_NAME ${TARGET_NAME}-assistant-endpoint-tests)
+        add_executable(${ASSISTANT_ENDPOINT_TEST_NAME}
+            src/view/test/rocprofvis_ai_endpoint_tests.cpp
+            src/view/src/agenticprofiling/rocprofvis_ai_endpoint.cpp
+            src/view/src/agenticprofiling/rocprofvis_ai_endpoint.h)
+        target_include_directories(${ASSISTANT_ENDPOINT_TEST_NAME} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+        target_link_libraries(${ASSISTANT_ENDPOINT_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+        add_test(NAME ${ASSISTANT_ENDPOINT_TEST_NAME} COMMAND ${ASSISTANT_ENDPOINT_TEST_NAME})
+    endif()
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)

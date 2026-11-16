@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_ai_client.h"
+#include "rocprofvis_ai_endpoint.h"
 
 #include "rocprofvis_ai_tool_schema.h"
 
@@ -19,7 +20,6 @@
 #include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
-#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,7 +38,6 @@ constexpr int  ASSISTANT_FIRST_REDIRECT_STATUS     = 300;
 constexpr int  ASSISTANT_FIRST_ERROR_STATUS        = 400;
 constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
 constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
-constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 
 // How many tools one reply may ask for. Generous next to what an investigation
 // actually needs, and a ceiling on how much work a single malformed or hostile
@@ -51,8 +50,7 @@ constexpr char ASSISTANT_OPENAI_AUTH_PREFIX[] = "Bearer ";
 
 // Azure OpenAI, and the API-management gateways that front it: the key is a
 // subscription key and the deployment is named in the path.
-constexpr char ASSISTANT_AZURE_AUTH_HEADER[]      = "Ocp-Apim-Subscription-Key";
-constexpr char ASSISTANT_AZURE_OPENAI_API_VERSION[] = "2024-09-01-preview";
+constexpr char ASSISTANT_AZURE_AUTH_HEADER[] = "Ocp-Apim-Subscription-Key";
 
 // max_completion_tokens also covers reasoning tokens, which are billed but
 // never returned, so it has to pay for the thinking as well as the prose. Too
@@ -80,173 +78,6 @@ constexpr char ASSISTANT_REDIRECT_ERROR[] =
     "The endpoint answered with a redirect, which is not followed because the "
     "API key must not be handed to another host. Point the URL at the address "
     "the endpoint actually serves.";
-
-// Which endpoint the URL implies. Everything that differs between them - the
-// path, the auth header, and the token-limit field - keys off this, so the two
-// shapes are described in one place rather than sniffed at each use.
-enum class EndpointFlavour
-{
-    kOpenAi,
-    kAzure
-};
-
-// Azure-style bases name the deployment in the path, which is what the /azure,
-// /engines/ and /openai/deployments segments below identify.
-EndpointFlavour
-FlavourFromUrl(const std::string& url)
-{
-    const bool azure = url.find("/azure") != std::string::npos ||
-                       url.find("/engines/") != std::string::npos ||
-                       url.find("/openai/deployments") != std::string::npos;
-    return azure ? EndpointFlavour::kAzure : EndpointFlavour::kOpenAi;
-}
-
-// True when the value ends with the given suffix.
-bool
-EndsWith(const std::string& value, const char* suffix)
-{
-    const size_t n = std::strlen(suffix);
-    return value.size() >= n && value.compare(value.size() - n, n, suffix) == 0;
-}
-
-// True when the base URL already names the chat-completions route.
-bool
-HasCompletionsSuffix(const std::string& url)
-{
-    return EndsWith(url, ASSISTANT_CHAT_COMPLETIONS_SUFFIX);
-}
-
-// Azure's /openai deployments want apiVersion on the query when the user did
-// not already supply one. /azure/engines does not.
-void
-EnsureAzureOpenAiVersion(const std::string& path, std::string& query)
-{
-    if(!query.empty() || path.find("/openai/deployments/") == std::string::npos)
-    {
-        return;
-    }
-    query  = "?apiVersion=";
-    query += ASSISTANT_AZURE_OPENAI_API_VERSION;
-}
-
-// Undoes a /chat/completions that was appended to an Azure base without the
-// deployment in between. Azure answers that with a 404, so a user who pasted
-// the failing URL back into settings would otherwise be stuck with it.
-void
-StripDeploymentlessCompletions(std::string& base_url)
-{
-    if(!HasCompletionsSuffix(base_url))
-    {
-        return;
-    }
-    std::string without_suffix = base_url;
-    without_suffix.resize(without_suffix.size() -
-                          std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX));
-    if(EndsWith(without_suffix, "/azure") || EndsWith(without_suffix, "/openai") ||
-       EndsWith(without_suffix, "/azure/engines") ||
-       EndsWith(without_suffix, "/openai/deployments"))
-    {
-        base_url = without_suffix;
-    }
-}
-
-// Inserts the deployment segment an Azure base is missing, e.g. /azure becomes
-// /azure/engines/<model>. Empty return means the model field was not filled in.
-bool
-AppendAzureDeployment(std::string& base_url, const std::string& model)
-{
-    // A base that already names the deployment only needs the route appended.
-    if(base_url.find("/engines/") != std::string::npos ||
-       base_url.find("/deployments/") != std::string::npos)
-    {
-        return true;
-    }
-
-    const bool azure_base              = EndsWith(base_url, "/azure");
-    const bool openai_base             = EndsWith(base_url, "/openai");
-    const bool azure_engines_base      = EndsWith(base_url, "/azure/engines");
-    const bool openai_deployments_base = EndsWith(base_url, "/openai/deployments");
-    if(!azure_base && !openai_base && !azure_engines_base && !openai_deployments_base)
-    {
-        return true;
-    }
-    if(model.empty())
-    {
-        return false;
-    }
-
-    if(azure_base)
-    {
-        base_url += "/engines/";
-    }
-    else if(openai_base)
-    {
-        base_url += "/deployments/";
-    }
-    else
-    {
-        base_url += "/";
-    }
-    base_url += model;
-    return true;
-}
-
-// Turns the configured base into the chat-completions URL. Any query string
-// comes off first so the path suffix is not buried inside it. Empty return
-// means an Azure base needs a deployment and the Model field was blank.
-std::string
-ChatCompletionsUrl(std::string base_url, const std::string& model,
-                   EndpointFlavour flavour)
-{
-    std::string  query;
-    const size_t query_start = base_url.find('?');
-    if(query_start != std::string::npos)
-    {
-        query = base_url.substr(query_start);
-        base_url.resize(query_start);
-    }
-
-    while(!base_url.empty() && base_url.back() == '/')
-    {
-        base_url.pop_back();
-    }
-
-    if(flavour == EndpointFlavour::kAzure)
-    {
-        StripDeploymentlessCompletions(base_url);
-    }
-
-    if(!HasCompletionsSuffix(base_url))
-    {
-        if(flavour == EndpointFlavour::kAzure &&
-           !AppendAzureDeployment(base_url, model))
-        {
-            return std::string();
-        }
-        base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
-    }
-
-    EnsureAzureOpenAiVersion(base_url, query);
-    return base_url + query;
-}
-
-// httplib::Client wants the origin ("https://host:port") and the path
-// ("/v1/chat/completions") as separate arguments.
-bool
-SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
-{
-    const std::string separator  = "://";
-    const size_t      scheme_end = url.find(separator);
-    if(scheme_end == std::string::npos)
-    {
-        return false;
-    }
-
-    const size_t path_start = url.find('/', scheme_end + separator.size());
-    origin_out              = url.substr(0, path_start);
-    path_out = (path_start == std::string::npos) ? "/" : url.substr(path_start);
-    return true;
-}
 
 // The host of an origin ("https://host:port"), with the port and any IPv6
 // brackets removed. Empty when the origin has no scheme separator.

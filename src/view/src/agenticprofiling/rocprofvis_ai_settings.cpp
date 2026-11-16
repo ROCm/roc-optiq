@@ -189,9 +189,9 @@ SettingsPanel::RenderAssistantSettings()
     if(ImGui::IsItemHovered())
     {
         SetTooltipStyled("Base URL, e.g. https://api.openai.com/v1. "
-                         "/chat/completions is appended. Azure-style /azure "
-                         "and /openai paths also insert the model as the "
-                         "deployment id.");
+                         "/chat/completions is appended. For an Azure-style URL, "
+                         "with /azure or /openai/deployments in the path, the "
+                         "Model field is the deployment id.");
     }
 
     ImGui::AlignTextToFramePadding();

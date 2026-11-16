@@ -638,7 +638,9 @@ BuildRequestBody(const AssistantChatRequest& request, EndpointFlavour flavour)
     // user empty the field to match the endpoint.
     if(flavour == EndpointFlavour::kOpenAi)
     {
-        body["model"] = request.model;
+        // Same trim as the Azure path. A pasted model can end in a newline,
+        // and that would be sent as a different model name.
+        body["model"] = Core::String::trim_copy(request.model);
     }
     // Azure's API version predates max_completion_tokens and rejects it.
     if(flavour == EndpointFlavour::kAzure)
@@ -715,9 +717,12 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
 {
     // A pasted URL can carry a trailing newline, which httplib refuses in the
     // request line, or a space, which ends up in a host name that never resolves.
+    // The model is trimmed too: Azure concatenates it into the path, and a
+    // trailing space there is a deployment name that does not exist.
     const std::string base_url = Core::String::trim_copy(request.endpoint_url);
-    endpoint_out.flavour       = FlavourFromUrl(base_url);
-    endpoint_out.url = ChatCompletionsUrl(base_url, request.model, endpoint_out.flavour);
+    const std::string model    = Core::String::trim_copy(request.model);
+    endpoint_out.flavour = FlavourFromUrl(base_url);
+    endpoint_out.url     = ChatCompletionsUrl(base_url, model, endpoint_out.flavour);
     if(endpoint_out.url.empty())
     {
         return ASSISTANT_MISSING_DEPLOYMENT_ERROR;

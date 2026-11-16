@@ -244,6 +244,10 @@ class SystemDatabase : public Database
        // SQLite GROUP BY. Other sources load the rows and aggregate afterwards.
        virtual bool EventSummaryInSqlite() const { return false; }
 
+       // True when a repeated search query (operation packed into the track id)
+       // can reuse the rows already loaded instead of running again.
+       virtual bool ReuseSearchQueryRows() const { return false; }
+
 
 
     private:

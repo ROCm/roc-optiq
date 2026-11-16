@@ -49,6 +49,7 @@ public:
     // Method to open sqlite database
     // @return status of operation
     rocprofvis_dm_result_t Open() override;
+    bool IsSourceFile(rocprofvis_dm_charptr_t path) override;
     // Method to close sqlite database
     // @return status of operation
     rocprofvis_dm_result_t      Close() override;
@@ -118,6 +119,8 @@ protected:
         Future* future, std::vector<rocprofvis_db_name_duration_t>& rows) override;
 
     bool EventSummaryInSqlite() const override { return true; }
+
+    bool ReuseSearchQueryRows() const override { return true; }
 
     rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type,
                                          uint32_t node, uint64_t& result) override;

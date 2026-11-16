@@ -153,11 +153,8 @@ typedef enum rocprofvis_db_type_t {
     kChromeTrace = 5,
     kPerfettoTrace = 6,
     kGoogleSqlite = 7,
-#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
-    // supported by profiler hub
-    kProfilerHub = 8,
-#endif
-
+    // supported by profiler hub, detected only when built with ROCPROFVIS_ENABLE_PROFILER_HUB
+    kProfilerHub = 8
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback
@@ -226,6 +223,9 @@ typedef enum  rocprofvis_dm_trace_property_t {
     kRPVDStreamQueueMappingInfoTableHandleIndexed,
     // Topology handle
     kRPVDMTopologyHandle,
+    // 1 when the track histograms share the trace time base, so a time range whose
+    // buckets are all zero holds no events and its slice read can be skipped
+    kRPVDMHistogramAlignedUInt64,
 } rocprofvis_dm_trace_property_t;
 
 // Track properties

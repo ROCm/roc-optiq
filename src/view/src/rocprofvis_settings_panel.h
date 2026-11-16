@@ -21,6 +21,11 @@ public:
     ~SettingsPanel();
 
     void Show();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Opens on the Assistant page, so the panel can send a user who has not set
+    // it up straight there.
+    void ShowAssistantSettings();
+#endif
     void Render();
 
 private:

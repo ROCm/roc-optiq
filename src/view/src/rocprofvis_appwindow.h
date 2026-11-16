@@ -115,6 +115,10 @@ public:
 #ifdef ROCPROFVIS_ENABLE_PROFILER
     void ShowProfilerLauncher();  // TEMPORARY (profiler launch)
 #endif
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Opens Preferences on the Assistant page.
+    void ShowAssistantSettings();
+#endif
 
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;

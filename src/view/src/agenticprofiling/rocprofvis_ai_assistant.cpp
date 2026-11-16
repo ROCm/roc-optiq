@@ -438,10 +438,13 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
     if(provider == nullptr || provider->endpoint_url.empty())
     {
-        AppendLine(Speaker::kStatus,
-                   "Set the assistant URL in Edit > Preferences > Assistant.");
-        NotificationManager::GetInstance().Show(
-            "Assistant URL is not set", NotificationLevel::Warning);
+        // Open the page that fixes it rather than name a menu path to go and find.
+        AppendLine(Speaker::kStatus, "Set the assistant URL in Preferences, then ask again.");
+        AppWindow* app = AppWindow::GetInstance();
+        if(app != nullptr)
+        {
+            app->ShowAssistantSettings();
+        }
         return;
     }
 

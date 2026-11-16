@@ -2190,6 +2190,14 @@ AppWindow::ShowProfilerLauncher()
 }
 #endif  // ROCPROFVIS_ENABLE_PROFILER
 
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+void
+AppWindow::ShowAssistantSettings()
+{
+    m_settings_panel->ShowAssistantSettings();
+}
+#endif
+
 }  // namespace View
 }  // namespace RocProfVis
 

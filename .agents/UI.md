@@ -454,7 +454,7 @@ AppWindow (singleton, RocWidget)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
-+-- m_settings_panel        : SettingsPanel (modal, opened via menu)
++-- m_settings_panel        : SettingsPanel (modal, opened via menu or by Ask Optiq when its URL is unset)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
 +-- ProfilerLauncherDialog   : optional profiler UI

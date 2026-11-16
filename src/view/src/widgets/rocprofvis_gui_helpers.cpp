@@ -328,36 +328,31 @@ std::pair<bool, bool>
 InputTextWithClear(const char* id, const char* hint, std::string& str, ImFont* icon_font,
                    ImU32 bg_color, const ImGuiStyle& style, float width)
 {
-    bool input_cleared = false;
+    bool        input_cleared = false;
+    const float clear_width   = ImGui::GetTextLineHeight() + 2.0f * style.FramePadding.x;
+    const float reserved_width =
+        str.size() && width >= 2.0f * clear_width ? clear_width : 0.0f;
     ImGui::BeginGroup();
+    ImGui::Dummy(ImVec2(width, ImGui::GetFrameHeight()));
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), bg_color, style.FrameRounding);
+    ImGui::SetCursorScreenPos(ImGui::GetItemRectMin());
     ImGui::SetNextItemAllowOverlap();
     ImGui::PushID(id);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_color);
-    ImGui::SetNextItemWidth(width);
-    bool input_changed = InputTextStringWithHint("##input_text_with_clear", hint, str, 
-                                                  ImGuiInputTextFlags_AutoSelectAll);
+    ImGui::SetNextItemWidth(width - reserved_width);
+    bool input_changed = InputTextStringWithHint("##input_text_with_clear", hint, str,
+                                                 ImGuiInputTextFlags_AutoSelectAll |
+                                                     ImGuiInputTextFlags_ElideLeft);
     ImGui::PopStyleColor();
-    if(!str.empty())
+    if(reserved_width)
     {
-        ImGui::PushFont(icon_font, 0.0f);
-        if(width >= 2.0f * (ImGui::CalcTextSize(ICON_X_CIRCLED).x + style.FramePadding.x))
-        {
-            ImGui::SameLine();
-            ImGui::SetCursorScreenPos(
-                ImVec2(ImGui::GetItemRectMax().x - 2 * style.FramePadding.x -
-                           ImGui::CalcTextSize(ICON_X_CIRCLED).x,
-                       ImGui::GetCursorScreenPos().y));
-            ImGui::PopFont();
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
-            input_cleared =
-                IconButton(ICON_X_CIRCLED, icon_font, ImVec2(0, 0), "Clear", false,
-                           style.FramePadding, bg_color, bg_color, bg_color);
-            ImGui::PopStyleVar();
-        }
-        else
-        {
-            ImGui::PopFont();
-        }
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, style.FramePadding);
+        input_cleared = IconButton(
+            ICON_X_CIRCLED, icon_font, ImVec2(clear_width, ImGui::GetFrameHeight()),
+            "Clear", false, style.FramePadding, bg_color, bg_color, bg_color);
+        ImGui::PopStyleVar();
     }
     ImGui::PopID();
     ImGui::EndGroup();
@@ -739,18 +734,18 @@ ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_
     return clicked;
 }
 
-void
+bool
 RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
-                          uint64_t downloaded, uint64_t total, bool finished,
-                          bool& show)
+                          uint64_t downloaded, uint64_t total, bool finished, bool& show)
 {
     if(!show)
     {
-        return;
+        return false;
     }
 
-    SettingsManager&  settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style    = settings.GetDefaultStyle();
+    bool              cancelled = false;
+    SettingsManager&  settings  = SettingsManager::GetInstance();
+    const ImGuiStyle& style     = settings.GetDefaultStyle();
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -764,10 +759,11 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
                ImGuiWindowFlags_NoScrollWithMouse))
     {
-        BeginPanelCard("##remote_dl_header", PanelCardTone::kPanel, style.WindowPadding, true,
-                       &settings);
+        BeginPanelCard("##remote_dl_header", PanelCardTone::kPanel, style.WindowPadding,
+                       true, &settings);
         {
-            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings, settings.GetFontManager().GetFontSize(FontSize::kMedium));
+            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings,
+                      settings.GetFontManager().GetFontSize(FontSize::kMedium));
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
             ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
             ImGui::TextUnformatted("Fetching the trace over SSH.");
@@ -775,8 +771,8 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
         }
         EndPanelCard();
 
-        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, style.WindowPadding, true,
-                       &settings);
+        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, style.WindowPadding,
+                       true, &settings);
         {
             ImGui::TextWrapped("%s", file_name ? file_name : "");
             ImGui::Spacing();
@@ -792,6 +788,11 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
             else
             {
                 PanelFieldLabel("Starting...", false, &settings);
+            }
+            CenterNextItem(ImGui::CalcTextSize("Cancel").x + 2.0f * style.FramePadding.x);
+            if(ImGui::Button("Cancel"))
+            {
+                cancelled = true;
             }
         }
         EndPanelCard();
@@ -810,6 +811,7 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
         // reopened on the next download.
         show = false;
     }
+    return cancelled;
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

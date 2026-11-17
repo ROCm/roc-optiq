@@ -3021,4 +3021,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(arg_count > 0);
         IM_CHECK(have_named_arg);
     };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    RegisterAskOptiqTests(e);
+#endif
 }

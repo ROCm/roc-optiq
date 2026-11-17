@@ -1,0 +1,72 @@
+tool: list_metrics
+args: {}
+
+workload_id: 1
+metric_id_format: category.table.entry
+tables:
+  2.1  System Speed-of-Light / System Speed-of-Light  (34 metrics)  value_names: Avg Peak Pct of Peak
+  3.1  Memory Chart / Memory Chart  (55 metrics)  value_names: Value
+  4.1  Roofline / Roofline Performance Rates  (14 metrics)  value_names: Value Peak (Empirical)
+  5.1  Command Processor (CPC/CPF) / Command processor fetcher (CPF)  (5 metrics)  value_names: Avg Min Max
+  5.2  Command Processor (CPC/CPF) / Command processor packet processor (CPC)  (10 metrics)  value_names: Avg Min Max
+  6.1  Workgroup Manager (SPI) / Workgroup manager utilizations  (11 metrics)  value_names: Avg Min Max
+  6.2  Workgroup Manager (SPI) / Workgroup Manager - Resource Allocation  (12 metrics)  value_names: Avg Min Max
+  7.1  Wavefront / Wavefront Launch Stats  (10 metrics)  value_names: Avg Min Max
+  7.2  Wavefront / Wavefront Runtime Stats  (8 metrics)  value_names: Avg Min Max
+  10.1  Compute Units - Instruction Mix / Overall Instruction Mix  (7 metrics)  value_names: Avg Min Max
+  10.2  Compute Units - Instruction Mix / VALU Arithmetic Instruction Mix  (15 metrics)  value_names: Avg Min Max
+  10.3  Compute Units - Instruction Mix / VMEM Instruction Mix  (9 metrics)  value_names: Avg Min Max
+  10.4  Compute Units - Instruction Mix / MFMA Arithmetic Instruction Mix  (7 metrics)  value_names: Avg Min Max
+  11.1  Compute Units - Compute Pipeline / Compute Speed-of-Light  (9 metrics)  value_names: Avg Peak Pct of Peak
+  11.2  Compute Units - Compute Pipeline / Pipeline Statistics  (13 metrics)  value_names: Avg Min Max
+  11.3  Compute Units - Compute Pipeline / Arithmetic Operations  (9 metrics)  value_names: Avg Min Max
+  12.1  Local Data Share (LDS) / LDS Speed-of-Light  (4 metrics)  value_names: Avg
+  12.2  Local Data Share (LDS) / LDS Statistics  (18 metrics)  value_names: Avg Min Max
+  13.1  Instruction Cache / L1I Speed-of-Light  (3 metrics)  value_names: Avg
+  13.2  Instruction Cache / L1I cache accesses  (6 metrics)  value_names: Avg Min Max
+  13.3  Instruction Cache / L1I <-> L2 interface  (1 metrics)  value_names: Avg Min Max
+  14.1  Scalar L1 Data Cache / Scalar L1D Speed-of-Light  (3 metrics)  value_names: Avg
+  14.2  Scalar L1 Data Cache / Scalar L1D cache accesses  (12 metrics)  value_names: Avg Min Max
+  14.3  Scalar L1 Data Cache / Scalar L1D Cache - L2 Interface  (5 metrics)  value_names: Avg Min Max
+  15.1  Address Processing Unit and Data Return Path (TA/TD) / Busy and stall metrics  (7 metrics)  value_names: Avg Min Max
+  15.2  Address Processing Unit and Data Return Path (TA/TD) / Instruction counts  (11 metrics)  value_names: Avg Min Max
+  15.3  Address Processing Unit and Data Return Path (TA/TD) / Spill and stack metrics  (3 metrics)  value_names: Avg Min Max
+  15.4  Address Processing Unit and Data Return Path (TA/TD) / Vector L1 data-return path or Texture Data (TD)  (8 metrics)  value_names: Avg Min Max
+  16.1  Vector L1 Data Cache / vL1D Speed-of-Light  (4 metrics)  value_names: Avg
+  16.2  Vector L1 Data Cache / vL1D cache stall metrics  (10 metrics)  value_names: Min Q1 Median Q3 Max
+  16.3  Vector L1 Data Cache / vL1D cache access metrics  (20 metrics)  value_names: Avg Min Max
+  16.4  Vector L1 Data Cache / L1D - L2 Transactions  (12 metrics)  value_names: Avg Min Max
+  16.5  Vector L1 Data Cache / L1 Unified Translation Cache (UTCL1)  (7 metrics)  value_names: Avg Min Max
+  16.6  Vector L1 Data Cache / L1D Addr Translation Stalls  (7 metrics)  value_names: Avg Min Max
+  17.1  L2 Cache / L2 Speed-of-Light  (6 metrics)  value_names: Avg
+  17.2  L2 Cache / L2-Fabric interface metrics  (14 metrics)  value_names: Avg Min Max
+  17.3  L2 Cache / L2 Cache Accesses  (24 metrics)  value_names: Avg Min Max
+  17.4  L2 Cache / L2 Cache Stalls  (3 metrics)  value_names: Avg Min Max
+  17.5  L2 Cache / L2 - Fabric Interface stalls  (7 metrics)  value_names: Avg Min Max
+  17.6  L2 Cache / L2 - Fabric interface detailed metrics  (22 metrics)  value_names: Avg Min Max
+  18.1  L2 Cache (per Channel) / Aggregate Stats (All channels)  (1 metrics)  value_names: Avg Std Dev Min Max L2-Fabric Write Stall (PCIe) L2-Fabric Write Stall (Infinity Fabric™) L2-Fabric Write Stall (HBM) L2-Fabric Write Starve Q1 Median Q3
+  18.2  L2 Cache (per Channel) / L2 Cache Hit Rate (Percent)  (128 metrics)  value_names: Min Q1 Median Q3 Max
+  18.3  L2 Cache (per Channel) / L2 Requests (per normUnit)  (128 metrics)  value_names: Min Q1 Median Q3 Max
+  18.4  L2 Cache (per Channel) / L2 Requests (per normUnit)  (128 metrics)  value_names: L2 Read L2 Write L2 Atomic
+  18.5  L2 Cache (per Channel) / L2-Fabric Requests (per normUnit)  (128 metrics)  value_names: L2-Fabric Read L2-Fabric Write and Atomic L2-Fabric Atomic
+  18.6  L2 Cache (per Channel) / L2-Fabric Read Latency (Cycles)  (128 metrics)  value_names: Min Q1 Median Q3 Max
+  18.7  L2 Cache (per Channel) / L2-Fabric Write and Atomic Latency (Cycles)  (128 metrics)  value_names: Min Q1 Median Q3 Max
+  18.8  L2 Cache (per Channel) / L2-Fabric Atomic Latency (Cycles)  (128 metrics)  value_names: Min Q1 Median Q3 Max
+  18.9  L2 Cache (per Channel) / L2-Fabric Read Stall (Cycles per normUnit)  (128 metrics)  value_names: L2-Fabric Read Stall (PCIe) L2-Fabric Read Stall (Infinity Fabric™) L2-Fabric Read Stall (HBM)
+  18.10  L2 Cache (per Channel) / L2-Fabric Write and Atomic Stall (Cycles per normUnit)  (128 metrics)  value_names: L2-Fabric Write Stall (PCIe) L2-Fabric Write Stall (Infinity Fabric™) L2-Fabric Write Stall (HBM) L2-Fabric Write Starve
+  18.12  L2 Cache (per Channel) / L2-Fabric (128B read requests per normUnit)  (128 metrics)  value_names: Min Q1 Median Q3 Max
+  30.1  Memory Bandwidth Analysis / L1 Cache  (20 metrics)  value_names: Avg
+  30.2  Memory Bandwidth Analysis / L1 Traffic  (17 metrics)  value_names: Avg
+  30.3  Memory Bandwidth Analysis / TD Return Path  (9 metrics)  value_names: Avg
+  30.4  Memory Bandwidth Analysis / Normalized Stall Metrics (%)  (14 metrics)  value_names: Avg
+  30.5  Memory Bandwidth Analysis / Normalized Throughput Metrics (per Second)  (5 metrics)  value_names: Avg
+  30.6  Memory Bandwidth Analysis / Raw Counter Value  (50 metrics)  value_names: Avg
+  30.7  Memory Bandwidth Analysis / L2 Cache  (14 metrics)  value_names: Avg
+  30.8  Memory Bandwidth Analysis / L2 Traffic  (20 metrics)  value_names: Avg
+  30.9  Memory Bandwidth Analysis / L2 Raw Counter Values  (39 metrics)  value_names: Avg
+  30.10  Memory Bandwidth Analysis / Normalized L2 Stall Metrics (%)  (12 metrics)  value_names: Avg
+  30.11  Memory Bandwidth Analysis / Normalized L2 Throughput Metrics (per Second)  (7 metrics)  value_names: Avg
+  30.12  Memory Bandwidth Analysis / L2 Bottleneck Detection Indicators  (9 metrics)  value_names: Avg
+total_metrics: 1942
+note: this is the shape of the catalogue, not its contents. Pass a table id to get_metrics to read all of it, call again with search to find one metric by word, or with describe to see what given ids measure. A metric that is not in this workload does not exist in this trace, whatever the architecture usually records.
+

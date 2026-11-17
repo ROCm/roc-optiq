@@ -1015,7 +1015,12 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
 {
     const EventInfo* event =
         context.data_provider->DataModel().GetEvents().GetEvent(event_id);
-    if(event == nullptr)
+    // FetchEvent records an entry for any uuid it is asked about, so an entry
+    // alone does not mean the event exists. One that came back with nothing at
+    // all, not even a name, is a uuid this trace does not have.
+    if(event == nullptr ||
+       (event->basic_info.name.empty() && event->args.empty() && event->ext_info.empty() &&
+        event->flow_info.empty() && event->call_stack_info.empty()))
     {
         return "No details came back for that event_uuid. Check the __uuid value.";
     }
@@ -2436,9 +2441,11 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     // the first query of a session, before any header has been read. "id" is
     // column 0 of the event table today; naming it means a reordered table
     // sorts by the same thing rather than silently by whatever moved into that
-    // slot. A sample table without an "id" column falls through to the index
-    // unchanged.
-    const uint64_t sort_column = RecordSort(tables, fetch, args, "id", 0);
+    // slot. A sample table has no id, and its first column (node) is the same
+    // on every row, so samples go in time order: "start", column 1.
+    const uint64_t sort_column =
+        events ? RecordSort(tables, fetch, args, "id", 0)
+               : RecordSort(tables, fetch, args, "start", 1);
     const bool     queued      = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
             table_type, tracks, start_ns, end_ns, nullptr, filter.c_str(),

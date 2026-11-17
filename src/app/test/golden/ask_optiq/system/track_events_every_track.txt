@@ -1,0 +1,10 @@
+tool: track_events
+args: {"limit":3}
+
+window_ns: 0 .. 5044424388 (whole trace)
+columns: id __uuid category name stream queue node PID TID AgentAbsoluteIndex AgentType AgentTypeIndex AgentName start end duration GridSizeX GridSizeY GridSizeZ WGSizeX WGSizeY WGSizeZ LDSSize ScratchSize StaticLDSSize StaticScratchSize size address SrcAgentAbsoluteIndex SrcAgentType SrcAgentTypeIndex SrcAgentName SrcAddr __trackId __streamTrackId
+1. id=1 __uuid="1152921504606846977" category=rocm_hip_api name=hipGetDeviceCount stream= queue= node=4227766824237315800 PID=71893 TID=71893 AgentAbsoluteIndex= AgentType= AgentTypeIndex= AgentName= start=495115 end=28763581 duration=28268466 GridSizeX= GridSizeY= GridSizeZ= WGSizeX= WGSizeY= WGSizeZ= LDSSize= ScratchSize= StaticLDSSize= StaticScratchSize= size= address= SrcAgentAbsoluteIndex= SrcAgentType= SrcAgentTypeIndex= SrcAgentName= SrcAddr= __trackId=0 __streamTrackId=-1
+2. id=1 __uuid="4611686018427387905" category=rocm_memory_copy name=MEMORY_COPY_HOST_TO_DEVICE stream=Stream 2 queue=Queue 0 node=4227766824237315800 PID=71893 TID=5 AgentAbsoluteIndex=1 AgentType=GPU AgentTypeIndex=0 AgentName=gfx1102 start=728498410 end=730869573 duration=2371163 GridSizeX= GridSizeY= GridSizeZ= WGSizeX= WGSizeY= WGSizeZ= LDSSize= ScratchSize= StaticLDSSize= StaticScratchSize= size=33554432 address=129507325378560 SrcAgentAbsoluteIndex=0 SrcAgentType=CPU SrcAgentTypeIndex=0 SrcAgentName=AMD Ryzen 9 5900X 12-Core Processor SrcAddr=129508900646928 __trackId=10 __streamTrackId=8
+3. id=1 __uuid="2305843009213693953" category=rocm_kernel_dispatch name=__amd_rocclr_fillBufferAligned.kd stream=Stream 2 queue=Queue 2 node=4227766824237315800 PID=71893 TID=5 AgentAbsoluteIndex=1 AgentType=GPU AgentTypeIndex=0 AgentName=gfx1102 start=712772349 end=725969327 duration=13196978 GridSizeX=4096 GridSizeY=1 GridSizeZ=1 WGSizeX=256 WGSizeY=1 WGSizeZ=1 LDSSize=0 ScratchSize=0 StaticLDSSize=0 StaticScratchSize=0 size= address= SrcAgentAbsoluteIndex= SrcAgentType= SrcAgentTypeIndex= SrcAgentName= SrcAddr= __trackId=6 __streamTrackId=8
+... 31965 more rows not shown
+

@@ -1,0 +1,52 @@
+tool: event_details
+args: {"event_uuid":"2305843009213693957"}
+
+event_uuid: 2305843009213693957
+name: transpose_a(int*, int*, int, int) [clone .kd]
+start_ns: 781826724
+duration_ns: 4084445
+track_id: 6
+extended_data:
+  Properties.id=5
+  Properties.guid=60fda567c0b83c878edbeb59b252078f
+  Properties.tid=71920
+  Properties.category=rocm_kernel_dispatch
+  Properties.region=transpose_a(int*, int*, int, int) [clone .kd]
+  Properties.name=transpose_a(int*, int*, int, int) [clone .kd]
+  Properties.nid=4227766824237315800
+  Properties.pid=71893
+  Properties.agent_abs_index=1
+  Properties.agent_log_index=1
+  Properties.agent_type_index=0
+  Properties.agent_type=GPU
+  Properties.code_object_id=2
+  Properties.kernel_id=16
+  Properties.dispatch_id=5
+  Properties.stream_id=2
+  Properties.queue_id=2
+  Properties.queue=Queue 2
+  Properties.stream=Stream 2
+  Properties.start=781826724
+  Properties.end=785911169
+  Properties.duration=4084445
+  Properties.grid_x=9920
+  Properties.grid_y=9920
+  Properties.grid_z=1
+  Properties.workgroup_x=32
+  Properties.workgroup_y=32
+  Properties.workgroup_z=1
+  Properties.lds_size=4096
+  Properties.scratch_size=0
+  Properties.static_lds_size=4096
+  Properties.static_scratch_size=0
+  Properties.stack_id=16
+  Properties.parent_stack_id=0
+  Properties.corr_id=0
+  Track.trackId=6
+  Track.levelForTrack=0
+  Track.streamTrackId=8
+  Track.levelForStreamTrack=0
+flow:
+  uuid="1152921504606846991" track_id=1 start_ns=781323421 end_ns=781791877 name="hipLaunchKernel"
+  uuid="2305843009213693957" track_id=6 start_ns=781826724 end_ns=785911169 name="transpose_a(int*, int*, int, int) [clone .kd]"
+

@@ -1,0 +1,4 @@
+tool: kernel_pc_samples
+args: {"kernel_id":4}
+
+This trace has no PC samples to read: it was written with a compute schema older than 2.2, and Optiq reads PC samples only from 2.2 on. That is the trace, not a failed read, so do not retry it.

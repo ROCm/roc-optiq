@@ -15,15 +15,10 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <system_error>
 #include <vector>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
-#else
-#include <pwd.h>
-#include <sys/types.h>
-#include <unistd.h>
 #endif
 
 namespace RocProfVis
@@ -71,47 +66,6 @@ sanitize_base_dir(const std::string& raw)
     }
     return normalized;
 }
-
-#ifndef _WIN32
-// Home directory used as the base for the settings and log directories. HOME
-// is used whenever it is a usable absolute path, so nothing moves for a normal
-// login. When HOME is unset or relative (some service and container launches)
-// the account database is asked instead, because the old fallback was the
-// working directory, which may be shared and writable by other users who could
-// then read the log or plant a settings file. Returns empty only if both fail.
-static std::filesystem::path
-resolve_home_dir()
-{
-    std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
-    if(!home.empty()) return home;
-
-    // getpwuid_r rather than getpwuid: this can be reached from more than one
-    // thread and getpwuid returns a pointer into shared static storage.
-    std::vector<char> buffer(16384);
-    struct passwd     entry  = {};
-    struct passwd*    result = nullptr;
-    if(getpwuid_r(getuid(), &entry, buffer.data(), buffer.size(), &result) == 0 &&
-       result != nullptr && result->pw_dir != nullptr)
-    {
-        home = sanitize_base_dir(result->pw_dir);
-    }
-    return home;
-}
-
-// Restricts one of the application's own directories to its owner (0700). The
-// settings and log files inside are created with the default umask (usually
-// 0644), so the directory mode is what keeps other local users from reading
-// endpoint URLs and log contents. Applied on every start, not only on
-// creation, so directories made by older versions are tightened too. Failure
-// is ignored: it must not stop the application from starting.
-static void
-restrict_dir_to_owner(const std::filesystem::path& dir)
-{
-    std::error_code ec;
-    std::filesystem::permissions(dir, std::filesystem::perms::owner_all,
-                                 std::filesystem::perm_options::replace, ec);
-}
-#endif
 }  // namespace View
 }  // namespace RocProfVis
 
@@ -444,7 +398,7 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
         !base.empty() ? base : std::filesystem::current_path();
 #elif defined(__APPLE__)
     const char*           app_config_dir_name = "ROCm-Optiq";
-    std::filesystem::path home                = resolve_home_dir();
+    std::filesystem::path home                = sanitize_base_dir(safe_getenv("HOME"));
     std::filesystem::path config_dir =
         !home.empty() ? (home / "Library" / "Application Support")
                        : std::filesystem::current_path();
@@ -453,7 +407,7 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
     std::filesystem::path config_dir          = sanitize_base_dir(safe_getenv("XDG_CONFIG_HOME"));
     if(config_dir.empty())
     {
-        std::filesystem::path home = resolve_home_dir();
+        std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
         config_dir = !home.empty() ? (home / ".config") : std::filesystem::current_path();
     }
 #endif
@@ -462,11 +416,6 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
     if(create_dirs)
     {
         std::filesystem::create_directories(config_dir);
-#ifndef _WIN32
-        // The leaf is always the application's own directory, so this never
-        // changes the mode of ~/.config or of the working directory itself.
-        restrict_dir_to_owner(config_dir);
-#endif
     }
 
     return config_dir.string();
@@ -476,7 +425,7 @@ std::string
 RocProfVis::View::get_application_log_path(bool create_dirs)
 {
 #ifdef __APPLE__
-    std::filesystem::path home = resolve_home_dir();
+    std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
     std::filesystem::path log_dir =
         !home.empty() ? (home / "Library" / "Logs") : std::filesystem::current_path();
     log_dir /= "ROCm-Optiq";
@@ -484,7 +433,6 @@ RocProfVis::View::get_application_log_path(bool create_dirs)
     if(create_dirs)
     {
         std::filesystem::create_directories(log_dir);
-        restrict_dir_to_owner(log_dir);
     }
 
     return log_dir.string();

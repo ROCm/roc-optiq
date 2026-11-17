@@ -105,23 +105,10 @@ is_allowlisted(char const* name)
     return false;
 }
 
-// optiq is the one allowlisted module that is not standard library. The
-// controller builds it for each run and it holds only the trace bindings, so
-// it is handed over as it is rather than through a proxy.
-bool
-is_optiq_module(char const* name)
-{
-    return std::strcmp(name, "optiq") == 0 || std::strncmp(name, "optiq.", 6) == 0;
-}
-
-/*
- * The script's __import__. self is the _import function compiled from
- * MODULE_PROXY_SOURCE, bound when the script builtins are built, so every
- * standard library import resolves to a proxy and never to the module itself.
- */
 PyObject*
 restricted_import(PyObject* self, PyObject* args, PyObject* kwargs)
 {
+    (void) self;
     char const* name     = nullptr;
     PyObject*   globals  = nullptr;
     PyObject*   locals   = nullptr;
@@ -141,30 +128,8 @@ restricted_import(PyObject* self, PyObject* args, PyObject* kwargs)
                             "module '%s' is not allowed in optiq scripts",
                             name);
     }
-    if(is_optiq_module(name))
-    {
-        return PyImport_ImportModuleLevel(name, globals, locals,
-                                          fromlist ? fromlist : Py_None, level);
-    }
-    if(level != 0)
-    {
-        // A script is not part of a package, so there is nothing for a
-        // relative import to be relative to.
-        return PyErr_Format(PyExc_ImportError,
-                            "relative import of '%s' is not allowed in optiq "
-                            "scripts",
-                            name);
-    }
-    if(!self)
-    {
-        // Without the proxy importer the only thing left to return is the
-        // real module, which is exactly what must not reach a script.
-        return PyErr_Format(PyExc_ImportError,
-                            "module '%s' is unavailable: the module proxies "
-                            "were not built",
-                            name);
-    }
-    return PyObject_CallFunction(self, "sO", name, fromlist ? fromlist : Py_None);
+    return PyImport_ImportModuleLevel(name, globals, locals,
+                                      fromlist ? fromlist : Py_None, level);
 }
 
 PyMethodDef IMPORT_METHOD = {
@@ -197,9 +162,8 @@ char const* const SAFE_BUILTIN_NAMES[] = {
  * Source screen, run over the parse tree before a script executes.
  *
  * Neither the import allowlist nor the reduced builtins bound what a script can
- * reach, because what an allowlisted module exposes are real functions and
- * classes (see MODULE_PROXY_SOURCE for what is held back): from any function
- * on it, __globals__ leads back to the unrestricted builtins, and from
+ * reach, because an allowlisted module is a real module object: from any
+ * function on it, __globals__ leads back to the unrestricted builtins, and from
  * any instance, __class__ leads to object.__subclasses__() and everything the
  * interpreter has already imported. Both are one expression:
  *
@@ -235,115 +199,6 @@ def _screen(source):
             if node.id in _BLOCKED:
                 return (node.id, getattr(node, 'lineno', 0))
     return None
-)PY";
-
-/*
- * Module proxies, built once at init. A script never holds a standard library
- * module itself, only a stand-in carrying that module's public names.
- *
- * The real modules keep the modules they import as plain attributes, and the
- * source screen has no reason to refuse a plain attribute. statistics.random,
- * typing.sys, collections._sys and enum.bltns each lead to os or to the
- * unrestricted builtins in one expression with no screened name in it. A list
- * of names to refuse cannot keep up with that, so the proxy copies by rule
- * instead: only the names in __all__ where the module defines one, never a
- * name that starts with an underscore, and never a value that is a module.
- *
- * A submodule is the one module-valued attribute a script may reach, and it
- * gets a proxy of its own built by the same rule: collections.abc works, and
- * what it hands back is not the real collections.abc. _import attaches those
- * proxies to their parent before it returns, because `from json import
- * decoder` falls back to sys.modules when the attribute is missing and would
- * find the real module there. _build imports every module before it proxies
- * any, because one allowlisted module importing another's submodule (typing
- * imports collections.abc) is what makes that submodule an attribute at all.
- *
- * A module this Python does not have is skipped, and importing it later fails
- * the ordinary way. Any other failure stops init: see BuildModuleProxies.
- *
- * operator.attrgetter and operator.methodcaller are left out because they are
- * getattr with the name in a string, which the source screen never inspects.
- *
- * The functions and classes copied across are the real ones and still refer
- * to their own module internally. That is what keeps them working, and it is
- * also why this is defence behind approval rather than containment - see the
- * threat model in .agents/SCRIPTING.md.
- *
- * The proxies live as long as the interpreter, so what one script sets on a
- * proxy is still there for the next. That was already true of the modules
- * they replace, and the run generation check in the bindings covers it.
- */
-char const* const MODULE_PROXY_SOURCE = R"PY(
-import importlib
-import sys
-import types
-
-_OMITTED = {'operator': frozenset(('attrgetter', 'methodcaller'))}
-_PROXIES = {}
-
-def _proxy(module, name):
-    proxy = _PROXIES.get(name)
-    if proxy is not None:
-        return proxy
-    proxy = types.ModuleType(name, getattr(module, '__doc__', None))
-    _PROXIES[name] = proxy
-    names = getattr(module, '__all__', None)
-    if names is None:
-        names = list(vars(module))
-    omitted = _OMITTED.get(name, ())
-    for attr in names:
-        if not isinstance(attr, str) or attr.startswith('_') or attr in omitted:
-            continue
-        try:
-            value = getattr(module, attr)
-        except AttributeError:
-            continue
-        if not isinstance(value, types.ModuleType):
-            setattr(proxy, attr, value)
-    for attr, value in list(vars(module).items()):
-        if not isinstance(attr, str) or attr.startswith('_'):
-            continue
-        if not isinstance(value, types.ModuleType):
-            continue
-        child_name = name + '.' + attr
-        if getattr(value, '__name__', None) == child_name:
-            setattr(proxy, attr, _proxy(value, child_name))
-    return proxy
-
-def _build(names):
-    modules = {}
-    for name in names:
-        try:
-            modules[name] = importlib.import_module(name)
-        except ImportError:
-            continue
-    top = {}
-    for name, module in modules.items():
-        top[name] = _proxy(module, name)
-    return top
-
-def _import(name, fromlist):
-    importlib.import_module(name)
-    parts = name.split('.')
-    proxy = None
-    for count in range(1, len(parts) + 1):
-        prefix = '.'.join(parts[:count])
-        child = _proxy(sys.modules[prefix], prefix)
-        if proxy is not None:
-            setattr(proxy, parts[count - 1], child)
-        proxy = child
-    if not fromlist:
-        return _PROXIES[parts[0]]
-    for attr in fromlist:
-        if not isinstance(attr, str) or hasattr(proxy, attr):
-            continue
-        child_name = name + '.' + attr
-        try:
-            importlib.import_module(child_name)
-        except ImportError:
-            continue
-        setattr(proxy, attr, _proxy(sys.modules[child_name], child_name))
-    return proxy
 )PY";
 
 // Keeps the tail, not the head: the exception line and the frame that raised
@@ -479,7 +334,6 @@ private:
     void ExecWork(WorkItem& item);
     PyObject* MakeScriptGlobals();
     bool      BuildSourceScreen();
-    bool      BuildModuleProxies();
     bool      ScreenSource(std::string const& source, std::string& error);
 
     std::string                m_runtime_root;
@@ -513,13 +367,6 @@ private:
     // Compiled once at init and owned by the interpreter thread: the parse-tree
     // screen every script passes through before it runs.
     PyObject*                             m_screen_fn = nullptr;
-
-    // Built once at init and owned by the interpreter thread, like the screen.
-    // m_module_proxies maps each allowlisted standard library module to the
-    // proxy a script gets in place of it, and m_proxy_import_fn is what the
-    // script's __import__ calls to resolve an import to one.
-    PyObject*                             m_module_proxies  = nullptr;
-    PyObject*                             m_proxy_import_fn = nullptr;
 };
 
 // Where the interpreter's standard library lives. stdarch is empty unless a
@@ -775,15 +622,6 @@ Runtime::InitializeInterpreter()
         FinalizeInterpreter();
         return false;
     }
-    // Same reasoning: MakeScriptGlobals refuses to build an environment
-    // without the proxies, because the alternative is handing a script the
-    // real modules.
-    if(!BuildModuleProxies())
-    {
-        spdlog::error("Python init failed: could not build the module proxies");
-        FinalizeInterpreter();
-        return false;
-    }
     return true;
 }
 
@@ -793,13 +631,9 @@ Runtime::FinalizeInterpreter()
     if(Py_IsInitialized())
     {
         Py_CLEAR(m_screen_fn);
-        Py_CLEAR(m_module_proxies);
-        Py_CLEAR(m_proxy_import_fn);
         Py_FinalizeEx();
     }
-    m_screen_fn       = nullptr;
-    m_module_proxies  = nullptr;
-    m_proxy_import_fn = nullptr;
+    m_screen_fn = nullptr;
 }
 
 // Compiles the screen into a throwaway module dict with the real builtins, so
@@ -831,73 +665,6 @@ Runtime::BuildSourceScreen()
     m_screen_fn = screen;
     Py_DECREF(globals);
     return m_screen_fn != nullptr;
-}
-
-// Compiles MODULE_PROXY_SOURCE the same way as the screen and builds a proxy
-// for every allowlisted standard library module. Returns false unless both the
-// proxies and the importer are in hand, and leaves neither behind in that
-// case. Runs on the interpreter thread with the GIL held.
-bool
-Runtime::BuildModuleProxies()
-{
-    PyObject* globals = PyDict_New();
-    if(!globals)
-    {
-        PyErr_Clear();
-        return false;
-    }
-    PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
-
-    PyObject* code = PyRun_String(MODULE_PROXY_SOURCE, Py_file_input, globals, globals);
-    if(!code)
-    {
-        spdlog::error("Python module proxies: {}", FormatPythonError());
-        Py_DECREF(globals);
-        return false;
-    }
-    Py_DECREF(code);
-
-    PyObject* names = PyList_New(0);
-    bool      ok    = names != nullptr;
-    for(char const* name : ALLOWLISTED_MODULES)
-    {
-        // optiq is not standard library and does not exist until a run
-        // injects it, so there is nothing to proxy.
-        if(ok && !is_optiq_module(name))
-        {
-            PyObject* text = PyUnicode_FromString(name);
-            ok             = text && PyList_Append(names, text) == 0;
-            Py_XDECREF(text);
-        }
-    }
-
-    // Both borrowed from the dict. The functions keep the dict alive through
-    // their own globals once it is released below.
-    PyObject* build     = ok ? PyDict_GetItemString(globals, "_build") : nullptr;
-    PyObject* import_fn = ok ? PyDict_GetItemString(globals, "_import") : nullptr;
-    PyObject* proxies   = nullptr;
-    if(build && import_fn)
-    {
-        proxies = PyObject_CallFunctionObjArgs(build, names, nullptr);
-    }
-
-    if(proxies && PyDict_Check(proxies))
-    {
-        Py_INCREF(import_fn);
-        m_proxy_import_fn = import_fn;
-        m_module_proxies  = proxies;
-    }
-    else
-    {
-        if(PyErr_Occurred())
-        {
-            spdlog::error("Python module proxies: {}", FormatPythonError());
-        }
-        Py_XDECREF(proxies);
-    }
-    Py_XDECREF(names);
-    Py_DECREF(globals);
-    return m_module_proxies != nullptr && m_proxy_import_fn != nullptr;
 }
 
 /*
@@ -958,17 +725,6 @@ Runtime::ScreenSource(std::string const& source, std::string& error)
 PyObject*
 Runtime::MakeScriptGlobals()
 {
-    if(!m_module_proxies || !m_proxy_import_fn)
-    {
-        // Init refuses to finish without these, so this is not expected. It is
-        // checked anyway because the fallback would be the real modules. Fail
-        // closed, as ScreenSource does.
-        PyErr_SetString(PyExc_RuntimeError,
-                        "the module proxies are unavailable, so the script was "
-                        "not run");
-        return nullptr;
-    }
-
     PyObject* globals = PyDict_New();
     if(!globals)
     {
@@ -991,8 +747,7 @@ Runtime::MakeScriptGlobals()
         }
     }
 
-    // Bound to the proxy importer, which restricted_import receives as self.
-    PyObject* import_fn = PyCFunction_New(&IMPORT_METHOD, m_proxy_import_fn);
+    PyObject* import_fn = PyCFunction_New(&IMPORT_METHOD, nullptr);
     if(import_fn)
     {
         PyDict_SetItemString(safe, "__import__", import_fn);
@@ -1014,13 +769,15 @@ Runtime::MakeScriptGlobals()
         {
             continue;
         }
-        // The proxy, never the module. A name with no proxy is a module this
-        // Python does not have, and is left out as it always was. Borrowed.
-        PyObject* proxy = PyDict_GetItemString(m_module_proxies, name);
-        if(proxy && PyDict_SetItemString(globals, name, proxy) != 0)
+        PyObject* mod = PyImport_ImportModule(name);
+        if(mod)
         {
-            Py_DECREF(globals);
-            return nullptr;
+            PyDict_SetItemString(globals, name, mod);
+            Py_DECREF(mod);
+        }
+        else
+        {
+            PyErr_Clear();
         }
     }
     return globals;

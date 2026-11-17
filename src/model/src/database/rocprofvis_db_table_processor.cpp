@@ -259,12 +259,7 @@ namespace DataModel
                     
                 }
 
-                // Every track in queries is fetched again below, kept ones as
-                // well as added ones, so rows left from the last call would
-                // come back twice. Event rows are deduplicated by id after the
-                // merge; sample rows carry no id to do that with, so the
-                // merged rows are dropped outright.
-                m_merged_table.RemoveRowsForSetOfTracks(tracks, removed_tracks, true);
+                m_merged_table.RemoveRowsForSetOfTracks(tracks, removed_tracks, query_updated);
 
                 if (new_queries.size())
                 {

@@ -79,14 +79,10 @@ std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
 // may offer one again.
 void ResetAssistantScriptOffers();
 
-// Tells the UI tools a turn is starting, and what the user typed to start it.
-// The tools that reach past the trace in front or leave something behind are
-// held to what the user asked for by the prompt, which a model steered by text
-// in the trace can ignore; this is what lets the tools hold the line
-// themselves. It resets the per-turn count of pinned notes, and decides from
-// the user's own words whether switch_tab may list and bring forward another
-// trace this turn. Pass the text as typed, not the prompt built around it.
-// Until the first call nothing is restricted.
+// Tells the UI tools a turn is starting, with the text the user typed (not the
+// prompt built around it). Resets the per-turn count of pinned notes and
+// decides from the user's own words whether switch_tab may reach another trace
+// this turn, so those limits hold even if text in the trace steers the model.
 void BeginAssistantUiTurn(const std::string& user_message);
 
 // Formats the compute metric values that just landed in the assistant's store.
@@ -116,6 +112,9 @@ uint64_t JsonU64(const jt::Json& json, const std::string& key,
 
 // The same for a value already in hand, such as one entry of an id array.
 uint64_t JsonU64Value(const jt::Json& value, uint64_t default_value);
+
+// Narrows a JSON number to an id, rejecting anything a uint64_t cannot hold.
+uint64_t JsonU64FromDouble(double value, uint64_t default_value);
 
 // Caps a tool result at max_chars, appending truncation_note when it had to
 // cut. Keeps the head, which is where a well-behaved result puts its summary.

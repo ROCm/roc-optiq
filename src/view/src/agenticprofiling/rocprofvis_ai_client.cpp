@@ -61,17 +61,13 @@ constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 // response can start. The inline "harmony" path below has its own, smaller cap.
 constexpr size_t ASSISTANT_MAX_TOOL_CALLS_PER_ROUND = 16;
 
-// A throttle, a gateway hiccup or a dropped connection usually clears within
-// seconds, and failing the turn over one throws away every tool round before
-// it. So a request gets one more try, after a short wait the endpoint can
+// A transient failure gets one more try, after a short wait the endpoint can
 // lengthen with Retry-After, up to the cap.
-constexpr int ASSISTANT_HTTP_ATTEMPTS           = 2;
 constexpr int ASSISTANT_RETRY_WAIT_SECONDS      = 2;
 constexpr int ASSISTANT_RETRY_WAIT_MAX_SECONDS  = 10;
 constexpr int ASSISTANT_RETRY_POLL_MILLISECONDS = 100;
-// A connection that failed later than this had most likely timed out, or the
-// endpoint was already working on the completion. Trying again would double a
-// long wait, and possibly the bill.
+// A connection that failed later than this most likely timed out, or the
+// endpoint was already working: retrying would double the wait and the bill.
 constexpr int ASSISTANT_RETRY_FAST_FAILURE_SECONDS = 10;
 
 // Stock OpenAI: the key is a bearer token and the model is named in the body.
@@ -96,11 +92,9 @@ constexpr int ASSISTANT_MAX_OUTPUT_TOKENS = 4096;
 // A malformed reply could otherwise name an unbounded number of tools.
 constexpr size_t ASSISTANT_MAX_HARMONY_CALLS = 4;
 
-// The provider's error text goes into the transcript, a toast and any export,
-// so its length is bounded rather than left to the endpoint.
+// The provider's error text goes into the transcript, a toast and any export.
 constexpr size_t ASSISTANT_MAX_ERROR_TEXT_BYTES = 400;
-// A key shorter than this is a placeholder or a typo, and blanking every
-// occurrence of it could mangle ordinary words in the message.
+// Blanking a shorter key could mangle ordinary words in the message.
 constexpr size_t ASSISTANT_MIN_REDACTED_KEY_BYTES = 8;
 constexpr char   ASSISTANT_REDACTED_KEY[]         = "[key]";
 constexpr char   ASSISTANT_TRUNCATION_MARK[]      = "...";
@@ -137,18 +131,13 @@ enum class EndpointFlavour
 EndpointFlavour
 FlavourFromUrl(const std::string& url)
 {
-    const std::string base       = url.substr(0, url.find_first_of("?#"));
-    const size_t      scheme     = base.find("://");
-    const size_t      path_start =
-        base.find('/', scheme == std::string::npos ? 0 : scheme + 3);
-    if(path_start == std::string::npos)
-    {
-        return EndpointFlavour::kOpenAi;
-    }
-    const std::string path  = base.substr(path_start);
-    const bool        azure = path.find("/azure") != std::string::npos ||
-                              path.find("/engines/") != std::string::npos ||
-                              path.find("/openai/deployments") != std::string::npos;
+    std::string  path   = url.substr(0, url.find_first_of("?#"));
+    const size_t scheme = path.find("://");
+    // erase() clamps, so a URL with no path leaves nothing to search.
+    path.erase(0, path.find('/', scheme == std::string::npos ? 0 : scheme + 3));
+    const bool azure = path.find("/azure") != std::string::npos ||
+                       path.find("/engines/") != std::string::npos ||
+                       path.find("/openai/deployments") != std::string::npos;
     return azure ? EndpointFlavour::kAzure : EndpointFlavour::kOpenAi;
 }
 
@@ -299,36 +288,6 @@ SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
     return true;
 }
 
-// Removes any "user:password@" from the authority of a URL or origin. People
-// do paste a key there, and it must not travel on into the log, an error
-// message or anything derived from the URL.
-void
-StripUserInfo(std::string& url)
-{
-    const std::string separator  = "://";
-    const size_t      scheme_end = url.find(separator);
-    if(scheme_end == std::string::npos)
-    {
-        return;
-    }
-
-    const size_t authority_start = scheme_end + separator.size();
-    size_t       authority_end   = url.find_first_of("/?#", authority_start);
-    if(authority_end == std::string::npos)
-    {
-        authority_end = url.size();
-    }
-    // The last one counts: everything before it is userinfo, whatever it holds.
-    for(size_t i = authority_end; i > authority_start; --i)
-    {
-        if(url[i - 1] == '@')
-        {
-            url.erase(authority_start, i - authority_start);
-            return;
-        }
-    }
-}
-
 // The host of an origin ("https://host:port"), with the port and any IPv6
 // brackets removed. Empty when the origin has no scheme separator.
 std::string
@@ -359,9 +318,7 @@ HostFromOrigin(const std::string& origin)
 
 // True when the request never leaves this machine, which is what makes a plain
 // http endpoint - a local Ollama or llama.cpp server - safe to send a key to.
-// Only a literal 127.x.y.z address counts. A name that merely starts with
-// "127." resolves wherever its DNS says, and digits and dots alone can never
-// be such a name.
+// Only a literal 127.x.y.z counts: a name starting "127." resolves anywhere.
 bool
 OriginIsLoopback(const std::string& origin)
 {
@@ -381,10 +338,8 @@ OriginMayCarryToken(const std::string& origin)
            OriginIsLoopback(origin);
 }
 
-// Whether cpp-httplib will read this origin the way the checks above did. When
-// its own parser rejects an origin it quietly falls back to a plain-http client
-// on port 80, so anything the two could disagree about is refused up front
-// rather than left to fail at name resolution.
+// Whether cpp-httplib will read this origin the way the checks above did. An
+// origin its parser rejects quietly becomes a plain-http client on port 80.
 bool
 OriginIsWellFormed(const std::string& origin)
 {
@@ -394,15 +349,14 @@ OriginIsWellFormed(const std::string& origin)
     }
     for(const char c : origin)
     {
-        const unsigned char byte = static_cast<unsigned char>(c);
         // Spaces and control characters, including DEL.
-        if(byte <= 0x20 || byte == 0x7F)
+        if(static_cast<unsigned char>(c) <= 0x20 || c == 0x7F)
         {
             return false;
         }
     }
-    // After a bracketed IPv6 literal only a port may follow. HostFromOrigin
-    // stops at the bracket, so "[::1].example" would otherwise pass as loopback.
+    // Only a port may follow a bracketed IPv6 literal. HostFromOrigin stops at
+    // the bracket, so "[::1].example" would otherwise pass as loopback.
     const size_t close = origin.find(']');
     return close == std::string::npos || close + 1 == origin.size() ||
            origin[close + 1] == ':';
@@ -522,17 +476,13 @@ ParseHarmonyToolCalls(const std::string& content, std::vector<AssistantToolCall>
         }
 
         // "to=" inside a longer word, flag or URL query ("--to=json", "goto=x",
-        // "?to=abc") is the model's prose. A real harmony call follows a space
-        // or a "<|...|>" token.
-        if(marker_pos > 0)
+        // "?to=abc") is the model's prose, not a call.
+        const char before = (marker_pos > 0) ? content[marker_pos - 1] : ' ';
+        if(std::isalnum(static_cast<unsigned char>(before)) != 0 || before == '_' ||
+           before == '-' || before == '?' || before == '&')
         {
-            const char before = content[marker_pos - 1];
-            if(std::isalnum(static_cast<unsigned char>(before)) != 0 ||
-               before == '_' || before == '-' || before == '?' || before == '&')
-            {
-                search = marker_pos + marker.size();
-                continue;
-            }
+            search = marker_pos + marker.size();
+            continue;
         }
 
         size_t start = marker_pos + marker.size();
@@ -625,20 +575,12 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
         }
 
         call.arguments = "{}";
-        if(function.contains("arguments"))
+        // A null stands for "no arguments" and keeps the empty object.
+        if(function.contains("arguments") && !function["arguments"].isNull())
         {
-            // A null stands for "no arguments" and keeps the empty object.
-            // Any other type goes through as it is, so the tool can tell the
-            // model what was wrong with it.
             jt::Json& arguments = function["arguments"];
-            if(arguments.isString())
-            {
-                call.arguments = arguments.getString();
-            }
-            else if(!arguments.isNull())
-            {
-                call.arguments = arguments.toString();
-            }
+            call.arguments =
+                arguments.isString() ? arguments.getString() : arguments.toString();
         }
         calls.push_back(call);
     }
@@ -813,50 +755,54 @@ ResponseError(int status, const std::string& body)
     return "The endpoint did not return JSON. Check the URL.";
 }
 
-// True for the statuses that mean "not now" rather than "no": a throttle, or a
-// gateway that could not reach the model. Everything else would fail the same
-// way a second time.
-bool
-StatusIsTransient(int status)
-{
-    return status == ASSISTANT_HTTP_TOO_MANY_REQUESTS ||
-           status == ASSISTANT_HTTP_BAD_GATEWAY ||
-           status == ASSISTANT_HTTP_SERVICE_UNAVAILABLE ||
-           status == ASSISTANT_HTTP_GATEWAY_TIMEOUT;
-}
-
-// How long to wait before the retry: what Retry-After asks for when it is a
-// number of seconds, up to the cap, and the default otherwise. The header may
-// also be an HTTP date or garbage, so the digits are read by hand rather than
-// with a conversion that throws.
+// Seconds to wait before trying a request that started at "started" once more,
+// or 0 when the outcome would only repeat. A throttle or a gateway failure
+// waits as long as a numeric Retry-After asks, up to the cap. Of the transport
+// failures only a connection that broke straight away is retried: a timeout, a
+// refused connection, a DNS or a TLS failure would fail the same way again.
 int
-RetryWaitSeconds(const std::string& retry_after)
+RetryWaitSeconds(const httplib::Result&                       response,
+                 const std::chrono::steady_clock::time_point& started)
 {
-    int seconds = 0;
-    for(size_t i = 0; i < retry_after.size(); ++i)
+    if(!response)
     {
-        // Stopping at the cap also keeps a long run of digits from overflowing.
-        if(std::isdigit(static_cast<unsigned char>(retry_after[i])) == 0 ||
+        const httplib::Error error = response.error();
+        const bool           reset = error == httplib::Error::Read ||
+                                     error == httplib::Error::Write ||
+                                     error == httplib::Error::ConnectionClosed ||
+                                     error == httplib::Error::Unknown;
+        const bool fast = std::chrono::steady_clock::now() - started <
+                          std::chrono::seconds(ASSISTANT_RETRY_FAST_FAILURE_SECONDS);
+        return (reset && fast) ? ASSISTANT_RETRY_WAIT_SECONDS : 0;
+    }
+    if(response->status != ASSISTANT_HTTP_TOO_MANY_REQUESTS &&
+       response->status != ASSISTANT_HTTP_BAD_GATEWAY &&
+       response->status != ASSISTANT_HTTP_SERVICE_UNAVAILABLE &&
+       response->status != ASSISTANT_HTTP_GATEWAY_TIMEOUT)
+    {
+        return 0;
+    }
+
+    // The header may also be an HTTP date or garbage, so the digits are read by
+    // hand. Stopping at the cap keeps a long run of them from overflowing.
+    int seconds = 0;
+    for(const char c : response->get_header_value("Retry-After"))
+    {
+        if(std::isdigit(static_cast<unsigned char>(c)) == 0 ||
            seconds >= ASSISTANT_RETRY_WAIT_MAX_SECONDS)
         {
             break;
         }
-        seconds = seconds * 10 + (retry_after[i] - '0');
+        seconds = seconds * 10 + (c - '0');
     }
-    if(seconds <= 0)
-    {
-        return ASSISTANT_RETRY_WAIT_SECONDS;
-    }
-    return std::min(seconds, ASSISTANT_RETRY_WAIT_MAX_SECONDS);
+    return (seconds == 0) ? ASSISTANT_RETRY_WAIT_SECONDS
+                          : std::min(seconds, ASSISTANT_RETRY_WAIT_MAX_SECONDS);
 }
 
-// A write into a connection the peer has reset raises SIGPIPE, and its default
-// action ends the whole app, every open trace with it. A request body is tens
-// to hundreds of KB, so an endpoint that resets mid-upload is not rare, and
-// cpp-httplib's client leaves the signal to its caller. macOS turns it off per
-// socket. Linux cannot, so there the request's thread blocks it and drops any
-// it raised. Either way the write fails, and is reported or retried like any
-// other dropped connection.
+// A write into a connection the peer has reset raises SIGPIPE, whose default
+// action ends the app, and cpp-httplib's client leaves the signal to its
+// caller. macOS turns it off per socket. Linux cannot, so there the request's
+// thread blocks it and drops any it raised. Either way the write just fails.
 #ifdef SO_NOSIGPIPE
 void
 SuppressSigpipe(socket_t sock)
@@ -871,15 +817,12 @@ class ScopedSigpipeBlock
 {
 public:
     ScopedSigpipeBlock()
-    : m_blocked(false)
     {
         sigemptyset(&m_sigpipe);
         sigaddset(&m_sigpipe, SIGPIPE);
         // When the thread already blocked SIGPIPE, a pending one is not ours to drop.
-        if(pthread_sigmask(SIG_BLOCK, &m_sigpipe, &m_previous) == 0)
-        {
-            m_blocked = sigismember(&m_previous, SIGPIPE) == 0;
-        }
+        m_blocked = pthread_sigmask(SIG_BLOCK, &m_sigpipe, &m_previous) == 0 &&
+                    sigismember(&m_previous, SIGPIPE) == 0;
     }
 
     ~ScopedSigpipeBlock()
@@ -888,7 +831,7 @@ public:
         {
             return;
         }
-        // A SIGPIPE raised here is pending on this thread, and would be
+        // One raised meanwhile is pending on this thread, and would be
         // delivered the moment the mask is restored.
         const timespec no_wait = {};
         while(sigtimedwait(&m_sigpipe, nullptr, &no_wait) == SIGPIPE)
@@ -897,9 +840,6 @@ public:
         pthread_sigmask(SIG_SETMASK, &m_previous, nullptr);
     }
 
-    ScopedSigpipeBlock(const ScopedSigpipeBlock&)            = delete;
-    ScopedSigpipeBlock& operator=(const ScopedSigpipeBlock&) = delete;
-
 private:
     sigset_t m_sigpipe;
     sigset_t m_previous;
@@ -907,45 +847,38 @@ private:
 };
 #endif
 
-// The URL with any query string elided and any userinfo removed. A user who
-// pastes a key into either would otherwise see it copied into the log and into
-// error text. The path stays: it cannot be told apart from a deployment name,
-// and it is what a 404 needs to show.
+// The URL with any query string elided. A user who pastes a key into the URL
+// would otherwise see it copied into the log and into error text.
 std::string
 LoggableUrl(const std::string& url)
 {
     const size_t query_start = url.find('?');
-    std::string  loggable    = url.substr(0, query_start);
-    StripUserInfo(loggable);
-    if(query_start != std::string::npos)
+    if(query_start == std::string::npos)
     {
-        loggable += "?...";
+        return url;
     }
-    return loggable;
+    return url.substr(0, query_start) + "?...";
 }
 
-// Makes the endpoint's error text safe to show and export. Some gateways echo
-// the credential they were given in their auth error, so every copy of the key
-// is blanked, and the text is cut to a bounded length. A key the provider has
-// already partly masked is left as it is.
+// Makes the endpoint's error text safe to show and export: some gateways echo
+// the key they were given, so every copy of it is blanked, and the text is cut
+// to a bounded length.
 void
 ScrubErrorText(const std::string& api_token, std::string& error)
 {
     if(api_token.size() >= ASSISTANT_MIN_REDACTED_KEY_BYTES)
     {
-        const size_t placeholder_size = std::strlen(ASSISTANT_REDACTED_KEY);
-        size_t       found            = error.find(api_token);
+        size_t found = error.find(api_token);
         while(found != std::string::npos)
         {
             error.replace(found, api_token.size(), ASSISTANT_REDACTED_KEY);
-            found = error.find(api_token, found + placeholder_size);
+            found = error.find(api_token, found + std::strlen(ASSISTANT_REDACTED_KEY));
         }
     }
 
     if(error.size() > ASSISTANT_MAX_ERROR_TEXT_BYTES)
     {
-        // Back up to the start of a UTF-8 sequence so the cut never leaves half
-        // a code point for ImGui or the exported file.
+        // Back up to the start of a UTF-8 sequence so no code point is halved.
         size_t cut = ASSISTANT_MAX_ERROR_TEXT_BYTES;
         while(cut > 0 && (static_cast<unsigned char>(error[cut]) & 0xC0) == 0x80)
         {
@@ -984,8 +917,7 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
     }
 
     // cpp-httplib only recognises a lower-case scheme, while the key check
-    // below is case-blind. Normalising here keeps the two in step, and lets
-    // "HTTPS://" work. SplitUrl found the separator, at the same place in both.
+    // below is case-blind. Normalising keeps the two in step.
     const size_t      scheme_size = endpoint_out.origin.find("://");
     const std::string scheme =
         Core::String::to_lower_copy(endpoint_out.origin.substr(0, scheme_size));
@@ -996,9 +928,8 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
     endpoint_out.origin.replace(0, scheme_size, scheme);
     endpoint_out.url.replace(0, scheme_size, scheme);
 
-    // The origin is scheme and authority only, so an @ in it is userinfo. It
-    // could never connect - cpp-httplib takes "key@host" as the host name - and
-    // refusing it here keeps the secret out of the request log.
+    // An @ in the origin is userinfo. cpp-httplib could not connect with it,
+    // and refusing it here keeps a pasted key out of the log and error text.
     if(endpoint_out.origin.find('@') != std::string::npos)
     {
         return ASSISTANT_URL_CREDENTIALS_ERROR;
@@ -1057,9 +988,8 @@ InterpretResponse(const httplib::Response& response, bool allow_tool_calls,
     else
     {
         ParseChatCompletion(parsed.second, allow_tool_calls, result);
-        // An error status with a JSON body: lead with the status so a throttle,
-        // a bad key and a wrong URL do not read alike, then the provider's own
-        // words if it sent any.
+        // Lead with the status so a throttle, a bad key and a wrong URL do not
+        // read alike, then the provider's own words if it sent any.
         if(!result.error.empty() && response.status >= ASSISTANT_FIRST_ERROR_STATUS)
         {
             const std::string detail = ErrorText(parsed.second);
@@ -1072,21 +1002,24 @@ InterpretResponse(const httplib::Response& response, bool allow_tool_calls,
 
 }  // namespace
 
-// Lower-cased "scheme://host[:port]" of an endpoint URL, or empty when it has
-// no scheme separator. Userinfo is dropped, so a key pasted into the URL is not
-// carried into whatever the caller stores or compares.
 std::string
 AssistantUrlOrigin(const std::string& url)
 {
     std::string origin;
     std::string path;
-    // A base with no path can still carry a query, which is not part of the
-    // origin.
+    // A base with no path can still carry a query, which is not part of it.
     if(!SplitUrl(url.substr(0, url.find_first_of("?#")), origin, path))
     {
         return std::string();
     }
-    StripUserInfo(origin);
+    // Userinfo is dropped, up to the last @, so a key pasted into the URL is
+    // not carried into whatever the caller stores or compares.
+    const size_t authority = origin.find("://") + 3;
+    const size_t at        = origin.rfind('@');
+    if(at != std::string::npos && at >= authority)
+    {
+        origin.erase(authority, at + 1 - authority);
+    }
     origin = Core::String::to_lower_copy(origin);
     // A default port names the same destination as no port at all.
     if(origin.compare(0, 8, "https://") == 0 && EndsWith(origin, ":443"))
@@ -1100,9 +1033,8 @@ AssistantUrlOrigin(const std::string& url)
     return origin;
 }
 
-// True when the URL is plain http to a host that is not loopback. This is the
-// same rule OriginMayCarryToken applies to the key, asked on behalf of the
-// conversation: with no key set such an endpoint is still used.
+// The rule OriginMayCarryToken applies to the key, asked for the conversation:
+// with no key set such an endpoint is still used.
 bool
 AssistantUrlIsCleartext(const std::string& url)
 {
@@ -1134,8 +1066,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     }
 
 #ifdef __linux__
-    // Declared before the client so it also covers the client's destructor,
-    // which can write a TLS close_notify.
+    // Before the client, whose destructor can write a TLS close_notify.
     const ScopedSigpipeBlock sigpipe_block;
 #endif
     httplib::Client client(endpoint.origin);
@@ -1168,52 +1099,18 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         result.cancelled = true;
         return result;
     }
-    // The client stays adopted across both attempts so Cancel() can stop
-    // either one.
-    httplib::Result response;
-    for(int attempt = 1;; ++attempt)
+    const std::chrono::steady_clock::time_point started =
+        std::chrono::steady_clock::now();
+    httplib::Result response =
+        client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+    // The client stays adopted across the retry so Cancel() can stop that too.
+    const int wait_seconds = RetryWaitSeconds(response, started);
+    if(wait_seconds > 0 && !Cancelled())
     {
-        const std::chrono::steady_clock::time_point started =
-            std::chrono::steady_clock::now();
-        response =
-            client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
-        if(attempt >= ASSISTANT_HTTP_ATTEMPTS || Cancelled())
-        {
-            break;
-        }
-
-        int wait_seconds = ASSISTANT_RETRY_WAIT_SECONDS;
-        if(response)
-        {
-            if(!StatusIsTransient(response->status))
-            {
-                break;
-            }
-            wait_seconds = RetryWaitSeconds(response->get_header_value("Retry-After"));
-        }
-        else
-        {
-            // Only a connection that broke straight away is worth another try.
-            // A timeout, a refused connection, a DNS or a TLS failure would
-            // fail the same way again, so those are reported at once.
-            const httplib::Error error = response.error();
-            const bool           reset = error == httplib::Error::Read ||
-                                         error == httplib::Error::Write ||
-                                         error == httplib::Error::ConnectionClosed ||
-                                         error == httplib::Error::Unknown;
-            const bool fast = std::chrono::steady_clock::now() - started <
-                              std::chrono::seconds(ASSISTANT_RETRY_FAST_FAILURE_SECONDS);
-            if(!reset || !fast)
-            {
-                break;
-            }
-        }
-
         spdlog::warn("Assistant request to {} failed transiently, retrying in {} s",
                      loggable, wait_seconds);
-        // Wait in short slices so Cancel() is noticed promptly; an abandoned
-        // request holds its thread until this returns, and the panel's
-        // destructor waits on that thread at quit.
+        // Wait in short slices: Cancel() must be noticed promptly, because the
+        // panel's destructor waits on this thread at quit.
         const std::chrono::steady_clock::time_point wake =
             std::chrono::steady_clock::now() + std::chrono::seconds(wait_seconds);
         while(!Cancelled() && std::chrono::steady_clock::now() < wake)
@@ -1221,9 +1118,10 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(ASSISTANT_RETRY_POLL_MILLISECONDS));
         }
-        if(Cancelled())
+        if(!Cancelled())
         {
-            break;
+            response =
+                client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
         }
     }
     Release();
@@ -1243,8 +1141,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
-    // A cancel that landed during the retry wait leaves the first, failed
-    // response in hand. The caller walked away, so it is not an error to show.
+    // A cancel during the retry wait leaves the first, failed response in hand.
     if(Cancelled())
     {
         result.cancelled = true;
@@ -1254,8 +1151,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     InterpretResponse(*response, request.enable_tools, result);
     ScrubErrorText(request.api_token, result.error);
     // A 404 is nearly always the URL being shaped wrong, so name what we asked
-    // for. Added after the scrub so a long provider message cannot cut it off;
-    // the query and any userinfo are already off it.
+    // for. Added after the scrub so a long provider message cannot cut it off.
     if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)
     {
         result.error.append(" Requested ");

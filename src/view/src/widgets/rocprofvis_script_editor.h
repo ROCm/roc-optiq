@@ -52,21 +52,18 @@ public:
     // Offers a script the assistant wrote. Nothing runs until the user presses
     // Run. Selecting the tab is the caller's job, through OptiqActions, so that
     // every UI change the assistant makes goes through one place.
-    //
-    // Returns false, changing nothing, when the editor holds the user's own
-    // unsaved work: an offer replaces the source, and a draft must not be
-    // lost to one.
+    // Returns false, changing nothing, when HasUnsavedDraft: an offer replaces
+    // the source.
     bool ProposeScript(const std::string& source);
 
-    // True when the source has been typed into since it was last offered,
-    // loaded or saved, so replacing it would lose something.
+    // True when the source was typed into since it was last offered, loaded or
+    // saved.
     bool HasUnsavedDraft() const;
 
     ScriptApproval ProposalState() const;
     void           ClearProposal();
-    // Declines the offer, the same as the Reject button. The assistant calls
-    // this too when the user never answered, so that a script nobody approved
-    // is labelled as declined rather than left looking like the user's own.
+    // The Reject button. Also called for an offer the user never answered, so
+    // an unapproved script does not read as their own.
     void           Reject();
 
 private:
@@ -94,9 +91,8 @@ private:
     float       m_result_ratio;
     uint64_t    m_progress_percent;
     std::string m_source;
-    // The source as it was last put here by something other than typing: the
-    // sample, an offer from Ask Optiq, a file loaded, or a file saved. Any
-    // difference from m_source is work the user has not saved.
+    // m_source as last set by something other than typing: the sample, an
+    // offer, a load or a save.
     std::string m_saved_source;
     std::string m_output;
     bool        m_output_is_error;

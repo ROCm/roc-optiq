@@ -98,9 +98,8 @@ public:
     AssistantChatResult Send(const AssistantChatRequest& request);
 
     // Aborts the request in flight, if any. Safe to call from another thread.
-    // While a connect is in progress cpp-httplib holds the socket, so this waits
-    // for the connect to finish, up to its timeout, before it can close it. Do
-    // not call it from a thread that must not stall.
+    // Waits out a connect in progress, up to its timeout, so do not call it
+    // from a thread that must not stall.
     void Cancel();
 
 private:

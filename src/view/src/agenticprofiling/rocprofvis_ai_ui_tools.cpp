@@ -40,32 +40,15 @@ constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
 // A chosen trace comes forward within a couple of frames. This only bounds a
 // switch that never lands, such as one to a tab closed in the meantime.
 constexpr uint32_t ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS = 5;
-// Notes are saved with the project, so what one turn can leave behind is
-// bounded: a heading stays a heading, the body stays something a sticky note
-// can show, and a turn that has gone wrong cannot paper the timeline.
+// Notes are saved with the project, so what one turn can leave is bounded.
 constexpr size_t ASSISTANT_MAX_NOTE_TITLE_CHARS = 120;
 constexpr size_t ASSISTANT_MAX_NOTE_TEXT_CHARS  = 2000;
 constexpr size_t ASSISTANT_MAX_NOTES_PER_TURN   = 5;
 
-/*
- * What the turn in progress may still do through these tools.
- *
- * The prompt tells the model to leave notes and change traces only when the
- * user asked, but names and arguments in a trace are text someone else wrote,
- * and a model that takes them for instructions will not honour a prompt. These
- * are the limits that hold regardless. The panel starts each turn through
- * BeginAssistantUiTurn; until it has done so once nothing is known about the
- * turn, and nothing is restricted.
- */
-struct UiTurnState
-{
-    bool   tracked              = false;
-    // The user's own message asked for a tab change, or named another trace.
-    bool   tab_switch_requested = false;
-    size_t notes_pinned         = 0;
-};
-
-UiTurnState g_ui_turn;
+// Per-turn limits that hold even when text in the trace talks the model out of
+// its prompt. BeginAssistantUiTurn resets them.
+bool   g_tab_switch_requested = false;
+size_t g_notes_pinned         = 0;
 
 // Every UI-facing thing a tool does goes through here.
 OptiqActions
@@ -103,7 +86,6 @@ bool
 AsksForTabSwitch(const std::string& user_message)
 {
     const std::string text = Core::String::to_lower_copy(user_message);
-    // "Go to the other trace" asks for the same thing without either word.
     if(ContainsWord(text, "tab") || ContainsWord(text, "tabs") ||
        ContainsWord(text, "switch") || text.find("other trace") != std::string::npos ||
        text.find("other run") != std::string::npos)
@@ -125,9 +107,8 @@ AsksForTabSwitch(const std::string& user_message)
     return false;
 }
 
-// Cuts model-written text to max_chars and marks the cut. Backs up to the start
-// of a character first: a note is saved into the project file, and half a
-// UTF-8 sequence there would be read back as garbage.
+// Cuts text to max_chars and marks the cut. Backs up to the start of a UTF-8
+// character first, since a note is saved into the project file.
 std::string
 TrimNoteText(std::string text, size_t max_chars)
 {
@@ -143,6 +124,20 @@ TrimNoteText(std::string text, size_t max_chars)
     text.resize(cut);
     text += "...";
     return text;
+}
+
+// Holds a window to the trace. False when none of it lies inside.
+bool
+ClampToTrace(const TimelineModel& timeline, double& start_ns, double& end_ns)
+{
+    const double trace_start = timeline.GetStartTime();
+    const double trace_end   = timeline.GetEndTime();
+    if(trace_end > trace_start)
+    {
+        start_ns = std::max(start_ns, trace_start);
+        end_ns   = std::min(end_ns, trace_end);
+    }
+    return end_ns > start_ns;
 }
 
 // Reads the stacked follow-up buttons out of offer_next_steps arguments.
@@ -342,17 +337,16 @@ AssistantToolStartResult
 ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
              const std::string&)
 {
-    const double      time_ns  = JsonUtils::GetDouble(args, "time_ns", -1.0);
-    const std::string raw_text = JsonUtils::GetString(args, "text", "");
-    const std::string title    = TrimNoteText(JsonUtils::GetString(args, "title", ""),
-                                              ASSISTANT_MAX_NOTE_TITLE_CHARS);
-    const std::string text     = TrimNoteText(raw_text, ASSISTANT_MAX_NOTE_TEXT_CHARS);
+    const double      time_ns = JsonUtils::GetDouble(args, "time_ns", -1.0);
+    const std::string title   = TrimNoteText(JsonUtils::GetString(args, "title", ""),
+                                             ASSISTANT_MAX_NOTE_TITLE_CHARS);
+    const std::string text    = JsonUtils::GetString(args, "text", "");
     if(time_ns < 0.0 || title.empty() || text.empty())
     {
         return DoneResult("annotate needs time_ns, title, and text.",
                           "Missing arguments");
     }
-    if(g_ui_turn.tracked && g_ui_turn.notes_pinned >= ASSISTANT_MAX_NOTES_PER_TURN)
+    if(g_notes_pinned >= ASSISTANT_MAX_NOTES_PER_TURN)
     {
         return DoneResult("This turn has already pinned " +
                               std::to_string(ASSISTANT_MAX_NOTES_PER_TURN) +
@@ -386,17 +380,19 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
     double view_start = 0.0;
     double view_end   = 0.0;
     SelectedOrFullTimeRange(context, view_start, view_end);
-    if(!Actions(context).AddNote(time_ns, title, text, view_start, view_end,
+    if(!Actions(context).AddNote(time_ns, title,
+                                 TrimNoteText(text, ASSISTANT_MAX_NOTE_TEXT_CHARS),
+                                 view_start, view_end,
                                  JsonU64(args, "track_id", INVALID_UINT64_INDEX)))
     {
         return DoneResult("Could not pin a note on this trace.", "Note failed");
     }
-    ++g_ui_turn.notes_pinned;
+    ++g_notes_pinned;
 
     std::ostringstream out;
     out << "Pinned a note titled \"" << title << "\" at "
         << nanosecond_to_formatted_str(time_ns, time_format, true) << ".";
-    if(raw_text.size() > ASSISTANT_MAX_NOTE_TEXT_CHARS)
+    if(text.size() > ASSISTANT_MAX_NOTE_TEXT_CHARS)
     {
         out << " Its text was too long for a note and was cut at "
             << ASSISTANT_MAX_NOTE_TEXT_CHARS << " characters.";
@@ -421,29 +417,23 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
               const std::string&)
 {
     OptiqActions                   actions       = Actions(context);
-    const std::vector<std::string> trace_tabs    = actions.ListTabs();
+    // Other open traces are the user's business until they bring one up. An
+    // unasked call sees only the trace in front and is refused the switch
+    // below, because every tool after a switch sends the new trace's data to
+    // the endpoint.
+    const std::vector<std::string> trace_tabs =
+        g_tab_switch_requested
+            ? actions.ListTabs()
+            : std::vector<std::string>{ actions.ActiveTab(),
+                                        "(any other open trace is listed only when "
+                                        "the user asks to change tabs)" };
     const std::vector<std::string> analysis_tabs = actions.ListAnalysisTabs();
-
-    // The other open traces are the user's business until they bring one up.
-    // A call nobody asked for learns only about the trace it is already on,
-    // and further down is refused the switch, because every tool after a
-    // switch reads the new trace and sends what it reads to the endpoint.
-    const bool other_traces = !g_ui_turn.tracked || g_ui_turn.tab_switch_requested;
 
     std::ostringstream out;
     out << "trace_tabs:";
-    if(other_traces)
+    for(const std::string& tab : trace_tabs)
     {
-        for(const std::string& tab : trace_tabs)
-        {
-            out << "\n  " << tab;
-        }
-    }
-    else
-    {
-        out << "\n  " << actions.ActiveTab()
-            << "\n  (any other open trace is listed only when the user asks to "
-               "change tabs)";
+        out << "\n  " << tab;
     }
     out << "\nactive_trace_tab: " << actions.ActiveTab() << "\n";
     if(!analysis_tabs.empty())
@@ -472,7 +462,7 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     }
     // Refused whether or not the name matches a trace, so the reply cannot be
     // used to find out which traces are open.
-    if(!other_traces)
+    if(!g_tab_switch_requested)
     {
         out << "\"" << name
             << "\" is not a details panel tab. Switching to another trace needs "
@@ -627,39 +617,25 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
 
     // goto is the one writer of the selection the data tools default to, so a
     // window outside the trace must not be stored: every later read would come
-    // back empty and read as "nothing happened here". The trace's own window is
-    // given in raw nanoseconds, like every other tool result, so the model can
-    // pass it straight back.
-    const TimelineModel& timeline      = context.data_provider->DataModel().GetTimeline();
-    const double         trace_start   = timeline.GetStartTime();
-    const double         trace_end     = timeline.GetEndTime();
-    const std::string    trace_window  = "window_ns is " + nanosecond_to_str(trace_start) +
-                                         " .. " + nanosecond_to_str(trace_end);
-    bool                 range_dropped = false;
-    if(has_range)
+    // back empty. The trace's window is reported in raw nanoseconds so the
+    // model can pass it straight back.
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    const std::string    trace_window =
+        "window_ns is " + nanosecond_to_str(timeline.GetStartTime()) + " .. " +
+        nanosecond_to_str(timeline.GetEndTime());
+    bool range_dropped = false;
+    if(has_range && !ClampToTrace(timeline, start_ns, end_ns))
     {
-        if(trace_end > trace_start)
+        if(targets.empty())
         {
-            if(end_ns <= trace_start || start_ns >= trace_end)
-            {
-                if(targets.empty())
-                {
-                    return DoneResult("That range is outside this trace, whose " +
-                                          trace_window +
-                                          ". Re-read the range from the data rather than "
-                                          "reusing one from an earlier trace or turn.",
-                                      "goto failed");
-                }
-                // The named events supply the window instead.
-                has_range     = false;
-                range_dropped = true;
-            }
-            else
-            {
-                start_ns = std::max(start_ns, trace_start);
-                end_ns   = std::min(end_ns, trace_end);
-            }
+            return DoneResult("That range is outside this trace, whose " + trace_window +
+                                  ". Re-read the range from the data rather than "
+                                  "reusing one from an earlier trace or turn.",
+                              "goto failed");
         }
+        // The named events supply the window instead.
+        has_range     = false;
+        range_dropped = true;
     }
 
     // Naming the culprit event but no window is the obvious way to call this,
@@ -679,21 +655,12 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         if(context.data_provider->DataModel().GetEvents().GetEventTimeRange(
                ids, found_start, found_end) &&
            std::isfinite(found_start) && std::isfinite(found_end) &&
-           found_start >= 0.0 && found_end > found_start)
+           found_start >= 0.0 && found_end > found_start &&
+           ClampToTrace(timeline, found_start, found_end))
         {
-            // Held to the trace like a window the model passed, so an entry
-            // with no times of its own cannot store a selection outside it.
-            if(trace_end > trace_start)
-            {
-                found_start = std::max(found_start, trace_start);
-                found_end   = std::min(found_end, trace_end);
-            }
-            if(found_end > found_start)
-            {
-                start_ns  = found_start;
-                end_ns    = found_end;
-                has_range = true;
-            }
+            start_ns  = found_start;
+            end_ns    = found_end;
+            has_range = true;
         }
     }
 
@@ -848,9 +815,8 @@ const AssistantToolEntry k_shared_ui_tool_handlers[] = {
 void
 BeginAssistantUiTurn(const std::string& user_message)
 {
-    g_ui_turn                      = UiTurnState{};
-    g_ui_turn.tracked              = true;
-    g_ui_turn.tab_switch_requested = AsksForTabSwitch(user_message);
+    g_tab_switch_requested = AsksForTabSwitch(user_message);
+    g_notes_pinned         = 0;
 }
 
 // The UI half of the tool set, for StartAssistantTool to search.

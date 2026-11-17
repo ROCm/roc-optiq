@@ -63,22 +63,11 @@ constexpr size_t   ASSISTANT_MAX_CONVERSATION_CHARS = 120000;
 // Tool replies newer than this are never compacted, however long the history
 // has run. These are the rows the answer is about to be written from.
 constexpr size_t   ASSISTANT_RECENT_TOOL_REPLIES = 8;
-// Replies this small are spared until the large ones are gone: compacting them
-// saves almost nothing, and they are the overview and summary every later
-// claim leans on.
+// Replies this small are spared until the large ones are gone: they save
+// little, and are the overview and summary every later claim leans on.
 constexpr size_t   ASSISTANT_COMPACT_SMALL_CHARS = 4000;
-// Opens the briefing inside a user message. Shared by the code that writes it
-// and the code that looks for one still in the history.
+// Opens the briefing inside a user message.
 constexpr const char* ASSISTANT_BRIEFING_HEADER = "Briefing for the current Optiq view:\n";
-// Asks for the write-up on the tools-off round. A user message in form only:
-// ResetTurn takes it back out, and a briefing never goes on it.
-constexpr const char* ASSISTANT_WRITE_UP_NUDGE =
-    "Do not call any more tools. Write your answer now, reading the numbers you "
-    "already gathered and saying what they mean for this workload.";
-// Shown under an answer the endpoint stopped at its output cap.
-constexpr const char* ASSISTANT_TRUNCATED_NOTE =
-    "The answer was cut off at the model's output limit. Ask it to continue, or "
-    "ask something narrower.";
 // Stands in for a tool reply dropped from the history. Says plainly that the
 // rows can be had again, so a model that still needs them asks rather than
 // invents.
@@ -101,14 +90,11 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
 // How often track_statistics asks again after a range change dropped its
-// result. Capped as well as timed, so a query that keeps failing answers
-// promptly instead of being re-issued until the deadline.
+// result, so a query that keeps failing answers well before the deadline.
 constexpr uint32_t ASSISTANT_STATS_MAX_RERUNS = 4;
 
-// Overwrites a key before the string holding it is emptied or freed, so the
-// bytes do not sit in released memory for a crash dump to pick up. The whole
-// buffer is covered, not just the current length, and the writes go through a
-// volatile pointer so the compiler cannot drop them as dead stores.
+// Overwrites a key's whole buffer before it is emptied or freed, so the bytes
+// do not sit in released memory. Volatile, so the writes are not optimised out.
 void
 WipeString(std::string& text)
 {
@@ -119,17 +105,6 @@ WipeString(std::string& text)
         bytes[i] = '\0';
     }
     text.clear();
-}
-
-// Whether any question still in the conversation opens with the briefing.
-bool
-HasBriefing(const std::vector<AssistantMessage>& conversation)
-{
-    return std::any_of(conversation.begin(), conversation.end(),
-                       [](const AssistantMessage& message) {
-                           return message.role == "user" &&
-                                  message.content.rfind(ASSISTANT_BRIEFING_HEADER, 0) == 0;
-                       });
 }
 
 }  // namespace
@@ -172,12 +147,6 @@ AssistantPanel::AssistantPanel()
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
-    // The cancelled workers log as they unwind, so they finish before the app
-    // tears down what they log through.
-    for(std::future<void>& abandoned : m_abandoned)
-    {
-        abandoned.wait();
-    }
     WipeString(m_turn_token);
 }
 
@@ -358,11 +327,9 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
     return out.str();
 }
 
-// Takes back a script still waiting on Run or Reject. The turn is ending with
-// nobody left to hear the choice, so the Script tab must stop saying Ask Optiq
-// is waiting. Reached through the pinned trace rather than the one in front,
-// which is no longer the editor's after a tab change. The text stays, for a
-// run by hand.
+// Takes back a script still waiting on Run or Reject when the turn ends with
+// nobody left to hear the choice. Reached through the pinned trace, because
+// after a tab change the one in front is not the editor's.
 void
 AssistantPanel::WithdrawScriptOffer()
 {
@@ -391,15 +358,11 @@ AssistantPanel::ResetTurn()
     CancelPendingRequest();
     ResetAssistantPcRead();
     ResetAssistantScriptOffers();
-    // The turn's copy of the endpoint and key ends with the turn, so the next
-    // one reads the settings afresh. A cancelled request may still be unwinding
-    // on its own thread, but it reads the copy in its request, which it wipes
-    // itself, never these.
+    // A request still unwinding reads its own copy of these, never the members.
     m_turn_endpoint_url.clear();
     m_turn_model.clear();
     WipeString(m_turn_token);
-    // The write-up nudge is scaffolding for the one tools-off request. Left in,
-    // it tells every later turn not to call tools.
+    // Left in, the write-up nudge tells every later turn not to call tools.
     if(m_force_final && !m_conversation.empty() && m_conversation.back().role == "user")
     {
         m_conversation.pop_back();
@@ -415,11 +378,9 @@ AssistantPanel::ResetTurn()
     m_queued_question.clear();
 }
 
-// Abandons the reply we are waiting on without waiting for it. Cancel() closes
-// the socket, but first it has to wait out a connect already in progress, up to
-// the connect timeout, and then the worker has to unwind. So both happen on a
-// thread of their own and the UI keeps drawing; Update() lets go of that thread
-// once it is done.
+// Abandons the reply we are waiting on. Cancel() closes the socket, but first
+// waits out a connect in progress, so it runs on a thread of its own and the UI
+// never blocks. Update() lets go of that thread once it is done.
 void
 AssistantPanel::CancelPendingRequest()
 {
@@ -437,35 +398,41 @@ AssistantPanel::CancelPendingRequest()
     m_call.reset();
 }
 
-// The trim drops whole earlier exchanges, and the one it drops can be the one
-// whose question carried the briefing. The request about to go out would then
-// have none at all, so the live question takes a fresh one.
+// The trim can drop the exchange whose question carried the only briefing, so
+// the live question takes a fresh one. The write-up nudge, always last on the
+// tools-off round, is not a question.
 void
 AssistantPanel::RestoreTrimmedBriefing()
 {
-    if(HasBriefing(m_conversation))
+    AssistantMessage* question = nullptr;
+    for(size_t i = 0; i + (m_force_final ? 1 : 0) < m_conversation.size(); ++i)
     {
-        return;
-    }
-    for(auto it = m_conversation.rbegin(); it != m_conversation.rend(); ++it)
-    {
-        if(it->role == "user" && it->content != ASSISTANT_WRITE_UP_NUDGE)
+        AssistantMessage& message = m_conversation[i];
+        if(message.role != "user")
         {
-            it->content = std::string(ASSISTANT_BRIEFING_HEADER) +
-                          BuildAssistantBriefing(MakeToolContext()) + "\n" + it->content;
-            m_briefed_project_id = CurrentProjectId();
-            break;
+            continue;
         }
+        if(message.content.rfind(ASSISTANT_BRIEFING_HEADER, 0) == 0)
+        {
+            return;
+        }
+        question = &message;
+    }
+    if(question != nullptr)
+    {
+        question->content = ASSISTANT_BRIEFING_HEADER +
+                            BuildAssistantBriefing(MakeToolContext()) + "\n" +
+                            question->content;
+        m_briefed_project_id = CurrentProjectId();
     }
 }
 
 void
 AssistantPanel::StartHttpRequest()
 {
-    // Every round goes to the endpoint SendCurrentInput copied when the turn
-    // started, never to the live settings: the Preferences dialog edits those
-    // in place, so a later round would otherwise post the key to a half-typed
-    // or since-cancelled URL. An empty copy means no turn set one up.
+    // Every round goes to the endpoint SendCurrentInput copied, never to the
+    // live settings, which Preferences edits in place: a later round would
+    // otherwise post the key to a half-typed URL.
     if(m_turn_endpoint_url.empty())
     {
         ResetTurn();
@@ -496,8 +463,7 @@ AssistantPanel::StartHttpRequest()
     spdlog::info("Assistant HTTP round {} ({} messages)", m_tool_round,
                  request.messages.size());
 
-    // The worker owns the request's copy of the key and overwrites it as soon
-    // as the reply is in, rather than leaving it to be freed as it stands.
+    // The worker owns the request's copy of the key and wipes it after the reply.
     m_call    = std::make_shared<AssistantChatCall>();
     m_pending = std::async(std::launch::async,
                            [call = m_call, request = std::move(request)]() mutable {
@@ -595,15 +561,12 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     // Lets the UI tools hold switch_tab and annotate to what the user typed.
     BeginAssistantUiTurn(question);
 
-    // Fixes where this turn's requests go, and with which key, before the
-    // first one is built. Taken here rather than in StartHttpRequest so it
-    // also covers a turn that waits on the summary warmup first, and so no
-    // later round reads the settings again.
+    // Fixes where this turn's requests go, and with which key. Taken here so
+    // it also covers a turn that waits on the summary warmup first.
     AssistantProvider endpoint = *provider;
     ApplyAssistantEndpointDefaults(endpoint);
     m_turn_endpoint_url = endpoint.endpoint_url;
     m_turn_model        = endpoint.model;
-    WipeString(m_turn_token);
     settings.GetAssistantToken(endpoint.name, m_turn_token);
 
     if(TryStartSummaryWarmup(question))
@@ -625,15 +588,14 @@ AssistantPanel::SendCurrentInput(bool explain_view)
  * front. Repeating it on every follow-up costs its length once per turn for the
  * rest of the session, and puts several copies in context that disagree about
  * the selection - the model then has to guess which is current. Send it when
- * no briefing is left in the conversation - none yet, or the trim dropped the
- * exchange that carried it - or when the trace it described is no longer the
- * one being asked about.
+ * there is no conversation to refer back to, or when the trace it described is
+ * no longer the one being asked about.
  */
 bool
 AssistantPanel::NeedsBriefing()
 {
     const std::string project_id = CurrentProjectId();
-    if(HasBriefing(m_conversation) && project_id == m_briefed_project_id)
+    if(!m_conversation.empty() && project_id == m_briefed_project_id)
     {
         return false;
     }
@@ -677,8 +639,7 @@ MessageChars(const AssistantMessage& message)
  * user message to cut on. The second pass shrinks the oldest tool replies in
  * place instead: the rounds that followed have already read those numbers, and
  * keeping the message keeps its tool_call_id paired with the call that asked
- * for it, which is what dropping it outright would break. Large replies go
- * first, and the small ones only if that was not enough.
+ * for it, which is what dropping it outright would break.
  */
 void
 AssistantPanel::TrimConversation()
@@ -747,8 +708,7 @@ AssistantPanel::TrimConversation()
 
     const std::string note      = ASSISTANT_COMPACTED_TOOL_REPLY;
     size_t            compacted = 0;
-    // The second tier is what bounds the history: it takes every reply the
-    // note is shorter than.
+    // Large replies first, then every reply the note is shorter than.
     const size_t tiers[] = { ASSISTANT_COMPACT_SMALL_CHARS, note.size() };
     for(const size_t spared_up_to : tiers)
     {
@@ -818,11 +778,12 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
 
     ResetTurn();
     AppendLine(Speaker::kAssistant, reply);
-    // The endpoint cut the answer off at its output cap. Say so, or the user
-    // reads a write-up that stops short of its conclusion as the whole thing.
+    // Say so, or a write-up that stops short reads as the whole thing.
     if(result.finish_reason == "length")
     {
-        AppendLine(Speaker::kStatus, ASSISTANT_TRUNCATED_NOTE);
+        AppendLine(Speaker::kStatus,
+                   "The answer was cut off at the model's output limit. Ask it to "
+                   "continue, or ask something narrower.");
     }
 
     AssistantMessage assistant_message;
@@ -863,7 +824,9 @@ AssistantPanel::BeginFinalAnswer()
 {
     AssistantMessage nudge;
     nudge.role    = "user";
-    nudge.content = ASSISTANT_WRITE_UP_NUDGE;
+    nudge.content =
+        "Do not call any more tools. Write your answer now, reading the numbers you "
+        "already gathered and saying what they mean for this workload.";
     m_conversation.push_back(nudge);
     m_force_final = true;
     SetStatus("Working out what it means...");
@@ -890,17 +853,13 @@ AssistantPanel::RunNextTool()
     }
 
     const AssistantToolCall& call = m_pending_calls[m_next_call_index];
-    // A re-run is the same call still waiting, possibly once a frame. Only the
-    // first run is logged and scrolls the transcript down to the status, so a
-    // wait neither fills the log nor pins the transcript to the bottom.
+    // A re-run is the same call still waiting, so only the first run is logged
+    // and scrolls the transcript down to the status.
+    m_status = AssistantToolStatusLabel(call.name);
     if(m_fetch_retries == 0)
     {
-        SetStatus(AssistantToolStatusLabel(call.name));
+        m_scroll_to_bottom = true;
         spdlog::info("Assistant tool {} ({})", call.name, call.id);
-    }
-    else
-    {
-        m_status = AssistantToolStatusLabel(call.name);
     }
 
     const AssistantToolStartResult started =
@@ -916,19 +875,13 @@ AssistantPanel::RunNextTool()
     if(started.set_next_steps)
     {
         m_next_steps = started.next_steps;
-        // The model was told to call this alone, last, and then write. The
-        // prose it would write next is discarded anyway (see HandleHttpResult),
-        // so go straight to the tools-off round. Only when it is the whole
-        // batch: with sibling calls the model has not yet read their results
-        // with tools on.
+        // Called alone, it is the model's last step before writing, and the
+        // prose of a tools-on round is discarded anyway (see HandleHttpResult),
+        // so go straight to the tools-off round. With sibling calls the model
+        // has not yet read their results. ResetTurn clears the queue.
         if(m_pending_calls.size() == 1)
         {
-            // Before the queue is cleared, because call refers into it.
             AppendToolReply(call, started.content);
-            m_pending_calls.clear();
-            m_next_call_index = 0;
-            m_fetch_retries   = 0;
-            m_fetch_wait      = FetchWait();
             BeginFinalAnswer();
             return;
         }
@@ -1083,9 +1036,9 @@ AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
     {
         return CurrentProjectId() != m_fetch_wait.fetch.project_id;
     }
-    // Refused because the UI was loading a table of the same controller type.
-    // That table is what has to finish: this tool's own request id is idle, and
-    // polling it would re-run the tool every frame.
+    // Refused because the UI was loading a table of the same type. That load is
+    // what has to finish: the tool's own request id is idle, and polling it
+    // would re-run the tool every frame.
     if(m_fetch_wait.fetch.waits_for_ui_table &&
        context.data_provider->IsTableRequestPending(m_fetch_wait.fetch.ui_table_type))
     {
@@ -1149,9 +1102,10 @@ AssistantPanel::PollToolFetch()
     if(pending && !timed_out)
     {
         // Say how long, so a slow query reads as working rather than frozen.
-        // Assigned directly: this runs every frame, and SetStatus would pin
-        // the transcript to the bottom for the whole wait.
-        if(elapsed.count() >= ASSISTANT_SLOW_FETCH_NOTICE_SECONDS)
+        // Assigned directly: every frame, SetStatus would pin the transcript
+        // to the bottom for the whole wait.
+        if(elapsed.count() >= ASSISTANT_SLOW_FETCH_NOTICE_SECONDS &&
+           !m_fetch_wait.tool_name.empty())
         {
             m_status =
                 m_fetch_wait.status + " (" + std::to_string(elapsed.count()) + "s)";
@@ -1210,39 +1164,25 @@ AssistantPanel::PollToolFetch()
     // The rows that landed answer someone else's query, so never format them as
     // this tool's result. Re-run until we issue our own query, bounded by the
     // original wait deadline even though BeginFetchWait runs again.
-    if(!m_fetch_wait.started_fetch &&
-       m_fetch_wait.fetch.kind != AssistantFetchKind::kSummary)
+    const bool not_our_rows = !m_fetch_wait.started_fetch &&
+                              m_fetch_wait.fetch.kind != AssistantFetchKind::kSummary;
+    if(not_our_rows && timed_out)
     {
-        if(timed_out)
-        {
-            FinishCurrentTool("Timed out waiting to run " + m_fetch_wait.tool_name +
-                              " because its shared data request remained busy.");
-            return;
-        }
-
-        ++m_fetch_retries;
-        m_fetch_wait.active = false;
-        RunNextTool();
+        FinishCurrentTool("Timed out waiting to run " + m_fetch_wait.tool_name +
+                          " because its shared data request remained busy.");
         return;
     }
 
-    // The pills share this track's statistics slot. A range change while our
-    // fetch was in flight (often the model's own goto in the same batch) makes
-    // the model drop the result, so ask again rather than report "not ready".
-    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics && !timed_out &&
-       m_fetch_retries < ASSISTANT_STATS_MAX_RERUNS &&
-       AssistantTrackStatisticsDropped(context, m_fetch_wait.fetch.track_id))
-    {
-        ++m_fetch_retries;
-        m_fetch_wait.active = false;
-        RunNextTool();
-        return;
-    }
-
-    // The sort column was picked from the header of whatever query used this
-    // table last. The header that just landed says it was the wrong one, so
-    // run again against it. The original deadline still bounds this.
-    if(!timed_out && AssistantFetchNeedsRerun(context, m_fetch_wait.fetch))
+    // Our own rows are asked for again too, inside the same deadline, when a
+    // range change (often the model's own goto) dropped the statistics while
+    // they were in flight, or the sort column was resolved against the header
+    // an earlier query left behind.
+    if(not_our_rows ||
+       (!timed_out &&
+        ((m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics &&
+          m_fetch_retries < ASSISTANT_STATS_MAX_RERUNS &&
+          AssistantTrackStatisticsDropped(context, m_fetch_wait.fetch.track_id)) ||
+         AssistantFetchNeedsRerun(context, m_fetch_wait.fetch))))
     {
         ++m_fetch_retries;
         m_fetch_wait.active = false;
@@ -1264,7 +1204,7 @@ AssistantPanel::PollToolFetch()
 void
 AssistantPanel::Update()
 {
-    // Cancelled requests unwind on their own threads. Let go of those that have.
+    // Lets go of the cancelled requests that have finished unwinding.
     m_abandoned.erase(std::remove_if(m_abandoned.begin(), m_abandoned.end(),
                                      [](const std::future<void>& abandoned) {
                                          return abandoned.wait_for(std::chrono::seconds(0)) ==

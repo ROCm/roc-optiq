@@ -470,9 +470,8 @@ ScriptEditor::RenderProposalBanner()
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::AlignTextToFramePadding();
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
-    // Says what approving means, not just who wrote it: the script is not
-    // confined to the trace. Wrapped, so a narrow panel does not clip the part
-    // that matters.
+    // Says what approving means, since the script is not confined to the
+    // trace. Wrapped so a narrow panel does not clip it.
     ImGui::TextWrapped("%s", "Ask Optiq wrote this script. It runs inside Optiq with "
                              "your user permissions, so read it before you press "
                              "Run, or Reject it.");
@@ -497,8 +496,7 @@ ScriptEditor::RenderSource(const ImVec2& size)
     PanelFieldLabel("Source", false, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x * 2.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    // An offer is locked while it waits, so what Run executes is the text that
-    // was offered and read, with nothing typed over it by a stray key.
+    // An offer is locked while it waits, so Run executes the text that was read.
     const bool locked = m_approval == ScriptApproval::kPending;
     ImGui::TextUnformatted(locked ? "Python, locked until you Run or Reject" : "Python");
     ImGui::PopStyleColor();
@@ -669,10 +667,9 @@ ScriptEditor::Run()
 void
 ScriptEditor::Cancel()
 {
-    // Stopping a run Ask Optiq is waiting on withdraws the approval. Answer
-    // the assistant now: it must not be told to fix a script the user chose
-    // to stop, and a cancel that finds nothing left to stop drops the
-    // completion event that would otherwise have answered it.
+    // Stopping a run Ask Optiq waits on withdraws the approval. Answered now:
+    // a cancel with nothing left to stop gets no completion event, and the
+    // assistant must not be told to fix a script the user chose to stop.
     if(m_approval == ScriptApproval::kRunning)
     {
         m_approval = ScriptApproval::kRejected;

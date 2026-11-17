@@ -3,6 +3,7 @@
 
 #include "rocprofvis_ai_actions.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <memory>
@@ -345,48 +346,40 @@ OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
     }
 
     // File names repeat across run directories, and the container returns the
-    // first tab carrying a label. Asking for the name already in front can
-    // only mean the next tab that shares it.
+    // first tab carrying a label, so asking for the label already in front
+    // means the next tab that shares it.
     const std::vector<const TabItem*> tabs  = container->GetTabs();
     const std::string                 label = Core::String::to_lower_copy(match->m_label);
-    if(match == container->GetActiveTab())
+    const size_t first =
+        static_cast<size_t>(std::find(tabs.begin(), tabs.end(), match) - tabs.begin());
+    const bool advance  = match == container->GetActiveTab();
+    size_t     position = first;
+    bool       shared   = false;
+    for(size_t step = 1; step < tabs.size(); ++step)
     {
-        size_t at = 0;
-        while(at < tabs.size() && tabs[at] != match)
+        const size_t   at    = (first + step) % tabs.size();
+        const TabItem* other = tabs[at];
+        if(other == nullptr || Core::String::to_lower_copy(other->m_label) != label)
         {
-            ++at;
+            continue;
         }
-        for(size_t step = 1; step < tabs.size(); ++step)
+        shared = true;
+        if(advance && position == first && other->m_enabled)
         {
-            const TabItem* other = tabs[(at + step) % tabs.size()];
-            if(other->m_enabled && Core::String::to_lower_copy(other->m_label) == label)
-            {
-                match = other;
-                break;
-            }
+            match    = other;
+            position = at;
         }
     }
 
     selected_id    = match->m_id;
     selected_label = match->m_label;
-    // A shared label alone would not say which of the tabs came forward, so
-    // add where it sits in the tab bar. The id would say it too, but it is the
-    // trace's full path, and this label is sent on to the model's endpoint:
-    // directory and user names have no business going there.
-    size_t position = 0;
-    while(position < tabs.size() && tabs[position] != match)
+    // A shared label gets its place in the tab bar so the tabs can be told
+    // apart. Not the id: it is the trace's full path, and this goes to the
+    // model's endpoint.
+    if(shared)
     {
-        ++position;
-    }
-    for(const TabItem* tab : tabs)
-    {
-        if(tab != nullptr && tab != match &&
-           Core::String::to_lower_copy(tab->m_label) == label)
-        {
-            selected_label += " (tab " + std::to_string(position + 1) + " of " +
-                              std::to_string(tabs.size()) + ")";
-            break;
-        }
+        selected_label += " (tab " + std::to_string(position + 1) + " of " +
+                          std::to_string(tabs.size()) + ")";
     }
     container->SetActiveTab(match->m_id);
     return true;

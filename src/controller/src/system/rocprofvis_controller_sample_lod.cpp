@@ -27,6 +27,7 @@ void SampleLOD::CalculateChildValues(void)
     uint64_t            entries = 0;
     std::vector<double> values;
     double total_duration = 0;
+    double value_sum      = 0;
     for(Sample* sample : m_children)
     {
         if(sample)
@@ -49,6 +50,7 @@ void SampleLOD::CalculateChildValues(void)
                 duration = end_timestamp - timestamp;
                 m_child_mean += value*duration;
                 total_duration += duration;
+                value_sum += value;
                 entries++;
                 values.push_back(value);
             }
@@ -66,7 +68,15 @@ void SampleLOD::CalculateChildValues(void)
 
         m_child_median = (values[lower] + values[upper]) / 2;
     }
-    m_child_mean /= total_duration;
+    // Zero-length samples have equal weight, so the weighted mean is their average.
+    if(total_duration > 0)
+    {
+        m_child_mean /= total_duration;
+    }
+    else if(entries > 0)
+    {
+        m_child_mean = value_sum / entries;
+    }
     auto result = SetDouble(kRPVControllerSampleValue, 0, m_child_mean);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 }

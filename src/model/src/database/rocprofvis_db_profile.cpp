@@ -213,10 +213,7 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
     track_params.min_value=db->Sqlite3ColumnDouble(func, stmt, azColName,kRpvDbTrackLoadMinValue);
     track_params.max_value=db->Sqlite3ColumnDouble(func, stmt, azColName,kRpvDbTrackLoadMaxValue);
 
-    db->TraceProperties()->db_inst_start_time[db_instance] = std::min(db->TraceProperties()->db_inst_start_time[db_instance], track_params.min_ts);
-    db->TraceProperties()->db_inst_end_time[db_instance]  = std::max(db->TraceProperties()->db_inst_end_time[db_instance],track_params.max_ts);
-
-    db->TraceProperties()->trace_duration  = std::max(db->TraceProperties()->trace_duration,db->TraceProperties()->db_inst_end_time[db_instance]-db->TraceProperties()->db_inst_start_time[db_instance]);
+    db->UpdateTraceDuration(db_instance, track_params.min_ts, track_params.max_ts);
 
     track_params.track_indentifiers.id[TRACK_ID_NODE] = db->Sqlite3ColumnInt64(func, stmt, azColName,kRpvDbTrackLoadNodeId);
     track_params.track_indentifiers.id[TRACK_ID_PID_OR_AGENT] = db->Sqlite3ColumnInt64(func, stmt, azColName,kRpvDbTrackLoadProcessId);
@@ -298,10 +295,8 @@ int ProfileDatabase::CallbackGetTrackProperties(void* data, int argc, sqlite3_st
     db->TrackPropertiesAt(index)->min_value    = std::min((rocprofvis_dm_value_t)db->Sqlite3ColumnDouble(func, stmt, azColName, 2),db->TrackPropertiesAt(index)->min_value);
     db->TrackPropertiesAt(index)->max_value    = std::max((rocprofvis_dm_value_t)db->Sqlite3ColumnDouble(func, stmt, azColName, 3),db->TrackPropertiesAt(index)->max_value);
 
-    db->TraceProperties()->db_inst_start_time[db_instance] = std::min(db->TraceProperties()->db_inst_start_time[db_instance], db->TrackPropertiesAt(index)->min_ts);
-    db->TraceProperties()->db_inst_end_time[db_instance]  = std::max(db->TraceProperties()->db_inst_end_time[db_instance],db->TrackPropertiesAt(index)->max_ts);
-
-    db->TraceProperties()->trace_duration  = std::max(db->TraceProperties()->trace_duration,db->TraceProperties()->db_inst_end_time[db_instance]-db->TraceProperties()->db_inst_start_time[db_instance]);
+    db->UpdateTraceDuration(db_instance, db->TrackPropertiesAt(index)->min_ts,
+                            db->TrackPropertiesAt(index)->max_ts);
     callback_params->future->CountThisRow();
     return 0;
 }
@@ -683,12 +678,17 @@ rocprofvis_dm_result_t
         }
         if (split_count > 1)
         {
-            uint64_t trace_time = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()] - TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
-            if (trace_time > 0)
+            uint64_t trace_start = TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
+            uint64_t trace_end = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()];
+            uint64_t time_bucket_size = (trace_end > trace_start ? trace_end - trace_start : 0) / split_count;
+            // Half-open ranges with open outer ends, so every event lands in exactly one split.
+            if (split_index > 0)
             {
-                uint64_t time_bucket_size = trace_time / split_count;
-                ss << " and " << Builder::START_SERVICE_NAME << " BETWEEN " << TraceProperties()->db_inst_start_time[db_instance->GuidIndex()] + (time_bucket_size * split_index);
-                ss << " and " << TraceProperties()->db_inst_start_time[db_instance->GuidIndex()] + (time_bucket_size * (split_index+1));
+                ss << " and " << Builder::START_SERVICE_NAME << " >= " << trace_start + (time_bucket_size * split_index);
+            }
+            if (split_index + 1 < split_count)
+            {
+                ss << " and " << Builder::START_SERVICE_NAME << " < " << trace_start + (time_bucket_size * (split_index + 1));
             }
         }
     }

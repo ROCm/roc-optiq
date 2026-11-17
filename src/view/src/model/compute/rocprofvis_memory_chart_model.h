@@ -95,7 +95,7 @@ private:
 
 // One line inside a block. All fields optional: `title` overrides the metric's
 // name, `unit` overrides the entry's unit suffix, and `category`
-// (read/write/atomic/util/hit/stall/misc) sets the accent color (else inferred
+// (read/write/atomic/util/hit/stall/neutral) sets the accent color (else inferred
 // from the label).
 struct MemChartContentItem
 {

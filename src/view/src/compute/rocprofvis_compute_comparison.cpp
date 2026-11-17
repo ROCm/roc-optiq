@@ -72,7 +72,7 @@ ComputeComparisonView::ComputeComparisonView(
 , m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_compute_selection(compute_selection)
-, m_view(ViewRoofline)
+, m_view(ViewMetrics)
 , m_target_workload_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_target_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_toolbar_available_width(0)

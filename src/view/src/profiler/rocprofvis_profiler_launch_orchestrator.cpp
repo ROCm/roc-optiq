@@ -31,7 +31,6 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 , m_is_running(false)
 , m_is_remote(false)
 , m_auto_load_trace(true)
-, m_parse_trace(nullptr)
 , m_raw_output()
 , m_output_dirty(false)
 , m_trace_path()
@@ -91,7 +90,6 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
 
     m_is_remote       = request.is_remote;
     m_auto_load_trace = request.auto_load_trace;
-    m_parse_trace     = request.parse_trace;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_remote_uri      = request.remote_uri;
@@ -132,9 +130,8 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
     // Spawn a RemoteProfilerSession that drives connect -> auth -> remote launch
     // -> download -> open. Auth prompts / download progress surface via the SSH
     // popups rendered by the dialog.
-    auto parse_trace = request.parse_trace;
     m_remote_session = std::make_unique<RemoteProfilerSession>(
-        request.remote_uri,
+        request.remote_uri, request.auto_load_trace,
         [this](const std::string& local_path)
         {
             // Honor the "Open trace when profiling completes" checkbox for remote
@@ -144,10 +141,6 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
             {
                 m_app_window->OpenFile(local_path);
             }
-        },
-        [parse_trace](const std::string& profiler_stdout) -> std::string
-        {
-            return parse_trace ? parse_trace(profiler_stdout) : std::string();
         });
 
     bool success = m_remote_session->Launch(request.spec);
@@ -236,12 +229,20 @@ void ProfilerLaunchOrchestrator::Update()
             m_is_running = false;
             if(remote_state == kRPVProfilerStateCompleted)
             {
-                m_profiler_state = kRPVProfilerStateCompleted;
-                // The remote session resolved + downloaded the trace; surface the
-                // local cached copy path for the view's "Trace file:" line.
-                if(m_remote_uri && m_trace_path.empty())
+                // Decided once, on the transition: the output is final by then,
+                // and a run with no output file would otherwise be re-scanned
+                // every frame.
+                if(m_profiler_state != kRPVProfilerStateCompleted)
                 {
-                    m_trace_path = m_remote_uri->GetLocalResultPathString();
+                    m_profiler_state = kRPVProfilerStateCompleted;
+                    // The remote session downloaded the trace the controller
+                    // named. A run with no trace file downloaded nothing, and
+                    // deriving the local path would create an empty cache
+                    // directory.
+                    if(m_remote_uri && m_remote_session->ProducedTraceFile())
+                    {
+                        m_trace_path = m_remote_uri->GetLocalResultPathString();
+                    }
                 }
             }
             else if(remote_state == kRPVProfilerStateCancelled)
@@ -298,12 +299,13 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
     if(new_state == kRPVProfilerStateCompleted)
     {
         m_is_running = false;
-        ResolveLocalTracePath();
+        rocprofvis_result_t const trace = ResolveLocalTracePath();
         if(!m_trace_path.empty() && m_auto_load_trace && m_app_window)
         {
             m_app_window->OpenFile(m_trace_path);
         }
-        else if(m_trace_path.empty() && m_auto_load_trace)
+        else if(m_trace_path.empty() && m_auto_load_trace &&
+                trace != kRocProfVisResultNotSupported)
         {
             // No filesystem fallback by design (a newest-*.db guess can open a
             // stale/unrelated trace). Fail safe and tell the user where to look.
@@ -325,12 +327,12 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
     }
 }
 
-void ProfilerLaunchOrchestrator::ResolveLocalTracePath()
+rocprofvis_result_t ProfilerLaunchOrchestrator::ResolveLocalTracePath()
 {
     // Pull the freshest output directly from the session. The completion event is
-    // dispatched before Update() refreshes m_raw_output this frame, so parsing
-    // m_raw_output alone would use a stale/partial snapshot and needlessly fall
-    // back to the filesystem scan.
+    // dispatched before Update() refreshes m_raw_output this frame, so the
+    // console would otherwise keep a stale snapshot. The path itself comes from
+    // the controller, which scraped it as the output arrived.
     std::string latest = m_profiler_session.GetOutput();
     if(!latest.empty() && latest != m_raw_output)
     {
@@ -338,11 +340,17 @@ void ProfilerLaunchOrchestrator::ResolveLocalTracePath()
         m_output_dirty = true;
     }
 
-    // The profiler backend scraper is the single source of truth for the trace
-    // path (it knows the tool's output format, and scales per-profiler via the
-    // view IProfilerBackend). An empty result is handled by the caller (fail-safe
-    // notification).
-    m_trace_path = m_parse_trace ? m_parse_trace(m_raw_output) : std::string();
+    std::string             path;
+    rocprofvis_result_t const result = m_profiler_session.GetTraceFilePath(path);
+    if(result == kRocProfVisResultSuccess)
+    {
+        m_trace_path = std::move(path);
+    }
+    else
+    {
+        m_trace_path.clear();
+    }
+    return result;
 }
 
 int32_t ProfilerLaunchOrchestrator::GetExitCode() const

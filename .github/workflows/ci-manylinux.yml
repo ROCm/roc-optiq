@@ -322,6 +322,27 @@ jobs:
               --run-tests -f "${GITHUB_WORKSPACE}/sample/rocprof_compute_23ed6f36.db" \
             || true
 
+      - name: UI Test Backend Experiments (on failure)
+        if: steps.run_tests.outcome == 'failure' && env.ENABLE_UI_TESTS == 'ON'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          # TEMPORARY diagnostics: why does lavapipe fail vkCreateInstance, and
+          # does the OpenGL backend (llvmpipe) work instead?
+          echo "::group::lavapipe ldd"
+          ldd /usr/lib64/libvulkan_lvp.so || true
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+          echo "::endgroup::"
+          echo "::group::vulkaninfo with loader debug"
+          VK_LOADER_DEBUG=all VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+            xvfb-run -a vulkaninfo --summary 2>&1 | tail -60 || true
+          echo "::endgroup::"
+          echo "::group::compute UI test with --backend opengl"
+          cd "${GITHUB_WORKSPACE}"
+          xvfb-run -a "${BUILD_DIR}/roc-optiq-tests" --backend opengl \
+            --run-tests -f sample/rocprof_compute_23ed6f36.db 2>&1 | tail -60 || true
+          echo "::endgroup::"
+
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

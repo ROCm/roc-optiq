@@ -58,6 +58,8 @@ public:
     void           ClearProposal();
 
 private:
+    friend struct ScriptEditorTestPeer;
+
     void        Run();
     void        Cancel();
     void        Reject();

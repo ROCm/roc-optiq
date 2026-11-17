@@ -1,0 +1,12 @@
+tool: get_metrics
+args: {"kernel_id":4,"metrics":["2.1.0","2.1.11"]}
+
+workload_id: 1
+scope: kernel
+kernel_id: 4
+kernel_name: void rocprim::ROCPRIM_400200_NS::detail::trampoline_kernel<rocprim::ROCPRIM_400200_NS::detail::wrapped_reduce_config<rocprim::ROCPRIM_400200 ... ong>, long>, int>, ihipStream_t*, bool)::{lambda(auto:1)#1})
+  System Speed-of-Light / System Speed-of-Light
+    2.1.0  VALU FLOPs [Gflop/s]: Avg=8.40 Peak=72089.60 Pct of Peak=0.01165
+    2.1.11  VALU Utilization [Percent]: Avg=5.47 Peak=100 Pct of Peak=5.47
+metrics_returned: 2
+

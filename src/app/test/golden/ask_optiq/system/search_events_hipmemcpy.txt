@@ -1,0 +1,9 @@
+tool: search_events
+args: {"terms":["hipMemcpy"],"limit":5}
+
+columns: id __uuid category name node PID TID start end duration __trackId __streamTrackId
+1. id=13 __uuid="1152921504606846989" category=rocm_hip_api name=hipMemcpyAsync node=4227766824237315800 PID=71893 TID=71920 start=712112495 end=780632584 duration=68520089 __trackId=1 __streamTrackId=-1
+2. id=35 __uuid="1152921504606847011" category=rocm_hip_api name=hipMemcpyAsync node=4227766824237315800 PID=71893 TID=71893 start=739769493 end=792254127 duration=52484634 __trackId=0 __streamTrackId=-1
+3. id=2119 __uuid="1152921504606849095" category=rocm_hip_api name=hipMemcpyAsync node=4227766824237315800 PID=71893 TID=71920 start=4781432050 end=4830457784 duration=49025734 __trackId=1 __streamTrackId=-1
+4. id=2121 __uuid="1152921504606849097" category=rocm_hip_api name=hipMemcpyAsync node=4227766824237315800 PID=71893 TID=71893 start=4797118490 end=4844805189 duration=47686699 __trackId=0 __streamTrackId=-1
+

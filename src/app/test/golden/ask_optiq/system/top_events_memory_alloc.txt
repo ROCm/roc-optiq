@@ -1,0 +1,5 @@
+tool: top_events
+args: {"category":"memory_alloc"}
+
+columns: name Invocations DurationTotal DurationAvg DurationMin DurationMax
+

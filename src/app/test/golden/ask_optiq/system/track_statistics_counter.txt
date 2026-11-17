@@ -1,0 +1,11 @@
+tool: track_statistics
+args: {"track_id":24}
+
+track_id: 24
+track_name: GFX Busy
+track_type: Counter
+Minimum: 0.00 %
+Maximum: 100 %
+Mean: 82.4 %
+Standard Deviation: 37.7 %
+

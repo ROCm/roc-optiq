@@ -1,0 +1,4 @@
+tool: list_tracks
+args: {}
+
+Unknown tool "list_tracks". Available tools: compute_overview, list_kernels, kernel_summary, list_metrics, kernel_roofline, kernel_triage, get_metrics, kernel_pc_samples, switch_tab, offer_next_steps.

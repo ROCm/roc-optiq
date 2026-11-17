@@ -1,0 +1,23 @@
+tool: kernel_roofline
+args: {}
+
+workload_id: 1
+axes: x=arithmetic_intensity(FLOP/byte) y=performance(GFLOP/s)
+bandwidth_ceilings_gb_per_s:
+  HBM: 4885.55
+  L2: 31385.78
+  L1: 34731.92
+  LDS: 55317.77
+compute_ceilings_gflop_per_s:
+  MFMA FP4: 7672257.64
+  MFMA FP6: 6664852.57
+  MFMA FP8: 2209648.87
+  VALU FP16: 35484.93
+  MFMA FP16: 1073745.10
+  MFMA BF16: 1127592.36
+  VALU FP32: 137432.92
+  MFMA FP32: 141872.01
+  VALU FP64: 69512.05
+  MFMA FP64: 70944.17
+note: no kernel was named, so only the workload's ceilings are shown. Pass kernel_id to place a kernel against them.
+

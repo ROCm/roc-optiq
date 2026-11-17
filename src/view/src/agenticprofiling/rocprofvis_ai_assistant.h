@@ -50,6 +50,8 @@ public:
     static void RenderToolbarButton();
 
 private:
+    friend struct AssistantPanelTestPeer;
+
     enum class Speaker
     {
         kUser,
@@ -119,6 +121,8 @@ private:
     void        ExportTranscript();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
+    // Ends the turn and empties the transcript, the history and the composer.
+    void ClearConversation();
     void CancelPendingRequest();
     void StartHttpRequest();
     void PollToolFetch();

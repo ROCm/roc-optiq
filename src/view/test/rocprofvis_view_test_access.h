@@ -32,6 +32,13 @@
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#    include "agenticprofiling/rocprofvis_ai_tools.h"
+#endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 
 namespace RocProfVis
 {
@@ -497,6 +504,71 @@ struct SummaryTopEventsTestPeer
         if(v.m_selected_idx.has_value()) v.ToggleSelectEvent(v.m_selected_idx.value());
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+// Ask Optiq drives a turn from Update(), so the tests start one here and then
+// read back what the panel kept, showed and sent.
+struct AssistantPanelTestPeer
+{
+    AssistantPanel& v;
+
+    void Send(const std::string& text)
+    {
+        v.m_input = text;
+        v.SendCurrentInput(false);
+    }
+    void Explain() { v.SendCurrentInput(true); }
+    void Clear() { v.ClearConversation(); }
+
+    bool Busy() const { return v.Busy(); }
+    bool InHttpWait() const { return v.m_phase == AssistantPanel::Phase::kHttpWait; }
+    bool InToolWait() const { return v.m_phase == AssistantPanel::Phase::kToolWait; }
+    bool WaitingOn(AssistantFetchKind kind) const
+    {
+        return InToolWait() && v.m_fetch_wait.active && v.m_fetch_wait.fetch.kind == kind;
+    }
+    uint32_t FetchRetries() const { return v.m_fetch_retries; }
+
+    std::vector<AssistantMessage>& Conversation() { return v.m_conversation; }
+    std::vector<std::string>&      NextSteps() { return v.m_next_steps; }
+    std::string&                   Input() { return v.m_input; }
+    const std::string&             Status() const { return v.m_status; }
+    bool&                          ScrollToBottom() { return v.m_scroll_to_bottom; }
+    std::string&                   BriefedProject() { return v.m_briefed_project_id; }
+    std::string                    CurrentProject() const { return v.CurrentProjectId(); }
+    AssistantToolContext           ToolContext() const { return v.MakeToolContext(); }
+    std::string                    Transcript() const { return v.BuildTranscriptText(); }
+
+    std::string LastUser() const { return Last(AssistantPanel::Speaker::kUser); }
+    std::string LastAnswer() const { return Last(AssistantPanel::Speaker::kAssistant); }
+    std::string LastNotice() const { return Last(AssistantPanel::Speaker::kStatus); }
+    size_t      ChartCount() const
+    {
+        size_t charts = 0;
+        for(const AssistantPanel::ChatLine& line : v.m_lines)
+            if(line.speaker == AssistantPanel::Speaker::kChart) ++charts;
+        return charts;
+    }
+
+private:
+    std::string Last(AssistantPanel::Speaker speaker) const
+    {
+        for(auto it = v.m_lines.rbegin(); it != v.m_lines.rend(); ++it)
+            if(it->speaker == speaker) return it->text;
+        return std::string();
+    }
+};
+#endif
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+// Stands in for the Run and Stop buttons on the Script tab.
+struct ScriptEditorTestPeer
+{
+    ScriptEditor& v;
+    void          Run() { v.Run(); }
+    void          Cancel() { v.Cancel(); }
+};
+#endif
 
 }  // namespace View
 }  // namespace RocProfVis

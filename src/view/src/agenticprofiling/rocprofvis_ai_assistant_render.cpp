@@ -768,6 +768,18 @@ AssistantPanel::RenderSuggestedActions()
     ImGui::Spacing();
 }
 
+void
+AssistantPanel::ClearConversation()
+{
+    ResetTurn();
+    m_lines.clear();
+    m_message_select.clear();
+    m_message_lines.clear();
+    m_input.clear();
+    m_conversation.clear();
+    m_next_steps.clear();
+}
+
 std::string
 AssistantPanel::BuildTranscriptText() const
 {
@@ -947,13 +959,7 @@ AssistantPanel::RenderComposer()
                   settings.GetColor(Colors::kButtonHovered),
                   settings.GetColor(Colors::kButtonActive)))
     {
-        ResetTurn();
-        m_lines.clear();
-        m_message_select.clear();
-        m_message_lines.clear();
-        m_input.clear();
-        m_conversation.clear();
-        m_next_steps.clear();
+        ClearConversation();
     }
     ImGui::EndDisabled();
 

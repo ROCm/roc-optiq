@@ -1,0 +1,164 @@
+tool: kernel_triage
+args: {"kernel_id":7}
+
+workload_id: 1
+scope: kernel
+kernel_id: 7
+kernel_name: void rocrand_impl::host::generate_sobol_kernel<1u, false, rocrand_device::sobol32_engine<true>, unsigned int, float, rocrand_impl::host::sob ...  int, rocrand_impl::host::sobol_uniform_distribution<float>)
+  System Speed-of-Light / System Speed-of-Light
+    2.1.0  VALU FLOPs [Gflop/s]: Avg=468.11 Peak=72089.60 Pct of Peak=0.6494
+    2.1.1  VALU IOPs [Giop/s]: Avg=5880.69 Peak=72089.60 Pct of Peak=8.16
+    2.1.2  MFMA FLOPs (F8) [Gflop/s]: Avg=0 Peak=4613734.40 Pct of Peak=0
+    2.1.3  MFMA FLOPs (BF16) [Gflop/s]: Avg=0 Peak=2306867.20 Pct of Peak=0
+    2.1.4  MFMA FLOPs (F16) [Gflop/s]: Avg=0 Peak=2306867.20 Pct of Peak=0
+    2.1.5  MFMA FLOPs (F32) [Gflop/s]: Avg=0 Peak=144179.20 Pct of Peak=0
+    2.1.6  MFMA FLOPs (F64) [Gflop/s]: Avg=0 Peak=72089.60 Pct of Peak=0
+    2.1.7  MFMA FLOPs (F6F4) [Gflop/s]: Avg=0 Peak=9480908.80 Pct of Peak=0
+    2.1.8  MFMA IOPs (Int8) [Giop/s]: Avg=0 Peak=4613734.40 Pct of Peak=0
+    2.1.9  Active CUs (deprecated) [Cus]: Avg=88 Peak=256 Pct of Peak=34.38
+    2.1.10  SALU Utilization [Percent]: Avg=5.97 Peak=100 Pct of Peak=5.97
+    2.1.11  VALU Utilization [Percent]: Avg=26.78 Peak=100 Pct of Peak=26.78
+    2.1.12  MFMA Utilization [Percent]: Avg=0 Peak=100 Pct of Peak=0
+    2.1.13  VMEM Utilization [Percent]: Avg=0.448 Peak=100 Pct of Peak=0.448
+    2.1.14  Branch Utilization [Percent]: Avg=1.19 Peak=100 Pct of Peak=1.19
+    2.1.15  VALU Active Threads [Work-items]: Avg=63.64 Peak=64 Pct of Peak=99.44
+    2.1.16  IPC [Instructions per cycle]: Avg=1.12 Peak=5 Pct of Peak=22.31
+    2.1.17  Wavefront Occupancy [Wavefronts]: Avg=2260.34 Peak=8192 Pct of Peak=27.59
+    2.1.18  Theoretical LDS Bandwidth [Gb/s]: Avg=9011.20 Peak=72089.60 Pct of Peak=12.50
+    2.1.19  LDS Bank Conflicts/Access [Conflicts per access]: Avg=0 Peak=32 Pct of Peak=0
+    2.1.20  vL1D Cache Hit Rate [Percent]: Avg=5.51 Peak=100 Pct of Peak=5.51
+    2.1.21  vL1D Cache BW [Gb/s]: Avg=1989.49 Peak=72089.60 Pct of Peak=2.76
+    2.1.22  L2 Cache Hit Rate [Percent]: Avg=51.80 Peak=100 Pct of Peak=51.80
+    2.1.23  L2 Cache BW [Gb/s]: Avg=1948.61 Peak=36044.80 Pct of Peak=5.41
+    2.1.24  L2-Fabric Read BW [Gb/s]: Avg=2.46 Peak=7782.40 Pct of Peak=0.03166
+    2.1.25  L2-Fabric Write BW [Gb/s]: Avg=936.23 Peak=7782.40 Pct of Peak=12.03
+    2.1.26  L2-Fabric Read Latency [Cycles]: Avg=295.11
+    2.1.27  L2-Fabric Write Latency [Cycles]: Avg=554.06
+    2.1.28  sL1D Cache Hit Rate [Percent]: Avg=99.81 Peak=100 Pct of Peak=99.81
+    2.1.29  sL1D Cache BW [Gb/s]: Avg=585.14 Peak=18022.40 Pct of Peak=3.25
+    2.1.30  L1I Hit Rate [Percent]: Avg=99.95 Peak=100 Pct of Peak=99.95
+    2.1.31  L1I BW [Gb/s]: Avg=4213.03 Peak=18022.40 Pct of Peak=23.38
+    2.1.32  L1I Fetch Latency [Cycles]: Avg=23.17
+    2.1.33  CU Utilization [Percent]: Avg=34.36 Peak=100 Pct of Peak=34.36
+  Roofline / Roofline Performance Rates
+    4.1.0  VALU FLOPs (F16) [Gflop/s]: Value=0 Peak (Empirical)=35484.93
+    4.1.1  VALU FLOPs (F32) [Gflop/s]: Value=468.11 Peak (Empirical)=137432.92
+    4.1.2  VALU FLOPs (F64) [Gflop/s]: Value=0 Peak (Empirical)=69512.05
+    4.1.3  MFMA FLOPs (F64) [Gflop/s]: Value=0 Peak (Empirical)=70944.17
+    4.1.4  MFMA FLOPs (F32) [Gflop/s]: Value=0 Peak (Empirical)=141872.01
+    4.1.5  MFMA FLOPs (F16) [Gflop/s]: Value=0 Peak (Empirical)=1073745.10
+    4.1.6  MFMA FLOPs (BF16) [Gflop/s]: Value=0 Peak (Empirical)=1127592.36
+    4.1.7  MFMA FLOPs (F8) [Gflop/s]: Value=0 Peak (Empirical)=2209648.87
+    4.1.8  MFMA FLOPs (F6F4) [Gflop/s]: Value=0
+    4.1.9  MFMA IOPs (Int8) [Giop/s]: Value=0 Peak (Empirical)=2243733.17
+    4.1.10  HBM Bandwidth [Gb/s]: Value=938.69 Peak (Empirical)=4885.55
+    4.1.11  L2 Cache Bandwidth [Gb/s]: Value=939.89 Peak (Empirical)=31385.78
+    4.1.12  L1 Cache Bandwidth [Gb/s]: Value=994.74 Peak (Empirical)=34731.92
+    4.1.13  LDS Bandwidth [Gb/s]: Value=9011.20 Peak (Empirical)=55317.77
+  Workgroup Manager (SPI) / Workgroup Manager - Resource Allocation
+    6.2.0  Not-scheduled Rate (Workgroup Manager) [Percent]: Avg=4.61 Min=4.61 Max=4.61
+    6.2.1  Not-scheduled Rate (Scheduler-Pipe) [Percent]: Avg=10.83 Min=10.83 Max=10.83
+    6.2.2  Scheduler-Pipe FIFO Full Rate [Percent]: Avg=0 Min=0 Max=0
+    6.2.3  Scheduler-Pipe Stall Rate [Percent]: Avg=10.28 Min=10.28 Max=10.28
+    6.2.4  Scratch Stall Rate [Percent]: Avg=0 Min=0 Max=0
+    6.2.5  Insufficient SIMD Waveslots [Percent]: Avg=17.41 Min=17.41 Max=17.41
+    6.2.6  Insufficient SIMD VGPRs [Percent]: Avg=0 Min=0 Max=0
+    6.2.7  Insufficient SIMD SGPRs [Percent]: Avg=0 Min=0 Max=0
+    6.2.8  Insufficient CU LDS [Percent]: Avg=0 Min=0 Max=0
+    6.2.9  Insufficient CU Barriers [Percent]: Avg=0 Min=0 Max=0
+    6.2.10  Reached CU Workgroup Limit [Percent]: Avg=0 Min=0 Max=0
+    6.2.11  Reached CU Wavefront Limit [Percent]: Avg=0 Min=0 Max=0
+  Wavefront / Wavefront Launch Stats
+    7.1.0  Grid Size [Work-items]: Avg=1048576 Min=1048576 Max=1048576
+    7.1.1  Workgroup Size [Work-items]: Avg=256 Min=256 Max=256
+    7.1.2  Total Wavefronts [Wavefronts]: Avg=16384 Min=16384 Max=16384
+    7.1.3  Saved Wavefronts [Wavefronts]: Avg=0 Min=0 Max=0
+    7.1.4  Restored Wavefronts [Wavefronts]: Avg=0 Min=0 Max=0
+    7.1.5  VGPRs [Registers]: Avg=12 Min=12 Max=12
+    7.1.6  AGPRs [Registers]: Avg=0 Min=0 Max=0
+    7.1.7  SGPRs [Registers]: Avg=32 Min=32 Max=32
+    7.1.8  LDS Allocation [Bytes]: Avg=128 Min=128 Max=128
+    7.1.9  Scratch Allocation [Bytes per work-item]: Avg=0 Min=0 Max=0
+  Wavefront / Wavefront Runtime Stats
+    7.2.0  Kernel Time [Nanoseconds]: Avg=8960 Min=8960 Max=8960
+    7.2.1  Kernel Time (Cycles) [Cycles]: Avg=32143.50 Min=32143.50 Max=32143.50
+    7.2.2  Instructions per wavefront [Instructions per wavefront]: Avg=192.50 Min=192.50 Max=192.50
+    7.2.3  Wave Cycles [Cycles per kernel]: Avg=71017912 Min=71017912 Max=71017912
+    7.2.4  Dependency Wait Cycles [Cycles per kernel]: Avg=29753560 Min=29753560 Max=29753560
+    7.2.5  Issue Wait Cycles [Cycles per kernel]: Avg=33669684 Min=33669684 Max=33669684
+    7.2.6  Active Cycles [Cycles per kernel]: Avg=12075140 Min=12075140 Max=12075140
+    7.2.7  Wavefront Occupancy [Wavefronts]: Avg=2260.34 Min=2260.34 Max=2260.34
+  Compute Units - Instruction Mix / Overall Instruction Mix
+    10.1.0  VALU [Instructions per kernel]: Avg=2203648 Min=2203648 Max=2203648
+    10.1.1  VMEM [Instructions per kernel]: Avg=36864 Min=36864 Max=36864
+    10.1.2  LDS [Instructions per kernel]: Avg=184320 Min=184320 Max=184320
+    10.1.3  MFMA [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.1.4  SALU [Instructions per kernel]: Avg=409600 Min=409600 Max=409600
+    10.1.5  SMEM [Instructions per kernel]: Avg=81920 Min=81920 Max=81920
+    10.1.6  Branch [Instructions per kernel]: Avg=65536 Min=65536 Max=65536
+  Compute Units - Instruction Mix / VALU Arithmetic Instruction Mix
+    10.2.0  INT32 [Instructions per kernel]: Avg=688128 Min=688128 Max=688128
+    10.2.1  INT64 [Instructions per kernel]: Avg=135168 Min=135168 Max=135168
+    10.2.2  F16-ADD [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.3  F16-MUL [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.4  F16-FMA [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.5  F16-Trans [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.6  F32-ADD [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.7  F32-MUL [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.8  F32-FMA [Instructions per kernel]: Avg=32768 Min=32768 Max=32768
+    10.2.9  F32-Trans [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.10  F64-ADD [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.11  F64-MUL [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.12  F64-FMA [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.13  F64-Trans [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.2.14  Conversion [Instructions per kernel]: Avg=32768 Min=32768 Max=32768
+  Compute Units - Instruction Mix / VMEM Instruction Mix
+    10.3.0  Global/Generic Instr [Instructions per kernel]: Avg=36864 Min=36864 Max=36864
+    10.3.1  Global/Generic Read [Instructions per kernel]: Avg=4096 Min=4096 Max=4096
+    10.3.2  Global/Generic Write [Instructions per kernel]: Avg=32768 Min=32768 Max=32768
+    10.3.3  Global/Generic Atomic [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.3.4  Spill/Stack Instr [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.3.5  Spill/Stack Coalesceable Instr [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.3.6  Spill/Stack Read [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.3.7  Spill/Stack Write [Instructions per kernel]: Avg=0 Min=0 Max=0
+    10.3.8  Spill/Stack Atomic [Instructions per kernel]: Avg=0 Min=0 Max=0
+  Local Data Share (LDS) / LDS Speed-of-Light
+    12.1.0  Utilization [Percent]: Avg=7.67
+    12.1.1  Access Rate [Percent]: Avg=4.58
+    12.1.2  Theoretical Bandwidth Utilization [Percent]: Avg=12.50
+    12.1.3  Bank Conflict Rate [Percent]: Avg=0
+  Local Data Share (LDS) / LDS Statistics
+    12.2.0  LDS Instructions [Instructions per kernel]: Avg=184320 Min=184320 Max=184320
+    12.2.1  LDS LOAD [Instructions per kernel]: Avg=180224 Min=180224 Max=180224
+    12.2.2  LDS STORE [Instructions per kernel]: Avg=4096 Min=4096 Max=4096
+    12.2.3  LDS ATOMIC [Instructions per kernel]: Avg=0 Min=0 Max=0
+    12.2.4  LDS LOAD Bandwidth [Gbps]: Avg=16384 Min=16384 Max=16384
+    12.2.5  LDS STORE Bandwidth [Gbps]: Avg=58.51 Min=58.51 Max=58.51
+    12.2.6  LDS ATOMIC Bandwidth [Gbps]: Avg=0 Min=0 Max=0
+    12.2.7  Theoretical Bandwidth [Gbps]: Avg=9011.20 Min=9011.20 Max=9011.20
+    12.2.8  LDS Latency [Cycles]: Avg=55.19 Min=55.19 Max=55.19
+    12.2.9  Bank Conflicts/Access [Conflicts per access]: Avg=0 Min=0 Max=0
+    12.2.10  Index Accesses [Cycles per kernel]: Avg=630784 Min=630784 Max=630784
+    12.2.11  Atomic Return Cycles [Cycles per kernel]: Avg=0 Min=0 Max=0
+    12.2.12  Bank Conflict [Cycles per kernel]: Avg=0 Min=0 Max=0
+    12.2.13  Addr Conflict [Cycles per kernel]: Avg=0 Min=0 Max=0
+    12.2.14  Unaligned Stall [Cycles per kernel]: Avg=0 Min=0 Max=0
+    12.2.15  Mem Violations [Accesses per kernel]: Avg=0 Min=0 Max=0
+    12.2.16  LDS Command FIFO Full Rate [Cycles per kernel]: Avg=109512 Min=109512 Max=109512
+    12.2.17  LDS Data FIFO Full Rate [Cycles per kernel]: Avg=40 Min=40 Max=40
+  Address Processing Unit and Data Return Path (TA/TD) / Vector L1 data-return path or Texture Data (TD)
+    15.4.0  Data-Return Busy [Percent]: Avg=21.31 Min=21.31 Max=21.31
+    15.4.1  Cache RAM → Data-Return Stall [Percent]: Avg=20.34 Min=20.34 Max=20.34
+    15.4.2  Workgroup manager → Data-Return Stall [Percent]: Avg=0.001252 Min=0.001252 Max=0.001252
+    15.4.3  Coalescable Instructions [Instructions per kernel]: Avg=36864 Min=36864 Max=36864
+    15.4.4  Read Instructions [Instructions per kernel]: Avg=4096 Min=4096 Max=4096
+    15.4.5  Write Instructions [Instructions per kernel]: Avg=32768 Min=32768 Max=32768
+    15.4.6  Atomic Instructions [Instructions per kernel]: Avg=0 Min=0 Max=0
+    15.4.7  Write Ack Instructions [Instructions per kernel]: Avg=32768 Min=32768 Max=32768
+  Vector L1 Data Cache / vL1D Speed-of-Light
+    16.1.0  Hit rate [Percent]: Avg=5.51
+    16.1.1  Bandwidth Utilization [Percent]: Avg=2.76
+    16.1.2  Utilization [Percent]: Avg=54.59
+    16.1.3  Coalescing [Percent]: Avg=100
+metrics_returned: 143
+

@@ -1,0 +1,4 @@
+tool: track_statistics
+args: {"track_id":1}
+
+track_statistics only works on Queue and Counter tracks. Use track_events for thread and stream tracks.

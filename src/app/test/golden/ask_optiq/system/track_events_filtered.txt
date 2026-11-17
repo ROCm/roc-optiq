@@ -1,0 +1,11 @@
+tool: track_events
+args: {"track_ids":[1],"filters":[{"column":"name","op":"=","value":"hipLaunchKernel"}],"limit":5}
+
+columns: id __uuid category name node PID TID start end duration __trackId __streamTrackId
+1. id=15 __uuid="1152921504606846991" category=rocm_hip_api name=hipLaunchKernel node=4227766824237315800 PID=71893 TID=71920 start=781323421 end=781791877 duration=468456 __trackId=1 __streamTrackId=-1
+2. id=17 __uuid="1152921504606846993" category=rocm_hip_api name=hipLaunchKernel node=4227766824237315800 PID=71893 TID=71920 start=781844997 end=781851227 duration=6230 __trackId=1 __streamTrackId=-1
+3. id=19 __uuid="1152921504606846995" category=rocm_hip_api name=hipLaunchKernel node=4227766824237315800 PID=71893 TID=71920 start=781883958 end=781891608 duration=7650 __trackId=1 __streamTrackId=-1
+4. id=21 __uuid="1152921504606846997" category=rocm_hip_api name=hipLaunchKernel node=4227766824237315800 PID=71893 TID=71920 start=781922468 end=781929918 duration=7450 __trackId=1 __streamTrackId=-1
+5. id=23 __uuid="1152921504606846999" category=rocm_hip_api name=hipLaunchKernel node=4227766824237315800 PID=71893 TID=71920 start=781960089 end=781966399 duration=6310 __trackId=1 __streamTrackId=-1
+... 495 more rows not shown
+

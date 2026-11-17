@@ -1,0 +1,26 @@
+tool: trace_overview
+args: {"bins":8}
+
+trace_start_ns: 0
+trace_end_ns: 5044424388
+trace_duration_ns: 5044424388
+bins: 8
+bin_width_ns: 630553048
+activity_0_100: 14,72,99,99,100,100,100,75
+busiest_window_ns: 2522212194 .. 3152765242
+quietest_window_ns: 0 .. 630553048
+note: activity_0_100, busiest_window_ns and quietest_window_ns are estimates from the timeline histogram, which counts an event in every bucket it overlaps. Use them to choose where to look and do not report them as exact numbers. total_events and busiest_tracks are exact; for an exact count in one window, call track_events on that window with the track_ids you need.
+total_events: 31968
+stream_tracks: 2 tracks, 1052 events. These are the same kernels and copies as the queue tracks, grouped by HIP stream, so total_events and busiest_tracks leave them out. The histogram still includes them, so GPU work counts twice in activity_0_100 and both windows.
+busiest_tracks:
+  1. track_id=2 events=19277 share_pct=60.3 name="Thread 71893(1) (S)"
+  2. track_id=3 events=9499 share_pct=29.7 name="Thread 71919(4) (S)"
+  3. track_id=0 events=1069 share_pct=3.3 name="Thread 71893(1)"
+  4. track_id=1 events=1061 share_pct=3.3 name="Thread 71920(5)"
+  5. track_id=5 events=502 share_pct=1.6 name="Queue 1"
+  6. track_id=6 events=502 share_pct=1.6 name="Queue 2"
+  7. track_id=9 events=24 share_pct=0.1 name="Memory copy"
+  8. track_id=10 events=24 share_pct=0.1 name="Memory copy"
+  9. track_id=4 events=10 share_pct=0.0 name="Thread 71920(5) (S)"
+counter_tracks: 18 (use track_samples or track_statistics)
+

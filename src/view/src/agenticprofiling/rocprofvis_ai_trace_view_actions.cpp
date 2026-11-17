@@ -118,8 +118,14 @@ TraceView::ProposeScript(const std::string& source)
     {
         return false;
     }
-    m_analysis_view->GetScriptEditor()->ProposeScript(source);
-    return true;
+    return m_analysis_view->GetScriptEditor()->ProposeScript(source);
+}
+
+bool
+TraceView::ScriptHasUnsavedDraft() const
+{
+    return m_analysis_view && m_analysis_view->GetScriptEditor() &&
+           m_analysis_view->GetScriptEditor()->HasUnsavedDraft();
 }
 
 ScriptApproval
@@ -138,6 +144,15 @@ TraceView::ClearScriptProposal()
     if(m_analysis_view && m_analysis_view->GetScriptEditor())
     {
         m_analysis_view->GetScriptEditor()->ClearProposal();
+    }
+}
+
+void
+TraceView::RejectScriptProposal()
+{
+    if(m_analysis_view && m_analysis_view->GetScriptEditor())
+    {
+        m_analysis_view->GetScriptEditor()->Reject();
     }
 }
 #endif

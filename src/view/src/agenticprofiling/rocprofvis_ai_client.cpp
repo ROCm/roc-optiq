@@ -90,6 +90,15 @@ constexpr int ASSISTANT_MAX_OUTPUT_TOKENS = 4096;
 // A malformed reply could otherwise name an unbounded number of tools.
 constexpr size_t ASSISTANT_MAX_HARMONY_CALLS = 4;
 
+// The provider's error text goes into the transcript, a toast and any export,
+// so its length is bounded rather than left to the endpoint.
+constexpr size_t ASSISTANT_MAX_ERROR_TEXT_BYTES = 400;
+// A key shorter than this is a placeholder or a typo, and blanking every
+// occurrence of it could mangle ordinary words in the message.
+constexpr size_t ASSISTANT_MIN_REDACTED_KEY_BYTES = 8;
+constexpr char   ASSISTANT_REDACTED_KEY[]         = "[key]";
+constexpr char   ASSISTANT_TRUNCATION_MARK[]      = "...";
+
 constexpr char ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
 constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
@@ -97,8 +106,11 @@ constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
     "the Model field.";
 constexpr char ASSISTANT_INSECURE_URL_ERROR[] =
     "The assistant URL is plain http, which would put the API key on the wire "
-    "in clear text. Use https, or clear the key to talk to this endpoint "
-    "without one.";
+    "in clear text. Use an https URL for this endpoint.";
+// Deliberately does not repeat the URL, which is where the secret is.
+constexpr char ASSISTANT_URL_CREDENTIALS_ERROR[] =
+    "The assistant URL must not contain credentials. Put the key in the API "
+    "key field.";
 constexpr char ASSISTANT_REDIRECT_ERROR[] =
     "The endpoint answered with a redirect, which is not followed because the "
     "API key must not be handed to another host. Point the URL at the address "
@@ -281,6 +293,36 @@ SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
     return true;
 }
 
+// Removes any "user:password@" from the authority of a URL or origin. People
+// do paste a key there, and it must not travel on into the log, an error
+// message or anything derived from the URL.
+void
+StripUserInfo(std::string& url)
+{
+    const std::string separator  = "://";
+    const size_t      scheme_end = url.find(separator);
+    if(scheme_end == std::string::npos)
+    {
+        return;
+    }
+
+    const size_t authority_start = scheme_end + separator.size();
+    size_t       authority_end   = url.find_first_of("/?#", authority_start);
+    if(authority_end == std::string::npos)
+    {
+        authority_end = url.size();
+    }
+    // The last one counts: everything before it is userinfo, whatever it holds.
+    for(size_t i = authority_end; i > authority_start; --i)
+    {
+        if(url[i - 1] == '@')
+        {
+            url.erase(authority_start, i - authority_start);
+            return;
+        }
+    }
+}
+
 // The host of an origin ("https://host:port"), with the port and any IPv6
 // brackets removed. Empty when the origin has no scheme separator.
 std::string
@@ -331,6 +373,33 @@ OriginMayCarryToken(const std::string& origin)
 {
     return Core::String::to_lower_copy(origin).compare(0, 8, "https://") == 0 ||
            OriginIsLoopback(origin);
+}
+
+// Whether cpp-httplib will read this origin the way the checks above did. When
+// its own parser rejects an origin it quietly falls back to a plain-http client
+// on port 80, so anything the two could disagree about is refused up front
+// rather than left to fail at name resolution.
+bool
+OriginIsWellFormed(const std::string& origin)
+{
+    if(HostFromOrigin(origin).empty())
+    {
+        return false;
+    }
+    for(const char c : origin)
+    {
+        const unsigned char byte = static_cast<unsigned char>(c);
+        // Spaces and control characters, including DEL.
+        if(byte <= 0x20 || byte == 0x7F)
+        {
+            return false;
+        }
+    }
+    // After a bracketed IPv6 literal only a port may follow. HostFromOrigin
+    // stops at the bracket, so "[::1].example" would otherwise pass as loopback.
+    const size_t close = origin.find(']');
+    return close == std::string::npos || close + 1 == origin.size() ||
+           origin[close + 1] == ':';
 }
 
 std::string
@@ -775,17 +844,53 @@ RetryWaitSeconds(const std::string& retry_after)
     return std::min(seconds, ASSISTANT_RETRY_WAIT_MAX_SECONDS);
 }
 
-// The URL with any query string elided. A user who pastes a key into the URL
-// would otherwise see it copied into the log and into error text.
+// The URL with any query string elided and any userinfo removed. A user who
+// pastes a key into either would otherwise see it copied into the log and into
+// error text. The path stays: it cannot be told apart from a deployment name,
+// and it is what a 404 needs to show.
 std::string
 LoggableUrl(const std::string& url)
 {
     const size_t query_start = url.find('?');
-    if(query_start == std::string::npos)
+    std::string  loggable    = url.substr(0, query_start);
+    StripUserInfo(loggable);
+    if(query_start != std::string::npos)
     {
-        return url;
+        loggable += "?...";
     }
-    return url.substr(0, query_start) + "?...";
+    return loggable;
+}
+
+// Makes the endpoint's error text safe to show and export. Some gateways echo
+// the credential they were given in their auth error, so every copy of the key
+// is blanked, and the text is cut to a bounded length. A key the provider has
+// already partly masked is left as it is.
+void
+ScrubErrorText(const std::string& api_token, std::string& error)
+{
+    if(api_token.size() >= ASSISTANT_MIN_REDACTED_KEY_BYTES)
+    {
+        const size_t placeholder_size = std::strlen(ASSISTANT_REDACTED_KEY);
+        size_t       found            = error.find(api_token);
+        while(found != std::string::npos)
+        {
+            error.replace(found, api_token.size(), ASSISTANT_REDACTED_KEY);
+            found = error.find(api_token, found + placeholder_size);
+        }
+    }
+
+    if(error.size() > ASSISTANT_MAX_ERROR_TEXT_BYTES)
+    {
+        // Back up to the start of a UTF-8 sequence so the cut never leaves half
+        // a code point for ImGui or the exported file.
+        size_t cut = ASSISTANT_MAX_ERROR_TEXT_BYTES;
+        while(cut > 0 && (static_cast<unsigned char>(error[cut]) & 0xC0) == 0x80)
+        {
+            --cut;
+        }
+        error.resize(cut);
+        error += ASSISTANT_TRUNCATION_MARK;
+    }
 }
 
 // Where a request is going, once the configured base URL has been turned into
@@ -811,6 +916,31 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
         return ASSISTANT_MISSING_DEPLOYMENT_ERROR;
     }
     if(!SplitUrl(endpoint_out.url, endpoint_out.origin, endpoint_out.path))
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+
+    // cpp-httplib only recognises a lower-case scheme, while the key check
+    // below is case-blind. Normalising here keeps the two in step, and lets
+    // "HTTPS://" work. SplitUrl found the separator, at the same place in both.
+    const size_t      scheme_size = endpoint_out.origin.find("://");
+    const std::string scheme =
+        Core::String::to_lower_copy(endpoint_out.origin.substr(0, scheme_size));
+    if(scheme != "http" && scheme != "https")
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+    endpoint_out.origin.replace(0, scheme_size, scheme);
+    endpoint_out.url.replace(0, scheme_size, scheme);
+
+    // The origin is scheme and authority only, so an @ in it is userinfo. It
+    // could never connect - cpp-httplib takes "key@host" as the host name - and
+    // refusing it here keeps the secret out of the request log.
+    if(endpoint_out.origin.find('@') != std::string::npos)
+    {
+        return ASSISTANT_URL_CREDENTIALS_ERROR;
+    }
+    if(!OriginIsWellFormed(endpoint_out.origin))
     {
         return ASSISTANT_BAD_URL_ERROR;
     }
@@ -844,8 +974,8 @@ AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
 
 // Turns a response that did arrive into a reply or an error.
 void
-InterpretResponse(const httplib::Response& response, const std::string& url,
-                  bool allow_tool_calls, AssistantChatResult& result)
+InterpretResponse(const httplib::Response& response, bool allow_tool_calls,
+                  AssistantChatResult& result)
 {
     if(response.status >= ASSISTANT_FIRST_REDIRECT_STATUS &&
        response.status < ASSISTANT_FIRST_ERROR_STATUS)
@@ -875,18 +1005,47 @@ InterpretResponse(const httplib::Response& response, const std::string& url,
                            (detail.empty() ? std::string(".") : ": " + detail);
         }
     }
-
-    // A 404 is nearly always the URL being shaped wrong, so name what we asked
-    // for. The query comes off first in case a key was pasted into it.
-    if(!result.error.empty() && response.status == ASSISTANT_HTTP_NOT_FOUND)
-    {
-        result.error.append(" Requested ");
-        result.error.append(LoggableUrl(url));
-        result.error.append(".");
-    }
 }
 
 }  // namespace
+
+// Lower-cased "scheme://host[:port]" of an endpoint URL, or empty when it has
+// no scheme separator. Userinfo is dropped, so a key pasted into the URL is not
+// carried into whatever the caller stores or compares.
+std::string
+AssistantUrlOrigin(const std::string& url)
+{
+    std::string origin;
+    std::string path;
+    // A base with no path can still carry a query, which is not part of the
+    // origin.
+    if(!SplitUrl(url.substr(0, url.find_first_of("?#")), origin, path))
+    {
+        return std::string();
+    }
+    StripUserInfo(origin);
+    origin = Core::String::to_lower_copy(origin);
+    // A default port names the same destination as no port at all.
+    if(origin.compare(0, 8, "https://") == 0 && EndsWith(origin, ":443"))
+    {
+        origin.resize(origin.size() - 4);
+    }
+    else if(origin.compare(0, 7, "http://") == 0 && EndsWith(origin, ":80"))
+    {
+        origin.resize(origin.size() - 3);
+    }
+    return origin;
+}
+
+// True when the URL is plain http to a host that is not loopback. This is the
+// same rule OriginMayCarryToken applies to the key, asked on behalf of the
+// conversation: with no key set such an endpoint is still used.
+bool
+AssistantUrlIsCleartext(const std::string& url)
+{
+    const std::string origin = AssistantUrlOrigin(url);
+    return origin.compare(0, 7, "http://") == 0 && !OriginIsLoopback(origin);
+}
 
 AssistantChatResult
 AssistantChatCall::Send(const AssistantChatRequest& request)
@@ -1020,7 +1179,17 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
-    InterpretResponse(*response, endpoint.url, request.enable_tools, result);
+    InterpretResponse(*response, request.enable_tools, result);
+    ScrubErrorText(request.api_token, result.error);
+    // A 404 is nearly always the URL being shaped wrong, so name what we asked
+    // for. Added after the scrub so a long provider message cannot cut it off;
+    // the query and any userinfo are already off it.
+    if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)
+    {
+        result.error.append(" Requested ");
+        result.error.append(loggable);
+        result.error.append(".");
+    }
     result.ok = result.error.empty();
     return result;
 }

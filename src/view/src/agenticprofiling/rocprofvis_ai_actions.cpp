@@ -369,13 +369,22 @@ OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
 
     selected_id    = match->m_id;
     selected_label = match->m_label;
-    // A shared label alone would not say which of the tabs came forward. The
-    // id is the trace path, which does.
+    // A shared label alone would not say which of the tabs came forward, so
+    // add where it sits in the tab bar. The id would say it too, but it is the
+    // trace's full path, and this label is sent on to the model's endpoint:
+    // directory and user names have no business going there.
+    size_t position = 0;
+    while(position < tabs.size() && tabs[position] != match)
+    {
+        ++position;
+    }
     for(const TabItem* tab : tabs)
     {
-        if(tab != match && Core::String::to_lower_copy(tab->m_label) == label)
+        if(tab != nullptr && tab != match &&
+           Core::String::to_lower_copy(tab->m_label) == label)
         {
-            selected_label += " (" + match->m_id + ")";
+            selected_label += " (tab " + std::to_string(position + 1) + " of " +
+                              std::to_string(tabs.size()) + ")";
             break;
         }
     }
@@ -419,6 +428,12 @@ OptiqActions::ProposeScript(const std::string& source)
     return true;
 }
 
+bool
+OptiqActions::ScriptHasUnsavedDraft() const
+{
+    return m_trace_view != nullptr && m_trace_view->ScriptHasUnsavedDraft();
+}
+
 ScriptApproval
 OptiqActions::ScriptProposalState() const
 {
@@ -432,6 +447,15 @@ OptiqActions::ClearScriptProposal()
     if(m_trace_view != nullptr)
     {
         m_trace_view->ClearScriptProposal();
+    }
+}
+
+void
+OptiqActions::RejectScriptProposal()
+{
+    if(m_trace_view != nullptr)
+    {
+        m_trace_view->RejectScriptProposal();
     }
 }
 #endif

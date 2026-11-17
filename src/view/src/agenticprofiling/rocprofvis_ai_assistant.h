@@ -197,6 +197,13 @@ private:
     // The trace the briefing in the conversation describes. A follow-up about
     // the same trace does not repeat it; a different one does.
     std::string m_briefed_project_id;
+    // Where this turn's requests go and the key they carry, copied from the
+    // settings once when the turn starts. Every round of the turn reads these
+    // rather than the live settings, so a URL being edited in Preferences while
+    // an answer is running never receives the key. Empty between turns.
+    std::string m_turn_endpoint_url;
+    std::string m_turn_model;
+    std::string m_turn_token;
     FetchWait   m_fetch_wait;
     // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
     std::vector<std::string> m_next_steps;

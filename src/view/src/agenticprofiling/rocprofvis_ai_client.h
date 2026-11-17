@@ -61,6 +61,14 @@ struct AssistantChatResult
     std::vector<AssistantToolCall> tool_calls;
 };
 
+// Lower-cased "scheme://host[:port]" of an endpoint URL, or empty when it has
+// no scheme separator. What a stored key is bound to.
+std::string AssistantUrlOrigin(const std::string& url);
+
+// True when the URL is plain http to a host that is not loopback, i.e. the
+// conversation would cross the network unencrypted.
+bool AssistantUrlIsCleartext(const std::string& url);
+
 /**
  * @brief One POST to an OpenAI chat-completions endpoint, which the caller can
  * abandon.

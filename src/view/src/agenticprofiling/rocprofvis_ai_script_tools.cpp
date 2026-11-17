@@ -49,6 +49,14 @@ constexpr uint32_t ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS = 300;
 // its working out instead of its result.
 constexpr size_t ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS = 8000;
 
+// Set once an offer has gone unanswered or been declined, and held until the
+// turn ends. The reply already tells the model not to offer again, but a model
+// steered by text in the trace need not listen, and a second offer landing in
+// the editor the user is still reading is how a script nobody reviewed gets
+// run. So the refusal is made here, where it cannot be talked round. The panel
+// clears it through ResetAssistantScriptOffers.
+bool g_script_offers_closed = false;
+
 AssistantToolStartResult
 ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                       const std::string&)
@@ -67,6 +75,14 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                               " characters.",
                           "Script too long");
     }
+    if(g_script_offers_closed)
+    {
+        return DoneResult("A script was already offered this turn and the user did "
+                          "not run it, so another cannot be offered until they ask "
+                          "for one. Answer with what you have, or read the data "
+                          "with the other tools.",
+                          "Script not offered");
+    }
 
     // One script at a time per trace, and the user's own run owns the slot just
     // as much as this one does.
@@ -83,6 +99,17 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
     // owns the trace and the selection the run needs.
     OptiqActions actions(context.data_provider, context.timeline_selection,
                          context.trace_view);
+    // Offering replaces what is in the editor, so it must not land on a script
+    // the user is partway through writing.
+    if(actions.ScriptHasUnsavedDraft())
+    {
+        return DoneResult("The Script tab holds the user's own unsaved work, so "
+                          "the script was not offered over it. Tell the user to "
+                          "save or clear the Script tab if they want a script "
+                          "from you, and read the data with the other tools "
+                          "meanwhile.",
+                          "Script tab in use");
+    }
     if(!actions.ProposeScript(source))
     {
         return DoneResult("There is no script editor on this trace, so the "
@@ -136,7 +163,21 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
     OptiqActions actions(context.data_provider, context.timeline_selection,
                          context.trace_view);
     const ScriptApproval state = actions.ScriptProposalState();
-    actions.ClearScriptProposal();
+    if(state == ScriptApproval::kPending)
+    {
+        // Nobody answered. Decline it for them rather than just dropping the
+        // offer: the text stays in the editor, and it has to go on reading as
+        // a script that was not approved, not as the user's own.
+        actions.RejectScriptProposal();
+    }
+    else
+    {
+        actions.ClearScriptProposal();
+    }
+    if(state == ScriptApproval::kPending || state == ScriptApproval::kRejected)
+    {
+        g_script_offers_closed = true;
+    }
 
     if(state == ScriptApproval::kRejected)
     {
@@ -153,8 +194,8 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
     }
     if(state == ScriptApproval::kPending)
     {
-        return "The user did not answer, so the script was not run. Carry on "
-               "without it.";
+        return "The user did not answer, so the script was not run. Do not offer "
+               "a script again this turn unless they ask. Carry on without it.";
     }
     if(state == ScriptApproval::kRunning)
     {
@@ -188,6 +229,14 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
         "\n... truncated. Have the script report totals rather than rows ...");
 }
 
+// Forgets that a script offer went unanswered or was declined, so the next
+// turn may offer one again.
+void
+ResetAssistantScriptOffers()
+{
+    g_script_offers_closed = false;
+}
+
 #else
 
 // Scripting is not built in, so the tool never reaches the model. The
@@ -210,6 +259,10 @@ FinishAssistantScriptFetch(const AssistantToolContext&)
 {
     return "This build has no script support.";
 }
+
+void
+ResetAssistantScriptOffers()
+{}
 
 #endif  // ROCPROFVIS_ENABLE_SCRIPTING
 

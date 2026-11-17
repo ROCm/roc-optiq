@@ -100,6 +100,22 @@ constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
 // promptly instead of being re-issued until the deadline.
 constexpr uint32_t ASSISTANT_STATS_MAX_RERUNS = 4;
 
+// Overwrites a key before the string holding it is emptied or freed, so the
+// bytes do not sit in released memory for a crash dump to pick up. The whole
+// buffer is covered, not just the current length, and the writes go through a
+// volatile pointer so the compiler cannot drop them as dead stores.
+void
+WipeString(std::string& text)
+{
+    text.resize(text.capacity());
+    volatile char* bytes = text.data();
+    for(size_t i = 0; i < text.size(); i++)
+    {
+        bytes[i] = '\0';
+    }
+    text.clear();
+}
+
 }  // namespace
 
 AssistantPanel* AssistantPanel::s_instance = nullptr;
@@ -140,6 +156,7 @@ AssistantPanel::AssistantPanel()
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
+    WipeString(m_turn_token);
 }
 
 void
@@ -338,7 +355,9 @@ AssistantPanel::WithdrawScriptOffer()
         project != nullptr ? dynamic_cast<TraceView*>(project->GetView().get()) : nullptr;
     if(trace_view != nullptr)
     {
-        trace_view->ClearScriptProposal();
+        // Declined rather than cleared, so the editor does not go on to present
+        // the unapproved script as the user's own.
+        trace_view->RejectScriptProposal();
     }
 #endif
 }
@@ -349,6 +368,13 @@ AssistantPanel::ResetTurn()
     WithdrawScriptOffer();
     CancelPendingRequest();
     ResetAssistantPcRead();
+    ResetAssistantScriptOffers();
+    // The turn's copy of the endpoint and key ends with the turn, so the next
+    // one reads the settings afresh. CancelPendingRequest above has already
+    // waited the worker out, so nothing is still reading these.
+    m_turn_endpoint_url.clear();
+    m_turn_model.clear();
+    WipeString(m_turn_token);
     // The write-up nudge is scaffolding for the one tools-off request. Left in,
     // it tells every later turn not to call tools.
     if(m_force_final && !m_conversation.empty() && m_conversation.back().role == "user")
@@ -386,9 +412,11 @@ AssistantPanel::CancelPendingRequest()
 void
 AssistantPanel::StartHttpRequest()
 {
-    SettingsManager&         settings = SettingsManager::GetInstance();
-    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
-    if(provider == nullptr)
+    // Every round goes to the endpoint SendCurrentInput copied when the turn
+    // started, never to the live settings: the Preferences dialog edits those
+    // in place, so a later round would otherwise post the key to a half-typed
+    // or since-cancelled URL. An empty copy means no turn set one up.
+    if(m_turn_endpoint_url.empty())
     {
         ResetTurn();
         AppendLine(Speaker::kStatus,
@@ -396,13 +424,10 @@ AssistantPanel::StartHttpRequest()
         return;
     }
 
-    AssistantProvider endpoint = *provider;
-    ApplyAssistantEndpointDefaults(endpoint);
-
     AssistantChatRequest request;
-    request.endpoint_url = endpoint.endpoint_url;
-    request.model        = endpoint.model;
-    settings.GetAssistantToken(endpoint.name, request.api_token);
+    request.endpoint_url  = m_turn_endpoint_url;
+    request.model         = m_turn_model;
+    request.api_token     = m_turn_token;
     request.enable_tools  = !m_force_final;
     request.compute_tools = m_turn_is_compute;
 
@@ -420,11 +445,15 @@ AssistantPanel::StartHttpRequest()
     spdlog::info("Assistant HTTP round {} ({} messages)", m_tool_round,
                  request.messages.size());
 
+    // The worker owns the request's copy of the key and overwrites it as soon
+    // as the reply is in, rather than leaving it to be freed as it stands.
     m_call    = std::make_shared<AssistantChatCall>();
-    m_pending =
-        std::async(std::launch::async, [call = m_call, request = std::move(request)]() {
-            return call->Send(request);
-        });
+    m_pending = std::async(std::launch::async,
+                           [call = m_call, request = std::move(request)]() mutable {
+                               AssistantChatResult result = call->Send(request);
+                               WipeString(request.api_token);
+                               return result;
+                           });
 }
 
 void
@@ -512,6 +541,20 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
     PinTurnTrace();
+    // Lets the UI tools hold switch_tab and annotate to what the user typed.
+    BeginAssistantUiTurn(question);
+
+    // Fixes where this turn's requests go, and with which key, before the
+    // first one is built. Taken here rather than in StartHttpRequest so it
+    // also covers a turn that waits on the summary warmup first, and so no
+    // later round reads the settings again.
+    AssistantProvider endpoint = *provider;
+    ApplyAssistantEndpointDefaults(endpoint);
+    m_turn_endpoint_url = endpoint.endpoint_url;
+    m_turn_model        = endpoint.model;
+    WipeString(m_turn_token);
+    settings.GetAssistantToken(endpoint.name, m_turn_token);
+
     if(TryStartSummaryWarmup(question))
     {
         return;

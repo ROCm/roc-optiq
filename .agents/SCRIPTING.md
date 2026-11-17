@@ -152,8 +152,9 @@ held, after exec and before the globals dict is released - including
 when prepare refused the run. It deletes `optiq` from `sys.modules` and
 empties the module dict. Both are needed: deleting the entry handles
 the normal case, and emptying the module covers a script that parked it
-somewhere else that outlives the run (`json.keep = optiq` - allowlisted
-modules live in `sys.modules` for the whole process).
+somewhere else that outlives the run (`json.keep = optiq` - the proxy a
+script gets for an allowlisted module lives for the whole process, see
+§7).
 
 This cannot be done from the `done` callback: `done` is documented as
 running with the GIL **released**, and it is also where `DropSession`
@@ -589,9 +590,80 @@ guardrail. When adding a module to the allowlist, check what its normal
 use actually needs - `rocprofvis_controller_script_tests.cpp` has a
 case per promise, and the tool description is written from it.
 
-**Source screen (parse tree).** The allowlist and the builtin set do
-not bound reachability on their own, because an allowlisted module is a
-real module object. Two expressions are enough to leave:
+**Module proxies.** A script never holds a standard library module
+itself. Both the pre-imported globals (`MakeScriptGlobals`) and the
+script's `__import__` (`restricted_import`) hand out a per-module proxy:
+a fresh `types.ModuleType` that `MODULE_PROXY_SOURCE` in
+`rocprofvis_python_runtime.cpp` fills by rule, once, at init.
+
+- Only the names in `__all__` where the module defines one, otherwise
+  every name in the module.
+- Never a name that starts with an underscore.
+- Never a value that is itself a module.
+- `operator.attrgetter` and `operator.methodcaller` are left out. Both
+  are `getattr` with the name in a string, which the source screen
+  below never inspects.
+
+The reason is that a real module keeps the modules it imports as plain
+attributes, and no screen of interpreter-internal names refuses a plain
+attribute. Each of these used to leave in one expression:
+
+```python
+statistics.random._os.system('...')
+typing.sys.modules['builtins'].open('...')
+enum.bltns.eval('...')
+```
+
+A list of names to refuse cannot keep up with that (`_sys` in
+`collections`, `bltns` in `enum`), and would reject ordinary variable
+names such as `random` or `types`. Copying by rule removes the whole
+class without naming any of it.
+
+Things that still work, and why:
+
+- **Functions and classes are the real ones.** `isinstance`,
+  subclassing `enum.Enum`, `@dataclasses.dataclass` and
+  `collections.namedtuple` behave exactly as before, because those
+  objects still refer to their own module internally. That module is
+  just not reachable by name from the script.
+- **Submodules.** A submodule under an allowlisted top name is the one
+  module-valued attribute a script can reach, and it gets its own proxy
+  built by the same rule. `collections.abc` is attached at init;
+  `import json.decoder` builds and attaches one on demand.
+- **`from x import y`.** `_import` attaches a proxy for any `y` that is
+  a submodule before it returns. This is not cosmetic: when the
+  attribute is missing, the interpreter's `IMPORT_FROM` falls back to
+  `sys.modules['x.y']` and would return the real module.
+- **`optiq`** is not proxied. The controller builds it per run and it
+  holds only the trace bindings.
+
+A name that is public in practice but missing from its module's
+`__all__` is no longer visible to scripts. That is the price of
+honouring `__all__`; `fractions.Decimal` is an example, and the answer
+is to import it from the module that exports it.
+
+The proxies live as long as the interpreter, so an attribute one script
+sets on a proxy is still there for the next (`json.kept = ...`). That
+was already true of the real modules, and the run generation check (§3)
+is what covers it. The real modules are no longer modified.
+
+It **fails closed** in two places: a runtime that cannot build the
+proxies refuses to initialize, and `MakeScriptGlobals` refuses to build
+an environment without them. A module this Python does not have is
+simply absent, as before.
+
+What the proxies do **not** stop: anything reachable from a value
+rather than from a module attribute. The functions on a proxy still
+carry `__globals__`, which is why the source screen below is still
+needed, and an allowlisted callable that reaches attributes by string
+or evaluates a string is `getattr` or `eval` by another name. Two are
+known and listed in §11. This is defence behind approval, not
+containment.
+
+**Source screen (parse tree).** The allowlist, the builtin set and the
+proxies do not bound reachability on their own, because what a proxy
+exposes are real functions and classes. Two expressions are enough to
+leave:
 
 ```python
 json.dumps.__globals__['__builtins__']['__import__']('os')
@@ -608,24 +680,27 @@ builtins withhold `getattr`, `vars`, `eval` and `__import__`, so an
 attribute expression is the only *syntactic* way to walk either chain,
 which is what makes screening names worth doing without an AST rewrite.
 
-It does **not** close every published route today, and earlier drafts of
-this file said it did. `operator` is allowlisted, and
-`operator.attrgetter` is `getattr` under another name with the
-interpreter-internal part in a string the screen never inspects:
+It does **not** close every route, and earlier drafts of this file said
+it did. Anything that takes the interpreter-internal name as a string
+walks past it, because the screen never inspects string literals.
+`operator.attrgetter` was the published example:
 
 ```python
 operator.attrgetter('__globals__')(json.dumps)['__builtins__']['__import__']('os')
 ```
 
-See §11.
+That one now fails with `AttributeError`, because the `operator` proxy
+does not carry `attrgetter` or `methodcaller`. Others of the same shape
+remain; see §11.
 
 Three things to keep in mind when touching it:
 
 - It screens **names, not values**. It cannot know what an expression
   evaluates to and does not try. Adding `getattr` to the builtins would
-  defeat it completely — and allowlisting a module that reaches
-  attributes by string, as `operator` does, is the same mistake by a
-  quieter route.
+  defeat it completely — and exposing a callable that reaches
+  attributes by string, as `operator.attrgetter` did, is the same
+  mistake by a quieter route. Add such names to `_OMITTED` in
+  `MODULE_PROXY_SOURCE` when allowlisting a module that has them.
 - It must not refuse ordinary code. `__init__` and `__name__` are not
   on the denylist because defining `__init__` is how the allowlisted
   `dataclasses` and `enum` are used at all.
@@ -800,12 +875,24 @@ reasoning moved to the section it belongs to.
 
 ### Sandbox
 
-- **`operator.attrgetter` / `methodcaller` walk past the source
-  screen**, as described in §7. Either drop those two names from what
-  `operator` exposes, or refuse interpreter-internal names when they
-  appear as string literals in a call to them. Whichever way it goes,
-  §7 and `PYTHON.md` have to agree with the result. Approval is the
-  real control either way — this is about not overstating the screen.
+- **`operator.attrgetter` / `methodcaller` are closed.** The module
+  proxies (§7) leave both out of what `operator` exposes, and
+  `operator.itemgetter` is unaffected. The same proxies closed the
+  plain attribute chains through a module's own imports
+  (`statistics.random._os`, `typing.sys`, `enum.bltns`).
+- **Other allowlisted callables still walk past the source screen.**
+  Found by reading the vendored standard library, not tested:
+  - `string.Formatter().get_field('0.__globals__', (json.dumps,), {})`
+    is `getattr` by string, the same shape as `attrgetter`.
+  - `typing.get_type_hints` evaluates string annotations with the real
+    builtins, so a class annotated with a string is `eval`.
+
+  Either can be added to `_OMITTED` in `MODULE_PROXY_SOURCE`, at the
+  cost of the legitimate use. Expect more of the kind: the proxies
+  remove module-valued attributes, not every callable that takes a name
+  or source as a string. Approval is the real control either way — this
+  is about not overstating the screen or the proxies.
+- **Nothing tests the proxies yet.** See the test gaps below.
 
 ### Runtime (`src/python/`)
 
@@ -853,7 +940,7 @@ reasoning moved to the section it belongs to.
 | Cancel | `rocprofvis_script_cancel` against a running `while True: pass` (the queued case is covered) |
 | Slice wait | Cancel or timeout arriving *during* `Track.events()` / `Table.fetch()` |
 | `import optiq` | Promised by the docs, never asserted |
-| Source screen | `operator.attrgetter('__globals__')(...)` |
+| Module proxies | `operator.attrgetter` and `statistics.random` raising `AttributeError`; `enum.bltns` and `typing.sys` likewise; `import collections.abc`, `from collections import abc` and `from json import decoder` yielding proxies that work; `operator.itemgetter` still present |
 | Interrupt retry | A bare `except:` — the present test uses `except Exception:`, which does not catch `KeyboardInterrupt`, so the retry path is untested |
 | Session lifetime | The `__del__` / cyclic-GC route. The run-generation test covers a wrapper parked on an allowlisted module, not one freed late by the collector |
 | View | `ProposeScript` during a run; tab close with a file dialog open; `GetLastScriptResult` after cancel versus after an error |

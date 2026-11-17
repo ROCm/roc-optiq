@@ -862,7 +862,9 @@ string. No syntax highlighting; result tables are Phase 2.
 
 Ask Optiq offers a script through `OptiqActions::ProposeScript`, which
 fills this tab and selects it; nothing runs until the user presses Run
-or Reject. `ScriptApproval` is that state machine, and
+or Reject. The source is read-only while the offer waits, and
+`ProposeScript` refuses to replace the user's own unsaved edits
+(`HasUnsavedDraft`). `ScriptApproval` is that state machine, and
 `ScriptExecuteCompleteEvent` is filtered by trace source id because
 every editor hears every one of them.
 
@@ -2581,7 +2583,13 @@ Layered, transport at the bottom and the panel at the top:
   range is dropped and the events supply the window. Trace tab labels
   are file names and can repeat: `switch_tab` with the label already in
   front moves to the next tab that shares it, and the reply then
-  carries the tab id (the trace path) in parentheses.
+  carries the tab's position (`tab N of M`) in parentheses - never the
+  tab id, which is the trace path and would go to the endpoint.
+  `annotate` cuts a title at 120 bytes and the text at 2000.
+  `BeginAssistantUiTurn` adds two per-turn limits - at most five notes,
+  and `switch_tab` listing or switching to another trace only when the
+  user's message asked for it - but nothing calls it yet, and until the
+  panel does neither limit applies.
   Also owns `GetAssistantSharedUiToolHandlers`, the two entries that
   mean the same thing on either kind of trace: `offer_next_steps`, which
   needs no trace at all, and `switch_tab`, whose details-panel half
@@ -2712,7 +2720,11 @@ Layered, transport at the bottom and the panel at the top:
   because an approval has no request behind it. A turn that ends
   while the offer still waits takes it back: `ResetTurn` and
   `AbandonBatchForNewTrace` call `WithdrawScriptOffer`, which clears
-  the proposal on the pinned trace's Script tab. Stopping an approved
+  the proposal on the pinned trace's Script tab. An offer that times
+  out is declined (`RejectScriptProposal`) rather than cleared, and
+  after a declined or unanswered offer the tool refuses another until
+  `ResetTurn` calls `ResetAssistantScriptOffers`: one offer per turn,
+  enforced by the tool and not only by the prompt. Stopping an approved
   run from the editor counts as a rejection (`ScriptApproval::kRejected`),
   not a failed run, so the model is not told to fix and re-offer it.
   **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
@@ -2882,7 +2894,11 @@ Rules that are easy to get wrong here:
   shipped endpoint URL. The default model is `ASSISTANT_DEFAULT_MODEL`
   (`gpt-5.6-luna`). Nothing about the endpoint shape is persisted:
   `AssistantProvider` holds only name, URL, and model, and the client
-  works the rest out from the URL.
+  works the rest out from the URL. The URL is written to settings JSON
+  as typed, query included, so the page keeps a warning line under the
+  field while the URL carries userinfo or a query other than a lone
+  `api-version` / `apiVersion`, and another while it is plain http to a
+  non-loopback host (`AssistantUrlIsCleartext`).
 - **Two endpoint shapes, decided by `EndpointFlavour`.** Stock OpenAI
   gets `/chat/completions` appended, names the model in the body, sends
   `Authorization: Bearer`, and uses `max_completion_tokens`. Azure-style
@@ -2940,7 +2956,38 @@ Rules that are easy to get wrong here:
   the key is held in `SettingsManager::m_assistant_token_session` for
   the session only, and that copy is read before the store. The
   Settings page asks the store once per dialog open
-  (`m_assistant_token_stored`), not per frame.
+  (`m_assistant_token_stored`), not per frame. A failed erase is
+  reported with a notification, like a failed save.
+- **A saved key is bound to the origin of the URL it was saved for.**
+  Both copies hold `<origin>\n<key>`, the origin being
+  `AssistantUrlOrigin()` of the provider's URL at save time (lower-cased
+  scheme, host and port; default ports are not normalised, so
+  `https://h` and `https://h:443` differ). `GetAssistantToken` returns
+  the key only while the URL still has that origin, so a URL edited in
+  the dialog or in the settings file cannot carry a key to another
+  host. A value with no origin (an older build, or saved while the URL
+  had no scheme) is bound to the current origin on first read. On the
+  Settings page, changing the origin without typing a new key says the
+  stored key belongs to the previous host, and OK removes it
+  (`AssistantOriginChanged`); path and model edits keep it.
+- **A turn uses the endpoint and key it started with.**
+  `SendCurrentInput` copies the active provider's URL, model and key
+  into `m_turn_endpoint_url` / `m_turn_model` / `m_turn_token` once;
+  `StartHttpRequest` builds every round from that copy and never reads
+  `SettingsManager`, so editing Preferences mid-answer cannot redirect
+  the key. `ResetTurn` clears the copy and overwrites the key bytes. A
+  new path that starts a turn must take the same snapshot before its
+  first `StartHttpRequest`.
+- **The URL is checked before anything is sent or logged.**
+  `ResolveEndpoint` lower-cases the scheme, accepts only `http` and
+  `https`, refuses userinfo (`user@host`) or a malformed origin, and
+  refuses plain http to a non-loopback host when a key is set.
+  `LoggableUrl` drops the query and userinfo but keeps the path, so a
+  key placed in a path segment is still logged. `ScrubErrorText`
+  replaces the key with `[key]` in provider error text (keys under 8
+  bytes are left) and cuts the text at
+  `ASSISTANT_MAX_ERROR_TEXT_BYTES`, which on a long 404 also drops the
+  trailing `Requested <url>` hint.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -3889,7 +3936,8 @@ All under `agenticprofiling/`, compiled only with
 - `AssistantSettings`, `AssistantProvider` ->
   `rocprofvis_settings_manager.h` -> Saved URL and model; the token
   itself lives in `SecretStore` (or in session memory when the store
-  is missing or refuses the write).
+  is missing or refuses the write), stored with the origin of the URL
+  it was saved for.
 
 ### Events / pubsub
 

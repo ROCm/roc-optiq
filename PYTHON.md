@@ -233,6 +233,15 @@ name are allowed, for example `collections.abc`):
 Allowlisted stdlib modules are also pre-imported into the script
 globals, so `math.sqrt(16)` works without `import math`.
 
+What a script gets for a stdlib module is its public interface, not the
+module object itself: the names the module exports (its `__all__` where
+it has one), without names that start with an underscore and without
+the other modules it happens to import. So `statistics.mean` works and
+`statistics.random` is an `AttributeError`. `operator.attrgetter` and
+`operator.methodcaller` are not provided either; use a `lambda`, or
+`operator.itemgetter` for items. Like everything else in this section
+this is a guardrail, not a boundary.
+
 Disallowed imports fail with `ImportError` (for example `os`,
 `subprocess`, `ctypes`, `sys`, `pathlib`, `numpy`).
 

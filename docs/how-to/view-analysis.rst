@@ -105,7 +105,7 @@ Summary View: Roofline chart
 ------------------------------
 
 The chart plots kernel performance against empirical hardware ceilings to reveal the dominant performance bottleneck for all kernels.
-Showing where kernels are positioned relative to these rooflines helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction. 
+Showing where kernels are positioned relative to these rooflines helps determine whether performance is memory-bound or compute-bound, and identify the most impactful optimization direction.
 
 .. image:: ../images/summary-view-roofline-analysis.png
    :width: 800
@@ -119,7 +119,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
     :width: 400
     :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
 
-    To adjust your view of the chart:
+- To adjust your view of the chart with the roofline chart menu:
 
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
   - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration.

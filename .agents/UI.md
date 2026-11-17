@@ -3050,8 +3050,14 @@ Rules that are easy to get wrong here:
   what ran before it, on build flags (the unknown-tool reply lists the
   tools built in, so it has no golden), or on SQLite's scan order. That
   is why sample reads default to time order: the first sample column,
-  `node`, is the same on every row. A sort on a column that ties leaves
-  row order to the database, and the second golden pass catches it.
+  `node`, is the same on every row. A grouped read has neither an id
+  nor a start, so it defaults to its group column. A sort on a column
+  that ties falls back to row order (`PackedTable::SortByColumn` breaks
+  ties on the row index), so the reply does not depend on the standard
+  library's sort or the core count. The second golden pass only catches
+  run-to-run differences, not platform ones; a read that merges samples
+  from several tracks can still tie across tracks, so a golden case
+  should sort on a key that does not tie.
 
 ## 13. Remote / SSH and Profiler Launch UI
 

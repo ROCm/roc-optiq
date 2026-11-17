@@ -1,4 +1,0 @@
-tool: track_statistics
-args: {"track_id":99999}
-
-Unknown track_id. Call list_tracks first.

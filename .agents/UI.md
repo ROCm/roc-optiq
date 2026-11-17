@@ -3014,51 +3014,6 @@ Rules that are easy to get wrong here:
   `ASSISTANT_MAX_ERROR_TEXT_BYTES`, which on a long 404 also drops the
   trailing `Requested <url>` hint.
 
-#### Testing Ask Optiq
-
-- **The suite is `src/app/test/ask_optiq_tests.cpp`, category
-  `ask_optiq`.** It is built into `roc-optiq-tests` when agentic
-  profiling is on; the compute and scripting cases also need their own
-  flags. Every turn goes to `MockChatEndpoint`
-  (`ask_optiq_mock_endpoint.{h,cpp}`), a loopback httplib server that
-  answers from a script (`Answer`, `Calls`, `Failure`, plus `delay_ms`,
-  `drop` and `LimitBody` for transport faults) and records each request
-  body. `AskOptiqFixture` points a provider named `ask-optiq-tests` at
-  it, so a saved key is never sent, and restores the active provider,
-  time format, and panel state afterwards. Private state is reached
-  through `AssistantPanelTestPeer` and `ScriptEditorTestPeer` in
-  `src/view/test/rocprofvis_view_test_access.h`.
-- **Run it once per sample trace.** For example,
-  `roc-optiq-tests --run-tests --test-filter ask_optiq -f sample/rocpd-transpose.db`,
-  then again with `sample/rocprof_compute_23ed6f36.db`. A case written
-  for the other kind of trace skips, so one run covers only half the
-  suite. `--test-filter` (`-e`) takes the test engine's filter: test or
-  category names, comma-separated, `^` to anchor and `-` to exclude.
-  The CTest entries run both traces from the source root.
-- **The golden tests pin what every tool replies.**
-  `golden_system_tools` and `golden_compute_tools` run each tool with
-  fixed arguments, run the whole set twice, and compare both passes with
-  each other and with
-  `src/app/test/golden/ask_optiq/{system,compute}/<case>.txt`. The
-  trace's briefing is pinned beside them in `briefing.txt`. A mismatch
-  prints the first differing line and writes the actual output under
-  `<temp>/roc-optiq-golden/<group>`. After an intended change, rewrite
-  the files with `ROCPROFVIS_UPDATE_GOLDEN=1` and review the diff.
-  `ROCPROFVIS_GOLDEN_DIR` reads them from somewhere other than the
-  working directory.
-- **A tool reply must be the same on every run.** It must not depend on
-  what ran before it, on build flags (the unknown-tool reply lists the
-  tools built in, so it has no golden), or on SQLite's scan order. That
-  is why sample reads default to time order: the first sample column,
-  `node`, is the same on every row. A grouped read has neither an id
-  nor a start, so it defaults to its group column. A sort on a column
-  that ties falls back to row order (`PackedTable::SortByColumn` breaks
-  ties on the row index), so the reply does not depend on the standard
-  library's sort or the core count. The second golden pass only catches
-  run-to-run differences, not platform ones; a read that merges samples
-  from several tracks can still tie across tracks, so a golden case
-  should sort on a key that does not tie.
-
 ## 13. Remote / SSH and Profiler Launch UI
 
 These optional UI slices are separate from trace-project tabs until a

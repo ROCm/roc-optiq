@@ -1,7 +1,0 @@
-tool: top_events
-args: {"category":"dispatch","start_ns":1000000000,"end_ns":2000000000}
-
-window_ns: 1000000000 .. 2000000000 (requested)
-columns: name Invocations DurationTotal DurationAvg DurationMin DurationMax
-1. name=transpose_a(int*, int*, int, int) [clone .kd] Invocations=251 DurationTotal=2005304056.000000 DurationAvg=7989259.187251 DurationMin=7870412.000000 DurationMax=8067173.000000
-

@@ -1,9 +1,0 @@
-tool: get_summary_counter_stats
-args: {"limit":3,"offset":2}
-
-scope: trace (every node, device, process and thread)
-  device_busy_umc [%] class=GPU mean=54.8569 min=0 max=98 std_dev=26.8308
-  device_memory_usage [MB] class=GPU mean=1.83073e+09 min=3.5702e+08 max=2.11769e+09 std_dev=6.04503e+08
-  device_power [W] class=GPU mean=65535 min=65535 max=65535 std_dev=0.00154408
-showing 2-5 of 18 counters; call again with offset=5 for more. Pass a name to pick out specific counters.
-

@@ -1,4 +1,0 @@
-tool: list_tracks
-args: [1,2]
-
-Those arguments were not a JSON object, so none of them were read. Send arguments as one JSON object.

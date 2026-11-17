@@ -1,4 +1,0 @@
-tool: track_events
-args: {"filters":[{"column":"__uuid","op":"=","value":"1"}]}
-
-__uuid cannot be used in filters: ids this large are compared approximately and would match neighbouring events. Call event_details with the uuid, or filter on id, name, or start instead.

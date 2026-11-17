@@ -1,9 +1,0 @@
-tool: track_statistics
-args: {"track_id":5,"start_ns":1000000000,"end_ns":2000000000}
-
-window_ns: 1000000000 .. 2000000000 (requested)
-track_id: 5
-track_name: Queue 1
-track_type: Queue
-Utilization: 99.7 %
-

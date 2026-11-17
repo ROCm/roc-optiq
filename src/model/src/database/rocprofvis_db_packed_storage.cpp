@@ -557,15 +557,8 @@ namespace DataModel
                 }
                 std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
-                        if (sort_values[so1] != sort_values[so2])
-                        {
-                            return ascending ? sort_values[so1] < sort_values[so2]
-                                : sort_values[so2] < sort_values[so1];
-                        }
-                        // Ties fall back to row order, so the result does not
-                        // depend on the sort algorithm, the execution policy or
-                        // the order an earlier sort left behind.
-                        return so1 < so2;
+                        return ascending ? sort_values[so1] < sort_values[so2]
+                            : sort_values[so2] < sort_values[so1];
                     });
             }
             else if (it->m_name == Builder::CATEGORY_PUBLIC_NAME || it->m_name == Builder::NAME_PUBLIC_NAME)
@@ -597,15 +590,8 @@ namespace DataModel
                 }
                 std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
-                        if (sort_values[so1] != sort_values[so2])
-                        {
-                            return ascending ? sort_values[so1] < sort_values[so2]
-                                : sort_values[so2] < sort_values[so1];
-                        }
-                        // Ties fall back to row order, so the result does not
-                        // depend on the sort algorithm, the execution policy or
-                        // the order an earlier sort left behind.
-                        return so1 < so2;
+                        return ascending ? sort_values[so1] < sort_values[so2]
+                            : sort_values[so2] < sort_values[so1];
                     });
 
             }
@@ -622,15 +608,8 @@ namespace DataModel
                 }
                 std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
-                        if (sort_values[so1] != sort_values[so2])
-                        {
-                            return ascending ? sort_values[so1] < sort_values[so2]
-                                : sort_values[so2] < sort_values[so1];
-                        }
-                        // Ties fall back to row order, so the result does not
-                        // depend on the sort algorithm, the execution policy or
-                        // the order an earlier sort left behind.
-                        return so1 < so2;
+                        return ascending ? sort_values[so1] < sort_values[so2]
+                            : sort_values[so2] < sort_values[so1];
                     });
             }
 

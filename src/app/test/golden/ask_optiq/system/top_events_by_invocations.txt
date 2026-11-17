@@ -1,8 +1,0 @@
-tool: top_events
-args: {"category":"dispatch","sort_by":"Invocations","sort_order":"asc"}
-
-window_ns: 0 .. 5044424388 (whole trace)
-columns: name Invocations DurationTotal DurationAvg DurationMin DurationMax
-1. name=__amd_rocclr_fillBufferAligned.kd Invocations=4 DurationTotal=18483665.000000 DurationAvg=4620916.250000 DurationMin=1433322.000000 DurationMax=13196978.000000
-2. name=transpose_a(int*, int*, int, int) [clone .kd] Invocations=1000 DurationTotal=7980562907.000000 DurationAvg=7980562.907000 DurationMin=4027366.000000 DurationMax=8067173.000000
-

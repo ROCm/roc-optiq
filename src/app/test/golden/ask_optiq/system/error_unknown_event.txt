@@ -1,4 +1,0 @@
-tool: event_details
-args: {"event_uuid":"123"}
-
-No details came back for that event_uuid. Check the __uuid value.

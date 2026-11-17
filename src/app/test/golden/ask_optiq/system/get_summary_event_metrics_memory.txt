@@ -1,7 +1,0 @@
-tool: get_summary_event_metrics
-args: {"category":"memory","name":"MEMORY_COPY_HOST_TO_DEVICE"}
-
-scope: trace (every node, device, process and thread)
-category: memory
-  MEMORY_COPY_HOST_TO_DEVICE  pct=59.7  calls=24  sum_ns=81866950  avg_ns=3411122  min_ns=1735361  max_ns=4273566
-

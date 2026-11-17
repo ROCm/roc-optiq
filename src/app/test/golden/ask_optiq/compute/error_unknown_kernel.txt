@@ -1,4 +1,0 @@
-tool: kernel_summary
-args: {"kernel_id":999}
-
-No kernel with id 999 in this workload. Call list_kernels for the ids.

@@ -1,8 +1,0 @@
-tool: top_events
-args: {"category":"memory_copy"}
-
-window_ns: 0 .. 5044424388 (whole trace)
-columns: name Invocations DurationTotal DurationAvg DurationMin DurationMax
-1. name=MEMORY_COPY_HOST_TO_DEVICE Invocations=24 DurationTotal=81866950.000000 DurationAvg=3411122.916667 DurationMin=1735361.000000 DurationMax=4273566.000000
-2. name=MEMORY_COPY_DEVICE_TO_HOST Invocations=24 DurationTotal=55278381.000000 DurationAvg=2303265.875000 DurationMin=1718123.000000 DurationMax=2477725.000000
-

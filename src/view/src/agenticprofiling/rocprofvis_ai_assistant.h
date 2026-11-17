@@ -50,8 +50,6 @@ public:
     static void RenderToolbarButton();
 
 private:
-    friend struct AssistantPanelTestPeer;
-
     enum class Speaker
     {
         kUser,

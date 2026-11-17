@@ -586,16 +586,6 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImGuiTextSelect)
-    target_sources(${TEST_TARGET} PRIVATE
-        src/app/test/ask_optiq_tests.cpp
-        src/app/test/ask_optiq_mock_endpoint.cpp)
-    # httplib.h overruns the default section limit (see rocprofvis_ai_client.cpp above).
-    if(MSVC)
-        set_source_files_properties(
-            src/app/test/ask_optiq_mock_endpoint.cpp PROPERTIES
-            COMPILE_OPTIONS "/bigobj"
-        )
-    endif()
     endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     # TEMPORARY (profiler launch): remove when the profiler feature graduates.
     if(ROCPROFVIS_ENABLE_PROFILER)

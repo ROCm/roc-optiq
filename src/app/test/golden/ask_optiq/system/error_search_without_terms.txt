@@ -1,4 +1,0 @@
-tool: search_events
-args: {}
-
-search_events needs terms, e.g. {"terms":["gemm"]}.

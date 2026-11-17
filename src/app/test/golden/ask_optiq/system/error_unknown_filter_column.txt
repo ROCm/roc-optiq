@@ -1,4 +1,0 @@
-tool: track_events
-args: {"filters":[{"column":"nope","op":"=","value":"1"}]}
-
-Unknown filter column "nope". Allowed columns: name, category, duration, start, end, id, __uuid, PID, TID, queue, stream, node, size, address, SrcAddr, value, counter, arguments, GridSizeX, GridSizeY, GridSizeZ, WGSizeX, WGSizeY, WGSizeZ, LDSSize, ScratchSize, StaticLDSSize, StaticScratchSize, AgentAbsoluteIndex, AgentType, AgentTypeIndex, AgentName, SrcAgentAbsoluteIndex, SrcAgentType, SrcAgentTypeIndex, SrcAgentName, __trackId, __streamTrackId

@@ -1,0 +1,28 @@
+briefing
+
+trace_name: rocprof_compute_23ed6f36.db
+kind: compute_trace
+workload_count: 1
+workload_id: 1
+workload_name: drchen_pi
+kernel_count: 7
+metric_count: 1942
+  amd gpu kernel version: 6.16.0
+  cu per gpu: 256
+  cur mclk: 1900
+  cur sclk: 2200
+  gpu arch: gfx950
+  gpu chip id: 30112
+  gpu l1: 32
+  gpu l2: 4096
+  gpu memory: 264224768
+  gpu model: MI350
+  gpu series: MI350
+  lds banks per cu: 32
+  max waves per cu: 32
+  pipes per gpu: 4
+  se per gpu: 32
+  simd per cu: 4
+  sqc per gpu: 128
+note: kernel names, dispatch statistics, and hardware metric values are NOT in this briefing. Call compute_overview, list_kernels, kernel_triage, and get_metrics to see them.
+

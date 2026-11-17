@@ -1,0 +1,15 @@
+briefing
+
+trace_name: rocpd-transpose.db
+kind: system_trace
+node: gliff-dev-lnx
+  device: AMD Radeon PRO W7600
+  device: AMD Ryzen 9 5900X 12-Core Processor
+summary:
+kernel_exec_time_total_ns: 7999046572
+memory_op_time_total_ns: 137145331
+thread_op_time_total_ns: 128799266802
+summarized_counters: 18
+sub_metrics: 1
+note: these are trace-wide totals. Top kernels, memory and thread operations, counter statistics, per node/device/process/thread breakdowns, and event rows are NOT in this briefing. Call get_summary, top_events, or track_events to see them.
+

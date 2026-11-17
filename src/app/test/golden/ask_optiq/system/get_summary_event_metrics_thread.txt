@@ -1,0 +1,6 @@
+tool: get_summary_event_metrics
+args: {"category":"thread","name":"hipLaunchKernel"}
+
+scope: trace (every node, device, process and thread)
+category: thread
+Not in the summary at this scope. The summary keeps only the busiest names per scope; call top_events category=instrumented or sampled to rank every name, or get_summary to see the ones it kept.

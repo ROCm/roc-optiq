@@ -1,0 +1,7 @@
+tool: get_summary_event_metrics
+args: {"category":"kernel","name":"transpose_a(int*, int*, int, int) [clone .kd]"}
+
+scope: trace (every node, device, process and thread)
+category: kernel
+  transpose_a(int*, int*, int, int) [clone .kd]  pct=99.8  calls=1000  sum_ns=7980562907  avg_ns=7980562  min_ns=4027366  max_ns=8067173
+

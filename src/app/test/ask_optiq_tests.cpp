@@ -486,7 +486,8 @@ const GoldenCase SYSTEM_GOLDEN[] = {
     { "track_events_every_track", "track_events", R"({"limit":3})" },
     { "track_events_window", "track_events",
       R"({"track_ids":[5],"start_ns":1000000000,"end_ns":1100000000,"limit":5})" },
-    { "track_samples_gfx_busy", "track_samples", R"({"track_ids":[24],"limit":5})" },
+    // Enough rows to show several timestamps, so the golden pins time order.
+    { "track_samples_gfx_busy", "track_samples", R"({"track_ids":[24],"limit":14})" },
     { "track_samples_grouped", "track_samples", R"({"group_by":"counter","limit":10})" },
     { "track_samples_highest", "track_samples",
       R"({"track_ids":[24],"sort_by":"value","sort_order":"desc","limit":5})" },

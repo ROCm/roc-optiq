@@ -2451,9 +2451,25 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     // sorts by the same thing rather than silently by whatever moved into that
     // slot. A sample table has no id, and its first column (node) is the same
     // on every row, so samples go in time order: "start", column 1.
-    const uint64_t sort_column =
-        events ? RecordSort(tables, fetch, args, "id", 0)
-               : RecordSort(tables, fetch, args, "start", 1);
+    uint64_t sort_column = 0;
+    if(!group_by.empty())
+    {
+        // A grouped result is the group column and then its aggregates, and has
+        // neither an id nor a start. The group column is always first, whatever
+        // header the slot held before, so the default is known without one.
+        // Only a sort_by the model named is looked up, and the landed header
+        // corrects it if this one was the wrong layout.
+        fetch.sort_by      = JsonUtils::GetString(args, "sort_by", "");
+        fetch.sort_default = group_by;
+        fetch.sort_column  =
+            ResolveAssistantSortColumn(tables, fetch.table_type, fetch.sort_by, 0);
+        sort_column = fetch.sort_column;
+    }
+    else
+    {
+        sort_column = events ? RecordSort(tables, fetch, args, "id", 0)
+                             : RecordSort(tables, fetch, args, "start", 1);
+    }
     const bool     queued      = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
             table_type, tracks, start_ns, end_ns, nullptr, filter.c_str(),

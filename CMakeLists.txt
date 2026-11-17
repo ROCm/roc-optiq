@@ -1087,7 +1087,10 @@ execute_process( COMMAND rpm --eval %{?dist}
                  RESULT_VARIABLE PROC_RESULT
                  OUTPUT_VARIABLE EVAL_RESULT
                  OUTPUT_STRIP_TRAILING_WHITESPACE)
-if(PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "")
+# A '~' pre-release marker (nightly builds, e.g. 1~20261116) is left without the
+# distro tag so the filename and embedded release match.
+if(PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL ""
+   AND NOT CPACK_RPM_PACKAGE_RELEASE MATCHES "~")
   string(APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}")
 endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")

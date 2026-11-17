@@ -413,8 +413,7 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
-          # The nightly release is already embedded in the RPM; only drop the
-          # distro tag from the filename.
+          # Nightly builds carry no distro tag; strip it from other builds.
           RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
 

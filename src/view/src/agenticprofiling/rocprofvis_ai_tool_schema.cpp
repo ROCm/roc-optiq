@@ -3,7 +3,7 @@
 
 #include "rocprofvis_ai_tool_schema.h"
 
-#include <sstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -125,9 +125,11 @@ AddScopeParams(jt::Json& params)
     params["properties"]["track_ids"]["items"]["type"] = "integer";
 }
 
-// The structured stand-in for a SQL query: filters, sort, paging, grouping.
+// The structured stand-in for a SQL query: filters, sort and paging, plus
+// grouping for the tools that honour it. Only the track tables group: top_events
+// always groups by name, and the name searches have no grouping at all.
 void
-AddQueryParams(jt::Json& params)
+AddQueryParams(jt::Json& params, bool with_group_by = false)
 {
     jt::Json filter_item = ObjectParams();
     AddParam(filter_item, "column", "string",
@@ -154,8 +156,13 @@ AddQueryParams(jt::Json& params)
     AddParam(params, "limit", "integer", "Rows to return (default 20, max 200).");
     AddParam(params, "offset", "integer",
              "Rows to skip. Use with limit to page through a big result.");
-    AddParam(params, "group_by", "string",
-             "Optional column to aggregate rows by, e.g. name.");
+    if(with_group_by)
+    {
+        AddParam(params, "group_by", "string",
+                 "Optional column to aggregate rows by, e.g. name. Returns one row "
+                 "per value with its count and the average, min and max duration "
+                 "(value for samples). No sums.");
+    }
 }
 
 }  // namespace
@@ -164,31 +171,20 @@ AddQueryParams(jt::Json& params)
 std::string
 AssistantToolNameList(bool is_compute)
 {
-    std::ostringstream out;
-    bool               first = true;
-    if(is_compute)
+    const AssistantToolLabel* labels =
+        is_compute ? ASSISTANT_COMPUTE_TOOL_LABELS : ASSISTANT_TOOL_LABELS;
+    const size_t count = is_compute ? std::size(ASSISTANT_COMPUTE_TOOL_LABELS)
+                                    : std::size(ASSISTANT_TOOL_LABELS);
+    std::string out;
+    for(size_t i = 0; i < count; ++i)
     {
-        for(const AssistantToolLabel& label : ASSISTANT_COMPUTE_TOOL_LABELS)
+        if(i > 0)
         {
-            if(!first)
-            {
-                out << ", ";
-            }
-            first = false;
-            out << label.name;
+            out += ", ";
         }
-        return out.str();
+        out += labels[i].name;
     }
-    for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
-    {
-        if(!first)
-        {
-            out << ", ";
-        }
-        first = false;
-        out << label.name;
-    }
-    return out.str();
+    return out;
 }
 
 namespace
@@ -261,7 +257,9 @@ MakeAssistantToolsJson()
         MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
     AddParam(inst_params, "id", "integer",
              "Sub-metric id from a get_summary sub_metrics line, paired with level.");
-    AddScopeParams(inst_params);
+    AddParam(inst_params, "start_ns", "number",
+             "Window start in nanoseconds. Defaults to the whole trace.");
+    AddParam(inst_params, "end_ns", "number", "Window end in nanoseconds.");
     AddQueryParams(inst_params);
     inst_params["required"][0] = "name";
     AddTool(tools, 2, "event_instances",
@@ -330,10 +328,6 @@ MakeAssistantToolsJson()
              "columns. They stay highlighted while the user reads, and the first "
              "one gets selected so its flow arrows and call stack expand.");
     goto_params["properties"]["events"]["items"] = goto_event_item;
-    AddParam(goto_params, "zoom", "boolean",
-             "Also zoom the timeline to the range, not just select it. Use this "
-             "when the range is small enough that the user would have to zoom in "
-             "by hand.");
 
     AddTool(tools, 5, "goto",
             "Point the UI at what you are talking about: move the timeline to a "
@@ -348,7 +342,7 @@ MakeAssistantToolsJson()
 
     jt::Json track_events_params = ObjectParams();
     AddScopeParams(track_events_params);
-    AddQueryParams(track_events_params);
+    AddQueryParams(track_events_params, true);
     AddTool(tools, 6, "track_events",
             "Read raw events off specific timeline tracks. This is the closest thing "
             "to querying the database: pick tracks with track_ids, a window with "
@@ -358,7 +352,7 @@ MakeAssistantToolsJson()
 
     jt::Json track_samples_params = ObjectParams();
     AddScopeParams(track_samples_params);
-    AddQueryParams(track_samples_params);
+    AddQueryParams(track_samples_params, true);
     AddTool(tools, 7, "track_samples",
             "Read counter/PMC samples off specific counter tracks over a window. "
             "Use track_ids from list_tracks where type=Counter. Same filtering, "
@@ -376,8 +370,8 @@ MakeAssistantToolsJson()
     event_details_params["required"][0] = "event_uuid";
     AddTool(tools, 8, "event_details",
             "Drill into one event: its arguments, extended data, flow links to and "
-            "from other events, and its call stack. Use after track_events or "
-            "top_events gives you a __uuid.",
+            "from other events, and its call stack. Use after event_instances, "
+            "search_events or track_events gives you a __uuid.",
             event_details_params);
 
     jt::Json track_stats_params = ObjectParams();

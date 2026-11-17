@@ -2151,7 +2151,10 @@ controller results.
   table a tab is showing; the summary instance tables get one
   assistant slot per category because the assistant resolves sort
   columns by name from the header already in the slot, and the three
-  layouts differ.
+  layouts differ. That header is the previous read's, so the index is
+  a first guess: `AssistantFetchNeedsRerun` checks it against the
+  header that lands and the panel runs the tool again when it was
+  wrong.
 - `rocprofvis_analysis_model.{h,cpp}` - `AnalysisModel`: per-track
   queue/counter statistic cache plus analysis tables, using the
   `AnalysisTrackStatistics` state machine.
@@ -2544,6 +2547,10 @@ Layered, transport at the bottom and the panel at the top:
   escaped `LIKE` wildcards paired with an explicit `ESCAPE` clause. Its
   columns must be names the returned rows carry (`node`, not the SQL
   `nodeId`), since a filter on any other name matches nothing.
+  `filters: null` counts as absent, and `__uuid` is refused as a filter
+  column because the filter compares through a double, which would
+  match neighbouring events. Only `track_events` and `track_samples`
+  are offered `group_by`.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
   `StartAssistantTool`, which parses the arguments, refuses everything
   but `offer_next_steps` when no trace is ready, parks while a trace is
@@ -2563,11 +2570,18 @@ Layered, transport at the bottom and the panel at the top:
   in the same call, so none of them park a fetch or touch a request id.
   `offer_next_steps` is a UI side-effect rather than a read: it fills
   the stacked follow-up buttons under the chat. Unprompted UI mutation
-  is `goto` (zoom and select events) plus `flow_arrows` with
+  is `goto` (frame and select events) plus `flow_arrows` with
   `visible=true` alongside a selection, since the arrows only draw for
   a selected event and would otherwise stay invisible to a user who had
   switched them off. Notes, bookmarks, measure pins, panels, tabs,
   arrow restyling, and reset_view wait until the user asked.
+  `goto` is the one writer of the selection the data tools default to,
+  so it refuses a range that lies wholly outside the trace and clamps
+  one that partly overlaps; when events are named, an out-of-trace
+  range is dropped and the events supply the window. Trace tab labels
+  are file names and can repeat: `switch_tab` with the label already in
+  front moves to the next tab that shares it, and the reply then
+  carries the tab id (the trace path) in parentheses.
   Also owns `GetAssistantSharedUiToolHandlers`, the two entries that
   mean the same thing on either kind of trace: `offer_next_steps`, which
   needs no trace at all, and `switch_tab`, whose details-panel half
@@ -2581,8 +2595,26 @@ Layered, transport at the bottom and the panel at the top:
   answer in one call: they queue a fetch and hand the panel a set of
   `DataProvider` request ids to poll, then format the rows once they
   land. Those request ids are shared with the normal UI, which is why
-  each body checks `IsRequestPending` before issuing its own query and
-  reports whether it actually started the fetch.
+  each tool checks `IsRequestPending` around its query and reports
+  whether it actually started the fetch. The table-backed ones do it in
+  their shared tail, `FetchStartedResult`, after the fetch is refused
+  rather than before issuing it, and the track tables also count a UI
+  table of the same controller type as busy
+  (`IsTableRequestPending`). `FetchStartedResult` clears the slot's
+  table params when it queues a read, so a slot still without params
+  once the request clears is reported as a failed query, never
+  formatted from the previous call's rows.
+
+  Every table read (`top_events`, `event_instances`, `track_events`,
+  `track_samples`, `search_events`) and `track_statistics` leads its
+  result with `window_ns: <start> .. <end> (<source>)`, because the
+  default window is the timeline selection - which `goto` sets as
+  often as the user does - and a window that cannot be used is
+  replaced rather than refused. `top_events`, `track_events` and
+  `track_samples` add a `tracks:` line when a read without `track_ids`
+  used only the selected tracks or hit the 32-track cap. A `sort_by`
+  that names no column of the result adds a `note:` line saying what
+  the rows are sorted by instead.
 
   The summary tools read `SummaryModel` and run no query:
   - `get_summary` - one scope's top kernels, memory and thread
@@ -2621,8 +2653,9 @@ Layered, transport at the bottom and the panel at the top:
   diagnostic tables in one query, found by name
   (`ASSISTANT_TRIAGE_TABLE_NAMES`) because the dotted ids move with the
   accelerator and the profiling mode while the names do not. A standard
-  name this workload has no table for is named in the reply, so the
-  defect that table would have shown is not read as absent. Both go
+  name this workload has no table for is named in the reply, and so is
+  a standard table that exists but returned no values for the kernel,
+  so the defect that table would have shown is not read as absent. Both go
   through `StartComputeMetricsFetch`, which calls `FetchMetrics` under
   `ASSISTANT_CLIENT_ID` - their own request slot (`MakeClientRequestId`)
   and their own `store_id` partition in `ComputeDataModel`, the compute
@@ -2639,6 +2672,10 @@ Layered, transport at the bottom and the panel at the top:
   the workload has only one: the toolbar selection is never a default.
   `get_metrics` reads the workload's own values only when asked with
   `scope="workload"`.
+  `list_kernels` stops on a whole row before the result cap and its
+  footer names the exact next `offset`; `compute_overview` with a
+  `workload_id` a multi-workload trace does not have returns the
+  workload list with the error.
   `kernel_pc_samples` reads one kernel's PC samples - instructions ranked
   by samples, issued against stalled, the profiler's reasons, and the
   `frame_index == 0` source line the ISA View would show - or says none
@@ -2672,7 +2709,13 @@ Layered, transport at the bottom and the panel at the top:
   That wait is on a person, so the tool sets its own `timeout_seconds`
   instead of the 45s a fetch gets, and the panel asks
   `AssistantScriptFetchPending` rather than polling a request id,
-  because an approval has no request behind it. **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
+  because an approval has no request behind it. A turn that ends
+  while the offer still waits takes it back: `ResetTurn` and
+  `AbandonBatchForNewTrace` call `WithdrawScriptOffer`, which clears
+  the proposal on the pinned trace's Script tab. Stopping an approved
+  run from the editor counts as a rejection (`ScriptApproval::kRejected`),
+  not a failed run, so the model is not told to fix and re-offer it.
+  **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
   on**; with it off the handler table is empty, the schema never
   registers the tool, and the prompt never names it, so the model is
   not offered something that would always fail. It owns
@@ -2700,7 +2743,8 @@ panel shows as a status line.
   and the turn loop. The composer shows **Explain this view** on an
   empty chat, then replaces it with up to three stacked next-step
   buttons from `offer_next_steps`. Clicking a step sends that text as
-  the next user message.
+  the next user message; a question the user was still typing in the
+  composer is kept.
 
 Integration points:
 
@@ -2709,7 +2753,7 @@ Integration points:
   main view, and renders it with `RenderDocked()`. The View menu binds
   `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
 - `TraceView` and `AnalysisView` expose the plain accessors
-  `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
+  `OptiqActions` needs (`SetFlowArrowsVisible`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into
   their members.
 
@@ -2723,11 +2767,20 @@ Rules that are easy to get wrong here:
   model on the next round. A code path that consumes a tool call
   without queueing it ends the turn with an empty transcript. The
   harmony scan only runs on rounds where tools were offered, so a
-  literal `to=` in the final prose is not mistaken for a call.
+  literal `to=` in the final prose is not mistaken for a call. On tool
+  rounds a `to=` glued to a preceding letter, digit, `_`, `-`, `?` or
+  `&` (`--to=json`, `goto=x`, `?to=abc`) is also treated as prose.
 - **Tool rounds and the answer are separate HTTP calls.** When the
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
-  user reads.
+  user reads. A batch that is exactly one successful `offer_next_steps`
+  goes straight to `BeginFinalAnswer` from `RunNextTool`: the prompt
+  makes it the model's last tool, and the tools-on draft that would
+  follow is discarded anyway. The write-up nudge `BeginFinalAnswer`
+  appends is scaffolding for that one request; `ResetTurn` removes it,
+  so later turns never read "do not call any more tools". An answer
+  that comes back with `finish_reason == "length"` is followed by a
+  status line saying it was cut off.
 - **The prompt is a shared base plus one body per trace kind.**
   `AssistantSystemPrompt(is_compute)` concatenates
   `ASSISTANT_SHARED_OPENING`, then either
@@ -2834,7 +2887,9 @@ Rules that are easy to get wrong here:
   gets `/chat/completions` appended, names the model in the body, sends
   `Authorization: Bearer`, and uses `max_completion_tokens`. Azure-style
   bases, recognised by an `/azure`, `/engines/`, or `/openai/deployments`
-  segment in the URL, take the
+  segment in the URL path (the host and the query string are not
+  searched, so a host such as `azure-llm.example` is not a marker),
+  take the
   deployment from the Model field into the path, send
   `Ocp-Apim-Subscription-Key`, omit `model` from the body, and use
   `max_tokens` at a lower cap - that is all their API version accepts,
@@ -2855,11 +2910,24 @@ Rules that are easy to get wrong here:
   request IDs and result slots are shared with the normal UI. If a tool
   finds one busy, it waits for that owner and retries its own query
   against the original timeout deadline. It returns a timeout rather
-  than treating the other query's rows as its own.
+  than treating the other query's rows as its own. `PollToolFetch`
+  re-runs the same call in two more cases, both bounded by that
+  deadline: a range change dropped a `track_statistics` result while
+  it was in flight (at most `ASSISTANT_STATS_MAX_RERUNS`), or the sort
+  index was resolved against a stale header
+  (`AssistantFetchNeedsRerun`). A re-run (`m_fetch_retries > 0`) can
+  happen every frame, so it is not logged and writes `m_status`
+  directly, as the slow-wait counter does; `SetStatus` scrolls the
+  transcript and would pin it to the bottom for the whole wait.
 - **HTTP runs on a worker via `std::async`, and must stay cancellable.**
   `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
   is what lets the panel be destroyed without blocking on a
-  two-minute read timeout.
+  five-minute read timeout. `Send()` retries once on HTTP
+  429/502/503/504, or on a connection that drops within 10 seconds,
+  after a 2 s wait (`Retry-After` in seconds is honoured up to 10 s).
+  The wait polls the cancel flag every 100 ms, so `Cancel()` still ends
+  it promptly. Timeouts, refused connections, DNS and TLS failures,
+  and every other status are reported at once.
 - **The tool context is rebuilt every call** (`MakeToolContext()`) from
   `AppWindow::GetCurrentProject()`, so it never holds a dead provider.
   The flip side is that the trace in front can change mid-turn, which
@@ -2868,6 +2936,11 @@ Rules that are easy to get wrong here:
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
+  When no store exists, or a write to it fails (the user is warned),
+  the key is held in `SettingsManager::m_assistant_token_session` for
+  the session only, and that copy is read before the store. The
+  Settings page asks the store once per dialog open
+  (`m_assistant_token_stored`), not per frame.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -3815,7 +3888,8 @@ All under `agenticprofiling/`, compiled only with
   `agenticprofiling/rocprofvis_ai_client.h`.
 - `AssistantSettings`, `AssistantProvider` ->
   `rocprofvis_settings_manager.h` -> Saved URL and model; the token
-  itself lives in `SecretStore`.
+  itself lives in `SecretStore` (or in session memory when the store
+  is missing or refuses the write).
 
 ### Events / pubsub
 

@@ -75,7 +75,9 @@ public:
 
     // Open traces. Names match the tab labels the user sees. The tab bar brings a
     // selected trace forward when it next draws, so ActiveTab() names the old one
-    // until then; SelectTab reports the tab it picked instead.
+    // until then; SelectTab reports the tab it picked instead. Asking for the
+    // label already in front moves to the next tab that shares it, and the
+    // reported label then carries the tab id so the two can be told apart.
     std::vector<std::string> ListTabs() const;
     std::string              ActiveTab() const;
     bool                     SelectTab(const std::string& name, std::string& selected_id,
@@ -103,9 +105,6 @@ public:
     // selected event or chain through the sequence.
     bool SetFlowArrowsVisible(bool visible);
     bool SetFlowRenderChained(bool chained);
-
-    // Zoom the visible window, rather than only selecting a range.
-    bool ZoomToRange(double start_ns, double end_ns);
 
     // --- Leaving something behind ------------------------------------------
 

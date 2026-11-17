@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
@@ -93,13 +94,15 @@ StripPanelFiller(const std::string& key)
 OptiqPanel
 PanelFromKey(const std::string& key)
 {
-    if(key == "minimap" || key == "map" || key == "overview" ||
-       key == "birdseye" || key == "thumbnail")
+    if(key == "minimap" || key == "map" || key == "birdseye" || key == "thumbnail")
     {
         return OptiqPanel::kMinimap;
     }
-    if(key == "histogram" || key == "activity" || key == "activitybar" ||
-       key == "activitygraph" || key == "activitychart" || key == "density")
+    // The View menu calls this strip "Timeline Overview", so "overview" means
+    // the histogram and not the minimap.
+    if(key == "histogram" || key == "overview" || key == "timelineoverview" ||
+       key == "activity" || key == "activitybar" || key == "activitygraph" ||
+       key == "activitychart" || key == "density")
     {
         return OptiqPanel::kHistogram;
     }
@@ -197,7 +200,7 @@ OptiqActions::PanelName(OptiqPanel panel)
 std::string
 OptiqActions::PanelNameList()
 {
-    return "minimap (map, overview), histogram (activity), topology (sidebar, "
+    return "minimap (map), histogram (timeline overview, activity), topology (sidebar, "
            "navbar, tree, tracks, left panel), details (analysis, tables, event "
            "table, bottom), summary (stats), log (console, output), toolbar (top "
            "bar), annotations (notes, sticky notes). Whatever the user called it "
@@ -248,6 +251,12 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
         }
         case OptiqPanel::kSummary:
         {
+            // Compare projects have no summary, so opening it there would
+            // report a panel that cannot appear.
+            if(visible && m_trace_view != nullptr && !m_trace_view->SummarySupported())
+            {
+                return false;
+            }
             app_settings.show_summary = visible;
             return true;
         }
@@ -334,8 +343,42 @@ OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
     {
         return false;
     }
+
+    // File names repeat across run directories, and the container returns the
+    // first tab carrying a label. Asking for the name already in front can
+    // only mean the next tab that shares it.
+    const std::vector<const TabItem*> tabs  = container->GetTabs();
+    const std::string                 label = Core::String::to_lower_copy(match->m_label);
+    if(match == container->GetActiveTab())
+    {
+        size_t at = 0;
+        while(at < tabs.size() && tabs[at] != match)
+        {
+            ++at;
+        }
+        for(size_t step = 1; step < tabs.size(); ++step)
+        {
+            const TabItem* other = tabs[(at + step) % tabs.size()];
+            if(other->m_enabled && Core::String::to_lower_copy(other->m_label) == label)
+            {
+                match = other;
+                break;
+            }
+        }
+    }
+
     selected_id    = match->m_id;
     selected_label = match->m_label;
+    // A shared label alone would not say which of the tabs came forward. The
+    // id is the trace path, which does.
+    for(const TabItem* tab : tabs)
+    {
+        if(tab != match && Core::String::to_lower_copy(tab->m_label) == label)
+        {
+            selected_label += " (" + match->m_id + ")";
+            break;
+        }
+    }
     container->SetActiveTab(match->m_id);
     return true;
 }
@@ -468,17 +511,6 @@ OptiqActions::ClearMeasurement()
         return false;
     }
     m_trace_view->ClearMeasurement();
-    return true;
-}
-
-bool
-OptiqActions::ZoomToRange(double start_ns, double end_ns)
-{
-    if(m_trace_view == nullptr || !is_usable_time_range(start_ns, end_ns))
-    {
-        return false;
-    }
-    m_trace_view->ZoomToRange(start_ns, end_ns);
     return true;
 }
 

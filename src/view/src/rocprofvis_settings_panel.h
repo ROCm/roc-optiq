@@ -89,6 +89,10 @@ private:
     std::vector<std::string> m_assistant_orphaned_providers;
     bool                     m_assistant_show_token  = false;
     bool                     m_assistant_clear_token = false;
+    // Credential-store answers for the open dialog; -1 = not asked yet.
+    // Asking is a blocking OS call, so it is not done per frame.
+    int m_assistant_token_stored    = -1;
+    int m_assistant_store_available = -1;
 #endif
 };
 

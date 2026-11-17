@@ -640,7 +640,7 @@ PanelCardBackground(PanelCardTone tone)
 }
 }  // namespace
 
-void
+bool
 BeginPanelCard(const char* id, PanelCardTone tone, ImVec2 padding, bool bordered,
                SettingsManager* settings)
 {
@@ -662,8 +662,9 @@ BeginPanelCard(const char* id, PanelCardTone tone, ImVec2 padding, bool bordered
     {
         child_flags |= ImGuiChildFlags_Borders;
     }
-    ImGui::BeginChild(id, ImVec2(0.0f, 0.0f), child_flags,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    return ImGui::BeginChild(id, ImVec2(0.0f, 0.0f), child_flags,
+                             ImGuiWindowFlags_NoScrollbar |
+                                 ImGuiWindowFlags_NoScrollWithMouse);
 }
 
 void

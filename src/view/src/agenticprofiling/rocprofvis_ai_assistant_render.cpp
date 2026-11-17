@@ -14,6 +14,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "imgui.h"
@@ -529,12 +530,16 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
 
     if(line.speaker == Speaker::kChart)
     {
-        BeginPanelCard("##chart_card", PanelCardTone::kPanel, ASSISTANT_CARD_PADDING,
-                       true, &settings);
-        PanelIcon(ICON_CHART_BAR, Colors::kAccent, &settings);
-        ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        PanelFieldLabel("Timeline overview", false, &settings);
-        RenderActivityChart(line.track_id);
+        // The chart is rebuilt from the whole minimap each frame, so a card
+        // scrolled out of view skips it.
+        if(BeginPanelCard("##chart_card", PanelCardTone::kPanel, ASSISTANT_CARD_PADDING,
+                          true, &settings))
+        {
+            PanelIcon(ICON_CHART_BAR, Colors::kAccent, &settings);
+            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            PanelFieldLabel("Timeline overview", false, &settings);
+            RenderActivityChart(line.track_id);
+        }
         EndPanelCard();
         ImGui::PopID();
         return;
@@ -621,9 +626,10 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
     const ImVec2 message_spacing = ImGui::GetStyle().ItemSpacing;
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(message_spacing.x, 0.0f));
-    ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                          ImGuiWindowFlags_NoScrollWithMouse);
+    const bool text_visible = ImGui::BeginChild(
+        "##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse);
     // Scoped to the text so the copy menu below keeps the theme's text color.
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     for(const std::string& line : m_message_lines[index])
@@ -651,11 +657,20 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
             }
         }
     }
-    select->update();
+    // update() word-wraps the whole message, so a clipped one skips it. Mouse
+    // frames still run, so a drag that ends off screen releases its state.
+    const bool update_select = text_visible || select->hasSelection() ||
+                               ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+                               ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    if(update_select)
+    {
+        select->update();
+    }
     // update() copies on Ctrl+C but does not report it. The same chord in the
     // same window fires on the same press.
-    bool copied_selection =
-        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && select->hasSelection();
+    bool copied_selection = update_select &&
+                            ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) &&
+                            select->hasSelection();
 
     PushContextMenuStyles();
     if(ImGui::BeginPopupContextWindow("##message_copy"))
@@ -761,8 +776,11 @@ AssistantPanel::RenderSuggestedActions()
 
     if(clicked >= 0)
     {
-        m_input = m_next_steps[static_cast<size_t>(clicked)];
+        // Send the step without losing a question the user was still typing.
+        std::string draft = std::move(m_input);
+        m_input           = m_next_steps[static_cast<size_t>(clicked)];
         SendCurrentInput(false);
+        m_input = std::move(draft);
     }
 
     ImGui::Spacing();
@@ -907,7 +925,8 @@ AssistantPanel::RenderComposer()
                             Busy() ? "Working..." : "Ask about this trace...", m_input,
                             input_flags);
     const bool submitted = ImGui::IsItemFocused() &&
-                           ImGui::IsKeyPressed(ImGuiKey_Enter) &&
+                           (ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) &&
                            !ImGui::GetIO().KeyShift && !Busy();
 
     ImGui::SameLine(0.0f, gap);

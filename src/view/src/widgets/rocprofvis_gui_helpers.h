@@ -176,7 +176,9 @@ enum class PanelCardTone
 // Begins a rounded, padded, optionally-bordered child that groups related
 // controls - the building block of the remote/profiler dialog design language.
 // Pass a stable id. Always pair with EndPanelCard.
-void
+// Returns false when the card is clipped, so a caller may skip content that is
+// expensive to build. EndPanelCard is still required either way.
+bool
 BeginPanelCard(const char* id, PanelCardTone tone = PanelCardTone::kPanel,
                ImVec2 padding = ImVec2(14.0f, 8.0f), bool bordered = true,
                SettingsManager* settings = nullptr);

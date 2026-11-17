@@ -19,8 +19,12 @@
 #include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
+#include <algorithm>
+#include <cctype>
+#include <chrono>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -33,10 +37,16 @@ namespace
 {
 
 constexpr int  ASSISTANT_CONNECT_TIMEOUT_SECONDS   = 15;
-constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 120;
+// The reply is not streamed, so no byte arrives until the whole completion,
+// reasoning included, is done. The read timeout has to cover all of that.
+constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 300;
 constexpr int  ASSISTANT_FIRST_REDIRECT_STATUS     = 300;
 constexpr int  ASSISTANT_FIRST_ERROR_STATUS        = 400;
 constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
+constexpr int  ASSISTANT_HTTP_TOO_MANY_REQUESTS    = 429;
+constexpr int  ASSISTANT_HTTP_BAD_GATEWAY          = 502;
+constexpr int  ASSISTANT_HTTP_SERVICE_UNAVAILABLE  = 503;
+constexpr int  ASSISTANT_HTTP_GATEWAY_TIMEOUT      = 504;
 constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
 constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 
@@ -44,6 +54,19 @@ constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 // actually needs, and a ceiling on how much work a single malformed or hostile
 // response can start. The inline "harmony" path below has its own, smaller cap.
 constexpr size_t ASSISTANT_MAX_TOOL_CALLS_PER_ROUND = 16;
+
+// A throttle, a gateway hiccup or a dropped connection usually clears within
+// seconds, and failing the turn over one throws away every tool round before
+// it. So a request gets one more try, after a short wait the endpoint can
+// lengthen with Retry-After, up to the cap.
+constexpr int ASSISTANT_HTTP_ATTEMPTS           = 2;
+constexpr int ASSISTANT_RETRY_WAIT_SECONDS      = 2;
+constexpr int ASSISTANT_RETRY_WAIT_MAX_SECONDS  = 10;
+constexpr int ASSISTANT_RETRY_POLL_MILLISECONDS = 100;
+// A connection that failed later than this had most likely timed out, or the
+// endpoint was already working on the completion. Trying again would double a
+// long wait, and possibly the bill.
+constexpr int ASSISTANT_RETRY_FAST_FAILURE_SECONDS = 10;
 
 // Stock OpenAI: the key is a bearer token and the model is named in the body.
 constexpr char ASSISTANT_OPENAI_AUTH_HEADER[] = "Authorization";
@@ -91,13 +114,23 @@ enum class EndpointFlavour
 };
 
 // Azure-style bases name the deployment in the path, which is what the /azure,
-// /engines/ and /openai/deployments segments below identify.
+// /engines/ and /openai/deployments segments below identify. Only the path is
+// searched: a host such as azure-llm.example or a query value is not a marker.
 EndpointFlavour
 FlavourFromUrl(const std::string& url)
 {
-    const bool azure = url.find("/azure") != std::string::npos ||
-                       url.find("/engines/") != std::string::npos ||
-                       url.find("/openai/deployments") != std::string::npos;
+    const std::string base       = url.substr(0, url.find_first_of("?#"));
+    const size_t      scheme     = base.find("://");
+    const size_t      path_start =
+        base.find('/', scheme == std::string::npos ? 0 : scheme + 3);
+    if(path_start == std::string::npos)
+    {
+        return EndpointFlavour::kOpenAi;
+    }
+    const std::string path  = base.substr(path_start);
+    const bool        azure = path.find("/azure") != std::string::npos ||
+                              path.find("/engines/") != std::string::npos ||
+                              path.find("/openai/deployments") != std::string::npos;
     return azure ? EndpointFlavour::kAzure : EndpointFlavour::kOpenAi;
 }
 
@@ -278,12 +311,16 @@ HostFromOrigin(const std::string& origin)
 
 // True when the request never leaves this machine, which is what makes a plain
 // http endpoint - a local Ollama or llama.cpp server - safe to send a key to.
+// Only a literal 127.x.y.z address counts. A name that merely starts with
+// "127." resolves wherever its DNS says, and digits and dots alone can never
+// be such a name.
 bool
 OriginIsLoopback(const std::string& origin)
 {
     const std::string host = Core::String::to_lower_copy(HostFromOrigin(origin));
     return host == "localhost" || host == "::1" ||
-           host.compare(0, 4, "127.") == 0;
+           (host.compare(0, 4, "127.") == 0 &&
+            host.find_first_not_of("0123456789.") == std::string::npos);
 }
 
 // Whether the API key may be sent to this origin. TLS always qualifies; plain
@@ -409,6 +446,20 @@ ParseHarmonyToolCalls(const std::string& content, std::vector<AssistantToolCall>
             return;
         }
 
+        // "to=" inside a longer word, flag or URL query ("--to=json", "goto=x",
+        // "?to=abc") is the model's prose. A real harmony call follows a space
+        // or a "<|...|>" token.
+        if(marker_pos > 0)
+        {
+            const char before = content[marker_pos - 1];
+            if(std::isalnum(static_cast<unsigned char>(before)) != 0 ||
+               before == '_' || before == '-' || before == '?' || before == '&')
+            {
+                search = marker_pos + marker.size();
+                continue;
+            }
+        }
+
         size_t start = marker_pos + marker.size();
         if(content.compare(start, functions_prefix.size(), functions_prefix) == 0)
         {
@@ -501,9 +552,18 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
         call.arguments = "{}";
         if(function.contains("arguments"))
         {
+            // A null stands for "no arguments" and keeps the empty object.
+            // Any other type goes through as it is, so the tool can tell the
+            // model what was wrong with it.
             jt::Json& arguments = function["arguments"];
-            call.arguments =
-                arguments.isString() ? arguments.getString() : arguments.toString();
+            if(arguments.isString())
+            {
+                call.arguments = arguments.getString();
+            }
+            else if(!arguments.isNull())
+            {
+                call.arguments = arguments.toString();
+            }
         }
         calls.push_back(call);
     }
@@ -513,7 +573,8 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
 std::string
 ErrorText(jt::Json& root)
 {
-    if(root.contains("error"))
+    // Some gateways send "error": null beside a perfectly good reply.
+    if(root.contains("error") && !root["error"].isNull())
     {
         jt::Json& error = root["error"];
         if(error.isString())
@@ -677,6 +738,43 @@ ResponseError(int status, const std::string& body)
     return "The endpoint did not return JSON. Check the URL.";
 }
 
+// True for the statuses that mean "not now" rather than "no": a throttle, or a
+// gateway that could not reach the model. Everything else would fail the same
+// way a second time.
+bool
+StatusIsTransient(int status)
+{
+    return status == ASSISTANT_HTTP_TOO_MANY_REQUESTS ||
+           status == ASSISTANT_HTTP_BAD_GATEWAY ||
+           status == ASSISTANT_HTTP_SERVICE_UNAVAILABLE ||
+           status == ASSISTANT_HTTP_GATEWAY_TIMEOUT;
+}
+
+// How long to wait before the retry: what Retry-After asks for when it is a
+// number of seconds, up to the cap, and the default otherwise. The header may
+// also be an HTTP date or garbage, so the digits are read by hand rather than
+// with a conversion that throws.
+int
+RetryWaitSeconds(const std::string& retry_after)
+{
+    int seconds = 0;
+    for(size_t i = 0; i < retry_after.size(); ++i)
+    {
+        // Stopping at the cap also keeps a long run of digits from overflowing.
+        if(std::isdigit(static_cast<unsigned char>(retry_after[i])) == 0 ||
+           seconds >= ASSISTANT_RETRY_WAIT_MAX_SECONDS)
+        {
+            break;
+        }
+        seconds = seconds * 10 + (retry_after[i] - '0');
+    }
+    if(seconds <= 0)
+    {
+        return ASSISTANT_RETRY_WAIT_SECONDS;
+    }
+    return std::min(seconds, ASSISTANT_RETRY_WAIT_MAX_SECONDS);
+}
+
 // The URL with any query string elided. A user who pastes a key into the URL
 // would otherwise see it copied into the log and into error text.
 std::string
@@ -766,6 +864,16 @@ InterpretResponse(const httplib::Response& response, const std::string& url,
     else
     {
         ParseChatCompletion(parsed.second, allow_tool_calls, result);
+        // An error status with a JSON body: lead with the status so a throttle,
+        // a bad key and a wrong URL do not read alike, then the provider's own
+        // words if it sent any.
+        if(!result.error.empty() && response.status >= ASSISTANT_FIRST_ERROR_STATUS)
+        {
+            const std::string detail = ErrorText(parsed.second);
+            result.error = "The endpoint returned HTTP " +
+                           std::to_string(response.status) +
+                           (detail.empty() ? std::string(".") : ": " + detail);
+        }
     }
 
     // A 404 is nearly always the URL being shaped wrong, so name what we asked
@@ -830,8 +938,63 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         result.cancelled = true;
         return result;
     }
-    const httplib::Result response =
-        client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+    // The client stays adopted across both attempts so Cancel() can stop
+    // either one.
+    httplib::Result response;
+    for(int attempt = 1;; ++attempt)
+    {
+        const std::chrono::steady_clock::time_point started =
+            std::chrono::steady_clock::now();
+        response =
+            client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+        if(attempt >= ASSISTANT_HTTP_ATTEMPTS || Cancelled())
+        {
+            break;
+        }
+
+        int wait_seconds = ASSISTANT_RETRY_WAIT_SECONDS;
+        if(response)
+        {
+            if(!StatusIsTransient(response->status))
+            {
+                break;
+            }
+            wait_seconds = RetryWaitSeconds(response->get_header_value("Retry-After"));
+        }
+        else
+        {
+            // Only a connection that broke straight away is worth another try.
+            // A timeout, a refused connection, a DNS or a TLS failure would
+            // fail the same way again, so those are reported at once.
+            const httplib::Error error = response.error();
+            const bool           reset = error == httplib::Error::Read ||
+                                         error == httplib::Error::Write ||
+                                         error == httplib::Error::ConnectionClosed ||
+                                         error == httplib::Error::Unknown;
+            const bool fast = std::chrono::steady_clock::now() - started <
+                              std::chrono::seconds(ASSISTANT_RETRY_FAST_FAILURE_SECONDS);
+            if(!reset || !fast)
+            {
+                break;
+            }
+        }
+
+        spdlog::warn("Assistant request to {} failed transiently, retrying in {} s",
+                     loggable, wait_seconds);
+        // Wait in short slices so Cancel() is noticed promptly; the panel
+        // blocks on this thread when it abandons a request.
+        const std::chrono::steady_clock::time_point wake =
+            std::chrono::steady_clock::now() + std::chrono::seconds(wait_seconds);
+        while(!Cancelled() && std::chrono::steady_clock::now() < wake)
+        {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(ASSISTANT_RETRY_POLL_MILLISECONDS));
+        }
+        if(Cancelled())
+        {
+            break;
+        }
+    }
     Release();
 
     if(!response)
@@ -846,6 +1009,14 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
             "HTTPS request failed (" + httplib::to_string(response.error()) + ").";
         spdlog::warn("Assistant request to {} failed: {}", loggable,
                      httplib::to_string(response.error()));
+        return result;
+    }
+
+    // A cancel that landed during the retry wait leaves the first, failed
+    // response in hand. The caller walked away, so it is not an error to show.
+    if(Cancelled())
+    {
+        result.cancelled = true;
         return result;
     }
 

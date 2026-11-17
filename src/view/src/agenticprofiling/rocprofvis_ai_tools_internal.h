@@ -100,8 +100,8 @@ AssistantToolStartResult DoneResult(const std::string& content,
 uint64_t JsonU64(const jt::Json& json, const std::string& key,
                  uint64_t default_value);
 
-// Narrows a JSON number to an id, rejecting anything a uint64_t cannot hold.
-uint64_t JsonU64FromDouble(double value, uint64_t default_value);
+// The same for a value already in hand, such as one entry of an id array.
+uint64_t JsonU64Value(const jt::Json& value, uint64_t default_value);
 
 // Caps a tool result at max_chars, appending truncation_note when it had to
 // cut. Keeps the head, which is where a well-behaved result puts its summary.

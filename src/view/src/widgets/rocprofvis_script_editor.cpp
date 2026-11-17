@@ -291,7 +291,7 @@ ScriptEditor::SubtitleText() const
     switch(m_approval)
     {
     case ScriptApproval::kPending: return "Written by Ask Optiq";
-    case ScriptApproval::kRejected: return "Declined - not run";
+    case ScriptApproval::kRejected: return "Declined or stopped";
     case ScriptApproval::kRunning:
     case ScriptApproval::kFinished: return "Ran from Ask Optiq";
     case ScriptApproval::kFailedToStart: return "Could not be started";
@@ -645,6 +645,14 @@ ScriptEditor::Run()
 void
 ScriptEditor::Cancel()
 {
+    // Stopping a run Ask Optiq is waiting on withdraws the approval. Answer
+    // the assistant now: it must not be told to fix a script the user chose
+    // to stop, and a cancel that finds nothing left to stop drops the
+    // completion event that would otherwise have answered it.
+    if(m_approval == ScriptApproval::kRunning)
+    {
+        m_approval = ScriptApproval::kRejected;
+    }
     if(!m_data_provider.CancelScript())
     {
         // Nothing left to cancel, so no completion event is coming and the

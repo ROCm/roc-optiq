@@ -77,6 +77,10 @@ struct AssistantChatResult
  * if the server is wedged. Cancel() closes the socket out from under it, so the
  * panel can walk away from a request - on quit, or when the user clears the
  * conversation - instead of waiting out the read timeout.
+ *
+ * A throttle (429), a gateway failure (502, 503, 504) or a connection that
+ * drops straight away is tried once more after a short wait, which Cancel()
+ * also cuts short.
  */
 class AssistantChatCall
 {

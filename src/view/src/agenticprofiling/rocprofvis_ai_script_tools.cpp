@@ -142,9 +142,9 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
     {
         // Their call, and not a failure. Said plainly so the model moves on
         // rather than offering the same script again.
-        return "The user read the script and chose not to run it. Do not offer "
-               "it again unless they ask. Answer with what you have, or read "
-               "the data with the other tools.";
+        return "The user chose not to run the script, or stopped it before it "
+               "finished. Do not offer it again unless they ask. Answer with "
+               "what you have, or read the data with the other tools.";
     }
     if(state == ScriptApproval::kFailedToStart)
     {

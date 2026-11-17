@@ -236,15 +236,6 @@ TraceView::ClearMeasurement()
     }
 }
 
-void
-TraceView::ZoomToRange(double start_ns, double end_ns)
-{
-    if(m_timeline_view && is_usable_time_range(start_ns, end_ns))
-    {
-        m_timeline_view->SetViewableRangeNS(start_ns, end_ns);
-    }
-}
-
 bool
 TraceView::AddNote(double time_ns, const std::string& title, const std::string& text,
                    double v_min, double v_max, uint64_t track_id)

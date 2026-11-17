@@ -19,6 +19,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_settings_panel.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 
 #include "spdlog/spdlog.h"
 
@@ -91,13 +92,23 @@ SettingsManager::HasAssistantToken(const std::string& provider_name) const
     return GetAssistantToken(provider_name, unused);
 }
 
-// Reads this endpoint's key from the credential store, or from this session's
-// memory when no store is available. Never falls through to another endpoint's
-// key: an endpoint with nothing saved has no key.
+// Reads this endpoint's key from this session's memory, then from the
+// credential store. A session copy exists only when there was no store to save
+// to or the write to it failed, so it is the newer key and wins over whatever
+// the store still holds. Never falls through to another endpoint's key: an
+// endpoint with nothing saved has no key.
 bool
 SettingsManager::GetAssistantToken(const std::string& provider_name,
                                    std::string&       out_token) const
 {
+    const std::map<std::string, std::string>::const_iterator session =
+        m_assistant_token_session.find(provider_name);
+    if(session != m_assistant_token_session.end() && !session->second.empty())
+    {
+        out_token = session->second;
+        return true;
+    }
+
     out_token.clear();
     if(SecretStore::IsAvailable() &&
        SecretStore::Get(AssistantTokenKey(provider_name), out_token) &&
@@ -107,17 +118,11 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
     }
 
     out_token.clear();
-    const std::map<std::string, std::string>::const_iterator session =
-        m_assistant_token_session.find(provider_name);
-    if(session != m_assistant_token_session.end() && !session->second.empty())
-    {
-        out_token = session->second;
-        return true;
-    }
     return false;
 }
 
-// Saves the key, or clears it when the token is empty.
+// Saves the key, or clears it when the token is empty. Returns false when the
+// credential store refused it; the key is then kept for this session only.
 bool
 SettingsManager::SetAssistantToken(const std::string& provider_name,
                                    const std::string& token)
@@ -129,10 +134,18 @@ SettingsManager::SetAssistantToken(const std::string& provider_name,
 
     if(SecretStore::IsAvailable())
     {
-        // The vault owns it now. A second copy in process memory would only
-        // widen the window where the key can be read back out.
-        m_assistant_token_session.erase(provider_name);
-        return SecretStore::Set(AssistantTokenKey(provider_name), token);
+        if(SecretStore::Set(AssistantTokenKey(provider_name), token))
+        {
+            // The vault owns it now. A second copy in process memory would only
+            // widen the window where the key can be read back out.
+            m_assistant_token_session.erase(provider_name);
+            return true;
+        }
+        // Keep the key for this session rather than dropping what was just typed.
+        spdlog::warn("Could not save the assistant key to the credential store; "
+                     "keeping it for this session only");
+        m_assistant_token_session[provider_name] = token;
+        return false;
     }
     m_assistant_token_session[provider_name] = token;
     return true;
@@ -214,13 +227,17 @@ SettingsPanel::RenderAssistantSettings()
     ImGui::TextUnformatted("API key");
     ImGui::Separator();
 
-    const bool token_stored =
-        m_settings.HasAssistantToken(provider.name) && !m_assistant_clear_token;
+    if(m_assistant_token_stored < 0)
+    {
+        m_assistant_token_stored = m_settings.HasAssistantToken(provider.name) ? 1 : 0;
+        m_assistant_store_available = SecretStore::IsAvailable() ? 1 : 0;
+    }
+    const bool token_stored = m_assistant_token_stored == 1 && !m_assistant_clear_token;
     if(token_stored && m_assistant_token_draft.empty())
     {
         ImGui::TextUnformatted("A key is stored. Leave the field blank to keep it.");
     }
-    else if(SecretStore::IsAvailable())
+    else if(m_assistant_store_available == 1)
     {
         ImGui::TextWrapped(
             "Saved to the OS credential store when you press OK, never to the "
@@ -288,9 +305,15 @@ SettingsPanel::ApplyAssistantTokenEdits()
     {
         m_settings.ClearAssistantToken(provider_name);
     }
-    else if(!m_assistant_token_draft.empty())
+    else if(!m_assistant_token_draft.empty() &&
+            !m_settings.SetAssistantToken(provider_name, m_assistant_token_draft))
     {
-        m_settings.SetAssistantToken(provider_name, m_assistant_token_draft);
+        // The dialog closes on OK, so this is the only place the user can learn
+        // the key was not saved.
+        NotificationManager::GetInstance().Show(
+            "Could not save the API key to the credential store. It will be kept "
+            "for this session only.",
+            NotificationLevel::Warning);
     }
     DiscardAssistantTokenEdits();
 }
@@ -300,7 +323,8 @@ SettingsPanel::DiscardAssistantTokenEdits()
 {
     m_assistant_token_draft.clear();
     m_assistant_orphaned_providers.clear();
-    m_assistant_clear_token = false;
+    m_assistant_clear_token  = false;
+    m_assistant_token_stored = -1;
 }
 
 // The endpoint being edited, which is the key its token is stored under.
@@ -335,7 +359,10 @@ SettingsPanel::ResetAssistantOptions()
     m_assistant_token_draft.clear();
     // The default endpoint has nothing configured now, so its key should go too.
     m_assistant_clear_token = true;
-    m_settings_changed      = true;
+    // The endpoint being edited may have a different name now, so ask the
+    // credential store again.
+    m_assistant_token_stored = -1;
+    m_settings_changed       = true;
 }
 
 }  // namespace View

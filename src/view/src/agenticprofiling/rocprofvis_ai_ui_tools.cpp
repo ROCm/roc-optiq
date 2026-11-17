@@ -8,6 +8,7 @@
 // not as wiring inside a tool here.
 #include "rocprofvis_ai_tools_internal.h"
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 #include <string>
@@ -405,7 +406,8 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     double end_ns =
         JsonUtils::GetDouble(args, "end_ns", JsonUtils::GetDouble(args, "end", -1.0));
     const uint64_t track_id =
-        JsonU64(args, "track_id", TimelineSelection::INVALID_SELECTION_ID);
+        JsonU64(args, "track_id",
+                JsonU64(args, "__trackId", TimelineSelection::INVALID_SELECTION_ID));
     const uint64_t event_uuid =
         JsonU64(args, "event_uuid",
                 JsonU64(args, "event_id", TimelineSelection::INVALID_SELECTION_ID));
@@ -447,7 +449,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
                                 TimelineSelection::INVALID_SELECTION_ID));
             if(entry_uuid != TimelineSelection::INVALID_SELECTION_ID)
             {
-                targets.emplace_back(JsonU64(entry, "track_id", track_id), entry_uuid);
+                targets.emplace_back(
+                    JsonU64(entry, "track_id", JsonU64(entry, "__trackId", track_id)),
+                    entry_uuid);
             }
         }
     }
@@ -482,6 +486,42 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     // without it a NaN bound would be accepted as a valid range.
     bool has_range = std::isfinite(start_ns) && std::isfinite(end_ns) &&
                      start_ns >= 0.0 && end_ns > start_ns;
+
+    // goto is the one writer of the selection the data tools default to, so a
+    // window outside the trace must not be stored: every later read would come
+    // back empty and read as "nothing happened here".
+    if(has_range)
+    {
+        const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+        const double         trace_start = timeline.GetStartTime();
+        const double         trace_end   = timeline.GetEndTime();
+        if(trace_end > trace_start)
+        {
+            if(end_ns <= trace_start || start_ns >= trace_end)
+            {
+                if(targets.empty())
+                {
+                    const TimeFormat fmt = SettingsManager::GetInstance()
+                                               .GetUserSettings()
+                                               .unit_settings.time_format;
+                    return DoneResult(
+                        "That range is outside this trace, which runs " +
+                            nanosecond_to_formatted_str(trace_start, fmt, true) +
+                            " .. " + nanosecond_to_formatted_str(trace_end, fmt, true) +
+                            ". Re-read the range from the data rather than reusing "
+                            "one from an earlier trace or turn.",
+                        "goto failed");
+                }
+                // The named events supply the window instead.
+                has_range = false;
+            }
+            else
+            {
+                start_ns = std::max(start_ns, trace_start);
+                end_ns   = std::min(end_ns, trace_end);
+            }
+        }
+    }
 
     // Naming the culprit event but no window is the obvious way to call this,
     // so derive the window from the events rather than refusing. Only works for
@@ -519,14 +559,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     }
 
     OptiqActions actions = Actions(context);
-    const bool   zoom    = JsonUtils::GetBool(args, "zoom", false);
     if(has_range)
     {
         actions.SelectRange(start_ns, end_ns);
-        if(zoom)
-        {
-            actions.ZoomToRange(start_ns, end_ns);
-        }
     }
 
     // The first event that takes becomes the focal point: it is clicked, which
@@ -589,10 +624,6 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         out << "Moved the timeline to "
             << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
             << nanosecond_to_formatted_str(end_ns, time_format, true);
-        if(zoom)
-        {
-            out << ", zoomed in";
-        }
     }
     else
     {

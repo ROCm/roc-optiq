@@ -73,6 +73,9 @@ DoneResult(const std::string& content, const std::string& status)
     return result;
 }
 
+namespace
+{
+
 /*
  * Narrows a JSON number to an id, refusing anything a double cannot hold
  * exactly.
@@ -88,7 +91,7 @@ DoneResult(const std::string& content, const std::string& status)
  *
  * Rejecting here turns that into a tool error the model can see and correct,
  * rather than a wrong answer nothing downstream can detect. Ids should arrive
- * as strings - see the string branch of JsonU64, which is exact - and the
+ * as strings - see the string branch of JsonU64Value, which is exact - and the
  * schema asks for them that way.
  */
 uint64_t
@@ -102,6 +105,8 @@ JsonU64FromDouble(double value, uint64_t default_value)
     return static_cast<uint64_t>(value);
 }
 
+}  // namespace
+
 // Reads an unsigned id from JSON, however the model chose to encode it.
 uint64_t
 JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
@@ -111,7 +116,15 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
     {
         return default_value;
     }
-    jt::Json& value = mutable_json[key];
+    return JsonU64Value(mutable_json[key], default_value);
+}
+
+// Reads an unsigned id from one JSON value. Split from JsonU64 so the entries
+// of an id array are read by the same rules as a named id.
+uint64_t
+JsonU64Value(const jt::Json& json_value, uint64_t default_value)
+{
+    jt::Json& value = const_cast<jt::Json&>(json_value);
     if(value.isLong())
     {
         const long long raw = value.getLong();

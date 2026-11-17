@@ -109,6 +109,15 @@ struct AssistantFetchState
     // the scope asked for.
     std::string summary_level;
     uint64_t    summary_id = INVALID_UINT64_INDEX;
+    // kernel_triage: name the standard tables that came back empty.
+    bool        compute_triage = false;
+    // The sort a table read asked for: the model's sort_by, which may be empty,
+    // the column the tool sorts by when it is, and the index that was sent. The
+    // index is picked before this read's header exists, so
+    // AssistantFetchNeedsRerun checks it against the header that lands.
+    std::string sort_by;
+    std::string sort_default;
+    uint64_t    sort_column = 0;
 };
 
 // What one tool call produced: either finished content, or a set of requests
@@ -168,6 +177,20 @@ AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,
 // so the panel asks here rather than polling the data provider. Always false
 // when scripting is not built in.
 bool AssistantScriptFetchPending(const AssistantToolContext& context);
+
+// Whether a table read that has landed was sorted by the wrong column, because
+// the index it sent was resolved against the header an earlier read left in
+// the slot. The panel runs the tool again when it was; the second run resolves
+// against the header that just landed, so this cannot ask twice. Always false
+// for a fetch that is not a table read, and for one that failed.
+bool AssistantFetchNeedsRerun(const AssistantToolContext& context,
+                              const AssistantFetchState&  fetch);
+
+// Whether the statistics a track_statistics call asked for were thrown away
+// before they landed. The track pills share the slot, so a change of selection
+// or view during the wait invalidates it and the result is dropped.
+bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
+                                     uint64_t                    track_id);
 
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,

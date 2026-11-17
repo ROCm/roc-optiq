@@ -87,6 +87,9 @@ private:
         AssistantFetchState   fetch;
         std::string           tool_name;
         std::string           prefix;
+        // What the status row says while parked: the tool's own wording when it
+        // gave one, so the slow-wait counter does not replace it.
+        std::string           status;
         std::chrono::steady_clock::time_point started;
         // Zero takes the default fetch deadline. A tool waiting on the user
         // rather than on a query sets its own, much longer.
@@ -119,6 +122,8 @@ private:
     void        ExportTranscript();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
+    // Stops the Script tab waiting on Run or Reject for a turn that is over.
+    void WithdrawScriptOffer();
     void CancelPendingRequest();
     void StartHttpRequest();
     void PollToolFetch();

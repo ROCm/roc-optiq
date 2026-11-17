@@ -625,68 +625,85 @@ TrackCapNote(size_t used, size_t total)
            " - pass track_ids to read the others\n";
 }
 
+// Whether a track can answer a read of one operation.
+bool
+TrackCarriesOperation(const TrackInfo* track, rocprofvis_dm_event_operation_t op)
+{
+    return track != nullptr && track->operation_types.count(op) > 0 &&
+           track->track_type == kRPVControllerTrackTypeEvents;
+}
+
+// The tracks: line for a read that took the timeline selection. A selection
+// that already holds every track with the operation narrows nothing, so only
+// the cap can earn a line then.
+std::string
+SelectedTracksNote(size_t used, size_t selected, size_t total)
+{
+    if(selected >= total)
+    {
+        return TrackCapNote(used, total);
+    }
+    const std::string count = used < selected ? "the first " + std::to_string(used) +
+                                                    " of the " + std::to_string(selected) +
+                                                    " selected"
+                                              : "the " + std::to_string(used) + " selected";
+    return "tracks: " + count + ", of " + std::to_string(total) +
+           " in all - pass track_ids to read the others\n";
+}
+
 // Prefers the selected tracks that carry an operation, else every such track.
-// note_out is set when that is narrower than every track with the operation.
+// note_out is set when that leaves some of them out.
 std::vector<uint64_t>
 TracksForOperation(const AssistantToolContext&     context,
                    rocprofvis_dm_event_operation_t op, std::string& note_out)
 {
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+
+    // Counted past the cap, so the note can say how many tracks were left out.
+    size_t                selected_count = 0;
+    std::vector<uint64_t> matching;
+    matching.reserve(ASSISTANT_MAX_TRACKS);
     std::vector<uint64_t> selected;
     if(context.timeline_selection != nullptr)
     {
         context.timeline_selection->GetSelectedTracks(selected);
     }
-
-    std::vector<uint64_t> matching;
-    matching.reserve(ASSISTANT_MAX_TRACKS);
     for(uint64_t track_id : selected)
     {
-        const TrackInfo* track =
-            context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
-        if(track != nullptr && track->operation_types.count(op) > 0 &&
-           track->track_type == kRPVControllerTrackTypeEvents)
+        if(!TrackCarriesOperation(timeline.GetTrack(track_id), op))
+        {
+            continue;
+        }
+        ++selected_count;
+        if(matching.size() < ASSISTANT_MAX_TRACKS)
         {
             matching.push_back(track_id);
-            if(matching.size() >= ASSISTANT_MAX_TRACKS)
-            {
-                break;
-            }
         }
-    }
-    if(!matching.empty())
-    {
-        note_out = "tracks: the selected tracks only (" +
-                   std::to_string(matching.size()) +
-                   ") - pass track_ids to read others\n";
-        return matching;
     }
 
-    // Count past the cap, so the note can say how many tracks were left out.
-    size_t                              total = 0;
-    const std::vector<const TrackInfo*> tracks =
-        context.data_provider->DataModel().GetTimeline().GetTrackList();
-    for(const TrackInfo* track : tracks)
+    size_t                total = 0;
+    std::vector<uint64_t> every;
+    every.reserve(ASSISTANT_MAX_TRACKS);
+    for(const TrackInfo* track : timeline.GetTrackList())
     {
-        if(track == nullptr)
-        {
-            continue;
-        }
-        if(track->operation_types.count(op) == 0)
-        {
-            continue;
-        }
-        if(track->track_type != kRPVControllerTrackTypeEvents)
+        if(!TrackCarriesOperation(track, op))
         {
             continue;
         }
         ++total;
-        if(matching.size() < ASSISTANT_MAX_TRACKS)
+        if(every.size() < ASSISTANT_MAX_TRACKS)
         {
-            matching.push_back(track->id);
+            every.push_back(track->id);
         }
     }
-    note_out = TrackCapNote(matching.size(), total);
-    return matching;
+
+    if(!matching.empty())
+    {
+        note_out = SelectedTracksNote(matching.size(), selected_count, total);
+        return matching;
+    }
+    note_out = TrackCapNote(every.size(), total);
+    return every;
 }
 
 // Lists the tracks of one kind, for a tool the model called without track ids.
@@ -1586,17 +1603,18 @@ RecordSort(const TablesModel& tables, AssistantFetchState& fetch, const jt::Json
 //
 // serialized_type is for the track tables, which FetchTrackTable also refuses
 // while the UI is loading a table of the same controller type under its own
-// request id. That is busy, not failed, so it waits and runs again too.
+// request id. That is busy, not failed, so it waits for that table and runs
+// again too.
 AssistantToolStartResult
 FetchStartedResult(const AssistantToolContext& context, uint64_t request_id,
                    const AssistantFetchState& fetch, const std::string& tool_name,
                    bool queued,
                    const rocprofvis_controller_table_type_t* serialized_type = nullptr)
 {
-    const bool busy = context.data_provider->IsRequestPending(request_id) ||
-                      (serialized_type != nullptr &&
-                       context.data_provider->IsTableRequestPending(*serialized_type));
-    if(!queued && !busy)
+    const bool own_busy  = context.data_provider->IsRequestPending(request_id);
+    const bool type_busy = serialized_type != nullptr &&
+                           context.data_provider->IsTableRequestPending(*serialized_type);
+    if(!queued && !own_busy && !type_busy)
     {
         return DoneResult("Could not queue the " + tool_name + " fetch.", "Fetch failed");
     }
@@ -1608,7 +1626,13 @@ FetchStartedResult(const AssistantToolContext& context, uint64_t request_id,
         context.data_provider->DataModel().GetTables().SetTableParams(fetch.table_type,
                                                                       nullptr);
     }
-    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), queued);
+    AssistantFetchState parked = fetch;
+    if(!queued && !own_busy)
+    {
+        parked.waits_for_ui_table = true;
+        parked.ui_table_type      = *serialized_type;
+    }
+    return PendingResult(request_id, parked, AssistantToolStatusLabel(tool_name), queued);
 }
 
 // Leads a parked read's result with what it covered. Left off a result that

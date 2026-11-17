@@ -70,6 +70,11 @@ constexpr size_t   ASSISTANT_COMPACT_SMALL_CHARS = 4000;
 // Opens the briefing inside a user message. Shared by the code that writes it
 // and the code that looks for one still in the history.
 constexpr const char* ASSISTANT_BRIEFING_HEADER = "Briefing for the current Optiq view:\n";
+// Asks for the write-up on the tools-off round. A user message in form only:
+// ResetTurn takes it back out, and a briefing never goes on it.
+constexpr const char* ASSISTANT_WRITE_UP_NUDGE =
+    "Do not call any more tools. Write your answer now, reading the numbers you "
+    "already gathered and saying what they mean for this workload.";
 // Shown under an answer the endpoint stopped at its output cap.
 constexpr const char* ASSISTANT_TRUNCATED_NOTE =
     "The answer was cut off at the model's output limit. Ask it to continue, or "
@@ -116,6 +121,17 @@ WipeString(std::string& text)
     text.clear();
 }
 
+// Whether any question still in the conversation opens with the briefing.
+bool
+HasBriefing(const std::vector<AssistantMessage>& conversation)
+{
+    return std::any_of(conversation.begin(), conversation.end(),
+                       [](const AssistantMessage& message) {
+                           return message.role == "user" &&
+                                  message.content.rfind(ASSISTANT_BRIEFING_HEADER, 0) == 0;
+                       });
+}
+
 }  // namespace
 
 AssistantPanel* AssistantPanel::s_instance = nullptr;
@@ -156,6 +172,12 @@ AssistantPanel::AssistantPanel()
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
+    // The cancelled workers log as they unwind, so they finish before the app
+    // tears down what they log through.
+    for(std::future<void>& abandoned : m_abandoned)
+    {
+        abandoned.wait();
+    }
     WipeString(m_turn_token);
 }
 
@@ -370,8 +392,9 @@ AssistantPanel::ResetTurn()
     ResetAssistantPcRead();
     ResetAssistantScriptOffers();
     // The turn's copy of the endpoint and key ends with the turn, so the next
-    // one reads the settings afresh. CancelPendingRequest above has already
-    // waited the worker out, so nothing is still reading these.
+    // one reads the settings afresh. A cancelled request may still be unwinding
+    // on its own thread, but it reads the copy in its request, which it wipes
+    // itself, never these.
     m_turn_endpoint_url.clear();
     m_turn_model.clear();
     WipeString(m_turn_token);
@@ -392,21 +415,48 @@ AssistantPanel::ResetTurn()
     m_queued_question.clear();
 }
 
-// Abandons the reply we are waiting on. Cancel() closes the socket, so this
-// returns immediately instead of blocking out the endpoint's read timeout.
+// Abandons the reply we are waiting on without waiting for it. Cancel() closes
+// the socket, but first it has to wait out a connect already in progress, up to
+// the connect timeout, and then the worker has to unwind. So both happen on a
+// thread of their own and the UI keeps drawing; Update() lets go of that thread
+// once it is done.
 void
 AssistantPanel::CancelPendingRequest()
 {
-    if(m_call != nullptr)
-    {
-        m_call->Cancel();
-    }
     if(m_pending.valid())
     {
-        m_pending.wait();
-        m_pending = std::future<AssistantChatResult>();
+        m_abandoned.push_back(std::async(
+            std::launch::async, [call = m_call, pending = std::move(m_pending)]() {
+                if(call != nullptr)
+                {
+                    call->Cancel();
+                }
+                pending.wait();
+            }));
     }
     m_call.reset();
+}
+
+// The trim drops whole earlier exchanges, and the one it drops can be the one
+// whose question carried the briefing. The request about to go out would then
+// have none at all, so the live question takes a fresh one.
+void
+AssistantPanel::RestoreTrimmedBriefing()
+{
+    if(HasBriefing(m_conversation))
+    {
+        return;
+    }
+    for(auto it = m_conversation.rbegin(); it != m_conversation.rend(); ++it)
+    {
+        if(it->role == "user" && it->content != ASSISTANT_WRITE_UP_NUDGE)
+        {
+            it->content = std::string(ASSISTANT_BRIEFING_HEADER) +
+                          BuildAssistantBriefing(MakeToolContext()) + "\n" + it->content;
+            m_briefed_project_id = CurrentProjectId();
+            break;
+        }
+    }
 }
 
 void
@@ -432,6 +482,7 @@ AssistantPanel::StartHttpRequest()
     request.compute_tools = m_turn_is_compute;
 
     TrimConversation();
+    RestoreTrimmedBriefing();
 
     AssistantMessage system_message;
     system_message.role    = "system";
@@ -582,13 +633,7 @@ bool
 AssistantPanel::NeedsBriefing()
 {
     const std::string project_id = CurrentProjectId();
-    const bool        briefed =
-        std::any_of(m_conversation.begin(), m_conversation.end(),
-                    [](const AssistantMessage& message) {
-                        return message.role == "user" &&
-                               message.content.rfind(ASSISTANT_BRIEFING_HEADER, 0) == 0;
-                    });
-    if(briefed && project_id == m_briefed_project_id)
+    if(HasBriefing(m_conversation) && project_id == m_briefed_project_id)
     {
         return false;
     }
@@ -818,9 +863,7 @@ AssistantPanel::BeginFinalAnswer()
 {
     AssistantMessage nudge;
     nudge.role    = "user";
-    nudge.content =
-        "Do not call any more tools. Write your answer now, reading the numbers you "
-        "already gathered and saying what they mean for this workload.";
+    nudge.content = ASSISTANT_WRITE_UP_NUDGE;
     m_conversation.push_back(nudge);
     m_force_final = true;
     SetStatus("Working out what it means...");
@@ -1040,6 +1083,14 @@ AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
     {
         return CurrentProjectId() != m_fetch_wait.fetch.project_id;
     }
+    // Refused because the UI was loading a table of the same controller type.
+    // That table is what has to finish: this tool's own request id is idle, and
+    // polling it would re-run the tool every frame.
+    if(m_fetch_wait.fetch.waits_for_ui_table &&
+       context.data_provider->IsTableRequestPending(m_fetch_wait.fetch.ui_table_type))
+    {
+        return true;
+    }
     for(uint64_t request_id : m_fetch_wait.request_ids)
     {
         if(context.data_provider->IsRequestPending(request_id))
@@ -1213,6 +1264,14 @@ AssistantPanel::PollToolFetch()
 void
 AssistantPanel::Update()
 {
+    // Cancelled requests unwind on their own threads. Let go of those that have.
+    m_abandoned.erase(std::remove_if(m_abandoned.begin(), m_abandoned.end(),
+                                     [](const std::future<void>& abandoned) {
+                                         return abandoned.wait_for(std::chrono::seconds(0)) ==
+                                                std::future_status::ready;
+                                     }),
+                      m_abandoned.end());
+
     if(m_pending.valid())
     {
         RenderScheduler::GetInstance().RequestRender();

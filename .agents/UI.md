@@ -1514,7 +1514,8 @@ layout with a missing, numeric, or duplicate block id, or an arrow whose
 `from`/`to` names no block; the caller then falls back to the next layout
 source instead of drawing disconnected arrows.
 - `MemChartMetricRef` - references a metric by its full dotted id
-  `category.table.entry` (e.g. "3.1.0").
+  `category.table.entry` (e.g. "3.1.0"), read from a content item's or
+  arrow's `metric_id` key.
 - `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
   No ImGui is pulled into the model file.
 
@@ -1523,7 +1524,7 @@ table (block rows + arrow rows keyed by block id). `LoadWorkloadLayout()`
 resolves a layout in priority order: a temporary dev override at
 `<config-dir>/memory_chart.json` (forced template, metric ids remapped; remove
 once template selection is stable) -> the per-workload JSON blob in
-`compute_workload.memory_chart_extdata` (dotted metric ids, used as authored)
+`compute_workload.memory_chart_layout_extdata` (dotted metric ids, used as authored)
 -> an **architecture-specific embedded layout** (picked from the workload's
 `gpu_arch`: an exact key such as gfx950, else a family file whose trailing
 `x` is a wildcard, e.g. `gfx115x` for gfx1151; metric ids are remapped by
@@ -2967,8 +2968,11 @@ env, or nowhere - do not assume `--output`. Caller then merges
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
-`ParseTraceOutputPath` (scrape the trace path from stdout). Supporting
-structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
+`ProducesTrace` (whether this config writes an openable trace, judged
+from the backend's own settings; gates the auto-open checkbox and the
+request). The trace path is not parsed here: the controller scrapes it,
+and the launcher reads `rocprofvis_profiler_get_trace_path`. Supporting structs:
+`ToolOption`, `TabDescriptor`, `WarningMessage`.
 
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
@@ -3165,9 +3169,8 @@ ProfilerLauncherDialog.OnLaunchClicked
   -> ProfilerSession::Launch -> rocprofvis_profiler_launch_async
   -> AppMonitor op (ProfilerSession) -> ProfilerStatusEvent
   -> orchestrator OnProfilerStateChanged: on Completed,
-     ResolveLocalTracePath() (LaunchRequest.parse_trace ==
-     IProfilerBackend::ParseTraceOutputPath) -> AppWindow::OpenFile
-     when auto_load_trace
+     ResolveLocalTracePath() (rocprofvis_profiler_get_trace_path)
+     -> AppWindow::OpenFile when auto_load_trace
 ```
 
 Remote (`RemoteProfilerSession`, `#ifdef ROCPROFVIS_ENABLE_REMOTE`):
@@ -3187,8 +3190,10 @@ Phase machine (event-driven, main thread):
       profiler AppMonitor op
   - kProfilerStatusChanged (filtered by m_profiler_op_id):
       Completed -> StartDownload; Failed/Cancelled -> Fail
-  - StartDownload: parse the remote trace path from stdout only, then
-      SFTP-download over the same (now idle) connection
+  - StartDownload: unless launched without auto-open (fetch_trace
+      false), read the remote trace path from the controller
+      (rocprofvis_profiler_get_trace_path), then SFTP-download over the
+      same (now idle) connection
 ```
 
 Key remote rules:
@@ -3205,8 +3210,11 @@ Key remote rules:
   (passed as a raw connection handle), and the download; only one SSH
   phase is ever in flight.
 - **No trace-path guessing** in either path: the path comes only from
-  the backend's stdout scraper (or a pre-set remote path). Empty ->
-  warning notification, manual open.
+  the controller's scrape (`rocprofvis_profiler_get_trace_path`).
+  The path is only requested when `LaunchRequest::auto_load_trace` is
+  set, which the dialog clears when `IProfilerBackend::ProducesTrace` is
+  false. NotSupported (no trace file for this tool) skips the
+  open/download. NotAvailable -> warning notification, manual open.
 - Auto-open differs by path: local fires from the orchestrator's
   terminal-state handler; remote fires from the download-complete
   callback inside `RemoteProfilerSession`.
@@ -3231,8 +3239,9 @@ through `AppMonitor` instead of blocking:
   `rocprofvis_profiler_cancel`.
 
 To add a backend: implement `IProfilerBackend`, register it in
-`ProfilerLauncherDialog`, map its `rocprofvis_profiler_type_t` in
-`ResolveProfilerType`, and implement `ParseTraceOutputPath`.
+`ProfilerLauncherDialog`, and map its tool in `ResolveProfilerType`.
+A new tool's trace path is a row in the controller scrape-rule table,
+not a view parser.
 
 ## 14. Data Flow: Requests, Remote Operations, and Profiler Runs
 

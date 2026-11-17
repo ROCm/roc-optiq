@@ -4,11 +4,19 @@
 #pragma once
 
 #include "rocprofvis_common_types.h"
+#include <array>
 #include <atomic>
 #include <future>
+#include <mutex>
+#include <string>
 #include <thread>
+#include <unordered_map>
 #include <variant>
-#include <array>
+#include <vector>
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+#include <profiler-hub/c/profiler_hub.h>
+#include <profiler-hub/c/profiler_hub_types.h>
+#endif
 
 namespace RocProfVis
 {
@@ -117,6 +125,19 @@ class Future
         void                                DeleteSubFuture(Future* sub_future);
         rocprofvis_dm_result_t              WaitAndDeleteSubFuture(Future* sub_future);
 
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+        // Creates a profiler-hub future whose progress is reported through this future.
+        // @param db_name - trace path forwarded with progress reports. May be null.
+        // @return the hub future, or null if it could not be created
+        ph_future_t                         AddProfilerHubFuture(rocprofvis_dm_charptr_t db_name = nullptr);
+        // Unregisters and frees a hub future created by AddProfilerHubFuture().
+        void                                DeleteProfilerHubFuture(ph_future_t future);
+        // Waits for the hub operation, frees the hub future, and returns its outcome.
+        rocprofvis_dm_result_t              WaitAndDeleteProfilerHubFuture(ph_future_t future);
+        // Profiler-hub progress callback. Forwards a percent and a copied description.
+        static void                         ProfilerHubOnProgress(ph_future_t future, double value, ph_progress_description_t description);
+#endif
+
     private:
         static std::atomic<uint64_t> s_counter;
         // unique identifier for this future
@@ -143,6 +164,13 @@ class Future
         std::string           m_error_message;
         std::vector<Future*>  m_sub_futures;
         std::array<RuntimeValue, static_cast<size_t>(kRPVFutureRuntimeStorageSize)> m_runtime_storage;
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+        std::vector<ph_future_t> m_ph_futures;
+        std::string           m_progress_db_name;
+        static std::unordered_map<ph_future_t, Future*> s_ph_future_lookup;
+        static std::mutex     s_mutex;
+#endif
 };
 
 }  // namespace DataModel

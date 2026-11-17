@@ -1159,6 +1159,19 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
+    // Each side of a comparison loads its own summary. A finished one is a new
+    // wait, not another try of the same one, so the clock starts again for
+    // whichever side comes next. Keeping the original deadline would leave a
+    // slow baseline's target almost no time, and a summary that landed as the
+    // deadline passed would be reported as still busy.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kCompareTraces)
+    {
+        m_fetch_retries = 0;
+        m_fetch_wait    = FetchWait();
+        RunNextTool();
+        return;
+    }
+
     // The rows that landed answer someone else's query, so never format them as
     // this tool's result. Re-run until we issue our own query, bounded by the
     // original wait deadline even though BeginFetchWait runs again.

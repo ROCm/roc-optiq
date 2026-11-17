@@ -9,6 +9,7 @@
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <sstream>
 #include <string>
@@ -39,6 +40,32 @@ constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
 // A chosen trace comes forward within a couple of frames. This only bounds a
 // switch that never lands, such as one to a tab closed in the meantime.
 constexpr uint32_t ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS = 5;
+// Notes are saved with the project, so what one turn can leave behind is
+// bounded: a heading stays a heading, the body stays something a sticky note
+// can show, and a turn that has gone wrong cannot paper the timeline.
+constexpr size_t ASSISTANT_MAX_NOTE_TITLE_CHARS = 120;
+constexpr size_t ASSISTANT_MAX_NOTE_TEXT_CHARS  = 2000;
+constexpr size_t ASSISTANT_MAX_NOTES_PER_TURN   = 5;
+
+/*
+ * What the turn in progress may still do through these tools.
+ *
+ * The prompt tells the model to leave notes and change traces only when the
+ * user asked, but names and arguments in a trace are text someone else wrote,
+ * and a model that takes them for instructions will not honour a prompt. These
+ * are the limits that hold regardless. The panel starts each turn through
+ * BeginAssistantUiTurn; until it has done so once nothing is known about the
+ * turn, and nothing is restricted.
+ */
+struct UiTurnState
+{
+    bool   tracked              = false;
+    // The user's own message asked for a tab change, or named another trace.
+    bool   tab_switch_requested = false;
+    size_t notes_pinned         = 0;
+};
+
+UiTurnState g_ui_turn;
 
 // Every UI-facing thing a tool does goes through here.
 OptiqActions
@@ -46,6 +73,76 @@ Actions(const AssistantToolContext& context)
 {
     return OptiqActions(context.data_provider, context.timeline_selection,
                         context.trace_view);
+}
+
+// True when word appears in text as a word of its own, so that "tab" is not
+// found inside "table". Both are expected in lower case.
+bool
+ContainsWord(const std::string& text, const std::string& word)
+{
+    size_t at = text.find(word);
+    while(at != std::string::npos)
+    {
+        const size_t end = at + word.size();
+        const bool   starts =
+            at == 0 || std::isalnum(static_cast<unsigned char>(text[at - 1])) == 0;
+        const bool ends = end >= text.size() ||
+                          std::isalnum(static_cast<unsigned char>(text[end])) == 0;
+        if(starts && ends)
+        {
+            return true;
+        }
+        at = text.find(word, at + 1);
+    }
+    return false;
+}
+
+// Whether what the user typed asks to change tabs: it says so in as many
+// words, or it names an open trace other than the one in front.
+bool
+AsksForTabSwitch(const std::string& user_message)
+{
+    const std::string text = Core::String::to_lower_copy(user_message);
+    // "Go to the other trace" asks for the same thing without either word.
+    if(ContainsWord(text, "tab") || ContainsWord(text, "tabs") ||
+       ContainsWord(text, "switch") || text.find("other trace") != std::string::npos ||
+       text.find("other run") != std::string::npos)
+    {
+        return true;
+    }
+
+    // Listing the tabs needs nothing from a trace, so no context is required.
+    const OptiqActions actions(nullptr, nullptr, nullptr);
+    const std::string  active = Core::String::to_lower_copy(actions.ActiveTab());
+    for(const std::string& tab : actions.ListTabs())
+    {
+        const std::string label = Core::String::to_lower_copy(tab);
+        if(!label.empty() && label != active && text.find(label) != std::string::npos)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Cuts model-written text to max_chars and marks the cut. Backs up to the start
+// of a character first: a note is saved into the project file, and half a
+// UTF-8 sequence there would be read back as garbage.
+std::string
+TrimNoteText(std::string text, size_t max_chars)
+{
+    if(text.size() <= max_chars)
+    {
+        return text;
+    }
+    size_t cut = max_chars;
+    while(cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+    {
+        --cut;
+    }
+    text.resize(cut);
+    text += "...";
+    return text;
 }
 
 // Reads the stacked follow-up buttons out of offer_next_steps arguments.
@@ -245,13 +342,23 @@ AssistantToolStartResult
 ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
              const std::string&)
 {
-    const double      time_ns = JsonUtils::GetDouble(args, "time_ns", -1.0);
-    const std::string title   = JsonUtils::GetString(args, "title", "");
-    const std::string text    = JsonUtils::GetString(args, "text", "");
+    const double      time_ns  = JsonUtils::GetDouble(args, "time_ns", -1.0);
+    const std::string raw_text = JsonUtils::GetString(args, "text", "");
+    const std::string title    = TrimNoteText(JsonUtils::GetString(args, "title", ""),
+                                              ASSISTANT_MAX_NOTE_TITLE_CHARS);
+    const std::string text     = TrimNoteText(raw_text, ASSISTANT_MAX_NOTE_TEXT_CHARS);
     if(time_ns < 0.0 || title.empty() || text.empty())
     {
         return DoneResult("annotate needs time_ns, title, and text.",
                           "Missing arguments");
+    }
+    if(g_ui_turn.tracked && g_ui_turn.notes_pinned >= ASSISTANT_MAX_NOTES_PER_TURN)
+    {
+        return DoneResult("This turn has already pinned " +
+                              std::to_string(ASSISTANT_MAX_NOTES_PER_TURN) +
+                              " notes, which is the most one turn may leave. Put "
+                              "the rest in your answer instead.",
+                          "Too many notes");
     }
 
     SettingsManager& settings    = SettingsManager::GetInstance();
@@ -284,10 +391,16 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult("Could not pin a note on this trace.", "Note failed");
     }
+    ++g_ui_turn.notes_pinned;
 
     std::ostringstream out;
     out << "Pinned a note titled \"" << title << "\" at "
         << nanosecond_to_formatted_str(time_ns, time_format, true) << ".";
+    if(raw_text.size() > ASSISTANT_MAX_NOTE_TEXT_CHARS)
+    {
+        out << " Its text was too long for a note and was cut at "
+            << ASSISTANT_MAX_NOTE_TEXT_CHARS << " characters.";
+    }
     const bool selected = context.timeline_selection != nullptr &&
                           context.timeline_selection->HasValidTimeRangeSelection();
     if(selected && (time_ns < view_start || time_ns > view_end))
@@ -311,11 +424,26 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     const std::vector<std::string> trace_tabs    = actions.ListTabs();
     const std::vector<std::string> analysis_tabs = actions.ListAnalysisTabs();
 
+    // The other open traces are the user's business until they bring one up.
+    // A call nobody asked for learns only about the trace it is already on,
+    // and further down is refused the switch, because every tool after a
+    // switch reads the new trace and sends what it reads to the endpoint.
+    const bool other_traces = !g_ui_turn.tracked || g_ui_turn.tab_switch_requested;
+
     std::ostringstream out;
     out << "trace_tabs:";
-    for(const std::string& tab : trace_tabs)
+    if(other_traces)
     {
-        out << "\n  " << tab;
+        for(const std::string& tab : trace_tabs)
+        {
+            out << "\n  " << tab;
+        }
+    }
+    else
+    {
+        out << "\n  " << actions.ActiveTab()
+            << "\n  (any other open trace is listed only when the user asks to "
+               "change tabs)";
     }
     out << "\nactive_trace_tab: " << actions.ActiveTab() << "\n";
     if(!analysis_tabs.empty())
@@ -341,6 +469,16 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult("Opened the " + selected_label + " tab in the details panel.",
                           "Switched tabs");
+    }
+    // Refused whether or not the name matches a trace, so the reply cannot be
+    // used to find out which traces are open.
+    if(!other_traces)
+    {
+        out << "\"" << name
+            << "\" is not a details panel tab. Switching to another trace needs "
+               "the user to ask for it, so tell the user which trace you would "
+               "switch to and why.\n";
+        return DoneResult(out.str(), "Tab switch not requested");
     }
     // The trace in front changes only when the tab bar next draws, so the call
     // waits for that instead of answering now: the panel re-pins the turn and
@@ -682,6 +820,15 @@ const AssistantToolEntry k_shared_ui_tool_handlers[] = {
 };
 
 }  // namespace
+
+// Starts a turn's allowance for the tools above, from what the user typed.
+void
+BeginAssistantUiTurn(const std::string& user_message)
+{
+    g_ui_turn                      = UiTurnState{};
+    g_ui_turn.tracked              = true;
+    g_ui_turn.tab_switch_requested = AsksForTabSwitch(user_message);
+}
 
 // The UI half of the tool set, for StartAssistantTool to search.
 AssistantToolTable

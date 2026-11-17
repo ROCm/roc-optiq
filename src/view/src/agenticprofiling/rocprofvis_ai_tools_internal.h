@@ -75,6 +75,20 @@ AssistantToolTable GetAssistantSharedUiToolHandlers();
 // through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
 
+// Forgets that a script offer went unanswered or was declined, so the next turn
+// may offer one again.
+void ResetAssistantScriptOffers();
+
+// Tells the UI tools a turn is starting, and what the user typed to start it.
+// The tools that reach past the trace in front or leave something behind are
+// held to what the user asked for by the prompt, which a model steered by text
+// in the trace can ignore; this is what lets the tools hold the line
+// themselves. It resets the per-turn count of pinned notes, and decides from
+// the user's own words whether switch_tab may list and bring forward another
+// trace this turn. Pass the text as typed, not the prompt built around it.
+// Until the first call nothing is restricted.
+void BeginAssistantUiTurn(const std::string& user_message);
+
 // Formats the compute metric values that just landed in the assistant's store.
 // Reached through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantComputeFetch(const AssistantToolContext& context,

@@ -56,6 +56,9 @@ private:
     void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
+    // True once the edited URL points at a different origin than the one the
+    // dialog opened with, which is the origin the stored key was saved for.
+    bool AssistantOriginChanged() const;
 #endif
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 

@@ -77,7 +77,9 @@ public:
     // selected trace forward when it next draws, so ActiveTab() names the old one
     // until then; SelectTab reports the tab it picked instead. Asking for the
     // label already in front moves to the next tab that shares it, and the
-    // reported label then carries the tab id so the two can be told apart.
+    // reported label then carries the tab's position so the two can be told
+    // apart. Never the tab id: that is the trace's full path, and what is
+    // reported here goes to the model's endpoint.
     std::vector<std::string> ListTabs() const;
     std::string              ActiveTab() const;
     bool                     SelectTab(const std::string& name, std::string& selected_id,
@@ -93,10 +95,15 @@ public:
     // --- Scripts ----------------------------------------------------------
 
     // Puts a script in the Script tab and brings the user to it. Nothing runs:
-    // they press Run or Reject, and ScriptProposalState reports which.
+    // they press Run or Reject, and ScriptProposalState reports which. Fails
+    // without touching the editor when it holds the user's own unsaved work,
+    // which ScriptHasUnsavedDraft reports so the caller can say why.
     bool           ProposeScript(const std::string& source);
+    bool           ScriptHasUnsavedDraft() const;
     ScriptApproval ScriptProposalState() const;
     void           ClearScriptProposal();
+    // Declines an offer on the user's behalf, for one they never answered.
+    void           RejectScriptProposal();
 #endif
 
     // --- Timeline options -------------------------------------------------

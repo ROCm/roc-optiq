@@ -83,6 +83,7 @@ ScriptEditor::ScriptEditor(DataProvider&                      data_provider,
 , m_result_ratio(SCRIPT_DEFAULT_RESULT_RATIO)
 , m_progress_percent(0)
 , m_source(DEFAULT_SCRIPT)
+, m_saved_source(DEFAULT_SCRIPT)
 , m_output_is_error(false)
 , m_status("Ready")
 , m_approval(ScriptApproval::kNone)
@@ -156,10 +157,15 @@ ScriptEditor::~ScriptEditor()
         static_cast<int>(RocEvents::kRequestProgressUpdate), m_progress_token);
 }
 
-void
+bool
 ScriptEditor::ProposeScript(const std::string& source)
 {
-    m_source = source;
+    if(HasUnsavedDraft())
+    {
+        return false;
+    }
+    m_source       = source;
+    m_saved_source = source;
     m_file_path.clear();
     m_output.clear();
     m_output_is_error  = false;
@@ -167,6 +173,13 @@ ScriptEditor::ProposeScript(const std::string& source)
     m_running          = false;
     m_approval         = ScriptApproval::kPending;
     m_status           = "Waiting for you";
+    return true;
+}
+
+bool
+ScriptEditor::HasUnsavedDraft() const
+{
+    return !m_source.empty() && m_source != m_saved_source;
 }
 
 ScriptApproval
@@ -371,7 +384,8 @@ ScriptEditor::RenderHeaderCard()
         }
         else if(awaiting_decision)
         {
-            SetTooltipStyled("Run the script Ask Optiq wrote, against this trace");
+            SetTooltipStyled("Run the script Ask Optiq wrote. It runs inside Optiq "
+                             "with your user permissions, so read it first");
         }
         else
         {
@@ -456,7 +470,12 @@ ScriptEditor::RenderProposalBanner()
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::AlignTextToFramePadding();
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
-    ImGui::TextUnformatted("Ask Optiq wrote this - Run or Reject.");
+    // Says what approving means, not just who wrote it: the script is not
+    // confined to the trace. Wrapped, so a narrow panel does not clip the part
+    // that matters.
+    ImGui::TextWrapped("%s", "Ask Optiq wrote this script. It runs inside Optiq with "
+                             "your user permissions, so read it before you press "
+                             "Run, or Reject it.");
     ImGui::PopStyleColor();
     EndPanelCard();
 }
@@ -478,7 +497,10 @@ ScriptEditor::RenderSource(const ImVec2& size)
     PanelFieldLabel("Source", false, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x * 2.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Python");
+    // An offer is locked while it waits, so what Run executes is the text that
+    // was offered and read, with nothing typed over it by a stray key.
+    const bool locked = m_approval == ScriptApproval::kPending;
+    ImGui::TextUnformatted(locked ? "Python, locked until you Run or Reject" : "Python");
     ImGui::PopStyleColor();
 
     const float editor_height = std::max(1.0f, ImGui::GetContentRegionAvail().y);
@@ -491,7 +513,9 @@ ScriptEditor::RenderSource(const ImVec2& size)
     // Negative x fills the card; the inset well is the code surface.
     InputTextMultilineString("##script_source", m_source,
                              ImVec2(-FLT_MIN, editor_height),
-                             ImGuiInputTextFlags_AllowTabInput);
+                             locked ? ImGuiInputTextFlags_AllowTabInput |
+                                          ImGuiInputTextFlags_ReadOnly
+                                    : ImGuiInputTextFlags_AllowTabInput);
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
     ImGui::PopFont();
@@ -712,8 +736,9 @@ ScriptEditor::ReadFile(const std::string& path)
     }
     m_source.assign((std::istreambuf_iterator<char>(file)),
                     std::istreambuf_iterator<char>());
-    m_file_path = path;
-    m_status    = "Loaded";
+    m_saved_source = m_source;
+    m_file_path    = path;
+    m_status       = "Loaded";
 }
 
 void
@@ -742,8 +767,9 @@ ScriptEditor::WriteFile(const std::string& path)
                                                 NotificationLevel::Error);
         return;
     }
-    m_file_path = path;
-    m_status    = "Saved";
+    m_saved_source = m_source;
+    m_file_path    = path;
+    m_status       = "Saved";
 }
 
 }  // namespace View

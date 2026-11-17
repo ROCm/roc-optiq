@@ -106,8 +106,10 @@ public:
     // The Script tab, reached the same way as the rest of the details panel so
     // the assistant never holds a widget of its own.
     bool           ProposeScript(const std::string& source);
+    bool           ScriptHasUnsavedDraft() const;
     ScriptApproval ScriptProposalState() const;
     void           ClearScriptProposal();
+    void           RejectScriptProposal();
 #    endif
 
     void             ResetView();

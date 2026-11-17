@@ -451,7 +451,9 @@ MakeAssistantToolsJson()
     AddTool(tools, 13, "switch_tab",
             "Switch tabs among open traces or the details panel. Only call this "
             "when the user asked you to change tabs. Call with no name to list "
-            "what is available.",
+            "what is available. Other open traces are listed, and can be "
+            "switched to, only in a turn where the user's own message asked for "
+            "a tab change or named that trace; details panel tabs always work.",
             tab_params);
 
     jt::Json flow_params = ObjectParams();
@@ -484,7 +486,8 @@ MakeAssistantToolsJson()
     note_params["required"][2] = "text";
     AddTool(tools, 15, "annotate",
             "Pin a sticky note on the timeline. Notes are saved with the project. "
-            "Only call this when the user asked you to leave a note.\n"
+            "Only call this when the user asked you to leave a note. A turn may "
+            "pin at most five, and a long title or text is cut to fit.\n"
             "The note goes at an absolute timestamp, and the user can pan, zoom "
             "or change the selection between your turns - so a number you "
             "worked out earlier may no longer be where they are looking. The "
@@ -580,9 +583,13 @@ MakeAssistantToolsJson()
     AddTool(tools, 21, "run_analysis_script",
             "Offer a Python script that analyses this trace. It does not run on "
             "its own: the editor opens with your source and the user presses Run "
-            "or Reject, so write it to be read as well as executed - clear names, "
-            "and a comment where the intent is not obvious. You get back what it "
-            "computed, or that they declined.\n"
+            "or Reject. Once approved it runs inside Optiq with the user's own "
+            "permissions, and they are told so, which makes their reading of it "
+            "the safeguard - so write it to be read as well as executed: clear "
+            "names, and a comment where the intent is not obvious. You get back "
+            "what it computed, or that they declined. An offer that is declined "
+            "or left unanswered is the last one that turn, and a script is not "
+            "offered over the user's own unsaved work in the Script tab.\n"
             "Use it when the answer needs arithmetic across many rows - gaps "
             "between events, totals, percentiles, overlap between two tracks, "
             "per-name rollups, call-depth analysis - because one script costs a "
@@ -854,7 +861,10 @@ MakeAssistantComputeToolsJson()
              "tab that is available.");
     AddTool(tools, 8, "switch_tab",
             "Switch between the open traces. Only call this when the user asked "
-            "you to change tabs. Call with no name to list what is open.",
+            "you to change tabs. Call with no name to list what is open. Other "
+            "open traces are listed, and can be switched to, only in a turn "
+            "where the user's own message asked for a tab change or named that "
+            "trace.",
             tab_params);
 
     jt::Json next_params = ObjectParams();

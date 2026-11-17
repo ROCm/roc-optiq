@@ -1389,6 +1389,7 @@ RegisterDataToolTests(ImGuiTestEngine* e)
             peer.Send("with a selection");
             AO_CHECK(WaitIdle(ctx));
             sent = Sent();
+            AO_CHECK(sent.size() >= 2);
             if(sent.size() < 2) continue;
             const std::string reply = sent[1].ToolReply("top_events");
             AO_CHECK(Has(reply, "(timeline selection - goto sets this"));
@@ -1418,6 +1419,7 @@ RegisterDataToolTests(ImGuiTestEngine* e)
             peer.Send("sorted");
             AO_CHECK(WaitIdle(ctx, 60.0, &max_retries));
             std::vector<SentRequest> sent = Sent();
+            AO_CHECK(sent.size() >= 2);
             if(sent.size() < 2) continue;
             const std::string   reply     = sent[1].ToolReply("track_events");
             std::vector<double> durations = ColumnValues(reply, "duration");
@@ -1436,6 +1438,7 @@ RegisterDataToolTests(ImGuiTestEngine* e)
         peer.Send("unknown sort");
         AO_CHECK(WaitIdle(ctx));
         std::vector<SentRequest> sent = Sent();
+        AO_CHECK(sent.size() >= 2);
         if(sent.size() >= 2)
         {
             AO_CHECK(Has(sent[1].ToolReply("track_events"),
@@ -1474,6 +1477,7 @@ RegisterDataToolTests(ImGuiTestEngine* e)
         }
         AO_CHECK(nulled);
         std::vector<SentRequest> sent = Sent();
+        AO_CHECK(sent.size() >= 2);
         if(sent.size() >= 2)
         {
             const std::string reply = sent[1].ToolReply("track_events");
@@ -1506,6 +1510,7 @@ RegisterDataToolTests(ImGuiTestEngine* e)
         peer.Send("stats");
         AO_CHECK(WaitIdle(ctx, 90.0));
         std::vector<SentRequest> sent = Sent();
+        AO_CHECK(sent.size() >= 2);
         if(sent.size() >= 2)
         {
             for(int i = 0; i < 2; ++i)
@@ -1557,6 +1562,7 @@ RegisterDataToolTests(ImGuiTestEngine* e)
         }
         AO_CHECK(busy_max_retries <= 1);
         std::vector<SentRequest> sent = Sent();
+        AO_CHECK(sent.size() >= 2);
         if(sent.size() >= 2)
         {
             const std::string reply = sent[1].ToolReply("track_events");
@@ -1647,6 +1653,7 @@ RegisterUiToolTests(ImGuiTestEngine* e)
         peer.Send("details");
         AO_CHECK(WaitIdle(ctx));
         std::vector<SentRequest> sent = Sent();
+        AO_CHECK(sent.size() >= 2);
         if(sent.size() >= 2)
         {
             const std::string reply = sent[1].ToolReply("event_details");

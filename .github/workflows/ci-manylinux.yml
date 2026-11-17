@@ -212,7 +212,14 @@ jobs:
             mesa-vulkan-drivers \
             mesa-dri-drivers \
             vulkan-loader \
+            vulkan-tools \
             gdb
+
+          # Diagnostics: show which Vulkan ICDs exist and whether the loader
+          # can enumerate a (software) device.
+          rpm -ql mesa-vulkan-drivers | grep -iE 'icd|vulkan' || true
+          ls -l /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1 || true
+          xvfb-run -a vulkaninfo --summary || true
 
       - name: Install OpenSSL 3
         if: inputs.crypto_backend == 'OpenSSL'

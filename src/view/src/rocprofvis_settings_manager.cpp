@@ -1156,9 +1156,8 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
 }
 
 // The API keys are deliberately absent: those live in the credential store.
-// The URL is written as typed, query string included, because an Azure-style
-// endpoint needs its api-version to persist. The settings page warns when the
-// URL looks like it carries a secret of its own.
+// The URL is written as typed, query included, since an Azure-style endpoint
+// needs its api-version; the settings page warns when it may carry a secret.
 void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
@@ -1180,9 +1179,7 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
  * Makes every endpoint name distinct, and gives an unnamed one a name.
  *
  * The name is the credential-store key, so two endpoints sharing one would
- * share an entry: saving a key for one would overwrite the other's. The origin
- * saved with the key is what stops it being posted to the wrong host; distinct
- * names are what let each endpoint keep a key at all.
+ * share an entry: saving a key for one would overwrite the other's.
  * Nothing in the UI creates a duplicate, but a hand-edited settings file can,
  * and that is exactly the case where the mistake is invisible. Suffixing is
  * better than dropping the endpoint, which would silently lose a configuration.

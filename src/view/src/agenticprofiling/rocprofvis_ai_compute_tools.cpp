@@ -735,12 +735,12 @@ AppendCatalogueEntry(std::ostringstream& out, const AvailableMetrics::Entry& ent
 
 // --- Tools ---------------------------------------------------------------
 
-// The workload count and, when there is more than one, the id of each. Shared
-// by compute_overview and the briefing so the two always list them alike.
-void
-AppendWorkloadList(std::ostringstream&                     out,
-                   const std::vector<const WorkloadInfo*>& workloads)
+AssistantToolStartResult
+ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
+                    const std::string&)
 {
+    const std::vector<const WorkloadInfo*>& workloads = Model(context).GetWorkloadList();
+    std::ostringstream                      out;
     out << "workload_count: " << workloads.size() << "\n";
     if(workloads.size() > 1)
     {
@@ -755,15 +755,6 @@ AppendWorkloadList(std::ostringstream&                     out,
             }
         }
     }
-}
-
-AssistantToolStartResult
-ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
-                    const std::string&)
-{
-    const std::vector<const WorkloadInfo*>& workloads = Model(context).GetWorkloadList();
-    std::ostringstream                      out;
-    AppendWorkloadList(out, workloads);
 
     std::string         error;
     const WorkloadInfo* workload = ResolveWorkload(context, args, error);
@@ -2401,9 +2392,19 @@ BuildAssistantComputeBriefing(const AssistantToolContext& context)
     out << "kind: compute_trace\n";
 
     const std::vector<const WorkloadInfo*>& workloads = model.GetWorkloadList();
-    AppendWorkloadList(out, workloads);
+    out << "workload_count: " << workloads.size() << "\n";
     if(workloads.size() > 1)
     {
+        out << "workloads:\n";
+        for(const WorkloadInfo* listed : workloads)
+        {
+            if(listed != nullptr)
+            {
+                out << "  workload_id=" << listed->id << " kernels="
+                    << listed->ordered_kernels.size() << " name=\"" << listed->name
+                    << "\"\n";
+            }
+        }
         out << "note: pass workload_id on every call. Kernel names and metric values "
                "are NOT in this briefing - compute_overview with a workload_id shows "
                "them.\n";

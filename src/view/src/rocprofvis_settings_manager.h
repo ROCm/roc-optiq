@@ -446,13 +446,12 @@ public:
 
     // Assistant API token, one per provider. Stored in the OS credential vault
     // when available, otherwise held in process memory only. Never written to
-    // settings JSON. A key is saved together with the origin (scheme, host and
-    // port) of the provider's URL at that moment, and is handed back only while
-    // the provider still points at that origin, so editing the URL - in the
-    // dialog or in the settings file - cannot send a saved key to another host.
-    // Guarded because these are the only users of SecretStore outside remote;
-    // the provider URL and model above stay compiled either way, so a settings
-    // file survives a build that has the assistant switched off.
+    // settings JSON. Guarded because these are the only users of SecretStore
+    // outside remote; the provider URL and model above stay compiled either way,
+    // so a settings file survives a build that has the assistant switched off.
+    // A key is saved with the origin of the provider's URL and handed back only
+    // while the URL still has that origin, so an edited URL cannot carry it to
+    // another host.
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     bool HasAssistantToken(const std::string& provider_name) const;
     bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
@@ -521,8 +520,7 @@ private:
     AppWindowSettings  m_appwindowsettings;
     ProfilerSettings   m_profilersettings;
     // Provider name -> origin and token, held only when no OS credential store
-    // exists or a write to it failed. Mutable because a const read records the
-    // origin on an entry that was saved before the provider had a usable URL.
+    // exists or a write to it failed. Mutable: a const read may add the origin.
     mutable std::map<std::string, std::string> m_assistant_token_session;
 
     std::filesystem::path m_json_path;

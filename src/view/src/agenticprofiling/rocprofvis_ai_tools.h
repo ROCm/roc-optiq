@@ -111,16 +111,13 @@ struct AssistantFetchState
     uint64_t    summary_id = INVALID_UINT64_INDEX;
     // kernel_triage: name the standard tables that came back empty.
     bool        compute_triage = false;
-    // The sort a table read asked for: the model's sort_by, which may be empty,
-    // the column the tool sorts by when it is, and the index that was sent. The
-    // index is picked before this read's header exists, so
-    // AssistantFetchNeedsRerun checks it against the header that lands.
+    // A table read's sort: the model's sort_by (may be empty), the tool's own
+    // default column, and the index sent - for AssistantFetchNeedsRerun.
     std::string sort_by;
     std::string sort_default;
     uint64_t    sort_column = 0;
-    // A track table read refused because the UI was loading a table of the same
-    // controller type under its own request id. The panel waits for that table
-    // rather than for this read's request id, which is idle.
+    // A track table read refused because the UI was loading a table of this
+    // controller type; the panel waits for that table, not the idle request id.
     bool                               waits_for_ui_table = false;
     rocprofvis_controller_table_type_t ui_table_type      = kRPVControllerTableTypeEvents;
 };
@@ -185,15 +182,13 @@ bool AssistantScriptFetchPending(const AssistantToolContext& context);
 
 // Whether a table read that has landed was sorted by the wrong column, because
 // the index it sent was resolved against the header an earlier read left in
-// the slot. The panel runs the tool again when it was; the second run resolves
-// against the header that just landed, so this cannot ask twice. Always false
-// for a fetch that is not a table read, and for one that failed.
+// the slot. The panel runs the tool again when it was. Always false for a
+// fetch that is not a table read, and for one that failed.
 bool AssistantFetchNeedsRerun(const AssistantToolContext& context,
                               const AssistantFetchState&  fetch);
 
-// Whether the statistics a track_statistics call asked for were thrown away
-// before they landed. The track pills share the slot, so a change of selection
-// or view during the wait invalidates it and the result is dropped.
+// Whether a track_statistics result was dropped before it landed. The track
+// pills share the slot, so a change of selection or view invalidates it.
 bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
                                      uint64_t                    track_id);
 

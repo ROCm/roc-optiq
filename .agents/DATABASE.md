@@ -1424,11 +1424,7 @@ Highlights:
   run each per-node query in parallel into a `PackedTable`, merge
   via `m_merged_table.Merge(...)`, apply filter / sort / group via
   the embedded commands, then emit into the public `Table` (or to
-  CSV for export). When the track set changes, every track is fetched
-  again, so the merged rows are dropped first: `Merge` deduplicates
-  event rows by id, but sample rows have none, and keeping them made
-  a track's samples count twice each time it stayed selected across a
-  change.
+  CSV for export).
 - **`RestartableTimer m_timer`** clears the cached
   `m_merged_table` and `m_tracks` after a configurable idle window
   (default 1s) so the same table query coming back later can avoid

@@ -218,8 +218,7 @@ std::string
 BuildAssistantFilterExpression(const jt::Json& args, std::string& error_out)
 {
     jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    // A null counts as leaving the argument out, which is how some models spell
-    // an optional argument they are not using.
+    // Some models spell an optional argument they are not using as null.
     if(!mutable_args.contains("filters") || mutable_args["filters"].isNull())
     {
         return std::string();
@@ -372,11 +371,8 @@ ResolveAssistantSortColumnNamed(const TablesModel& tables, TableType type,
 {
     // Ask for the column by name first. An index is only right for the column
     // order the table happens to have today, and a wrong one sorts by something
-    // else without saying so. The index stays as a first guess for the first
-    // query of a session, when no header has been read yet. The header searched
-    // here is the one the previous read left behind, so either answer can be
-    // wrong for this read; AssistantFetchNeedsRerun checks it against the header
-    // that lands and has the tool run again.
+    // else without saying so. The index stays as a last resort for the first
+    // query of a session, when no header has been read yet.
     const uint64_t resolved = ResolveAssistantSortColumn(tables, type, name,
                                                          ASSISTANT_SORT_COLUMN_UNKNOWN);
     if(resolved != ASSISTANT_SORT_COLUMN_UNKNOWN)

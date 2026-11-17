@@ -87,8 +87,8 @@ private:
         AssistantFetchState   fetch;
         std::string           tool_name;
         std::string           prefix;
-        // What the status row says while parked: the tool's own wording when it
-        // gave one, so the slow-wait counter does not replace it.
+        // What the slow-wait counter is appended to: the tool's own status
+        // line when it gave one.
         std::string           status;
         std::chrono::steady_clock::time_point started;
         // Zero takes the default fetch deadline. A tool waiting on the user
@@ -122,8 +122,6 @@ private:
     void        ExportTranscript();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
-    // Ends the turn and empties the transcript, the history and the composer.
-    void ClearConversation();
     // Stops the Script tab waiting on Run or Reject for a turn that is over.
     void WithdrawScriptOffer();
     void CancelPendingRequest();
@@ -202,9 +200,8 @@ private:
     // the same trace does not repeat it; a different one does.
     std::string m_briefed_project_id;
     // Where this turn's requests go and the key they carry, copied from the
-    // settings once when the turn starts. Every round of the turn reads these
-    // rather than the live settings, so a URL being edited in Preferences while
-    // an answer is running never receives the key. Empty between turns.
+    // settings when the turn starts, so a URL edited in Preferences mid-answer
+    // never receives the key. Empty between turns.
     std::string m_turn_endpoint_url;
     std::string m_turn_model;
     std::string m_turn_token;
@@ -214,8 +211,9 @@ private:
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
-    // Requests the user walked away from, still unwinding on their own threads.
-    // Update() lets go of the finished ones, and the destructor waits for the rest.
+    // Cancelled requests still unwinding on their own threads. Update() lets go
+    // of the finished ones; destroying the rest waits for them, so none outlives
+    // the panel and what it logs through.
     std::vector<std::future<void>> m_abandoned;
 };
 

@@ -3,7 +3,7 @@
 
 #include "rocprofvis_ai_tool_schema.h"
 
-#include <iterator>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -125,9 +125,8 @@ AddScopeParams(jt::Json& params)
     params["properties"]["track_ids"]["items"]["type"] = "integer";
 }
 
-// The structured stand-in for a SQL query: filters, sort and paging, plus
-// grouping for the tools that honour it. Only the track tables group: top_events
-// always groups by name, and the name searches have no grouping at all.
+// The structured stand-in for a SQL query: filters, sort, paging, grouping.
+// Only the track tables honour group_by.
 void
 AddQueryParams(jt::Json& params, bool with_group_by = false)
 {
@@ -171,20 +170,31 @@ AddQueryParams(jt::Json& params, bool with_group_by = false)
 std::string
 AssistantToolNameList(bool is_compute)
 {
-    const AssistantToolLabel* labels =
-        is_compute ? ASSISTANT_COMPUTE_TOOL_LABELS : ASSISTANT_TOOL_LABELS;
-    const size_t count = is_compute ? std::size(ASSISTANT_COMPUTE_TOOL_LABELS)
-                                    : std::size(ASSISTANT_TOOL_LABELS);
-    std::string out;
-    for(size_t i = 0; i < count; ++i)
+    std::ostringstream out;
+    bool               first = true;
+    if(is_compute)
     {
-        if(i > 0)
+        for(const AssistantToolLabel& label : ASSISTANT_COMPUTE_TOOL_LABELS)
         {
-            out += ", ";
+            if(!first)
+            {
+                out << ", ";
+            }
+            first = false;
+            out << label.name;
         }
-        out += labels[i].name;
+        return out.str();
     }
-    return out;
+    for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
+    {
+        if(!first)
+        {
+            out << ", ";
+        }
+        first = false;
+        out << label.name;
+    }
+    return out.str();
 }
 
 namespace

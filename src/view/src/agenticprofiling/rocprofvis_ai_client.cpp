@@ -1133,6 +1133,11 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
+#ifdef __linux__
+    // Declared before the client so it also covers the client's destructor,
+    // which can write a TLS close_notify.
+    const ScopedSigpipeBlock sigpipe_block;
+#endif
     httplib::Client client(endpoint.origin);
     if(!client.is_valid())
     {
@@ -1150,9 +1155,6 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     client.set_follow_location(false);
 #ifdef SO_NOSIGPIPE
     client.set_socket_options(SuppressSigpipe);
-#endif
-#ifdef __linux__
-    const ScopedSigpipeBlock sigpipe_block;
 #endif
 
     const httplib::Headers headers = AuthHeaders(request, endpoint.flavour);
@@ -1209,8 +1211,9 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
 
         spdlog::warn("Assistant request to {} failed transiently, retrying in {} s",
                      loggable, wait_seconds);
-        // Wait in short slices so Cancel() is noticed promptly; the panel
-        // blocks on this thread when it abandons a request.
+        // Wait in short slices so Cancel() is noticed promptly; an abandoned
+        // request holds its thread until this returns, and the panel's
+        // destructor waits on that thread at quit.
         const std::chrono::steady_clock::time_point wake =
             std::chrono::steady_clock::now() + std::chrono::seconds(wait_seconds);
         while(!Cancelled() && std::chrono::steady_clock::now() < wake)

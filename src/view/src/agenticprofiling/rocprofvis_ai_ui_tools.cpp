@@ -681,9 +681,19 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
            std::isfinite(found_start) && std::isfinite(found_end) &&
            found_start >= 0.0 && found_end > found_start)
         {
-            start_ns  = found_start;
-            end_ns    = found_end;
-            has_range = true;
+            // Held to the trace like a window the model passed, so an entry
+            // with no times of its own cannot store a selection outside it.
+            if(trace_end > trace_start)
+            {
+                found_start = std::max(found_start, trace_start);
+                found_end   = std::min(found_end, trace_end);
+            }
+            if(found_end > found_start)
+            {
+                start_ns  = found_start;
+                end_ns    = found_end;
+                has_range = true;
+            }
         }
     }
 

@@ -1022,6 +1022,14 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
        (event->basic_info.name.empty() && event->args.empty() && event->ext_info.empty() &&
         event->flow_info.empty() && event->call_stack_info.empty()))
     {
+        // Take the empty entry back out, or a later goto would read it as an
+        // event at time zero and stretch its window to match. Not while it is
+        // selected: the events view holds a pointer to a selected entry.
+        if(event != nullptr && (context.timeline_selection == nullptr ||
+                                !context.timeline_selection->EventSelected(event_id)))
+        {
+            context.data_provider->DataModel().GetEvents().RemoveEvent(event_id);
+        }
         return "No details came back for that event_uuid. Check the __uuid value.";
     }
 

@@ -20,82 +20,12 @@
 #include "rocprofvis_platform_helpers.h"
 #endif
 #include <GLFW/glfw3.h>
-#include <algorithm>
-#include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string>
-#include <system_error>
-#include <vector>
 
 // Frames left to render before the loop may sleep; see RENDER_FRAMES_AFTER_INPUT.
 static int g_frames_to_render = 1;
-
-// Whatever the ImGui backend installed, so normal keyboard input still reaches it.
-static GLFWkeyfun g_chained_key_callback = nullptr;
-
-// Pause/resume the soak drivers on F9.
-//
-// Read from the GLFW callback rather than ImGui's key state because the Test
-// Engine discards the backend's input events while a test is running, which is
-// precisely when a soak needs pausing - so this is the only path a real key
-// press has left. Chains to the backend's own callback so nothing else breaks.
-static void
-soak_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if(key == GLFW_KEY_F9 && action == GLFW_PRESS)
-    {
-        const bool paused = !g_soak_paused.load();
-        g_soak_paused.store(paused);
-        spdlog::info("Soak {} (F9)", paused ? "paused" : "resumed");
-    }
-
-    if(g_chained_key_callback != nullptr)
-    {
-        g_chained_key_callback(window, key, scancode, action, mods);
-    }
-}
-
-// Directory expansion only picks up rocpd trace databases, by filename prefix.
-// A trace directory typically also holds compute profiles and other formats,
-// which open into views a timeline soak cannot drive.
-static const char* const TRACE_FILE_PREFIX = "rocpd";
-
-// Resolves the -f argument to the list of files to open. A plain file is passed
-// through untouched, whatever its name; a directory expands to the rocpd trace
-// databases directly inside it, sorted so repeated runs open the same set in the
-// same tab order. Matching on the ".db" extension also excludes the "-shm" and
-// "-wal" sidecars SQLite leaves next to an open database.
-static std::vector<std::string>
-collect_trace_paths(const std::string& path)
-{
-    std::error_code error;
-    if(!std::filesystem::is_directory(path, error))
-    {
-        return { path };
-    }
-
-    std::vector<std::string> paths;
-    for(const std::filesystem::directory_entry& entry :
-        std::filesystem::directory_iterator(path, error))
-    {
-        if(!entry.is_regular_file(error) || entry.path().extension() != ".db")
-        {
-            continue;
-        }
-        if(entry.path().filename().string().rfind(TRACE_FILE_PREFIX, 0) != 0)
-        {
-            continue;
-        }
-        paths.push_back(entry.path().string());
-    }
-    std::sort(paths.begin(), paths.end());
-
-    spdlog::info("Opening {} '{}*.db' trace(s) from directory {}", paths.size(),
-                 TRACE_FILE_PREFIX, path);
-    return paths;
-}
 
 static void
 parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_parser,
@@ -105,19 +35,6 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);
-    result &= cli_parser.AddOption(
-        "s", "soak",
-        "Run the soak drivers instead of the test suite: continuously exercise "
-        "the loaded view until interrupted. Use with -f to pick the trace, or a "
-        "directory to open every rocpd*.db trace in it at once",
-        false);
-    result &= cli_parser.AddOption(
-        "l", "log-level",
-        "Override the log level: 'trace', 'debug', 'info', 'warn', 'error'. "
-        "Defaults to debug in debug builds. A soak running for days at debug "
-        "produces gigabytes an hour and rotates its own earlier output away, so "
-        "prefer 'info' for long runs - the periodic memory samples are info",
-        true);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -140,39 +57,6 @@ main(int argc, char** argv)
         return app_result_code;
     }
 
-    // Applied after parsing rather than through enable_application_log, which
-    // runs before the command line is read and is guarded against a second call.
-    // Only the level is overridden; the sinks and log path stay as that set them.
-    if(cli_parser.WasOptionFound("log-level"))
-    {
-        const std::string requested = cli_parser.GetOptionValue("log-level");
-        if(requested == "trace")
-        {
-            spdlog::set_level(spdlog::level::trace);
-        }
-        else if(requested == "debug")
-        {
-            spdlog::set_level(spdlog::level::debug);
-        }
-        else if(requested == "info")
-        {
-            spdlog::set_level(spdlog::level::info);
-        }
-        else if(requested == "warn")
-        {
-            spdlog::set_level(spdlog::level::warn);
-        }
-        else if(requested == "error")
-        {
-            spdlog::set_level(spdlog::level::err);
-        }
-        else
-        {
-            std::cout << "Unknown log level '" << requested
-                      << "', keeping the build default" << std::endl;
-        }
-    }
-
     rocprofvis_imgui_backend_preference_t    backend_pref = kRPVBackendAuto;
     rocprofvis_view_file_dialog_preference_t fd_pref      = kRocProfVisViewFileDialog_Auto;
     if(!RocProfVis::App::parse_backend_preference(cli_parser, backend_pref) ||
@@ -180,6 +64,7 @@ main(int argc, char** argv)
     {
         return 1;
     }
+
 #ifdef __APPLE__
     RocProfVis::Platform::configure_bundled_vulkan_icd();
 #endif
@@ -241,11 +126,6 @@ main(int argc, char** argv)
                     fd_pref);
 
                 backend.m_config(&backend, window);
-
-                // Installed after m_config so this sits in front of the ImGui
-                // GLFW backend's key callback (set during m_config) and can chain
-                // to it.
-                g_chained_key_callback = glfwSetKeyCallback(window, soak_key_callback);
 #ifdef __APPLE__
                 // Install after m_config so this overrides the ImGui GLFW
                 // backend's own mouse-button callback (set during m_config).
@@ -259,23 +139,15 @@ main(int argc, char** argv)
                 if(cli_parser.WasOptionFound("file") &&
                    !cli_parser.GetOptionValue("file").empty())
                 {
-                    // If the user inputted a filepath open it here. A directory
-                    // opens every trace inside it at once, one tab per file, so a
-                    // soak run can be pointed at a whole corpus.
-                    rocprofvis_view_open_files(
-                        collect_trace_paths(cli_parser.GetOptionValue("file")));
+                    // If the user inputted a filepath open it here.
+                    rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
                 }
 
                 ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
                 RegisterAppTests(engine);
 
-                // The soak drivers live in their own "soak" category so the
-                // normal sweep can exclude them - they never terminate. Running
-                // with --soak inverts that: only the soak drivers are queued.
-                const bool  run_soak    = cli_parser.WasOptionFound("soak");
-                const char* test_filter = run_soak ? "soak" : "-soak";
-                const bool  run_tests_headless =
-                    cli_parser.WasOptionFound("run-tests") || run_soak;
+                const bool run_tests_headless =
+                    cli_parser.WasOptionFound("run-tests");
                 bool headless_tests_queued = false;
                 int headless_settle_frames = 0;
                 // Upper bound (~50s @60fps), not a tuned value: a view that never
@@ -322,11 +194,9 @@ main(int argc, char** argv)
                                              "{} frames; queueing tests anyway",
                                              kHeadlessSettleFrameCap);
                             }
-                            // File load settled (or cap hit): queue the selected
-                            // tests - everything but the soak drivers, or only
-                            // them under --soak.
+                            // File load settled (or cap hit): queue every registered test.
                             ImGuiTestEngine_QueueTests(
-                                engine, ImGuiTestGroup_Tests, test_filter,
+                                engine, ImGuiTestGroup_Tests, nullptr,
                                 ImGuiTestRunFlags_RunFromCommandLine);
                             headless_tests_queued = true;
                         }
@@ -442,14 +312,6 @@ main(int argc, char** argv)
                         --g_frames_to_render;
                     }
                 }
-
-                // Release any soak driver before stopping the engine. A driver
-                // still looping would sit inside ctx->Yield() waiting for a frame
-                // that is never going to be drawn, deadlocking against the join
-                // inside ImGuiTestEngine_Stop().
-                g_soak_exit_requested.store(true);
-                g_soak_paused.store(false);
-
                 ImGuiTestEngine_Stop(engine);
                 rocprofvis_view_destroy();
                 rocprofvis_view_set_texture_backend(nullptr, nullptr, nullptr);

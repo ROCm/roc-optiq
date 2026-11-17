@@ -9,7 +9,6 @@ subtrees:
     - file: release-notes.rst
       title: Release notes
 
-- caption: At a glance
   entries:
   - file: what-is-optiq.rst
     title: What is ROCm Optiq?

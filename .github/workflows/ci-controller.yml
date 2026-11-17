@@ -8,14 +8,6 @@ on:
         description: 'Run CI for all OS versions?'
         type: boolean
         default: false
-      enable_ci_redhat:
-        description: 'Run RedHat CI?'
-        type: boolean
-        default: true
-      enable_ci_ubuntu:
-        description: 'Run Ubuntu CI?'
-        type: boolean
-        default: true
       enable_ci_windows:
         description: 'Run Windows CI?'
         type: boolean
@@ -111,17 +103,14 @@ jobs:
     env:
       # Full OS Coverage (default for scheduled runs)
       UBUNTU_FULL_OS_VERSIONS: '[ "22.04", "24.04", "26.04" ]'
-      REDHAT_FULL_OS_VERSIONS: '[ "8", "9", "10" ]'
       WINDOWS_FULL_OS_VERSIONS: '[ "2022" ]'
       MAC_FULL_OS_VERSIONS: '[ "14", "15", "26" ]'
       # Minimal OS Coverage (default for all other runs)
       UBUNTU_CI_OS_VERSIONS: '[ "24.04" ]'
-      REDHAT_CI_OS_VERSIONS: '[ "10" ]'
       WINDOWS_CI_OS_VERSIONS: '[ "2022" ]'
       MAC_CI_OS_VERSIONS: '[ "26" ]'
     outputs:
       ubuntu-os-versions: ${{ steps.setup-os-versions.outputs.ubuntu-os-versions }}
-      redhat-os-versions: ${{ steps.setup-os-versions.outputs.redhat-os-versions }}
       windows-os-versions: ${{ steps.setup-os-versions.outputs.windows-os-versions }}
       mac-os-versions: ${{ steps.setup-os-versions.outputs.mac-os-versions }}
       # Experimental feature flags. Scheduled runs get no inputs and build
@@ -142,89 +131,13 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event.inputs.enable_full_os_versions }}" == "true" ]]; then
             echo "ubuntu-os-versions=${{ env.UBUNTU_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
-            echo "redhat-os-versions=${{ env.REDHAT_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "mac-os-versions=${{ env.MAC_FULL_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
           else
             echo "ubuntu-os-versions=${{ env.UBUNTU_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
-            echo "redhat-os-versions=${{ env.REDHAT_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "windows-os-versions=${{ env.WINDOWS_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
             echo "mac-os-versions=${{ env.MAC_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
           fi
-
-  ci-redhat:
-    name: RedHat CI
-    needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_redhat }}
-    uses: ./.github/workflows/ci-redhat.yml
-    secrets: inherit
-    with:
-      os_version: ${{ needs.setup.outputs.redhat-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
-
-  ci-redhat-experimental:
-    name: RedHat CI - Experimental
-    needs: setup
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_redhat && inputs.enable_ci_experimental) }}
-    uses: ./.github/workflows/ci-redhat.yml
-    secrets: inherit
-    with:
-      os_version: ${{ needs.setup.outputs.redhat-os-versions }}
-      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
-      artifact_suffix: '-experimental'
-      # EXPERIMENTAL FLAGS
-      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
-      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
-      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
-      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
-      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
-      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
-      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
-      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
-      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}
-
-  ci-ubuntu:
-    name: Ubuntu CI
-    needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_ubuntu }}
-    uses: ./.github/workflows/ci-ubuntu.yml
-    secrets: inherit
-    with:
-      os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      enable_ui_tests: true
-      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
-
-  ci-ubuntu-experimental:
-    name: Ubuntu CI - Experimental
-    needs: setup
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_ubuntu && inputs.enable_ci_experimental) }}
-    uses: ./.github/workflows/ci-ubuntu.yml
-    secrets: inherit
-    with:
-      os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      enable_ui_tests: true
-      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
-      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
-      artifact_suffix: '-experimental'
-      # EXPERIMENTAL FLAGS
-      crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
-      enable_internal_banner: ${{ fromJSON(needs.setup.outputs.exp-enable-internal-banner) }}
-      enable_profiler: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler) }}
-      enable_remote: ${{ fromJSON(needs.setup.outputs.exp-enable-remote) }}
-      enable_agentic_profiling: ${{ fromJSON(needs.setup.outputs.exp-enable-agentic-profiling) }}
-      enable_scripting: ${{ fromJSON(needs.setup.outputs.exp-enable-scripting) }}
-      enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
-      enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
-      enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
-      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}
 
   ci-windows:
     name: Windows CI
@@ -315,9 +228,10 @@ jobs:
     uses: ./.github/workflows/ci-manylinux.yml
     secrets: inherit
     with:
+      enable_ui_tests: true
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_bucket_env: ${{ github.event_name == 'schedule' && 'nightly' || 'legacy-nightly' }}
+      s3_bucket_env: ${{ github.event_name == 'schedule' && 'nightly' || 'none' }}
 
   ci-manylinux-experimental:
     name: ManyLinux CI - Experimental
@@ -326,10 +240,10 @@ jobs:
     uses: ./.github/workflows/ci-manylinux.yml
     secrets: inherit
     with:
+      enable_ui_tests: true
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_bucket_env: 'legacy-nightly'
-      s3_root_directory: 'nightly-experimental'
+      s3_bucket_env: 'none'
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}

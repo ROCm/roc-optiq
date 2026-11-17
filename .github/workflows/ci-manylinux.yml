@@ -60,24 +60,24 @@ on:
         description: 'Build with Profiler Hub trace support (ROCPROFVIS_ENABLE_PROFILER_HUB)'
         type: boolean
         default: false
+      enable_ui_tests:
+        description: 'Build + run the Dear ImGui UI tests?'
+        type: boolean
+        default: false
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
         default: '10'
       s3_bucket_env:
-        description: 'S3 bucket environment to upload artifacts to'
+        description: 'S3 bucket environment to upload artifacts to (none disables S3 uploads)'
         type: choice
-        default: 'legacy-nightly'
+        default: 'none'
         options:
+          - none
           - dev
           - nightly
           - rc
           - stable-staging
-          - legacy-nightly
-      s3_root_directory:
-        description: 'Override S3 root directory (used with legacy-nightly bucket env)'
-        type: string
-        default: ''
       artifact_suffix:
         description: 'Suffix to append to uploaded artifact names'
         type: string
@@ -140,18 +140,18 @@ on:
         description: 'Build with Profiler Hub trace support (ROCPROFVIS_ENABLE_PROFILER_HUB)'
         type: boolean
         default: false
+      enable_ui_tests:
+        description: 'Build + run the Dear ImGui UI tests?'
+        type: boolean
+        default: false
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
         default: '10'
       s3_bucket_env:
-        description: 'S3 bucket environment to upload artifacts to'
+        description: 'S3 bucket environment to upload artifacts to (none disables S3 uploads)'
         type: string
-        default: 'legacy-nightly'
-      s3_root_directory:
-        description: 'Override S3 root directory (used with legacy-nightly bucket env)'
-        type: string
-        default: ''
+        default: 'none'
       artifact_suffix:
         description: 'Suffix to append to uploaded artifact names'
         type: string
@@ -170,14 +170,19 @@ env:
   ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
   ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
   ENABLE_PROFILER_HUB: ${{ (inputs.enable_profiler_hub == true || inputs.enable_profiler_hub == 'true') && 'ON' || 'OFF' }}
+  ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
+  CTEST_PREFIX: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'xvfb-run -a' || '' }}
+  BUILD_TARGETS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'all package' || 'package' }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
+  # S3 uploads are never allowed with the 'none' bucket env
+  UPLOAD_TO_S3: ${{ (inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true') && inputs.s3_bucket_env != 'none' && 'true' || 'false' }}
   S3_ROOT_DIRECTORY: 'v5/rocm/extras/rocoptiq'
 
 jobs:
   manylinux:
     name: ManyLinux • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: ubuntu-latest
-    environment: ${{ inputs.s3_bucket_env }}
+    environment: ${{ inputs.s3_bucket_env != 'none' && inputs.s3_bucket_env || '' }}
     defaults:
       run:
         shell: bash
@@ -193,6 +198,21 @@ jobs:
           lfs: true
           submodules: recursive
           persist-credentials: false
+
+      - name: Install UI Test Dependencies
+        if: env.ENABLE_UI_TESTS == 'ON'
+        run: |
+          # TEMPORARY: installed per job to validate UI tests on ManyLinux
+          # before baking these into docker/Dockerfile.manylinux.
+          # Xvfb gives the tests a display; mesa provides the software
+          # Vulkan (lavapipe) and GL (llvmpipe) drivers.
+          yum install -y \
+            xorg-x11-server-Xvfb \
+            xauth \
+            mesa-vulkan-drivers \
+            mesa-dri-drivers \
+            vulkan-loader \
+            gdb
 
       - name: Install OpenSSL 3
         if: inputs.crypto_backend == 'OpenSSL'
@@ -252,6 +272,7 @@ jobs:
             -DROCPROFVIS_ENABLE_TRACE_COMPARE="${ENABLE_TRACE_COMPARE}" \
             -DROCPROFVIS_MULTI_WINDOW="${ENABLE_MULTI_WINDOW}" \
             -DROCPROFVIS_ENABLE_PROFILER_HUB="${ENABLE_PROFILER_HUB}" \
+            -DROCPROFVIS_ENABLE_UI_TESTS="${ENABLE_UI_TESTS}" \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND="${CRYPTO_BACKEND}" \
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
@@ -259,7 +280,7 @@ jobs:
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
             -DROCM_PACKAGE_NAME="amdrocm${ROCM_VERSION}-roc-optiq" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"
-          cmake --build "${BUILD_DIR}" --parallel 4 --target package
+          cmake --build "${BUILD_DIR}" --parallel 4 --target ${BUILD_TARGETS}
           if [ -e "${BUILD_DIR}/${BUILD_FILE_NAME}" ]; then
             echo "✅ ${BUILD_FILE_NAME} has been successfully built!"
           else
@@ -273,10 +294,26 @@ jobs:
         timeout-minutes: 10
         run: |
           cd ${{ env.BUILD_DIR }}
-          ctest \
+          ${CTEST_PREFIX} ctest \
             --output-on-failure \
             --no-tests=error \
             --output-junit ctest-results.xml
+
+      - name: Backtrace Compute UI Test (on failure)
+        if: steps.run_tests.outcome == 'failure' && env.ENABLE_UI_TESTS == 'ON'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          # ctest reports an abort without a call stack. Re-run the compute UI
+          # test under gdb so the log shows where the process died.
+          xvfb-run -a gdb -batch \
+            -ex "set pagination off" \
+            -ex "handle SIGPIPE nostop noprint" \
+            -ex run \
+            -ex "thread apply all bt" \
+            --args "${GITHUB_WORKSPACE}/${BUILD_DIR}/roc-optiq-tests" \
+              --run-tests -f "${GITHUB_WORKSPACE}/sample/rocprof_compute_23ed6f36.db" \
+            || true
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
@@ -306,10 +343,9 @@ jobs:
           retention-days: 2
 
       - name: Resolve S3 secrets
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        if: env.UPLOAD_TO_S3 == 'true'
         env:
           S3_BUCKET_ENV: ${{ inputs.s3_bucket_env }}
-          S3_ROOT_INPUT: ${{ inputs.s3_root_directory }}
         run: |
           case "${S3_BUCKET_ENV}" in
             dev)
@@ -329,19 +365,6 @@ jobs:
               echo "S3_BUCKET=${{ secrets.AWS_STABLE_STAGING_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_STABLE_STAGING_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
               ;;
-            legacy-nightly)
-              echo "S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> "$GITHUB_ENV"
-              echo "S3_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> "$GITHUB_ENV"
-              S3_BASE="${S3_ROOT_INPUT}"
-              if [[ -z "${S3_BASE}" ]]; then
-                S3_BASE="nightly"
-              fi
-              if [[ ! "${S3_BASE}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-                echo "Invalid s3_root_directory: ${S3_BASE}"
-                exit 1
-              fi
-              echo "S3_ROOT_DIRECTORY=${S3_BASE}/$(date +%Y_%m_%d)/manylinux" >> "$GITHUB_ENV"
-              ;;
             *)
               echo "Unknown s3_bucket_env: ${S3_BUCKET_ENV}"
               exit 1
@@ -349,14 +372,14 @@ jobs:
           esac
 
       - name: Configure AWS credentials
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        if: env.UPLOAD_TO_S3 == 'true'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.S3_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload DEB to S3
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        if: env.UPLOAD_TO_S3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_BASE=$(basename "${DEB_SRC}")
@@ -372,7 +395,7 @@ jobs:
             --no-progress
 
       - name: Generate and Upload DEB Metadata to S3
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        if: env.UPLOAD_TO_S3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_BASE=$(basename "${DEB_SRC}")
@@ -417,7 +440,7 @@ jobs:
             --no-progress
 
       - name: Generate RPM Metadata and Upload RPM to S3
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        if: env.UPLOAD_TO_S3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
           if [[ -n "${BUILD_TIMESTAMP}" ]]; then
@@ -441,7 +464,7 @@ jobs:
             --no-progress
 
       - name: Upload Tarball to S3
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        if: env.UPLOAD_TO_S3 == 'true'
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
           TGZ_BASE=$(basename "${TGZ_SRC}")

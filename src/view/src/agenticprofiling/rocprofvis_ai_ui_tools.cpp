@@ -627,31 +627,32 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
 
     // goto is the one writer of the selection the data tools default to, so a
     // window outside the trace must not be stored: every later read would come
-    // back empty and read as "nothing happened here".
+    // back empty and read as "nothing happened here". The trace's own window is
+    // given in raw nanoseconds, like every other tool result, so the model can
+    // pass it straight back.
+    const TimelineModel& timeline      = context.data_provider->DataModel().GetTimeline();
+    const double         trace_start   = timeline.GetStartTime();
+    const double         trace_end     = timeline.GetEndTime();
+    const std::string    trace_window  = "window_ns is " + nanosecond_to_str(trace_start) +
+                                         " .. " + nanosecond_to_str(trace_end);
+    bool                 range_dropped = false;
     if(has_range)
     {
-        const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
-        const double         trace_start = timeline.GetStartTime();
-        const double         trace_end   = timeline.GetEndTime();
         if(trace_end > trace_start)
         {
             if(end_ns <= trace_start || start_ns >= trace_end)
             {
                 if(targets.empty())
                 {
-                    const TimeFormat fmt = SettingsManager::GetInstance()
-                                               .GetUserSettings()
-                                               .unit_settings.time_format;
-                    return DoneResult(
-                        "That range is outside this trace, which runs " +
-                            nanosecond_to_formatted_str(trace_start, fmt, true) +
-                            " .. " + nanosecond_to_formatted_str(trace_end, fmt, true) +
-                            ". Re-read the range from the data rather than reusing "
-                            "one from an earlier trace or turn.",
-                        "goto failed");
+                    return DoneResult("That range is outside this trace, whose " +
+                                          trace_window +
+                                          ". Re-read the range from the data rather than "
+                                          "reusing one from an earlier trace or turn.",
+                                      "goto failed");
                 }
                 // The named events supply the window instead.
-                has_range = false;
+                has_range     = false;
+                range_dropped = true;
             }
             else
             {
@@ -762,6 +763,18 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         out << "Moved the timeline to "
             << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
             << nanosecond_to_formatted_str(end_ns, time_format, true);
+        if(range_dropped)
+        {
+            out << ", the named events' own window, because the range you gave is "
+                   "outside this trace, whose "
+                << trace_window;
+        }
+    }
+    else if(range_dropped)
+    {
+        out << "Left the timeline where it was, because the range you gave is outside "
+               "this trace, whose "
+            << trace_window << ", and that event is not loaded in the view yet";
     }
     else
     {

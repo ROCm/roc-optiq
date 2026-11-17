@@ -28,6 +28,12 @@
 #include <utility>
 #include <vector>
 
+#ifndef _WIN32
+#include <csignal>
+#include <ctime>
+#include <sys/socket.h>
+#endif
+
 namespace RocProfVis
 {
 namespace View
@@ -844,6 +850,63 @@ RetryWaitSeconds(const std::string& retry_after)
     return std::min(seconds, ASSISTANT_RETRY_WAIT_MAX_SECONDS);
 }
 
+// A write into a connection the peer has reset raises SIGPIPE, and its default
+// action ends the whole app, every open trace with it. A request body is tens
+// to hundreds of KB, so an endpoint that resets mid-upload is not rare, and
+// cpp-httplib's client leaves the signal to its caller. macOS turns it off per
+// socket. Linux cannot, so there the request's thread blocks it and drops any
+// it raised. Either way the write fails, and is reported or retried like any
+// other dropped connection.
+#ifdef SO_NOSIGPIPE
+void
+SuppressSigpipe(socket_t sock)
+{
+    const int on = 1;
+    setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+}
+#endif
+
+#ifdef __linux__
+class ScopedSigpipeBlock
+{
+public:
+    ScopedSigpipeBlock()
+    : m_blocked(false)
+    {
+        sigemptyset(&m_sigpipe);
+        sigaddset(&m_sigpipe, SIGPIPE);
+        // When the thread already blocked SIGPIPE, a pending one is not ours to drop.
+        if(pthread_sigmask(SIG_BLOCK, &m_sigpipe, &m_previous) == 0)
+        {
+            m_blocked = sigismember(&m_previous, SIGPIPE) == 0;
+        }
+    }
+
+    ~ScopedSigpipeBlock()
+    {
+        if(!m_blocked)
+        {
+            return;
+        }
+        // A SIGPIPE raised here is pending on this thread, and would be
+        // delivered the moment the mask is restored.
+        const timespec no_wait = {};
+        while(sigtimedwait(&m_sigpipe, nullptr, &no_wait) == SIGPIPE)
+        {
+        }
+        pthread_sigmask(SIG_SETMASK, &m_previous, nullptr);
+    }
+
+    ScopedSigpipeBlock(const ScopedSigpipeBlock&)            = delete;
+    ScopedSigpipeBlock& operator=(const ScopedSigpipeBlock&) = delete;
+
+private:
+    sigset_t m_sigpipe;
+    sigset_t m_previous;
+    bool     m_blocked;
+};
+#endif
+
 // The URL with any query string elided and any userinfo removed. A user who
 // pastes a key into either would otherwise see it copied into the log and into
 // error text. The path stays: it cannot be told apart from a deployment name,
@@ -1085,6 +1148,12 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     // to whatever host the redirect names. A chat endpoint has no reason to
     // redirect, so refusing costs nothing and InterpretResponse says why.
     client.set_follow_location(false);
+#ifdef SO_NOSIGPIPE
+    client.set_socket_options(SuppressSigpipe);
+#endif
+#ifdef __linux__
+    const ScopedSigpipeBlock sigpipe_block;
+#endif
 
     const httplib::Headers headers = AuthHeaders(request, endpoint.flavour);
     const std::string      body =

@@ -155,6 +155,8 @@ private:
                                          bool               include_briefing) const;
     bool                 NeedsBriefing();
     void                 TrimConversation();
+    // Gives the live question a briefing when the trim dropped the only one.
+    void RestoreTrimmedBriefing();
     bool                 Busy() const;
 
     static AssistantPanel* s_instance;
@@ -210,6 +212,9 @@ private:
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
+    // Requests the user walked away from, still unwinding on their own threads.
+    // Update() lets go of the finished ones, and the destructor waits for the rest.
+    std::vector<std::future<void>> m_abandoned;
 };
 
 }  // namespace View

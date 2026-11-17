@@ -118,6 +118,11 @@ struct AssistantFetchState
     std::string sort_by;
     std::string sort_default;
     uint64_t    sort_column = 0;
+    // A track table read refused because the UI was loading a table of the same
+    // controller type under its own request id. The panel waits for that table
+    // rather than for this read's request id, which is idle.
+    bool                               waits_for_ui_table = false;
+    rocprofvis_controller_table_type_t ui_table_type      = kRPVControllerTableTypeEvents;
 };
 
 // What one tool call produced: either finished content, or a set of requests

@@ -2580,7 +2580,10 @@ Layered, transport at the bottom and the panel at the top:
   `goto` is the one writer of the selection the data tools default to,
   so it refuses a range that lies wholly outside the trace and clamps
   one that partly overlaps; when events are named, an out-of-trace
-  range is dropped and the events supply the window. Trace tab labels
+  range is dropped, the events supply the window, and the reply says
+  the range was dropped. Where it names the trace's own extent it
+  does so as raw `window_ns`, so the model can pass it straight back.
+  Trace tab labels
   are file names and can repeat: `switch_tab` with the label already in
   front moves to the next tab that shares it, and the reply then
   carries the tab's position (`tab N of M`) in parentheses - never the
@@ -2608,7 +2611,9 @@ Layered, transport at the bottom and the panel at the top:
   their shared tail, `FetchStartedResult`, after the fetch is refused
   rather than before issuing it, and the track tables also count a UI
   table of the same controller type as busy
-  (`IsTableRequestPending`). `FetchStartedResult` clears the slot's
+  (`IsTableRequestPending`). Such a read parks on that table
+  (`waits_for_ui_table`): its own request id is idle, and polling it
+  would re-run the tool every frame. `FetchStartedResult` clears the slot's
   table params when it queues a read, so a slot still without params
   once the request clears is reported as a failed query, never
   formatted from the previous call's rows.
@@ -2620,7 +2625,9 @@ Layered, transport at the bottom and the panel at the top:
   often as the user does - and a window that cannot be used is
   replaced rather than refused. `top_events`, `track_events` and
   `track_samples` add a `tracks:` line when a read without `track_ids`
-  used only the selected tracks or hit the 32-track cap. A `sort_by`
+  left tracks out: the timeline selection held only some of the tracks
+  with that operation, or the 32-track cap cut the list. A selection
+  that holds all of them narrows nothing and earns no line. A `sort_by`
   that names no column of the result adds a `note:` line saying what
   the rows are sorted by instead.
 
@@ -2932,18 +2939,34 @@ Rules that are easy to get wrong here:
   it was in flight (at most `ASSISTANT_STATS_MAX_RERUNS`), or the sort
   index was resolved against a stale header
   (`AssistantFetchNeedsRerun`). A re-run (`m_fetch_retries > 0`) can
-  happen every frame, so it is not logged and writes `m_status`
+  repeat within one wait, so it is not logged and writes `m_status`
   directly, as the slow-wait counter does; `SetStatus` scrolls the
   transcript and would pin it to the bottom for the whole wait.
-- **HTTP runs on a worker via `std::async`, and must stay cancellable.**
-  `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
-  is what lets the panel be destroyed without blocking on a
-  five-minute read timeout. `Send()` retries once on HTTP
+- **The briefing rides on a question, so the trim can take it.** It
+  goes out with the first question about a trace and is not repeated
+  (`NeedsBriefing`). When `TrimConversation` drops the exchange that
+  carried it, `RestoreTrimmedBriefing` puts a fresh one on the live
+  question before the request goes out, so no request leaves without
+  one.
+- **HTTP runs on a worker via `std::async`, and cancelling it must not
+  block the UI.** `AssistantChatCall::Cancel()` closes the socket, but
+  cpp-httplib holds that socket while it connects, so `Cancel()` first
+  waits out a connect in progress, up to the 15 s connect timeout.
+  `CancelPendingRequest()` therefore hands the cancel and the wait to
+  a thread of their own (`m_abandoned`). `Update()` lets go of that
+  thread once it is done, and the destructor waits for any still
+  running. `Send()` retries once on HTTP
   429/502/503/504, or on a connection that drops within 10 seconds,
   after a 2 s wait (`Retry-After` in seconds is honoured up to 10 s).
   The wait polls the cancel flag every 100 ms, so `Cancel()` still ends
   it promptly. Timeouts, refused connections, DNS and TLS failures,
-  and every other status are reported at once.
+  and every other status are reported at once. A peer that resets the
+  connection while the request is still being written fails the write
+  rather than raising SIGPIPE, whose default action would end the
+  app: the socket sets `SO_NOSIGPIPE` on macOS, and on Linux the
+  request's thread blocks SIGPIPE and drops any it raised. That stays
+  inside the client rather than ignoring SIGPIPE process-wide, which
+  the profiler's `fork()`/`execvp()` children would inherit.
 - **The tool context is rebuilt every call** (`MakeToolContext()`) from
   `AppWindow::GetCurrentProject()`, so it never holds a dead provider.
   The flip side is that the trace in front can change mid-turn, which

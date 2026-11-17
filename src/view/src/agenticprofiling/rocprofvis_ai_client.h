@@ -88,7 +88,8 @@ bool AssistantUrlIsCleartext(const std::string& url);
  *
  * A throttle (429), a gateway failure (502, 503, 504) or a connection that
  * drops straight away is tried once more after a short wait, which Cancel()
- * also cuts short.
+ * also cuts short. A peer that resets the connection while the request is
+ * still being written fails the request rather than raising SIGPIPE.
  */
 class AssistantChatCall
 {
@@ -97,6 +98,9 @@ public:
     AssistantChatResult Send(const AssistantChatRequest& request);
 
     // Aborts the request in flight, if any. Safe to call from another thread.
+    // While a connect is in progress cpp-httplib holds the socket, so this waits
+    // for the connect to finish, up to its timeout, before it can close it. Do
+    // not call it from a thread that must not stall.
     void Cancel();
 
 private:

@@ -175,6 +175,7 @@ private:
 
     rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(
         uint32_t stream_track_index, uint32_t db_instance);
+    rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
 
     rocprofvis_dm_track_category_t GetRegionTrackCategory() override
     {

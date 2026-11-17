@@ -843,6 +843,7 @@ ProfilerHub::LoadInformationCatalog(const ph_node_t& node, uint32_t source_index
             const ph_agent_t& agent = node.agents.agents[i];
             const uint64_t    id    = agent.row_id;
             catalog.SetInt("Agent", id, "id", static_cast<int64_t>(id));
+            catalog.SetInt("Agent", id, "nid", static_cast<int64_t>(node_id));
             catalog.SetInt("Agent", id, "type_index", static_cast<int64_t>(agent.id));
             catalog.SetText("Agent", id, "type", agent.agent_type);
             catalog.SetText("Agent", id, "name", agent.name);
@@ -1025,6 +1026,76 @@ ProfilerHub::PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index,
 }
 
 rocprofvis_dm_result_t
+ProfilerHub::PopulateUnusedAgents(uint32_t db_instance)
+{
+    // Agents that never recorded a kernel, copy, allocation, hip event, or
+    // counter have no track. The topology still needs a processor node so the
+    // hardware layout is visible. The node carries no events.
+    rocprofvis_dm_result_t result     = kRocProfVisDmResultSuccess;
+    const char*            table_name = "Agent";
+    CatalogTable*          table =
+        (CatalogTable*) CachedTables(db_instance)->GetTableHandle(table_name);
+    if(table == nullptr) return kRocProfVisDmResultSuccess;
+    for(uint64_t i = 0; i < table->NumRows(); i++)
+    {
+        uint64_t agent_id = std::atoll(table->CellTextByIndex(i, "id"));
+        uint64_t node_id  = std::atoll(table->CellTextByIndex(i, "nid"));
+        bool     agent_in_use = false;
+        for(int track_id = 0; track_id < NumTracks(); track_id++)
+        {
+            DbInstance* instance =
+                (DbInstance*) TrackPropertiesAt(track_id)->track_indentifiers.db_instance;
+            if(instance == nullptr || instance->GuidIndex() != db_instance) continue;
+            rocprofvis_dm_track_identifiers_t& track_indentifiers =
+                TrackPropertiesAt(track_id)->track_indentifiers;
+            if(GpuAndPMCTracks(track_indentifiers.category) &&
+               track_indentifiers.id[TRACK_ID_NODE] == node_id &&
+               track_indentifiers.id[TRACK_ID_AGENT] == agent_id)
+            {
+                agent_in_use = true;
+                break;
+            }
+        }
+        if(agent_in_use) continue;
+
+        rocprofvis_dm_track_identifiers_t track_indentifiers;
+        uint64_t pid = std::atoll(table->CellTextByIndex(i, "pid"));
+        track_indentifiers.category                   = kRocProfVisDmNotATrack;
+        track_indentifiers.id[TRACK_ID_NODE]          = node_id;
+        track_indentifiers.id[TRACK_ID_AGENT]         = agent_id;
+        track_indentifiers.process_id                = static_cast<rocprofvis_dm_track_id_t>(pid);
+        track_indentifiers.is_numeric[TRACK_ID_NODE]  = true;
+        track_indentifiers.is_numeric[TRACK_ID_QUEUE] = true;
+        track_indentifiers.tag[TRACK_ID_NODE]         = Builder::NODE_ID_SERVICE_NAME;
+        track_indentifiers.tag[TRACK_ID_AGENT]        = Builder::AGENT_ID_SERVICE_NAME;
+        track_indentifiers.tag[TRACK_ID_QUEUE]        = "noData";
+        track_indentifiers.db_instance               = DbInstancePtrAt(db_instance);
+        result = BindObject()->FuncAddTopologyNode(BindObject()->trace_object,
+                                                   &track_indentifiers);
+        if(kRocProfVisDmResultSuccess == result ||
+           kRocProfVisDmResultInvalidParameter == result)
+        {
+            if(kRocProfVisDmResultSuccess ==
+               CachedTables(db_instance)
+                   ->PopulateTrackTopologyData(this, &track_indentifiers, db_instance,
+                                               table_name, agent_id))
+            {
+                if(CachedTables(db_instance)
+                       ->PopulateTrackTopologyData(this, &track_indentifiers, db_instance,
+                                                   "Node", node_id) ==
+                   kRocProfVisDmResultSuccess)
+                {
+                    result = CachedTables(db_instance)
+                                 ->PopulateTrackTopologyData(this, &track_indentifiers,
+                                                             db_instance, "Agent", agent_id);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t
 ProfilerHub::ReadTraceMetadata(Future* future)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL,
@@ -1141,6 +1212,13 @@ ProfilerHub::ReadTraceMetadata(Future* future)
         if(!tracks_added) break;
 
         rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+        for(auto& guid_info : DbInstances())
+        {
+            result = PopulateUnusedAgents(guid_info.first.GuidIndex());
+            if(result != kRocProfVisDmResultSuccess) break;
+        }
+        if(result != kRocProfVisDmResultSuccess) break;
+
         for(int i = 0; i < NumTracks(); i++)
         {
             if(TrackPropertiesAt(i)->track_indentifiers.category ==

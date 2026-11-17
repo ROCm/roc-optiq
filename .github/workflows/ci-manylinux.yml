@@ -227,6 +227,17 @@ jobs:
           echo "Python3_ROOT_DIR=${SHARED_PY}" >> "${GITHUB_ENV}"
           echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
+      - name: Set nightly package version
+        if: inputs.s3_bucket_env == 'nightly'
+        run: |
+          # Embed the date in the DEB/RPM release (e.g. 1~20261116) before
+          # packaging so package managers can order successive nightlies. The
+          # '~' sorts below the plain "1" release, so a later stable build
+          # still upgrades a nightly.
+          BUILD_TIMESTAMP="$(date -u '+%Y%m%d')"
+          echo "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" >> "$GITHUB_ENV"
+          echo "PACKAGE_RELEASE=1~${BUILD_TIMESTAMP}" >> "$GITHUB_ENV"
+
       - name: Build, Make, and Verify Installation
         env:
           CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
@@ -247,6 +258,8 @@ jobs:
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
             ${Python3_ROOT_DIR:+-DPython3_ROOT_DIR="${Python3_ROOT_DIR}"} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
+            ${PACKAGE_RELEASE:+-DCPACK_DEBIAN_PACKAGE_RELEASE="${PACKAGE_RELEASE}"} \
+            ${PACKAGE_RELEASE:+-DCPACK_RPM_PACKAGE_RELEASE="${PACKAGE_RELEASE}"} \
             -DROCM_PACKAGE_NAME="amdrocm${ROCM_VERSION}-roc-optiq" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"
           cmake --build "${BUILD_DIR}" --parallel 4 --target package
@@ -309,7 +322,6 @@ jobs:
             nightly)
               echo "S3_BUCKET=${{ secrets.AWS_NIGHTLY_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_NIGHTLY_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
-              echo "BUILD_TIMESTAMP=$(date -u '+%Y%m%d')" >> "$GITHUB_ENV"
               ;;
             rc)
               echo "S3_BUCKET=${{ secrets.AWS_RC_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
@@ -349,12 +361,8 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_BASE=$(basename "${DEB_SRC}")
-          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            DEB_NAME="$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/~'"${BUILD_TIMESTAMP}"'_\1/')"
-          else
-            DEB_NAME="${DEB_BASE}"
-          fi
+          # The version, including any nightly release, is already in the name
+          DEB_NAME=$(basename "${DEB_SRC}")
           S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
@@ -365,12 +373,7 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_BASE=$(basename "${DEB_SRC}")
-          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            DEB_NAME="$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/~'"${BUILD_TIMESTAMP}"'_\1/')"
-          else
-            DEB_NAME="${DEB_BASE}"
-          fi
+          DEB_NAME=$(basename "${DEB_SRC}")
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
@@ -410,11 +413,9 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
-          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//' | sed 's/\.\([^.]*\.rpm\)$/~'"${BUILD_TIMESTAMP}"'.\1/')"
-          else
-            RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
-          fi
+          # The nightly release is already embedded in the RPM; only drop the
+          # distro tag from the filename.
+          RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
 
           # Use the renamed file so repodata <location href> matches the S3 key

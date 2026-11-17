@@ -2628,14 +2628,6 @@ ToolCompareTraces(const AssistantToolContext& context, const jt::Json& args,
         fetch.kind             = AssistantFetchKind::kCompareTraces;
         fetch.project_id       = side->project_id;
         DataProvider* provider = side->data_provider;
-        if(provider->SummaryFetchFailed())
-        {
-            return DoneResult("The summary of " + side->trace_name +
-                                  " failed to load, so the runs cannot be compared. "
-                                  "Call get_summary on that trace to retry, or use "
-                                  "top_events on each trace instead.",
-                              "Summary unavailable");
-        }
         if(AssistantSummaryCurrent(*side))
         {
             return DoneResult("The summary of " + side->trace_name +

@@ -97,7 +97,6 @@ const uint64_t DataProvider::FETCH_PC_SAMPLING_STALLS_REQUEST_ID =
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
-, m_summary_fetch_failed(false)
 , m_trace_controller(nullptr)
 , m_trace_timeline(nullptr)
 , m_track_data_ready_callback(nullptr)
@@ -369,7 +368,7 @@ DataProvider::SetTrackDataReadyCallback(
 }
 
 void
-DataProvider::SetSummaryDataReadyCallback(const std::function<void()>& callback)
+DataProvider::SetSummaryDataReadyCallback(const std::function<void(bool)>& callback)
 {
     m_summary_data_ready_callback = callback;
 }
@@ -2589,7 +2588,6 @@ DataProvider::FetchSummary()
     auto it = m_requests.find(SUMMARY_REQUEST_ID);
     if(it == m_requests.end())
     {
-        m_summary_fetch_failed                    = false;
         rocprofvis_result_t                result = kRocProfVisResultUnknownError;
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
@@ -2620,12 +2618,6 @@ DataProvider::FetchSummary()
         spdlog::debug("Request for summary is already pending");
         return false;
     }
-}
-
-bool
-DataProvider::SummaryFetchFailed() const
-{
-    return m_summary_fetch_failed;
 }
 
 bool
@@ -3426,6 +3418,7 @@ DataProvider::ProcessCleanupDatabaseRequest(RequestInfo& req)
 void
 DataProvider::ProcessSummaryRequest(RequestInfo& req)
 {
+    const bool succeeded = req.response_code == kRocProfVisResultSuccess;
     if(req.request_args)
     {
         rocprofvis_controller_arguments_free(req.request_args);
@@ -3434,9 +3427,8 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     if(req.request_obj_handle)
     {
         rocprofvis_controller_summary_metrics_t* metrics_handle = req.request_obj_handle;
-        if(req.response_code == kRocProfVisResultSuccess)
+        if(succeeded)
         {
-            m_summary_fetch_failed = false;
             m_model.GetSummary().Clear();
             m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
@@ -3445,13 +3437,10 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
         }
         else if(req.response_code == kRocProfVisResultCancelled)
         {
-            // Cancellation is user intent (Clear or closing a trace), not a
-            // failed summary. A later comparison may request it again.
             spdlog::debug("Summary request cancelled");
         }
         else
         {
-            m_summary_fetch_failed = true;
             spdlog::warn("Summary request failed with code {}", req.response_code);
         }
         rocprofvis_controller_summary_metric_free(metrics_handle);
@@ -3459,7 +3448,7 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     }
     if(m_summary_data_ready_callback)
     {
-        m_summary_data_ready_callback();
+        m_summary_data_ready_callback(succeeded);
     }
 }
 

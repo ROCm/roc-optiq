@@ -113,6 +113,11 @@ TraceView::TraceView()
                 trace_path, request_id, response_code, error_message));
         });
 
+    m_data_provider.SetSummaryDataReadyCallback([this](bool success) {
+        EventManager::GetInstance()->AddEvent(std::make_shared<SummaryEvent>(
+            m_data_provider.GetTraceFilePath(), success));
+    });
+
     m_data_provider.SetTraceLoadedCallback(
         [this](const std::string& trace_path, uint64_t response_code) {
             if(response_code != kRocProfVisResultSuccess)

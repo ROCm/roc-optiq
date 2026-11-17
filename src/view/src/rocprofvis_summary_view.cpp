@@ -58,6 +58,7 @@ SummaryView::SummaryView(DataProvider&                      dp,
 , m_settings(SettingsManager::GetInstance())
 , m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
 , m_progress_token(EventManager::InvalidSubscriptionToken)
+, m_summary_event_token(EventManager::InvalidSubscriptionToken)
 {
     m_tab_container = std::make_unique<TabContainer>();
     m_topology      = std::make_shared<SummaryTopology>(m_data_provider);
@@ -75,14 +76,22 @@ SummaryView::SummaryView(DataProvider&                      dp,
         DataProvider::SUMMARY_THREAD_INSTANCE_TABLE_REQUEST_ID);
     m_overview = std::make_shared<SummaryOverview>(m_data_provider, m_topology,
                                                    m_top_events, *m_tab_container.get());
-    m_data_provider.SetSummaryDataReadyCallback([this]() {
-        m_topology->Fetched();
-        for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
-        {
-            top_events->Fetched();
-        }
-        m_data_changed = true;
-    });
+    m_summary_event_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kSummaryComplete),
+        [this](std::shared_ptr<RocEvent> e) {
+            std::shared_ptr<SummaryEvent> event = std::dynamic_pointer_cast<SummaryEvent>(e);
+            if(event == nullptr || !event->Succeeded() ||
+               event->GetSourceId() != m_data_provider.GetTraceFilePath())
+            {
+                return;
+            }
+            m_topology->Fetched();
+            for(std::shared_ptr<SummaryTopEvents>& top_events : m_top_events)
+            {
+                top_events->Fetched();
+            }
+            m_data_changed = true;
+        });
     m_time_format_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged),
         [this](std::shared_ptr<RocEvent> e) {
@@ -113,6 +122,8 @@ SummaryView::~SummaryView()
         static_cast<int>(RocEvents::kTimeFormatChanged), m_time_format_changed_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kRequestProgressUpdate), m_progress_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kSummaryComplete), m_summary_event_token);
 }
 
 void

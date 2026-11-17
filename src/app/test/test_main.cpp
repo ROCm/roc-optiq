@@ -35,6 +35,11 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);
+    result &= cli_parser.AddOption(
+        "e", "test-filter",
+        "With --run-tests, queue only the tests whose name or category matches: "
+        "comma-separated, '^' anchors to the start, a leading '-' excludes",
+        true);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -194,9 +199,15 @@ main(int argc, char** argv)
                                              "{} frames; queueing tests anyway",
                                              kHeadlessSettleFrameCap);
                             }
-                            // File load settled (or cap hit): queue every registered test.
+                            // File load settled (or cap hit): queue every registered
+                            // test, or those the filter names.
+                            const std::string filter =
+                                cli_parser.WasOptionFound("test-filter")
+                                    ? cli_parser.GetOptionValue("test-filter")
+                                    : std::string();
                             ImGuiTestEngine_QueueTests(
-                                engine, ImGuiTestGroup_Tests, nullptr,
+                                engine, ImGuiTestGroup_Tests,
+                                filter.empty() ? nullptr : filter.c_str(),
                                 ImGuiTestRunFlags_RunFromCommandLine);
                             headless_tests_queued = true;
                         }

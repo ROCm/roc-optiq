@@ -1,0 +1,4 @@
+tool: top_events
+args: {"category":"bogus"}
+
+Unknown category. Use dispatch, memory_copy, memory_alloc, instrumented, or sampled.

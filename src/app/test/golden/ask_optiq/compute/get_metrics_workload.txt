@@ -1,0 +1,9 @@
+tool: get_metrics
+args: {"metrics":["2.1.0"],"scope":"workload"}
+
+workload_id: 1
+scope: workload
+  System Speed-of-Light / System Speed-of-Light
+    2.1.0  VALU FLOPs [Gflop/s]: Avg=125.86 Peak=72089.60 Pct of Peak=0.1746
+metrics_returned: 1
+

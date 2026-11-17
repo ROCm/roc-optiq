@@ -1,0 +1,4 @@
+tool: kernel_summary
+args: {}
+
+kernel_summary needs a kernel_id or kernel_name. Call list_kernels for the ids.

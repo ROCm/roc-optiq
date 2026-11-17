@@ -1,0 +1,7 @@
+tool: top_events
+args: {"category":"instrumented","filters":[{"column":"name","op":"starts_with","value":"hipMemcpy"}]}
+
+window_ns: 0 .. 5044424388 (whole trace)
+columns: name Invocations DurationTotal DurationAvg DurationMin DurationMax
+1. name=hipMemcpyAsync Invocations=4 DurationTotal=217717156.000000 DurationAvg=54429289.000000 DurationMin=47686699.000000 DurationMax=68520089.000000
+

@@ -2629,7 +2629,9 @@ Layered, transport at the bottom and the panel at the top:
   with that operation, or the 32-track cap cut the list. A selection
   that holds all of them narrows nothing and earns no line. A `sort_by`
   that names no column of the result adds a `note:` line saying what
-  the rows are sorted by instead.
+  the rows are sorted by instead. Without `sort_by`, event reads sort by
+  `id` and sample reads by `start`, since every sample row has the same
+  first column.
 
   The summary tools read `SummaryModel` and run no query:
   - `get_summary` - one scope's top kernels, memory and thread
@@ -3011,6 +3013,45 @@ Rules that are easy to get wrong here:
   bytes are left) and cuts the text at
   `ASSISTANT_MAX_ERROR_TEXT_BYTES`, which on a long 404 also drops the
   trailing `Requested <url>` hint.
+
+#### Testing Ask Optiq
+
+- **The suite is `src/app/test/ask_optiq_tests.cpp`, category
+  `ask_optiq`.** It is built into `roc-optiq-tests` when agentic
+  profiling is on; the compute and scripting cases also need their own
+  flags. Every turn goes to `MockChatEndpoint`
+  (`ask_optiq_mock_endpoint.{h,cpp}`), a loopback httplib server that
+  answers from a script (`Answer`, `Calls`, `Failure`, plus `delay_ms`,
+  `drop` and `LimitBody` for transport faults) and records each request
+  body. `AskOptiqFixture` points a provider named `ask-optiq-tests` at
+  it, so a saved key is never sent, and restores the active provider,
+  time format, and panel state afterwards. Private state is reached
+  through `AssistantPanelTestPeer` and `ScriptEditorTestPeer` in
+  `src/view/test/rocprofvis_view_test_access.h`.
+- **Run it once per sample trace.** For example,
+  `roc-optiq-tests --run-tests --test-filter ask_optiq -f sample/rocpd-transpose.db`,
+  then again with `sample/rocprof_compute_23ed6f36.db`. A case written
+  for the other kind of trace skips, so one run covers only half the
+  suite. `--test-filter` (`-e`) takes the test engine's filter: test or
+  category names, comma-separated, `^` to anchor and `-` to exclude.
+  The CTest entries run both traces from the source root.
+- **The golden tests pin what every tool replies.**
+  `golden_system_tools` and `golden_compute_tools` run each tool with
+  fixed arguments, run the whole set twice, and compare both passes with
+  each other and with
+  `src/app/test/golden/ask_optiq/{system,compute}/<case>.txt`. The
+  trace's briefing is pinned beside them in `briefing.txt`. A mismatch
+  prints the first differing line and writes the actual output under
+  `<temp>/roc-optiq-golden/<group>`. After an intended change, rewrite
+  the files with `ROCPROFVIS_UPDATE_GOLDEN=1` and review the diff.
+  `ROCPROFVIS_GOLDEN_DIR` reads them from somewhere other than the
+  working directory.
+- **A tool reply must be the same on every run.** It must not depend on
+  what ran before it, on build flags (the unknown-tool reply lists the
+  tools built in, so it has no golden), or on SQLite's scan order. That
+  is why sample reads default to time order: the first sample column,
+  `node`, is the same on every row. A sort on a column that ties leaves
+  row order to the database, and the second golden pass catches it.
 
 ## 13. Remote / SSH and Profiler Launch UI
 

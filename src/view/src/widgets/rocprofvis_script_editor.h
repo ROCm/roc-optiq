@@ -70,6 +70,8 @@ public:
     void           Reject();
 
 private:
+    friend struct ScriptEditorTestPeer;
+
     void        Run();
     void        Cancel();
     void        LoadFromFile();

@@ -115,9 +115,9 @@ Showing where kernels are positioned relative to these rooflines helps determine
 - The kernel performance at each cache level is displayed as individual dots in the roofline chart. 
 - Click |gear| to access the roofline chart menu, which is shown in the picture below.
 
-    .. image:: ../images/Roofline-legend.png
-       :width: 400
-       :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
+.. image:: ../images/Roofline-legend.png
+    :width: 400
+    :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
 
     To adjust your view of the chart:
 

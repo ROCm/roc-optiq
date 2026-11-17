@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -688,6 +689,28 @@ ProfilerHub::AddTrack(ph_track_t& track, DbInstance* instance)
     return result;
 }
 
+// Missing indexes between populated buckets keep the previous value and a
+// zero count, the same fill ProfileDatabase applies after its SQL histogram.
+static void
+fill_histogram_gaps(std::map<uint32_t, std::pair<uint32_t, double>>& histogram)
+{
+    if(histogram.size() <= 1) return;
+    auto it   = histogram.begin();
+    auto next = std::next(it);
+    while(next != histogram.end())
+    {
+        const uint32_t x0 = it->first;
+        const uint32_t x1 = next->first;
+        const double   y0 = it->second.second;
+        for(uint32_t x = x0 + 1; x < x1; ++x)
+        {
+            histogram.emplace(x, std::make_pair(static_cast<uint32_t>(0), y0));
+        }
+        it = next;
+        ++next;
+    }
+}
+
 rocprofvis_dm_result_t
 ProfilerHub::BuildHistogram(Future* future)
 {
@@ -711,13 +734,6 @@ ProfilerHub::BuildHistogram(Future* future)
 
     TraceProperties()->histogram_bucket_size  = histogram.bucket_size;
     TraceProperties()->histogram_bucket_count = histogram.bucket_count;
-    // The hub grid starts at origin_ts for every source, while each source's
-    // track timestamps are relative to its own start.
-    TraceProperties()->histogram_aligned = false;
-    // if(!TraceProperties()->db_inst_start_time.empty() && histogram.bucket_count > 0)
-    //{
-    //     TraceProperties()->db_inst_start_time[0] = histogram.origin_ts;
-    // }
 
     if(histogram.tracks != nullptr)
     {
@@ -739,12 +755,13 @@ ProfilerHub::BuildHistogram(Future* future)
                 ++bucket_index)
             {
                 const ph_histogram_bucket_t& bucket = source.buckets[bucket_index];
-                uint32_t                     count  = bucket.event_count > UINT32_MAX
-                                                          ? UINT32_MAX
-                                                          : static_cast<uint32_t>(bucket.event_count);
+                const uint32_t                count  = bucket.event_count > UINT32_MAX
+                                                           ? UINT32_MAX
+                                                           : static_cast<uint32_t>(bucket.event_count);
                 destination->histogram[bucket.bucket_index] =
                     std::make_pair(count, bucket.value);
             }
+            fill_histogram_gaps(destination->histogram);
         }
     }
 

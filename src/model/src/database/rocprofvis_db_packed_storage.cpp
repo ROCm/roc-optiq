@@ -570,19 +570,23 @@ namespace DataModel
                     DbInstance* db_instance = GetDbInstanceForRow(db, row.get());
                     ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
                     uint8_t size = ColumnTypeSize(it->m_type[op]);
+                    uint64_t rank = 0;
                     if (size > 0)
                     {
                         uint64_t value = row->Get<uint64_t>(it->m_offset[op], size);
                         uint64_t string_index = 0;
                         if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, db_instance->GuidIndex(), string_index))
                         {
-                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
+                            rank = db->BindObject()->FuncGetStringOrder(
+                                db->BindObject()->trace_object,
+                                static_cast<uint32_t>(string_index));
                         }
-                        
-                        sort_values.push_back(value);
-                    } else
-                        sort_values.push_back(0);
-               
+                        else
+                        {
+                            rank = value;
+                        }
+                    }
+                    sort_values.push_back(rank);
                 }
                 std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
@@ -736,10 +740,18 @@ namespace DataModel
             auto columns = tables[i]->GetColumns();
             if (tables[i]->m_rows.size() > 0)
             {
-                uint8_t op = tables[i]->GetOperationValue(0);
-                for (auto column : columns)
+                std::unordered_set<uint8_t> table_operations;
+                for (size_t row_index = 0; row_index < tables[i]->m_rows.size(); ++row_index)
                 {
-                    AddMergedColumn(column.m_name, op, column.m_type, column.m_offset, column.m_schema_index);
+                    table_operations.insert(tables[i]->GetOperationValue(row_index));
+                }
+                for (uint8_t op : table_operations)
+                {
+                    for (const ColumnDef& column : columns)
+                    {
+                        AddMergedColumn(column.m_name, op, column.m_type, column.m_offset,
+                                        column.m_schema_index);
+                    }
                 }
             }
         }

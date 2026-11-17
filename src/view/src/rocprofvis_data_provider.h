@@ -217,7 +217,11 @@ public:
 
     bool FetchTable(const TableRequestParams& table_params);
 
+    // Summarizes the whole trace into DataModel().GetSummary().
     bool FetchSummary();
+    // Summarizes one compare source into DataModel().GetSourceSummary(source), under
+    // the caller's request id so the two sources' summaries never share one.
+    bool FetchSourceSummary(uint64_t source, uint64_t request_id);
 
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
@@ -322,6 +326,7 @@ private:
 
     bool FetchTrackTable(const TrackTableRequestParams& table_params);
     bool FetchEventSearch(const EventSearchRequestParams& table_params);
+    bool IssueSummaryRequest(uint64_t request_id, std::optional<uint64_t> source);
 
     /*
      * The request id, table handle and model slot a table fetch should use.
@@ -392,25 +397,30 @@ private:
     void CreateRawEventData(const TrackRequestParams& params, const RequestInfo& req);
     void CreateRawSampleData(const TrackRequestParams& params,
                              const RequestInfo&    req);
-    void CreateSummaryData(rocprofvis_handle_t* metrics_handle,
+    // The summary helpers fill, and register the values of, the model the
+    // request was made for: the trace's, or one compare source's.
+    void CreateSummaryData(SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
                            std::vector<size_t>& sub_metrics_idx);
-    void CreateSummaryGPUData(rocprofvis_handle_t* metrics_handle,
-                              SummaryInfo::GPU&    output);
-    void CreateSummaryCPUData(rocprofvis_handle_t* metrics_handle,
-                              SummaryInfo::CPU&    output);
-    void CreateSummaryProcessThreadData(rocprofvis_handle_t*           metrics_handle,
+    void CreateSummaryGPUData(SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::GPU& output);
+    void CreateSummaryCPUData(SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+                              SummaryInfo::CPU& output);
+    void CreateSummaryProcessThreadData(SummaryModel&                  summary,
+                                        rocprofvis_handle_t*           metrics_handle,
                                         SummaryInfo::AggregateMetrics& output);
-    void CreateSummaryTraceNodeData(rocprofvis_handle_t*           metrics_handle,
+    void CreateSummaryTraceNodeData(SummaryModel&                  summary,
+                                    rocprofvis_handle_t*           metrics_handle,
                                     SummaryInfo::AggregateMetrics& output);
     void CreateSummaryTopOpEventsData(
-        rocprofvis_handle_t* metrics_handle,
+        SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
         std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventsMetricLast>
             op_properties,
         std::array<rocprofvis_property_t, __kRPVAnalysisSummaryTopEventMetricLast>
                               event_properties,
         rocprofvis_property_t event_name_property, SummaryInfo::TopOpEvents& output);
     void CreateSummaryCountersData(
-        rocprofvis_handle_t* metrics_handle, rocprofvis_property_t num_counters_property,
+        SummaryModel& summary, rocprofvis_handle_t* metrics_handle,
+        rocprofvis_property_t num_counters_property,
         rocprofvis_property_t counter_property,
         std::array<rocprofvis_property_t, __kRPVAnalysisSummaryCounterMetricLast>
                                metric_properties,

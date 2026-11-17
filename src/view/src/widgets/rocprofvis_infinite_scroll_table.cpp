@@ -692,6 +692,7 @@ InfiniteScrollTable::Render()
                                 time_tooltip = col + " ns";
                             }
 
+                            RenderCellPrefix(row_n, column);
                             RenderCell(display_value, row_n, column,
                                        is_time_column ? &time_tooltip : nullptr);
 

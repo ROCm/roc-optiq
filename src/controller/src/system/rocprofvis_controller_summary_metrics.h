@@ -42,6 +42,9 @@ public:
     rocprofvis_result_t AggregateSubMetrics();
     void Reset();
     bool Empty() const;
+    // Events each top list keeps before the rest fold into "Others", at every
+    // level below this one too.
+    void SetTopEventsLimit(uint64_t limit);
 
 private:
     struct TopOpEvents
@@ -98,6 +101,7 @@ private:
     std::optional<TopOpEvents> m_memory;
     std::optional<TopOpEvents> m_launch;
     std::vector<SummaryMetrics> m_sub_metrics;
+    uint64_t m_top_events_limit;
 };
 
 }

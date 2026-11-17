@@ -196,14 +196,15 @@ TEST_CASE_METHOD(SummaryFailureFixture, "Summary accepts populated and empty tim
     CHECK(Fetch() == kRocProfVisResultSuccess);
     CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel) ==
           kRPVAnalysisSummaryAggregationLevelTrace);
-    const uint64_t memory_events =
-        Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
     if(empty)
     {
-        CHECK(memory_events == 0);
+        // Nothing falls in a range past the end of the trace: it has no events, and no
+        // counter holds its last value beyond the end of its own trace.
+        CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyNumSubMetrics) == 0);
     }
     else
     {
-        CHECK(memory_events > 0);
+        CHECK(Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents) >
+              0);
     }
 }

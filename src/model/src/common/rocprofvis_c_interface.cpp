@@ -41,6 +41,18 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(
 }
 
 /****************************************************************************************************
+ * @brief Detects two databases written by the same profiling run, such as a file and a copy of it
+ *
+ * @param first path of the first database file
+ * @param second path of the second database file
+ *
+ ***************************************************************************************************/
+bool rocprofvis_db_same_run(rocprofvis_db_filename_t first, rocprofvis_db_filename_t second) {
+    return first != nullptr && second != nullptr &&
+           RocProfVis::DataModel::ProfileDatabase::SameRun(first, second);
+}
+
+/****************************************************************************************************
 * @brief Opens database of provided path and type
 *      kAutodetect = 0, 
 *	    kRocpdSqlite = 1,

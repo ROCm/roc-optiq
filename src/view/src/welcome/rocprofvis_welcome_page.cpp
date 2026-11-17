@@ -94,6 +94,9 @@ constexpr const char* SUPPORTED_FILE_TYPES_HINT =
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
     "Supported types: .db, .rpd, .yaml, .rpv";
 #endif
+constexpr const char* COMPARE_HINT =
+    "Opens two ROCm Systems Profiler databases as one project, with every view "
+    "showing them side by side.";
 
 struct ResourceGroup
 {
@@ -293,10 +296,11 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     }
 }
 
-// Primary action row used in the Start tile.
+// Action row used in the Start tile: accent filled when primary, outlined on the
+// frame color otherwise.
 bool
-DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
-                  const char* subtitle, const char* tooltip, float width)
+DrawAction(SettingsManager& settings, const char* id, const char* title,
+           const char* subtitle, const char* tooltip, float width, bool primary)
 {
     const float  font_size = ImGui::GetFontSize();
     const ImVec2 size(width, font_size * WELCOME_ACTION_HEIGHT_EM);
@@ -315,12 +319,26 @@ DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     const float rounding  = settings.GetDefaultStyle().FrameRounding;
-    const ImU32 bg_col = active   ? settings.GetColor(Colors::kAccentActive)
-                           : hovered ? settings.GetColor(Colors::kAccentHover)
-                                     : settings.GetColor(Colors::kAccent);
-    const ImU32 border_col =
-        hovered || active ? settings.GetColor(Colors::kAccentHover)
-                          : settings.GetColor(Colors::kAccent);
+    ImU32       bg_col    = settings.GetColor(Colors::kBgFrame);
+    ImU32       border_col =
+        settings.GetColor(hovered || active ? Colors::kAccent : Colors::kBorderColor);
+    ImU32 title_col    = settings.GetColor(Colors::kTextMain);
+    ImU32 subtitle_col = settings.GetColor(Colors::kTextDim);
+    if(primary)
+    {
+        bg_col       = active    ? settings.GetColor(Colors::kAccentActive)
+                       : hovered ? settings.GetColor(Colors::kAccentHover)
+                                 : settings.GetColor(Colors::kAccent);
+        border_col   = hovered || active ? settings.GetColor(Colors::kAccentHover)
+                                         : settings.GetColor(Colors::kAccent);
+        title_col    = settings.GetColor(Colors::kTextOnAccent);
+        subtitle_col = title_col;
+    }
+    else if(hovered || active)
+    {
+        bg_col =
+            settings.GetColor(active ? Colors::kButtonActive : Colors::kButtonHovered);
+    }
 
     draw_list->AddRectFilled(pos, bottom_right, bg_col, rounding);
     draw_list->AddRect(pos, bottom_right, border_col, rounding);
@@ -332,10 +350,10 @@ DrawPrimaryAction(SettingsManager& settings, const char* id, const char* title,
         ImVec2(bottom_right.x - font_size * WELCOME_ACTION_RIGHT_PAD_EM,
                bottom_right.y),
         true);
-    draw_list->AddText(text_pos, settings.GetColor(Colors::kTextOnAccent), title);
+    draw_list->AddText(text_pos, title_col, title);
     draw_list->AddText(
         ImVec2(text_pos.x, text_pos.y + font_size * WELCOME_ACTION_LINE_GAP_EM),
-        settings.GetColor(Colors::kTextOnAccent), subtitle);
+        subtitle_col, subtitle);
     draw_list->PopClipRect();
 
     ImGui::PopID();
@@ -404,9 +422,11 @@ SectionHeader(SettingsManager& settings, const char* title,
 }
 }  // namespace
 
-WelcomePage::WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recent)
-    : m_on_open_file(std::move(on_open_file))
-    , m_on_open_recent(std::move(on_open_recent))
+WelcomePage::WelcomePage(OpenFileFn on_open_file, OpenRecentFileFn on_open_recent,
+                         CompareFn on_compare)
+: m_on_open_file(std::move(on_open_file))
+, m_on_open_recent(std::move(on_open_recent))
+, m_on_compare(std::move(on_compare))
 {
     // Two flex cards: left = Start + Recent, right = Resources. The grow ratios
     // keep Resources the wider panel; the min widths (set per-frame in Render)
@@ -519,11 +539,17 @@ WelcomePage::RenderLeftCard()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                             ImVec2(0.0f, font_size * WELCOME_ACTION_SPACING_EM));
         const float inner_w = ImGui::GetContentRegionAvail().x;
-        if(DrawPrimaryAction(settings, "open_trace", "Open Trace File...",
-                             "Open a .db, .rpd, .rpv or .yaml file.",
-                             SUPPORTED_FILE_TYPES_HINT, inner_w))
+        if(DrawAction(settings, "open_trace", "Open Trace File...",
+                      "Open a .db, .rpd, .rpv or .yaml file.", SUPPORTED_FILE_TYPES_HINT,
+                      inner_w, true))
         {
             m_on_open_file();
+        }
+        if(m_on_compare &&
+           DrawAction(settings, "compare_traces", "Compare Traces...",
+                      "Load two .db traces side by side.", COMPARE_HINT, inner_w, false))
+        {
+            m_on_compare();
         }
 
         ImGui::Dummy(ImVec2(0.0f, font_size * WELCOME_SECTION_GAP_EM));

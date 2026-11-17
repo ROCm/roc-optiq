@@ -14,6 +14,7 @@ namespace Controller
 {
 
 constexpr const char* TOP_EVENT_REMAINDER_NAME = "Others";
+constexpr uint64_t    DEFAULT_TOP_EVENTS_LIMIT = 10;
 
 SummaryMetrics::SummaryMetrics()
 : Handle(__kRPVAnalysisSummaryMetricPropertiesFirst, __kRPVAnalysisSummaryProcessThreadPropertiesLast)
@@ -23,7 +24,13 @@ SummaryMetrics::SummaryMetrics()
 , m_cpu(std::nullopt)
 , m_memory(std::nullopt)
 , m_launch(std::nullopt)
+, m_top_events_limit(DEFAULT_TOP_EVENTS_LIMIT)
 {}
+
+void SummaryMetrics::SetTopEventsLimit(uint64_t limit)
+{
+    m_top_events_limit = limit;
+}
 
 rocprofvis_controller_object_type_t SummaryMetrics::GetType(void) 
 {
@@ -1424,6 +1431,7 @@ rocprofvis_result_t SummaryMetrics::AggregateSubMetrics()
         std::vector<const std::vector<Counter>*> cpu_counter_subs;
         for(SummaryMetrics& sub : m_sub_metrics)
         {
+            sub.m_top_events_limit = m_top_events_limit;
             result = sub.AggregateSubMetrics();
             if(result == kRocProfVisResultSuccess)
             {
@@ -1634,14 +1642,15 @@ void SummaryMetrics::AppendTopEventsRemainder(TopOpEvents& events)
 {
     uint64_t invocations = 0;
     uint64_t duration = 0;
-    for(size_t i = 0; i < std::min((size_t)10, events.top.size()); i++)
+    const size_t limit = static_cast<size_t>(m_top_events_limit);
+    for(size_t i = 0; i < std::min(limit, events.top.size()); i++)
     {
         invocations += events.top[i].invocations;
         duration += events.top[i].duration_sum;
     }
-    if(events.top.size() > 10)
+    if(events.top.size() > limit)
     {
-        events.top.resize(10);
+        events.top.resize(limit);
     }
     if(invocations < events.op_invocations || duration < events.op_duration)
     {

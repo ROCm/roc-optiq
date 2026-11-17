@@ -673,6 +673,8 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsAgentId                             = 0xE0000014,
     kRPVControllerTableArgsProcessId                           = 0xE0000015,
     kRPVControllerTableArgsThreadId                            = 0xE0000016,
+    // Source file index of a compare trace; restricts the rows to that source.
+    kRPVControllerTableArgsFileId                              = 0xE0000017,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t

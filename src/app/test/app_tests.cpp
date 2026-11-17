@@ -18,6 +18,7 @@
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -32,6 +33,7 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#include "sqlite3.h"
 using namespace RocProfVis::View;
 
 namespace
@@ -331,6 +333,133 @@ struct TabStateGuard
         if(ctx) ctx->Yield(3);
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+// Copy of the trace under test, so it can be compared against itself.
+std::filesystem::path CompareCopyPath(const std::filesystem::path& source)
+{
+    return std::filesystem::temp_directory_path() /
+           ("roc-optiq-compare-" + source.filename().string());
+}
+
+std::filesystem::path WalPath(const std::filesystem::path& trace)
+{
+    std::filesystem::path wal = trace;
+    wal += "-wal";
+    return wal;
+}
+
+// Copies a trace with its write-ahead log, which holds what the app has written to
+// the trace and not yet checkpointed. A leftover log beside the copy is removed,
+// since SQLite would replay it into a file it does not belong to.
+bool CopyTrace(const std::filesystem::path& source, const std::filesystem::path& copy,
+               std::error_code& ec)
+{
+    namespace fs = std::filesystem;
+    fs::copy_file(source, copy, fs::copy_options::overwrite_existing, ec);
+    if (!ec)
+    {
+        if (fs::exists(WalPath(source), ec))
+            fs::copy_file(WalPath(source), WalPath(copy), fs::copy_options::overwrite_existing, ec);
+        else
+            fs::remove(WalPath(copy), ec);
+    }
+    return !ec;
+}
+
+// Deletes the files a compare test makes, with their SQLite logs. Declare it before
+// the test's TabStateGuard, so it runs once the compare tab holding a copy is gone.
+struct CompareFilesGuard
+{
+    ImGuiTestContext*                  ctx;
+    std::vector<std::filesystem::path> paths;
+
+    explicit CompareFilesGuard(ImGuiTestContext* c) : ctx(c) {}
+    ~CompareFilesGuard()
+    {
+        namespace fs = std::filesystem;
+        for (const fs::path& file : paths)
+        {
+            for (const char* suffix : { "", "-wal", "-shm" })
+            {
+                fs::path path = file;
+                path += suffix;
+                std::error_code ec;
+                // A closed tab releases its traces a few frames later.
+                for (int i = 0; i < 300 && fs::exists(path, ec) && !fs::remove(path, ec); i++)
+                    ctx->Yield(2);
+            }
+        }
+    }
+};
+
+// Opens the trace under test against a copy of itself, so every A/B figure has
+// to match. Returns the compare view once it has loaded; nullptr (with a SKIP)
+// when the trace under test is not one compare can read. The caller holds a
+// TabStateGuard, which closes the compare tab again, and the files guard that then
+// deletes the copy.
+TraceView* OpenSelfCompareOrSkip(ImGuiTestContext* ctx, CompareFilesGuard& files)
+{
+    namespace fs = std::filesystem;
+    AppWindow* app     = AppWindow::GetInstance();
+    Project*   project = app->GetCurrentProject();
+    IM_CHECK_RETV(project != nullptr, nullptr);
+    std::error_code ec;
+    const fs::path  source = project->GetID();
+    if(project->GetTraceType() != Project::System || source.extension() != ".db" ||
+       !fs::is_regular_file(source, ec))
+    {
+        ctx->LogWarning("SKIP: compare needs a system .db trace under test");
+        return nullptr;
+    }
+    const fs::path copy = CompareCopyPath(source);
+    files.paths.push_back(copy);
+    if(!CopyTrace(source, copy, ec))
+    {
+        ctx->LogWarning("SKIP: could not copy the trace to compare: %s", ec.message().c_str());
+        return nullptr;
+    }
+
+    app->OpenCompare(source.string(), copy.string());
+    // Opening a pair that compare cannot read queues an error dialog; close it.
+    ctx->Yield(2);
+    const std::string compare_id = AppWindow::MakeCompareId({ source.string(), copy.string() });
+    Project*          compare    = app->GetProject(compare_id);
+    if(compare == nullptr)
+    {
+        ctx->PopupCloseAll();
+        ctx->LogWarning("SKIP: the trace under test cannot be opened as a compare");
+        return nullptr;
+    }
+    AppWindowTestPeer{*app}.TabContainerPtr()->SetActiveTab(compare_id);
+    TraceView* tv = dynamic_cast<TraceView*>(compare->GetView().get());
+    IM_CHECK_RETV(tv != nullptr, nullptr);
+    for(int i = 0; i < 1500 && (tv->GetDataProvider()->GetState() != ProviderState::kReady ||
+                                TraceViewTestPeer{*tv}.SummaryViewPtr() == nullptr);
+        i++)
+    {
+        ctx->Yield(2);
+    }
+    IM_CHECK_RETV(tv->GetDataProvider()->GetState() == ProviderState::kReady, nullptr);
+    return tv;
+}
+
+uint64_t KernelInvocations(const SummaryModel& summary)
+{
+    const SummaryInfo::TopOpEvents* kernels =
+        summary.TopOpEvents(summary.GetSummaryData(), kRPVAnalysisSummaryCategoryKernel);
+    return kernels ? kernels->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations].numeric.uint
+                   : 0;
+}
+
+uint64_t KernelDuration(const SummaryModel& summary)
+{
+    const SummaryInfo::TopOpEvents* kernels =
+        summary.TopOpEvents(summary.GetSummaryData(), kRPVAnalysisSummaryCategoryKernel);
+    return kernels ? kernels->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum].numeric.uint
+                   : 0;
+}
+#endif
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -3021,4 +3150,397 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(arg_count > 0);
         IM_CHECK(have_named_arg);
     };
+
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    // A trace compared against a copy of itself: each source's summary must be the
+    // single trace's own, not the two added together, and every event must line
+    // up with itself with no change.
+    t = IM_REGISTER_TEST(e, "app", "compare_self_summary_matches");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        CompareFilesGuard files(ctx);
+        TabStateGuard tabs(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+        ShowSummaryGuard summary_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+
+        TraceView* single = GetTraceViewOrSkip(ctx);
+        if (!single) return;
+        const TraceDataModel& single_model = single->GetDataProvider()->DataModel();
+        for (int i = 0; i < 1500 && single_model.GetSummary().GetRevision() <
+                                        single_model.GetTopology().GetRevision();
+             i++)
+            ctx->Yield(2);
+        const uint64_t single_calls    = KernelInvocations(single_model.GetSummary());
+        const uint64_t single_duration = KernelDuration(single_model.GetSummary());
+
+        TraceView* tv = OpenSelfCompareOrSkip(ctx, files);
+        if (!tv) return;
+        const TraceDataModel& model = tv->GetDataProvider()->DataModel();
+        IM_CHECK(IsCompareTrace(model));
+
+        size_t tracks[COMPARE_SOURCE_COUNT] = {};
+        for (const TrackInfo* track : model.GetTimeline().GetTrackList())
+            if (track && track->file_id < COMPARE_SOURCE_COUNT) tracks[track->file_id]++;
+        IM_CHECK(tracks[COMPARE_SOURCE_A] > 0);
+        IM_CHECK_EQ(tracks[COMPARE_SOURCE_A], tracks[COMPARE_SOURCE_B]);
+
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        SummaryViewTestPeer peer{*sv};
+        IM_CHECK(peer.CompareMode());
+        for (int i = 0; i < 3000 && peer.Loading(); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Loading());
+        // The tabs are rebuilt on the frame after the data lands.
+        ctx->Yield(4);
+
+        for (size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            const SummaryModel* summary = model.GetSourceSummary(source);
+            IM_CHECK(summary != nullptr);
+            if (summary == nullptr) return;
+            IM_CHECK_EQ(KernelInvocations(*summary), single_calls);
+            IM_CHECK_EQ(KernelDuration(*summary), single_duration);
+        }
+
+        for (int category = 0; category < __kRPVAnalysisSummaryCategoryLast; category++)
+        {
+            SummaryCompareTopEvents* te = peer.CompareTopEventsPtr(
+                static_cast<rocprofvis_analysis_summary_category_t>(category));
+            IM_CHECK(te != nullptr);
+            if (te == nullptr) return;
+            SummaryCompareTopEventsTestPeer rows{*te};
+            for (size_t i = 0; i < rows.RowCount(); i++)
+            {
+                const SummaryEventDiff& row = rows.Row(i);
+                IM_CHECK(row.Known());
+                IM_CHECK(row.events[COMPARE_SOURCE_A] != nullptr);
+                IM_CHECK(row.events[COMPARE_SOURCE_B] != nullptr);
+                IM_CHECK(row.DeltaNs() == 0.0);
+            }
+        }
+
+        // Each side lists its own instances of the selected kernel, and the copy
+        // has exactly as many as the original.
+        SummaryCompareTopEventsTestPeer kernels{
+            *peer.CompareTopEventsPtr(kRPVAnalysisSummaryCategoryKernel)};
+        if (kernels.RowCount() == 0)
+        {
+            ctx->LogWarning("SKIP: the trace under test has no kernels to select");
+            return;
+        }
+        const SummaryEventDiff& first = kernels.Row(0);
+        const uint64_t          calls =
+            first.events[COMPARE_SOURCE_A]
+                ->metrics[kRPVAnalysisSummaryTopEventMetricInvocations].numeric.uint;
+        kernels.Select(first.name);
+        auto settled = [&kernels]() {
+            for (size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+                if (kernels.InstancesLoading(source) || !kernels.Searched(source)) return false;
+            return true;
+        };
+        for (int i = 0; i < 1500 && !settled(); i++) ctx->Yield(2);
+        IM_CHECK(settled());
+        IM_CHECK_EQ(kernels.InstanceCount(COMPARE_SOURCE_A), calls);
+        IM_CHECK_EQ(kernels.InstanceCount(COMPARE_SOURCE_B), calls);
+    };
+
+    // Search results of a compare trace come from both sources; the copy finds
+    // exactly what the original does.
+    t = IM_REGISTER_TEST(e, "app", "compare_search_finds_both_sources");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        CompareFilesGuard files(ctx);
+        TabStateGuard tabs(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+        TraceView* tv = OpenSelfCompareOrSkip(ctx, files);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Any event name present in the trace will do; take one off a track.
+        std::string term;
+        for (int i = 0; i < 600 && term.empty(); i++)
+        {
+            ctx->Yield(2);
+            TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+            if (tlv == nullptr) continue;
+            for (FlameTrackItem* flame : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+            {
+                if (FlameTrackItemTestPeer{*flame}.ChartItemCount() > 0)
+                {
+                    term = FlameTrackItemTestPeer{*flame}.FirstChartItemName();
+                    if (!term.empty()) break;
+                }
+            }
+        }
+        if (term.empty())
+        {
+            ctx->LogWarning("SKIP: no named event on screen to search for");
+            return;
+        }
+
+        es->TextInput() = term;
+        es->Search();
+        // The rows land a frame before the table indexes their columns.
+        for (int i = 0; i < 600 && (EventSearchTestPeer{*es}.RequestPending() ||
+                                    EventSearchTestPeer{*es}.ResultCount() == 0 ||
+                                    EventSearchTestPeer{*es}.LoadedRowTrackIds().empty());
+             i++)
+            ctx->Yield(2);
+        const size_t results = EventSearchTestPeer{*es}.ResultCount();
+        IM_CHECK(results > 0);
+        IM_CHECK(results % COMPARE_SOURCE_COUNT == 0);
+
+        bool seen[COMPARE_SOURCE_COUNT] = {};
+        for (uint64_t track_id : EventSearchTestPeer{*es}.LoadedRowTrackIds())
+        {
+            const TrackInfo* track =
+                tv->GetDataProvider()->DataModel().GetTimeline().GetTrack(track_id);
+            if (track && track->file_id < COMPARE_SOURCE_COUNT) seen[track->file_id] = true;
+        }
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(seen[COMPARE_SOURCE_A]);
+        IM_CHECK(seen[COMPARE_SOURCE_B]);
+    };
+
+    // The compare dialog says what is wrong with a pick before anything opens.
+    t = IM_REGISTER_TEST(e, "app", "compare_dialog_checks_picks");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+        AppWindow* app = AppWindow::GetInstance();
+        Project*   project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        const fs::path source = project->GetID();
+        if (!rocprofvis_controller_compare_supported(source.string().c_str()))
+        {
+            ctx->LogWarning("SKIP: the dialog checks need a rocprofv3 trace under test");
+            return;
+        }
+        const fs::path temp      = fs::temp_directory_path();
+        const fs::path copy      = CompareCopyPath(source);
+        const fs::path not_a_db  = temp / "roc-optiq-compare-not-a-db.rpd";
+        const fs::path empty_db  = temp / "roc-optiq-compare-empty.db";
+        const fs::path other_run = temp / "roc-optiq-compare-other-run.db";
+        CompareFilesGuard files(ctx);
+        files.paths = { copy, not_a_db, empty_db, other_run };
+        std::error_code ec;
+        IM_CHECK(CopyTrace(source, copy, ec));
+        {
+            std::ofstream out(not_a_db);
+            std::ofstream empty(empty_db);
+        }
+        // The rocpd_event view makes a rocprofv3 trace, and naming no run keeps it from
+        // counting as a copy.
+        fs::remove(other_run, ec);
+        sqlite3* db = nullptr;
+        IM_CHECK(sqlite3_open(other_run.string().c_str(), &db) == SQLITE_OK);
+        const int created = sqlite3_exec(db, "CREATE VIEW rocpd_event AS SELECT 1 AS id",
+                                         nullptr, nullptr, nullptr);
+        sqlite3_close(db);
+        IM_CHECK(created == SQLITE_OK);
+
+        CompareFilesDialog* dialog = AppWindowTestPeer{*app}.CompareFilesDialogPtr();
+        IM_CHECK(dialog != nullptr);
+        if (dialog == nullptr) return;
+        CompareFilesDialogTestPeer peer{*dialog};
+
+        // The trace on screen starts as the baseline.
+        dialog->Show(source.string());
+        ctx->Yield(3);
+        IM_CHECK(dialog->IsOpen());
+        IM_CHECK(peer.SlotPath(0) == source.string());
+        IM_CHECK(!peer.CanCompare());
+
+        dialog->SetFilePath(CompareFilesDialog::FileSlot::kSecond, source.string());
+        ctx->Yield(2);
+        IM_CHECK(!peer.PairProblem().empty());
+        IM_CHECK(!peer.CanCompare());
+
+        dialog->SetFilePath(CompareFilesDialog::FileSlot::kSecond, not_a_db.string());
+        ctx->Yield(2);
+        IM_CHECK(!peer.SlotProblem(1).empty());
+        IM_CHECK(!peer.CanCompare());
+
+        // A .db that is no rocprofv3 trace is refused before Compare is pressed.
+        dialog->SetFilePath(CompareFilesDialog::FileSlot::kSecond, empty_db.string());
+        ctx->Yield(2);
+        IM_CHECK(!peer.SlotProblem(1).empty());
+        IM_CHECK(!peer.CanCompare());
+
+        // A copy of the baseline is a fine file but no comparison.
+        dialog->SetFilePath(CompareFilesDialog::FileSlot::kSecond, copy.string());
+        ctx->Yield(2);
+        IM_CHECK(peer.SlotProblem(1).empty());
+        IM_CHECK(!peer.PairProblem().empty());
+        IM_CHECK(!peer.CanCompare());
+
+        dialog->SetFilePath(CompareFilesDialog::FileSlot::kSecond, other_run.string());
+        ctx->Yield(2);
+        IM_CHECK(peer.SlotProblem(1).empty());
+        IM_CHECK(peer.PairProblem().empty());
+        IM_CHECK(peer.CanCompare());
+
+        ctx->ItemClick("//Compare Traces##_compare_files/Cancel");
+        ctx->Yield(3);
+        IM_CHECK(!dialog->IsOpen());
+    };
+
+    // A saved compare project is held to the dialog's rules, since its file can be
+    // edited by hand, and an entry that is not a path fails the load, not the app.
+    t = IM_REGISTER_TEST(e, "app", "compare_saved_project_checks_files");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+        AppWindow* app     = AppWindow::GetInstance();
+        Project*   project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        const fs::path source = project->GetID();
+        if (!rocprofvis_controller_compare_supported(source.string().c_str()))
+        {
+            ctx->LogWarning("SKIP: the project checks need a rocprofv3 trace under test");
+            return;
+        }
+        const fs::path copy = CompareCopyPath(source);
+        const fs::path rpv  = fs::temp_directory_path() / "roc-optiq-compare-saved.rpv";
+        CompareFilesGuard files(ctx);
+        files.paths = { copy, rpv };
+        std::error_code ec;
+        IM_CHECK(CopyTrace(source, copy, ec));
+
+        auto json_path = [](const fs::path& path) {
+            std::string quoted = "\"";
+            for (char c : path.string())
+            {
+                if (c == '\\' || c == '"') quoted.push_back('\\');
+                quoted.push_back(c);
+            }
+            return quoted + "\"";
+        };
+        // Opens a project listing these entries and returns why it failed to load.
+        // Open() queues its error dialog for the next frame, so that is closed too.
+        auto load_error = [&](const std::string& entries) {
+            {
+                std::ofstream out(rpv);
+                out << "{\"general\": {\"version\": \"1.0\", \"compare_files\": [" << entries
+                    << "]}}";
+            }
+            Project                   proj;
+            std::string               path   = rpv.string();
+            const Project::OpenResult result = proj.Open(path);
+            ctx->Yield(2);
+            ctx->PopupCloseAll();
+            ctx->Yield(2);
+            return result == Project::OpenResult::Failed ? ProjectTestPeer{proj}.OpenErrorMessage()
+                                                         : std::string();
+        };
+        const std::string a = json_path(source);
+        IM_CHECK(load_error(a).find("exactly two") != std::string::npos);
+        IM_CHECK(load_error(a + ", " + a).find("same trace twice") != std::string::npos);
+        IM_CHECK(load_error(a + ", " + json_path(copy)).find("copies") != std::string::npos);
+        IM_CHECK(load_error(a + ", 7").find("invalid or corrupted") != std::string::npos);
+    };
+
+    // Two runs that differ, made up so each case is exact: unequal durations, events
+    // only one source has, and a top list cut short into "Others".
+    t = IM_REGISTER_TEST(e, "app", "compare_diff_pairs_events");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        IM_UNUSED(ctx);
+        auto event = [](const char* name, uint64_t total_ns) {
+            SummaryInfo::TopOpEvents::Event out = {};
+            out.name = name;
+            out.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].numeric.uint = total_ns;
+            return out;
+        };
+        auto find = [](const std::vector<SummaryEventDiff>& rows, const char* name) {
+            for (const SummaryEventDiff& row : rows)
+                if (row.name == name) return &row;
+            return static_cast<const SummaryEventDiff*>(nullptr);
+        };
+
+        SummaryInfo::TopOpEvents a = {};
+        SummaryInfo::TopOpEvents b = {};
+        a.top = { event("shared", 100), event("only_a", 40) };
+        b.top = { event("shared", 250), event("only_b", 60) };
+        std::vector<SummaryEventDiff> rows = diff_top_events({ &a, &b });
+        IM_CHECK_EQ(rows.size(), 3u);
+        if (rows.size() != 3u) return;
+        // Largest change first, either way.
+        IM_CHECK(rows[0].name == "shared");
+        IM_CHECK(rows[1].name == "only_b");
+        IM_CHECK(rows[2].name == "only_a");
+        IM_CHECK(rows[0].Known());
+        IM_CHECK_EQ(rows[0].DeltaNs(), 150.0);
+        IM_CHECK_EQ(rows[0].RelativeChange(), 1.5);
+        // Absent from a full list is known absent: it went from all to nothing.
+        IM_CHECK(rows[2].Known());
+        IM_CHECK(rows[2].events[COMPARE_SOURCE_B] == nullptr);
+        IM_CHECK_EQ(rows[2].RelativeChange(), -1.0);
+        IM_CHECK(rows[1].events[COMPARE_SOURCE_A] == nullptr);
+        IM_CHECK(std::isinf(rows[1].RelativeChange()));
+        IM_CHECK(FormatRelativeChange(100.0, 250.0) == "+150.0%");
+        IM_CHECK(FormatRelativeChange(100.0, 0.0) == "-100.0%");
+        IM_CHECK(FormatRelativeChange(0.0, 60.0).empty());
+
+        // Once B's list is cut short, an event missing from it may be in "Others".
+        b.top = { event("shared", 250), event("Others", 500) };
+        rows  = diff_top_events({ &a, &b });
+        IM_CHECK_EQ(rows.size(), 2u);
+        IM_CHECK(find(rows, "Others") == nullptr);
+        const SummaryEventDiff* hidden = find(rows, "only_a");
+        IM_CHECK(hidden != nullptr);
+        if (hidden == nullptr) return;
+        IM_CHECK(hidden->Unknown(COMPARE_SOURCE_B));
+        IM_CHECK(!hidden->Unknown(COMPARE_SOURCE_A));
+        IM_CHECK(!hidden->Known());
+    };
+
+    // A source summary that never arrives (cancelled here) leaves the panel on an
+    // error rather than loading forever, and Retry fetches it again.
+    t = IM_REGISTER_TEST(e, "app", "compare_summary_retries_failed_source");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        CompareFilesGuard files(ctx);
+        TabStateGuard tabs(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+        ShowSummaryGuard summary_guard;
+        // Hidden until the compare has loaded, so the first fetch goes out on cue.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = false;
+        TraceView* tv = OpenSelfCompareOrSkip(ctx, files);
+        if (!tv) return;
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        SummaryViewTestPeer peer{*sv};
+        DataProvider*       dp = tv->GetDataProvider();
+        const uint64_t      first_fetch = RequestIdBuilder::MakeClientRequestId(
+            RequestType::kFetchSummary, COMPARE_CLIENT_ID[COMPARE_SOURCE_A]);
+
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        for (int i = 0; i < 60 && !dp->IsRequestPending(first_fetch); i++) ctx->Yield(1);
+        IM_CHECK(dp->IsRequestPending(first_fetch));
+        // A job already running reports the cancel as unsupported, and stops anyway.
+        dp->CancelRequest(first_fetch);
+        for (int i = 0; i < 3000 && peer.Loading(); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Loading());
+        if (!peer.Failed())
+        {
+            ctx->LogWarning("SKIP: the summary finished before it could be cancelled");
+            return;
+        }
+
+        peer.Retry();
+        IM_CHECK(peer.Loading());
+        for (int i = 0; i < 3000 && peer.Loading(); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Loading());
+        IM_CHECK(!peer.Failed());
+    };
+#endif
 }

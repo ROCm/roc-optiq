@@ -34,6 +34,10 @@ rocprofvis_dm_timestamp_t Track::MaxTimestamp() {
     DbInstance* db_instance = (DbInstance*)m_track_params->track_indentifiers.db_instance;
     return m_track_params->max_ts-m_ctx->BindingInfo()->trace_properties->db_inst_start_time[db_instance->GuidIndex()];
 }
+rocprofvis_dm_timestamp_t Track::InstanceEndTimestamp() {
+    DbInstance* db_instance = (DbInstance*)m_track_params->track_indentifiers.db_instance;
+    return m_ctx->BindingInfo()->trace_properties->db_inst_end_time[db_instance->GuidIndex()]-m_ctx->BindingInfo()->trace_properties->db_inst_start_time[db_instance->GuidIndex()];
+}
 
 rocprofvis_dm_slice_t  Track::AddSlice(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag)
 {
@@ -243,6 +247,9 @@ rocprofvis_dm_result_t  Track::GetPropertyAsUint64(rocprofvis_dm_property_t prop
         case kRPVDMTrackMaximumTimestampUInt64:
             *value = MaxTimestamp();
             return kRocProfVisDmResultSuccess;
+        case kRPVDMTrackInstanceEndTimestampUInt64:
+            *value = InstanceEndTimestamp();
+            return kRocProfVisDmResultSuccess;
         case kRPVDMTrackHistogramBucketEventDensityUInt64Indexed:
             *value = GetHistogramBucketNumEventsAt(index);
             return kRocProfVisDmResultSuccess;
@@ -379,6 +386,8 @@ const char*  Track::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMTrackMinimumTimestampUInt64";
         case kRPVDMTrackMaximumTimestampUInt64:
             return "kRPVDMTrackMaximumTimestampUInt64";
+        case kRPVDMTrackInstanceEndTimestampUInt64:
+            return "kRPVDMTrackInstanceEndTimestampUInt64";
         case kRPVDMTrackMinimumValueDouble:
             return "kRPVDMTrackMinimumValueDouble";
         case kRPVDMTrackMaximumValueDouble:

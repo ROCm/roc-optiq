@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <iomanip>
 #include <limits>
@@ -764,6 +765,36 @@ RocProfVis::View::format_byte_size(uint64_t bytes)
     else
     {
         std::snprintf(buf, sizeof(buf), "%.1f %s", size, UNITS[unit]);
+    }
+    return std::string(buf);
+}
+
+std::string
+RocProfVis::View::format_local_time(uint64_t epoch_seconds)
+{
+    constexpr size_t TIME_TEXT_CHARS = 32;
+    if(epoch_seconds == 0)
+    {
+        return "-";
+    }
+
+    std::time_t t = static_cast<std::time_t>(epoch_seconds);
+    std::tm     tm_buf{};
+#ifdef _WIN32
+    if(localtime_s(&tm_buf, &t) != 0)
+    {
+        return "-";
+    }
+#else
+    if(localtime_r(&t, &tm_buf) == nullptr)
+    {
+        return "-";
+    }
+#endif
+    char buf[TIME_TEXT_CHARS];
+    if(std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm_buf) == 0)
+    {
+        return "-";
     }
     return std::string(buf);
 }

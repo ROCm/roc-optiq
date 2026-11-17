@@ -231,10 +231,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* 
             bool all_supported = true;
             for(uint64_t i = 0; i < count; i++)
             {
-                // Compare combines the inputs through the multinode rocprof engine, so
-                // every file must be a rocprof trace (reject legacy rocpd / compute / etc).
-                if(filenames[i] == nullptr ||
-                   rocprofvis_db_identify_type(filenames[i]) != kRocprofSqlite)
+                if(!rocprofvis_controller_compare_supported(filenames[i]))
                 {
                     spdlog::error("Compare: unsupported or missing trace '{}'",
                                   filenames[i] ? filenames[i] : "(null)");
@@ -261,6 +258,16 @@ rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* 
         }
     }
     return controller;
+}
+
+bool rocprofvis_controller_compare_same_run(char const* first, char const* second)
+{
+    return rocprofvis_db_same_run(first, second);
+}
+
+bool rocprofvis_controller_compare_supported(char const* file)
+{
+    return file != nullptr && rocprofvis_db_identify_type(file) == kRocprofSqlite;
 }
 #endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future)

@@ -16,12 +16,32 @@ void
 TraceDataModel::SetCompareSources(const std::vector<CompareSourceInfo>& sources)
 {
     m_compare_sources = sources;
+    while(m_source_summaries.size() < m_compare_sources.size())
+    {
+        m_source_summaries.push_back(std::make_unique<SummaryModel>());
+    }
+    for(std::unique_ptr<SummaryModel>& summary : m_source_summaries)
+    {
+        summary->Clear();
+    }
 }
 
 const CompareSourceInfo*
 TraceDataModel::GetCompareSource(size_t index) const
 {
     return index < m_compare_sources.size() ? &m_compare_sources[index] : nullptr;
+}
+
+const SummaryModel*
+TraceDataModel::GetSourceSummary(size_t index) const
+{
+    return index < m_compare_sources.size() ? m_source_summaries[index].get() : nullptr;
+}
+
+SummaryModel*
+TraceDataModel::GetSourceSummary(size_t index)
+{
+    return index < m_compare_sources.size() ? m_source_summaries[index].get() : nullptr;
 }
 
 std::string
@@ -117,6 +137,10 @@ TraceDataModel::Clear()
     m_analysis.Clear();
     m_trace_file_path.clear();
     m_compare_sources.clear();
+    for(std::unique_ptr<SummaryModel>& summary : m_source_summaries)
+    {
+        summary->Clear();
+    }
 }
 
 }  // namespace View

@@ -12,7 +12,9 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <string_view>
 #include <vector>
 
@@ -130,6 +132,7 @@ EventsView::Render()
                           m_settings.GetColor(Colors::kTableBorderInner));
     if(m_compare_mode && m_events_split)
     {
+        RenderComparison();
         m_events_split->Render();
     }
     else if(m_event_items.empty())
@@ -265,6 +268,79 @@ EventsView::RenderSourceColumn(size_t source_index)
     }
 
     EndCompareCard();
+}
+
+void
+EventsView::RenderComparison()
+{
+    std::array<const EventInfo*, COMPARE_SOURCE_COUNT> picked = {};
+    std::array<size_t, COMPARE_SOURCE_COUNT>           counts = {};
+    for(const EventItem& item : m_event_items)
+    {
+        const TrackInfo* track_info =
+            item.info
+                ? m_data_provider.DataModel().GetTimeline().GetTrack(item.info->track_id)
+                : nullptr;
+        if(track_info && track_info->file_id < COMPARE_SOURCE_COUNT)
+        {
+            counts[track_info->file_id]++;
+            picked[track_info->file_id] = item.info;
+        }
+    }
+    if(counts[COMPARE_SOURCE_A] != 1 || counts[COMPARE_SOURCE_B] != 1)
+    {
+        return;
+    }
+
+    const ImGuiStyle& style      = m_settings.GetDefaultStyle();
+    const TimeFormat time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    const double     a           = picked[COMPARE_SOURCE_A]->basic_info.duration;
+    const double     b           = picked[COMPARE_SOURCE_B]->basic_info.duration;
+    const std::string difference =
+        std::string(b < a ? "-" : "+") +
+        nanosecond_to_formatted_str(std::abs(b - a), time_format, true);
+
+    BeginCompareCard("##event_comparison", m_settings,
+                     ImVec2(0.0f, ImGui::GetFrameHeight() + 2.0f * style.WindowPadding.y),
+                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    const float change_width = ImGui::CalcTextSize(("+100.0%  " + difference).c_str()).x +
+                               ImGui::GetFontSize() + style.ItemSpacing.x;
+    const float source_width = std::max(
+        0.0f, (ImGui::GetContentRegionAvail().x - change_width) * COMPARE_EVEN_SPLIT);
+    // ElidedText fills the rest of the row when given no width, so a name keeps at least
+    // the room of its "[...]" marker. A pane too narrow for that clips the strip.
+    const float min_name_width = ImGui::CalcTextSize(" [...]").x;
+    for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+    {
+        const CompareSourceInfo* info =
+            m_data_provider.DataModel().GetCompareSource(source);
+        const float start_x = ImGui::GetCursorPosX();
+        ImGui::PushID(static_cast<int>(source));
+        if(info)
+        {
+            ImGui::AlignTextToFramePadding();
+            RenderCompareSourceBadge(*info, m_settings);
+            ImGui::SameLine();
+        }
+        const std::string duration = nanosecond_to_formatted_str(
+            picked[source]->basic_info.duration, time_format, true);
+        const float duration_width = ImGui::CalcTextSize(duration.c_str()).x;
+        ElidedText(picked[source]->basic_info.name.c_str(),
+                   std::max(min_name_width, start_x + source_width -
+                                                ImGui::GetCursorPosX() - duration_width -
+                                                2.0f * style.ItemSpacing.x),
+                   ImGui::GetContentRegionAvail().x, Alignment_Left, true);
+        ImGui::SameLine();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", duration.c_str());
+        ImGui::PopID();
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), start_x + source_width));
+    }
+    ImGui::AlignTextToFramePadding();
+    RenderCompareChange(a, b, m_settings, difference);
+    EndCompareCard();
+    ImGui::Spacing();
 }
 
 bool

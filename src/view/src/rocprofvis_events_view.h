@@ -70,6 +70,9 @@ private:
      */
     size_t RenderEventList(std::optional<uint64_t> source_index);
     void   RenderSourceColumn(size_t source_index);
+    // With one event picked in each source, a strip that puts their durations
+    // and the change between them side by side.
+    void RenderComparison();
 
     bool XButton();
 

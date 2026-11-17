@@ -98,7 +98,9 @@ private:
 
     rocprofvis_result_t FetchCounterStatistics(rocprofvis_dm_trace_t dm_handle, Track* track, double start, double end, rocprofvis_dm_hashed_timestamp_tag_t tag, rocprofvis_analysis_counter_statistics_t* output, uint64_t* active_duration, Future* future) const;
 
-    rocprofvis_result_t FetchSummaryMetrics(SystemTrace* trace, double start, double end, SummaryMetrics& output, Future* future) const;
+    // file_id, when set, summarizes one source of a compare trace: every query is
+    // scoped to that file and counters from the other sources are left out.
+    rocprofvis_result_t FetchSummaryMetrics(SystemTrace* trace, double start, double end, const c_optional_uint64_t& file_id, SummaryMetrics& output, Future* future) const;
 
     rocprofvis_result_t FetchTopEvents(
         rocprofvis_dm_trace_t                               dm_handle,

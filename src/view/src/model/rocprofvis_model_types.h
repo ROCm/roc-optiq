@@ -29,9 +29,10 @@ struct ThreadInfo;
 
 struct CompareSourceInfo
 {
-    std::string id;
+    std::string id;  // "A", "B", ...; empty for a track of a single trace
     std::string name;
     std::string path;
+    size_t      index = 0;  // Position among the sources, which TrackInfo::file_id counts
 };
 
 union TopologyId

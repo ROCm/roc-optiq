@@ -54,6 +54,10 @@ protected:
     virtual rocprofvis_result_t    UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t& out) const;
     virtual rocprofvis_dm_result_t BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, uint64_t index, uint64_t count, bool count_only, char** out) const;
 
+    // Node, agent, process, thread and compare-source ids the caller scoped the
+    // table to, or nullopt when it set none of them.
+    static std::optional<rocprofvis_dm_query_criteria_t> UnpackSourceFilter(Arguments& args);
+
 private:
     rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future) final;
     rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future) final;

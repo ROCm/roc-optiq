@@ -4,10 +4,13 @@
 #include "rocprofvis_event_search.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_common_defs.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+
+#include <cstdlib>
 
 namespace RocProfVis
 {
@@ -30,6 +33,7 @@ EventSearch::EventSearch(DataProvider&                      dp,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
       [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection,
       1, kRPVControllerSortOrderAscending, "Event Search Table", "")
+, m_compare_mode(IsCompareTrace(dp.DataModel()))
 , m_show_options(false)
 , m_include_substrings(DEFAULT_INCLUDE_SUBSTRINGS)
 , m_include_category(DEFAULT_INCLUDE_CATEGORY)
@@ -563,6 +567,32 @@ EventSearch::IndexColumns()
     if(m_include_category)
     {
         m_important_column_idxs[kCategory] = ColumnIndexOf(CATEGORY_COLUMN_NAME);
+    }
+}
+
+void
+EventSearch::RenderCellPrefix(int row, int column)
+{
+    const size_t id_column    = m_important_column_idxs[kDbEventId];
+    const size_t track_column = m_important_column_idxs[kTrackId];
+    if(!m_compare_mode || static_cast<size_t>(column) != id_column)
+    {
+        return;
+    }
+    const std::vector<std::vector<std::string>>& rows =
+        m_table_model().GetTableData(m_table_type);
+    if(row < 0 || static_cast<size_t>(row) >= rows.size() ||
+       track_column >= rows[row].size())
+    {
+        return;
+    }
+    const uint64_t track_id = std::strtoull(rows[row][track_column].c_str(), nullptr, 10);
+    const TrackInfo* track = m_data_provider.DataModel().GetTimeline().GetTrack(track_id);
+    if(track && !track->compare_source.id.empty())
+    {
+        RenderCompareSourceBadge(track->compare_source, m_settings);
+        // Table cells run with no item spacing.
+        ImGui::SameLine(0.0f, m_settings.GetDefaultStyle().ItemSpacing.x);
     }
 }
 

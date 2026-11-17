@@ -429,8 +429,18 @@ rocprofvis_result_t Analysis::AsyncFetchSummary(SystemTrace* trace, Arguments& a
             result = args.GetDouble(kRPVAnalysisSummaryArgsEndTimestamp, 0, &end);
             if(result == kRocProfVisResultSuccess)
             {
-                SummaryMetrics metrics;
-                result = FetchSummaryMetrics(trace, start, end, metrics, future);
+                SummaryMetrics      metrics;
+                c_optional_uint64_t file_id;
+                uint64_t            top_events_limit = 0;
+                if(args.GetUInt64(kRPVAnalysisSummaryArgsFileId, 0, &file_id.value) == kRocProfVisResultSuccess)
+                {
+                    file_id.has_value = true;
+                }
+                if(args.GetUInt64(kRPVAnalysisSummaryArgsTopEventsLimit, 0, &top_events_limit) == kRocProfVisResultSuccess)
+                {
+                    metrics.SetTopEventsLimit(top_events_limit);
+                }
+                result = FetchSummaryMetrics(trace, start, end, file_id, metrics, future);
                 if(result == kRocProfVisResultSuccess && !future->IsCancelled())
                 {
                     output = metrics;
@@ -544,10 +554,6 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     uint64_t sort_column_index = 2;
     uint64_t sort_order = (uint64_t)kRPVControllerSortOrderDescending;
     rocprofvis_dm_table_use_case_enum_t use_case;
-    c_optional_uint64_t node_id;
-    c_optional_uint64_t agent_id;
-    c_optional_uint64_t process_id;
-    c_optional_uint64_t thread_id;
     result = UnpackUseCase(args, use_case);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetDouble(kRPVControllerTableArgsStartTime, 0, &start_ts);
@@ -585,23 +591,7 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
     sys_out->m_sort_column = sort_column_index;
     sys_out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
-    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsNodeId, 0, &node_id.value))
-    {
-        node_id.has_value = true;
-    }
-    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsAgentId, 0, &agent_id.value))
-    {
-        agent_id.has_value = true;
-    }
-    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsProcessId, 0, &process_id.value))
-    {
-        process_id.has_value = true;
-    }
-    if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerTableArgsThreadId, 0, &thread_id.value))
-    {
-        thread_id.has_value = true;
-    }
-    sys_out->m_source_filter = node_id.has_value || agent_id.has_value || process_id.has_value || thread_id.has_value ? std::make_optional(rocprofvis_dm_query_criteria_t{ node_id, agent_id, process_id, thread_id }) : std::nullopt;
+    sys_out->m_source_filter = UnpackSourceFilter(args);
     sys_out->m_filter = "__op = " + std::to_string(m_op);
     uint32_t filter_length = 0;
     if(kRocProfVisResultSuccess ==
@@ -662,6 +652,22 @@ rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_ha
         rocprofvis_dm_result_t   dm_result = kRocProfVisDmResultUnknownError;
         uint64_t                 track_id = track->GetId();
         rocprofvis_dm_track_t    dm_track = track->GetDmHandle();
+        // A counter holds its last value only to the end of its own trace, which in a
+        // compare can stop before the longer trace does.
+        const uint64_t trace_end = rocprofvis_dm_get_property_as_uint64(dm_track, kRPVDMTrackInstanceEndTimestampUInt64, 0);
+        if(trace_end > 0 && end > static_cast<double>(trace_end))
+        {
+            end = static_cast<double>(trace_end);
+        }
+        if(end <= start)
+        {
+            *output = rocprofvis_analysis_counter_statistics_t{};
+            if(active_duration)
+            {
+                *active_duration = 0;
+            }
+            return kRocProfVisResultSuccess;
+        }
         rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
         ROCPROFVIS_ASSERT(db);
         rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
@@ -751,8 +757,25 @@ rocprofvis_result_t Analysis::FetchCounterStatistics(rocprofvis_dm_trace_t dm_ha
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
 
-rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double start, double end, SummaryMetrics& output, Future* future) const
+// Whether a counter belongs to the source being summarized. Counters carry no
+// criteria of their own; their track says which file they came from.
+static bool counter_in_source(Counter* counter, const c_optional_uint64_t& file_id)
 {
+    bool in_source = !file_id.has_value;
+    rocprofvis_handle_t* track_handle = nullptr;
+    if(!in_source && counter->GetObject(kRPVControllerCounterTrack, 0, &track_handle) == kRocProfVisResultSuccess && track_handle)
+    {
+        in_source = rocprofvis_dm_get_property_as_uint64(((Track*)track_handle)->GetDmHandle(), kRPVDMTrackFileIdUInt64, 0) == file_id.value;
+    }
+    return in_source;
+}
+
+rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double start, double end, const c_optional_uint64_t& file_id, SummaryMetrics& output, Future* future) const
+{
+    // Walks the topology node by node. Only processors and threads are queried: a
+    // processor for its GPU or CPU events and its counters, a thread for its
+    // launches. Nodes, processes and the trace hold the sums of their children,
+    // which AggregateSubMetrics adds up once the walk is done.
     rocprofvis_result_t   result    = kRocProfVisResultUnknownError;
     rocprofvis_dm_trace_t dm_handle = trace->GetDMHandle();
     output.Reset();
@@ -762,6 +785,8 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
     result = trace->GetUInt64(kRPVControllerSystemNumNodes, 0, &num_nodes);
     if(result == kRocProfVisResultSuccess)
     {
+        // Each node is an equal share of the progress, split evenly among its
+        // processors and processes.
         double node_weight = num_nodes > 0 ? 100.0 / num_nodes : 0.0;
         for(int i = 0; i < num_nodes && !future->IsCancelled(); i++)
         {
@@ -775,6 +800,7 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                     uint64_t uint64_data = 0;
                     SummaryMetrics node_metrics;
                     rocprofvis_dm_query_criteria_t node_criteria;
+                    node_criteria.file_id = file_id;
                     node_metrics.SetUInt64(kRPVAnalysisSummaryMetricPropertyAggregationLevel, 0, kRPVAnalysisSummaryAggregationLevelNode);
                     result = node->GetUInt64(kRPVControllerNodeId, 0, &uint64_data);
                     if(result == kRocProfVisResultSuccess)
@@ -823,6 +849,8 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                                         processor_criteria, start, end,
                                                         GPU_DISPATCH_PROPERTIES,
                                                         processor_metrics, future);
+                                                    // A failed query ends the walk here, before a
+                                                    // later getter can overwrite its result.
                                                     if(result != kRocProfVisResultSuccess)
                                                     {
                                                         return future->IsCancelled()
@@ -872,20 +900,23 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                                             Counter* counter = (Counter*)counter_handle;
                                                             if(counter)
                                                             {
-                                                                result =
-                                                                    FetchCounterStatistics(
-                                                                        dm_handle,
-                                                                        processor,
-                                                                        counter, start,
-                                                                        end,
-                                                                        processor_metrics,
-                                                                        future);
-                                                                if(result !=
-                                                                   kRocProfVisResultSuccess)
+                                                                if(counter_in_source(counter, file_id))
                                                                 {
-                                                                    return future->IsCancelled()
-                                                                               ? kRocProfVisResultCancelled
-                                                                               : result;
+                                                                    result =
+                                                                        FetchCounterStatistics(
+                                                                            dm_handle,
+                                                                            processor,
+                                                                            counter, start,
+                                                                            end,
+                                                                            processor_metrics,
+                                                                            future);
+                                                                    if(result !=
+                                                                       kRocProfVisResultSuccess)
+                                                                    {
+                                                                        return future->IsCancelled()
+                                                                                   ? kRocProfVisResultCancelled
+                                                                                   : result;
+                                                                    }
                                                                 }
                                                             }
                                                             else
@@ -945,6 +976,7 @@ rocprofvis_result_t Analysis::FetchSummaryMetrics(SystemTrace* trace, double sta
                                     Process* process = (Process*)process_handle;
                                     if(process)
                                     {
+                                        // A thread listed twice under a process is summarized once.
                                         std::unordered_set<uint64_t> unique_threads;
                                         SummaryMetrics process_metrics;
                                         rocprofvis_dm_query_criteria_t process_criteria = node_criteria;

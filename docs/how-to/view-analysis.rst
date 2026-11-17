@@ -241,6 +241,11 @@ ISA View
 
 **ISA View** lists the instructions of the selected kernel's code object with PC-sampling counts for each instruction. Select an instruction to see its type and stall reasons. When source file information is available, the view also shows the matching source lines.
 
+.. image:: ../images/ISA-view.png
+   :width: 800
+   :align: center
+   :alt: ISA View showing the source file selector, a list of ISA instructions, and the matching source code pane on the right
+
 .. _analysis-table:
 
 Table View 
@@ -321,7 +326,7 @@ Baseline Comparison: Metrics
 Use the dropdowns to select the baseline, target workload, and kernel. The comparison table updates to show statistics for the selections. 
 You can also compare two kernels within the same workload.
 
-.. image:: ../images/baseline-comparison.png
+.. image:: ../images/baseline-comparison-metrics.png
    :width: 800
    :align: center
    :alt: Baseline Comparison view showing a side-by-side metric table with baseline, target, delta, and percentage-change columns color-coded for quick identification
@@ -353,6 +358,11 @@ Baseline Comparison: Roofline
 -----------------------------
 
 **Roofline** compares rooflines for two kernels in the same ROCm Compute Profiler database, including kernels from different workloads. Select **Roofline**, then use **Compare With** to choose the target workload and kernel. When the workloads differ, use **Peak Source** option in the **Legend/Menu** to choose the hardware ceilings: **Baseline** uses the baseline workload, and **Target** uses the compared workload.
+
+.. image:: ../images/baseline-comparison-roofline.png
+   :width: 800
+   :align: center
+   :alt: Baseline Comparison Roofline view comparing two kernels, with the target workload and kernel selected under Compare With and hardware peak lines labeled on the chart
 
 .. note::
 

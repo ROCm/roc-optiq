@@ -1,0 +1,4 @@
+tool: get_metrics
+args: {"kernel_id":4,"metrics":["99.9.9"]}
+
+"99.9.9" is not in this workload's metric catalogue. Call list_metrics for the ids it does have.

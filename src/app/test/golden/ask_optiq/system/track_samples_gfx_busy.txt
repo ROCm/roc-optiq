@@ -1,0 +1,12 @@
+tool: track_samples
+args: {"track_ids":[24],"limit":5}
+
+window_ns: 0 .. 5044424388 (whole trace)
+columns: node start end counter value __trackId
+1. node=4227766824237315800 start=5218830 end=5218830 counter=GFX Busy value=0.000000 __trackId=24
+2. node=4227766824237315800 start=5218830 end=5218830 counter=GFX Busy value=0.000000 __trackId=24
+3. node=4227766824237315800 start=5218830 end=5218830 counter=GFX Busy value=0.000000 __trackId=24
+4. node=4227766824237315800 start=5218830 end=5218830 counter=GFX Busy value=0.000000 __trackId=24
+5. node=4227766824237315800 start=5218830 end=5218830 counter=GFX Busy value=0.000000 __trackId=24
+... 2767 more rows not shown
+

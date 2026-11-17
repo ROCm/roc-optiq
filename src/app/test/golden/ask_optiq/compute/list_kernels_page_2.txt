@@ -1,0 +1,12 @@
+tool: list_kernels
+args: {"limit":2,"offset":2}
+
+workload_id: 1
+matching_kernels: 7
+kernel_time_total_ns: 1284933
+kernels:
+  kernel_id=1 invocations=1 duration_total_ns=227562 duration_mean_ns=227562 duration_median_ns=227562 duration_min_ns=227562 duration_max_ns=227562 name="void rocrand_impl::system::detail::trampoline_kernel<rocrand_impl::host::init_xorwow_engines, rocrand_impl::host::static_block_size_config_p ... d int, unsigned int, unsigned long long, unsigned long long)"
+  kernel_id=7 invocations=1 duration_total_ns=8960 duration_mean_ns=8960 duration_median_ns=8960 duration_min_ns=8960 duration_max_ns=8960 name="void rocrand_impl::host::generate_sobol_kernel<1u, false, rocrand_device::sobol32_engine<true>, unsigned int, float, rocrand_impl::host::sob ...  int, rocrand_impl::host::sobol_uniform_distribution<float>)"
+  ... 3 more, page with offset=4
+note: names longer than 200 characters show only their head and tail, around " ... ". kernel_summary prints a name whole, and kernel_id is the way to name a kernel to the other tools.
+

@@ -6,18 +6,12 @@
 #include "rocprofvis_json_utils.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_settings_manager.h"
-#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
-#include <sstream>
-#include <string_view>
 
 namespace RocProfVis
 {
 namespace View
 {
-
-constexpr std::string_view STDOUT_PREFIX_ANALYZE_MODE   = "Analysis mode =";
-constexpr std::string_view STDOUT_PREFIX_ANALYZE_OUTPUT = "Created file:";
 
 namespace
 {
@@ -65,7 +59,7 @@ RocprofComputeSettings::FromJson(jt::Json const& json)
     }
 
     // Analyze
-    s.analyze_output_format_db = JsonUtils::GetBool(j, "analyze_output_format_db", false);
+    s.analyze_output_format_db = JsonUtils::GetBool(j, "analyze_output_format_db", true);
     if(j.contains("analyze_target"))
     {
         s.analyze_target = TargetSpec::FromJson(j["analyze_target"]);
@@ -203,8 +197,9 @@ bool
 RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
                                            TargetBrowseFn const& on_browse)
 {
-    const bool                is_remote = (config.connection == ConnectionType::kSsh);
-    std::vector<std::string>& recents   = GetRecentTargets(config.tool, config.operation);
+    const bool                is_remote      = (config.connection == ConnectionType::kSsh);
+    const bool                produces_trace = ProducesTrace(config);
+    std::vector<std::string>& recents        = GetRecentTargets(config.tool, config.operation);
 
     bool modified = false;
     if(config.operation == kRPVProfilerOperationAnalyze)
@@ -224,7 +219,9 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         modified |= RenderTargetPathRow(workload, m_settings.analyze_target.path,
                                         config.connection, on_browse,
                                         TargetLabelColumnWidth("Workload"));
-        modified |= RenderTargetAutoLoadRow(m_settings.analyze_target.auto_load_trace);
+        modified |= RenderTargetAutoLoadRow(
+            m_settings.analyze_target.auto_load_trace, produces_trace,
+            "Turn on \"ROCpd database\" output to get a trace.");
     }
     else
     {
@@ -254,6 +251,10 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         modified |=
             RenderTargetPathRow(output, m_settings.profile_target.output_directory,
                                 config.connection, on_browse, label_w);
+        modified |= RenderTargetAutoLoadRow(
+            m_settings.profile_target.auto_load_trace, produces_trace,
+            "Profile writes a workload folder. Run Analyze with \"ROCpd database\" "
+            "output to get a trace.");
     }
     return modified;
 }
@@ -292,6 +293,15 @@ RocprofComputeBackend::GetWarnings(LaunchConfig const& config) const
             "Performance counter collection is skipped when using PC sampling."});
     }
     return warnings;
+}
+
+bool
+RocprofComputeBackend::ProducesTrace(LaunchConfig const& config) const
+{
+    // Profile writes a workload folder, and analyze only writes a database
+    // with --output-format db.
+    return config.operation == kRPVProfilerOperationAnalyze &&
+           m_settings.analyze_output_format_db;
 }
 
 void
@@ -349,42 +359,6 @@ RocprofComputeBackend::FlattenToExecution(
             m_settings.analyze_target.Argv(false, argv_out);
         }
     }
-}
-
-// ==================================================================================
-// HasOutputFile / ParseTraceOutputPath
-// ==================================================================================
-
-bool
-RocprofComputeBackend::HasOutputFile(rocprofvis_profiler_operation_t operation,
-                                     std::string const& profiler_stdout) const
-{
-    // Analyze only writes a file Optiq can load in db mode; the other modes
-    // print their report to the console.
-    bool has_output = false;
-    if(operation == kRPVProfilerOperationAnalyze)
-    {
-        std::string mode =
-            ParseLineWithPrefix(profiler_stdout, STDOUT_PREFIX_ANALYZE_MODE);
-        has_output = mode.size() > 1 && mode.substr(mode.size() - 2, 2) == "db";
-    }
-    return has_output;
-}
-
-std::string
-RocprofComputeBackend::ParseTraceOutputPath(rocprofvis_profiler_operation_t operation,
-                                            std::string const& profiler_stdout) const
-{
-    std::string trace_path;
-    if(operation == kRPVProfilerOperationAnalyze)
-    {
-        trace_path = ParseLineWithPrefix(profiler_stdout, STDOUT_PREFIX_ANALYZE_OUTPUT);
-        if(trace_path.size() <= 3 || trace_path.substr(trace_path.size() - 3, 3) != ".db")
-        {
-            trace_path.clear();
-        }
-    }
-    return trace_path;
 }
 
 // ==================================================================================
@@ -454,29 +428,6 @@ RocprofComputeBackend::RenderProfilingOptions(rocprofvis_profiler_operation_t op
         ImGui::EndGroup();
     }
     return changed;
-}
-
-std::string
-RocprofComputeBackend::ParseLineWithPrefix(std::string const& profiler_stdout,
-                                           std::string_view   prefix) const
-{
-    std::string        value;
-    std::istringstream stream(strip_ansi_for_display(profiler_stdout));
-    std::string        line;
-    while(value.empty() && std::getline(stream, line))
-    {
-        size_t prefix_pos = line.find(prefix);
-        if(prefix_pos != std::string::npos)
-        {
-            size_t first = line.find_first_not_of(" \t", prefix_pos + prefix.size());
-            size_t last  = line.find_last_not_of(" \t\r");
-            if(first != std::string::npos && last >= first)
-            {
-                value = line.substr(first, last - first + 1);
-            }
-        }
-    }
-    return value;
 }
 
 }  // namespace View

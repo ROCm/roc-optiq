@@ -29,6 +29,9 @@ constexpr float Y_AXIS_GRID_LINE_ALPHA      = 0.10f;
 constexpr float Y_AXIS_LABEL_SPACING_FACTOR = 2.5f;
 // Interior ticks/labels/grid lines only show above this height.
 constexpr float Y_AXIS_LABEL_MIN_TRACK_HEIGHT = 2.0f * DEFAULT_TRACK_HEIGHT;
+// Samples this close outside the chart are still drawn: the outline's
+// anti-aliased fringe reaches into the chart.
+constexpr float VISIBLE_SAMPLE_MARGIN_PX = 4.0f;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
                              TimelineTrackOptions&               track_options,
@@ -186,7 +189,26 @@ LineTrackItem::BoxPlotRender(float graph_width)
 
     int hovered_idx = -1;
     size_t data_len = m_data.size();
-    for(size_t i = 0; i < data_len; ++i)
+
+    // Samples are in time order, so only the run that reaches the chart is drawn,
+    // plus the sample before it, whose connector line leads into the chart.
+    auto visible_begin = std::partition_point(
+        m_data.cbegin(), m_data.cend(), [this](const TraceCounter& sample) {
+            return m_tpt->RawTimeToPixel(sample.m_end_ts) < -VISIBLE_SAMPLE_MARGIN_PX;
+        });
+    auto visible_end = std::partition_point(
+        visible_begin, m_data.cend(), [this, graph_width](const TraceCounter& sample) {
+            return m_tpt->RawTimeToPixel(sample.m_start_ts) <=
+                   graph_width + VISIBLE_SAMPLE_MARGIN_PX;
+        });
+    if(visible_begin != m_data.cbegin())
+    {
+        --visible_begin;
+    }
+    const size_t first_index = static_cast<size_t>(visible_begin - m_data.cbegin());
+    const size_t end_index   = static_cast<size_t>(visible_end - m_data.cbegin());
+
+    for(size_t i = first_index; i < end_index; ++i)
     {
         ImVec2 point_start = MapToUI(m_data[i].m_start_ts, m_data[i].m_value,
                                      cursor_position, content_size, scale_y);

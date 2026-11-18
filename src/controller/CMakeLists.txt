@@ -182,6 +182,18 @@ if(BUILD_TESTING)
         set_tests_properties(${PROFILER_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     endif(ROCPROFVIS_ENABLE_PROFILER)
 
+    # TEMPORARY (remote/SSH): remove this guard when the remote feature
+    # graduates. These tests need no SSH server.
+    if(ROCPROFVIS_ENABLE_REMOTE)
+        set(REMOTE_TEST_NAME ${PROJECT_NAME}-remote-tests)
+        add_executable(${REMOTE_TEST_NAME}
+            tests/rocprofvis_controller_remote_tests.cpp)
+        target_include_directories(${REMOTE_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_link_libraries(${REMOTE_TEST_NAME} PRIVATE ${PROJECT_NAME})
+        target_link_libraries(${REMOTE_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+        add_test(NAME ${REMOTE_TEST_NAME} COMMAND ${REMOTE_TEST_NAME})
+    endif(ROCPROFVIS_ENABLE_REMOTE)
+
     if(ROCPROFVIS_ENABLE_SCRIPTING)
         set(SCRIPT_TEST_NAME ${PROJECT_NAME}-script-tests)
         add_executable(${SCRIPT_TEST_NAME} tests/rocprofvis_controller_script_tests.cpp)

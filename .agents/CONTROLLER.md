@@ -1504,6 +1504,12 @@ Catch2 tests live in `src/controller/tests/`:
 - `rocprofvis_controller_compute_tests.cpp` - runs against
   `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
   workload + kernel + roofline + metric-fetch + pivot-table flows.
+- `rocprofvis_controller_remote_tests.cpp` - built only with
+  `ROCPROFVIS_ENABLE_REMOTE=ON`, as `roc-optiq-controller-remote-tests`.
+  Needs no SSH server: a string argument longer than any fixed buffer
+  reaches the connection whole, a host key is named by its port
+  (`KnownHostName`), and trusting a host appends one line and leaves the
+  rest of `known_hosts` byte for byte (`AppendKnownHostLine`).
 - `rocprofvis_controller_script_tests.cpp` - built only with
   `ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0: execute a source string
   and read `optiq.result.text`. Phase 1: load
@@ -1622,6 +1628,7 @@ free" sequence.
 
 - `rocprofvis_controller_system_tests.cpp`
 - `rocprofvis_controller_compute_tests.cpp`
+- `rocprofvis_controller_remote_tests.cpp` (remote flag)
 
 ---
 

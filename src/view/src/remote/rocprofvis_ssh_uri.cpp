@@ -33,6 +33,47 @@ namespace View
             std::snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(v));
             return buf;
         }
+
+        // Stands in for a remote name with nothing usable in it.
+        constexpr const char* FALLBACK_CACHE_FILE_NAME = "trace";
+
+        // ASCII control characters are everything below space, and DEL. Tested
+        // by value rather than std::iscntrl, which follows the locale and can
+        // claim bytes of a UTF-8 name.
+        constexpr unsigned char ASCII_SPACE  = 0x20;
+        constexpr unsigned char ASCII_DELETE = 0x7f;
+
+        // The name a downloaded file gets inside its cache folder. The remote
+        // name comes from the server (a directory listing, or a path scraped
+        // from profiler output) and is a POSIX name, so it can hold characters
+        // that are path syntax here: on Windows "..\\..\\x.bat" walks out of the
+        // folder and "C:\\x.bat" replaces it outright. Those, and the other
+        // characters a Windows file name cannot hold, become '_' on every
+        // platform so one remote file maps to one local name everywhere.
+        std::string CacheFileName(const std::string& remote_path)
+        {
+            const size_t slash = remote_path.rfind('/');
+            std::string  name  =
+                slash == std::string::npos ? remote_path : remote_path.substr(slash + 1);
+
+            for(char& c : name)
+            {
+                const unsigned char byte = static_cast<unsigned char>(c);
+                if(byte < ASCII_SPACE || byte == ASCII_DELETE ||
+                   std::strchr("\\/:*?\"<>|", c) != nullptr)
+                {
+                    c = '_';
+                }
+            }
+
+            // "", "." and "..", and what Windows reads as those once it drops
+            // trailing dots and spaces, name the folder or its parent.
+            if(name.find_first_not_of(". ") == std::string::npos)
+            {
+                name = FALLBACK_CACHE_FILE_NAME;
+            }
+            return name;
+        }
     }  // namespace
 
     RemoteUri::RemoteUri()
@@ -123,9 +164,7 @@ namespace View
 
     std::string RemoteUri::GetLocalResultPathString()
     {
-        std::string remote = GetRemoteResultPathString();
-        auto pos = remote.rfind('/');
-        std::string filename = pos == std::string::npos ? remote : remote.substr(pos + 1);
+        std::string filename = CacheFileName(GetRemoteResultPathString());
         std::filesystem::path config_root = get_application_config_path(true);
         std::filesystem::path cache_root  = config_root / "remote_cache";
         std::filesystem::path key_root = cache_root / GetRemoteCacheKey();

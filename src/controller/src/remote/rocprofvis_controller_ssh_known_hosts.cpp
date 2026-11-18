@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <spdlog/spdlog.h>
 
 #if defined(_WIN32)
@@ -24,6 +25,8 @@ namespace Controller
 
 namespace
 {
+
+constexpr int SSH_DEFAULT_PORT = 22;
 
 std::string DefaultHomePath()
 {
@@ -70,7 +73,67 @@ std::string Base64Encode(const unsigned char* data, size_t n)
     }
     return out;
 }
+
+// Looks `name` up exactly as written. Port -1 keeps libssh2 from also trying
+// "[name]:port" and then the bare name, which is how a key for one port ends
+// up judged against the entry for another.
+KnownHostMatch CheckName(LIBSSH2_KNOWNHOSTS* known_hosts, const std::string& name,
+                         const char* key, size_t key_len, int type_mask)
+{
+    KnownHostMatch result = KnownHostMatch::Failure;
+    int rc = libssh2_knownhost_checkp(known_hosts, name.c_str(), -1, key, key_len,
+                                      type_mask, nullptr);
+    switch(rc)
+    {
+        case LIBSSH2_KNOWNHOST_CHECK_MATCH:    result = KnownHostMatch::Match; break;
+        case LIBSSH2_KNOWNHOST_CHECK_MISMATCH: result = KnownHostMatch::Mismatch; break;
+        case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND: result = KnownHostMatch::NotFound; break;
+        default:                               break;
+    }
+    return result;
+}
 }  // namespace
+
+std::string KnownHostName(const std::string& host, int port)
+{
+    return port == SSH_DEFAULT_PORT ? host : "[" + host + "]:" + std::to_string(port);
+}
+
+bool AppendKnownHostLine(const std::string& path, const std::string& line)
+{
+    std::error_code       ec;
+    std::filesystem::path folder = std::filesystem::path(path).parent_path();
+    if(!folder.empty() && std::filesystem::create_directories(folder, ec))
+    {
+        // A new ~/.ssh is private to the user, as OpenSSH creates it.
+        std::filesystem::permissions(folder, std::filesystem::perms::owner_all, ec);
+    }
+
+    // An entry appended to a file whose last line has no newline would run on
+    // from that line and corrupt both.
+    bool needs_newline = false;
+    {
+        std::ifstream existing(path, std::ios::binary | std::ios::ate);
+        if(existing.is_open() && existing.tellg() > 0)
+        {
+            existing.seekg(-1, std::ios::end);
+            needs_newline = existing.get() != '\n';
+        }
+    }
+
+    std::ofstream file(path, std::ios::binary | std::ios::app);
+    if(!file.is_open())
+    {
+        return false;
+    }
+    if(needs_newline)
+    {
+        file.put('\n');
+    }
+    file.write(line.data(), static_cast<std::streamsize>(line.size()));
+    file.flush();
+    return file.good();
+}
 
 KnownHosts::KnownHosts(LIBSSH2_SESSION* session)
     : m_session(session), m_path(DefaultKnownHostsPath())
@@ -86,9 +149,28 @@ KnownHosts::~KnownHosts()
 bool KnownHosts::Load()
 {
     if(!m_kh || m_path.empty()) return false;
-    int rc = libssh2_knownhost_readfile(m_kh, m_path.c_str(),
-        LIBSSH2_KNOWNHOST_FILE_OPENSSH);
-    return rc >= 0;
+
+    std::ifstream file(m_path, std::ios::binary);
+    if(!file.is_open()) return false;
+
+    // Line by line rather than libssh2_knownhost_readfile, which stops at the
+    // first line it cannot parse. Every entry after such a line would then be
+    // unknown: a host the user already trusts is asked about again, and a
+    // changed key there shows up as a first connection instead of a mismatch.
+    std::string line;
+    while(std::getline(file, line))
+    {
+        if(!line.empty() && line.back() == '\r')
+        {
+            line.pop_back();
+        }
+        if(libssh2_knownhost_readline(m_kh, line.c_str(), line.size(),
+                                      LIBSSH2_KNOWNHOST_FILE_OPENSSH) != 0)
+        {
+            spdlog::debug("[ssh] known_hosts: skipped a line that could not be parsed");
+        }
+    }
+    return true;
 }
 
 KnownHostMatch KnownHosts::Check(const std::string& host, int port) const
@@ -116,23 +198,23 @@ KnownHostMatch KnownHosts::Check(const std::string& host, int port) const
         default: break;
     }
 
-    struct libssh2_knownhost* match = nullptr;
-    int rc = libssh2_knownhost_checkp(m_kh, host.c_str(), port, key, key_len,
-                                      kh_type_mask, &match);
-    switch(rc)
+    KnownHostMatch result = CheckName(m_kh, KnownHostName(host, port), key, key_len, kh_type_mask);
+    if(result == KnownHostMatch::NotFound && port != SSH_DEFAULT_PORT)
     {
-        case LIBSSH2_KNOWNHOST_CHECK_MATCH:    return KnownHostMatch::Match;
-        case LIBSSH2_KNOWNHOST_CHECK_MISMATCH: return KnownHostMatch::Mismatch;
-        case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND: return KnownHostMatch::NotFound;
-        default:                               return KnownHostMatch::Failure;
+        // Only a match counts here. The bare host name is the port-22 entry, so
+        // a different key under it says nothing about this port, and reporting
+        // it as a changed key would teach the user to accept that warning.
+        if(CheckName(m_kh, host, key, key_len, kh_type_mask) == KnownHostMatch::Match)
+        {
+            result = KnownHostMatch::Match;
+        }
     }
+    return result;
 }
 
 bool KnownHosts::Add(const std::string& host, int port)
 {
-    // libssh2_knownhost_addc keys entries by host only; the port is part of the
-    // signature for symmetry with Check() but is not needed to store the entry.
-    (void) port;
+    m_added = nullptr;
     if(!m_kh) return false;
     size_t      key_len  = 0;
     int         key_type = 0;
@@ -156,11 +238,13 @@ bool KnownHosts::Add(const std::string& host, int port)
         default: return false;
     }
 
-    rc = libssh2_knownhost_addc(m_kh, host.c_str(), nullptr, key, key_len,
+    const std::string name = KnownHostName(host, port);
+    rc = libssh2_knownhost_addc(m_kh, name.c_str(), nullptr, key, key_len,
         "added by roc-optiq", strlen("added by roc-optiq"),
-        type_mask, nullptr);
+        type_mask, &m_added);
     if (rc != 0) {
         spdlog::error("failed adding new host: {}", rc);
+        m_added = nullptr;
         return false;
     }
     return true;
@@ -169,13 +253,22 @@ bool KnownHosts::Add(const std::string& host, int port)
 
 bool KnownHosts::Save() const
 {
-    if (!m_kh) return false;
+    if (!m_kh || !m_added || m_path.empty()) return false;
 
-    return libssh2_knownhost_writefile(
-        m_kh,
-        m_path.c_str(),
-        LIBSSH2_KNOWNHOST_FILE_OPENSSH
-    ) == 0;
+    // libssh2 writes nothing into a buffer that is too small but still reports
+    // the length it needs, so the first call only sizes the line.
+    size_t length = 0;
+    libssh2_knownhost_writeline(m_kh, m_added, nullptr, 0, &length,
+                                LIBSSH2_KNOWNHOST_FILE_OPENSSH);
+    std::string line(length + 1, '\0');
+    if (libssh2_knownhost_writeline(m_kh, m_added, line.data(), line.size(), &length,
+                                    LIBSSH2_KNOWNHOST_FILE_OPENSSH) != 0)
+    {
+        return false;
+    }
+    line.resize(length);
+
+    return AppendKnownHostLine(m_path, line);
 }
 
 std::string FormatHostKeyFingerprint(LIBSSH2_SESSION* session)

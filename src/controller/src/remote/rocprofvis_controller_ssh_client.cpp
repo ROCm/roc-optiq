@@ -266,6 +266,11 @@ namespace Controller
             spdlog::info("[ssh] publickey auth OK ({})", priv_path);
             return true;
         }
+        if(!connection->IsValid())
+        {
+            // The retry could not reconnect, so there is no session to report on.
+            return false;
+        }
         char* msg = nullptr;
         libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
         const char* hint = "";
@@ -289,6 +294,24 @@ namespace Controller
 
     bool SshClient::TryAgent(SshConnection * connection, const std::string& user, Future* future)
     {
+        bool rejected = false;
+        bool ok       = TryAgentIdentities(connection, user, rejected);
+        if(!ok && rejected)
+        {
+            // An agent handle belongs to the session it was opened on, so the
+            // lowercase retry opens its own on the reconnected session.
+            std::string u = Core::String::to_lower_copy(user);
+            if(u != user && Reconnect(connection, future))
+            {
+                ok = TryAgentIdentities(connection, u, rejected);
+            }
+        }
+        return ok;
+    }
+
+    bool SshClient::TryAgentIdentities(SshConnection* connection, const std::string& user, bool& rejected)
+    {
+        rejected = false;
         LIBSSH2_AGENT* agent = libssh2_agent_init(connection->GetSession());
         if(!agent)
         {
@@ -329,11 +352,7 @@ namespace Controller
             rc = libssh2_agent_userauth(agent, user.c_str(), identity);
             if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
             {
-                std::string u = Core::String::to_lower_copy(user);
-                if (u!=user && Reconnect(connection, future))
-                {
-                    rc = libssh2_agent_userauth(agent, u.c_str(), identity);
-                }
+                rejected = true;
             }
 
             if(rc == 0)
@@ -608,10 +627,45 @@ namespace Controller
         return SshClient::Result::Success;
     }
 
+    // The host key the server presented in this session's key exchange, as raw
+    // bytes. Empty without a session.
+    static std::string session_host_key(SshConnection* connection)
+    {
+        size_t      key_len = 0;
+        const char* key     = libssh2_session_hostkey(connection->GetSession(), &key_len, nullptr);
+        return key ? std::string(key, key_len) : std::string();
+    }
+
     bool SshClient::Reconnect(SshConnection * connection, Future* future)
     {
-        connection->Disconnect();
-        return Connect(connection, future) == SshClient::Result::Success;
+        // The retry sends credentials over a session the host-key check has not
+        // seen. It is only used if it presents the key that check accepted for
+        // the session it replaces; anything else is closed before a credential
+        // is sent.
+        const std::string verified_key = session_host_key(connection);
+
+        // Not Disconnect(): that cancels the bridge, and a cancelled bridge
+        // stops the Connect() below at its first cancellation check.
+        connection->CloseTransport();
+
+        // A failed Connect() has already reported why.
+        bool reconnected = false;
+        if(!verified_key.empty() && Connect(connection, future) == SshClient::Result::Success)
+        {
+            reconnected = session_host_key(connection) == verified_key;
+            if(!reconnected)
+            {
+                std::string err = "Host key changed while reconnecting - connection rejected.";
+                spdlog::error("[ssh] {}", err);
+                connection->GetSshBridge()->SaveError(err);
+            }
+        }
+
+        if(!reconnected)
+        {
+            connection->CloseTransport();
+        }
+        return reconnected;
     }
 
     //---------------------------------------------SSH CLIENT AUTHENTICATE-------------------------------------------//
@@ -693,13 +747,22 @@ namespace Controller
         }
 
         // ---- auth ----
-        char* methods = libssh2_userauth_list(connection->GetSession(), user.c_str(),
+        // Copied: libssh2 keeps the list in the session, and a retry under the
+        // lowercase user name replaces the session.
+        const char* listed_methods = libssh2_userauth_list(connection->GetSession(), user.c_str(),
             static_cast<unsigned int>(user.size()));
+        const std::string methods_copy = listed_methods ? listed_methods : "";
+        const char*       methods      = listed_methods ? methods_copy.c_str() : nullptr;
         spdlog::debug("[ssh] server auth methods: {}", methods ? methods : "(none)");
 
         bool tried_password = false;
         bool tried_kbdint   = false;
         int  auth_rc        = LIBSSH2_ERROR_AUTHENTICATION_FAILED;
+
+        // A failed attempt may have retried under the lowercase user name,
+        // which reconnects. If that reconnect fails (or the server answers with
+        // a different host key) no session is left, and Reconnect() has saved
+        // the reason, so the remaining methods are not tried.
 
         // 1) publickey
         if(MethodListed(methods, "publickey"))
@@ -712,12 +775,20 @@ namespace Controller
                 {
                     return Result::Success;
                 }
+                if (!connection->IsValid())
+                {
+                    return Result::SessionError;
+                }
             }
             // 1b) ssh-agent - handles encrypted keys without us needing a passphrase.
             spdlog::debug("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
                 return Result::Success;
+            }
+            if (!connection->IsValid())
+            {
+                return Result::SessionError;
             }
             // 1c) default on-disk identity files
             spdlog::debug("[ssh] trying default identity files");
@@ -735,6 +806,10 @@ namespace Controller
                 if(TryPublicKey(connection, user, p, passphrase, future))
                 {
                     return Result::Success;
+                }
+                if (!connection->IsValid())
+                {
+                    return Result::SessionError;
                 }
             }
         }
@@ -804,6 +879,10 @@ namespace Controller
                     spdlog::info("[ssh] password auth OK");
                     return Result::Success;
                 }
+                else if(!connection->IsValid())
+                {
+                    return Result::SessionError;
+                }
                 else
                 {
                     char* msg = nullptr;
@@ -839,10 +918,16 @@ namespace Controller
                 std::string u = Core::String::to_lower_copy(user);
                 if (u != user && Reconnect(connection, future))
                 {
+                    // The slot is per session, and this is a new one.
+                    abstract = libssh2_session_abstract(connection->GetSession());
+                    if(abstract) *abstract = kbd_ctx.get();
                     auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), u.c_str(),
                         &KbdIntCallback);
                 }
             }
+            // Looked up again rather than reused: after a retry the pointer
+            // taken above is into a session that has been freed.
+            abstract = connection->IsValid() ? libssh2_session_abstract(connection->GetSession()) : nullptr;
             if(abstract) *abstract = nullptr;
             if(kbd_ctx->was_cancelled)
             {
@@ -856,6 +941,10 @@ namespace Controller
             {
                 spdlog::info("[ssh] kbdint auth OK");
                 return Result::Success;
+            }
+            else if(!connection->IsValid())
+            {
+                return Result::SessionError;
             }
             else
             {
@@ -1568,6 +1657,10 @@ namespace Controller
 
     void SshConnection::Disconnect() {
         m_net_bridge.Cancel();
+        CloseTransport();
+    }
+
+    void SshConnection::CloseTransport() {
         if (m_session)
         {
             libssh2_session_disconnect(m_session, "Normal Shutdown");

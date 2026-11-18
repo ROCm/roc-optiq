@@ -53,7 +53,11 @@ namespace Controller
             void                 SetSession(LIBSSH2_SESSION* session) { m_session = session; };
             void                 SetSocket(socket_t socket) { m_socket = socket; };
             void                 SetConnected() { m_connected = true; }
+            // Cancels whatever is waiting on the bridge, then closes the transport.
             void                 Disconnect();
+            // Frees the session and closes the socket without cancelling the
+            // bridge, for a worker that is about to connect again itself.
+            void                 CloseTransport();
             bool                 IsConnected() { return m_connected; };
             bool                 IsValid() { return m_session != nullptr && m_socket != kInvalidSocket; };
 
@@ -171,6 +175,10 @@ namespace Controller
         static bool TryPublicKey(SshConnection * connection, const std::string& user,
             const std::string& priv_path_in, const std::string& passphrase, Future* future);
         static bool TryAgent(SshConnection * connection, const std::string& user, Future* future);
+        // One pass over the agent's identities as `user`, on the current
+        // session. `rejected` is set when the server refused an identity
+        // outright, which is what a retry under another user name is for.
+        static bool TryAgentIdentities(SshConnection* connection, const std::string& user, bool& rejected);
         static std::vector<std::string> DefaultKeyPaths();
         static void KbdIntCallback(
             const char* name, 
@@ -182,6 +190,9 @@ namespace Controller
             void** abstract);
         static KeyType DetectPubkeyType(const char* pubkey_path);
 
+        // Replaces the session with a new one to the same server, for a retry
+        // under a different user name. False, with no session left, unless the
+        // new session presents the host key the old one did.
         static bool Reconnect(SshConnection* connection, Future* future);
         static socket_t CreateTcpConnection(const std::string& host, int port);
 

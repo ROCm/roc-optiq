@@ -242,6 +242,17 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
+## Experimental features
+
+In-development features (in-app profiler launch, remote/SSH, Ask Optiq,
+scripting, trace comparison, multi-window, Profiler Hub) are each behind
+their own `ROCPROFVIS_ENABLE_*` option and are off by default. To build all
+of them at once, configure with `-DROCPROFVIS_ENABLE_EXPERIMENTAL=ON`; an
+explicit `-DROCPROFVIS_ENABLE_<X>=OFF` still turns a single feature back
+off. CI experimental builds use this switch. The Profiler Hub clones
+`rocm-systems` at configure time, so an experimental configure needs git and
+network access.
+
 ## Systems trace comparison
 
 Systems-trace comparison (File > Compare, combined A/B timeline) is opt-in

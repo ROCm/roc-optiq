@@ -45,11 +45,11 @@ else()
     set(ROCPROFVIS_EXPERIMENTAL_DEFAULT OFF)
 endif()
 
-# TEMPORARY: gate the in-development profiler-launch and remote/SSH features
-# until they ship. Both default OFF so release builds exclude the UI, the
-# dependent sources, and (for remote) the libssh2/mbedtls stack and its
-# submodules. Remove these options and unwrap their guards when the features
-# graduate.
+# TEMPORARY: in-development features. Each defaults to the umbrella above, so
+# release builds exclude their UI and dependent sources (for remote, also the
+# libssh2/mbedtls stack and its submodules; for the Profiler Hub, the
+# rocm-systems clone at configure time). Remove an option and unwrap its guards
+# when the feature graduates.
 option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
@@ -73,17 +73,10 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 # remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
 # built when BOTH are enabled.
 
-# TEMPORARY: gate the in-development trace-compare and multi-window features
-# until they ship. Both default OFF so release builds exclude their UI and
-# dependent sources. Remove these options and unwrap their guards when the
-# features graduate.
 option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 
-# TEMPORARY: gate the in-development Profiler Hub trace backend until it ships.
-# Default OFF so builds do not clone rocm-systems at configure time. Remove
-# this option and unwrap its guards when the feature graduates.
-option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")

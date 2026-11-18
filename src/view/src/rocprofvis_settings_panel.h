@@ -27,6 +27,7 @@ private:
     enum Category
     {
         Display,
+        Tracks,
         Units,
         Other,
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
@@ -36,11 +37,13 @@ private:
     };
 
     void RenderDisplayOptions();
+    void RenderTrackOptions();
     void RenderUnitOptions();
     void RenderOtherSettings();
     void RenderHotkeySettings();
 
     void ResetDisplayOptions();
+    void ResetTrackOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
     // The Assistant page. Defined in

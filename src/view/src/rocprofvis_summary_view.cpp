@@ -902,7 +902,7 @@ SummaryTopology::CompositionTable(const SummaryInfo::AggregateMetrics& metrics,
                     "%s %llu: ",
                     DISPLAY_NAMES_METRIC_TYPES[static_cast<size_t>(
                         metrics.type - __kRPVAnalysisSummaryAggregationLevelFirst)],
-                    metrics.info.process->GetId());
+                    metrics.info.process->pid);
                 if(metrics.info.process->command.size())
                 {
                     ImGui::SameLine(0.0f, 0.0f);
@@ -1398,7 +1398,7 @@ SummaryTopEvents::Update()
                                                     __kRPVAnalysisSummaryAggregationLevelFirst)]) +
                                                 " " +
                                                 std::to_string(
-                                                    metric.info.process->GetId()) +
+                                                    metric.info.process->pid) +
                                                 ": " + metric.info.process->command);
                                             m_filters[i].query.push_back(
                                                 m_filters[i - 1].query

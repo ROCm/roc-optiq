@@ -53,14 +53,12 @@ public:
     };
 
     // on_open_file is invoked with the local trace path once downloaded.
-    // parse_trace_path is invoked with the remote profiler's captured stdout
-    // once profiling completes; it must return the remote trace file path the
-    // profiler produced (or empty if it cannot be determined), which drives the
-    // SFTP download. May be null, in which case any path already set on the URI
-    // is used.
-    RemoteProfilerSession(std::shared_ptr<RemoteUri>                     uri,
-                          std::function<void(const std::string&)>       on_open_file,
-                          std::function<std::string(const std::string&)> parse_trace_path = nullptr);
+    // The remote path itself comes from the controller's scrape of the
+    // profiler's output. A run that produces no trace file, or one launched
+    // with fetch_trace false, finishes without downloading.
+    RemoteProfilerSession(std::shared_ptr<RemoteUri>               uri,
+                          bool                                    fetch_trace,
+                          std::function<void(const std::string&)> on_open_file);
     ~RemoteProfilerSession() override;
 
     // Begins the workflow (connect phase). Profiler parameters mirror the local
@@ -82,6 +80,11 @@ public:
     // Current workflow phase, used by the dialog to drive the status badge.
     Phase GetPhase() const { return m_phase; }
 
+    // True once this run named a trace file and the download was started.
+    // False when the run produces no trace file, so callers must not derive a
+    // local cache path (that creates an empty directory).
+    bool ProducedTraceFile() const { return m_produced_trace; }
+
     // Accessor used by the dialog to render the auth modal / download progress.
     SshSession* GetSession() { return m_session.get(); }
 
@@ -93,10 +96,11 @@ private:
     void StartDownload();
     void Fail(const std::string& message);
 
-    std::shared_ptr<RemoteUri>                     m_uri;
-    std::function<void(const std::string&)>        m_on_open_file;
-    std::function<std::string(const std::string&)> m_parse_trace_path;
-    std::unique_ptr<SshSession>                    m_session;
+    std::shared_ptr<RemoteUri>              m_uri;
+    std::function<void(const std::string&)> m_on_open_file;
+    std::unique_ptr<SshSession>             m_session;
+    bool                                    m_fetch_trace;
+    bool                                    m_produced_trace;
 
     EventManager::SubscriptionToken m_remote_status_token;
     EventManager::SubscriptionToken m_profiler_status_token;

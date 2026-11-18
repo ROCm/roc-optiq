@@ -168,7 +168,11 @@ CanLinkTrace(const AssistantToolContext& context)
 bool
 CanAskTrace(const AssistantToolContext& context)
 {
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    return context.data_provider != nullptr && !context.is_compare;
+#else
     return context.data_provider != nullptr && !context.is_compute && !context.is_compare;
+#endif
 }
 
 TraceLinkMember
@@ -958,7 +962,7 @@ AssistantPanel::RenderSuggestedActions()
                 SetTooltipStyled("Open the two traces on their own and link them; "
                                  "Ask Optiq would add a compare tab's runs together.");
             }
-            else if(view.is_compute)
+            else if(view.is_compute && !can_ask)
             {
                 SetTooltipStyled("Ask Optiq currently reads system traces.");
             }
@@ -1183,13 +1187,13 @@ AssistantPanel::RenderComposer()
     {
         hint = "Link the two traces from their own tabs...";
     }
-    else if(view.is_compute)
+    else if(view.is_compute && !can_ask)
     {
         hint = "Ask Optiq currently reads system traces...";
     }
     else if(view.data_provider == nullptr)
     {
-        hint = "Open a system trace...";
+        hint = "Open a trace...";
     }
 
     ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_None;

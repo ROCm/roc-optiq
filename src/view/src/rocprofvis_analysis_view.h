@@ -42,9 +42,9 @@ public:
 
     // The tab strip along the bottom: Event Table, Sample Table, Event Details,
     // Track Details, Top Events, Annotations, and Script when scripting is
-    // built in. Matched on the visible label. SelectTab reports the label it
-    // matched, because the tab bar only switches when it next draws, so
-    // ActiveTab() still names the old tab until then.
+    // built in. Matched on the visible label. A selected tab comes forward when
+    // the strip next draws, so ActiveTab() names the previous one until then;
+    // SelectTab reports the label it matched instead.
     std::vector<std::string> ListTabs();
     bool SelectTab(const std::string& name, std::string& selected_label);
     std::string              ActiveTab();

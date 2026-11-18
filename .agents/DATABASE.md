@@ -153,7 +153,8 @@ rocprofvis_dm_charptr_t  rocprofvis_db_future_get_error_message(future);
 
 `rocprofvis_db_future_get_error_message` returns a message the last
 operation left for the user (set with `Future::SetErrorMessage`, e.g. a
-table filter the table processor could not apply), or an empty string.
+table filter the table processor or the compute pivot could not apply),
+or an empty string.
 
 The progress callback `rocprofvis_db_progress_callback_t` receives:
 
@@ -626,8 +627,11 @@ databases:
   (`compute_version`, `git_version`, `schema_version`) is served to the
   controller by the `kRPVComputeFetchMetadata` use case through
   `CallbackGetComputeGeneric`; it is valid for every schema version.
-- Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
-  the kernel x metric pivot table from a JSON plan (`jt::Json`).
+- Pivot construction: `BuildKernelMetricsMatrix(future, table, plan)`
+  builds the kernel x metric pivot table from a JSON plan (`jt::Json`).
+  A column filter it can't parse or evaluate still succeeds, with every
+  column and no rows, and leaves "Could not apply filter: ..." on the
+  future.
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
   kernels to stamp mean / median into the table.
 
@@ -1547,7 +1551,11 @@ There are two distinct flows:
   containing only the time range `[start, end]`. Tables marked
   `kRocOptiqTableCopyWhenTrimmed` are copied; those marked
   `kRocOptiqTableDisposeWhenTrimmed` are dropped from the new file
-  and rebuilt on next open.
+  and rebuilt on next open. `SaveTrimmedDataAsync` refuses a destination
+  that is one of the trace's own files (`IsSourceFile`), trims into a
+  temporary file beside the destination, and renames it over the
+  destination only on success. The per-subclass `SaveTrimmedData`
+  returns its result; the async wrapper sets the promise.
 
 ## 11. CFFI / Python Bindings
 

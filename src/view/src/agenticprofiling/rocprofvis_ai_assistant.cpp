@@ -21,6 +21,7 @@
 
 #include "rocprofvis_ai_prompts.h"
 #include "rocprofvis_ai_tool_schema.h"
+#include "rocprofvis_ai_tools_internal.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
@@ -64,6 +65,11 @@ constexpr size_t   ASSISTANT_RECENT_TOOL_REPLIES = 8;
 constexpr const char* ASSISTANT_COMPACTED_TOOL_REPLY =
     "(earlier result omitted to save room - call this tool again if you still "
     "need these rows)";
+// Answers a queued call that never ran because switch_tab, earlier in the same
+// round, moved the user to another trace.
+constexpr const char* ASSISTANT_SKIPPED_TOOL_REPLY =
+    "Not run because switch_tab moved the user to another trace. This "
+    "conversation stays with its original trace.";
 // How long a tool waits for its rows. Sized for a query over a large trace
 // rather than a small one: cutting a live query off and telling the model it
 // timed out is worse than making the user wait, because the model answers
@@ -107,6 +113,7 @@ AssistantPanel::AssistantPanel()
 , m_force_final(false)
 , m_stop_tool_queue(false)
 , m_fetch_retries(0)
+, m_turn_is_compute(false)
 , m_tab_closed_token(EventManager::InvalidSubscriptionToken)
 , m_summary_event_token(EventManager::InvalidSubscriptionToken)
 {
@@ -290,6 +297,19 @@ AssistantPanel::CurrentProjectId() const
     return app->GetCurrentProject()->GetID();
 }
 
+// The kind moves only here, together with the project, so the prompt and
+// schema a round goes out with always match the tools the dispatcher runs.
+// Without compute support every turn is a system turn, and a compute trace is
+// turned away before it is asked anything.
+void
+AssistantPanel::PinTurnTrace()
+{
+    m_turn_project_id = m_view_project_id;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    m_turn_is_compute = MakeToolContext().is_compute;
+#endif
+}
+
 std::string
 AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefing)
 {
@@ -325,6 +345,18 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
     {
         out << "User question:\n" << question << "\n";
     }
+    else if(m_turn_is_compute)
+    {
+        // Names the free tools, so the button never spends a metric query the
+        // user did not ask for. kernel_roofline follows compute_overview
+        // because, with several kernels, it needs the id that call hands back.
+        // Keyed on the pinned kind rather than the trace's, because these are
+        // the names in the schema the turn goes out with.
+        out << "Explain this view. Call compute_overview, then kernel_roofline with "
+               "the kernel_id of the kernel that owns the most time, so the "
+               "explanation uses real kernel names and numbers. Stay on the tools "
+               "that need no query, and offer the deeper dives as next steps.\n";
+    }
     else
     {
         out << "Explain this view. Call trace_overview and get_summary so the "
@@ -353,6 +385,7 @@ AssistantPanel::ResetTurn()
         }
     }
     AbandonPendingRequest();
+    ResetAssistantPcRead();
     m_phase           = Phase::kIdle;
     m_pending_calls.clear();
     m_next_call_index = 0;
@@ -477,13 +510,14 @@ AssistantPanel::StartHttpRequest()
     request.endpoint_url = endpoint.endpoint_url;
     request.model        = endpoint.model;
     settings.GetAssistantToken(endpoint.name, request.api_token);
-    request.enable_tools = !m_force_final;
+    request.enable_tools  = !m_force_final;
+    request.compute_tools = m_turn_is_compute;
 
     TrimConversation();
 
     AssistantMessage system_message;
     system_message.role    = "system";
-    system_message.content = AssistantSystemPrompt();
+    system_message.content = AssistantSystemPrompt(m_turn_is_compute);
     request.messages.push_back(system_message);
     const std::vector<AssistantMessage>& history = TurnConversation().messages;
     request.messages.insert(request.messages.end(), history.begin(), history.end());
@@ -512,6 +546,10 @@ AssistantPanel::BeginQueuedTurn()
 
 // Preloads an empty summary so the briefing carries real numbers, not zeros.
 // False when there is nothing to preload.
+//
+// A compute trace needs no warmup at all: its kernel list and metric catalogue
+// are loaded with the file, so the compute briefing already has real counts to
+// report and compute_overview answers without a query.
 bool
 AssistantPanel::TryStartSummaryWarmup(const std::string& question)
 {
@@ -552,18 +590,20 @@ AssistantPanel::SendCurrentInput(bool explain_view)
 
     // The turn belongs to the trace on screen when it is asked, and stays with
     // it whichever tab the user moves to while it runs.
-    m_turn_project_id                       = m_view_project_id;
+    PinTurnTrace();
     Conversation&              conversation = TurnConversation();
     const AssistantToolContext context      = MakeToolContext();
     std::string                unavailable;
     if(context.data_provider == nullptr)
     {
-        unavailable = "Open a system trace before asking Optiq about it.";
+        unavailable = "Open a trace before asking Optiq about it.";
     }
+#ifndef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
     else if(context.is_compute)
     {
-        unavailable = "Ask Optiq reads system traces, not compute traces.";
+        unavailable = "This build of Ask Optiq reads system traces, not compute traces.";
     }
+#endif
     else if(context.is_compare)
     {
         unavailable =
@@ -958,13 +998,38 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
 void
 AssistantPanel::FinishCurrentTool(const std::string& content)
 {
+    // kernel_pc_samples re-enters through RunNextTool, never here, so this runs
+    // only once its call is over.
+    ResetAssistantPcRead();
+
     if(m_next_call_index >= m_pending_calls.size())
     {
         ContinueAfterTools();
         return;
     }
+    AppendToolReply(m_pending_calls[m_next_call_index], content);
 
-    const AssistantToolCall& call = m_pending_calls[m_next_call_index];
+    m_fetch_wait    = FetchWait();
+    m_fetch_retries = 0;
+    ++m_next_call_index;
+    // The endpoint still needs a reply to every call, so the rest of a batch
+    // that switch_tab ended is answered without running.
+    if(m_stop_tool_queue)
+    {
+        while(m_next_call_index < m_pending_calls.size())
+        {
+            AppendToolReply(m_pending_calls[m_next_call_index],
+                            ASSISTANT_SKIPPED_TOOL_REPLY);
+            ++m_next_call_index;
+        }
+        m_stop_tool_queue = false;
+    }
+    RunNextTool();
+}
+
+void
+AssistantPanel::AppendToolReply(const AssistantToolCall& call, const std::string& content)
+{
     AssistantMessage tool_message;
     tool_message.role         = "tool";
     tool_message.name         = call.name;
@@ -981,28 +1046,6 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
     spdlog::debug("Assistant tool {} result:\n{}", call.name, tool_message.content);
 
     TurnConversation().messages.push_back(tool_message);
-
-    m_fetch_wait    = FetchWait();
-    m_fetch_retries = 0;
-    ++m_next_call_index;
-    if(m_stop_tool_queue)
-    {
-        while(m_next_call_index < m_pending_calls.size())
-        {
-            const AssistantToolCall& skipped = m_pending_calls[m_next_call_index];
-            AssistantMessage         skipped_message;
-            skipped_message.role         = "tool";
-            skipped_message.name         = skipped.name;
-            skipped_message.tool_call_id = skipped.id;
-            skipped_message.content =
-                "Not run because switch_tab moved the user to another trace. This "
-                "conversation stays with its original trace.";
-            TurnConversation().messages.push_back(skipped_message);
-            ++m_next_call_index;
-        }
-        m_stop_tool_queue = false;
-    }
-    RunNextTool();
 }
 
 void

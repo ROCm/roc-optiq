@@ -199,10 +199,14 @@ private:
     void BeginFetchWait(const AssistantToolStartResult& started,
                         const std::string& tool_name, bool warmup);
     void FinishCurrentTool(const std::string& content);
+    void AppendToolReply(const AssistantToolCall& call, const std::string& content);
     void ContinueAfterTools();
     void BeginQueuedTurn();
     bool TryStartSummaryWarmup(const std::string& question);
     bool AnyFetchPending(const AssistantToolContext& context) const;
+    // Makes the trace on screen the one this turn is about, together with its
+    // kind, which picks the prompt body and the tool schema.
+    void PinTurnTrace();
     // What the tools may touch on the trace the turn is pinned to.
     AssistantToolContext MakeToolContext() const;
     std::string          CurrentProjectId() const;
@@ -244,8 +248,14 @@ private:
     uint32_t m_fetch_retries;
     // The trace the turn belongs to. Its tools read this trace and its replies
     // go to this trace's conversation, whichever tab is in front while it runs.
+    // Moves only through PinTurnTrace.
     std::string m_turn_project_id;
-    FetchWait   m_fetch_wait;
+    // Which kind of trace that is, which picks the prompt body and the tool
+    // schema. Pinned with the project rather than read per round, so the schema
+    // a round goes out with always matches the tools the dispatcher will run
+    // for it.
+    bool      m_turn_is_compute;
+    FetchWait m_fetch_wait;
 
     EventManager::SubscriptionToken m_tab_closed_token;
     EventManager::SubscriptionToken m_summary_event_token;

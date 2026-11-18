@@ -9,6 +9,7 @@
 #include "rocprofvis_db_version.h"
 #include "rocprofvis_db.h"
 #include "rocprofvis_db_packed_storage.h"
+#include "rocprofvis_db_table_processor.h"
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -93,7 +94,9 @@ class SystemDatabase : public Database
         SystemDatabase(   
                     rocprofvis_db_filename_t path):
                     Database(path),
-                    m_track_lookup(this) {
+                    m_track_lookup(this),
+                    m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)}
+        {
         };
         // Database destructor, must be defined as virtual to free resources of derived classes 
         virtual ~SystemDatabase(){};
@@ -201,10 +204,16 @@ class SystemDatabase : public Database
                                                   rocprofvis_dm_string_t file_path,
                                                   rocprofvis_db_future_t object);
 
+       // Writes the time range to new_db_path and returns the result. It does not set
+       // the future's promise: SaveTrimmedDataAsync does, once the file is in place.
        virtual rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
                                                       rocprofvis_dm_timestamp_t end,
                                                       rocprofvis_dm_charptr_t new_db_path,
                                                       Future* future) = 0;
+
+       // True when path is one of the files this trace reads, which a trim must not
+       // overwrite.
+       virtual bool IsSourceFile(rocprofvis_dm_charptr_t path) = 0;
 
        rocprofvis_dm_result_t SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                                    rocprofvis_dm_timestamp_t end,
@@ -219,6 +228,25 @@ class SystemDatabase : public Database
            RpvCallback callback) {
            return kRocProfVisDmResultNotSupported;
        };
+
+       virtual rocprofvis_dm_result_t SummarizeNameDurations(
+           const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+           Future* future,
+           std::vector<rocprofvis_db_name_duration_t>& rows)
+       {
+           (void) queries;
+           (void) future;
+           (void) rows;
+           return kRocProfVisDmResultNotSupported;
+       }
+
+       // True when this database can aggregate the event summary with a
+       // SQLite GROUP BY. Other sources load the rows and aggregate afterwards.
+       virtual bool EventSummaryInSqlite() const { return false; }
+
+       // True when a repeated search query (operation packed into the track id)
+       // can reuse the rows already loaded instead of running again.
+       virtual bool ReuseSearchQueryRows() const { return false; }
 
 
 
@@ -279,15 +307,15 @@ class SystemDatabase : public Database
         virtual rocprofvis_dm_result_t  ExecuteQuery(
                                                                 rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t description,
-                                                                Future* object) = 0;
+                                                                Future* object);
 
         // method to export the results of a table query to .CSV
         // @param query - database query
         // @param file_path - .CSV output path
         // @return status of operation 
-        virtual rocprofvis_dm_result_t ExportTableCSV(          rocprofvis_dm_charptr_t query,
+        rocprofvis_dm_result_t ExportTableCSV(          rocprofvis_dm_charptr_t query,
                                                                 rocprofvis_dm_charptr_t file_path,
-                                                                Future* future) = 0;
+                                                                Future* future);
 
     private:
         // vector array of track parameters. Used as a reference for data model Track objects and for Database component to generate proper database queries 
@@ -332,6 +360,8 @@ class SystemDatabase : public Database
 
         virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
 
+        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+
         // return suffix to sub-process name for provided track category ('TID', 'Queue')
         // @param category - track category
         // @return track sub-process name suffix  ('TID', 'Queue')  
@@ -357,6 +387,9 @@ class SystemDatabase : public Database
         friend class TrackLookup;
         friend class PackedTable;
         friend class SqliteDatabase;
+
+        protected:
+            TableProcessor m_table_processor[kRPVTableDataTypesNum];
 };
 
 }  // namespace DataModel

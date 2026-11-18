@@ -1,12 +1,14 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// The dispatcher, plus the few helpers both halves of the tool set need. The
-// bodies themselves live next door: rocprofvis_ai_ui_tools.cpp for the tools
-// that change Optiq, rocprofvis_ai_data_tools.cpp for the ones that read the
-// trace. Each of those owns its own handler table, so this file never has to be
-// edited to add a tool - only the table in the file the body went into, and the
-// matching schema entry in rocprofvis_ai_tool_schema.cpp.
+// The dispatcher, plus the few helpers every body file needs. The bodies
+// themselves live next door: rocprofvis_ai_ui_tools.cpp for the tools that
+// change Optiq, rocprofvis_ai_data_tools.cpp and rocprofvis_ai_compute_tools.cpp
+// for the ones that read a system trace and a compute workload, and
+// rocprofvis_ai_script_tools.cpp for analysis scripts. Each of those owns its
+// own handler table, so this file never has to be edited to add a tool - only
+// the table in the file the body went into, and the matching schema entry in
+// rocprofvis_ai_tool_schema.cpp.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cctype>
@@ -85,18 +87,33 @@ ParseArgsObject(const std::string& arguments_json, bool& ok_out)
     return parsed.second;
 }
 
-// Looks a tool up in the three handler tables. Null when none has it. The UI
-// tools are searched first: they are the cheap ones, and none of them shares a
-// name with a query.
+// Looks a tool up in the handler tables of one trace kind. Null when none has
+// it. The UI tools are searched first: they are the cheap ones, and none of them
+// shares a name with a query.
+//
+// The two kinds have disjoint tool sets, and the schema the model was sent
+// matches the kind of the trace the turn is about. Searching only that set is
+// what makes a name from the other kind come back as unknown rather than
+// running against a model that holds nothing: a compute trace still has a
+// TraceDataModel, it is simply empty, so a system data tool would answer
+// confidently that there are no tracks and no events.
 const AssistantToolEntry*
-FindTool(const std::string& tool_name, ToolFamily& family_out)
+FindTool(const std::string& tool_name, bool is_compute, ToolFamily& family_out)
 {
-    const AssistantToolTable tables[]   = { GetAssistantUiToolHandlers(),
-                                            GetAssistantDataToolHandlers(),
-                                            GetAssistantScriptToolHandlers() };
-    const ToolFamily         families[] = { ToolFamily::kUi, ToolFamily::kData,
-                                            ToolFamily::kScript };
-    for(size_t t = 0; t < sizeof(tables) / sizeof(tables[0]); ++t)
+    const AssistantToolTable system_tables[]    = { GetAssistantUiToolHandlers(),
+                                                    GetAssistantDataToolHandlers(),
+                                                    GetAssistantScriptToolHandlers() };
+    const ToolFamily         system_families[]  = { ToolFamily::kUi, ToolFamily::kData,
+                                                    ToolFamily::kScript };
+    const AssistantToolTable compute_tables[]   = { GetAssistantSharedUiToolHandlers(),
+                                                    GetAssistantComputeToolHandlers() };
+    const ToolFamily         compute_families[] = { ToolFamily::kUi, ToolFamily::kData };
+
+    const AssistantToolTable* tables   = is_compute ? compute_tables : system_tables;
+    const ToolFamily*         families = is_compute ? compute_families : system_families;
+    const size_t count = is_compute ? sizeof(compute_tables) / sizeof(compute_tables[0])
+                                    : sizeof(system_tables) / sizeof(system_tables[0]);
+    for(size_t t = 0; t < count; ++t)
     {
         for(size_t i = 0; i < tables[t].count; ++i)
         {
@@ -518,8 +535,8 @@ LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link)
     }
     if(linked.is_compute)
     {
-        return link.other.label + " is a compute trace, and Ask Optiq reads system "
-                                  "traces.";
+        return link.other.label + " is a compute trace, and only system traces can be "
+                                  "read as linked runs.";
     }
     if(linked.is_compare)
     {
@@ -551,11 +568,11 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
     }
 
     ToolFamily                family = ToolFamily::kData;
-    const AssistantToolEntry* entry  = FindTool(tool_name, family);
+    const AssistantToolEntry* entry  = FindTool(tool_name, context.is_compute, family);
     if(entry == nullptr)
     {
-        return DoneResult("Unknown tool \"" + tool_name +
-                              "\". Available tools: " + AssistantToolNameList() + ".",
+        return DoneResult("Unknown tool \"" + tool_name + "\". Available tools: " +
+                              AssistantToolNameList(context.is_compute) + ".",
                           "Unknown tool");
     }
 
@@ -576,16 +593,18 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
     {
         return DoneResult("No trace is open.", "No trace");
     }
-    // Ask Optiq reads system traces. Refused once here rather than in every
-    // tool: the panel is a singleton, so a compute tab can be in front even
-    // when the panel was opened on a system trace.
+#ifndef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    // Without compute support Ask Optiq reads system traces only. Refused once
+    // here rather than in every tool, as a backstop: the panel turns a compute
+    // trace away before a turn starts.
     if(context.is_compute)
     {
         return DoneResult(
-            "This is a compute trace, and Ask Optiq reads system traces. Tell "
-            "the user to open a system trace to ask about it.",
+            "This is a compute trace, and this build of Ask Optiq reads system "
+            "traces only. Tell the user to open a system trace to ask about it.",
             "Compute trace");
     }
+#endif
     // A compare tab holds two runs in one provider, and every tool reads a
     // provider as one trace, so its totals would add the runs together.
     if(context.is_compare)

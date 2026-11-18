@@ -47,9 +47,8 @@ endif()
 
 # TEMPORARY: in-development features. Each defaults to the umbrella above, so
 # release builds exclude their UI and dependent sources (for remote, also the
-# libssh2/mbedtls stack and its submodules; for the Profiler Hub, the
-# rocm-systems clone at configure time). Remove an option and unwrap its guards
-# when the feature graduates.
+# libssh2/mbedtls stack and its submodules). Remove an option and unwrap its
+# guards when the feature graduates.
 option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
@@ -76,7 +75,12 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 
-option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+# Deliberately NOT under the umbrella: the Hub is unstable (its system tests
+# abort with std::future_error and a filter error when it is on), and it clones
+# rocm-systems at configure time. Default OFF until it is stable; pass
+# -DROCPROFVIS_ENABLE_PROFILER_HUB=ON to build it, then move it under the
+# umbrella by defaulting it to ${ROCPROFVIS_EXPERIMENTAL_DEFAULT}.
+option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" OFF)
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")

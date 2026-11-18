@@ -6,6 +6,7 @@
 #include "widgets/rocprofvis_notification_manager.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+#    include "remote/rocprofvis_remote_trace_orchestrator.h"
 #include "remote/rocprofvis_ssh_uri.h"
 #endif
 
@@ -26,11 +27,13 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 , m_remote_uri(nullptr)
+, m_download_orchestrator(nullptr)
+, m_download_started(false)
 #endif
 , m_profiler_state(kRPVProfilerStateIdle)
 , m_is_running(false)
 , m_is_remote(false)
-, m_auto_load_trace(true)
+, m_download_trace(true)
 , m_raw_output()
 , m_output_dirty(false)
 , m_trace_path()
@@ -64,6 +67,7 @@ ProfilerLaunchOrchestrator::~ProfilerLaunchOrchestrator()
     // releasing our shared RemoteUri reference. The orchestrator holds its own
     // shared_ptr, so the deferred SSH teardown stays valid regardless of the
     // owning dialog's lifetime.
+    m_download_orchestrator.reset();
     m_remote_session.reset();
 #endif
 
@@ -79,7 +83,9 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
     // Fresh run: drop any prior remote session and reset normalized state /
     // output so stale data from a previous launch does not leak through.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+    m_download_orchestrator.reset();
     m_remote_session.reset();
+    m_download_started = false;
 #endif
     m_raw_output.clear();
     m_output_dirty   = false;
@@ -89,10 +95,11 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
     m_is_running     = false;
 
     m_is_remote       = request.is_remote;
-    m_auto_load_trace = request.auto_load_trace;
+    m_download_trace  = request.auto_load_trace;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_remote_uri      = request.remote_uri;
+    m_remote_uri =
+        request.remote_uri ? std::make_shared<RemoteUri>(*request.remote_uri) : nullptr;
     if(request.is_remote)
     {
         return LaunchRemote(request);
@@ -127,17 +134,15 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
         return false;
     }
 
-    // Spawn a RemoteProfilerSession that drives connect -> auth -> remote launch
-    // -> download -> open. Auth prompts / download progress surface via the SSH
-    // popups rendered by the dialog.
-    m_remote_session = std::make_unique<RemoteProfilerSession>(
-        request.remote_uri, request.auto_load_trace,
-        [this](const std::string& local_path)
-        {
-            // Honor the "Open trace when profiling completes" checkbox for remote
-            // runs too (m_auto_load_trace is set per launch and constant during
-            // the run).
-            if(m_app_window && m_auto_load_trace && !local_path.empty())
+    // Spawn a RemoteProfilerSession that drives connect -> auth -> remote launch.
+    // Auth prompts surface via the SSH popups rendered by the dialog. The trace
+    // download is not part of the run: it goes through a downloader shared with
+    // the launcher's Open Trace, which takes over the run's connection.
+    m_remote_session =
+        std::make_unique<RemoteProfilerSession>(m_remote_uri, request.produces_trace);
+    m_download_orchestrator = std::make_shared<RemoteTraceOrchestrator>(
+        m_remote_uri, [this](const std::string& local_path) {
+            if(m_app_window && !local_path.empty())
             {
                 m_app_window->OpenFile(local_path);
             }
@@ -151,6 +156,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
                          (m_remote_session ? m_remote_session->GetStatusMessage() : std::string());
         m_profiler_state = kRPVProfilerStateFailed;
         m_remote_session.reset();
+        m_download_orchestrator.reset();
         return false;
     }
 
@@ -193,6 +199,7 @@ void ProfilerLaunchOrchestrator::Cancel()
 void ProfilerLaunchOrchestrator::Close()
 {
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+    m_download_orchestrator.reset();
     m_remote_session.reset();
 #endif
     m_profiler_session.Close();
@@ -205,11 +212,11 @@ void ProfilerLaunchOrchestrator::Update()
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
     {
-        // The remote session owns the connect -> auth -> profile -> download
-        // phase machine. The orchestrator stays "running" until the whole
-        // workflow finishes, then settles to the remote profiler's terminal
-        // result. The transient Idle state is never mirrored back (it would
-        // regress the badge to [Idle]).
+        // The remote session owns the connect -> auth -> profile phase machine.
+        // The orchestrator stays "running" until it finishes, then settles to
+        // the run's terminal result. The transient Idle state is never mirrored
+        // back (it would regress the badge to [Idle]).
+        m_remote_session->Update();
         rocprofvis_profiler_state_t remote_state = m_remote_session->GetProfilerState();
 
         std::string remote_out = m_remote_session->GetOutput();
@@ -227,22 +234,26 @@ void ProfilerLaunchOrchestrator::Update()
         else
         {
             m_is_running = false;
+            // Once profiling is done, the run's connection goes to the trace
+            // downloader; TakeSession() hands it over only once.
+            if(m_download_orchestrator)
+            {
+                m_download_orchestrator->SetSession(m_remote_session->TakeSession());
+            }
+
             if(remote_state == kRPVProfilerStateCompleted)
             {
-                // Decided once, on the transition: the output is final by then,
-                // and a run with no output file would otherwise be re-scanned
-                // every frame.
-                if(m_profiler_state != kRPVProfilerStateCompleted)
+                m_profiler_state = kRPVProfilerStateCompleted;
+                m_trace_path     = m_remote_uri ? m_remote_uri->GetRemoteResultPathString()
+                                                : std::string();
+
+                // With auto-open, the trace is downloaded once the run has
+                // produced a file.
+                if(m_download_trace && !m_download_started && m_download_orchestrator &&
+                   !m_trace_path.empty())
                 {
-                    m_profiler_state = kRPVProfilerStateCompleted;
-                    // The remote session downloaded the trace the controller
-                    // named. A run with no trace file downloaded nothing, and
-                    // deriving the local path would create an empty cache
-                    // directory.
-                    if(m_remote_uri && m_remote_session->ProducedTraceFile())
-                    {
-                        m_trace_path = m_remote_uri->GetLocalResultPathString();
-                    }
+                    m_download_started = true;
+                    m_download_orchestrator->DownloadPath();
                 }
             }
             else if(remote_state == kRPVProfilerStateCancelled)
@@ -283,8 +294,7 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
 
     m_profiler_state = new_state;
 
-    // Remote trace download + auto-load is owned by the RemoteProfilerSession;
-    // local trace resolution happens here.
+    // Remote runs settle in Update(); local trace resolution happens here.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
     {
@@ -300,11 +310,11 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
     {
         m_is_running = false;
         rocprofvis_result_t const trace = ResolveLocalTracePath();
-        if(!m_trace_path.empty() && m_auto_load_trace && m_app_window)
+        if(!m_trace_path.empty() && m_download_trace && m_app_window)
         {
             m_app_window->OpenFile(m_trace_path);
         }
-        else if(m_trace_path.empty() && m_auto_load_trace &&
+        else if(m_trace_path.empty() && m_download_trace &&
                 trace != kRocProfVisResultNotSupported)
         {
             // No filesystem fallback by design (a newest-*.db guess can open a
@@ -360,24 +370,20 @@ int32_t ProfilerLaunchOrchestrator::GetExitCode() const
 
 std::string ProfilerLaunchOrchestrator::GetRemoteStatusMessage() const
 {
+    std::string message;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
     {
-        return m_remote_session->GetStatusMessage();
+        message = m_remote_session->GetStatusMessage();
     }
 #endif
-    return std::string();
+    return message;
 }
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 SshSession* ProfilerLaunchOrchestrator::GetRemoteSshSession() const
 {
     return m_remote_session ? m_remote_session->GetSession() : nullptr;
-}
-
-bool ProfilerLaunchOrchestrator::IsRemoteDownloading() const
-{
-    return m_remote_session && m_remote_session->IsDownloading();
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 
@@ -399,7 +405,7 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
     }
 
     // The badge reflects the workflow phase, not just the profiler state, so the
-    // user sees connect/auth/profile/download progress. The label says it all
+    // user sees connect/auth/profile progress. The label says it all
     // for those phases; only a failure carries a detail (its reason).
     out_detail.clear();
     switch(m_remote_session->GetPhase())
@@ -414,10 +420,6 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
             break;
         case RemoteProfilerSession::Phase::Profiling:
             out_label = "Profiling";
-            out_level = ConsoleStatusLevel::kRunning;
-            break;
-        case RemoteProfilerSession::Phase::Downloading:
-            out_label = "Downloading";
             out_level = ConsoleStatusLevel::kRunning;
             break;
         case RemoteProfilerSession::Phase::Done:

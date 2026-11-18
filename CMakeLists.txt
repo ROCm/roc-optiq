@@ -33,6 +33,9 @@ option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui fi
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
+set(ROCPROFVIS_UI_TEST_BACKEND "auto" CACHE STRING
+    "Graphics backend the UI tests run with (auto, vulkan, opengl)")
+set_property(CACHE ROCPROFVIS_UI_TEST_BACKEND PROPERTY STRINGS auto vulkan opengl)
 
 # TEMPORARY: gate the in-development profiler-launch and remote/SSH features
 # until they ship. Both default OFF so release builds exclude the UI, the
@@ -616,10 +619,10 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     if(APPLE)
         target_link_libraries(${TEST_TARGET} PRIVATE "-framework AppKit")
     endif()
-    add_test(NAME roc-optiq-ui-tests-trace COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
+    add_test(NAME roc-optiq-ui-tests-trace COMMAND roc-optiq-tests --backend ${ROCPROFVIS_UI_TEST_BACKEND} --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
     set_tests_properties(roc-optiq-ui-tests-trace PROPERTIES RUN_SERIAL ON)
     set_tests_properties(roc-optiq-ui-tests-trace PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-    add_test(NAME roc-optiq-ui-tests-compute COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
+    add_test(NAME roc-optiq-ui-tests-compute COMMAND roc-optiq-tests --backend ${ROCPROFVIS_UI_TEST_BACKEND} --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
     set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES RUN_SERIAL ON)
     set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()

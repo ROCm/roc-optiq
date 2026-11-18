@@ -204,22 +204,15 @@ jobs:
         run: |
           # TEMPORARY: installed per job to validate UI tests on ManyLinux
           # before baking these into docker/Dockerfile.manylinux.
-          # Xvfb gives the tests a display; mesa provides the software
-          # Vulkan (lavapipe) and GL (llvmpipe) drivers.
+          # Xvfb gives the tests a display and mesa-dri-drivers provides the
+          # llvmpipe software OpenGL renderer. The tests run on the OpenGL
+          # backend because lavapipe (software Vulkan) cannot create an
+          # instance in this container.
           yum install -y \
             xorg-x11-server-Xvfb \
             xauth \
-            mesa-vulkan-drivers \
             mesa-dri-drivers \
-            vulkan-loader \
-            vulkan-tools \
             gdb
-
-          # Diagnostics: show which Vulkan ICDs exist and whether the loader
-          # can enumerate a (software) device.
-          rpm -ql mesa-vulkan-drivers | grep -iE 'icd|vulkan' || true
-          ls -l /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1 || true
-          xvfb-run -a vulkaninfo --summary || true
 
       - name: Install OpenSSL 3
         if: inputs.crypto_backend == 'OpenSSL'
@@ -280,6 +273,7 @@ jobs:
             -DROCPROFVIS_MULTI_WINDOW="${ENABLE_MULTI_WINDOW}" \
             -DROCPROFVIS_ENABLE_PROFILER_HUB="${ENABLE_PROFILER_HUB}" \
             -DROCPROFVIS_ENABLE_UI_TESTS="${ENABLE_UI_TESTS}" \
+            -DROCPROFVIS_UI_TEST_BACKEND=opengl \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND="${CRYPTO_BACKEND}" \
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
@@ -319,29 +313,8 @@ jobs:
             -ex run \
             -ex "thread apply all bt" \
             --args "${GITHUB_WORKSPACE}/${BUILD_DIR}/roc-optiq-tests" \
-              --run-tests -f "${GITHUB_WORKSPACE}/sample/rocprof_compute_23ed6f36.db" \
+              --backend opengl --run-tests -f "${GITHUB_WORKSPACE}/sample/rocprof_compute_23ed6f36.db" \
             || true
-
-      - name: UI Test Backend Experiments (on failure)
-        if: steps.run_tests.outcome == 'failure' && env.ENABLE_UI_TESTS == 'ON'
-        continue-on-error: true
-        timeout-minutes: 10
-        run: |
-          # TEMPORARY diagnostics: why does lavapipe fail vkCreateInstance, and
-          # does the OpenGL backend (llvmpipe) work instead?
-          echo "::group::lavapipe ldd"
-          ldd /usr/lib64/libvulkan_lvp.so || true
-          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
-          echo "::endgroup::"
-          echo "::group::vulkaninfo with loader debug"
-          VK_LOADER_DEBUG=all VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
-            xvfb-run -a vulkaninfo --summary 2>&1 | tail -60 || true
-          echo "::endgroup::"
-          echo "::group::compute UI test with --backend opengl"
-          cd "${GITHUB_WORKSPACE}"
-          xvfb-run -a "${BUILD_DIR}/roc-optiq-tests" --backend opengl \
-            --run-tests -f sample/rocprof_compute_23ed6f36.db 2>&1 | tail -60 || true
-          echo "::endgroup::"
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'

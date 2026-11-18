@@ -595,6 +595,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                     }
                 }
 
+                result = kRocProfVisResultSuccess;
                 if(fetch_ranges.size())
                 {
                     for(auto& range : fetch_ranges)
@@ -608,7 +609,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
 
                         // The processed flags below must be cleared even if this
                         // throws, or later fetches of these segments wait forever.
-                        result = CallCatchingExceptions([&]() {
+                        rocprofvis_result_t range_result = CallCatchingExceptions([&]() {
                             m_track->GetSegments()->AddActiveArray(array_id);
 
                             rocprofvis_result_t fetch_result = m_track->FetchSegments(
@@ -640,18 +641,19 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                             {
                                 it->second.SetProcessed(i, false);
                                 it->second.SetValid(i,
-                                                    result == kRocProfVisResultSuccess);
+                                                    range_result == kRocProfVisResultSuccess);
                             }
                             
                         }
                         m_cv.notify_all();
 
                         m_track->GetSegments()->RemoveActiveArray(array_id);
+
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            result = range_result;
+                        }
                     }
-                }
-                else
-                {
-                    result = kRocProfVisResultSuccess;
                 }
 
                  {
@@ -749,9 +751,6 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
                 });
         }
     }
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                      result == kRocProfVisResultOutOfRange ||
-                      result == kRocProfVisResultCancelled);
     return result;
 }
 

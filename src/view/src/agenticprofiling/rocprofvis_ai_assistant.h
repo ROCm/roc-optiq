@@ -102,6 +102,17 @@ private:
         // announced on the next turn instead of leaving it an outdated list.
         std::string links_announced;
         bool        scroll_to_bottom = false;
+
+        // Token counts the endpoint reported for this trace's conversation.
+        // Kept across the end of a turn and cleared with the conversation.
+        bool usage_reported            = false;
+        int  last_prompt_tokens        = 0;
+        int  last_completion_tokens    = 0;
+        bool last_cached_known         = false;
+        int  last_cached_tokens        = 0;
+        int  session_prompt_tokens     = 0;
+        int  session_completion_tokens = 0;
+        int  session_rounds            = 0;
     };
 
     // One tool parked until the fetches behind it land.
@@ -160,6 +171,8 @@ private:
     void        RenderActivityChart(const std::string& project_id, uint64_t track_id);
     void        RenderHeaderCard();
     void        RenderLinkMenu();
+    // The model, context, and token-usage pill under the title.
+    void        RenderContextChip(const std::string& model, const std::string& endpoint);
     void        RenderTranscript();
     void        RenderMessageCard(Conversation& conversation, size_t index,
                                   const ChatLine& line);
@@ -214,6 +227,28 @@ private:
     bool                 NeedsBriefing();
     void                 TrimConversation();
     bool                 Busy() const;
+    // Records a usage object from a completed response. Ignored when the
+    // endpoint sent none.
+    void NoteTokenUsage(const AssistantChatResult& result);
+    void ClearTokenUsage(Conversation& conversation);
+
+    // The conversation as the history trimmer budgets it, plus the standing
+    // prompt and tool schema that ride along with every request. The pill
+    // draws the first against its budget and reports the overhead apart, so
+    // an empty chat reads as empty. Tokens are characters over four.
+    struct ContextLoad
+    {
+        size_t history_chars         = 0;
+        size_t history_budget_chars  = 0;
+        size_t history_tokens        = 0;
+        size_t history_budget_tokens = 0;
+        size_t overhead_tokens       = 0;
+    };
+    ContextLoad MeasureContext() const;
+    void        RenderContextTooltip(const Conversation& conversation,
+                                     const ContextLoad& load, float fill,
+                                     const std::string& model,
+                                     const std::string& endpoint) const;
 
     static AssistantPanel* s_instance;
 

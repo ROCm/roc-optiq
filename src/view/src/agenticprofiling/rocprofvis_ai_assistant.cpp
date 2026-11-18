@@ -53,9 +53,11 @@ constexpr size_t   ASSISTANT_MAX_CONVERSATION_MESSAGES = 60;
 // The same bill measured the way it is actually charged. A message count
 // cannot bound one investigation: that is a single question followed by round
 // after round of tool replies, so it never reaches a second user message to cut
-// on, and one reply alone may be ASSISTANT_MAX_RESULT_CHARS wide. Roughly four
-// characters to the token.
+// on, and one reply alone may be ASSISTANT_MAX_RESULT_CHARS wide.
 constexpr size_t   ASSISTANT_MAX_CONVERSATION_CHARS = 120000;
+// The ratio the history budget was sized with, and the one the context pill
+// uses to turn characters into tokens.
+constexpr size_t ASSISTANT_CHARS_PER_TOKEN = 4;
 // Tool replies newer than this are never compacted, however long the history
 // has run. These are the rows the answer is about to be written from.
 constexpr size_t   ASSISTANT_RECENT_TOOL_REPLIES = 8;
@@ -703,7 +705,108 @@ MessageChars(const AssistantMessage& message)
     return chars;
 }
 
+size_t
+TokensFromChars(size_t chars)
+{
+    return (chars + ASSISTANT_CHARS_PER_TOKEN - 1) / ASSISTANT_CHARS_PER_TOKEN;
+}
+
+// The standing prompt and the tool schema do not change for a trace kind, so
+// their sizes are measured once. Rebuilding either on every frame would copy
+// the whole prompt just to count it.
+size_t
+StandingPromptChars(bool is_compute)
+{
+    static size_t chars[2] = { 0, 0 };
+    static bool   ready[2] = { false, false };
+    const size_t  index    = is_compute ? 1 : 0;
+    if(!ready[index])
+    {
+        chars[index] = AssistantSystemPrompt(is_compute).size();
+        ready[index] = true;
+    }
+    return chars[index];
+}
+
+size_t
+ToolSchemaChars(bool is_compute)
+{
+    static size_t chars[2] = { 0, 0 };
+    static bool   ready[2] = { false, false };
+    const size_t  index    = is_compute ? 1 : 0;
+    if(!ready[index])
+    {
+        chars[index] = BuildAssistantToolsJson(is_compute).toString().size();
+        ready[index] = true;
+    }
+    return chars[index];
+}
+
 }  // namespace
+
+AssistantPanel::ContextLoad
+AssistantPanel::MeasureContext() const
+{
+    // The pill follows the conversation on screen, even while another trace's
+    // turn is running. Only that conversation's active write-up omits tools.
+    const bool viewing_turn =
+        Busy() && m_view_project_id == m_turn_project_id;
+    const bool is_compute =
+        viewing_turn ? m_turn_is_compute
+                     : MakeAssistantToolContext(m_view_project_id).is_compute;
+    // The write-up round goes out with the schema omitted. Every other round,
+    // including the one a new question is about to start, carries it.
+    const bool   include_tools  = !viewing_turn || !m_force_final;
+    const size_t overhead_chars = StandingPromptChars(is_compute) +
+                                  (include_tools ? ToolSchemaChars(is_compute) : 0);
+
+    ContextLoad load;
+    load.history_budget_chars = ASSISTANT_MAX_CONVERSATION_CHARS;
+    const std::unordered_map<std::string, std::unique_ptr<Conversation>>::const_iterator
+        conversation = m_conversations.find(m_view_project_id);
+    if(conversation != m_conversations.end())
+    {
+        for(const AssistantMessage& message : conversation->second->messages)
+        {
+            load.history_chars += MessageChars(message);
+        }
+    }
+    load.history_tokens        = TokensFromChars(load.history_chars);
+    load.history_budget_tokens = TokensFromChars(load.history_budget_chars);
+    load.overhead_tokens       = TokensFromChars(overhead_chars);
+    return load;
+}
+
+void
+AssistantPanel::NoteTokenUsage(const AssistantChatResult& result)
+{
+    if(!result.has_usage)
+    {
+        return;
+    }
+    Conversation& conversation              = TurnConversation();
+    conversation.usage_reported             = true;
+    conversation.last_prompt_tokens         = result.prompt_tokens;
+    conversation.last_completion_tokens     = result.completion_tokens;
+    conversation.last_cached_known          = result.has_cached_tokens;
+    conversation.last_cached_tokens         = result.cached_tokens;
+    conversation.session_prompt_tokens     += result.prompt_tokens;
+    conversation.session_completion_tokens += result.completion_tokens;
+    ++conversation.session_rounds;
+}
+
+void
+AssistantPanel::ClearTokenUsage(Conversation& conversation)
+{
+    conversation.usage_reported            = false;
+    conversation.last_prompt_tokens        = 0;
+    conversation.last_completion_tokens    = 0;
+    conversation.last_cached_known         = false;
+    conversation.last_cached_tokens        = 0;
+    conversation.session_prompt_tokens     = 0;
+    conversation.session_completion_tokens = 0;
+    conversation.session_rounds            = 0;
+}
 
 /*
  * Bounds what the transcript costs to re-send, in two passes.
@@ -842,6 +945,9 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
         TurnConversation().next_steps.clear();
         return;
     }
+    // A length-limit error can still name what was spent. Record it before any
+    // path below resets the turn.
+    NoteTokenUsage(result);
 
     if(!result.ok)
     {

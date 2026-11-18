@@ -3197,6 +3197,23 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app->GetCurrentProject() != nullptr);
         IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
 
+        // Extra JSON fields are accepted by the endpoint parser. A stale trace
+        // link must not redirect a compute handler into a system data model.
+        AssistantToolContext compute_context;
+        compute_context.is_compute = true;
+#    ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+        result = StartAssistantTool(compute_context, "compute_overview",
+                                    "{\"trace\":\"stale-link\"}");
+        IM_CHECK(result.content.find(
+                     "Linked-trace reads are available only for system traces") !=
+                 std::string::npos);
+#    else
+        result = StartAssistantTool(compute_context, "compute_overview", "{}");
+        IM_CHECK(result.content.find(
+                     "this build of Ask Optiq reads system traces only") !=
+                 std::string::npos);
+#    endif
+
         // Link the sample as the baseline of its copy.
         TraceLinkMember baseline;
         baseline.path  = id_a;

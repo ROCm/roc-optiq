@@ -194,6 +194,16 @@ StartLinkedTool(const AssistantToolContext& context, const AssistantToolEntry& e
         }
         return DoneResult(reason + ".", "Not a read tool");
     }
+    // Trace links compare system runs. Compute schemas do not advertise a
+    // trace argument, but model-supplied JSON may contain extra fields; do not
+    // let one redirect a compute handler into a system trace's data model.
+    if(context.is_compute)
+    {
+        return DoneResult(
+            "Linked-trace reads are available only for system traces. Omit trace to "
+            "read this compute workload.",
+            "Not a system trace");
+    }
 
     TraceLink   link;
     std::string error;
@@ -567,6 +577,19 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
                           "Bad arguments");
     }
 
+#ifndef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    // Reject a compute turn before looking up its tools. Their schema names are
+    // still compiled in, but their handlers are stubs in this build, so lookup
+    // first would misleadingly call them unknown while listing them as available.
+    if(context.is_compute && tool_name != ASSISTANT_NEXT_STEPS_TOOL)
+    {
+        return DoneResult(
+            "This is a compute trace, and this build of Ask Optiq reads system "
+            "traces only. Tell the user to open a system trace to ask about it.",
+            "Compute trace");
+    }
+#endif
+
     ToolFamily                family = ToolFamily::kData;
     const AssistantToolEntry* entry  = FindTool(tool_name, context.is_compute, family);
     if(entry == nullptr)
@@ -593,18 +616,6 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
     {
         return DoneResult("No trace is open.", "No trace");
     }
-#ifndef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
-    // Without compute support Ask Optiq reads system traces only. Refused once
-    // here rather than in every tool, as a backstop: the panel turns a compute
-    // trace away before a turn starts.
-    if(context.is_compute)
-    {
-        return DoneResult(
-            "This is a compute trace, and this build of Ask Optiq reads system "
-            "traces only. Tell the user to open a system trace to ask about it.",
-            "Compute trace");
-    }
-#endif
     // A compare tab holds two runs in one provider, and every tool reads a
     // provider as one trace, so its totals would add the runs together.
     if(context.is_compare)

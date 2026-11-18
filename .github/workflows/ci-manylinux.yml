@@ -179,7 +179,7 @@ jobs:
           CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
           cmake -B ${{ env.BUILD_DIR }} \
-            --preset ${{ inputs.cmake_config_preset }} \
+            --preset "${CMAKE_CONFIG_PRESET}" \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
             ${CMAKE_ARGS} \
             -DGLFW_LINK_STATIC=ON \

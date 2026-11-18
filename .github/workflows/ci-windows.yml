@@ -256,7 +256,7 @@ jobs:
             "--preset", "${env:INPUTS_CMAKE_CONFIG_PRESET}",
             "-DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}",
             "-DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }}",
-            "-DCRYPTO_BACKEND=${{ inputs.crypto_backend }}"
+            "-DCRYPTO_BACKEND=${env:INPUTS_CRYPTO_BACKEND}"
           ) + $extraArgs + $opensslArgs
           cmake @cmakeArgs
           cmake --build ${{ env.BUILD_DIR }}/${env:INPUTS_CMAKE_CONFIG_PRESET} --preset "${env:INPUTS_CMAKE_BUILD_PRESET}" --parallel 4

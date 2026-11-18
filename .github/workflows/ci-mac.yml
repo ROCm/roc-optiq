@@ -271,7 +271,7 @@ jobs:
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
             ${CMAKE_ARGS} \
             -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} \
-            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            -DCRYPTO_BACKEND="${INPUTS_CRYPTO_BACKEND}" \
             -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" \
             -DVulkan_LIBRARY="$Vulkan_LIBRARY" \
             -DROCPROFVIS_MOLTENVK_LIBRARY="$MoltenVK_LIBRARY"

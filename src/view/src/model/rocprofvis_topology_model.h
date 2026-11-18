@@ -138,6 +138,7 @@ struct ProcessInfo : public TopologyNode
     , pid(0)
     , start_time(0.0)
     , end_time(0.0)
+    , display_index(0)
     {}
 
     // OS process id, for display. GetId() is the topology id, which is not an OS
@@ -147,6 +148,10 @@ struct ProcessInfo : public TopologyNode
     double      end_time;
     std::string command;
     std::string environment;
+    // 1-based rank across the whole trace: node rows in order, then ascending
+    // process id within a node. The track process decorator colors by it. Set
+    // by Finalize().
+    size_t display_index;
 };
 
 struct ThreadInfo : public TopologyNode
@@ -325,6 +330,12 @@ private:
      * drifting away from the rows.
      */
     void OrderNodes();
+    /*
+     * Ranks processes without reordering them. Ranked by id rather than load
+     * order because multi-file traces load in parallel, so the load order can
+     * change between sessions.
+     */
+    void RankProcesses();
     void BuildTrackOrder();
     /*
      * Groups the GPUs and CPUs by product name and picks the most numerous of

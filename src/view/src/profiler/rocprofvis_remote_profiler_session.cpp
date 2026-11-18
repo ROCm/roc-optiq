@@ -16,12 +16,13 @@ namespace View
 {
 
 RemoteProfilerSession::RemoteProfilerSession(
-    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file,
-    std::function<std::string(const std::string&)> parse_trace_path)
+    std::shared_ptr<RemoteUri> uri, bool fetch_trace,
+    std::function<void(const std::string&)> on_open_file)
 : m_uri(std::move(uri))
 , m_on_open_file(std::move(on_open_file))
-, m_parse_trace_path(std::move(parse_trace_path))
 , m_session(nullptr)
+, m_fetch_trace(fetch_trace)
+, m_produced_trace(false)
 , m_remote_status_token(EventManager::InvalidSubscriptionToken)
 , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
 , m_phase(Phase::Idle)
@@ -98,6 +99,8 @@ RemoteProfilerSession::Launch(const ProfilerLaunchSpec& spec)
     {
         return false;
     }
+
+    m_produced_trace = false;
 
     // Build the profiler config (same fields as local) and tag it as an SSH
     // launch so the controller selects the SshProfilerExecutor.
@@ -285,32 +288,36 @@ RemoteProfilerSession::StartDownload()
         return;
     }
 
-    // Deduce the remote trace path from the profiler's captured stdout (the
-    // profiler reports the file it produced). This replaces the old manual
-    // "Remote output database" field.
-    if(m_parse_trace_path)
+    // The controller scraped the remote path as the profiler printed it. A
+    // failed read must clear any path already on the URI: it outlives a run,
+    // and the next download must not fetch the previous run's file.
+    std::string             path;
+    rocprofvis_result_t const result =
+        m_fetch_trace ? GetTraceFilePath(path) : kRocProfVisResultNotSupported;
+    if(result == kRocProfVisResultNotSupported)
     {
-        std::string parsed = m_parse_trace_path(GetOutput());
-        if(!parsed.empty())
-        {
-            m_uri->GetRemoteResultPath() = parsed;
-        }
+        m_uri->GetRemoteResultPath().clear();
+        m_phase   = Phase::Done;
+        m_running = false;
+        return;
     }
-
-    if(m_uri->GetRemoteResultPathString().empty())
+    if(result != kRocProfVisResultSuccess || path.empty())
     {
-        // The run completed but we could not determine a trace path to fetch.
+        m_uri->GetRemoteResultPath().clear();
         Fail("Could not determine remote trace path from profiler output.");
         return;
     }
 
+    m_uri->GetRemoteResultPath() = std::move(path);
     m_status_message =
         std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
     m_phase = Phase::Downloading;
     if(m_session->StartDownload() == 0)
     {
         Fail("Trace download could not be started.");
+        return;
     }
+    m_produced_trace = true;
 }
 
 void

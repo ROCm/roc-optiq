@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_profiler_cmdline.h"
 #include "rocprofvis_controller_profiler_scrape_rules.h"
 #include "rocprofvis_controller_profiler_tool.h"
+#include "rocprofvis_core_string_utils.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "rocprofvis_controller_ssh_profiler_executor.h"
@@ -67,10 +68,12 @@ void append_diagnostic(std::string& output_text, std::string const& text)
 ProfilerConfig::ProfilerConfig()
     : Handle(0, 0)
     , m_tool(kRPVProfilerToolNone)
+    , m_operation(kRPVProfilerOperationDefault)
     , m_tool_directory()
     , m_resolved_tool_path()
     , m_output_directory()
     , m_working_directory()
+    , m_python_environment()
     , m_env_vars()
     , m_profiler_argv()
     , m_connection_type(ConnectionType::kLocal)
@@ -97,6 +100,16 @@ rocprofvis_result_t ProfilerConfig::SetTool(rocprofvis_profiler_tool_t tool)
     return kRocProfVisResultSuccess;
 }
 
+rocprofvis_result_t ProfilerConfig::SetOperation(rocprofvis_profiler_operation_t operation)
+{
+    if (operation >= __kRPVProfilerOperationLast)
+    {
+        return kRocProfVisResultInvalidEnum;
+    }
+    m_operation = operation;
+    return kRocProfVisResultSuccess;
+}
+
 rocprofvis_result_t ProfilerConfig::SetToolDirectory(char const* directory)
 {
     if (directory == nullptr)
@@ -109,7 +122,7 @@ rocprofvis_result_t ProfilerConfig::SetToolDirectory(char const* directory)
 
 rocprofvis_result_t ProfilerConfig::ResolveToolPath()
 {
-    return ProfilerTool::ResolvePath(m_tool, m_tool_directory, m_resolved_tool_path);
+    return ProfilerTool::ResolvePath(m_tool, m_tool_directory, m_python_environment, m_resolved_tool_path);
 }
 
 rocprofvis_result_t ProfilerConfig::ResolveToolPathRemote()
@@ -149,6 +162,16 @@ rocprofvis_result_t ProfilerConfig::ResolveToolPathRemote()
     return kRocProfVisResultSuccess;
 }
 
+std::string ProfilerConfig::GetCommandPreview(bool remote, std::string const& argv0) const
+{
+    std::vector<std::string> argv;
+    argv.reserve(m_profiler_argv.size() + 1);
+    argv.push_back(argv0);
+    argv.insert(argv.end(), m_profiler_argv.begin(), m_profiler_argv.end());
+
+    return Cmdline::ToPreviewString(argv, remote ? Cmdline::ComposeRemoteEnv(m_env_vars, m_python_environment) : Cmdline::ComposeLocalEnv(m_env_vars, m_python_environment, "$PATH"), m_working_directory, m_python_environment, remote);
+}
+
 rocprofvis_result_t ProfilerConfig::SetOutputDirectory(char const* path)
 {
     if (path == nullptr)
@@ -167,6 +190,62 @@ rocprofvis_result_t ProfilerConfig::SetWorkingDirectory(char const* path)
     }
     m_working_directory = path;
     return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::SetPythonEnvironment(char const* path)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if (path != nullptr)
+    {
+        m_python_environment = path;
+        result               = kRocProfVisResultSuccess;
+    }
+    return result;
+}
+
+rocprofvis_result_t ProfilerConfig::ValidatePythonEnvironment(bool remote) const
+{
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    if (m_python_environment.empty())
+    {
+        // No venv: the tool runs with the inherited Python.
+    }
+    else if (remote)
+    {
+        // The remote host is POSIX; a relative path would resolve against
+        // whatever directory the remote shell starts in.
+        if (m_python_environment[0] != '/')
+        {
+            spdlog::error("Python environment '{}' must be an absolute path",
+                          m_python_environment);
+            result = kRocProfVisResultInvalidArgument;
+        }
+    }
+    else
+    {
+#ifndef _WIN32
+        std::error_code ec;
+        if (!std::filesystem::path(m_python_environment).is_absolute())
+        {
+            spdlog::error("Python environment '{}' must be an absolute path",
+                          m_python_environment);
+            result = kRocProfVisResultInvalidArgument;
+        }
+        else if (!std::filesystem::is_regular_file(
+                     Cmdline::PythonEnvironmentPath(m_python_environment, "bin/activate"), ec) ||
+                 ec)
+        {
+            spdlog::error("Python environment '{}' is not a virtual environment (no bin/activate)",
+                          m_python_environment);
+            result = kRocProfVisResultInvalidArgument;
+        }
+#else
+        spdlog::warn("Ignoring Python environment '{}': local launches on Windows do not "
+                     "activate one",
+                     m_python_environment);
+#endif
+    }
+    return result;
 }
 
 rocprofvis_result_t ProfilerConfig::ValidateWorkingDirectory() const
@@ -266,6 +345,7 @@ void ProfilerConfig::ApplyStage(ProfilerStageSpec const& stage,
     m_tool_directory      = stage.tool_directory;
     m_resolved_tool_path  = resolved_tool_path;
     m_working_directory   = stage.working_directory;
+    m_python_environment  = stage.python_environment;
     m_profiler_argv       = stage.argv;
     m_env_vars            = stage.env;
     // A stage's own list is not the pipeline's; carrying it would make the
@@ -634,6 +714,10 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
     }
     argv_cstr.push_back(nullptr);
 
+    // Also before fork: composing the venv PATH reads and allocates.
+    std::vector<std::pair<std::string, std::string>> env = Cmdline::BuildLocalEnv(config);
+    bool const has_python_environment = !config.GetPythonEnvironment().empty();
+
     int stdout_pipe[2];
     int stderr_pipe[2];
 
@@ -684,9 +768,15 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         }
 
         // setenv is not async-signal-safe; see the POSIX section banner.
-        for (auto const& kv : config.GetEnvVars())
+        for (std::pair<std::string, std::string> const& kv : env)
         {
             setenv(kv.first.c_str(), kv.second.c_str(), 1);
+        }
+        // As bin/activate does: a PYTHONHOME from Optiq's environment would
+        // point the venv's interpreter at another installation's stdlib.
+        if (has_python_environment)
+        {
+            unsetenv("PYTHONHOME");
         }
 
         execvp(argv_cstr[0], argv_cstr.data());
@@ -892,8 +982,10 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
         // in the console when a key is missing (and, if so, when lines were
         // too long to scan).
         ProfilerStageSpec stage;
-        stage.tool              = m_config->GetTool();
-        stage.tool_directory    = m_config->GetToolDirectory();
+        stage.tool               = m_config->GetTool();
+        stage.operation          = m_config->GetOperation();
+        stage.tool_directory     = m_config->GetToolDirectory();
+        stage.python_environment = m_config->GetPythonEnvironment();
         stage.argv              = m_config->GetProfilerArgv();
         stage.working_directory = m_config->GetWorkingDirectory();
         stage.env               = m_config->GetEnvVars();
@@ -942,7 +1034,8 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
     for (size_t i = 0; i < m_stages.size(); ++i)
     {
         rocprofvis_result_t resolved = ProfilerTool::ResolvePath(
-            m_stages[i].tool, m_stages[i].tool_directory, m_stage_tool_paths[i]);
+            m_stages[i].tool, m_stages[i].tool_directory, m_stages[i].python_environment,
+            m_stage_tool_paths[i]);
         if (resolved != kRocProfVisResultSuccess)
         {
             m_failing_stage = static_cast<int32_t>(i);
@@ -1025,6 +1118,22 @@ rocprofvis_result_t ProfilerProcessController::StartStageLocked(uint32_t stage_i
         return working_directory_valid;
     }
 
+    // Same reasoning: a missing venv would otherwise surface as a Python
+    // import error from deep inside the tool.
+    rocprofvis_result_t python_environment_valid =
+        m_stage_config->ValidatePythonEnvironment(false);
+    if (python_environment_valid != kRocProfVisResultSuccess)
+    {
+        m_failing_stage = static_cast<int32_t>(stage_index);
+        m_stage_states[stage_index] = kRPVProfilerStateFailed;
+        m_scrape.SkipRemainingFrom(stage_index);
+        append_diagnostic(m_output_text,
+                          "The Python environment '" + stage.python_environment +
+                              "' is not an absolute path to a virtual environment "
+                              "(no bin/activate), so nothing was run.");
+        return python_environment_valid;
+    }
+
     if (m_emit_banners)
     {
         std::string banner = "=== Stage " + std::to_string(stage_index + 1) + "/" +
@@ -1050,6 +1159,11 @@ rocprofvis_result_t ProfilerProcessController::StartStageLocked(uint32_t stage_i
     if (!stage.working_directory.empty())
     {
         spdlog::info("Profiler working directory: {}", stage.working_directory);
+    }
+
+    if (!stage.python_environment.empty())
+    {
+        spdlog::info("Profiler Python environment: {}", stage.python_environment);
     }
 
     spdlog::info("Profiler launch: {}",
@@ -1151,6 +1265,13 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig 
     {
         m_state = kRPVProfilerStateFailed;
         return resolved;
+    }
+
+    rocprofvis_result_t python_environment_valid = m_config->ValidatePythonEnvironment(true);
+    if (python_environment_valid != kRocProfVisResultSuccess)
+    {
+        m_state = kRPVProfilerStateFailed;
+        return python_environment_valid;
     }
 
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -1324,7 +1445,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
         // stays set - the ending is not going back to UpdateState, and a second
         // Cancel on a finished run should say NotSupported.
         DrainExecutorLocked();
-        m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+        m_scrape.EndStage(m_stages[m_current_stage].working_directory, PosixScrapePaths());
 
         m_stage_states[m_current_stage] = kRPVProfilerStateFailed;
         m_failing_stage                 = static_cast<int32_t>(m_current_stage);
@@ -1345,7 +1466,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
     // to UpdateState would not work, since it no longer finalises a cancelled
     // run.
     DrainExecutorLocked();
-    m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+    m_scrape.EndStage(m_stages[m_current_stage].working_directory, PosixScrapePaths());
 
     m_exit_code = executor->GetExitCode();
 
@@ -1436,7 +1557,7 @@ void ProfilerProcessController::FinishStageLocked(int exit_code)
 {
     m_exit_code = exit_code;
 
-    m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+    m_scrape.EndStage(m_stages[m_current_stage].working_directory, PosixScrapePaths());
 
     if (exit_code != 0)
     {
@@ -1570,6 +1691,41 @@ rocprofvis_result_t ProfilerProcessController::GetArtifactPath(std::string& out)
         return kRocProfVisResultNotAvailable;
     }
     return ScrapedValueLocked(m_artifact_key, out);
+}
+
+rocprofvis_result_t ProfilerProcessController::GetTraceFilePath(std::string& out) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // A workload directory is the capture's artifact, and a probe or an
+    // instrument run declares none. Neither is a trace file to open.
+    if (m_artifact_key.empty() || m_artifact_key == ProfilerScrapeRules::kKeyWorkloadDir)
+    {
+        return kRocProfVisResultNotSupported;
+    }
+
+    std::string path;
+    rocprofvis_result_t const result = ScrapedValueLocked(m_artifact_key, path);
+    if (result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    // Analyze names whatever file it wrote, which is only a trace when it is a
+    // database.
+    if (m_artifact_key == ProfilerScrapeRules::kKeyAnalysisDb &&
+        !Core::String::ends_with(path, ".db"))
+    {
+        return kRocProfVisResultNotAvailable;
+    }
+
+    out = std::move(path);
+    return kRocProfVisResultSuccess;
+}
+
+bool ProfilerProcessController::PosixScrapePaths() const
+{
+    return m_config != nullptr && m_config->GetConnectionType() == ConnectionType::kSsh;
 }
 
 rocprofvis_result_t ProfilerProcessController::GetScrapedValue(std::string const& key,

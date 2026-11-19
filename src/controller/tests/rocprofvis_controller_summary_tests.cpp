@@ -7,8 +7,10 @@
 #include "system/rocprofvis_controller_track.h"
 
 #include <cfloat>
+#include <cstring>
 #include <filesystem>
 #include <memory>
+#include <sstream>
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
@@ -68,6 +70,52 @@ struct SummaryFailureFixture
         REQUIRE(rocprofvis_controller_get_uint64(handle, property, 0, &value) ==
                 kRocProfVisResultSuccess);
         return value;
+    }
+
+    std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
+                          uint64_t index)
+    {
+        uint32_t length = 0;
+        if(rocprofvis_controller_get_string(handle, property, index, nullptr, &length) !=
+           kRocProfVisResultSuccess)
+        {
+            return std::string();
+        }
+        std::string value(length + 1, '\0');
+        length += 1;
+        if(rocprofvis_controller_get_string(handle, property, index, value.data(),
+                                            &length) != kRocProfVisResultSuccess)
+        {
+            return std::string();
+        }
+        value.resize(std::strlen(value.c_str()));
+        return value;
+    }
+
+    std::string DescribeMemoryEvents(uint64_t count)
+    {
+        std::ostringstream text;
+        text.precision(17);
+        text << "window=[" << start << ", " << end << "]";
+        for(uint64_t i = 0; i < count; i++)
+        {
+            uint64_t invocations = 0;
+            uint64_t duration    = 0;
+            rocprofvis_controller_get_uint64(
+                metrics.get(),
+                kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventInvocationsIndexed, i,
+                &invocations);
+            rocprofvis_controller_get_uint64(
+                metrics.get(),
+                kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationSumIndexed, i,
+                &duration);
+            text << " | "
+                 << GetString(metrics.get(),
+                              kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventNameIndexed,
+                              i)
+                 << " invocations=" << invocations << " duration_sum=" << duration;
+        }
+        return text.str();
     }
 
     void Initialize()
@@ -198,6 +246,7 @@ TEST_CASE_METHOD(SummaryFailureFixture, "Summary accepts populated and empty tim
           kRPVAnalysisSummaryAggregationLevelTrace);
     const uint64_t memory_events =
         Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
+    INFO(DescribeMemoryEvents(memory_events));
     if(empty)
     {
         CHECK(memory_events == 0);

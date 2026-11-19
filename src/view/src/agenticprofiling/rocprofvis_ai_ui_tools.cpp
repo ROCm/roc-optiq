@@ -527,11 +527,14 @@ ToolFlowArrows(const AssistantToolContext& context, const jt::Json& args,
     {
         message += " Style set to " + style + ".";
     }
-    if(visible)
+    // With nothing selected there is nothing for them to draw from yet, which
+    // the model can still put right, so that reply is not a settled one.
+    if(visible && (context.timeline_selection == nullptr ||
+                   !context.timeline_selection->HasSelectedEvents()))
     {
-        message +=
-            " They only draw for a selected event, so call goto with an "
-            "event_uuid and track_id to see them.";
+        return DoneResult(message + " They only draw for a selected event, so call "
+                                    "goto with an event_uuid and track_id to see them.",
+                          "Flow arrows on");
     }
     return SettledResult(message, visible ? "Flow arrows on" : "Flow arrows off");
 }
@@ -628,6 +631,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     // without it a NaN bound would be accepted as a valid range.
     bool has_range = std::isfinite(start_ns) && std::isfinite(end_ns) &&
                      start_ns >= 0.0 && end_ns > start_ns;
+    // The start and end of an event with no duration, as its row prints them.
+    // Zero for both is how an argument left out tends to be spelled instead.
+    bool pointlike = std::isfinite(start_ns) && start_ns > 0.0 && end_ns == start_ns;
 
     // goto is the one writer of the selection the data tools default to, so a
     // window outside the trace must not be stored: every later read would come
@@ -669,6 +675,8 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
                 FindAssistantEvent(context, target.second);
             if(!sighting.has_span)
             {
+                pointlike = pointlike || (sighting.seen && sighting.start_ns > 0.0 &&
+                                          sighting.end_ns == sighting.start_ns);
                 continue;
             }
             found_start = found ? std::min(found_start, sighting.start_ns)
@@ -777,6 +785,12 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
             << ", and the event's own start and end are not in the rows read last - "
                "pass them from its row";
     }
+    else if(pointlike)
+    {
+        out << "Left the timeline where it was, because there is no span to frame: an "
+               "event with no duration needs start_ns and end_ns a little either side "
+               "of it";
+    }
     else
     {
         out << "Left the timeline where it was, because no window was given and the "
@@ -815,9 +829,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     }
     out << ".";
     AssistantToolStartResult result = DoneResult(out.str(), "Moved the view");
-    // Settled only when the view went where it was sent and the event named
-    // was selected. Anything short of that the model may want to correct.
-    result.settled = has_range && !range_dropped && (targets.empty() || have_focus);
+    // Settled only when the view went where it was sent and every event named
+    // was marked. Anything short of that the model may want to correct.
+    result.settled = has_range && !range_dropped && marked == targets.size();
     return result;
 }
 

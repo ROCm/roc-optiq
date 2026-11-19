@@ -2650,7 +2650,9 @@ Layered, transport at the bottom and the panel at the top:
   would). Every summary list is trimmed to the busiest names plus
   "Others", so the tools point at `top_events` for a full ranking.
   `AssistantSummaryLoaded` is the one "is the summary there" check,
-  shared with the panel's summary warmup. `BuildAssistantBriefing`
+  shared with the panel's summary warmup. A summary that loaded with
+  nothing in it (`AssistantSummaryCurrent`) is reported as empty by the
+  briefing and by `get_summary`, not fetched again. `BuildAssistantBriefing`
   lives here too and hands a compute trace straight to
   `BuildAssistantComputeBriefing`, so nothing system-shaped describes a
   workload.

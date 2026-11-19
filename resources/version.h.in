@@ -4,3 +4,10 @@
 #define ROCPROFVIS_VERSION_MINOR @PROJECT_VERSION_MINOR@
 #define ROCPROFVIS_VERSION_PATCH @PROJECT_VERSION_PATCH@
 #define ROCPROFVIS_VERSION_BUILD @PROJECT_VERSION_BUILD@
+
+// Full git commit of an official build, or "unknown" for any other build.
+#define ROCPROFVIS_GIT_COMMIT "@ROCPROFVIS_GIT_COMMIT@"
+
+// Shown under the commit in About and by -v hash when the commit is unknown.
+#define ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE \
+    "Unofficial builds do not record a commit hash."

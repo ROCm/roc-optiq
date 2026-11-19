@@ -4,7 +4,11 @@ defaults:
 root: index
 
 subtrees:
-- caption: At a glance
+
+- entries:
+    - file: release-notes.rst
+      title: Release notes
+
   entries:
   - file: what-is-optiq.rst
     title: What is ROCm Optiq?
@@ -17,7 +21,7 @@ subtrees:
 - caption: How to
   entries:
   - file: how-to/view-trace
-    title: View ROCm Systems Profiler trace data in ROCm Optiq
+    title: View ROCm Systems Profiler and ROCprofiler-SDK trace data in ROCm Optiq
   - file: how-to/view-analysis
     title: View ROCm Compute Profiler analysis data in ROCm Optiq
   - file: how-to/customize-views

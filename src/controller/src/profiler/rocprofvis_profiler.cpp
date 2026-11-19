@@ -107,11 +107,12 @@ rocprofvis_result_t rocprofvis_profiler_tool_get_binary_name(rocprofvis_profiler
     return RocProfVis::Controller::copy_string_to_buffer(name, buffer, length);
 }
 
-rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char* buffer, uint32_t* length)
+rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char const* python_environment, char* buffer, uint32_t* length)
 {
     std::string         resolved;
     rocprofvis_result_t result = RocProfVis::Controller::ProfilerTool::ResolvePath(
-        tool, tool_directory != nullptr ? tool_directory : "", resolved);
+        tool, tool_directory != nullptr ? tool_directory : "",
+        python_environment != nullptr ? python_environment : "", resolved);
     if (result != kRocProfVisResultSuccess)
     {
         return result;
@@ -129,6 +130,17 @@ rocprofvis_result_t rocprofvis_profiler_config_set_tool(rocprofvis_profiler_conf
     }
 
     return config_ref->SetTool(tool);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_operation(rocprofvis_profiler_config_t* config, rocprofvis_profiler_operation_t operation)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return config_ref->SetOperation(operation);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_tool_directory(rocprofvis_profiler_config_t* config, char const* tool_directory)
@@ -164,6 +176,17 @@ rocprofvis_result_t rocprofvis_profiler_config_set_working_directory(rocprofvis_
     return config_ref->SetWorkingDirectory(working_directory);
 }
 
+rocprofvis_result_t rocprofvis_profiler_config_set_python_environment(rocprofvis_profiler_config_t* config, char const* python_environment)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return config_ref->SetPythonEnvironment(python_environment);
+}
+
 rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value)
 {
     RocProfVis::Controller::ProfilerConfigRef config_ref(config);
@@ -184,6 +207,17 @@ rocprofvis_result_t rocprofvis_profiler_config_add_profiler_arg(rocprofvis_profi
     }
 
     return config_ref->AddProfilerArg(arg);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_get_command_preview(rocprofvis_profiler_config_t* config, bool remote, char const* argv0, char* buffer, uint32_t* length)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid() || argv0 == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return RocProfVis::Controller::copy_string_to_buffer(config_ref->GetCommandPreview(remote, argv0), buffer, length);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_connection_local(rocprofvis_profiler_config_t* config)
@@ -340,6 +374,24 @@ rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_profiler_t* profil
         session_ref->GetController().GetOutput(), buffer, length);
 }
 
+rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length)
+{
+    RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
+    if (!session_ref.IsValid() || length == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    std::string path;
+    rocprofvis_result_t const result = session_ref->GetController().GetTraceFilePath(path);
+    if (result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    return RocProfVis::Controller::copy_string_to_buffer(path, buffer, length);
+}
+
 rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_profiler_t* profiler)
 {
     RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
@@ -372,16 +424,21 @@ rocprofvis_result_t rocprofvis_profiler_cancel(rocprofvis_profiler_t* profiler)
         return kRocProfVisResultInvalidArgument;
     }
 
-    session_ref->GetController().Cancel();
+    // Reported rather than swallowed: NotSupported means the run had already
+    // finished or was already stopping, which is a different answer for the
+    // caller than "asked, and it stopped".
+    rocprofvis_result_t const result = session_ref->GetController().Cancel();
 
     // Forward cancellation to the bound future so any waiter (e.g. job system
-    // wait, view-side future_wait) unblocks promptly.
+    // wait, view-side future_wait) unblocks promptly. Done even when the
+    // controller had nothing to stop, so a waiter is never left hanging on a
+    // run that is already over.
     if (RocProfVis::Controller::Future* bound = session_ref->GetBoundFuture())
     {
         bound->Cancel();
     }
 
-    return kRocProfVisResultSuccess;
+    return result;
 }
 
 }

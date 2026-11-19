@@ -5,11 +5,15 @@
 
 #include "imgui.h"
 #include "json.h"
+#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_font_manager.h"
 #include <array>
 #include <filesystem>
 #include <list>
+#include <map>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -18,6 +22,16 @@ namespace View
 {
 
 enum class TimeFormat;
+
+// What the color strip on a track's left edge encodes. Persisted as an int, so
+// append new modes before kCount.
+enum class TrackDecoratorMode : uint32_t
+{
+    kNone,
+    kTrackType,
+    kProcess,
+    kCount
+};
 
 typedef struct DisplaySettings
 {
@@ -33,6 +47,16 @@ typedef struct UnitSettings
     TimeFormat time_format;
 } UnitSettings;
 
+constexpr int TRACK_DECORATOR_WIDTH_MIN     = 1;
+constexpr int TRACK_DECORATOR_WIDTH_MAX     = 10;
+constexpr int TRACK_DECORATOR_WIDTH_DEFAULT = 3;
+
+typedef struct TrackSettings
+{
+    TrackDecoratorMode decorator;        // what the strip on a track's left edge color-codes
+    int                decorator_width;  // strip width in pixels
+} TrackSettings;
+
 // Persisted UI state for the log viewer window. level_mask packs one bit per
 // spdlog severity level (bit i => level i enabled).
 typedef struct LogViewerSettings
@@ -44,19 +68,65 @@ typedef struct LogViewerSettings
     bool visible;
 } LogViewerSettings;
 
+// Chat endpoint. The settings panel asks for URL, model, and API key; how the
+// key and model are presented is worked out from the URL by the client, so
+// nothing about the endpoint shape is stored here.
+constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME = "Default";
+constexpr const char* ASSISTANT_DEFAULT_MODEL         = "gpt-5.6-luna";
+
+// One saved endpoint. Name is the credential-store key, not a display label.
+typedef struct AssistantProvider
+{
+    std::string name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+    std::string endpoint_url;
+    std::string model = ASSISTANT_DEFAULT_MODEL;
+} AssistantProvider;
+
+// Fills in an empty name or model, so a half-written settings file still runs.
+inline void
+ApplyAssistantEndpointDefaults(AssistantProvider& provider)
+{
+    if(provider.name.empty())
+    {
+        provider.name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+    }
+    if(provider.model.empty())
+    {
+        provider.model = ASSISTANT_DEFAULT_MODEL;
+    }
+}
+
+// A provider with nothing configured but the defaults.
+inline AssistantProvider
+MakeDefaultAssistantProvider()
+{
+    AssistantProvider provider;
+    ApplyAssistantEndpointDefaults(provider);
+    return provider;
+}
+
+typedef struct AssistantSettings
+{
+    std::vector<AssistantProvider> providers;
+    size_t                         active = 0;
+} AssistantSettings;
+
 typedef struct UserSettings
 {
     DisplaySettings   display_settings;
     UnitSettings      unit_settings;
+    TrackSettings     track_settings;
     bool              dont_ask_before_tab_closing;
     bool              dont_ask_before_exit;
     int               log_viewer_max_entries;
     LogViewerSettings log_viewer;
+    AssistantSettings assistant;
     // Linux/Wayland only: repair pointer routing after a floating window is
     // dragged, at the cost of a brief flicker on each drag-release. Set with
     // --drag-repair and ignored on other platforms. See
     // raise_dragged_viewport_after_release() in rocprofvis_platform_helpers.cpp.
-    bool              linux_drag_repair;
+    bool        linux_drag_repair;
+    std::string remote_cache_path;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -72,10 +142,10 @@ typedef struct InternalSettings
 // because a remote profile needs a directory on the remote host.
 typedef struct ProfilerSettings
 {
-    std::string profiler_output_directory;
-    bool        auto_load_trace = true;
-    std::vector<std::string> recent_targets;
-    std::string last_preset_name;
+    // Most recent first, keyed as described at SettingsManager::GetRecentTargets.
+    std::unordered_map<std::string, std::vector<std::string>> recent_targets;
+    // Each profiler's last selected launch profile, keyed by profiler id.
+    std::unordered_map<std::string, std::string> last_preset_names;
     std::string last_profiler_id;
     std::string last_ssh_connection_id;
 } ProfilerSettings;
@@ -221,6 +291,27 @@ enum class Colors
     kLogError,
     kLogCritical,
 
+    // PC-sampling stall-reason palette
+    kPcSamplingInstructionFetch,
+    kPcSamplingAluDependency,
+    kPcSamplingWaitcnt,
+    kPcSamplingInternalInstruction,
+    kPcSamplingBarrier,
+    kPcSamplingArbiter,
+    kPcSamplingPipelineStall,
+    kPcSamplingOtherWait,
+    kPcSamplingSleeping,
+
+    // ISA mnemonic palette; operands retain the normal text colour.
+    kIsaInternal,
+    kIsaMatrix,
+    kIsaScalar,
+    kIsaBranch,
+    kIsaValu,
+    kIsaFlat,
+    kIsaLds,
+    kIsaBarrier,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -240,14 +331,22 @@ constexpr const char* JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR = "compact_sideb
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_TRACKS        = "tracks";
+constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR       = "decorator";
+constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH = "decorator_width";
+
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
 constexpr size_t      MAX_RECENT_FILES                       = 5;
 
-constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
-constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
-constexpr const char* JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR         = "linux_drag_repair";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT =
+    "dont_ask_before_exit";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE =
+    "dont_ask_before_tab_close";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR = "linux_drag_repair";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH = "remote_cache_path";
 
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES = "log_viewer_max_entries";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES =
+    "log_viewer_max_entries";
 // Bounds for the log viewer's in-memory cache size. Older lines fall off the
 // ring buffer once the cap is reached; the full history lives in the log file.
 constexpr int LOG_VIEWER_MAX_ENTRIES_DEFAULT   = 512;
@@ -256,18 +355,36 @@ constexpr int LOG_VIEWER_MAX_ENTRIES_MAX       = 100000;
 constexpr int LOG_VIEWER_MAX_ENTRIES_STEP      = 64;
 constexpr int LOG_VIEWER_MAX_ENTRIES_STEP_FAST = 512;
 
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK    = "log_viewer_level_mask";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL   = "log_viewer_auto_scroll";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX     = "log_viewer_use_regex";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME = "log_viewer_relative_time";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_visible";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK =
+    "log_viewer_level_mask";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL =
+    "log_viewer_auto_scroll";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX =
+    "log_viewer_use_regex";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME =
+    "log_viewer_relative_time";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE = "log_viewer_visible";
 // All six severity levels enabled (bits 0..5).
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW      = "app_window";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR       = "show_toolbar";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL = "show_details_panel";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR       = "show_sidebar";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM     = "show_histogram";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY       = "show_summary";
+
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_MODEL        = "model";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS    = "providers";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ACTIVE       = "active";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_NAME         = "name";
+// OS credential-store key for the assistant API token. Never written to JSON.
+constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
+
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 
 class SettingsManager
 {
@@ -285,6 +402,11 @@ public:
     // Styling
     bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
     bool CompactSidebar() const { return m_usersettings.display_settings.compact_sidebar; }
+    TrackDecoratorMode GetTrackDecoratorMode() const
+    {
+        return m_usersettings.track_settings.decorator;
+    }
+    int GetTrackDecoratorWidth() const { return m_usersettings.track_settings.decorator_width; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
@@ -316,6 +438,35 @@ public:
     // Profiler settings
     ProfilerSettings& GetProfilerSettings();
     void SaveProfilerSettings();
+    /*
+     * The recent target list for a profiler, optionally narrowed to one tool and
+     * one operation; created empty on first use. The list is keyed by the
+     * profiler id followed by each supplied enum value, so a caller that passes
+     * only the profiler id gets one list shared by all of its tools. The
+     * reference stays valid as other lists are added.
+     */
+    std::vector<std::string>& GetRecentTargets(
+        std::string const&                             profiler_id,
+        std::optional<rocprofvis_profiler_tool_t>      tool      = std::nullopt,
+        std::optional<rocprofvis_profiler_operation_t> operation = std::nullopt);
+
+    // The route the assistant should use, or nullptr when none is configured.
+    const AssistantProvider* GetActiveAssistantProvider() const;
+
+    // Assistant API token, one per provider. Stored in the OS credential vault
+    // when available, otherwise held in process memory only. Never written to
+    // settings JSON. Guarded because these are the only users of SecretStore
+    // outside remote; the provider URL and model above stay compiled either way,
+    // so a settings file survives a build that has the assistant switched off.
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    bool HasAssistantToken(const std::string& provider_name) const;
+    bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
+    bool SetAssistantToken(const std::string& provider_name, const std::string& token);
+    bool ClearAssistantToken(const std::string& provider_name);
+    // Names the endpoint that owns a key saved before endpoints had names.
+    // Called once on load; see the definition for why it is not a live lookup.
+    void MigrateLegacyAssistantToken();
+#endif
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
@@ -344,6 +495,9 @@ private:
     void DeserializeUnitSettings(jt::Json& json);
     void ApplyUserUnitSettings(const UserSettings& old_settings);
 
+    void SerializeTrackSettings(jt::Json& json);
+    void DeserializeTrackSettings(jt::Json& json);
+
     void SerializeInternalSettings(jt::Json& json);
     void DeserializeInternalSettings(jt::Json& json);
 
@@ -354,6 +508,12 @@ private:
     void DeserializeHotkeySettings(jt::Json& json);
     void SerializeProfilerSettings(jt::Json& json);
     void DeserializeProfilerSettings(jt::Json& json);
+    void SerializeAssistantSettings(jt::Json& json);
+    void DeserializeAssistantSettings(jt::Json& json);
+    // The endpoint name is the credential-store key, so it has to be unique.
+    void MakeAssistantProviderNamesUnique();
+    void SerializeAppWindowSettings(jt::Json& json);
+    void DeserializeAppWindowSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
@@ -365,6 +525,8 @@ private:
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
     ProfilerSettings   m_profilersettings;
+    // Provider name -> token, used only when no OS credential store exists.
+    std::map<std::string, std::string> m_assistant_token_session;
 
     std::filesystem::path m_json_path;
 };

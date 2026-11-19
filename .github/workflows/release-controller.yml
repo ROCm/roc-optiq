@@ -31,3 +31,4 @@ jobs:
       upload_to_github: ${{ !inputs.dry_run }}
       upload_to_s3: ${{ !inputs.dry_run }}
       s3_bucket_env: ${{ inputs.s3_bucket_env }}
+      rocm_version: ${{ inputs.rocm_version }}

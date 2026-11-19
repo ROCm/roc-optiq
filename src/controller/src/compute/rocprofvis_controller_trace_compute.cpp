@@ -13,6 +13,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_controller_table_compute_pivot.h"
 #include "json.h"
+#include "spdlog/spdlog.h"
 #include <algorithm>
 #include <charconv>
 #include <cstring>
@@ -192,6 +193,39 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
     return result;
 }
 
+rocprofvis_result_t ComputeTrace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
+{
+    (void) index;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(length)
+    {
+        switch(property)
+        {
+            case kRPVControllerComputeProfilerVersion:
+            {
+                result = GetStdStringImpl(value, length, m_profiler_version);
+                break;
+            }
+            case kRPVControllerComputeProfilerGitVersion:
+            {
+                result = GetStdStringImpl(value, length, m_profiler_git_version);
+                break;
+            }
+            case kRPVControllerComputeSchemaVersion:
+            {
+                result = GetStdStringImpl(value, length, m_schema_version);
+                break;
+            }
+            default:
+            {
+                result = UnhandledProperty(property);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
 rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, MetricsContainer& output)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -353,9 +387,7 @@ ComputeTrace::AsyncFetchPcSamplingIsaData(Arguments& args, Future& future,
             const rocprofvis_dm_result_t dm_result =
                 FetchPcSamplingIsaData(db, future, kernel_id, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
+            return PcSamplingJobResult(dm_result);
         },
         &future));
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
@@ -387,9 +419,7 @@ ComputeTrace::AsyncFetchPcSamplingSource(Arguments& args, Future& future,
             const rocprofvis_dm_result_t dm_result = FetchPcSamplingSourceData(
                 db, future, kernel_id, source_file_uuid, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
+            return PcSamplingJobResult(dm_result);
         },
         &future));
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
@@ -399,26 +429,28 @@ rocprofvis_result_t
 ComputeTrace::AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
                                          PcSampling& output)
 {
-    uint64_t kernel_id = 0;
+    uint64_t kernel_id                   = 0;
+    uint64_t include_instruction_samples = 1;
     if(kRocProfVisResultSuccess !=
        args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id))
     {
         return kRocProfVisResultInvalidArgument;
     }
+    args.GetUInt64(kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0,
+                   &include_instruction_samples);
 
     future.Set(JobSystem::Get().IssueJob(
-        [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
+        [this, &output, kernel_id,
+         include_instruction_samples](Future* future) -> rocprofvis_result_t {
             std::unique_lock<std::recursive_mutex> data_lock(
                 output.GetLayerMutex(PcSampling::DataLayer::kStalls));
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
-            const rocprofvis_dm_result_t dm_result =
-                FetchPcSamplingStallData(db, future, kernel_id, output);
+            const rocprofvis_dm_result_t dm_result = FetchPcSamplingStallData(
+                db, future, kernel_id, include_instruction_samples != 0, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
+            return PcSamplingJobResult(dm_result);
         },
         &future));
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
@@ -432,17 +464,26 @@ ComputeTrace::FetchPcSamplingIsaData(rocprofvis_dm_database_t db, Future* future
     if(!output.m_code_object_store_loaded)
     {
         result = FetchCodeObjects(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_code_object_store_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_code_object_store_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && !output.m_kernel_symbols_loaded)
     {
         result = FetchKernelSymbols(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_kernel_symbols_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_kernel_symbols_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
     {
         result = FetchInstructionLines(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_instruction_lines_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_instruction_lines_loaded = true;
+        }
     }
     return result;
 }
@@ -456,14 +497,19 @@ ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* fut
     if(!output.m_source_files_loaded)
     {
         result = FetchSourceFiles(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_source_files_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_source_files_loaded = true;
+        }
     }
     if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
     if(result == kRocProfVisDmResultSuccess && !output.m_instruction_source_lines_loaded)
     {
         result = FetchInstructionSourceLines(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
+        {
             output.m_instruction_source_lines_loaded = true;
+        }
     }
     if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
 
@@ -481,24 +527,35 @@ ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* fut
 
 rocprofvis_dm_result_t
 ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* future,
-                                       uint64_t kernel_id, PcSampling& output)
+                                       uint64_t    kernel_id,
+                                       bool        include_instruction_samples,
+                                       PcSampling& output)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     if(!output.m_pc_sample_states_loaded)
     {
         result = FetchPcSampleStates(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_pc_sample_states_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_pc_sample_states_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && !output.m_stalls_loaded)
     {
         result = FetchStalls(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_stalls_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_stalls_loaded = true;
+        }
     }
-    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_samples_loaded)
+    if(result == kRocProfVisDmResultSuccess && include_instruction_samples &&
+       !output.m_instruction_samples_loaded)
     {
         result = FetchInstructionSamples(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
+        {
             output.m_instruction_samples_loaded = true;
+        }
     }
     return result;
 }
@@ -559,6 +616,7 @@ ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
             { kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid, std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset,    std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionLineInstruction,         std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineInstructionType,     std::nullopt },
         }, {}
     };
     rocprofvis_dm_result_t result = ExecuteQuery(
@@ -566,6 +624,7 @@ ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
         query_args, query_out,
         [this, &output](const QueryDataStore& data_store){
             StorePcSamplingRows(output, kRPVControllerPCSamplingNumInstructionLines, data_store);
+            StoreInstructionTypeLookupMap(output, data_store);
         });
     return result;
 }
@@ -831,6 +890,33 @@ ComputeTrace::StorePcSamplingRows(PcSampling& output,
     }
 }
 
+void
+ComputeTrace::StoreInstructionTypeLookupMap(PcSampling& output,
+                                            const QueryDataStore& data_store)
+{
+    output.m_instruction_type_lookup_map.clear();
+
+    const auto uuid_column = data_store.columns.find(
+        kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid);
+    const auto text_column = data_store.columns.find(
+        kRPVComputeColumnPcSamplingInstructionLineInstructionType);
+    if(uuid_column == data_store.columns.end() || !uuid_column->second ||
+       text_column == data_store.columns.end() || !text_column->second)
+    {
+        return;
+    }
+
+    for(const std::vector<const char*>& row : data_store.rows)
+    {
+        uint64_t instruction_type_uuid = 0;
+        if(ParseUInt64(row[uuid_column->second.value()], instruction_type_uuid))
+        {
+            output.m_instruction_type_lookup_map.try_emplace(
+                instruction_type_uuid, row[text_column->second.value()]);
+        }
+    }
+}
+
 rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -850,6 +936,11 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                     future->AddDependentFuture(object2wait);
                     if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                     {
+                        future->ResetProgress();
+                        if(FetchMetadata(db, object2wait) != kRocProfVisDmResultSuccess)
+                        {
+                            spdlog::warn("Compute metadata unavailable for {}", m_trace_file);
+                        }
                         query_arguments.clear();
                         query_output = {
                             {
@@ -904,13 +995,26 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             }
                                         }
                                     }
+                                    else if(column.first == kRPVComputeColumnWorkloadMemoryChart)
+                                    {
+                                        // Store the memory-chart layout as raw JSON; the view parses it.
+                                        const char* layout = data_store.rows[i][column.second.value()];
+                                        if(layout)
+                                        {
+                                            m_workloads[i]->SetString(kRPVControllerWorkloadMemoryChartLayout, 0, layout);
+                                        }
+                                    }
                                 }
                             }
                         });
                         if(dm_result == kRocProfVisDmResultSuccess)
                         {
+                            std::optional<double> roofline_max_intensity_x;
+                            std::optional<double> roofline_min_intensity_x;
+                            uint64_t uint_data;
                             for(Workload* workload : m_workloads)
                             {
+                                uint_data = 0;
                                 uint64_t id = 0;
                                 result = workload->GetUInt64(kRPVControllerWorkloadId, 0, &id);
                                 if(result == kRocProfVisResultSuccess)
@@ -923,6 +1027,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             { kRPVComputeColumnMetricDescription, std::nullopt },
                                             { kRPVComputeColumnTableId, std::nullopt },
                                             { kRPVComputeColumnSubTableId, std::nullopt },
+                                            { kRPVComputeColumnEntryId, std::nullopt },
                                             { kRPVComputeColumnMetricTableName, std::nullopt },
                                             { kRPVComputeColumnMetricSubTableName, std::nullopt },
                                             { kRPVComputeColumnMetricUnit, std::nullopt },
@@ -999,6 +1104,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 { kRPVComputeColumnKernelDurationsMedian, std::nullopt },
                                                 { kRPVComputeColumnKernelDurationsMin, std::nullopt },
                                                 { kRPVComputeColumnKernelDurationsMax, std::nullopt },
+                                                { kRPVComputeColumnKernelHasIsaLines, std::nullopt },
                                             },
                                             {}
                                         };
@@ -1029,11 +1135,6 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {
                                         Roofline* roofline = new Roofline();
-                                        std::optional<double> max_intensity_x;
-                                        std::optional<double> min_intensity_x;
-                                        std::optional<double> max_intensity_y;
-                                        std::optional<double> min_intensity_y;
-                                        uint64_t uint_data = 0;
                                         for(const uint32_t& kernel_id : kernel_ids)
                                         {
                                             query_arguments = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
@@ -1049,7 +1150,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 {}
                                             };
                                             future->ResetProgress();
-                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, query_arguments, query_output, [&roofline, &kernel_id, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
+                                            dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchKernelRooflineIntensities, query_arguments, query_output, [&roofline, &kernel_id, &uint_data, &roofline_max_intensity_x, &roofline_min_intensity_x](const QueryDataStore& data_store){
                                                 if(data_store.rows.size() == 1)
                                                 {
                                                     const char* data = data_store.rows[0][data_store.columns.at(kRPVComputeColumnRooflineTotalFlops).value()];
@@ -1074,10 +1175,8 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                                             roofline->SetUInt64(kRPVControllerRooflineKernelIntensityTypeIndexed, uint_data, type);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityXIndexed, uint_data, value);
                                                                             roofline->SetDouble(kRPVControllerRooflineKernelIntensityYIndexed, uint_data, flops);
-                                                                            max_intensity_x = max_intensity_x ? std::max(max_intensity_x.value(), value) : value;
-                                                                            min_intensity_x = min_intensity_x ? std::min(min_intensity_x.value(), value) : value;
-                                                                            max_intensity_y = max_intensity_y ? std::max(max_intensity_y.value(), flops) : flops;
-                                                                            min_intensity_y = min_intensity_y ? std::min(min_intensity_y.value(), flops) : flops;
+                                                                            roofline_max_intensity_x = roofline_max_intensity_x ? std::max(roofline_max_intensity_x.value(), value) : value;
+                                                                            roofline_min_intensity_x = roofline_min_intensity_x ? std::min(roofline_min_intensity_x.value(), value) : value;
                                                                             uint_data++;
                                                                         }
                                                                     }
@@ -1088,14 +1187,25 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 }
                                             });
                                         }
-                                        max_intensity_x = max_intensity_x ? max_intensity_x.value() * 10 : max_intensity_x;
-                                        min_intensity_x = min_intensity_x ? min_intensity_x.value() / 10 : min_intensity_x;
-                                        max_intensity_y = max_intensity_y ? max_intensity_y.value() * 10 : max_intensity_y;
-                                        min_intensity_y = min_intensity_y ? min_intensity_y.value() / 10 : min_intensity_y;
+                                        workload->SetObject(kRPVControllerWorkloadRoofline, 0, (rocprofvis_handle_t*)roofline);
+                                    }
+                                }
+                            }
+                            for(size_t i = 0; i < m_workloads.size() && dm_result == kRocProfVisDmResultSuccess ; i++)
+                            {
+                                uint64_t id = 0;
+                                result = m_workloads[i]->GetUInt64(kRPVControllerWorkloadId, 0, &id);
+                                if(result == kRocProfVisResultSuccess)
+                                {
+                                    rocprofvis_handle_t* roofline_handle = nullptr;
+                                    result = m_workloads[i]->GetObject(kRPVControllerWorkloadRoofline, 0, &roofline_handle);
+                                    if(result == kRocProfVisResultSuccess && roofline_handle)
+                                    {
+                                        Roofline* roofline = (Roofline*)roofline_handle;
                                         query_arguments = { {kRPVComputeParamWorkloadId, std::to_string(id)} };
                                         query_output = { {}, {} };
                                         future->ResetProgress();
-                                        dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadRooflineCeiling, query_arguments, query_output, [&roofline, &uint_data, &max_intensity_x, &min_intensity_x, &max_intensity_y, &min_intensity_y](const QueryDataStore& data_store){
+                                        dm_result = ExecuteQuery(db, m_dm_handle, object2wait, nullptr, kRPVComputeFetchWorkloadRooflineCeiling, query_arguments, query_output, [&roofline, &uint_data, &roofline_max_intensity_x, &roofline_min_intensity_x](const QueryDataStore& data_store){
                                             if(data_store.rows.size() == 1)
                                             {
                                                 std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t, double> compute_ceilings;
@@ -1116,7 +1226,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                                 {
                                                                     roofline->SetUInt64(kRPVControllerRooflineNumCeilingsCompute, 0, compute_ceilings.size() + 1);
                                                                     roofline->SetUInt64(kRPVControllerRooflineCeilingComputeTypeIndexed, compute_ceilings.size(), (uint64_t)compute_type);
-                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, compute_ceilings.size(), max_intensity_x ? std::max(max_intensity_x.value(), roofline->MaxX()) : roofline->MaxX());
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingComputeXIndexed, compute_ceilings.size(), roofline_max_intensity_x ? std::max(roofline_max_intensity_x.value() * 10.0, roofline->MaxX()) : roofline->MaxX());
                                                                     roofline->SetDouble(kRPVControllerRooflineCeilingComputeYIndexed, compute_ceilings.size(), value);
                                                                     roofline->SetDouble(kRPVControllerRooflineCeilingComputeThroughputIndexed, compute_ceilings.size(), value);
                                                                     compute_ceilings[compute_type] = value;
@@ -1125,8 +1235,8 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                                 {
                                                                     roofline->SetUInt64(kRPVControllerRooflineNumCeilingsBandwidth, 0, bandwidth_ceilings.size() + 1);
                                                                     roofline->SetUInt64(kRPVControllerRooflineCeilingBandwidthTypeIndexed, bandwidth_ceilings.size(), (uint64_t)bandwidth_type);
-                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthXIndexed, bandwidth_ceilings.size(), min_intensity_x ? std::min(min_intensity_x.value(), roofline->MinX()) : roofline->MinX());
-                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthYIndexed, bandwidth_ceilings.size(), value * (min_intensity_x ? std::min(min_intensity_x.value(), roofline->MinX()) : roofline->MinX()));
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthXIndexed, bandwidth_ceilings.size(), roofline_min_intensity_x ? std::min(roofline_min_intensity_x.value() / 10.0, roofline->MinX()) : roofline->MinX());
+                                                                    roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthYIndexed, bandwidth_ceilings.size(), value * (roofline_min_intensity_x ? std::min(roofline_min_intensity_x.value() / 10.0, roofline->MinX()) : roofline->MinX()));
                                                                     roofline->SetDouble(kRPVControllerRooflineCeilingBandwidthThroughputIndexed, bandwidth_ceilings.size(), value);
                                                                     bandwidth_ceilings[bandwidth_type] = value;
                                                                 }
@@ -1148,11 +1258,10 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                     }
                                                 }
                                             }
-                                        });
-                                        workload->SetObject(kRPVControllerWorkloadRoofline, 0, (rocprofvis_handle_t*)roofline);
+                                        }); 
                                     }
                                 }
-                            }
+                            }                            
                         }
                         result = (dm_result == kRocProfVisDmResultSuccess) ? result : kRocProfVisResultUnknownError;
                         future->RemoveDependentFuture(object2wait);
@@ -1163,6 +1272,34 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
         }
     }
     return result;
+}
+
+rocprofvis_dm_result_t ComputeTrace::FetchMetadata(rocprofvis_dm_database_t db,
+                                                   rocprofvis_db_future_t   db_future)
+{
+    m_profiler_version.clear();
+    m_profiler_git_version.clear();
+    m_schema_version.clear();
+
+    QueryArgumentStore query_args;
+    QueryDataStore     query_out = {
+        {
+            { kRPVComputeColumnMetadataComputeVersion, std::nullopt },
+            { kRPVComputeColumnMetadataGitVersion,     std::nullopt },
+            { kRPVComputeColumnMetadataSchemaVersion,  std::nullopt },
+        }, {}
+    };
+    return ExecuteQuery(
+        db, m_dm_handle, db_future, nullptr, kRPVComputeFetchMetadata, query_args, query_out,
+        [this](const QueryDataStore& data_store){
+            if(!data_store.rows.empty())
+            {
+                const std::vector<const char*>& row = data_store.rows.front();
+                m_profiler_version     = row[data_store.columns.at(kRPVComputeColumnMetadataComputeVersion).value()];
+                m_profiler_git_version = row[data_store.columns.at(kRPVComputeColumnMetadataGitVersion).value()];
+                m_schema_version       = row[data_store.columns.at(kRPVComputeColumnMetadataSchemaVersion).value()];
+            }
+        });
 }
 
 rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t              db,
@@ -1371,6 +1508,20 @@ rocprofvis_result_t ComputeTrace::SetObjectProperty(rocprofvis_handle_t*        
                 break;
             }
         }
+    }
+    return result;
+}
+
+rocprofvis_result_t ComputeTrace::PcSamplingJobResult(rocprofvis_dm_result_t dm_result)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        result = kRocProfVisResultSuccess;
+    }
+    else if(dm_result == kRocProfVisDmResultNotSupported)
+    {
+        result = kRocProfVisResultNotSupported;
     }
     return result;
 }

@@ -6,11 +6,12 @@
 #include <charconv>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
-#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -18,6 +19,8 @@
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
+#include <knownfolders.h>
+#include <shlobj.h>
 #endif
 
 namespace RocProfVis
@@ -421,6 +424,65 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 }
 
 std::string
+RocProfVis::View::get_default_remote_cache_path()
+{
+    // The user's Downloads folder; stays empty when it cannot be determined.
+    std::filesystem::path downloads;
+#ifdef _WIN32
+    PWSTR wide_path = nullptr;
+    if(SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Downloads, KF_FLAG_DEFAULT, nullptr,
+                                      &wide_path)))
+    {
+        downloads = std::filesystem::path(wide_path).lexically_normal();
+    }
+    CoTaskMemFree(wide_path);
+#else
+    std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
+    if(!home.empty())
+    {
+        downloads = home / "Downloads";
+#    ifndef __APPLE__
+        // XDG user-dirs names the folder, translated on localized desktops, as
+        // XDG_DOWNLOAD_DIR="$HOME/..." or an absolute path.
+        std::filesystem::path config_dir = sanitize_base_dir(safe_getenv("XDG_CONFIG_HOME"));
+        std::ifstream file((config_dir.empty() ? home / ".config" : config_dir) /
+                           "user-dirs.dirs");
+        if(file.is_open())
+        {
+            const std::string key = "XDG_DOWNLOAD_DIR=";
+            std::string       line;
+            while(std::getline(file, line))
+            {
+                if(line.rfind(key, 0) == 0)
+                {
+                    std::string value = line.substr(key.size());
+                    if(value.size() >= 2 && value.front() == '"' && value.back() == '"')
+                    {
+                        value = value.substr(1, value.size() - 2);
+                    }
+                    if(value.rfind("$HOME", 0) == 0)
+                    {
+                        value = home.string() + value.substr(5);
+                    }
+                    std::filesystem::path configured = sanitize_base_dir(value);
+                    if(!configured.empty())
+                    {
+                        downloads = configured;
+                    }
+                }
+            }
+        }
+#    endif
+    }
+#endif
+    return (downloads.empty()
+                ? std::filesystem::path(get_application_config_path(false)) / "remote_cache"
+                : downloads / "ROCm-Optiq")
+        .lexically_normal()
+        .string();
+}
+
+std::string
 RocProfVis::View::get_application_log_path(bool create_dirs)
 {
 #ifdef __APPLE__
@@ -740,6 +802,33 @@ RocProfVis::View::join_posix_path(const std::string& dir, const std::string& nam
     return normalize_posix_path(joined);
 }
 
+std::string
+RocProfVis::View::format_byte_size(uint64_t bytes)
+{
+    constexpr const char* UNITS[]    = { "B", "KiB", "MiB", "GiB", "TiB" };
+    constexpr int         LAST_UNIT  = 4;
+    constexpr double      UNIT_RATIO = 1024.0;
+
+    double size = static_cast<double>(bytes);
+    int    unit = 0;
+    while(size >= UNIT_RATIO && unit < LAST_UNIT)
+    {
+        size /= UNIT_RATIO;
+        unit++;
+    }
+
+    char buf[32];
+    if(unit == 0)
+    {
+        std::snprintf(buf, sizeof(buf), "%llu B", static_cast<unsigned long long>(bytes));
+    }
+    else
+    {
+        std::snprintf(buf, sizeof(buf), "%.1f %s", size, UNITS[unit]);
+    }
+    return std::string(buf);
+}
+
 namespace
 {
 // Returns true if DISPLAY looks like an SSH X11-forwarded display, e.g.
@@ -844,4 +933,10 @@ RocProfVis::View::strip_ansi_for_display(std::string const& text)
         ++i;
     }
     return out;
+}
+
+bool
+RocProfVis::View::is_usable_time_range(double start_ns, double end_ns)
+{
+    return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
 }

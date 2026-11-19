@@ -78,7 +78,7 @@ int RocprofDatabase::CallbackParseMetadata(void* data, int argc, sqlite3_stmt* s
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void* func = (void*)&CallbackParseMetadata;
     rocprofvis_dm_track_params_t track_params = {0};
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     std::string tag = db->Sqlite3ColumnText(func, stmt, azColName, 1);
     if (tag == "schema_version")
@@ -117,6 +117,7 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
         else if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmHipEventTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
         {
             track_params.track_indentifiers.name[TRACK_ID_AGENT] = CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT], "product_name");
@@ -124,6 +125,7 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
             track_params.track_indentifiers.name[TRACK_ID_AGENT] += CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT], "type_index");
             track_params.track_indentifiers.name[TRACK_ID_AGENT] += ")";
             if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
+                track_params.track_indentifiers.category == kRocProfVisDmHipEventTrack ||
                 track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
                 track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack)
             {
@@ -161,11 +163,13 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
         else if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmHipEventTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
         {
             if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT]) != kRocProfVisDmResultSuccess) return 1; 
             if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
                 track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+                track_params.track_indentifiers.category == kRocProfVisDmHipEventTrack ||
                 track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack)
             {
                 if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
@@ -191,7 +195,7 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==rocprofvis_db_sqlite_memory_alloc_activity_query_format::NUM_PARAMS, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackCaptureMemoryActivity;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
@@ -307,7 +311,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
         const char* pmc_table_name = "PMC";
         std::map<uint32_t, uint64_t> allocated_memory_per_agent;
         std::map<uint32_t, uint64_t> pmc_id_per_agent;
-        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle(pmc_table_name);
+        CatalogTable* pmc_table = (CatalogTable*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle(pmc_table_name);
         auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
         std::vector<store_params> v;
         v.reserve(mem_act_per_guid.size());
@@ -322,7 +326,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                 if (it == pmc_id_per_agent.end())
                 {
                     uint32_t num = static_cast<uint32_t>(pmc_table->NumRows());
-                    uint64_t pmc_id = num ? std::atoll(pmc_table->GetCellByIndex(num - 1, "id")) : 0;
+                    uint64_t pmc_id = num ? std::atoll(pmc_table->CellTextByIndex(num - 1, "id")) : 0;
                     pmc_id++;
                     pmc_table->AddRow(pmc_id);
 
@@ -522,7 +526,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallBackAddString;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
@@ -547,8 +551,8 @@ RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stm
     (void) argc;
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackNodeEnumeration;
-    rocprofvis_db_sqlite_callback_parameters* callback_params =
-        (rocprofvis_db_sqlite_callback_parameters*) data;
+    rocprofvis_db_query_callback_parameters* callback_params =
+        (rocprofvis_db_query_callback_parameters*) data;
     RocprofDatabase* db = (RocprofDatabase*) callback_params->db;
     guid_list_t*     guid_list = (guid_list_t*) callback_params->handle;
     std::string      table_name_befor_guid = callback_params->query[kRPVCacheTableName];
@@ -641,22 +645,49 @@ RocprofDatabase::CreateIndexes()
 }
 
 
+std::string RocprofDatabase::GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
+{
+    std::string where_str;
+    if(source_filter)
+    {
+        if(source_filter->node_id.has_value)
+        {
+            where_str = std::string(Builder::NODE_ID_SERVICE_NAME) +" = " + std::to_string(source_filter->node_id.value);
+            if(source_filter->agent_id.has_value)
+            {
+                where_str += std::string(" AND ") + Builder::AGENT_ID_SERVICE_NAME + " = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
+            }
+            if(source_filter->process_id.has_value)
+            {
+                where_str += std::string(" AND ") + Builder::PROCESS_ID_SERVICE_NAME + " = " + std::to_string(source_filter->process_id.value & TOPOLOGY_ID_MASK);
+            }
+            if(source_filter->thread_id.has_value)
+            {
+                where_str += std::string(" AND ") + Builder::THREAD_ID_SERVICE_NAME + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
+            }
+        }
+    }
+    return where_str;
+}
+
 rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* future) {
 
-
-    std::vector<std::pair<std::string, std::string>> info_table_list = {{ "StreamToHw", 
-        std::string("SELECT ROW_NUMBER() OVER (ORDER BY ") +
+    std::string query = std::string("SELECT ROW_NUMBER() OVER (ORDER BY ") +
         Builder::STREAM_ID_SERVICE_NAME +
         ") AS row_num, * FROM (" +
         m_query_factory.GetRocprofMemoryCopyStreamFlowQuery() +
         Builder::Union() +
         m_query_factory.GetRocprofMemoryAllocStreamFlowQuery() +
         Builder::Union() +
-        m_query_factory.GetRocprofKernelDispatchStreamFlowQuery() +
-        ") ORDER BY " +
-        Builder::STREAM_ID_SERVICE_NAME
-        }};
-
+        m_query_factory.GetRocprofKernelDispatchStreamFlowQuery();
+    if (m_query_factory.IsVersionGreaterOrEqual("3.0.4") && !m_query_factory.IsVersionGreaterOrEqual("4.0.0"))
+    {
+        query += Builder::Union() +
+            m_query_factory.GetRocprofHipEventStreamFlowQuery();
+    }
+    query += ") ORDER BY ";
+    query += Builder::STREAM_ID_SERVICE_NAME;
+    std::vector<std::pair<std::string, std::string>> info_table_list = {{ "StreamToHw", query }};
     return RunCacheQueries(future, info_table_list, &CallbackCacheTable);
 }
 
@@ -714,16 +745,16 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
 
 
 rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance ){
-    TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
+    CatalogTable* table = (CatalogTable*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
     uint32_t stream_id = static_cast<uint32_t>(TrackPropertiesAt(stream_track_index)->track_indentifiers.id[TRACK_ID_STREAM]);
 
     for (int ind = 0; ind < table->NumRows(); ind++)
     {
-        uint64_t id = std::atoll(table->GetCellByIndex(ind, Builder::STREAM_ID_SERVICE_NAME));
+        uint64_t id = std::atoll(table->CellTextByIndex(ind, Builder::STREAM_ID_SERVICE_NAME));
         if (id == stream_id)
         {
-            uint32_t op = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::OPERATION_SERVICE_NAME)));
-            std::string agent = table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME);
+            uint32_t op = static_cast<uint32_t>(std::atoll(table->CellTextByIndex(ind, Builder::OPERATION_SERVICE_NAME)));
+            std::string agent = table->CellTextByIndex(ind, Builder::AGENT_ID_SERVICE_NAME);
             uint32_t agent_id = 0;
             if (agent.empty() && op == kRocProfVisDmOperationMemoryAllocate)
             {
@@ -735,9 +766,9 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(u
             }
             else
             {
-                agent_id = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME)));
+                agent_id = static_cast<uint32_t>(std::atoll(table->CellTextByIndex(ind, Builder::AGENT_ID_SERVICE_NAME)));
             }
-            uint32_t queue_id = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME)));
+            uint32_t queue_id = static_cast<uint32_t>(std::atoll(table->CellTextByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME)));
             uint32_t track;
             if (TrackTracker()->FindTrack(
                 TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op), 
@@ -763,11 +794,11 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     const char* table_name = "Agent";
-    TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle(table_name);
+    CatalogTable* table = (CatalogTable*)CachedTables(db_instance)->GetTableHandle(table_name);
     for (uint64_t i = 0; i < table->NumRows(); i++)
     {
-        uint64_t agent_id = std::atoll(table->GetCellByIndex(i, "id"));
-        uint64_t node_id = std::atoll(table->GetCellByIndex(i,"nid"));
+        uint64_t agent_id = std::atoll(table->CellTextByIndex(i, "id"));
+        uint64_t node_id = std::atoll(table->CellTextByIndex(i,"nid"));
         bool agent_in_use = false;
         for (int track_id = 0; track_id < NumTracks(); track_id++)
         {
@@ -779,6 +810,7 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
                 if ((track_indentifiers.category == kRocProfVisDmPmcTrack || 
                     track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
                     track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
+                    track_indentifiers.category == kRocProfVisDmHipEventTrack ||
                     track_indentifiers.category == kRocProfVisDmMemoryCopyTrack) &&
                     track_indentifiers.id[TRACK_ID_NODE] == node_id && 
                     track_indentifiers.id[TRACK_ID_AGENT] == agent_id)
@@ -792,7 +824,7 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
         {
             rocprofvis_dm_track_identifiers_t track_indentifiers;
 
-            uint64_t pid = std::atoll(table->GetCell(i,"pid"));
+            uint64_t pid = std::atoll(table->CellText(i,"pid"));
             track_indentifiers.category = kRocProfVisDmNotATrack;
             track_indentifiers.id[TRACK_ID_NODE] = node_id;
             track_indentifiers.id[TRACK_ID_AGENT] = agent_id;
@@ -900,6 +932,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationMemoryAllocate] = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]     = 0;
+        TraceProperties()->events_count[kRocProfVisDmOperationHipEvent]     = 0;
         TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]   = 0;
 
         TraceProperties()->tracks_info_restored = true;
@@ -918,6 +951,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             m_query_factory.GetRocprofMemoryAllocTrackQuery() +
             m_query_factory.GetRocprofMemoryAllocTrackQueryForStream() +
             m_query_factory.GetRocprofMemoryCopyTrackQuery() +
+            m_query_factory.GetRocprofHipEventTrackQuery() +
             m_query_factory.GetRocprofMemoryCopyTrackQueryForStream() +
             m_query_factory.GetRocprofPerformanceCountersTrackQuery() +
             m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery() +
@@ -1081,6 +1115,39 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             load_id++;
         }
 
+        if (m_query_factory.IsVersionGreaterOrEqual("3.0.4") && !m_query_factory.IsVersionGreaterOrEqual("4.0.0"))
+        {
+
+            ShowProgress(5, "Adding HIP event tracks", kRPVDbBusy, future);
+            {
+                std::vector<std::thread> threads;
+                m_add_track_mutex.init(NumDbInstances());
+                auto task = [&](DbInstance* db_instance)
+                    {
+                        Future* sub_future = future->AddSubFuture();
+                        result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                            {
+                                m_query_factory.GetRocprofHipEventTrackQuery(),
+                                m_query_factory.GetRocprofHipEventTrackQueryForStream(),
+                                m_query_factory.GetRocprofHipEventLevelQuery(),
+                                m_query_factory.GetRocprofHipEventSliceQuery(),
+                                m_query_factory.GetRocprofHipEventSliceQueryForStream(),
+                                m_query_factory.GetRocprofHipEventTableQuery(),
+                            },
+                            &CallBackAddTrack, &CallBackLoadTrack);
+                        future->DeleteSubFuture(sub_future);
+                        m_add_track_mutex.unlock(db_instance->GuidIndex());
+                    };
+                for (auto& guid_info : DbInstances())
+                {
+                    threads.emplace_back(task, &guid_info.first);
+                }
+                for (auto& t : threads)
+                    t.join();
+                load_id++;
+            }
+        }
+
         // PMC schema is not fully defined yet
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         {
@@ -1241,7 +1308,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableRegionSampleLevel),kRocProfVisDmOperationLaunchSample},
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableKernelDispatchLevel), kRocProfVisDmOperationDispatch},
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryAllocLevel),kRocProfVisDmOperationMemoryAllocate},
-            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryCopyLevel), kRocProfVisDmOperationMemoryCopy} 
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryCopyLevel), kRocProfVisDmOperationMemoryCopy},
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableHipEventLevel), kRocProfVisDmOperationHipEvent}
         };
 
         ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
@@ -1253,7 +1321,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 calculate_level_for_guids.push_back(guid_info);
                 for (auto prop : table_properties)
                 {
-                    m_event_levels[kRocProfVisDmOperationLaunch][guid_info.first.GuidIndex()].reserve(
+                    m_event_levels[prop.second][guid_info.first.GuidIndex()].reserve(
                         TraceProperties()->events_count[prop.second]);
                 }
             }
@@ -1387,6 +1455,13 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
             if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
         }
         else
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationHipEvent)
+        {
+            query = m_query_factory.GetRocprofDataFlowQueryForHipEvent(event_id.bitfield.event_id);
+            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
+            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+        }
+        else
         if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
             query = m_query_factory.GetRocprofDataFlowQueryForMemoryAllocEvent(event_id.bitfield.event_id);
@@ -1426,9 +1501,6 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
     rocprofvis_db_sqlite_trim_parameters trim_views;
     rocprofvis_db_sqlite_trim_parameters rocpd_trim_views;
     TemporaryDbInstance tmp_db_instance(0);
-
-
-    std::filesystem::remove(new_db_path);
 
     while (true) 
     {
@@ -1549,6 +1621,16 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                     return a < b; 
                 });
 
+            std::string hip_event_table;
+            for (const std::string& table : sorted_tables)
+            {
+                if (table.find("rocpd_hip_event") != std::string::npos)
+                {
+                    hip_event_table = table;
+                    break;
+                }
+            }
+
             ShowProgress(0, "Attaching old DB to new", kRPVDbBusy, future);
 
             rocprofvis_dm_timestamp_t fecth_start = start + TraceProperties()->db_inst_start_time[guid_info.first.GuidIndex()];
@@ -1576,7 +1658,8 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                             if (strstr(table.c_str(), "rocpd_kernel_dispatch") ||
                                 strstr(table.c_str(), "rocpd_memory_allocate") ||
                                 strstr(table.c_str(), "rocpd_memory_copy") ||
-                                strstr(table.c_str(), "rocpd_region"))
+                                strstr(table.c_str(), "rocpd_region") ||
+                                strstr(table.c_str(), "rocpd_hip_event"))
                             {
                                 query = "INSERT INTO ";
                                 query += table;
@@ -1656,7 +1739,18 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
                                 query += " R ON E.id = R.event_id  LEFT JOIN oldDb.";
                                 query += sorted_tables[kSampleTable];
                                 query += " S ON E.id = S.event_id ";
-                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL;";
+                                if (!hip_event_table.empty())
+                                {
+                                    query += " LEFT JOIN oldDb.";
+                                    query += hip_event_table;
+                                    query += " HE ON E.id = HE.event_id ";
+                                }
+                                query += " WHERE K.event_id IS NOT NULL OR MA.event_id IS NOT NULL OR MC.event_id IS NOT NULL OR R.event_id IS NOT NULL OR S.event_id IS NOT NULL";
+                                if (!hip_event_table.empty())
+                                {
+                                    query += " OR HE.event_id IS NOT NULL";
+                                }
+                                query += ";";
                             }
                             else if (strstr(table.c_str(), "rocpd_arg") ||
                                 strstr(table.c_str(), "rocpd_pmc_event"))
@@ -1726,12 +1820,24 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
         if (result != kRocProfVisDmResultSuccess) break;
 
         ShowProgress(100, "Trace trimmed successfully!", kRPVDbSuccess, future);
-        return future->SetPromise(result);
+        return result;
     }
 
 
     ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
-    return future->SetPromise(result);
+    return result;
+}
+
+void RocprofDatabase::BuildOpQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_event_operation_t op)
+{
+    QueryManager::BuildOpQueryMap(slice_query_map, op);
+    if(op == kRocProfVisDmOperationLaunch && slice_query_map.count(GetEventOperationQuery(op)))
+    {
+        for(std::pair<std::uint32_t const, std::string>& query : slice_query_map.at(GetEventOperationQuery(op)))
+        {
+            query.second = " WHERE (SAMPLE.id IS NULL";
+        }
+    }
 }
 
 rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
@@ -1826,6 +1932,7 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
                 filter[kRocProfVisDmOperationLaunch][it->first] = " SAMPLE.id IS NULL AND (R.name_id IN (" + it->second;
                 filter[kRocProfVisDmOperationDispatch][it->first] = " (K.region_name_id IN (" + it->second;
                 filter[kRocProfVisDmOperationMemoryCopy][it->first] = " (M.name_id IN (" + it->second;
+                filter[kRocProfVisDmOperationHipEvent][it->first] = " (HE.name_id IN (" + it->second;
                 filter[kRocProfVisDmOperationLaunchSample][it->first] = " (R.name_id IN (" + it->second;
                 
                 auto k_it = kernel_symbol.find(it->first);
@@ -1842,12 +1949,14 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
                         " E.category_id IN (" + it->second :
                         "(" + filter[kRocProfVisDmOperationMemoryAllocate][it->first] + ") OR E.category_id IN (" + it->second + ")";
                     filter[kRocProfVisDmOperationMemoryCopy][it->first] += ") OR E.category_id IN (" + it->second;
+                    filter[kRocProfVisDmOperationHipEvent][it->first] += ") OR E.category_id IN (" + it->second;
                     filter[kRocProfVisDmOperationLaunchSample][it->first] += ") OR E.category_id IN (" + it->second;
                 }
 
                 filter[kRocProfVisDmOperationLaunch][it->first] += ")";
                 filter[kRocProfVisDmOperationDispatch][it->first] += ")";
                 filter[kRocProfVisDmOperationMemoryCopy][it->first] += ")";
+                filter[kRocProfVisDmOperationHipEvent][it->first] += ")";
                 filter[kRocProfVisDmOperationLaunchSample][it->first] += ")";                
             }
         }
@@ -1881,6 +1990,14 @@ rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_
         case kRocProfVisDmOperationMemoryCopy:
         {
             return m_query_factory.GetRocprofMemoryCopyTableQuery();
+        }
+        case kRocProfVisDmOperationHipEvent:
+        {
+            if (m_query_factory.IsVersionGreaterOrEqual("3.0.4") && !m_query_factory.IsVersionGreaterOrEqual("4.0.0"))
+            {
+                return m_query_factory.GetRocprofHipEventTableQuery();
+            }
+            return "";
         }
         case kRocProfVisDmOperationLaunchSample:
         {
@@ -2055,6 +2172,26 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadExtEventInfo(
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
             future->ResetRowCount();
             query = m_query_factory.GetRocprofArgumentsInfoQueryForMemoryCopyEvent(event_id.bitfield.event_id);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddArgumentsInfo)) break;
+        } else
+        if (event_id.bitfield.event_op == kRocProfVisDmOperationHipEvent)
+        {
+            query = "select * from hip_events where id == ";
+            query += std::to_string(event_id.bitfield.event_id);
+            query += " and guid = '";
+            query += GuidSymAt(node_ptr->GuidIndex());
+            query += "'";
+            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
+            if(kRocProfVisDmResultSuccess !=
+               ExecuteSQLQuery(
+                   future, node_ptr, query.c_str(), "Properties", extdata,
+                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
+                   &CallbackAddExtInfo))
+                break;
+            query = m_query_factory.GetRocprofEssentialInfoQueryForHipEvent(event_id.bitfield.event_id);
+            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddEssentialInfo)) break;
+            future->ResetRowCount();
+            query = m_query_factory.GetRocprofArgumentsInfoQueryForHipEvent(event_id.bitfield.event_id);
             if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), extdata, &CallbackAddArgumentsInfo)) break;
         } else
         {

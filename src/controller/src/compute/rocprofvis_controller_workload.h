@@ -42,13 +42,14 @@ private:
         std::vector<std::string> values;
     };
     struct MetricDefinition {
-        uint32_t category_id;
-        uint32_t table_id;
-        size_t category_name_idx;
-        size_t table_name_idx;
-        size_t name_idx;
-        size_t description_idx;
-        size_t unit_idx;
+        uint32_t category_id = 0;
+        uint32_t table_id = 0;
+        uint32_t entry_id = 0;
+        size_t category_name_idx = 0;
+        size_t table_name_idx = 0;
+        size_t name_idx = 0;
+        size_t description_idx = 0;
+        size_t unit_idx = 0;
     };
     struct MetricValueName {
         uint32_t category_id;
@@ -61,6 +62,7 @@ private:
     std::string m_sub_name;
     JsonData m_system_info;
     JsonData m_profiling_config;
+    std::string m_memory_chart_layout;
     std::vector<MetricDefinition> m_available_metrics;
     std::vector<MetricValueName>  m_metric_value_names;
     std::vector<Kernel*> m_kernels;

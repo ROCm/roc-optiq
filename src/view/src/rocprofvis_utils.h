@@ -237,6 +237,16 @@ get_application_config_path(bool create_dirs);
 std::string 
 get_application_log_path(bool create_dirs);
 
+/*
+ * Default folder for files downloaded from remote hosts: <Downloads>/ROCm-Optiq,
+ * where Downloads is the Windows known folder (which follows a moved or
+ * redirected Downloads), ~/Downloads on macOS, and XDG_DOWNLOAD_DIR from
+ * user-dirs.dirs on Linux (falling back to ~/Downloads). When no Downloads
+ * folder can be determined, <config>/remote_cache. The folder is not created.
+ */
+std::string
+get_default_remote_cache_path();
+
 std::string
 compact_number_format(double number);
 
@@ -283,6 +293,10 @@ posix_parent_path(const std::string& path);
 std::string
 join_posix_path(const std::string& dir, const std::string& name);
 
+// Formats a byte count with a binary unit, e.g. "512 B" or "19.4 MiB".
+std::string
+format_byte_size(uint64_t bytes);
+
 /**
  * @brief Detects whether the current process appears to be running in a remote
  *        session where xdg-desktop-portal file dialogs cannot reach the user.
@@ -303,6 +317,16 @@ is_remote_display_session();
  */
 std::string
 strip_ansi_for_display(std::string const& text);
+
+/**
+ * @brief True when a time range is one the view can be driven to.
+ *
+ * Non-finite values have to be rejected explicitly: every comparison against
+ * NaN is false, so an `end <= start` guard on its own lets NaN and infinity
+ * through into the view transform.
+ */
+bool
+is_usable_time_range(double start_ns, double end_ns);
 
 }  // namespace View
 }  // namespace RocProfVis

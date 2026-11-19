@@ -39,7 +39,7 @@ Explore kernel-level metrics for a profiled workload and locate bottlenecks quic
 - **Summary** — a high-level overview of the selected workload, including duration and invocation statistics and a roofline chart.
 - **Kernel details** — memory chart, System Speed-of-Light metrics, and roofline chart for the selected kernel, with a filterable kernel selection table for comparing across kernels.
 - **Table view** — the complete list of available metrics for the selected kernel, grouped by category.
-- **Workload details** — system information and profiling configuration for the selected workload.
+- **Profile details** — the ROCm Compute Profiler version and database schema that produced the analysis, plus system information and profiling configuration for the selected workload.
 - **Baseline comparison** — a side-by-side view of two kernel measurements to assess regressions and improvements.
 
 ## Quick start
@@ -127,7 +127,7 @@ Report bugs and request features through the [GitHub issue tracker](https://gith
 
 ## Contributions and license
 
-Contributions of any kind are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the contribution process and
+Contributions of any kind are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution process and
 [CODING.md](CODING.md) for the style rules that apply to all C++ changes.
 
 Licensing information is in [LICENSE.md](LICENSE.md).

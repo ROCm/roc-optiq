@@ -61,12 +61,17 @@ bool SshProfilerExecutor::Start(const ProfilerConfig& config)
     // for a POSIX shell (the remote host).
     std::vector<std::string> argv = Cmdline::BuildArgv(config);
     std::vector<std::pair<std::string, std::string>> env = Cmdline::BuildEnv(config);
-    std::string remote_cmd =
-        Cmdline::ToPosixShellCommand(argv, env, config.GetWorkingDirectory());
+    std::string remote_cmd = Cmdline::ToPosixShellCommand(
+        argv, env, config.GetWorkingDirectory(), config.GetPythonEnvironment());
 
     if (!config.GetWorkingDirectory().empty())
     {
         spdlog::info("SSH profiler working directory: {}", config.GetWorkingDirectory());
+    }
+
+    if (!config.GetPythonEnvironment().empty())
+    {
+        spdlog::info("SSH profiler Python environment: {}", config.GetPythonEnvironment());
     }
 
     spdlog::info("SSH profiler launch: {}", Cmdline::ToDisplayString(argv, env));
@@ -147,12 +152,7 @@ std::string SshProfilerExecutor::DrainBridgeOutput()
 std::string SshProfilerExecutor::ReadOutput()
 {
     std::lock_guard<std::mutex> lock(m_output_mutex);
-    std::string chunk = DrainBridgeOutput();
-    if (!chunk.empty())
-    {
-        m_output_buffer += chunk;
-    }
-    return chunk;
+    return DrainBridgeOutput();
 }
 
 int SshProfilerExecutor::GetExitCode() const
@@ -160,11 +160,11 @@ int SshProfilerExecutor::GetExitCode() const
     return m_exit_code.load();
 }
 
-bool SshProfilerExecutor::Cancel()
+CancelOutcome SshProfilerExecutor::Cancel()
 {
     if (m_connection == nullptr)
     {
-        return false;
+        return CancelOutcome::kNotRunning;
     }
 
     // Signal the exec loop (via the bridge) to stop. Do NOT clear m_is_running
@@ -178,7 +178,7 @@ bool SshProfilerExecutor::Cancel()
     {
         bridge->Cancel();
     }
-    return true;
+    return CancelOutcome::kStopped;
 }
 
 } // namespace Controller

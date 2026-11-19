@@ -80,13 +80,13 @@ namespace DataModel
             throw std::out_of_range("Column out of range");
     }
 
-    DbInstance* PackedTable::GetDbInstanceForRow(QueryManager * db, int row_index)
+    DbInstance* PackedTable::GetDbInstanceForRow(SystemDatabase * db, int row_index)
     {
         ROCPROFVIS_ASSERT_MSG_RETURN(row_index < m_rows.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
         return GetDbInstanceForRow(db, m_rows[row_index].get());
     }
 
-    DbInstance* PackedTable::GetDbInstanceForRow(QueryManager * db, PackedRow* row)
+    DbInstance* PackedTable::GetDbInstanceForRow(SystemDatabase * db, PackedRow* row)
     {
         auto columns = GetMergedColumns();
         uint8_t op = row->Get<uint8_t>(0);
@@ -146,9 +146,8 @@ namespace DataModel
         return  m_rows[row]->Get<uint8_t>(0);
     }
 
-    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, QueryManager* requestor) const
+    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col) const
     {
-        (void) requestor;
         if (row >= m_rows.size() || col >= m_merged_columns.size())
             throw std::out_of_range("Row/Column out of range");
 
@@ -172,7 +171,7 @@ namespace DataModel
     }
 
 
-    const char* PackedTable::ConvertSqlStringReference(QueryManager* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
+    const char* PackedTable::ConvertSqlStringReference(SystemDatabase* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
         numeric_string = false;
         uint64_t string_index = 0;
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
@@ -199,7 +198,7 @@ namespace DataModel
         {
             return db->CachedTables(node_id)->GetTableCell("Stream", value, "name");
         } else
-        if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME)
+        if (column_index == Builder::SCHEMA_INDEX_QUEUE_NAME || column_index == Builder::SCHEMA_INDEX_SRC_QUEUE)
         {
             return db->CachedTables(node_id)->GetTableCell("Queue", value, "name");
         } else
@@ -285,7 +284,7 @@ namespace DataModel
         std::map<std::string, ColumnAggr> result;
         for (auto & map : m_aggregation.aggregation_maps)
         {
-            for (auto [key, val] : map)
+            for (auto & [key, val] : map)
             {
                 auto it = result.find(val.name);
                 if (it == result.end())
@@ -305,7 +304,7 @@ namespace DataModel
                 } else
                 { 
                     it->second.count+=val.count;
-                    for (auto param : m_aggregation.agg_params)
+                    for (auto & param : m_aggregation.agg_params)
                     {
                         auto it_dst = it->second.result.find(param.public_name);
                         auto it_src = val.result.find(param.public_name);
@@ -318,7 +317,7 @@ namespace DataModel
                                 it_dst->second.numeric.data.u64 += it_src->second.numeric.data.u64;
                                 break;
                             case FilterExpression::SqlCommand::Avg:
-                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) / it->second.count;
+                                it_dst->second.numeric.data.d += (it_src->second.numeric.data.d - it_dst->second.numeric.data.d) * val.count / it->second.count;
                                 break;
                             case FilterExpression::SqlCommand::Min:
                                 it_dst->second.numeric.data.d = std::min(it_src->second.numeric.data.d, it_dst->second.numeric.data.d);
@@ -357,8 +356,7 @@ namespace DataModel
         m_aggregation.m_string_data.Clear();
     }
 
-    void PackedTable::SortAggregationByColumn(QueryManager* db, std::string sort_column, bool sort_order) {
-        (void) db;
+    void PackedTable::SortAggregationByColumn(std::string sort_column, bool sort_order) {
 
         if (m_aggregation.agg_params[0].public_name == sort_column)
         {
@@ -385,7 +383,7 @@ namespace DataModel
         
     }
 
-    void PackedTable::AggregateRow(QueryManager* db, int row_index, int map_index)
+    void PackedTable::AggregateRow(SystemDatabase* db, int row_index, int map_index)
     {
         // Aggregate a single packed row into the target aggregation map.
         // High-level flow:
@@ -486,7 +484,7 @@ namespace DataModel
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Max:
-                        it->second.result[param.public_name].numeric.data.d = DBL_MIN;
+                        it->second.result[param.public_name].numeric.data.d = -DBL_MAX;
                         it->second.result[param.public_name].type = NumericDouble;
                         break;
                     case FilterExpression::SqlCommand::Sum:
@@ -542,7 +540,7 @@ namespace DataModel
         }
     }
 
-    void PackedTable::SortByColumn(QueryManager* db, std::string column, bool ascending)
+    void PackedTable::SortByColumn(SystemDatabase* db, std::string column, bool ascending)
     {
         auto it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [column](MergedColumnDef& cdef) { return cdef.m_name == column; });
         if (it != m_merged_columns.end())
@@ -572,19 +570,23 @@ namespace DataModel
                     DbInstance* db_instance = GetDbInstanceForRow(db, row.get());
                     ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
                     uint8_t size = ColumnTypeSize(it->m_type[op]);
+                    uint64_t rank = 0;
                     if (size > 0)
                     {
                         uint64_t value = row->Get<uint64_t>(it->m_offset[op], size);
                         uint64_t string_index = 0;
                         if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, db_instance->GuidIndex(), string_index))
                         {
-                            value = db->BindObject()->FuncGetStringOrder(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
+                            rank = db->BindObject()->FuncGetStringOrder(
+                                db->BindObject()->trace_object,
+                                static_cast<uint32_t>(string_index));
                         }
-                        
-                        sort_values.push_back(value);
-                    } else
-                        sort_values.push_back(0);
-               
+                        else
+                        {
+                            rank = value;
+                        }
+                    }
+                    sort_values.push_back(rank);
                 }
                 std::sort(ROCPROFVIS_SORT_EXEC_POLICY m_sort_order.begin(), m_sort_order.end(),
                     [&](uint32_t so1, uint32_t so2) {
@@ -738,10 +740,18 @@ namespace DataModel
             auto columns = tables[i]->GetColumns();
             if (tables[i]->m_rows.size() > 0)
             {
-                uint8_t op = tables[i]->GetOperationValue(0);
-                for (auto column : columns)
+                std::unordered_set<uint8_t> table_operations;
+                for (size_t row_index = 0; row_index < tables[i]->m_rows.size(); ++row_index)
                 {
-                    AddMergedColumn(column.m_name, op, column.m_type, column.m_offset, column.m_schema_index);
+                    table_operations.insert(tables[i]->GetOperationValue(row_index));
+                }
+                for (uint8_t op : table_operations)
+                {
+                    for (const ColumnDef& column : columns)
+                    {
+                        AddMergedColumn(column.m_name, op, column.m_type, column.m_offset,
+                                        column.m_schema_index);
+                    }
                 }
             }
         }

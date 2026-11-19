@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <cstdint>
 
 namespace RocProfVis
 {
@@ -153,6 +154,70 @@ rocprofvis_result_t Future::GetString(rocprofvis_property_t property, uint64_t i
             result = GetStdStringImpl(value, length, m_progress_message);
             break;
         }
+        case kRPVControllerFutureLastErrorMessage:
+        {
+            std::lock_guard lock(m_mutex);
+            result = GetStdStringImpl(value, length, m_last_error_message);
+            break;
+        }
+        default:
+        {
+            result = UnhandledProperty(property);
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Future::SetUInt64(rocprofvis_property_t property, uint64_t index,
+                                      uint64_t value)
+{
+    (void) index;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerFutureProgressPercentage:
+        {
+            std::lock_guard lock(m_mutex);
+            uint64_t clamped = value;
+            if(clamped > UINT16_MAX)
+            {
+                clamped = UINT16_MAX;
+            }
+            m_progress_percentage = static_cast<uint16_t>(clamped);
+            result                = kRocProfVisResultSuccess;
+            break;
+        }
+        default:
+        {
+            result = UnhandledProperty(property);
+            break;
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t Future::SetString(rocprofvis_property_t property, uint64_t index,
+                                      char const* value)
+{
+    (void) index;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(property)
+    {
+        case kRPVControllerFutureProgressMessage:
+        {
+            std::lock_guard lock(m_mutex);
+            m_progress_message = value ? value : "";
+            result             = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerFutureLastErrorMessage:
+        {
+            std::lock_guard lock(m_mutex);
+            m_last_error_message = value ? value : "";
+            result               = kRocProfVisResultSuccess;
+            break;
+        }
         default:
         {
             result = UnhandledProperty(property);
@@ -167,6 +232,16 @@ void Future::ResetProgress()
     std::lock_guard lock(m_mutex);
     m_progress_map.clear();
     m_progress_percentage = 0;
+}
+
+void Future::KeepErrorMessage(rocprofvis_db_future_t db_future)
+{
+    char const* message = rocprofvis_db_future_get_error_message(db_future);
+    if(message && message[0] != '\0')
+    {
+        std::lock_guard lock(m_mutex);
+        m_last_error_message = message;
+    }
 }
 
 void Future::ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data)

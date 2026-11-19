@@ -54,6 +54,16 @@ PushPlotChrome(SettingsManager& settings)
 
 }  // namespace
 
+TabItem
+ComputeSummaryView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Summary View", TAB_ID,
+        std::make_shared<ComputeSummaryView>(data_provider, compute_selection));
+}
+
 ComputeSummaryView::ComputeSummaryView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -712,9 +722,10 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                                std::optional<size_t>& hovered_idx)
 {
     (void) plot_style;
-    if(ImGui::BeginTable(
-           "Table", 2 + KernelInfo::NumMetrics,
-           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable))
+    if(ImGui::BeginTable("Table", 2 + KernelInfo::NumMetrics,
+                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders |
+                             ImGuiTableFlags_Resizable |
+                             ImGuiTableFlags_NoSavedSettings))
     {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("##legend",

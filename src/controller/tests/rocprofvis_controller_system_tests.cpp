@@ -3,16 +3,21 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_controller_string_table.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_segment.h"
+#include "system/rocprofvis_controller_track.h"
 #include <algorithm>
 #include <atomic>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
+#include <cmath>
+#include <cstring>
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -135,6 +140,102 @@ TEST_CASE("Memory Manager LRU Eviction")
     for(uint32_t i = 0; i < num_segments; i++)
     {
         REQUIRE_FALSE(timeline.IsValid(i));
+    }
+}
+
+// Appends the start and end timestamps of every sample in a fetched track array. They
+// are whole nanoseconds, so they are compared as integers.
+static void
+AppendSamples(rocprofvis_controller_array_t*              array,
+              std::vector<std::pair<uint64_t, uint64_t>>& samples)
+{
+    uint64_t            num_results = 0;
+    rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
+        array, kRPVControllerArrayNumEntries, 0, &num_results);
+    REQUIRE(result == kRocProfVisResultSuccess);
+    for(uint64_t i = 0; i < num_results; i++)
+    {
+        rocprofvis_handle_t* entry = nullptr;
+        result = rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed,
+                                                  i, &entry);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        double start_ts = 0;
+        double end_ts   = 0;
+        REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleTimestamp, 0,
+                                                 &start_ts) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleEndTimestamp,
+                                                 0, &end_ts) == kRocProfVisResultSuccess);
+        samples.emplace_back(static_cast<uint64_t>(start_ts),
+                             static_cast<uint64_t>(end_ts));
+    }
+}
+
+// Requires one sample per distinct timestamp the model holds for the track, with each
+// sample ending where the next one starts.
+static void
+RequireSamplesMatchModel(rocprofvis_handle_t*                        track_handle,
+                         std::vector<std::pair<uint64_t, uint64_t>>& samples)
+{
+    std::sort(samples.begin(), samples.end());
+    samples.erase(std::unique(samples.begin(), samples.end()), samples.end());
+
+    uint64_t track_id = 0;
+    double   min_time = 0;
+    double   max_time = 0;
+    REQUIRE(rocprofvis_controller_get_uint64(track_handle, kRPVControllerTrackId, 0,
+                                             &track_id) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMinTimestamp,
+                                             0, &min_time) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMaxTimestamp,
+                                             0, &max_time) == kRocProfVisResultSuccess);
+
+    rocprofvis_dm_track_t dm_track =
+        reinterpret_cast<RocProfVis::Controller::Track*>(track_handle)->GetDmHandle();
+    rocprofvis_dm_trace_t dm_trace =
+        rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackTraceHandle, 0);
+    rocprofvis_dm_database_t db =
+        rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
+    const uint64_t slice_start = static_cast<uint64_t>(min_time);
+    const uint64_t slice_end   = static_cast<uint64_t>(max_time);
+    uint32_t       dm_track_id = static_cast<uint32_t>(track_id);
+
+    rocprofvis_db_future_t db_future = rocprofvis_db_future_alloc(nullptr);
+    REQUIRE(db_future != nullptr);
+    REQUIRE(rocprofvis_db_read_trace_slice_async(
+                db, slice_start, slice_end, kRocProfVisDmHashedTimestampTagTrackSlice, 1,
+                (rocprofvis_db_track_selection_t) &dm_track_id, db_future) ==
+            kRocProfVisDmResultSuccess);
+    REQUIRE(rocprofvis_db_future_wait(db_future, UINT64_MAX) == kRocProfVisDmResultSuccess);
+    rocprofvis_db_future_free(db_future);
+
+    rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
+        dm_track, kRPVDMSliceHandleTimed,
+        rocprofvis_dm_hash_combine_timestamp(slice_start, slice_end,
+                                             kRocProfVisDmHashedTimestampTagTrackSlice));
+    REQUIRE(slice != nullptr);
+
+    // The slice ends with a record that only closes the last sample.
+    const uint64_t num_records =
+        rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
+    std::vector<uint64_t> timestamps;
+    for(uint64_t i = 0; i + 1 < num_records; i++)
+    {
+        timestamps.push_back(
+            rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i));
+    }
+    REQUIRE(rocprofvis_dm_delete_time_slice_handle(
+                dm_trace, static_cast<rocprofvis_dm_track_id_t>(track_id), slice) ==
+            kRocProfVisDmResultSuccess);
+    std::sort(timestamps.begin(), timestamps.end());
+    timestamps.erase(std::unique(timestamps.begin(), timestamps.end()), timestamps.end());
+
+    spdlog::info("Track {0}: {1} timestamps, {2} samples", track_id, timestamps.size(),
+                 samples.size());
+    REQUIRE(samples.size() == timestamps.size());
+    for(size_t i = 1; i < samples.size(); i++)
+    {
+        REQUIRE(samples[i - 1].second == samples[i].first);
     }
 }
 
@@ -428,6 +529,42 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         }
     }
 
+    // Checks that each sample track returns one sample per distinct timestamp in the
+    // model and that every sample ends where the next one starts.
+    // Fixture Reads: m_controller, m_track_data
+    SECTION("Sample Track Continuity")
+    {
+        uint64_t            num_tracks = 0;
+        rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
+            m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
+        {
+            rocprofvis_handle_t* track_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t track_type = 0;
+            result              = rocprofvis_controller_get_uint64(
+                track_handle, kRPVControllerTrackType, 0, &track_type);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            if(track_type != kRPVControllerTrackTypeSamples ||
+               m_track_data[track_idx] == nullptr)
+            {
+                continue;
+            }
+
+            std::vector<std::pair<uint64_t, uint64_t>> samples;
+            AppendSamples(m_track_data[track_idx], samples);
+            if(!samples.empty())
+            {
+                RequireSamplesMatchModel(track_handle, samples);
+            }
+        }
+    }
+
     // Fetches timeline graphs (line/flame) for the full time range, validates graph
     // type, timestamps, entry counts, and iterates each result entry.
     // Fixture Reads: m_controller
@@ -547,9 +684,91 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         }
     }
 
+    // Fetches each line graph zoomed in on its last 10us, where the sample at the end of
+    // the trace is alone in its bucket, and checks that no graph value is NaN.
+    // Fixture Reads: m_controller
+    SECTION("Line Graph Data At Trace End")
+    {
+        rocprofvis_handle_t* timeline_handle = nullptr;
+        rocprofvis_result_t  result          = rocprofvis_controller_get_object(
+            m_controller, kRPVControllerSystemTimeline, 0, &timeline_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(timeline_handle);
+
+        uint64_t num_graphs = 0;
+        result              = rocprofvis_controller_get_uint64(
+            timeline_handle, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        uint64_t num_checked = 0;
+        for(uint32_t i = 0; i < (uint32_t) num_graphs; i++)
+        {
+            rocprofvis_handle_t* graph_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                timeline_handle, kRPVControllerTimelineGraphIndexed, i, &graph_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(graph_handle);
+
+            uint64_t graph_type = 0;
+            result              = rocprofvis_controller_get_uint64(
+                graph_handle, kRPVControllerGraphType, 0, &graph_type);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            if(graph_type != kRPVControllerGraphTypeLine)
+            {
+                continue;
+            }
+
+            double graph_start_ts = 0;
+            double graph_end_ts   = 0;
+            REQUIRE(rocprofvis_controller_get_double(
+                        graph_handle, kRPVControllerGraphStartTimestamp, 0,
+                        &graph_start_ts) == kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_get_double(
+                        graph_handle, kRPVControllerGraphEndTimestamp, 0,
+                        &graph_end_ts) == kRocProfVisResultSuccess);
+            const double fetch_start = std::max(graph_start_ts, graph_end_ts - 10000.0);
+
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            REQUIRE(array != nullptr);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_graph_fetch_async(
+                m_controller, graph_handle, fetch_start, graph_end_ts, 1000, future,
+                array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                    kRocProfVisResultSuccess);
+
+            uint64_t num_results = 0;
+            REQUIRE(rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries,
+                                                     0, &num_results) ==
+                    kRocProfVisResultSuccess);
+            for(uint64_t idx = 0; idx < num_results; idx++)
+            {
+                rocprofvis_handle_t* entry = nullptr;
+                REQUIRE(rocprofvis_controller_get_object(
+                            array, kRPVControllerArrayEntryIndexed, idx, &entry) ==
+                        kRocProfVisResultSuccess);
+                REQUIRE(entry);
+
+                double value = 0;
+                REQUIRE(rocprofvis_controller_get_double(entry, kRPVControllerSampleValue,
+                                                         0, &value) ==
+                        kRocProfVisResultSuccess);
+                REQUIRE(!std::isnan(value));
+            }
+            num_checked += num_results;
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+        spdlog::info("Checked {0} line graph samples at the trace end", num_checked);
+    }
+
     // Fetches event-type tracks into a table in paginated chunks, validates column
     // headers, column types, and reads cell values for every row. Exports the last chunk
-    // to CSV.
+    // to CSV, and checks that exports which cannot write the file report failure.
     // Fixture Reads: m_controller
     SECTION("Event Track Table Data")
     {
@@ -648,10 +867,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
                                                   0, kRPVControllerSortOrderAscending);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result =
-            rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
@@ -810,6 +1025,98 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             start_index += chunk_size;
         } while(start_index < num_rows);
 
+        struct FilterCase
+        {
+            const char* filter;
+            const char* error;  // null when nothing is reported
+            bool        empty;  // the filter leaves no rows
+        };
+        // An invalid filter is reported when it is applied. Sending the same query again
+        // returns the cached empty result without reporting it again. Either way the
+        // columns come back, which the view needs to keep the filter row.
+        const FilterCase filter_cases[] = {
+            { "duration > 0", nullptr, false },
+            { "name LIKE '%O''Brien%'", nullptr, false },
+            { "duration == 0", nullptr, false },
+            { "duration 5",
+              "Could not apply filter: Expected an operator after \"duration\", but found \"5\"",
+              true },
+            { "duration 5", nullptr, true },
+            { "no_such_column > 5", "Could not apply filter: Unknown column \"no_such_column\"",
+              true },
+            { "no_such_column > 5", nullptr, true },
+            { "duration > 5 ms", "Could not apply filter: Unexpected \"ms\" after \"duration > 5\"",
+              true },
+            { "duration >", "Could not apply filter: Expected a value after >, but the filter ended",
+              true },
+            { "duration > 0 AND",
+              "Could not apply filter: Expected a condition after AND, but the filter ended", true },
+            { "duration <> 5", "Could not apply filter: \"<>\" is not supported; use != instead",
+              true },
+        };
+        for(const FilterCase& filter_case : filter_cases)
+        {
+            spdlog::info("Fetching event table with filter: {0}", filter_case.filter);
+            result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter,
+                                                      0, filter_case.filter);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStartIndex, 0, 0);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+            REQUIRE(array != nullptr);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_table_fetch_async(m_controller, table_handle,
+                                                             args, future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t future_result = kRocProfVisResultSuccess;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult,
+                                                      0, &future_result);
+            spdlog::info("Get future result: {0}", future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result == kRocProfVisResultSuccess);
+
+            uint32_t error_length = 0;
+            result = rocprofvis_controller_get_string(
+                future, kRPVControllerFutureLastErrorMessage, 0, nullptr, &error_length);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            std::string error(error_length, '\0');
+            if(error_length > 0)
+            {
+                result = rocprofvis_controller_get_string(
+                    future, kRPVControllerFutureLastErrorMessage, 0, error.data(),
+                    &error_length);
+                REQUIRE(result == kRocProfVisResultSuccess);
+            }
+            spdlog::info("Filter error message: {0}", error);
+            REQUIRE(error == (filter_case.error ? filter_case.error : ""));
+            if(filter_case.empty)
+            {
+                uint64_t filtered_columns = 0;
+                result = rocprofvis_controller_get_uint64(
+                    table_handle, kRPVControllerTableNumColumns, 0, &filtered_columns);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_columns == num_columns);
+
+                uint64_t filtered_rows = 0;
+                result = rocprofvis_controller_get_uint64(
+                    array, kRPVControllerArrayNumEntries, 0, &filtered_rows);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(filtered_rows == 0);
+            }
+
+            rocprofvis_controller_future_free(future);
+            rocprofvis_controller_array_free(array);
+        }
+        result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
+        REQUIRE(result == kRocProfVisResultSuccess);
+
         const char* csv_path = "sample/test_export.csv";
 
         spdlog::info("Allocating Future");
@@ -841,6 +1148,39 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         spdlog::info("Free Future");
         rocprofvis_controller_future_free(future);
+
+        std::vector<std::string> unwritable_csv_paths = { "sample/missing_dir/test_export.csv" };
+#ifdef __linux__
+        if(std::filesystem::exists("/dev/full"))
+        {
+            unwritable_csv_paths.push_back("/dev/full");
+        }
+#endif
+        for(const std::string& unwritable_csv_path : unwritable_csv_paths)
+        {
+            spdlog::info("Allocating Future");
+            future = rocprofvis_controller_future_alloc();
+            REQUIRE(future != nullptr);
+
+            spdlog::info("Exporting event table to unwritable CSV: {0}", unwritable_csv_path);
+            result = rocprofvis_controller_table_export_csv(m_controller, table_handle, args,
+                                                            future, unwritable_csv_path.c_str());
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            spdlog::info("Wait for future");
+            result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            future_result = kRocProfVisResultSuccess;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+                                                      &future_result);
+            spdlog::info("Get future result: {0}", future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result != kRocProfVisResultSuccess);
+
+            spdlog::info("Free Future");
+            rocprofvis_controller_future_free(future);
+        }
 
         spdlog::info("Free Args");
         rocprofvis_controller_arguments_free(args);
@@ -947,10 +1287,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
                                                   0, kRPVControllerSortOrderAscending);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result =
-            rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
@@ -2609,14 +2945,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     // Fixture Reads: m_controller
     SECTION("Summary Metrics")
     {
-        rocprofvis_handle_t* summary_handle = nullptr;
-        rocprofvis_result_t  result         = rocprofvis_controller_get_object(
-            m_controller, kRPVControllerSystemSummary, 0, &summary_handle);
-        REQUIRE(result == kRocProfVisResultSuccess);
-        REQUIRE(summary_handle != nullptr);
-
         rocprofvis_handle_t* timeline_handle = nullptr;
-        result                               = rocprofvis_controller_get_object(
+        rocprofvis_result_t  result          = rocprofvis_controller_get_object(
             m_controller, kRPVControllerSystemTimeline, 0, &timeline_handle);
         REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -2634,11 +2964,11 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(args != nullptr);
 
         result = rocprofvis_controller_set_double(
-            args, kRPVControllerSummaryArgsStartTimestamp, 0, start_ts);
+            args, kRPVAnalysisSummaryArgsStartTimestamp, 0, start_ts);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_double(
-            args, kRPVControllerSummaryArgsEndTimestamp, 0, end_ts);
+            args, kRPVAnalysisSummaryArgsEndTimestamp, 0, end_ts);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         rocprofvis_controller_summary_metrics_t* metrics =
@@ -2649,9 +2979,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(future != nullptr);
 
         spdlog::info("Fetching summary metrics for range {0}-{1}", start_ts, end_ts);
-        result = rocprofvis_controller_summary_fetch_async(
-            m_controller, (rocprofvis_controller_summary_t*) summary_handle, args, future,
-            metrics);
+        result = rocprofvis_analysis_fetch_summary(m_controller, args, future, metrics);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_future_wait(future, FLT_MAX);
@@ -2665,38 +2993,87 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         struct GpuFlags
         {
-            bool has_gpu_util    = false;
-            bool has_kernel_data = false;
+            bool has_gpu_counters = false;
+            bool has_kernel_data  = false;
         };
 
-        auto require_gpu_util = [&](rocprofvis_handle_t* metrics_handle,
-                                    const std::string&   indent) {
-            double gfx_util = 0;
-            result          = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyGpuGfxUtil, 0,
-                &gfx_util);
+        auto require_gpu_counters = [&](rocprofvis_handle_t* metrics_handle,
+                                        const std::string&   indent) {
+            uint64_t num_counters = 0;
+            result                = rocprofvis_controller_get_uint64(
+                metrics_handle, kRPVAnalysisSummaryGpuPropertyNumCounters, 0,
+                &num_counters);
             REQUIRE(result == kRocProfVisResultSuccess);
 
-            double mem_util = 0;
-            result          = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyGpuMemUtil, 0,
-                &mem_util);
-            REQUIRE(result == kRocProfVisResultSuccess);
+            spdlog::info("{0}Counters: {1}", indent, num_counters);
 
-            spdlog::info("{0}GfxUtil: {1} MemUtil: {2}", indent, gfx_util, mem_util);
+            for(uint64_t ci = 0; ci < num_counters; ci++)
+            {
+                rocprofvis_handle_t* counter_handle = nullptr;
+                result = rocprofvis_controller_get_object(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterIndexed, ci,
+                    &counter_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(counter_handle != nullptr);
+
+                uint64_t counter_id = 0;
+                result              = rocprofvis_controller_get_uint64(
+                    counter_handle, kRPVControllerCounterId, 0, &counter_id);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                uint32_t len = 0;
+                result       = rocprofvis_controller_get_string(
+                    counter_handle, kRPVControllerCounterName, 0, nullptr, &len);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                std::string counter_name;
+                counter_name.resize(len);
+                result = rocprofvis_controller_get_string(
+                    counter_handle, kRPVControllerCounterName, 0,
+                    const_cast<char*>(counter_name.c_str()), &len);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double min_value = 0;
+                result           = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterMinIndexed, ci,
+                    &min_value);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double max_value = 0;
+                result           = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterMaxIndexed, ci,
+                    &max_value);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double mean_value = 0;
+                result            = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterMeanIndexed, ci,
+                    &mean_value);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                double std_dev = 0;
+                result         = rocprofvis_controller_get_double(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyCounterStdDevIndexed,
+                    ci, &std_dev);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                spdlog::info("{0}  Counter {1}/{2} id={3} name={4} min={5} max={6} "
+                             "mean={7} std_dev={8}",
+                             indent, ci + 1, num_counters, counter_id, counter_name,
+                             min_value, max_value, mean_value, std_dev);
+            }
         };
 
         auto require_kernel_data = [&](rocprofvis_handle_t* metrics_handle,
                                        const std::string&   indent) {
             uint64_t num_kernels = 0;
             result               = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyNumKernels, 0,
+                metrics_handle, kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents, 0,
                 &num_kernels);
             REQUIRE(result == kRocProfVisResultSuccess);
 
-            double exec_total = 0;
-            result            = rocprofvis_controller_get_double(
-                metrics_handle, kRPVControllerSummaryMetricPropertyKernelsExecTimeTotal,
+            uint64_t exec_total = 0;
+            result              = rocprofvis_controller_get_uint64(
+                metrics_handle, kRPVAnalysisSummaryGpuPropertyDispatchEventsDurationTotal,
                 0, &exec_total);
             REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -2707,48 +3084,48 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             {
                 uint32_t len = 0;
                 result       = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyKernelNameIndexed,
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed,
                     ki, nullptr, &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 std::string kernel_name;
                 kernel_name.resize(len);
                 result = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyKernelNameIndexed,
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyTopDispatchEventNameIndexed,
                     ki, const_cast<char*>(kernel_name.c_str()), &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 uint64_t invocations = 0;
                 result               = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelInvocationsIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventInvocationsIndexed, ki,
                     &invocations);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
-                double exec_sum = 0;
-                result          = rocprofvis_controller_get_double(
+                uint64_t exec_sum = 0;
+                result            = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeSumIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationSumIndexed, ki,
                     &exec_sum);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
-                double exec_min = 0;
-                result          = rocprofvis_controller_get_double(
+                uint64_t exec_min = 0;
+                result            = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeMinIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMinIndexed, ki,
                     &exec_min);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
-                double exec_max = 0;
-                result          = rocprofvis_controller_get_double(
+                uint64_t exec_max = 0;
+                result            = rocprofvis_controller_get_uint64(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimeMaxIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationMaxIndexed, ki,
                     &exec_max);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 double exec_pct = 0;
                 result          = rocprofvis_controller_get_double(
                     metrics_handle,
-                    kRPVControllerSummaryMetricPropertyKernelExecTimePctIndexed, ki,
+                    kRPVAnalysisSummaryGpuPropertyTopDispatchEventDurationPctIndexed, ki,
                     &exec_pct);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -2766,33 +3143,44 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             uint64_t agg_level = 0;
             result             = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyAggregationLevel, 0,
+                metrics_handle, kRPVAnalysisSummaryMetricPropertyAggregationLevel, 0,
                 &agg_level);
             REQUIRE(result == kRocProfVisResultSuccess);
             spdlog::info("{0}Aggregation level: {1}", indent, agg_level);
 
             bool is_node_or_processor =
-                (agg_level == kRPVControllerSummaryAggregationLevelNode ||
-                 agg_level == kRPVControllerSummaryAggregationLevelProcessor);
+                (agg_level == kRPVAnalysisSummaryAggregationLevelNode ||
+                 agg_level == kRPVAnalysisSummaryAggregationLevelProcessor);
             bool is_processor =
-                (agg_level == kRPVControllerSummaryAggregationLevelProcessor);
+                (agg_level == kRPVAnalysisSummaryAggregationLevelProcessor);
 
+            rocprofvis_handle_t* metadata_handle = nullptr;
             if(is_node_or_processor)
             {
+                result = rocprofvis_controller_get_object(
+                    metrics_handle, kRPVAnalysisSummaryMetricPropertyMetadata, 0,
+                    &metadata_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(metadata_handle != nullptr);
+
                 uint64_t metric_id = 0;
                 result             = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyId, 0, &metric_id);
+                    metadata_handle,
+                    is_processor ? kRPVControllerProcessorId : kRPVControllerNodeId, 0,
+                    &metric_id);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
+                rocprofvis_property_t name_property =
+                    is_processor ? kRPVControllerProcessorProductName
+                                 : kRPVControllerNodeHostName;
                 uint32_t len = 0;
                 result       = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyName, 0, nullptr,
-                    &len);
+                    metadata_handle, name_property, 0, nullptr, &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 std::string metric_name;
                 metric_name.resize(len);
                 result = rocprofvis_controller_get_string(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyName, 0,
+                    metadata_handle, name_property, 0,
                     const_cast<char*>(metric_name.c_str()), &len);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 spdlog::info("{0}Metric id={1} name={2}", indent, metric_id, metric_name);
@@ -2802,14 +3190,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             if(is_processor)
             {
                 result = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyProcessorType, 0,
-                    &proc_type);
+                    metadata_handle, kRPVControllerProcessorType, 0, &proc_type);
                 REQUIRE(result == kRocProfVisResultSuccess);
 
                 uint64_t proc_type_idx = 0;
                 result                 = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyProcessorTypeIndex,
-                    0, &proc_type_idx);
+                    metadata_handle, kRPVControllerProcessorTypeIndex, 0,
+                    &proc_type_idx);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 spdlog::info("{0}ProcType: {1} TypeIndex: {2}", indent, proc_type,
                              proc_type_idx);
@@ -2819,25 +3206,19 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             if(is_processor && proc_type == kRPVControllerProcessorTypeGPU)
             {
-                double gfx_util = 0;
-                result          = rocprofvis_controller_get_double(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyGpuGfxUtil, 0,
-                    &gfx_util);
-                if(result == kRocProfVisResultSuccess)
+                uint64_t num_counters = 0;
+                result                = rocprofvis_controller_get_uint64(
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyNumCounters, 0,
+                    &num_counters);
+                if(result == kRocProfVisResultSuccess && num_counters > 0)
                 {
-                    flags.has_gpu_util = true;
-                    double mem_util    = 0;
-                    result             = rocprofvis_controller_get_double(
-                        metrics_handle, kRPVControllerSummaryMetricPropertyGpuMemUtil, 0,
-                        &mem_util);
-                    REQUIRE(result == kRocProfVisResultSuccess);
-                    spdlog::info("{0}GfxUtil: {1} MemUtil: {2}", indent, gfx_util,
-                                 mem_util);
+                    flags.has_gpu_counters = true;
+                    require_gpu_counters(metrics_handle, indent);
                 }
 
                 uint64_t num_kernels = 0;
                 result               = rocprofvis_controller_get_uint64(
-                    metrics_handle, kRPVControllerSummaryMetricPropertyNumKernels, 0,
+                    metrics_handle, kRPVAnalysisSummaryGpuPropertyNumTopDispatchEvents, 0,
                     &num_kernels);
                 if(result == kRocProfVisResultSuccess && num_kernels > 0)
                 {
@@ -2848,7 +3229,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             uint64_t num_sub = 0;
             result           = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyNumSubMetrics, 0,
+                metrics_handle, kRPVAnalysisSummaryMetricPropertyNumSubMetrics, 0,
                 &num_sub);
             REQUIRE(result == kRocProfVisResultSuccess);
             spdlog::info("{0}Sub-metrics: {1}", indent, num_sub);
@@ -2857,21 +3238,21 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
             {
                 rocprofvis_handle_t* sub_metric = nullptr;
                 result                          = rocprofvis_controller_get_object(
-                    metrics_handle, kRPVControllerSummaryMetricPropertySubMetricsIndexed,
+                    metrics_handle, kRPVAnalysisSummaryMetricPropertySubMetricsIndexed,
                     si, &sub_metric);
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(sub_metric != nullptr);
                 spdlog::info("{0}Processing sub-metric {1}/{2}", indent, si + 1, num_sub);
                 GpuFlags child = self(sub_metric, depth + 1, self);
-                if(child.has_gpu_util) flags.has_gpu_util = true;
+                if(child.has_gpu_counters) flags.has_gpu_counters = true;
                 if(child.has_kernel_data) flags.has_kernel_data = true;
             }
 
             if(!is_processor)
             {
-                if(flags.has_gpu_util)
+                if(flags.has_gpu_counters)
                 {
-                    require_gpu_util(metrics_handle, indent);
+                    require_gpu_counters(metrics_handle, indent);
                 }
                 if(flags.has_kernel_data)
                 {
@@ -3049,10 +3430,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
-            rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result =
             rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -3224,6 +3601,118 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         spdlog::info("Free Controller");
         rocprofvis_controller_free(m_controller);
     }
+}
+
+// Fetches each sample track one segment at a time, so that every segment is read as its
+// own slice, and checks the samples across the slice boundaries. Even segments are read
+// before odd ones so that boundaries are crossed with both loaded and unloaded
+// neighbours.
+TEST_CASE("Sample Track Slice Boundaries")
+{
+    rocprofvis_controller_t* controller =
+        rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
+    REQUIRE(controller != nullptr);
+
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    REQUIRE(future != nullptr);
+    REQUIRE(rocprofvis_controller_load_async(controller, future) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+            kRocProfVisResultSuccess);
+    rocprofvis_controller_future_free(future);
+
+    uint64_t num_tracks = 0;
+    REQUIRE(rocprofvis_controller_get_uint64(controller, kRPVControllerSystemNumTracks, 0,
+                                             &num_tracks) == kRocProfVisResultSuccess);
+
+    uint64_t num_boundaries = 0;
+    for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
+    {
+        rocprofvis_handle_t* track_handle = nullptr;
+        REQUIRE(rocprofvis_controller_get_object(controller,
+                                                 kRPVControllerSystemTrackIndexed,
+                                                 track_idx, &track_handle) ==
+                kRocProfVisResultSuccess);
+
+        uint64_t track_type = 0;
+        REQUIRE(rocprofvis_controller_get_uint64(track_handle, kRPVControllerTrackType, 0,
+                                                 &track_type) == kRocProfVisResultSuccess);
+        uint64_t track_num_entries = 0;
+        REQUIRE(rocprofvis_controller_get_uint64(track_handle,
+                                                 kRPVControllerTrackNumberOfEntries, 0,
+                                                 &track_num_entries) ==
+                kRocProfVisResultSuccess);
+        if(track_type != kRPVControllerTrackTypeSamples || track_num_entries == 0)
+        {
+            continue;
+        }
+
+        double min_time = 0;
+        double max_time = 0;
+        REQUIRE(rocprofvis_controller_get_double(track_handle,
+                                                 kRPVControllerTrackMinTimestamp, 0,
+                                                 &min_time) == kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_get_double(track_handle,
+                                                 kRPVControllerTrackMaxTimestamp, 0,
+                                                 &max_time) == kRocProfVisResultSuccess);
+        constexpr double segment_duration = RocProfVis::Controller::kSegmentDuration;
+        const uint32_t   num_segments     = std::max<uint32_t>(
+            1, (uint32_t) std::ceil((max_time - min_time) / segment_duration));
+        num_boundaries += num_segments - 1;
+
+        std::vector<std::pair<uint64_t, uint64_t>> samples;
+        for(uint32_t first : { 0u, 1u })
+        {
+            for(uint32_t segment = first; segment < num_segments; segment += 2)
+            {
+                rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
+                REQUIRE(array != nullptr);
+                future = rocprofvis_controller_future_alloc();
+                REQUIRE(future != nullptr);
+                REQUIRE(rocprofvis_controller_track_fetch_async(
+                            controller, (rocprofvis_controller_track_t*) track_handle,
+                            min_time + segment * segment_duration,
+                            min_time + (segment + 1) * segment_duration, future,
+                            array) == kRocProfVisResultSuccess);
+                REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                        kRocProfVisResultSuccess);
+                AppendSamples(array, samples);
+                rocprofvis_controller_future_free(future);
+                rocprofvis_controller_array_free(array);
+            }
+        }
+        RequireSamplesMatchModel(track_handle, samples);
+    }
+    spdlog::info("Checked {0} slice boundaries", num_boundaries);
+
+    rocprofvis_controller_free(controller);
+}
+
+// Empty names are copied into the table. Distinct temporary buffers share one
+// id, and that pointer stays valid after the temporaries die.
+TEST_CASE("StringTable empty string is stored by value")
+{
+    using RocProfVis::Controller::StringTable;
+
+    size_t id_a = 0;
+    size_t id_b = 0;
+    {
+        std::string temporary_a = "";
+        id_a = StringTable::Get().AddString(temporary_a.c_str());
+    }
+    {
+        std::string temporary_b = "";
+        id_b = StringTable::Get().AddString(temporary_b.c_str());
+    }
+
+    REQUIRE(id_a == id_b);
+    char const* interned = StringTable::Get().GetString(id_a);
+    REQUIRE(interned != nullptr);
+    REQUIRE(interned[0] == '\0');
+    REQUIRE(std::strlen(interned) == 0);
+
+    size_t id_null = StringTable::Get().AddString(nullptr);
+    REQUIRE(id_null == id_a);
 }
 
 // Regression coverage for the JobSystem Job::Wait primitive (lost-wakeup /

@@ -8,7 +8,9 @@
 #include "rocprofvis_events.h"
 #include <algorithm>
 #include <cfloat>
+#include <filesystem>
 #include <memory>
+#include <system_error>
 #include <vector>
 
 namespace RocProfVis
@@ -51,14 +53,16 @@ namespace View
         {
             s_active_sessions.erase(it);
         }
-        // If a phase is still in flight, the worker may still be using the
-        // connection. Hand the connection-free to the monitor so it runs only
-        // after the bound future resolves (deferred, non-blocking). The closure
-        // captures the connection BY VALUE so it stays valid after this session
-        // is gone. If AppendTeardown reports the op was already reaped, the
-        // worker is done and we can free the connection directly.
+        // The last phase's worker may still be using the connection: while the
+        // phase is in flight, and also after a failure, which is reported before
+        // the worker lets go of the connection. Hand the connection-free to the
+        // monitor so it runs only after the bound future resolves (deferred,
+        // non-blocking). The closure captures the connection BY VALUE so it
+        // stays valid after this session is gone. If AppendTeardown reports the
+        // op was already reaped, the worker is done and we can free the
+        // connection directly.
         bool connection_owned_by_monitor = false;
-        if (m_active_operation != SshOperation::None && m_active_operation_id != 0 && m_connection)
+        if (m_active_operation_id != 0 && m_connection)
         {
             rocprofvis_handle_t* connection = m_connection;
             connection_owned_by_monitor = AppMonitor::GetInstance()->AppendTeardown(
@@ -76,7 +80,7 @@ namespace View
         CancelActiveOperation();
 
         // Free the connection directly only when the monitor did not take
-        // ownership of it (no op in flight, or the op was already reaped).
+        // ownership of it (no phase has run, or its op was already reaped).
         if (m_connection)
         {
             rocprofvis_controller_ssh_connection_free(m_connection);
@@ -106,9 +110,7 @@ namespace View
             rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
         }
 
-        bool terminal =
-            remote_status == kRPVControllerSshCompleted || remote_status == kRPVControllerSshFailed;
-        if (terminal)
+        if (IsTerminalStatus(remote_status))
         {
             // Flush buffered stdout once an execute phase finishes, mirroring the
             // old blocking path's post-loop FinalizeExecution().
@@ -126,8 +128,21 @@ namespace View
         return remote_status;
     }
 
+    bool SshSession::IsTerminalStatus(uint64_t status)
+    {
+        return status == kRPVControllerSshCompleted || status == kRPVControllerSshFailed ||
+               status == kRPVControllerSshCancelled;
+    }
+
     uint64_t SshSession::BeginOperation(SshOperation operation, MonitorOperationType monitor_type,
             std::function<rocprofvis_result_t(rocprofvis_controller_future_t*)> start_fn)
+    {
+        return BeginOperation(operation, monitor_type, std::move(start_fn), nullptr);
+    }
+
+    uint64_t SshSession::BeginOperation(SshOperation operation, MonitorOperationType monitor_type,
+            std::function<rocprofvis_result_t(rocprofvis_controller_future_t*)> start_fn,
+            MonitorOperation::TeardownFn teardown_fn)
     {
         if (!m_connection)
         {
@@ -145,6 +160,11 @@ namespace View
 
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);
+
+        // The previous phase's terminal status stays latched on the connection
+        // until reset. Without this, the first poll of a reused connection can
+        // read that stale Completed before the worker has started the new job.
+        rocprofvis_controller_remote_reset(m_connection);
 
         rocprofvis_result_t result = start_fn(future);
         if (result != kRocProfVisResultSuccess)
@@ -177,13 +197,17 @@ namespace View
                 return std::make_shared<RemoteStatusEvent>(
                     *id_holder, static_cast<uint32_t>(status), m_last_result);
             },
-            [](uint64_t status) -> bool
-            {
-                return status == kRPVControllerSshCompleted || status == kRPVControllerSshFailed;
-            },
+            [this](uint64_t status) -> bool { return IsTerminalStatus(status); },
             [connection]() { rocprofvis_controller_remote_cancel_prompt(connection); },
             future,
-            [future]() { rocprofvis_controller_future_free(future); });
+            [future, teardown_fn]()
+            {
+                rocprofvis_controller_future_free(future);
+                if (teardown_fn)
+                {
+                    teardown_fn();
+                }
+            });
 
         *id_holder = m_active_operation_id;
         return m_active_operation_id;
@@ -221,16 +245,59 @@ namespace View
     // if remote_path or local_path omitted, the data will be taken from m_uri
     uint64_t SshSession::StartDownload(const char* remote_path, const char* local_path)
     {
-        m_pending_remote_path = remote_path ? remote_path : std::string();
-        m_pending_local_path  = local_path ? local_path : std::string();
-        bool have_paths = remote_path && local_path;
-        return BeginOperation(SshOperation::Download, MonitorOperationType::FileTransfer,
-            [this, have_paths](rocprofvis_controller_future_t* future)
+        uint64_t operation_id = 0;
+        if (remote_path && local_path)
+        {
+            m_pending_remote_path = remote_path;
+            m_pending_local_path  = local_path;
+        }
+        else if (m_uri)
+        {
+            m_pending_remote_path = m_uri->GetRemoteResultPathString();
+            m_pending_local_path  = m_uri->GetLocalResultPathString();
+        }
+        else
+        {
+            m_pending_remote_path.clear();
+            m_pending_local_path.clear();
+        }
+
+        if (!m_pending_local_path.empty())
+        {
+            // Unless the transfer completed, removes the download's folder if it
+            // is empty, whether the download fails to start or its job ends;
+            // the download itself removes a partial file and its sidecar. The
+            // connection's status is final once the job has returned; Idle
+            // means the job was cancelled before it started.
+            rocprofvis_handle_t*  connection = m_connection;
+            std::filesystem::path local_path = m_pending_local_path;
+            operation_id = BeginOperation(SshOperation::Download, MonitorOperationType::FileTransfer,
+                [this](rocprofvis_controller_future_t* future)
+                {
+                    return StartDownloadOp(m_pending_remote_path.c_str(), m_pending_local_path.c_str(), future);
+                },
+                [connection, local_path]()
+                {
+                    uint64_t status = kRPVControllerSshIdle;
+                    if (rocprofvis_controller_get_uint64(connection, kRPVControllerRemoteStatus, 0, &status) ==
+                            kRocProfVisResultSuccess &&
+                        (status == kRPVControllerSshCancelled || status == kRPVControllerSshFailed ||
+                         status == kRPVControllerSshIdle))
+                    {
+                        // remove() only deletes a directory that is empty.
+                        std::error_code ec;
+                        std::filesystem::remove(local_path.parent_path(), ec);
+                    }
+                });
+            if (operation_id == 0)
             {
-                return have_paths
-                    ? StartDownloadOp(m_pending_remote_path.c_str(), m_pending_local_path.c_str(), future)
-                    : StartDownloadOp(future);
-            });
+                // The download never started, so nothing was written; only the
+                // folder created for it can be left.
+                std::error_code ec;
+                std::filesystem::remove(local_path.parent_path(), ec);
+            }
+        }
+        return operation_id;
     }
 
     // if remote_path , the data will be taken from m_uri
@@ -252,7 +319,6 @@ namespace View
         // already removed (and freed) the operation, so there is nothing to do.
         if (m_active_operation == SshOperation::None)
         {
-            m_active_operation_id = 0;
             return;
         }
 
@@ -263,11 +329,12 @@ namespace View
 
         // RemoveOperation signals the bridge (cancel_fn) and requests cancel.
         // It never blocks: the monitor reaps the op (freeing the future via the
-        // registered teardown) once the worker resolves it.
+        // registered teardown) once the worker resolves it. The id is kept so
+        // IsIdle() stays false and the destructor still defers freeing the
+        // connection until then.
         if (m_active_operation_id != 0)
         {
             AppMonitor::GetInstance()->RemoveOperation(m_active_operation_id);
-            m_active_operation_id = 0;
         }
 
         m_active_operation = SshOperation::None;
@@ -590,18 +657,6 @@ namespace View
     }
 
 
-    rocprofvis_result_t SshSession::StartDownloadOp(rocprofvis_controller_future_t* future)
-    {
-        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        if (m_connection && m_uri)
-        {
-            std::string remote_path = m_uri->GetRemoteResultPathString();
-            std::string local_path = m_uri->GetLocalResultPathString();
-            result =  StartDownloadOp(remote_path.c_str(), local_path.c_str(), future);
-        }
-        return result;
-    }
-
     rocprofvis_result_t SshSession::StartDownloadOp(const char* remote_path, const char* local_path, rocprofvis_controller_future_t* future)
     {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -658,6 +713,10 @@ namespace View
                 else if (remote_status == kRPVControllerSshFailed)
                 {
                     result = kRocProfVisResultFailedSshCommunication;
+                }
+                else if (remote_status == kRPVControllerSshCancelled)
+                {
+                    result = kRocProfVisResultCancelled;
                 } else
                 if (remote_status == kRPVControllerSshDownloading)
                 {
@@ -801,6 +860,14 @@ namespace View
     bool SshSession::IsConnected()
     {
         return m_connection != nullptr;
+    }
+
+    bool SshSession::IsIdle() const
+    {
+        // The monitor reaps an operation only once its future has resolved.
+        return m_active_operation == SshOperation::None &&
+               (m_active_operation_id == 0 ||
+                !AppMonitor::GetInstance()->HasOperation(m_active_operation_id));
     }
 
     rocprofvis_result_t SshSession::SubmitPromptResponses(std::vector<std::string>& responses)

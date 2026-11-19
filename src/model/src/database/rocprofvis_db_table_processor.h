@@ -3,14 +3,55 @@
 
 #pragma once
 
-#include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_db.h"
+#include "json.h"
+#include <mutex>
+#include <string>
+#include <variant>
+#include <functional>
+#include <vector>
 
 namespace RocProfVis
 {
 namespace DataModel
 {
 
-    class QueryManager;
+    class SystemDatabase;
+
+    struct rocprofvis_db_name_duration_t
+    {
+        std::string name;
+        uint64_t count;
+        uint64_t min_duration;
+        uint64_t max_duration;
+        uint64_t total_duration;
+    };
+
+    struct rocprofvis_db_duration_summary_query_t
+    {
+        DbInstance* db_instance;
+        uint32_t track_id;
+        std::string query;
+    };
+
+    typedef enum rocprofvis_dm_track_search_id_t
+    {
+        kRPVTrackSearchIdThreads,
+        kRPVTrackSearchIdThreadSamples,
+        kRPVTrackSearchIdDispatches,
+        kRPVTrackSearchIdMemAllocs,
+        kRPVTrackSearchIdMemCopies,
+        kRPVTrackSearchIdCounters,
+        kRPVTrackSearchIdStreams,
+        kRPVTrackSearchIdUnknown,
+    } rocprofvis_dm_track_search_id_t;
+
+    typedef enum rocprofvis_db_compound_table_type {
+        kRPVTableDataTypeEvent,
+        kRPVTableDataTypeSample,
+        kRPVTableDataTypeSearch,
+        kRPVTableDataTypesNum
+    } rocprofvis_db_compound_table_type;
 
     typedef struct rocprofvis_db_compound_query_command {
         std::string name;
@@ -21,6 +62,9 @@ namespace DataModel
         uint32_t track;
         uint32_t guid_id;
     } rocprofvis_db_compound_query_info;
+
+
+    typedef std::variant<std::monostate, std::string, uint64_t, double> rocprofvis_table_cell_t;
 
     class RestartableTimer {
     public:
@@ -56,6 +100,14 @@ namespace DataModel
             m_paused = true;
             m_pending = false;
             m_cv.notify_all();
+        }
+
+        // An action already in flight runs with m_mutex released, so pause()
+        // cannot stop it. Actions that take a lock of their own call this
+        // after acquiring it to drop work a pause() or restart() cancelled.
+        bool paused() {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_paused || m_pending;
         }
 
         void stop() {
@@ -111,21 +163,146 @@ namespace DataModel
         bool m_pending = false;
     };
 
+    class ParamSerializer {
+        jt::Json obj_;
+    public:
+        ParamSerializer() { obj_.setObject(); }
+
+        explicit ParamSerializer(const std::string& text)
+        {
+            auto [status, json] = jt::Json::parse(text);
+            if(status != jt::Json::success)
+            {
+                throw std::runtime_error(std::string("JSON parse error: ") +
+                    jt::Json::StatusToString(status));
+            }
+            if(!json.isObject())
+            {
+                throw std::runtime_error("Expected JSON object");
+            }
+            obj_ = std::move(json);
+        }
+
+        template<typename T>
+        void set(const std::string& tag, const T& val) {
+            obj_.getObject()[tag] = jt::Json(val);
+        }
+
+        // Set an array of values
+        template<typename T>
+        void setArray(const std::string& tag, const std::vector<T>& values) {
+            jt::Json arr;
+            arr.setArray();
+            for (const auto& v : values)
+                arr.getArray().push_back(jt::Json(v));
+            obj_.getObject()[tag] = std::move(arr);
+        }
+
+        std::string toString() const { return obj_.toString(); }
+    };
+
+
+    class ParamDeserializer {
+        jt::Json json_;
+    public:
+        explicit ParamDeserializer(const std::string& text) {
+            auto [status, json] = jt::Json::parse(text);
+            if (status != jt::Json::success)
+                throw std::runtime_error(
+                    std::string("JSON parse error: ") + jt::Json::StatusToString(status));
+            if (!json.isObject())
+                throw std::runtime_error("Expected JSON object");
+            json_ = std::move(json);
+        }
+
+        template<typename T>
+        bool get(const std::string& tag, T& val) {
+            if (!json_.contains(tag)) return false;
+            jt::Json& j = json_[tag];
+            if constexpr (std::is_same_v<T, bool>) {
+                if (!j.isBool()) return false;
+                val = j.getBool();
+            } else if constexpr (std::is_same_v<T, float>) {
+                if (!j.isNumber()) return false;
+                val = static_cast<float>(j.getNumber());
+            } else if constexpr (std::is_same_v<T, double>) {
+                if (!j.isNumber()) return false;
+                val = j.getNumber();
+            } else if constexpr (std::is_integral_v<T>) {
+                if (!j.isLong()) return false;
+                val = static_cast<T>(j.getLong());
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                if (!j.isString()) return false;
+                val = j.getString();
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        // Get an array of values
+        template<typename T>
+        bool getArray(const std::string& tag, std::vector<T>& values) {
+            if (!json_.contains(tag)) return false;
+            jt::Json& j = json_[tag];
+            if (!j.isArray()) return false;
+
+            values.clear();
+            for (auto& elem : j.getArray()) {
+                T val;
+                if constexpr (std::is_same_v<T, bool>) {
+                    if (!elem.isBool()) return false;
+                    val = elem.getBool();
+                } else if constexpr (std::is_same_v<T, float>) {
+                    if (!elem.isNumber()) return false;
+                    val = static_cast<float>(elem.getNumber());
+                } else if constexpr (std::is_same_v<T, double>) {
+                    if (!elem.isNumber()) return false;
+                    val = elem.getNumber();
+                } else if constexpr (std::is_integral_v<T>) {
+                    if (!elem.isLong()) return false;
+                    val = static_cast<T>(elem.getLong());
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    if (!elem.isString()) return false;
+                    val = elem.getString();
+                } else {
+                    return false;
+                }
+                values.push_back(val);
+            }
+            return true;
+        }
+    };
+
 
     class TableProcessor
     {
 
     public:
-        TableProcessor(QueryManager* db) : m_db(db) { 
+        TableProcessor(SystemDatabase* db) : m_db(db) {
 
             m_timer.setAction([this] {
                 std::lock_guard<std::mutex> lock(m_lock);
-                this->m_merged_table.Clear(); 
+                if (m_timer.paused()) return;
+                this->m_merged_table.Clear();
                 this->m_tracks.clear();
                 });
 
         };
 
+        static rocprofvis_dm_result_t
+            BuildTableSemanticSubQuery(
+                rocprofvis_dm_table_use_case_enum_t use_case,
+                rocprofvis_dm_charptr_t filter,
+                rocprofvis_dm_charptr_t group,
+                rocprofvis_dm_charptr_t group_cols,
+                rocprofvis_dm_charptr_t sort_column,
+                rocprofvis_dm_sort_order_t sort_order,
+                uint64_t max_count,
+                uint64_t offset,
+                bool count_only,
+                bool sample_query,
+                rocprofvis_dm_string_t& query);
         static bool IsCompoundQuery(const char* query, std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries, std::set<uint32_t>& tracks,
             std::vector<rocprofvis_db_compound_query_command>& commands);
         static std::string QueryWithoutCommands(const char* query); // Unused
@@ -139,18 +316,24 @@ namespace DataModel
         void SaveCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries) { m_current_queries = queries; };
         bool IsCurrentQuery(std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries);
         rocprofvis_dm_result_t ExportToCSV(rocprofvis_dm_charptr_t file_path);
+        uint32_t AddPackedTable();
+        static int CallbackRunCompoundQuery(void* data, int argc, void* stmt, char** azColName);
 
     private:
-        rocprofvis_dm_result_t ProcessCompoundQuery(rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated);
-        static int CallbackRunCompoundQuery(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        rocprofvis_dm_result_t ProcessCompoundQuery(Future* future, rocprofvis_dm_table_t table, std::vector<rocprofvis_db_compound_query_command>& commands, bool updated);
         static std::string Trim(const std::string& str);
         rocprofvis_dm_result_t AddTableCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index);
         rocprofvis_dm_result_t AddTableColumns(bool to_file, rocprofvis_dm_handle_t handle);
         rocprofvis_dm_result_t AddAggregatedColumns(bool to_file, rocprofvis_dm_handle_t handle);
         rocprofvis_dm_result_t AddAggregatedCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index);
+        rocprofvis_dm_result_t ExecuteNameDurationSummary(
+            Future* future,
+            std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries,
+            std::vector<rocprofvis_db_compound_query_command>& commands,
+            rocprofvis_dm_handle_t handle);
 
     private:
-        QueryManager* m_db;
+        SystemDatabase* m_db;
         std::vector<std::unique_ptr<PackedTable>> m_tables;
         std::set<uint32_t> m_tracks;
         PackedTable m_merged_table;

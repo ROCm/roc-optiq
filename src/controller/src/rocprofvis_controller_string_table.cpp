@@ -24,37 +24,26 @@ StringTable::~StringTable()
 {
 }
 
-size_t StringTable::AddString(const char* string, bool store)
+size_t StringTable::AddString(const char* string)
 {
+    // A null pointer cannot be copied into std::string. Treat it as empty.
+    if(string == nullptr)
+    {
+        string = "";
+    }
+
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    if(store)
+    auto it = m_string_entries.find(string);
+    if(it == m_string_entries.end())
     {
-        auto it = m_string_entries.find(string);
-        if(it == m_string_entries.end())
+        auto pair = m_string_entries.insert(std::make_pair(string, m_strings.size()));
+        if(pair.second)
         {
-            auto pair = m_string_entries.insert(std::make_pair(string, m_strings.size()));
-            if(pair.second)
-            {
-                it = pair.first;
-                m_strings.push_back(it->first.c_str());
-            }
+            it = pair.first;
+            m_strings.push_back(it->first.c_str());
         }
-        return it->second;
     }
-    else
-    {
-        auto it = m_charptr_entries.find(string);
-        if(it == m_charptr_entries.end())
-        {
-            auto pair = m_charptr_entries.insert(std::make_pair(string, m_strings.size()));
-            if(pair.second)
-            {
-                it = pair.first;
-                m_strings.push_back(it->first);
-            }
-        }
-        return it->second;
-    }
+    return it->second;
 }
 
 char const* StringTable::GetString(size_t id)

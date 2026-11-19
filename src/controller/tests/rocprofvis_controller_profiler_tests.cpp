@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #ifndef _WIN32
@@ -246,7 +247,7 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
     SECTION("the tool is found under its own name in the configured directory")
     {
         REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, tool_dir.Path(),
-                                          resolved) == kRocProfVisResultSuccess);
+                                          "", resolved) == kRocProfVisResultSuccess);
         CHECK(resolved == tool_dir.ToolPath());
     }
 
@@ -254,23 +255,23 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
     {
         // The child may be given a working directory of its own, so a relative
         // directory would not mean the same thing to it as to us.
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "build/bin", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "build/bin", "", resolved) ==
               kRocProfVisResultInvalidArgument);
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "./bin", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "./bin", "", resolved) ==
               kRocProfVisResultInvalidArgument);
     }
 
     SECTION("a directory that does not hold the tool is a failure, not a different tool")
     {
         // The directory has rocprof-sys-run in it but not rocprofv3.
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, tool_dir.Path(), resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, tool_dir.Path(), "", resolved) ==
               kRocProfVisResultToolNotFound);
     }
 
     SECTION("a directory that does not exist is a failure")
     {
         CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, kMissingToolDirectory,
-                                        resolved) == kRocProfVisResultToolNotFound);
+                                        "", resolved) == kRocProfVisResultToolNotFound);
     }
 
     SECTION("a directory cannot name the executable")
@@ -279,12 +280,12 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
         // not a thing. The filename is the tool table's to choose, and this is
         // what stops a directory from being a path to an arbitrary program.
         CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, kRealExecutable,
-                                        resolved) == kRocProfVisResultToolNotFound);
+                                        "", resolved) == kRocProfVisResultToolNotFound);
     }
 
     SECTION("an unknown tool cannot be conjured out of a directory")
     {
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolNone, tool_dir.Path(), resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolNone, tool_dir.Path(), "", resolved) ==
               kRocProfVisResultInvalidArgument);
     }
 }
@@ -367,7 +368,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
         ScopedEnv path("PATH", path_dir.string());
 
-        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
                 kRocProfVisResultSuccess);
         CHECK(resolved == in_rocm.string());
     }
@@ -382,7 +383,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         // skipped rather than ending the search.
         ScopedEnv path("PATH", ":" + (scratch / "missing").string() + ":" + path_dir.string());
 
-        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+        REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
                 kRocProfVisResultSuccess);
         CHECK(resolved == in_path.string());
     }
@@ -396,7 +397,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
         ScopedEnv path("PATH", path_dir.string());
 
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
               kRocProfVisResultToolNotFound);
     }
 
@@ -405,7 +406,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
         ScopedEnv path("PATH", path_dir.string());
 
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, "", resolved) ==
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofV3, "", "", resolved) ==
               kRocProfVisResultToolNotFound);
     }
 
@@ -421,7 +422,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
             ScopedEnv rocm("ROCM_PATH", (scratch / "rocm").string());
             ScopedEnv path("PATH", "elsewhere");
 
-            REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", resolved) ==
+            REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, "", "", resolved) ==
                     kRocProfVisResultSuccess);
             CHECK(std::filesystem::path(resolved).is_absolute());
         }
@@ -442,7 +443,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         ScopedEnv path("PATH", path_dir.string());
 
         REQUIRE(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, chosen_dir.string(),
-                                          resolved) == kRocProfVisResultSuccess);
+                                          "", resolved) == kRocProfVisResultSuccess);
         CHECK(resolved == in_chosen.string());
 
         // And when the configured directory lacks the tool, an installed copy
@@ -451,7 +452,7 @@ TEST_CASE("Resolution prefers ROCM_PATH, then PATH, then fails", "[profiler][too
         // other one is the confusion they were trying to end.
         std::filesystem::remove(in_chosen);
         CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, chosen_dir.string(),
-                                        resolved) == kRocProfVisResultToolNotFound);
+                                        "", resolved) == kRocProfVisResultToolNotFound);
     }
 
     std::filesystem::remove_all(scratch);
@@ -477,7 +478,8 @@ TEST_CASE("The C ABI reports tool names with the shared string convention", "[pr
     length = 0;
     CHECK(rocprofvis_profiler_tool_get_binary_name(kRPVProfilerToolNone, nullptr, &length) ==
           kRocProfVisResultInvalidEnum);
-    CHECK(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolNone, nullptr, nullptr, &length) ==
+    CHECK(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolNone, nullptr, nullptr, nullptr,
+                                                &length) ==
           kRocProfVisResultInvalidArgument);
 }
 
@@ -487,20 +489,20 @@ TEST_CASE("The C ABI resolves a tool inside a configured directory", "[profiler]
 
     uint32_t length = 0;
     REQUIRE(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolRocprofSysRun,
-                                                  tool_dir.Path().c_str(), nullptr,
+                                                  tool_dir.Path().c_str(), nullptr, nullptr,
                                                   &length) == kRocProfVisResultSuccess);
     REQUIRE(length == tool_dir.ToolPath().size());
 
     std::vector<char> buffer(length + 1, '\0');
     REQUIRE(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolRocprofSysRun,
-                                                  tool_dir.Path().c_str(), buffer.data(),
+                                                  tool_dir.Path().c_str(), nullptr, buffer.data(),
                                                   &length) == kRocProfVisResultSuccess);
     CHECK(std::string(buffer.data()) == tool_dir.ToolPath());
 
     // A directory without the tool reports that, rather than reaching past it.
     length = 0;
     CHECK(rocprofvis_profiler_tool_resolve_path(kRPVProfilerToolRocprofV3,
-                                                tool_dir.Path().c_str(), nullptr,
+                                                tool_dir.Path().c_str(), nullptr, nullptr,
                                                 &length) == kRocProfVisResultToolNotFound);
 }
 
@@ -508,14 +510,14 @@ TEST_CASE("The C ABI resolves a tool inside a configured directory", "[profiler]
 // Process launch
 // ==================================================================================
 //
-// These run a real child process, so they use POSIX system utilities and are
-// skipped on Windows. /usr/bin/printf repeats its format once per remaining
-// argument, which makes each argv entry individually visible in the output.
+// These run a real child process, so they use a POSIX shell and are skipped on
+// Windows.
 //
-// A ScratchToolDir installs the utility under the tool's own name, since naming a
+// A ScratchToolDir installs the shell under the tool's own name, since naming a
 // tool is the only way to select a binary and nothing here is a ROCm tool. The
-// utilities used do not inspect argv[0], so running under another name is
-// indistinguishable to them.
+// shell does not choose its behaviour from argv[0]. Coreutils binaries can:
+// Ubuntu 26.04 and BusyBox ship them as one multi-call program that rejects the
+// name rocprof-sys-run, so do not use them as stand-ins.
 
 #ifndef _WIN32
 
@@ -576,13 +578,19 @@ TEST_CASE("Arguments reach the child process unsplit and uninterpreted", "[profi
     rocprofvis_profiler_config_t* config = rocprofvis_profiler_config_alloc();
     REQUIRE(config != nullptr);
 
-    ScratchToolDir tool_dir("/usr/bin/printf");
+    ScratchToolDir tool_dir;
     use_tool_in(config, tool_dir);
-    rocprofvis_profiler_config_add_profiler_arg(config, "[%s]\n");
+    // Everything after "sh" becomes a positional parameter, which the shell
+    // never parses as code. Its builtin printf then shows each one on its own
+    // line.
+    rocprofvis_profiler_config_add_profiler_arg(config, "-c");
+    rocprofvis_profiler_config_add_profiler_arg(
+        config, "for a in \"$@\"; do printf '[%s]\\n' \"$a\"; done");
+    rocprofvis_profiler_config_add_profiler_arg(config, "sh");
     rocprofvis_profiler_config_add_profiler_arg(config, "--simple");
     rocprofvis_profiler_config_add_profiler_arg(config, "with spaces  and   runs");
     rocprofvis_profiler_config_add_profiler_arg(config, "quo\"te's");
-    // No shell is involved, so these are ordinary characters.
+    // Only the launcher could interpret these, and it must not.
     rocprofvis_profiler_config_add_profiler_arg(config, "meta;|&$(echo hi)*?");
     rocprofvis_profiler_config_add_profiler_arg(config, "/path/with space/trace.db");
 
@@ -653,7 +661,14 @@ TEST_CASE("The child runs in the configured working directory", "[profiler][proc
     std::string output = run_to_completion(config, &state, &exit_code);
 
     CHECK(state == kRPVProfilerStateCompleted);
-    CHECK(output == scratch.string());
+    // macOS getcwd resolves /var to /private/var after chdir. Same directory,
+    // different spelling, so compare identity rather than the path strings.
+    std::error_code ec;
+    bool const same_directory = std::filesystem::equivalent(output, scratch, ec);
+    INFO("child PWD: " << output);
+    INFO("configured: " << scratch.string());
+    CHECK(!ec);
+    CHECK(same_directory);
     // Only the child moved. Optiq's own working directory is global state shared
     // by every open trace and relative path in the process.
     CHECK(std::filesystem::current_path() == before);
@@ -729,16 +744,36 @@ TEST_CASE("A missing working directory fails the run instead of running elsewher
     rocprofvis_profiler_config_set_working_directory(
         config, "/nonexistent-roc-optiq-working-directory");
 
-    rocprofvis_profiler_state_t state     = kRPVProfilerStateIdle;
-    int32_t                     exit_code = -1;
-    std::string output = run_to_completion(config, &state, &exit_code);
+    rocprofvis_profiler_t*          profiler = rocprofvis_profiler_alloc();
+    rocprofvis_controller_future_t* future   = rocprofvis_controller_future_alloc();
+    REQUIRE(profiler != nullptr);
+    REQUIRE(future != nullptr);
 
+    // The directory is checked before the process is created, so this is a
+    // launch error rather than a child that exited 126 after its chdir failed.
+    CHECK(rocprofvis_profiler_launch_async(profiler, config, future) ==
+          kRocProfVisResultInvalidArgument);
+
+    rocprofvis_profiler_state_t state = kRPVProfilerStateIdle;
+    rocprofvis_profiler_get_state(profiler, &state);
     CHECK(state == kRPVProfilerStateFailed);
-    CHECK(exit_code == 126);
+
+    uint32_t    length = 0;
+    std::string output;
+    rocprofvis_profiler_get_output(profiler, nullptr, &length);
+    if(length > 0)
+    {
+        std::vector<char> buffer(length + 1, '\0');
+        rocprofvis_profiler_get_output(profiler, buffer.data(), &length);
+        output.assign(buffer.data());
+    }
+
     CHECK(output.find("SHOULD NOT RUN") == std::string::npos);
     // The reason is reported to the console the user is looking at.
-    CHECK(output.find("chdir failed") != std::string::npos);
+    CHECK(output.find("working directory") != std::string::npos);
 
+    rocprofvis_controller_future_free(future);
+    rocprofvis_profiler_free(profiler);
     rocprofvis_profiler_config_free(config);
 }
 

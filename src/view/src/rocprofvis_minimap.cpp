@@ -33,6 +33,7 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 , m_last_normalize_global(true)
 , m_track_metadata_token(EventManager::InvalidSubscriptionToken)
 , m_track_visibility_token(EventManager::InvalidSubscriptionToken)
+, m_theme_changed_token(EventManager::InvalidSubscriptionToken)
 {
     UpdateColorCache();
     m_event_global_max =
@@ -56,6 +57,12 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
                 m_data_valid = false;
             }
         });
+    m_theme_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kThemeChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            (void) e;
+            UpdateColorCache();
+        });
 }
 
 Minimap::~Minimap()
@@ -64,6 +71,8 @@ Minimap::~Minimap()
         static_cast<int>(RocEvents::kTrackMetadataChanged), m_track_metadata_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTrackVisibilityChanged), m_track_visibility_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kThemeChanged), m_theme_changed_token);
 }
 void
 Minimap::UpdateColorCache()
@@ -495,7 +504,7 @@ Minimap::HandleNavigation(ImVec2 map_pos, ImVec2 map_size)
         if(total_h == 0) total_h = m_timeline_view->GetGraphSize().y;
 
         float  mouse_ratio_y = std::clamp((m.y - map_pos.y) / map_size.y, 0.0f, 1.0f);
-        double y_at_mouse    = mouse_ratio_y * total_h;
+        double y_at_mouse    = static_cast<double>(mouse_ratio_y) * total_h;
 
         // Get current view width (zoom level)
         double current_width = view_coords.v_max_x - view_coords.v_min_x;

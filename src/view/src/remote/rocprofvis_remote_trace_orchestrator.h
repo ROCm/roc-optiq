@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -51,8 +52,44 @@ public:
     // call so each click does not tear down and re-auth the SSH session.
     bool BrowsePath();
 
+    // Downloads the m_uri result path over the authenticated session, like
+    // BrowsePath(); without one it runs the full Start() pipeline.
+    bool DownloadPath();
+
+    void Cancel();
+
+    /*
+     * Takes over a session that has already authenticated on m_uri's connection,
+     * so the next DownloadPath() or BrowsePath() reuses it instead of connecting
+     * again. Returns false, and keeps nothing, while a phase is running or when
+     * session is null.
+     * @param session: an idle, authenticated session for m_uri.
+     */
+    bool SetSession(std::unique_ptr<SshSession> session);
+    // Replaces on_open_file, e.g. once a session has been taken over from the
+    // remote file browser.
+    void SetOnOpenFile(std::function<void(const std::string&)> on_open_file)
+    {
+        m_on_open_file = std::move(on_open_file);
+    }
+
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
+    // True only while the file transfer itself runs (not while connecting or
+    // authenticating for it).
+    bool IsDownloading() const { return m_phase == Phase::Downloading; }
+
+    // True once the workflow ended in failure; GetStatusMessage() says why.
+    bool HasFailed() const { return m_phase == Phase::Failed; }
+
+    // True once the session has authenticated, until a failure other than a
+    // directory listing drops it.
+    bool IsAuthenticated() const { return m_authenticated; }
+
+    // True once the session's last phase is done with the connection. A failed
+    // phase reports before then, so the next BrowsePath() after a failure only
+    // reuses the session once this holds.
+    bool IsSessionIdle() const { return !m_session || m_session->IsIdle(); }
 
     // Human-readable status for the open dialog.
     const std::string& GetStatusMessage() const { return m_status_message; }
@@ -81,6 +118,8 @@ private:
     void AdvanceAfterBrowsing();
     void Browse();
     void Fail(const std::string& message);
+    // An authenticated session whose last phase is done with the connection.
+    bool CanReuseSession();
 
     std::shared_ptr<RemoteUri>               m_uri;
     std::function<void(const std::string&)>  m_on_open_file;
@@ -91,9 +130,13 @@ private:
     bool                                     m_running;
     // True once the owned session has completed its authenticate phase, so a
     // subsequent BrowsePath() can reuse the live connection without redoing
-    // connect + authenticate. Reset whenever a fresh session is started.
+    // connect + authenticate. Reset whenever a fresh session is started, and by
+    // any failure other than a directory listing.
     bool                                     m_authenticated;
     std::string                              m_status_message;
+    // Where the current download writes, fixed when it starts so a change to
+    // the remote trace location setting mid-download does not move it.
+    std::string                              m_local_path;
 };
 
 }  // namespace View

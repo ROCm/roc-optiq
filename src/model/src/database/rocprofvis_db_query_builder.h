@@ -85,6 +85,14 @@ typedef struct rocprofvis_db_sqlite_memory_alloc_table_query_format
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_memory_alloc_table_query_format;
 
+typedef struct rocprofvis_db_sqlite_hip_event_table_query_format
+{
+    static constexpr const int NUM_PARAMS = 23;
+    SqliteDatabase*            owner;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_sqlite_hip_event_table_query_format;
+
 typedef struct rocprofvis_db_sqlite_memory_alloc_activity_query_format
 {
     static constexpr const int NUM_PARAMS = 12;
@@ -212,8 +220,10 @@ class Builder
         static constexpr const char* DURATION_PUBLIC_NAME = "duration";
         static constexpr const char* SIZE_PUBLIC_NAME = "size";
         static constexpr const char* ADDRESS_PUBLIC_NAME = "address";
+        static constexpr const char* HANDLE_PUBLIC_NAME = "handle";
         static constexpr const char* STREAM_PUBLIC_NAME = "stream";
         static constexpr const char* QUEUE_PUBLIC_NAME = "queue";
+        static constexpr const char* SRC_QUEUE_PUBLIC_NAME = "SrcQueue";
         static constexpr const char* NAME_PUBLIC_NAME = "name";
         static constexpr const char* ARGS_PUBLIC_NAME = "arguments";
         static constexpr const char* NODE_PUBLIC_NAME = "node";
@@ -249,6 +259,7 @@ class Builder
         static constexpr const char* EVENT_ARGS_RPD = "_s_arguments_rpd";
         static constexpr const char* STREAM_NAME_REFERENCE = "_st_name";
         static constexpr const char* QUEUE_NAME_REFERENCE = "_q_name";
+        static constexpr const char* SRC_QUEUE_NAME_REFERENCE = "_src_q_name";
         static constexpr const char* SYMBOL_NAME_REFERENCE = "_sy_name";
         static constexpr const char* AGENT_ABS_INDEX_REFERENCE = "_ag_abs_idx";
         static constexpr const char* AGENT_TYPE_REFERENCE = "_ag_type";
@@ -355,12 +366,14 @@ class Builder
             SCHEMA_INDEX_STATIC_SCRATCH_SIZE,
             SCHEMA_INDEX_SIZE,
             SCHEMA_INDEX_ADDRESS,
+            SCHEMA_INDEX_HANDLE,
             SCHEMA_INDEX_LEVEL,
             SCHEMA_INDEX_AGENT_SRC_ABS_INDEX,
             SCHEMA_INDEX_AGENT_SRC_TYPE,
             SCHEMA_INDEX_AGENT_SRC_TYPE_INDEX,
             SCHEMA_INDEX_AGENT_SRC_NAME,
             SCHEMA_INDEX_SRC_ADDRESS,
+            SCHEMA_INDEX_SRC_QUEUE,
             SCHEMA_INDEX_COUNTER_ID,
             SCHEMA_INDEX_COUNTER_ID_RPD,
             SCHEMA_INDEX_COUNTER_VALUE,
@@ -405,12 +418,14 @@ class Builder
             {STATIC_SCRATCH_SIZE_PUBLIC_NAME, {STATIC_SCRATCH_SIZE_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_STATIC_SCRATCH_SIZE}},
             {SIZE_PUBLIC_NAME, {SIZE_PUBLIC_NAME, ColumnType::Dword,SCHEMA_INDEX_SIZE}},
             {ADDRESS_PUBLIC_NAME, {ADDRESS_PUBLIC_NAME, ColumnType::Qword,SCHEMA_INDEX_ADDRESS}},
+            {HANDLE_PUBLIC_NAME, {HANDLE_PUBLIC_NAME, ColumnType::Qword,SCHEMA_INDEX_HANDLE}},
             {LEVEL_REFERENCE, {LEVEL_REFERENCE, ColumnType::Byte,SCHEMA_INDEX_LEVEL}},
             {AGENT_SRC_ABS_INDEX_REFERENCE, {AGENT_SRC_ABS_INDEX_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_AGENT_SRC_ABS_INDEX}},
             {AGENT_SRC_TYPE_REFERENCE, {AGENT_SRC_TYPE_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_AGENT_SRC_TYPE}},
             {AGENT_SRC_TYPE_INDEX_REFERENCE, {AGENT_SRC_TYPE_INDEX_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_AGENT_SRC_TYPE_INDEX}},
             {AGENT_SRC_NAME_REFERENCE, {AGENT_SRC_NAME_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_AGENT_SRC_NAME}},
             {SRC_ADDRESS_PUBLIC_NAME, {SRC_ADDRESS_PUBLIC_NAME, ColumnType::Qword,SCHEMA_INDEX_SRC_ADDRESS}},
+            {SRC_QUEUE_NAME_REFERENCE, {SRC_QUEUE_PUBLIC_NAME, ColumnType::Qword,SCHEMA_INDEX_SRC_QUEUE}},
             {COUNTER_ID_SERVICE_NAME,{COUNTER_ID_PUBLIC_NAME, ColumnType::Qword,SCHEMA_INDEX_COUNTER_ID}},
             {COUNTER_NAME_REFERENCE_RPD,{COUNTER_ID_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_COUNTER_ID_RPD}},
             {COUNTER_VALUE_SERVICE_NAME,{COUNTER_VALUE_PUBLIC_NAME, ColumnType::Double,SCHEMA_INDEX_COUNTER_VALUE}},
@@ -493,6 +508,7 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_dispatch_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_memory_alloc_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_memory_copy_table_query_format params);
+        static std::string Select(rocprofvis_db_sqlite_hip_event_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_rocpd_sample_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_sample_table_query_format params);
         static std::string Select(rocprofvis_db_sqlite_rocpd_table_query_format params);

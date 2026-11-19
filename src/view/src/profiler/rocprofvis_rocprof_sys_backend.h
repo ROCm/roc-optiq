@@ -112,6 +112,10 @@ struct RocprofSysSettings
     std::string instr_exclude;
     int32_t     min_instructions = 0;
 
+    TargetSpec target;
+
+    ExtraArguments extra_arguments;
+
     jt::Json ToJson() const;
     static RocprofSysSettings FromJson(jt::Json const& json);
 
@@ -129,9 +133,15 @@ public:
     const char* DisplayName() const override;
 
     std::vector<ToolOption> GetTools() const override;
-    std::vector<TabDescriptor> GetTabs(rocprofvis_profiler_tool_t tool) const override;
+    TabDescriptor GetOptions(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation) const override;
+    std::vector<TabDescriptor> GetAdvancedOptions(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation) const override;
 
     std::string Validate(LaunchConfig const& config) const override;
+
+    TargetSpec const& GetTarget(rocprofvis_profiler_operation_t operation) const override;
+    ExtraArguments& GetExtraArguments(rocprofvis_profiler_operation_t operation) override;
+    std::vector<std::string>& GetRecentTargets(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation) override;
+    bool RenderTargetSection(LaunchConfig const& config, TargetBrowseFn const& on_browse) override;
 
     void FlattenToExecution(
         LaunchConfig const& config,
@@ -145,11 +155,6 @@ public:
     std::vector<WarningMessage> GetWarnings(
         LaunchConfig const& config) const override;
 
-    std::vector<std::string> GetSummaryTags(
-        LaunchConfig const& config) const override;
-
-    std::string ParseTraceOutputPath(std::string const& profiler_stdout) const override;
-
 private:
     // Each returns true if the user changed a setting this frame - see
     // TabDescriptor::render_fn, which is what these are bound to.
@@ -162,6 +167,19 @@ private:
     bool RenderParallelismTab();
     bool RenderInstrumentTab();
     bool RenderAdvancedTab();
+
+    // Shared ROCPROFSYS_* env for every tool. Argv shape is per-tool:
+    // run and sample share --preset/--trace/--output; instrument does not.
+    void EmitCuratedEnv(
+        LaunchConfig const& config,
+        std::vector<std::pair<std::string, std::string>>& env_out) const;
+    void FlattenRunOrSample(
+        LaunchConfig const& config,
+        std::vector<std::string>& argv_out) const;
+    void FlattenInstrumentRuntime(
+        LaunchConfig const& config,
+        std::vector<std::pair<std::string, std::string>>& env_out,
+        std::vector<std::string>& argv_out) const;
 
     static std::string JoinEnabledKeys(
         std::map<std::string, bool> const& m,

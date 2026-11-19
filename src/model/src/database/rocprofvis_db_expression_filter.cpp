@@ -3,7 +3,11 @@
 
 #include "rocprofvis_db_expression_filter.h"
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <algorithm>
+#include <iomanip>
+#include <limits>
 #include <stdexcept>
 #include <regex>
 #include <sstream>
@@ -15,6 +19,40 @@ namespace DataModel
 {
     std::unordered_map<std::string, FilterExpression::FunctionHandler> FilterExpression::s_functions;
 
+    // How an error names an operand: a column by name, a literal by its value.
+    static std::string describe_operand(const FilterExpression::ExprNode* expr) {
+        if (!expr) return "nothing";
+        switch (expr->m_type) {
+        case FilterExpression::ExprNode::Type::Column:
+            return "\"" + std::get<std::string>(expr->m_data) + "\"";
+        case FilterExpression::ExprNode::Type::ConstantString:
+            return "'" + std::get<std::string>(expr->m_data) + "'";
+        case FilterExpression::ExprNode::Type::ConstantNumber: {
+            std::ostringstream out;
+            out << std::get<double>(expr->m_data);
+            return out.str();
+        }
+        default:
+            return "the arithmetic expression";
+        }
+    }
+
+    // How an error names what comes next: that text, or the end of the filter.
+    static std::string describe_next(Tokenizer& tk) {
+        const std::string next = tk.Upcoming();
+        return next.empty() ? "the filter ended" : "found \"" + next + "\"";
+    }
+
+    static double arithmetic_operand(const FilterExpression::FunctionResult& value,
+                                     const FilterExpression::ExprNode* expr) {
+        if (std::holds_alternative<double>(value)) return std::get<double>(value);
+        if (std::get<std::string>(value).empty())
+            throw std::runtime_error("Arithmetic needs a number, but some rows have no " +
+                                     describe_operand(expr));
+        throw std::runtime_error("Arithmetic needs a number, but " + describe_operand(expr) +
+                                 " is text");
+    }
+
     // ---------------- Evaluation ----------------
 
     FilterExpression::FunctionResult FilterExpression::ExprNode::Evaluate(const std::unordered_map<std::string, Value>& row) const {
@@ -24,7 +62,7 @@ namespace DataModel
         case Type::Column: {
             auto it = row.find(std::get<std::string>(m_data));
             if (it == row.end()) 
-                throw std::runtime_error("Unknown column name");
+                throw std::runtime_error("Unknown column \"" + std::get<std::string>(m_data) + "\"");
             return it->second;
         }
         case Type::Add:
@@ -33,8 +71,8 @@ namespace DataModel
         case Type::Div:
         case Type::Mod:
         {
-            double lhs = std::get<double>(m_left->Evaluate(row));
-            double rhs = std::get<double>(m_right->Evaluate(row));
+            double lhs = arithmetic_operand(m_left->Evaluate(row), m_left.get());
+            double rhs = arithmetic_operand(m_right->Evaluate(row), m_right.get());
             switch (m_type) {
             case Type::Add: return lhs + rhs;
             case Type::Sub: return lhs - rhs;
@@ -57,13 +95,75 @@ namespace DataModel
 
     // ---------------- Helpers ----------------
 
-    bool FilterExpression::MatchLike(const std::string& text, const std::string& pattern) {
+    // LIKE compares text, so a number is matched by how it prints: integral values without
+    // a fraction, others at full precision.
+    static std::string like_operand_text(const FilterExpression::Value& value) {
+        if (std::holds_alternative<std::string>(value)) {
+            return std::get<std::string>(value);
+        }
+        double number = std::get<double>(value);
+        std::ostringstream text;
+        if (std::isfinite(number) && std::trunc(number) == number) {
+            text << std::fixed << std::setprecision(0) << number;
+        } else {
+            text << std::setprecision(std::numeric_limits<double>::digits10) << number;
+        }
+        return text.str();
+    }
+
+    // True when the whole of text is a number, which is then written to number.
+    static bool parse_number_text(const std::string& text, double& number) {
+        if (text.empty()) {
+            return false;
+        }
+        char* end = nullptr;
+        number = std::strtod(text.c_str(), &end);
+        return end == text.c_str() + text.size();
+    }
+
+    static bool compare_numbers(FilterExpression::Operator op, double lv, double rv) {
+        switch (op) {
+        case FilterExpression::Operator::Equal: return lv == rv;
+        case FilterExpression::Operator::NotEqual: return lv != rv;
+        case FilterExpression::Operator::Less: return lv < rv;
+        case FilterExpression::Operator::LessEqual: return lv <= rv;
+        case FilterExpression::Operator::Greater: return lv > rv;
+        case FilterExpression::Operator::GreaterEqual: return lv >= rv;
+        default: return false;
+        }
+    }
+
+    static bool compare_text(FilterExpression::Operator op, const std::string& lv, const std::string& rv) {
+        switch (op) {
+        case FilterExpression::Operator::Equal: return lv == rv;
+        case FilterExpression::Operator::NotEqual: return lv != rv;
+        case FilterExpression::Operator::Less: return lv < rv;
+        case FilterExpression::Operator::LessEqual: return lv <= rv;
+        case FilterExpression::Operator::Greater: return lv > rv;
+        case FilterExpression::Operator::GreaterEqual: return lv >= rv;
+        default: return false;
+        }
+    }
+
+    bool FilterExpression::MatchLike(const std::string& text, const std::string& pattern, char escape) {
         std::string regexPattern;
-        for (char c : pattern) {
-            if (c == '%') regexPattern += ".*";
-            else if (c == '_') regexPattern += '.';
-            else if (std::strchr(".^$|()[]*+?\\", c)) { regexPattern += '\\'; regexPattern += c; }
-            else regexPattern += c;
+        for (size_t i = 0; i < pattern.size(); ++i) {
+            char c = pattern[i];
+            bool literal = false;
+            if (escape != 0 && c == escape && i + 1 < pattern.size()) {
+                c = pattern[++i];
+                literal = true;
+            }
+            if (!literal && c == '%') {
+                regexPattern += ".*";
+            } else if (!literal && c == '_') {
+                regexPattern += '.';
+            } else if (std::strchr(".^$|()[]{}*+?\\", c)) {
+                regexPattern += '\\';
+                regexPattern += c;
+            } else {
+                regexPattern += c;
+            }
         }
         return std::regex_match(text, std::regex(regexPattern, std::regex_constants::icase));
     }
@@ -78,42 +178,29 @@ namespace DataModel
             auto rhs = cond->m_rightExpr->Evaluate(row);
 
             if (cond->m_op == Operator::Like) {
-                auto lhs_str = std::get<std::string>(lhs);  
-                auto rhs_str = std::get<std::string>(rhs);   
-                bool result = MatchLike(lhs_str, rhs_str);
+                bool result = MatchLike(like_operand_text(lhs), like_operand_text(rhs), cond->m_escape);
                 if (cond->m_negate)
                     result = !result;
                 return result;
-            } else
-            if (std::holds_alternative<double>(lhs) && std::holds_alternative<double>(rhs))
-            {
-                double lv = std::get<double>(lhs);
-                double rv = std::get<double>(rhs);
-
-                switch (cond->m_op) {
-                case Operator::Equal: return lv == rv;
-                case Operator::NotEqual: return lv != rv;
-                case Operator::Less: return lv < rv;
-                case Operator::LessEqual: return lv <= rv;
-                case Operator::Greater: return lv > rv;
-                case Operator::GreaterEqual: return lv >= rv;
-                default: return false;
-                }
-            } else
-            if (std::holds_alternative<std::string>(lhs) && std::holds_alternative<std::string>(rhs) &&  
-                (cond->m_op == Operator::Equal || cond->m_op == Operator::NotEqual))
-            {
-                auto lhs_str = std::get<std::string>(lhs);  
-                auto rhs_str = std::get<std::string>(rhs);
-                return cond->m_op == Operator::Equal ? lhs_str == rhs_str : lhs_str != rhs_str;
             }
-
-            if (lhs.index() != rhs.index()) {
-
-                return false;
+            if (std::holds_alternative<double>(lhs) && std::holds_alternative<double>(rhs)) {
+                return compare_numbers(cond->m_op, std::get<double>(lhs), std::get<double>(rhs));
             }
-
-
+            if (std::holds_alternative<std::string>(lhs) && std::holds_alternative<std::string>(rhs)) {
+                return compare_text(cond->m_op, std::get<std::string>(lhs), std::get<std::string>(rhs));
+            }
+            // A number against text. Text that reads as a number compares as one, the way SQL
+            // applies numeric affinity. Empty text is a column this row does not have, so it
+            // matches nothing; other text only differs from the number.
+            const std::string& text = std::holds_alternative<std::string>(lhs) ? std::get<std::string>(lhs)
+                                                                               : std::get<std::string>(rhs);
+            double text_number = 0.0;
+            if (parse_number_text(text, text_number)) {
+                double lv = std::holds_alternative<double>(lhs) ? std::get<double>(lhs) : text_number;
+                double rv = std::holds_alternative<double>(rhs) ? std::get<double>(rhs) : text_number;
+                return compare_numbers(cond->m_op, lv, rv);
+            }
+            return !text.empty() && cond->m_op == Operator::NotEqual;
         }
 
         switch (node->m_logic) {
@@ -135,6 +222,9 @@ namespace DataModel
         Tokenizer tk(expr);
         FilterExpression fe;
         fe.m_root = ParseExpression(tk);
+        const std::string rest = tk.Upcoming();
+        if (!rest.empty())
+            throw std::runtime_error("Unexpected \"" + rest + "\" after \"" + tk.Consumed() + "\"");
         return fe;
     }
 
@@ -157,6 +247,8 @@ namespace DataModel
 
             if (upper == "OR")
             {
+                if (tk.Upcoming().empty())
+                    throw std::runtime_error("Expected a condition after OR, but the filter ended");
                 auto right = ParseTerm(tk);
                 auto parent = std::make_unique<Node>();
                 parent->m_logic = LogicOp::Or;
@@ -190,6 +282,8 @@ namespace DataModel
 
             if (upper == "AND")
             {
+                if (tk.Upcoming().empty())
+                    throw std::runtime_error("Expected a condition after AND, but the filter ended");
                 auto right = ParseFactor(tk);
                 auto parent = std::make_unique<Node>();
                 parent->m_logic = LogicOp::And;
@@ -212,6 +306,8 @@ namespace DataModel
 
         if (tk.Match("NOT"))
         {
+            if (tk.Upcoming().empty())
+                throw std::runtime_error("Expected a condition after NOT, but the filter ended");
             auto node = std::make_unique<Node>();
             node->m_logic = LogicOp::Not;
             node->m_left = ParseFactor(tk);  // NOT applies to next factor (expression in brackets or condition)
@@ -225,7 +321,7 @@ namespace DataModel
             tk.SkipSpaces();
 
             if (tk.Peek() != ')')
-                throw std::runtime_error("Expected ')' to close expression group");
+                throw std::runtime_error("Expected \")\" to close a group, but " + describe_next(tk));
             tk.Get(); // consume ')'
 
             return node;
@@ -245,28 +341,33 @@ namespace DataModel
         // 1️ Parse left expression — can now be an arithmetic expression, not just a column
         cond->m_leftExpr = ParseArithmetic(tk);
         if (!cond->m_leftExpr)
-            throw std::runtime_error("Expected left-hand expression in condition");
+            throw std::runtime_error("Expected a condition, but " + describe_next(tk));
 
         // 2️ Parse operator
         std::string op = tk.GetOperator();
         if (op.empty()) {
             // handle case like "name NOT LIKE ...", so look for keyword "NOT"
-            std::string maybeNot = tk.GetIdentifier();
+            const std::string word = tk.GetIdentifier();
+            std::string maybeNot = word;
             std::transform(maybeNot.begin(), maybeNot.end(), maybeNot.begin(),
                 [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
 
             if (maybeNot == "NOT") {
-                std::string next = tk.GetIdentifier();
+                const std::string next_word = tk.GetIdentifier();
+                std::string next = next_word;
                 std::transform(next.begin(), next.end(), next.begin(),
                     [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
                 if (next == "LIKE") {
                     cond->m_op = Operator::Like;
                     cond->m_negate = true;  // add new flag to Condition
                 } else {
-                    throw std::runtime_error("Expected LIKE after NOT");
+                    throw std::runtime_error("Expected LIKE after NOT, but " +
+                        (next_word.empty() ? describe_next(tk) : "found \"" + next_word + "\""));
                 }
             } else {
-                throw std::runtime_error("Expected operator after column ");
+                throw std::runtime_error("Expected an operator after " +
+                    describe_operand(cond->m_leftExpr.get()) + ", but " +
+                    (word.empty() ? describe_next(tk) : "found \"" + word + "\""));
             }
         }
         else {
@@ -281,13 +382,34 @@ namespace DataModel
             else if (op == ">=")              cond->m_op = Operator::GreaterEqual;
             else if (op == "LIKE")            cond->m_op = Operator::Like;
             else
-                throw std::runtime_error("Unknown operator: " + op);
+                throw std::runtime_error(op == "<>" ? std::string("\"<>\" is not supported; use != instead")
+                                                    : "Unsupported comparison \"" + op + "\"");
         }
 
         // 3️ Parse right-hand side — can also be arithmetic or literal
         cond->m_rightExpr = ParseArithmetic(tk);
         if (!cond->m_rightExpr)
-            throw std::runtime_error("Expected right-hand expression after operator: " + op);
+            throw std::runtime_error("Expected a value after " +
+                std::string(cond->m_negate ? "NOT LIKE" : op) + ", but " + describe_next(tk));
+
+        if (cond->m_op == Operator::Like) {
+            std::string word = tk.GetWord();
+            std::string upper = word;
+            std::transform(upper.begin(), upper.end(), upper.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
+            if (upper == "ESCAPE") {
+                bool empty_string = false;
+                std::string escape = tk.GetStringLiteral(empty_string);
+                if (escape.size() != 1) {
+                    throw std::runtime_error(escape.empty()
+                        ? "ESCAPE expects a single character in quotes, but " + describe_next(tk)
+                        : "ESCAPE expects a single character, but got '" + escape + "'");
+                }
+                cond->m_escape = escape[0];
+            } else {
+                tk.PutBack(word);
+            }
+        }
 
         return cond;
     }
@@ -317,7 +439,7 @@ namespace DataModel
             {
                 auto right = ParseTermExpr(tk);
                 if (!right)
-                    throw std::runtime_error("Expected right-hand term after operator: " + op);
+                    throw std::runtime_error("Expected a value after " + op + ", but " + describe_next(tk));
 
                 auto node = std::make_unique<ExprNode>();
                 node->m_type = op == "+" ? ExprNode::Type::Add : ExprNode::Type::Sub;
@@ -348,7 +470,7 @@ namespace DataModel
             {
                 auto right = ParseFactorExpr(tk);
                 if (!right)
-                    throw std::runtime_error("Expected right-hand factor after operator: " + op);
+                    throw std::runtime_error("Expected a value after " + op + ", but " + describe_next(tk));
 
                 auto node = std::make_unique<ExprNode>();
                 node->m_type = op == "*" ? ExprNode::Type::Mul : op == "/" ? ExprNode::Type::Div : ExprNode::Type::Mod;
@@ -376,7 +498,7 @@ namespace DataModel
         {
             auto expr = ParseArithmetic(tk);
             if (!tk.Match(")"))
-                throw std::runtime_error("Expected closing parenthesis");
+                throw std::runtime_error("Expected \")\" to close a group, but " + describe_next(tk));
             return expr;
         }
 
@@ -395,7 +517,7 @@ namespace DataModel
         std::string hex = tk.GetHexNumber();
         if (!hex.empty())
         {
-            unsigned long long val = std::stoull(hex, nullptr, 16);
+            unsigned long long val = std::strtoull(hex.c_str(), nullptr, 16);
             auto node = std::make_unique<ExprNode>();
             node->m_type = ExprNode::Type::ConstantNumber;
             node->m_data = static_cast<double>(val);
@@ -408,7 +530,7 @@ namespace DataModel
         {
             auto node = std::make_unique<ExprNode>();
             node->m_type = ExprNode::Type::ConstantNumber;
-            node->m_data = std::stod(num);
+            node->m_data = std::strtod(num.c_str(), nullptr);
             return node;
         }
 
@@ -423,9 +545,13 @@ namespace DataModel
         }
 
 
+        // Nothing left to read: the caller reports what was missing.
+        std::string text = tk.GetText();
+        if (text.empty())
+            return nullptr;
         auto node = std::make_unique<ExprNode>();
         node->m_type = ExprNode::Type::ConstantString;
-        node->m_data = tk.GetText();
+        node->m_data = text;
         return node;
 
     }
@@ -452,6 +578,8 @@ namespace DataModel
         copy->m_op = cond->m_op;
         copy->m_leftExpr = CopyExprNode(cond->m_leftExpr);
         copy->m_rightExpr = CopyExprNode(cond->m_rightExpr);
+        copy->m_negate = cond->m_negate;
+        copy->m_escape = cond->m_escape;
         return copy;
     }
 

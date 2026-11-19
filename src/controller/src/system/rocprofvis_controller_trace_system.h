@@ -29,7 +29,6 @@ class Event;
 class Table;
 class EventSearchTable;
 class SystemTable;
-class Summary;
 class SummaryMetrics;
 class TopologyNode;
 
@@ -67,9 +66,6 @@ public:
     rocprofvis_result_t TableExportCSV(Table& table, Arguments& args, Future& future, 
                                        const char* path);
 
-    rocprofvis_result_t AsyncFetch(Summary& summary, Arguments& args, Future& future,
-                                   SummaryMetrics& output);
-
     rocprofvis_result_t AsyncFetch(rocprofvis_property_t property, Future& future,
                                           Array& array, uint64_t index, uint64_t count);
 
@@ -94,9 +90,8 @@ private:
     SystemTable*                                   m_event_table;
     SystemTable*                                   m_sample_table;
     EventSearchTable*                              m_search_table;
-    Summary*                                       m_summary;
     MemoryManager*                                 m_mem_mgmt;
-    TopologyNode*                                  m_topology_root;
+    TopologyNode*                                  m_topology_root;  // null until the topology loads, and after a failed load
     std::array<std::mutex, kRPVDMTableNumUsecases> m_table_mutex;
     std::string                                    m_config_path;
 

@@ -80,12 +80,14 @@ class GoogleTraceProcessor : public QueryManager
             rocprofvis_dm_event_id_t event_id,
             Future* object) override ;
 
+        bool EventSummaryInSqlite() const override { return false; }
+
         rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
             rocprofvis_dm_timestamp_t end,
             rocprofvis_dm_charptr_t new_db_path,
             Future* future) override {
             ShowProgress(0, "Trimming is not supported for Perfetto traces!", kRPVDbError, future);
-            return future->SetPromise( kRocProfVisDmResultNotSupported);
+            return kRocProfVisDmResultNotSupported;
         };
 
     static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
@@ -145,8 +147,9 @@ class GoogleTraceProcessor : public QueryManager
         // ---------------------------------- Helpers ----------------------------------------
         rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t& result) override { result = id; return kRocProfVisDmResultSuccess; };
         rocprofvis_dm_track_category_t GetRegionTrackCategory() override { return kRocProfVisDmRegionTrack; }
-        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) override;
+        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_track_descriptor_t& track_ids_indices) override;
         bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
+        std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) override;
 
      private:
 

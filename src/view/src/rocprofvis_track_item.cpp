@@ -46,28 +46,33 @@ CompareSourceColor(const CompareSourceInfo& source, SettingsManager& settings)
     return wheel[idx % wheel.size()];
 }
 
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info)
+static float
+CompareSourceBadgeWidth(const CompareSourceInfo& source)
 {
-    if(!track_info || track_info->compare_source.id.empty())
+    if(source.id.empty())
     {
         return 0.0f;
     }
-    return ImGui::CalcTextSize(track_info->compare_source.id.c_str()).x +
+    return ImGui::CalcTextSize(source.id.c_str()).x +
            2.0f * ImGui::GetStyle().FramePadding.x;
 }
 
-void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+float
+CompareSourceBadgeWidth(const TrackInfo* track_info)
 {
-    if(!track_info || track_info->compare_source.id.empty())
+    return track_info ? CompareSourceBadgeWidth(track_info->compare_source) : 0.0f;
+}
+
+void
+RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings)
+{
+    if(source.id.empty())
     {
         return;
     }
 
-    const CompareSourceInfo& source = track_info->compare_source;
-    ImU32                    color  = CompareSourceColor(source, settings);
-    float                    width  = CompareSourceBadgeWidth(track_info);
+    ImU32 color = CompareSourceColor(source, settings);
+    float width = CompareSourceBadgeWidth(source);
 
     ImGui::PushID("compare_source_badge");
     ImGui::PushStyleColor(ImGuiCol_Button, color);
@@ -90,6 +95,15 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
         SetTooltipStyled("%s", tooltip.c_str());
     }
     ImGui::PopID();
+}
+
+void
+RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+{
+    if(track_info)
+    {
+        RenderCompareSourceBadge(track_info->compare_source, settings);
+    }
 }
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,
@@ -123,6 +137,8 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
 , m_node_color_index(0)
 , m_node_display_index(0)
 , m_node_pill(nullptr)
+, m_type_color_index(std::nullopt)
+, m_process_color_index(std::nullopt)
 , m_options(nullptr)
 , m_timeline_track_options(track_options)
 , m_selected(false)
@@ -140,6 +156,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
     m_name           = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetNodeColor(track_info);
+    SetDecoratorColors(track_info);
     SetDefaultPillLabel(track_info);
 
     EventManager::EventHandler selected_changed_handler =
@@ -380,6 +397,11 @@ TrackItem::RenderMetaArea()
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
+        // The strip widens the left gutter, so the grip and everything after it
+        // shift right instead of overlapping it.
+        const float decorator_width = RenderDecorator();
+        m_reorder_grip_width        = DEFAULT_GRIP_WIDTH + decorator_width;
+
         // handle mouse click
         ImVec2 container_pos  = ImGui::GetWindowPos() + ImVec2(m_reorder_grip_width, 0);
         ImVec2 container_size = ImGui::GetWindowSize();
@@ -407,7 +429,7 @@ TrackItem::RenderMetaArea()
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
 
         ImGui::SetCursorPos(
-            ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
+            ImVec2(decorator_width + (DEFAULT_GRIP_WIDTH - grid_icon_width) / 2,
                    (container_size.y - ImGui::GetTextLineHeightWithSpacing()) / 2));
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
 
@@ -725,16 +747,16 @@ TrackItem::FetchHelper()
 void
 TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    // Get Processor (device) type label from using track's agent_or_pid, ex: "GPU0".
-    // The associated device in topology is unreliable, so we use agent_or_pid to find the
-    // device. This may be empty for some tracks.
-    std::string       device_type_label;
-    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
-    if(device_info)
+    // Processor type label from the track's agent_or_pid, ex: "GPU0". The
+    // processor the topology associates with the track is unreliable here, hence
+    // the id lookup. Stays empty when no processor matches.
+    std::string          device_type_label;
+    const ProcessorInfo* processor_info = tdm.GetProcessor(track_info->agent_or_pid);
+    if(processor_info)
     {
-        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+        tdm.GetProcessorTypeLabel(*processor_info, device_type_label);
     }
     Pill* pill = AddPill(true, false);
     switch(track_info->topology.type)
@@ -762,9 +784,12 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         }
         case TrackInfo::TrackType::InstrumentedThread:
         {
+            const ProcessInfo* process_info =
+                tdm.GetProcess(track_info->topology.process_id);
             if(const ThreadInfo* thread_info =
-                   tdm.GetInstrumentedThread(track_info->topology.id.value);
-               thread_info && thread_info->tid == track_info->topology.process_id)
+                   tdm.GetThread(track_info->topology.id.value,
+                                 ThreadInfo::Kind::kInstrumented);
+               thread_info && process_info && thread_info->tid == process_info->pid)
             {
                 pill->Activate();
                 pill->SetLabel("MAIN THREAD");
@@ -795,9 +820,9 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             // Get product label from topology model, ex: "AMD Radeon RX 6800 XT"
-            if(device_info)
+            if(processor_info)
             {
-                pill->SetTooltip(device_info->product_name);
+                pill->SetTooltip(processor_info->product_name);
             }
             break;
         }
@@ -813,9 +838,11 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 void
 TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    std::string process_id_str = std::to_string(track_info->topology.process_id);
+    const ProcessInfo* process_info = tdm.GetProcess(track_info->topology.process_id);
+    std::string        process_id_str =
+        process_info ? std::to_string(process_info->pid) : std::string("N/A");
 
     bool show_process_id = tdm.ProcessCount() > 1;
 
@@ -833,18 +860,18 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::SampledThread:
         {
             std::string process_name_path;
-            if(const ProcessInfo* process_info =
-                   tdm.GetProcess(track_info->topology.process_id);
-               process_info)
+            if(process_info)
             {
                 process_name_path += process_info->command;
             }
 
-            std::string       thread_id;
-            const ThreadInfo* thread_info =
+            std::string             thread_id;
+            const ThreadInfo::Kind  kind =
                 (track_info->topology.type == TrackInfo::TrackType::SampledThread)
-                    ? tdm.GetSampledThread(track_info->topology.id.value)
-                    : tdm.GetInstrumentedThread(track_info->topology.id.value);
+                    ? ThreadInfo::Kind::kSampled
+                    : ThreadInfo::Kind::kInstrumented;
+            const ThreadInfo* thread_info =
+                tdm.GetThread(track_info->topology.id.value, kind);
             if(thread_info)
             {
                 thread_id = std::to_string(thread_info->tid);
@@ -945,7 +972,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 void
 TrackItem::SetNodeColor(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
     // Node decorations only make sense on multi-node traces; a single-node
     // trace looks exactly as it did before this feature.
@@ -972,6 +999,67 @@ TrackItem::SetNodeColor(const TrackInfo* track_info)
     m_node_pill->SetAccentColor(m_node_color_index);
     m_node_pill->SetTooltip("Node " + std::to_string(m_node_display_index) + ": " +
                             m_node_name);
+}
+
+void
+TrackItem::SetDecoratorColors(const TrackInfo* track_info)
+{
+    if(track_info->topology.type != TrackInfo::TrackType::Unknown)
+    {
+        m_type_color_index = static_cast<size_t>(track_info->topology.type);
+    }
+
+    const ProcessInfo* process = m_data_provider.DataModel().GetTopology().GetProcess(
+        track_info->topology.process_id);
+    if(process && process->display_index > 0)
+    {
+        m_process_color_index = process->display_index - 1;
+    }
+}
+
+float
+TrackItem::RenderDecorator()
+{
+    std::optional<size_t> color_index;
+    bool                  reverse_wheel = false;
+    switch(m_settings.GetTrackDecoratorMode())
+    {
+        case TrackDecoratorMode::kTrackType:
+        {
+            color_index = m_type_color_index;
+            break;
+        }
+        case TrackDecoratorMode::kProcess:
+        {
+            color_index   = m_process_color_index;
+            reverse_wheel = true;
+            break;
+        }
+        default:
+        {
+            return 0.0f;
+        }
+    }
+
+    // Every track reserves the column, including tracks with no color, so the
+    // labels stay aligned.
+    const float width = static_cast<float>(m_settings.GetTrackDecoratorWidth());
+
+    // Resolved per frame so the strip follows theme changes. Process ranks walk
+    // the wheel from the end: node pills walk it from the start, and the first
+    // node and the first process would otherwise share a swatch.
+    const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
+    if(color_index && !wheel.empty())
+    {
+        const size_t slot = *color_index % wheel.size();
+        const size_t index =
+            reverse_wheel ? (wheel.size() - 1 - slot) : slot;
+        const ImVec2 strip_min = ImGui::GetWindowPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            strip_min, strip_min + ImVec2(width, ImGui::GetWindowSize().y),
+            wheel[index]);
+    }
+    return width;
 }
 
 Pill*

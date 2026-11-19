@@ -6,9 +6,13 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "model/rocprofvis_model_types.h"
+#include "model/rocprofvis_tables_model.h"
 #include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
@@ -28,6 +32,8 @@ enum class RequestType
     kFetchTrackSampleTable,
     kFetchEventSearchTable,
     kFetchSummaryKernelInstanceTable,
+    kFetchSummaryMemoryInstanceTable,
+    kFetchSummaryThreadInstanceTable,
     kFetchEventExtendedData,
     kFetchEventFlowDetails,
     kFetchEventCallStack,
@@ -46,6 +52,7 @@ enum class RequestType
     kFetchMetrics,
     kFetchMetricPivotTable,
     kFetchPcSampling,
+    kExecuteScript,
 };
 
 enum class RequestState
@@ -76,6 +83,24 @@ public:
                (static_cast<uint64_t>(track_id));
     }
 
+    static constexpr uint8_t EVENT_NODE_OFFSET_BITS = 44;
+    static constexpr uint8_t EVENT_OP_OFFSET_BITS   = EVENT_NODE_OFFSET_BITS + 8;
+    static_assert(EVENT_OP_OFFSET_BITS + 4 == REQUEST_TYPE_OFFSET_BITS,
+                  "event op must sit just below the request type");
+
+    // Packs the event's op, node and the low 44 bits of its database id, so fetches
+    // for different events get different ids. Database ids are far narrower than
+    // 44 bits in practice.
+    static uint64_t MakeEventDataRequestId(uint64_t event_uuid, RequestType request_type)
+    {
+        TraceEventId id;
+        id.uuid = event_uuid;
+        return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
+               (static_cast<uint64_t>(id.bitfield.event_op) << EVENT_OP_OFFSET_BITS) |
+               (static_cast<uint64_t>(id.bitfield.event_node) << EVENT_NODE_OFFSET_BITS) |
+               (id.bitfield.event_id & ((1ULL << EVENT_NODE_OFFSET_BITS) - 1));
+    }
+
     static uint64_t MakeRequestId(RequestType request_type)
     {
         return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
@@ -88,6 +113,24 @@ public:
         return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
                (static_cast<uint64_t>(client_id) & ((1ULL << REQUEST_TYPE_OFFSET_BITS) - 1));
     }
+
+    /*
+     * Client ids below this are spoken for by name and must never be handed out
+     * dynamically. Three users are already load-bearing: 0 means "the UI" to
+     * TableRequestParams, which routes to the shared request ids and the model
+     * slots the tabs render from; 1 and 2 are COMPARE_CLIENT_ID, which keep the
+     * two compare sources' table requests apart; and
+     * DataProvider::ASSISTANT_CLIENT_ID is a compile-time constant because the
+     * assistant's request ids are derived from it at namespace scope.
+     *
+     * Two callers on one id share a request slot for every RequestType both use
+     * - and the assistant and the compute widgets both fetch metrics - plus, for
+     * metrics, a ComputeDataModel store, so each would clear the other's values.
+     * That is as true of two named callers as of a widget handed a named id, so
+     * a new named client takes an id nobody else uses. Keep the band wide enough
+     * that naming another does not require touching the generator.
+     */
+    static constexpr uint64_t FIRST_DYNAMIC_CLIENT_ID = 16;
 };
 
 // Singleton class for creating unique IDs
@@ -100,21 +143,22 @@ public:
         return instance;
     }
 
+    // Hands out a client id no reserved caller answers to. Wraps back to the
+    // start of the dynamic range rather than to zero, so a long-running session
+    // cannot eventually issue a reserved id.
     uint64_t GenerateId()
     {
         uint64_t id = m_current_id;
         m_current_id++;
         if(m_current_id > (1ULL << RequestIdBuilder::REQUEST_TYPE_OFFSET_BITS) - 1)
         {
-            // Wrap around if we exceed the maximum client ID that can be encoded in the
-            // request ID
-            m_current_id = 0;
+            m_current_id = RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID;
         }
         return id;
     }
 
 private:
-    IdGenerator() : m_current_id(0) {}
+    IdGenerator() : m_current_id(RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID) {}
     uint64_t m_current_id;
 };
 
@@ -157,6 +201,8 @@ public:
 class TableRequestParams : public RequestParamsBase
 {
 public:
+    static constexpr uint64_t INFER_REQUEST_ID = 0;
+
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
     double   m_start_ts;           // starting time stamp of the data in the table
     double   m_end_ts;             // ending time stamp of the data in the table
@@ -164,11 +210,21 @@ public:
     uint64_t m_req_row_count;      // number of rows requested
     uint64_t m_sort_column_index;  // index of the column to sort by
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
-    std::string                        m_where;       // SQL where clause
+    std::optional<rocprofvis_dm_query_criteria_t> m_source_filter;
     std::string                        m_filter;      // CMD filter
     std::string                        m_group;
     std::string                        m_group_columns;
     std::string                        m_export_to_file_path;
+    // TablesModel slot; __kTableTypeCount means infer.
+    TableType m_view_table_type;
+    // Packed client request ID; zero means infer.
+    uint64_t m_request_id;
+
+    // Who asked. 0 is the UI, which owns the shared request ids, the shared
+    // controller tables, and the model slots the tabs render from. A non-zero
+    // client is routed to its own of each, so a background reader cannot
+    // overwrite what the user is looking at. See DataProvider::ASSISTANT_CLIENT_ID.
+    uint64_t                           m_client_id = 0;
 
 protected:
     // Constructed only via derives...
@@ -177,11 +233,13 @@ protected:
 
     TableRequestParams(
         rocprofvis_controller_table_type_t table_type, double start_ts, double end_ts,
-        const char* where, char const* filter, char const* group, char const* group_cols,
+        rocprofvis_dm_query_criteria_ptr source_filter, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string                        export_to_file_path = "")
+        std::string export_to_file_path = "",
+        TableType   view_table_type     = TableType::__kTableTypeCount,
+        uint64_t    request_id          = INFER_REQUEST_ID)
     : m_table_type(table_type)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
@@ -189,11 +247,13 @@ protected:
     , m_req_row_count(req_row_count)
     , m_sort_column_index(sort_column_index)
     , m_sort_order(sort_order)
-    , m_where(where)
+    , m_source_filter(source_filter ? std::make_optional(*source_filter) : std::nullopt)
     , m_filter(filter)
     , m_group(group)
     , m_group_columns(group_cols)
     , m_export_to_file_path(export_to_file_path)
+    , m_view_table_type(view_table_type)
+    , m_request_id(request_id)
     {}
     TableRequestParams() = default;
 };
@@ -210,14 +270,16 @@ public:
     TrackTableRequestParams(
         rocprofvis_controller_table_type_t table_type,
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
-        const char* where, char const* filter, char const* group, char const* group_cols,
+        rocprofvis_dm_query_criteria_ptr source_filter, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string                        export_to_file_path = "")
-    : TableRequestParams(table_type, start_ts, end_ts, where, filter, group, group_cols, start_row,
+        std::string                        export_to_file_path = "",
+        TableType view_table_type = TableType::__kTableTypeCount,
+        uint64_t  request_id      = INFER_REQUEST_ID)
+    : TableRequestParams(table_type, start_ts, end_ts, source_filter, filter, group, group_cols, start_row,
                          req_row_count, sort_column_index, sort_order,
-                         export_to_file_path)
+                         export_to_file_path, view_table_type, request_id)
     , m_track_ids(track_ids)
     {}
     TrackTableRequestParams() = default;
@@ -241,13 +303,13 @@ public:
     EventSearchRequestParams(
         rocprofvis_controller_table_type_t                  table_type,
         const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, const char* where, bool include_substrings, bool include_category,
+        double end_ts, rocprofvis_dm_query_criteria_ptr source_filter, bool include_substrings, bool include_category,
         bool partial_matching, const std::vector<std::string> string_table_filters = {},
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
         std::string                        export_to_file_path = "")
-    : TableRequestParams(table_type, start_ts, end_ts, where, "", "", "", start_row,
+    : TableRequestParams(table_type, start_ts, end_ts, source_filter, "", "", "", start_row,
                          req_row_count, sort_column_index, sort_order,
                          export_to_file_path)
     , m_op_types(op_types)
@@ -399,6 +461,7 @@ struct RequestInfo
     std::shared_ptr<RequestParamsBase>    custom_params;  // custom request parameters
     std::chrono::steady_clock::time_point request_time;  // time when the request was made
     uint64_t                              response_code;  // response code for the request
+    std::string                           error_message;  // message the controller left for the user, if any
     uint64_t                              request_progress; // progress percentage of the request 
 };
 

@@ -4,6 +4,7 @@
 #include "rocprofvis_settings_panel.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -12,6 +13,7 @@
 #include "widgets/rocprofvis_widget.h"
 
 #include <algorithm>
+#include <string>
 
 // Layout constants
 constexpr float kCategorywidth            = 150.0f;
@@ -20,6 +22,7 @@ constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
 constexpr float kLogViewerInputWidth      = 160.0f;
+constexpr float kSliderWidth              = 240.0f;
 
 // Sample duration shown in the time-format preview: 12m 34.123456789s. Uses zero
 // hours so Condensed Timecode (which trims leading zero hour/minute groups)
@@ -55,6 +58,10 @@ SettingsPanel::Show()
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    DiscardAssistantTokenEdits();
+    m_assistant_show_token = false;
+#endif
 }
 
 void
@@ -66,13 +73,17 @@ SettingsPanel::Render()
         m_should_open = false;
     }
 
-    if(ImGui::IsPopupOpen("Settings"))
+    bool const is_open = ImGui::IsPopupOpen("Settings");
+    AppWindow::GetInstance()->SetFileDialogSelfManaged(is_open);
+
+    if(is_open)
     {
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
 
+        bool should_close = false;
         if(ImGui::BeginPopupModal("Settings", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize |
                                       ImGuiWindowFlags_NoSavedSettings))
@@ -84,17 +95,27 @@ SettingsPanel::Render()
             {
                 m_category = Display;
             }
+            if(ImGui::Selectable("Tracks", m_category == Tracks))
+            {
+                m_category = Tracks;
+            }
             if(ImGui::Selectable("Units", m_category == Units))
             {
                 m_category = Units;
             }
-            if(ImGui::Selectable("Other", m_category == Other))
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+            if(ImGui::Selectable("Assistant", m_category == Assistant))
             {
-                m_category = Other;
+                m_category = Assistant;
             }
+#endif
             if(ImGui::Selectable("Hotkeys", m_category == Hotkeys))
             {
                 m_category = Hotkeys;
+            }
+            if(ImGui::Selectable("Other", m_category == Other))
+            {
+                m_category = Other;
             }
             ImGui::EndChild();
 
@@ -109,6 +130,11 @@ SettingsPanel::Render()
                     RenderDisplayOptions();
                     break;
                 }
+                case Tracks:
+                {
+                    RenderTrackOptions();
+                    break;
+                }
                 case Units:
                 {
                     RenderUnitOptions();
@@ -119,6 +145,13 @@ SettingsPanel::Render()
                     RenderOtherSettings();
                     break;
                 }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                case Assistant:
+                {
+                    RenderAssistantSettings();
+                    break;
+                }
+#endif
                 case Hotkeys:
                 {
                     RenderHotkeySettings();
@@ -144,14 +177,31 @@ SettingsPanel::Render()
                         ResetDisplayOptions();
                         break;
                     }
+                    case Tracks:
+                    {
+                        ResetTrackOptions();
+                        break;
+                    }
                     case Units:
                     {
                         ResetUnitOptions();
                         break;
                     }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                    case Assistant:
+                    {
+                        ResetAssistantOptions();
+                        break;
+                    }
+#endif
                     case Hotkeys:
                     {
                         ResetHotkeySettings();
+                        break;
+                    }
+                    case Other:
+                    {
+                        ResetOtherSettings();
                         break;
                     }
                 }
@@ -162,19 +212,22 @@ SettingsPanel::Render()
                 ImGui::CalcTextSize("Cancel").x + 2 * ImGui::GetStyle().FramePadding.x;
             ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
                                  ImGui::GetStyle().ItemSpacing.x - 2 * button_width);
-            if(ImGui::Button("OK", ImVec2(button_width, 0)))
+            if(AccentButton("OK", ImVec2(button_width, 0)))
             {
                 m_usersettings.display_settings.font_size_index =
                     m_pending_font_size_index;
 
                 m_settings_changed   = true;
                 m_settings_confirmed = true;
-                m_should_open        = false;
+                should_close         = true;
                 if(m_hotkeys_changed)
                 {
                     m_settings.SaveHotkeySettings();
                     m_hotkeys_changed = false;
                 }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                ApplyAssistantTokenEdits();
+#endif
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -189,7 +242,15 @@ SettingsPanel::Render()
                     m_hotkeys_changed = false;
                 }
                 m_settings_changed = true;
-                m_should_open      = false;
+                should_close       = true;
+            }
+            AppWindow::GetInstance()->RenderFileDialog();
+            if(should_close)
+            {
+                m_should_open = false;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                DiscardAssistantTokenEdits();
+#endif
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
@@ -263,7 +324,7 @@ SettingsPanel::RenderDisplayOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Font Size");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(240.0f);
+    ImGui::SetNextItemWidth(kSliderWidth);
     if(ImGui::SliderInt("##font_size", &font_size, min_size, max_size, "%d pt"))
     {
         m_pending_font_size_index = m_fonts.GetFontSizeIndex(static_cast<float>(font_size));
@@ -284,14 +345,61 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::Spacing();
         ImGui::SameLine();
         ImGui::PushFont(preview_font, preview_size);
+        const char* preview_text = m_fonts.TrademarkText("AMD ROCm\u2122 Optiq");
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
-            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize("AMD ROCm(TM) Optiq") +
+            ImGui::GetCursorScreenPos() + ImGui::CalcTextSize(preview_text) +
                 ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
             ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)),
             style.FrameRounding);
-        ImGui::Text("AMD ROCm(TM) Optiq");
+        ImGui::TextUnformatted(preview_text);
         ImGui::PopFont();
+    }
+}
+
+void
+SettingsPanel::RenderTrackOptions()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    ImGui::TextUnformatted("Decorator");
+    ImGui::Separator();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Color by");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Track type").x + 2 * style.FramePadding.x +
+                            ImGui::GetFrameHeightWithSpacing());
+    int decorator_index = static_cast<int>(m_usersettings.track_settings.decorator);
+    // Options must match TrackDecoratorMode
+    PushComboStyles();
+    if(ImGui::Combo("##track_decorator", &decorator_index, "None\0Track type\0Process\0\0"))
+    {
+        m_usersettings.track_settings.decorator =
+            static_cast<TrackDecoratorMode>(decorator_index);
+        m_settings_changed = true;
+    }
+    PopComboStyles();
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Color a strip on the left edge of each track by its type or by "
+                         "its process.");
+    }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Width");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kSliderWidth);
+    if(ImGui::SliderInt("##track_decorator_width",
+                        &m_usersettings.track_settings.decorator_width,
+                        TRACK_DECORATOR_WIDTH_MIN, TRACK_DECORATOR_WIDTH_MAX, "%d px",
+                        ImGuiSliderFlags_AlwaysClamp))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Width of the track decorator strip.");
     }
 }
 
@@ -351,6 +459,30 @@ SettingsPanel::RenderUnitOptions()
 void
 SettingsPanel::RenderOtherSettings()
 {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::TextUnformatted("Storage");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Remote trace location");
+    ImGui::SameLine();
+    if(InputTextWithClear(
+           "remote_cache_path", m_usersettings_default.remote_cache_path.c_str(),
+           m_usersettings.remote_cache_path,
+           m_settings.GetFontManager().GetFont(FontType::kIcon),
+           m_settings.GetColor(Colors::kBgMain), style,
+           ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Browse").x -
+               2.0f * style.FramePadding.x - style.ItemSpacing.x)
+           .second)
+    {
+        m_usersettings.remote_cache_path.clear();
+    }
+    ImGui::SameLine();
+    if(ImGui::Button("Browse"))
+    {
+        AppWindow::GetInstance()->ShowPathPickerDialog(
+            "Chose Directory", m_usersettings.remote_cache_path,
+            [this](std::string path) { m_usersettings.remote_cache_path = path; });
+    }
     ImGui::TextUnformatted("Closing options");
     ImGui::Separator();
     ImGui::AlignTextToFramePadding();
@@ -380,7 +512,6 @@ SettingsPanel::RenderOtherSettings()
             std::clamp(m_usersettings.log_viewer_max_entries, LOG_VIEWER_MAX_ENTRIES_MIN,
                        LOG_VIEWER_MAX_ENTRIES_MAX);
     }
-
     m_settings_changed = true;
 }
 
@@ -390,6 +521,13 @@ SettingsPanel::ResetDisplayOptions()
     m_usersettings.display_settings = m_usersettings_default.display_settings;
     m_pending_font_size_index       = m_usersettings_default.display_settings.font_size_index;
     m_settings_changed              = true;
+}
+
+void
+SettingsPanel::ResetTrackOptions()
+{
+    m_usersettings.track_settings = m_usersettings_default.track_settings;
+    m_settings_changed            = true;
 }
 
 void
@@ -660,6 +798,17 @@ SettingsPanel::ResetHotkeySettings()
 {
     HotkeyManager::GetInstance().ResetAllBindings();
     m_hotkeys_changed = true;
+}
+
+void
+SettingsPanel::ResetOtherSettings()
+{
+    m_usersettings.remote_cache_path    = m_usersettings_default.remote_cache_path;
+    m_usersettings.dont_ask_before_exit = m_usersettings_default.dont_ask_before_exit;
+    m_usersettings.dont_ask_before_tab_closing =
+        m_usersettings_default.dont_ask_before_tab_closing;
+    m_usersettings.log_viewer_max_entries = m_usersettings_default.log_viewer_max_entries;
+    m_settings_changed                    = true;
 }
 
 void

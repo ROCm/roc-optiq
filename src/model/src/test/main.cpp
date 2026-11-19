@@ -278,6 +278,7 @@ int main(int argc, char** argv)
                                                 if(track_category == rocprofvis_dm_track_category_t::kRocProfVisDmRegionTrack ||
                                                    track_category == rocprofvis_dm_track_category_t::kRocProfVisDmKernelDispatchTrack ||
                                                    track_category == rocprofvis_dm_track_category_t::kRocProfVisDmMemoryAllocationTrack ||
+                                                    track_category == rocprofvis_dm_track_category_t::kRocProfVisDmHipEventTrack ||
                                                     track_category == rocprofvis_dm_track_category_t::kRocProfVisDmMemoryCopyTrack)
                                                     {
                                                         int64_t duration = rocprofvis_dm_get_property_as_int64(slice, kRPVDMEventDurationInt64Indexed, j);

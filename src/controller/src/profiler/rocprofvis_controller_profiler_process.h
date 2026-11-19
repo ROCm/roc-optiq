@@ -6,6 +6,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_profiler_executor.h"
+#include "rocprofvis_controller_profiler_scrape.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -62,9 +63,13 @@ public:
     rocprofvis_controller_object_type_t GetType(void) final;
 
     rocprofvis_result_t SetTool(rocprofvis_profiler_tool_t tool);
+    // Selects the scrape rules with the tool. A flat config (no stages) carries
+    // it here; a staged config carries it on each stage.
+    rocprofvis_result_t SetOperation(rocprofvis_profiler_operation_t operation);
     rocprofvis_result_t SetToolDirectory(char const* directory);
     rocprofvis_result_t SetOutputDirectory(char const* path);
     rocprofvis_result_t SetWorkingDirectory(char const* path);
+    rocprofvis_result_t SetPythonEnvironment(char const* path);
     rocprofvis_result_t AddEnvVar(char const* name, char const* value);
     rocprofvis_result_t AddProfilerArg(char const* arg);
     rocprofvis_result_t SetConnectionLocal();
@@ -72,7 +77,26 @@ public:
                                          int port, char const* identity_file,
                                          char const* remote_stage_dir);
 
+    // Stages run in the order added. A config with none runs its flat
+    // tool/argv/env/cwd as a single stage, which is what every caller does
+    // today, so the one-element case stays the existing code path.
+    rocprofvis_result_t AddStage(ProfilerStageSpec const& stage);
+    // Overrides the key the rule table would otherwise pick for the pipeline.
+    rocprofvis_result_t SetArtifactKey(char const* key);
+
+    std::vector<ProfilerStageSpec> const& GetStages() const { return m_stages; }
+    std::string const& GetArtifactKey() const { return m_artifact_key; }
+
+    /*
+     * Overwrite the per-child fields so this config describes one stage's
+     * process, leaving connection settings alone - those belong to the
+     * pipeline, not to a stage. `resolved_tool_path` comes from the pipeline's
+     * pre-flight resolution so a stage is never resolved twice.
+     */
+    void ApplyStage(ProfilerStageSpec const& stage, std::string const& resolved_tool_path);
+
     rocprofvis_profiler_tool_t GetTool() const { return m_tool; }
+    rocprofvis_profiler_operation_t GetOperation() const { return m_operation; }
     std::string const& GetToolDirectory() const { return m_tool_directory; }
 
     // Local absolute path for argv[0]. Must succeed before exec.
@@ -86,14 +110,27 @@ public:
     // child exit 126. Remote cwd cannot be checked from here.
     rocprofvis_result_t ValidateWorkingDirectory() const;
 
+    // Local: the venv is absolute and has bin/activate. Remote: absolute only,
+    // since the remote filesystem cannot be checked from here. Windows local
+    // launches ignore the venv, so it is not checked there.
+    rocprofvis_result_t ValidatePythonEnvironment(bool remote) const;
+
     // argv[0]; empty until ResolveToolPath or ResolveToolPathRemote succeeds.
     std::string const& GetResolvedToolPath() const { return m_resolved_tool_path; }
 
     std::string const& GetOutputDirectory() const { return m_output_directory; }
     std::string const& GetWorkingDirectory() const { return m_working_directory; }
+    std::string const& GetPythonEnvironment() const { return m_python_environment; }
 
     std::vector<std::pair<std::string, std::string>> const& GetEnvVars() const { return m_env_vars; }
     std::vector<std::string> const& GetProfilerArgv() const { return m_profiler_argv; }
+
+    // The command a launch of this config runs, for display (Cmdline::ToPreviewString),
+    // with its env composed exactly as the local or remote launch composes it. A
+    // local preview shows the inherited PATH as "$PATH". argv0 is passed in: it
+    // is what the caller resolved for display, so previewing does not repeat
+    // the filesystem search.
+    std::string GetCommandPreview(bool remote, std::string const& argv0) const;
 
     ConnectionType GetConnectionType() const { return m_connection_type; }
     SshConnectionInfo const& GetSshInfo() const { return m_ssh_info; }
@@ -101,6 +138,8 @@ public:
 private:
     // Named tool; filename comes from the tool table, never from a caller path.
     rocprofvis_profiler_tool_t m_tool;
+    // With m_tool, selects the scrape rules for a flat (no-stage) config.
+    rocprofvis_profiler_operation_t m_operation;
     std::string m_tool_directory;      // search dir only; empty = default search
     std::string m_resolved_tool_path;  // argv[0] after resolve
     // Not on argv (see BuildArgv). Unread for now; kept for a later per-stage
@@ -108,9 +147,15 @@ private:
     std::string m_output_directory;
     // Child cwd only (chdir after fork / lpCurrentDirectory / remote "cd").
     std::string m_working_directory;
+    // Python virtual environment directory; empty for none. A directory, never
+    // a command: the activation is composed here (see Cmdline).
+    std::string m_python_environment;
 
     std::vector<std::pair<std::string, std::string>> m_env_vars;
     std::vector<std::string> m_profiler_argv;
+
+    std::vector<ProfilerStageSpec> m_stages;
+    std::string                    m_artifact_key;
 
     ConnectionType    m_connection_type;
     SshConnectionInfo m_ssh_info;
@@ -126,7 +171,15 @@ public:
     bool IsRunning() override;
     std::string ReadOutput() override;
     int GetExitCode() const override;
-    bool Cancel() override;
+    CancelOutcome Cancel() override;
+
+    /*
+     * Nothing here outlives the executor: there is no worker thread, and the
+     * pipes are its own and close with it. So a child that could not be killed
+     * must not hold the run's future open - waiting on it would defer teardown
+     * for the whole remaining life of a process we have already given up on.
+     */
+    bool HasPendingTeardown() override { return false; }
 
 private:
     void CloseHandles();
@@ -145,8 +198,10 @@ private:
 
     std::atomic<bool> m_is_running;
     int m_exit_code;
+    // Serialises the pipe drain. The controller accumulates the text itself;
+    // keeping a second copy here would double a long run's output in memory
+    // for no reader.
     std::mutex m_output_mutex;
-    std::string m_output_buffer;
 };
 
 class ProfilerProcessController
@@ -167,6 +222,8 @@ public:
 
     rocprofvis_profiler_state_t GetState() const;
 
+    // Returns the whole run's output so far, so a caller that only needs the
+    // pipe emptied should use PumpOutput instead of discarding a copy of it.
     std::string GetOutput();
 
     void ClearOutput();
@@ -174,6 +231,41 @@ public:
     int GetExitCode() const;
 
     rocprofvis_result_t Cancel();
+
+    // Stages the pipeline actually ran with, so a flat config reports 1.
+    uint32_t GetStageCount() const;
+
+    rocprofvis_result_t GetStageState(uint32_t                     stage_index,
+                                      rocprofvis_profiler_state_t& out) const;
+
+    /*
+     * Index of the stage that failed, or -1 while none has. "Capture
+     * succeeded, analyze failed" leaves an expensive capture on disk that only
+     * needs the cheap stage re-run, and the UI can only offer that if it knows
+     * which stage went wrong.
+     */
+    int32_t GetFailingStage() const;
+
+    /*
+     * The pipeline's artifact - the file a successful run is understood to have
+     * produced. NotAvailable when the run finished without it being scraped,
+     * Pending while it may still arrive.
+     */
+    rocprofvis_result_t GetArtifactPath(std::string& out) const;
+
+    /*
+     * The trace file to open or download. NotSupported when this run does not
+     * produce one (a workload directory, a probe): that is not a missing file.
+     * NotAvailable when the output did not name a file, or analyze named one
+     * that is not a database. The path is already resolved against the stage
+     * working directory. `out` is left untouched unless the result is Success.
+     */
+    rocprofvis_result_t GetTraceFilePath(std::string& out) const;
+
+    rocprofvis_result_t GetScrapedValue(std::string const& key, std::string& out) const;
+
+    rocprofvis_result_t GetScrapeStatus(std::string const&                   key,
+                                        rocprofvis_profiler_scrape_status_t& out) const;
 
     // C ABI calls this just before issuing the monitor job (raw `this` in flight).
     void BeginMonitorJob();
@@ -187,12 +279,77 @@ private:
     void UpdateOutput();
     void UpdateState();
 
+    /*
+     * Build the stage list, fill its scrape rules from the rule table, and
+     * compile them.
+     *
+     * With `resolve_tools_locally`, every stage's tool is also resolved to a
+     * local path up front. That is the point of doing it here: a typo in the
+     * analyze stage's tool directory should fail before a twenty-minute capture
+     * starts, not after it. A remote launch has already resolved its own
+     * argv[0] against the remote filesystem and passes false.
+     */
+    rocprofvis_result_t PreparePipeline(bool resolve_tools_locally);
+
+    // The `_locked` suffix means m_mutex is already held. UpdateState holds it
+    // across a stage boundary so an executor swap is never observed half-done
+    // by GetOutput, so nothing on that path may re-lock.
+    rocprofvis_result_t StartStageLocked(uint32_t stage_index);
+    void                FinishStageLocked(int exit_code);
+    void                RelocateArtifactLocked(uint32_t stage_index);
+    /*
+     * Move whatever the child has written into m_output_text, without handing
+     * any of it back. The monitor job polls only to keep the pipe from filling
+     * and stalling the child, and GetOutput would copy the entire run's output
+     * under m_mutex on every tick just to have it dropped.
+     */
+    void                PumpOutput();
+    void                DrainExecutorLocked();
+    bool                ExecutorTeardownPending() const;
+    // Maps a slot's scrape status onto the getter contract: Success with the
+    // value when resolved, Pending while it may still arrive, NotAvailable once
+    // it cannot, InvalidArgument when no stage declares the key at all.
+    rocprofvis_result_t ScrapedValueLocked(std::string const& key, std::string& out) const;
+    // Remote output names files on the other host, so a relative path is joined
+    // with POSIX rules rather than this machine's filesystem.
+    bool PosixScrapePaths() const;
+
     std::unique_ptr<IProfilerExecutor> m_executor;
     std::unique_ptr<ProfilerConfig> m_config;
+    // Rebuilt per stage; the executor holds a reference only during Start.
+    std::unique_ptr<ProfilerConfig> m_stage_config;
     std::atomic<rocprofvis_profiler_state_t> m_state;
     std::string m_output_text;
     int m_exit_code;
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;
+    /*
+     * Set by Cancel before it drops m_mutex to kill the child. It makes Cancel
+     * the sole owner of the ending: UpdateState stops finalising, so the stage
+     * cannot be settled twice. Cleared again only when the child turns out to
+     * have already exited on its own, where the ending is handed back to
+     * UpdateState so the run reports the status the child really produced.
+     */
+    std::atomic<bool> m_cancel_requested{false};
+    /*
+     * Also set by Cancel, and never cleared for the rest of the run: the user
+     * has asked to stop, so no later stage may start. Separate from
+     * m_cancel_requested because the two answer different questions, and the
+     * case above is exactly where they differ - the ending goes back to
+     * UpdateState, but a stage boundary must still not advance the pipeline.
+     */
+    std::atomic<bool> m_stop_requested{false};
+
+    std::vector<ProfilerStageSpec>           m_stages;
+    std::vector<std::string>                 m_stage_tool_paths;
+    std::vector<std::string>                 m_stage_artifact_keys;
+    std::vector<rocprofvis_profiler_state_t> m_stage_states;
+    uint32_t                                 m_current_stage = 0;
+    int32_t                                  m_failing_stage = -1;
+    ProfilerScrapeEngine                     m_scrape;
+    std::string                              m_artifact_key;
+    // Banners would change the console of every single-stage run for no reason,
+    // and every caller today is single-stage.
+    bool                                     m_emit_banners = false;
 
     // Destructor waits on m_job_cv until the monitor Job is destroyed. Free the
     // bound future before (or with) the profiler; the View already does.

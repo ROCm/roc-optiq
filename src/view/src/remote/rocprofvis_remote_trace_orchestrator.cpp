@@ -23,6 +23,7 @@ RemoteTraceOrchestrator::RemoteTraceOrchestrator(
 , m_running(false)
 , m_authenticated(false)
 , m_status_message()
+, m_local_path()
 {
     m_status_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kRemoteStatusChanged),
@@ -123,7 +124,7 @@ RemoteTraceOrchestrator::BrowsePath()
     // Reuse an already connected + authenticated session: skip connect / auth
     // and browse directly on the live connection. This is the fast path for
     // folder-to-folder navigation.
-    if(m_session && m_authenticated && m_session->IsConnected())
+    if(CanReuseSession())
     {
         m_running = true;
         m_task    = Phase::Browsing;
@@ -131,9 +132,63 @@ RemoteTraceOrchestrator::BrowsePath()
         return m_phase != Phase::Failed;
     }
 
-    // No live authenticated session yet (first browse, or the previous one was
-    // torn down): run the full connect -> authenticate -> browse pipeline.
+    // No reusable session (first browse, the previous one was dropped, or it is
+    // still finishing its last phase): run the full connect -> authenticate ->
+    // browse pipeline.
     return StartBrowsing();
+}
+
+bool
+RemoteTraceOrchestrator::SetSession(std::unique_ptr<SshSession> session)
+{
+    bool adopted = false;
+    if(!m_running && session)
+    {
+        m_authenticated = session->IsConnected();
+        m_session       = std::move(session);
+        m_phase         = Phase::Idle;
+        adopted         = true;
+    }
+    return adopted;
+}
+
+bool
+RemoteTraceOrchestrator::DownloadPath()
+{
+    if(m_running)
+    {
+        return false;
+    }
+
+    if(CanReuseSession())
+    {
+        m_running = true;
+        m_task    = Phase::Executing;
+        AdvanceAfterExecute();
+        return m_phase != Phase::Failed;
+    }
+    return Start();
+}
+
+void
+RemoteTraceOrchestrator::Cancel()
+{
+    // A workflow that already ended (Done or Failed) keeps its outcome.
+    if(m_running && m_session)
+    {
+        m_session->CancelActiveOperation();
+        m_phase          = Phase::Idle;
+        m_running        = false;
+        m_status_message = "Cancelled.";
+    }
+}
+
+bool
+RemoteTraceOrchestrator::CanReuseSession()
+{
+    // A session whose last job still holds the connection is replaced rather
+    // than shared, so two jobs never use the connection at once.
+    return m_session && m_authenticated && m_session->IsConnected() && m_session->IsIdle();
 }
 
 void
@@ -225,7 +280,9 @@ RemoteTraceOrchestrator::AdvanceAfterExecute()
         m_status_message =
             std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
         m_phase = Phase::Downloading;
-        if(m_session->StartDownload() == 0)
+        m_local_path = m_uri->GetLocalResultPathString();
+        if(m_session->StartDownload(m_uri->GetRemoteResultPathString().c_str(),
+                                    m_local_path.c_str()) == 0)
         {
             Fail("Result database download could not be started.");
         }
@@ -244,9 +301,9 @@ RemoteTraceOrchestrator::AdvanceAfterDownload()
     m_running        = false;
     m_status_message = "Done.";
 
-    if(m_uri && m_on_open_file)
+    if(m_on_open_file)
     {
-        m_on_open_file(m_uri->GetLocalResultPathString());
+        m_on_open_file(m_local_path);
     }
 }
 
@@ -287,12 +344,18 @@ void
 RemoteTraceOrchestrator::Fail(const std::string& message)
 {
     spdlog::warn("[remote-trace] {}", message);
+    // A failed listing is usually a missing or unreadable folder, which leaves
+    // the connection usable, so the next BrowsePath() reuses it instead of
+    // reconnecting and asking for credentials again. After any other failure
+    // the live connection can no longer be trusted; force the next BrowsePath()
+    // to build a fresh session rather than reusing a dead one.
+    if(m_phase != Phase::Browsing)
+    {
+        m_authenticated = false;
+    }
     m_status_message = message;
     m_phase          = Phase::Failed;
     m_running        = false;
-    // The live connection (if any) can no longer be trusted; force the next
-    // BrowsePath() to build a fresh session rather than reusing a dead one.
-    m_authenticated  = false;
 }
 
 }  // namespace View

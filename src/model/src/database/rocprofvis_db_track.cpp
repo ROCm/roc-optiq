@@ -83,7 +83,7 @@ namespace DataModel
             cat = kRocProfVisDmRegionSampleTrack;
             break;
         case kRocProfVisDmOperationLaunch:
-            cat = ((QueryManager*)m_db)->GetRegionTrackCategory();
+            cat = ((SystemDatabase*)m_db)->GetRegionTrackCategory();
             break;
         case kRocProfVisDmOperationDispatch:
             cat = kRocProfVisDmKernelDispatchTrack;
@@ -93,6 +93,9 @@ namespace DataModel
             break;
         case kRocProfVisDmOperationMemoryAllocate:
             cat = kRocProfVisDmMemoryAllocationTrack;
+            break;
+        case kRocProfVisDmOperationHipEvent:
+            cat = kRocProfVisDmHipEventTrack;
             break;
         }
         return cat;

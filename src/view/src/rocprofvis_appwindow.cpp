@@ -25,6 +25,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#endif
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -41,6 +44,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 namespace RocProfVis
@@ -66,7 +70,9 @@ const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv"
 #else
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
 #endif
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
+#endif
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
@@ -122,16 +128,19 @@ AppWindow::AppWindow()
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 , m_compare_files_dialog(std::make_unique<CompareFilesDialog>(
       [this](CompareFilesDialog::FileSlot slot) { HandleCompareFileBrowse(slot); },
       [this](const std::string& first, const std::string& second) {
           OpenCompare(first, second);
       }))
+#endif
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
 , m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
 , m_use_native_file_dialog(false)
 , m_init_file_dialog(false)
+, m_file_dialog_self_managed(false)
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 , m_is_native_file_dialog_open(false)
 #endif
@@ -169,11 +178,14 @@ AppWindow::~AppWindow()
     m_profiler_launcher_dialog.reset();
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_ssh_test_dialog.reset();
+    m_ssh_file_dialog.reset();
 #endif
     AppMonitor::DestroyInstance();
 
     LogViewer::DestroyInstance();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    AssistantPanel::DestroyInstance();
+#endif
 }
 
 bool
@@ -239,6 +251,7 @@ AppWindow::Init()
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
+    ApplyPanelVisibilitySettings();
 
     m_default_padding = ImGui::GetStyle().WindowPadding;
     m_default_spacing = ImGui::GetStyle().ItemSpacing;
@@ -477,9 +490,19 @@ AppWindow::ShowConfirmationDialog(const std::string& title, const std::string& m
 }
 
 void
-AppWindow::ShowMessageDialog(const std::string& title, const std::string& message) const
+AppWindow::ShowMessageDialog(const std::string& title, const std::string& message,
+                             std::function<void()> on_close_callback) const
 {
-    m_message_dialog->Show(title, message);
+    m_message_dialog->Show(title, message, std::move(on_close_callback));
+}
+
+void
+AppWindow::CloseProjectTab(const std::string& project_id)
+{
+    if(m_tab_container)
+    {
+        m_tab_container->RemoveTab(project_id);
+    }
 }
 
 void
@@ -601,7 +624,7 @@ AppWindow::BeginAppShutdown()
     m_profiler_launcher_dialog.reset();
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_ssh_test_dialog.reset();
+    m_ssh_file_dialog.reset();
 #endif
 
     if(!m_provider_cleanup_jobs.empty())
@@ -754,6 +777,9 @@ AppWindow::Update()
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     LogViewer::GetInstance()->Poll();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    AssistantPanel::GetInstance()->Update();
+#endif
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
@@ -862,7 +888,30 @@ AppWindow::Render()
 
     if(m_main_view)
     {
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        // The assistant docks against the right edge, so the main view gets the
+        // remaining width. DockedWidth() is zero while the panel is closed, and
+        // a zero width here means "all of it".
+        //
+        // The main view goes inside this child either way, open or closed.
+        // ImGui scopes widget ids by window, so entering the child only when
+        // the panel happened to be open would give every widget in the main
+        // view a different id in each case - and table column widths, tree
+        // expansion, and scroll positions would all reset each time the user
+        // toggled the panel.
+        AssistantPanel* assistant  = AssistantPanel::GetInstance();
+        const float     dock_width = assistant->DockedWidth();
+        ImGui::BeginChild("##main_view_area", ImVec2(-dock_width, 0.0f));
         m_main_view->Render();
+        ImGui::EndChild();
+        if(dock_width > 0.0f)
+        {
+            ImGui::SameLine(0.0f, 0.0f);
+            assistant->RenderDocked();
+        }
+#else
+        m_main_view->Render();
+#endif
     }
 
     if(m_open_about_dialog)
@@ -872,14 +921,16 @@ AppWindow::Render()
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(m_ssh_test_dialog)
+    if(m_ssh_file_dialog)
     {
-        m_ssh_test_dialog->Render();
+        m_ssh_file_dialog->Render();
     }
 #endif
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     m_compare_files_dialog->Render();
+#endif
     m_settings_panel->Render();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
     if (m_profiler_launcher_dialog)
@@ -892,8 +943,6 @@ AppWindow::Render()
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
-
-    RenderFileDialog();
 
     LogViewer::GetInstance()->Render();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -911,7 +960,12 @@ AppWindow::Render()
     // render notifications last
     NotificationManager::GetInstance().Render();
 
-    RenderDisableScreen();
+    // Workaround for nesting the file dialog inside the settings panel (modal in modal)...
+    if(!m_file_dialog_self_managed)
+    {
+        // File dialog: Native - draw disabled screen, Imgui - draw dialog...
+        RenderFileDialog();
+    }
 }
 
 void
@@ -972,8 +1026,22 @@ AppWindow::RenderShutdownState()
 }
 
 void
+AppWindow::SetFileDialogSelfManaged(bool self_managed)
+{
+    m_file_dialog_self_managed = self_managed;
+}
+
+void
 AppWindow::RenderFileDialog()
 {
+    RenderDisableScreen();
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_is_native_file_dialog_open)
+    {
+        return;
+    }
+#endif
+
     if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME))
     {
         return;  // No file dialog is opened, nothing to render
@@ -1013,9 +1081,16 @@ AppWindow::RenderFileDialog()
     ImGui::PopStyleVar(3);
 }
 
+std::shared_ptr<TabContainer>
+AppWindow::GetTabContainer() const
+{
+    return m_tab_container;
+}
+
 void
 AppWindow::OpenFile(std::string file_path)
 {
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     // While the Compare dialog is up, dropped/opened files fill its slots rather than
     // opening standalone trace tabs behind the modal.
     if(m_compare_files_dialog->IsOpen())
@@ -1023,6 +1098,7 @@ AppWindow::OpenFile(std::string file_path)
         m_compare_files_dialog->AddDroppedFile(file_path);
         return;
     }
+#endif
 
     spdlog::info("Opening file: {}", file_path);
 
@@ -1058,6 +1134,7 @@ AppWindow::OpenFile(std::string file_path)
     }
 }
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 std::string
 AppWindow::MakeCompareId(const std::vector<std::string>& files)
 {
@@ -1097,6 +1174,7 @@ AppWindow::OpenCompare(const std::string& first_file, const std::string& second_
         m_projects[project->GetID()] = std::move(project);
     }
 }
+#endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 
 void
 AppWindow::RenderDisableScreen()
@@ -1145,7 +1223,14 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
-#ifdef ROCPROFVIS_DEVELOPER_MODE
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        if(ImGui::MenuItem("Open Remote..."))
+        {
+            HandleTestRemoteSSH();
+        }
+#endif
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+        // TEMPORARY (trace compare): remove guard when the feature graduates.
         if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
         {
             HandleCompareFiles();
@@ -1267,6 +1352,43 @@ AppWindow::RenderEditMenu(Project* project)
 }
 
 void
+AppWindow::ApplyPanelVisibilitySettings()
+{
+    const AppWindowSettings& settings =
+        SettingsManager::GetInstance().GetAppWindowSettings();
+
+    if(m_main_view)
+    {
+        LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
+        if(tool_bar_item)
+        {
+            tool_bar_item->m_visible = settings.show_toolbar;
+        }
+    }
+
+    if(!m_tab_container)
+    {
+        return;
+    }
+
+    for(const TabItem* tab : m_tab_container->GetTabs())
+    {
+        if(tab == nullptr)
+        {
+            continue;
+        }
+        std::shared_ptr<TraceView> trace_view =
+            std::dynamic_pointer_cast<TraceView>(tab->m_widget);
+        if(trace_view)
+        {
+            trace_view->SetAnalysisViewVisibility(settings.show_details_panel);
+            trace_view->SetSidebarViewVisibility(settings.show_sidebar);
+            trace_view->SetHistogramVisibility(settings.show_histogram);
+        }
+    }
+}
+
+void
 AppWindow::RenderViewMenu(Project* project)
 {
     (void) project;
@@ -1277,11 +1399,7 @@ AppWindow::RenderViewMenu(Project* project)
             SettingsManager::GetInstance().GetAppWindowSettings();
         if(ImGui::MenuItem("Show Tool Bar", nullptr, &settings.show_toolbar))
         {
-            LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
-            if(tool_bar_item)
-            {
-                tool_bar_item->m_visible = settings.show_toolbar;
-            }
+            ApplyPanelVisibilitySettings();
         }
 #ifndef __APPLE__
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
@@ -1298,40 +1416,38 @@ AppWindow::RenderViewMenu(Project* project)
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetAnalysisViewVisibility(
-                        settings.show_details_panel);
-            }
+            ApplyPanelVisibilitySettings();
         }
         if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetSidebarViewVisibility(settings.show_sidebar);
-            }
+            ApplyPanelVisibilitySettings();
         }
         if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
+            ApplyPanelVisibilitySettings();
+        }
+        // Compare projects have no summary, so the toggle would do nothing there.
+        bool           summary_supported = true;
+        const TabItem* active_tab        = m_tab_container->GetActiveTab();
+        if(active_tab)
+        {
+            auto active_trace_view =
+                std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                    active_tab->m_widget);
+            if(active_trace_view)
             {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetHistogramVisibility(settings.show_histogram);
+                summary_supported = active_trace_view->SummarySupported();
             }
         }
-        ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
+        ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary,
+                        summary_supported);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
                         LogViewer::GetInstance()->VisiblePtr());
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        ImGui::MenuItem("Ask Optiq", nullptr, AssistantPanel::GetInstance()->VisiblePtr());
+#endif
         ImGui::EndMenu();
     }
 }
@@ -1375,6 +1491,7 @@ AppWindow::HandleOpenFile()
         [this](std::string file_path) -> void { this->OpenFile(file_path); });
 }
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 void
 AppWindow::HandleCompareFiles()
 {
@@ -1397,6 +1514,7 @@ AppWindow::HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot)
             m_compare_files_dialog->SetFilePath(slot, file_path);
         });
 }
+#endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 
 void
 AppWindow::HandleSaveAsFile()
@@ -1519,10 +1637,10 @@ AppWindow::HandleFontChanged()
 void
 AppWindow::RenderAboutDialog()
 {
-    static constexpr const char* NAME_LABEL = "ROCm (TM) Optiq";
+    static constexpr const char* NAME_LABEL = "ROCm\u2122 Optiq";
     static constexpr const char* COPYRIGHT_LABEL =
         "Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.";
-    static constexpr const char* DOC_LABEL = "ROCm (TM) Optiq Documentation";
+    static constexpr const char* DOC_LABEL = "ROCm Optiq Documentation";
     static constexpr const char* DOC_URL =
         "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/";
     static const std::string VERSION_LABEL = []() {
@@ -1531,6 +1649,9 @@ AppWindow::RenderAboutDialog()
            << "." << ROCPROFVIS_VERSION_PATCH;
         return ss.str();
     }();
+    static constexpr const char* COMMIT_LABEL = "Commit " ROCPROFVIS_GIT_COMMIT;
+    static constexpr bool        COMMIT_UNKNOWN =
+        std::string_view(ROCPROFVIS_GIT_COMMIT) == "unknown";
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -1544,12 +1665,13 @@ AppWindow::RenderAboutDialog()
                               ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_NoMove))
     {
-        ImGui::PushFont(NULL, SettingsManager::GetInstance().GetFontManager().GetFontSize(
-                                  FontSize::kLarge));
+        FontManager& fonts = SettingsManager::GetInstance().GetFontManager();
+        ImGui::PushFont(NULL, fonts.GetFontSize(FontSize::kLarge));
 
+        const char* name_label = fonts.TrademarkText(NAME_LABEL);
         ImGui::SetCursorPosX(
-            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(NAME_LABEL).x) * 0.5f);
-        ImGui::TextUnformatted(NAME_LABEL);
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(name_label).x) * 0.5f);
+        ImGui::TextUnformatted(name_label);
         ImGui::PopFont();
 
         ImGui::Spacing();
@@ -1560,6 +1682,20 @@ AppWindow::RenderAboutDialog()
             (ImGui::GetWindowSize().x - ImGui::CalcTextSize(VERSION_LABEL.c_str()).x) *
             0.5f);
         ImGui::TextUnformatted(VERSION_LABEL.c_str());
+
+        ImGui::PushFont(NULL, SettingsManager::GetInstance().GetFontManager().GetFontSize(
+                                  FontSize::kSmall));
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(COMMIT_LABEL).x) * 0.5f);
+        ImGui::TextDisabled("%s", COMMIT_LABEL);
+        if(COMMIT_UNKNOWN)
+        {
+            ImGui::SetCursorPosX((ImGui::GetWindowSize().x -
+                                  ImGui::CalcTextSize(ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE).x) *
+                                 0.5f);
+            ImGui::TextDisabled("%s", ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE);
+        }
+        ImGui::PopFont();
 
         ImGui::Spacing();
 
@@ -1823,19 +1959,19 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, filters, config);
 }
 
-#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(ROCPROFVIS_ENABLE_REMOTE)
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 
 void
 AppWindow::HandleTestRemoteSSH()
 {
-    if(!m_ssh_test_dialog)
+    if(!m_ssh_file_dialog)
     {
-        m_ssh_test_dialog = std::make_unique<SshTestDialog>(this);
+        m_ssh_file_dialog = std::make_unique<SshFileDialog>(this);
     }
-    m_ssh_test_dialog->Show();
+    m_ssh_file_dialog->Show();
 }
 
-#endif // ROCPROFVIS_DEVELOPER_MODE && ROCPROFVIS_ENABLE_REMOTE
+#endif // ROCPROFVIS_ENABLE_REMOTE
 void
 AppWindow::UpdateStatusBar()
 {
@@ -2002,12 +2138,6 @@ AppWindow::RenderDeveloperMenu()
                                    }
                                });
         }
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-        if(ImGui::MenuItem("Open Remote...", nullptr, false))
-        {
-            HandleTestRemoteSSH();
-        }
-#endif        
         ImGui::EndMenu();
     }
 }

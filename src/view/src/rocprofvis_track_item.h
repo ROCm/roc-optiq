@@ -28,6 +28,8 @@ enum class Colors;
 
 // Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
 void
+RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings);
+void
 RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings);
 float
 CompareSourceBadgeWidth(const TrackInfo* track_info);
@@ -155,6 +157,7 @@ protected:
     void  SetDefaultPillLabel(const TrackInfo* track_info);
     void  SetMetaAreaLabel(const TrackInfo* track_info);
     void  SetNodeColor(const TrackInfo* track_info);
+    void  SetDecoratorColors(const TrackInfo* track_info);
     Pill* AddPill(bool shown = true, bool active = true);
     bool  HasSavedTrackHeight() const;
     float GetMetaAreaMinHeight() const;
@@ -201,12 +204,19 @@ protected:
     std::string m_node_name;
     Pill*       m_node_pill;
 
+    // Color-wheel slots for the strip on the meta area's left edge, one per
+    // TrackDecoratorMode. Unset when the track has no known type or process.
+    std::optional<size_t> m_type_color_index;
+    std::optional<size_t> m_process_color_index;
+
     // User configurable options.
     std::unique_ptr<TrackOptions> m_options;
     TimelineTrackOptions&         m_timeline_track_options;
 
 private:
     void RenderPills(ImVec2 region);
+    // Gutter reserved for the strip. 0 when the decorator is off.
+    float RenderDecorator();
 
     std::vector<std::unique_ptr<Pill>> m_pills;
     bool                               m_selected;

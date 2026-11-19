@@ -21,6 +21,13 @@ void
 RocWidget::Render()
 {}
 
+TabItem
+RocWidget::CreateTabItem(const std::string& label, const std::string& id,
+                         std::shared_ptr<RocWidget> widget, bool can_close)
+{
+    return TabItem{label, id, widget, can_close};
+}
+
 std::string
 RocWidget::GenUniqueName(std::string name)
 {
@@ -91,10 +98,10 @@ PopUpStyle::PushPopupStyles()
 }
 
 void
-PopUpStyle::CenterPopup()
+PopUpStyle::CenterPopup(ImGuiCond cond)
 {
     ImVec2 center_pos = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center_pos, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowPos(center_pos, cond, ImVec2(0.5f, 0.5f));
 }
 
 void

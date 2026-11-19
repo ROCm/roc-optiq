@@ -3,13 +3,11 @@
 
 #include "rocprofvis_ai_actions.h"
 
-#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <memory>
 
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
@@ -313,6 +311,25 @@ OptiqActions::ListTabs() const
     return names;
 }
 
+std::vector<std::string>
+OptiqActions::ListTabIds() const
+{
+    std::vector<std::string> ids;
+    AppWindow*               app = AppWindow::GetInstance();
+    if(app == nullptr || !app->GetTabContainer())
+    {
+        return ids;
+    }
+    for(const TabItem* tab : app->GetTabContainer()->GetTabs())
+    {
+        if(tab != nullptr)
+        {
+            ids.push_back(tab->m_id);
+        }
+    }
+    return ids;
+}
+
 std::string
 OptiqActions::ActiveTab() const
 {
@@ -339,48 +356,25 @@ OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
     // container that owns the tabs; the details panel resolves its inner tabs
     // through the same call.
     std::shared_ptr<TabContainer> container = app->GetTabContainer();
-    const TabItem*                match    = container->FindTabByLabel(name);
+    const TabItem*                match     = nullptr;
+    for(const TabItem* tab : container->GetTabs())
+    {
+        if(tab != nullptr && tab->m_id == name)
+        {
+            match = tab;
+            break;
+        }
+    }
+    if(match == nullptr)
+    {
+        match = container->FindTabByLabel(name);
+    }
     if(match == nullptr)
     {
         return false;
     }
-
-    // File names repeat across run directories, and the container returns the
-    // first tab carrying a label, so asking for the label already in front
-    // means the next tab that shares it.
-    const std::vector<const TabItem*> tabs  = container->GetTabs();
-    const std::string                 label = Core::String::to_lower_copy(match->m_label);
-    const size_t first =
-        static_cast<size_t>(std::find(tabs.begin(), tabs.end(), match) - tabs.begin());
-    const bool advance  = match == container->GetActiveTab();
-    size_t     position = first;
-    bool       shared   = false;
-    for(size_t step = 1; step < tabs.size(); ++step)
-    {
-        const size_t   at    = (first + step) % tabs.size();
-        const TabItem* other = tabs[at];
-        if(other == nullptr || Core::String::to_lower_copy(other->m_label) != label)
-        {
-            continue;
-        }
-        shared = true;
-        if(advance && position == first && other->m_enabled)
-        {
-            match    = other;
-            position = at;
-        }
-    }
-
     selected_id    = match->m_id;
     selected_label = match->m_label;
-    // A shared label gets its place in the tab bar so the tabs can be told
-    // apart. Not the id: it is the trace's full path, and this goes to the
-    // model's endpoint.
-    if(shared)
-    {
-        selected_label += " (tab " + std::to_string(position + 1) + " of " +
-                          std::to_string(tabs.size()) + ")";
-    }
     container->SetActiveTab(match->m_id);
     return true;
 }

@@ -103,15 +103,30 @@ JoinStoredToken(const std::string& origin, const std::string& token)
 }
 
 // A value written before origins were recorded has no line break: it is all
-// key, and its origin comes back empty.
+// key, and its origin comes back empty. Surrounding whitespace is skipped,
+// because such a key may have been pasted with a trailing newline, which would
+// otherwise read as the separator with the key on the origin's side of it.
 void
 SplitStoredToken(const std::string& stored, std::string& origin_out,
                  std::string& token_out)
 {
-    const size_t separator  = stored.find(ASSISTANT_TOKEN_ORIGIN_SEPARATOR);
-    const bool   has_origin = separator != std::string::npos;
-    origin_out = has_origin ? stored.substr(0, separator) : std::string();
-    token_out  = stored.substr(has_origin ? separator + 1 : 0);
+    origin_out.clear();
+    token_out.clear();
+    const char* const blank = " \t\r\n";
+    const size_t      first = stored.find_first_not_of(blank);
+    if(first == std::string::npos)
+    {
+        return;
+    }
+    const size_t last      = stored.find_last_not_of(blank);
+    const size_t separator = stored.find(ASSISTANT_TOKEN_ORIGIN_SEPARATOR, first);
+    const bool   has_origin = separator != std::string::npos && separator < last;
+    if(has_origin)
+    {
+        origin_out = stored.substr(first, separator - first);
+    }
+    const size_t token_start = has_origin ? separator + 1 : first;
+    token_out                = stored.substr(token_start, last + 1 - token_start);
 }
 
 // True when the URL has userinfo or a query string, either of which is often a
@@ -235,7 +250,7 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
     std::string saved_origin;
     SplitStoredToken(stored, saved_origin, out_token);
     WipeSecret(stored);
-    if(saved_origin.empty() && !origin.empty())
+    if(saved_origin.empty() && !origin.empty() && !out_token.empty())
     {
         stored = JoinStoredToken(origin, out_token);
         if(in_session)
@@ -268,7 +283,9 @@ bool
 SettingsManager::SetAssistantToken(const std::string& provider_name,
                                    const std::string& token)
 {
-    if(token.empty())
+    // A key of nothing but whitespace is no key, and stored it would read back
+    // as an entry with no separator.
+    if(token.find_first_not_of(" \t\r\n") == std::string::npos)
     {
         return ClearAssistantToken(provider_name);
     }
@@ -346,10 +363,11 @@ SettingsPanel::RenderAssistantSettings()
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Base URL, e.g. https://api.openai.com/v1. "
-                         "/chat/completions is appended. Azure-style /azure "
-                         "and /openai paths also insert the model as the "
-                         "deployment id.");
+        SetTooltipStyled(
+            "Base URL, e.g. https://api.openai.com/v1. /chat/completions is "
+            "appended. Model is the deployment id when the path ends in "
+            "/azure, /azure/engines, /openai, or /openai/deployments. A path "
+            "that already contains /engines/ or /deployments/ keeps that one.");
     }
     // Shown under the field for as long as they apply, not in the tooltip.
     ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextWarning));
@@ -379,9 +397,12 @@ SettingsPanel::RenderAssistantSettings()
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Model name sent to the endpoint. On Azure-style URLs "
-                         "this is the deployment id. Default is %s.",
-                         ASSISTANT_DEFAULT_MODEL);
+        SetTooltipStyled(
+            "Model name sent with an OpenAI-style request. When the URL path "
+            "ends in /azure, /azure/engines, /openai, or /openai/deployments, "
+            "this is the deployment id, and it is unused when that path "
+            "already names one. Default is %s.",
+            ASSISTANT_DEFAULT_MODEL);
     }
 
     ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y));

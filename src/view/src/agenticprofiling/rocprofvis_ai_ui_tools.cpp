@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 // The tools that change Optiq rather than read it. Every body here goes through
-// OptiqActions and none of them touch a request id. All but one answer in the
-// same call: switch_tab waits for the tab bar to bring a newly chosen trace
-// forward. Adding a capability belongs in rocprofvis_ai_actions.h as one method,
-// not as wiring inside a tool here.
+// OptiqActions and answers in the same call, so none of them park a fetch or
+// touch a request id. Adding a capability belongs in rocprofvis_ai_actions.h as
+// one method, not as wiring inside a tool here.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
+#include <cstdint>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -37,18 +37,33 @@ namespace
 constexpr size_t ASSISTANT_MAX_HIGHLIGHTS      = 12;
 constexpr size_t ASSISTANT_MAX_NEXT_STEPS      = 3;
 constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
-// A chosen trace comes forward within a couple of frames. This only bounds a
-// switch that never lands, such as one to a tab closed in the meantime.
-constexpr uint32_t ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS = 5;
 // Notes are saved with the project, so what one turn can leave is bounded.
 constexpr size_t ASSISTANT_MAX_NOTE_TITLE_CHARS = 120;
 constexpr size_t ASSISTANT_MAX_NOTE_TEXT_CHARS  = 2000;
 constexpr size_t ASSISTANT_MAX_NOTES_PER_TURN   = 5;
+constexpr uint64_t ASSISTANT_TAB_REF_OFFSET      = 14695981039346656037ULL;
+constexpr uint64_t ASSISTANT_TAB_REF_PRIME       = 1099511628211ULL;
 
-// Per-turn limits that hold even when text in the trace talks the model out of
-// its prompt. BeginAssistantUiTurn resets them.
-bool   g_tab_switch_requested = false;
-size_t g_notes_pinned         = 0;
+// A per-turn limit that holds even when text in the trace talks the model out
+// of its prompt. BeginAssistantUiTurn resets it.
+size_t g_notes_pinned = 0;
+
+// Stable for one project id without sending its full path to the model. The
+// mapping is recomputed from the open tabs, so closing another tab cannot
+// silently redirect an earlier ref.
+std::string
+TabRef(const std::string& project_id)
+{
+    uint64_t hash = ASSISTANT_TAB_REF_OFFSET;
+    for(unsigned char c : project_id)
+    {
+        hash ^= c;
+        hash *= ASSISTANT_TAB_REF_PRIME;
+    }
+    std::ostringstream out;
+    out << "tab_" << std::hex << std::setw(16) << std::setfill('0') << hash;
+    return out.str();
+}
 
 // Every UI-facing thing a tool does goes through here.
 OptiqActions
@@ -56,55 +71,6 @@ Actions(const AssistantToolContext& context)
 {
     return OptiqActions(context.data_provider, context.timeline_selection,
                         context.trace_view);
-}
-
-// True when word appears in text as a word of its own, so that "tab" is not
-// found inside "table". Both are expected in lower case.
-bool
-ContainsWord(const std::string& text, const std::string& word)
-{
-    size_t at = text.find(word);
-    while(at != std::string::npos)
-    {
-        const size_t end = at + word.size();
-        const bool   starts =
-            at == 0 || std::isalnum(static_cast<unsigned char>(text[at - 1])) == 0;
-        const bool ends = end >= text.size() ||
-                          std::isalnum(static_cast<unsigned char>(text[end])) == 0;
-        if(starts && ends)
-        {
-            return true;
-        }
-        at = text.find(word, at + 1);
-    }
-    return false;
-}
-
-// Whether what the user typed asks to change tabs: it says so in as many
-// words, or it names an open trace other than the one in front.
-bool
-AsksForTabSwitch(const std::string& user_message)
-{
-    const std::string text = Core::String::to_lower_copy(user_message);
-    if(ContainsWord(text, "tab") || ContainsWord(text, "tabs") ||
-       ContainsWord(text, "switch") || text.find("other trace") != std::string::npos ||
-       text.find("other run") != std::string::npos)
-    {
-        return true;
-    }
-
-    // Listing the tabs needs nothing from a trace, so no context is required.
-    const OptiqActions actions(nullptr, nullptr, nullptr);
-    const std::string  active = Core::String::to_lower_copy(actions.ActiveTab());
-    for(const std::string& tab : actions.ListTabs())
-    {
-        const std::string label = Core::String::to_lower_copy(tab);
-        if(!label.empty() && label != active && text.find(label) != std::string::npos)
-        {
-            return true;
-        }
-    }
-    return false;
 }
 
 // Cuts text to max_chars and marks the cut. Backs up to the start of a UTF-8
@@ -417,23 +383,16 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
               const std::string&)
 {
     OptiqActions                   actions       = Actions(context);
-    // Other open traces are the user's business until they bring one up. An
-    // unasked call sees only the trace in front and is refused the switch
-    // below, because every tool after a switch sends the new trace's data to
-    // the endpoint.
-    const std::vector<std::string> trace_tabs =
-        g_tab_switch_requested
-            ? actions.ListTabs()
-            : std::vector<std::string>{ actions.ActiveTab(),
-                                        "(any other open trace is listed only when "
-                                        "the user asks to change tabs)" };
+    const std::vector<std::string> trace_tabs    = actions.ListTabs();
+    const std::vector<std::string> trace_tab_ids = actions.ListTabIds();
     const std::vector<std::string> analysis_tabs = actions.ListAnalysisTabs();
 
     std::ostringstream out;
     out << "trace_tabs:";
-    for(const std::string& tab : trace_tabs)
+    for(size_t i = 0; i < trace_tabs.size(); ++i)
     {
-        out << "\n  " << tab;
+        out << "\n  ref=" << TabRef(trace_tab_ids[i]) << " name=\"" << trace_tabs[i]
+            << "\"";
     }
     out << "\nactive_trace_tab: " << actions.ActiveTab() << "\n";
     if(!analysis_tabs.empty())
@@ -446,7 +405,7 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
         out << "\nactive_details_tab: " << actions.ActiveAnalysisTab() << "\n";
     }
 
-    const std::string name = JsonUtils::GetString(args, "name", "");
+    std::string name = JsonUtils::GetString(args, "name", "");
     if(name.empty())
     {
         return DoneResult(out.str(), "Listed tabs");
@@ -454,36 +413,53 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
 
     // Details tabs are the ones people usually mean by name, so try those
     // first; trace tabs are file names and rarely collide.
-    std::string selected_label;
-    if(actions.SelectAnalysisTab(name, selected_label))
+    std::string selected;
+    if(actions.SelectAnalysisTab(name, selected))
     {
-        return DoneResult("Opened the " + selected_label + " tab in the details panel.",
+        return DoneResult("Opened the " + selected + " tab in the details panel.",
                           "Switched tabs");
     }
-    // Refused whether or not the name matches a trace, so the reply cannot be
-    // used to find out which traces are open.
-    if(!g_tab_switch_requested)
+    // A ref is unambiguous even when two paths have the same basename. The
+    // labels remain accepted when they name exactly one tab.
+    const std::string ref_prefix = "tab_";
+    if(name.compare(0, ref_prefix.size(), ref_prefix) == 0)
     {
-        out << "\"" << name
-            << "\" is not a details panel tab. Switching to another trace needs "
-               "the user to ask for it, so tell the user which trace you would "
-               "switch to and why.\n";
-        return DoneResult(out.str(), "Tab switch not requested");
+        const std::string* matched_id = nullptr;
+        for(const std::string& tab_id : trace_tab_ids)
+        {
+            if(TabRef(tab_id) != name)
+            {
+                continue;
+            }
+            if(matched_id != nullptr)
+            {
+                matched_id = nullptr;  // A hash collision is ambiguous.
+                break;
+            }
+            matched_id = &tab_id;
+        }
+        if(matched_id != nullptr)
+        {
+            name = *matched_id;
+        }
     }
-    // The trace in front changes only when the tab bar next draws, so the call
-    // waits for that instead of answering now: the panel re-pins the turn and
-    // drops the rest of the batch by the trace in front.
     std::string selected_id;
-    if(actions.SelectTab(name, selected_id, selected_label))
+    if(actions.SelectTab(name, selected_id, selected))
     {
-        AssistantToolStartResult result;
-        result.pending          = true;
-        result.started_fetch    = true;
-        result.fetch.kind       = AssistantFetchKind::kTabSwitch;
-        result.fetch.project_id = selected_id;
-        result.content          = "Switched to trace " + selected_label + ".";
-        result.status_line      = "Switching tabs...";
-        result.timeout_seconds  = ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS;
+        if(selected_id == context.project_id)
+        {
+            return DoneResult("Trace " + selected + " is already in front.",
+                              "Switched tabs");
+        }
+        // The turn stays with its own trace, so say where the user went rather
+        // than let the model think it can now read the other one.
+        AssistantToolStartResult result =
+            DoneResult("Switched the user to trace " + selected +
+                           ". This conversation stays with " + context.trace_name +
+                           ", so read and change nothing more here; questions about " +
+                           selected + " continue in its own conversation.",
+                       "Switched tabs");
+        result.stop_tool_queue = true;
         return result;
     }
 
@@ -811,12 +787,11 @@ const AssistantToolEntry k_shared_ui_tool_handlers[] = {
 
 }  // namespace
 
-// Starts a turn's allowance for the tools above, from what the user typed.
+// Starts a turn's allowance for the tools above.
 void
-BeginAssistantUiTurn(const std::string& user_message)
+BeginAssistantUiTurn()
 {
-    g_tab_switch_requested = AsksForTabSwitch(user_message);
-    g_notes_pinned         = 0;
+    g_notes_pinned = 0;
 }
 
 // The UI half of the tool set, for StartAssistantTool to search.

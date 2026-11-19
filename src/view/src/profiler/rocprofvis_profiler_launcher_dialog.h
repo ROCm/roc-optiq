@@ -16,11 +16,12 @@
 // when remote support is built. Remove this guard when the remote feature
 // graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+#    include "remote/rocprofvis_remote_file_browser.h"
+#    include "remote/rocprofvis_remote_trace_orchestrator.h"
+#    include "remote/rocprofvis_ssh_connection_store.h"
+#    include "remote/rocprofvis_ssh_fetch.h"
+#    include "remote/rocprofvis_ssh_settings_dialog.h"
 #include "remote/rocprofvis_ssh_uri.h"
-#include "remote/rocprofvis_ssh_connection_store.h"
-#include "remote/rocprofvis_ssh_settings_dialog.h"
-#include "remote/rocprofvis_ssh_fetch.h"
-#include "remote/rocprofvis_remote_file_browser.h"
 #endif
 #include <memory>
 #include <string>
@@ -190,13 +191,13 @@ private:
     // The dialog drives it (Launch/Cancel/Update) and reads state back via its
     // getters; it never touches the underlying sessions directly. Hide() does
     // not Close() it, so a last run remains viewable after the window is closed.
-    ProfilerLaunchOrchestrator m_orchestrator;
+    ProfilerLaunchOrchestrator m_profile_orchestrator;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // TEMPORARY (remote/SSH): SSH connection authoring. The connection config is
     // owned here as a shared RemoteUri (edited via the on-demand
     // SshSettingsDialog) and handed to the orchestrator at launch, mirroring the
-    // SshTestDialog pattern.
+    // SshFileDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
     SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
@@ -204,6 +205,12 @@ private:
     // Shared remote file/directory picker for the Target section's Browse
     // buttons; created lazily on first remote browse (see EnsureRemoteFileBrowser).
     std::unique_ptr<RemoteFileBrowser>     m_remote_file_browser;
+    // The current remote run's trace downloader, shared with the run (which
+    // starts the auto-open download on it). Open Trace downloads on it too.
+    std::shared_ptr<RemoteTraceOrchestrator> m_download_orchestrator;
+    // Whether the downloader's current failure has been shown, so each failed
+    // download is reported once.
+    bool                                   m_download_failure_reported;
     bool                                   m_remote_show_progress_popup;
     FileStat::Snapshot                     m_remote_last_progress;
 #endif

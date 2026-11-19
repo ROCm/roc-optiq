@@ -151,6 +151,9 @@ private:
         // wait instead of asking the provider for the same summary again.
         bool summary_settled   = false;
         bool summary_succeeded = false;
+        // The user pressed Run on the script this waits on, which restarted
+        // the clock: reading it and running it are two waits.
+        bool script_running = false;
     };
 
     // A cancelled HTTP call reaped from Update() instead of joined in the tab

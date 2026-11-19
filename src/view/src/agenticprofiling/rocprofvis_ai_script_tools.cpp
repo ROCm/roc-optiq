@@ -154,6 +154,14 @@ AssistantScriptFetchPending(const AssistantToolContext& context)
     return state == ScriptApproval::kPending || state == ScriptApproval::kRunning;
 }
 
+bool
+AssistantScriptRunning(const AssistantToolContext& context)
+{
+    const OptiqActions actions(context.data_provider, context.timeline_selection,
+                               context.trace_view);
+    return actions.ScriptProposalState() == ScriptApproval::kRunning;
+}
+
 // Reads back what the user decided, and what the script produced if they ran it.
 std::string
 FinishAssistantScriptFetch(const AssistantToolContext& context)
@@ -243,6 +251,12 @@ GetAssistantScriptToolHandlers()
 
 bool
 AssistantScriptFetchPending(const AssistantToolContext&)
+{
+    return false;
+}
+
+bool
+AssistantScriptRunning(const AssistantToolContext&)
 {
     return false;
 }

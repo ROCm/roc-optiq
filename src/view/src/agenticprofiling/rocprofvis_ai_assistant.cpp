@@ -1404,6 +1404,17 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
+    // Approved late in the reading time, a run would be reported unfinished
+    // moments after it started.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kScript &&
+       !m_fetch_wait.script_running && AssistantScriptRunning(context))
+    {
+        m_fetch_wait.script_running = true;
+        m_fetch_wait.started        = std::chrono::steady_clock::now();
+        m_fetch_wait.status         = AssistantToolStatusLabel(m_fetch_wait.tool_name);
+        m_status                    = m_fetch_wait.status;
+    }
+
     const std::chrono::seconds elapsed = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - m_fetch_wait.started);
     const int64_t deadline = m_fetch_wait.timeout_seconds > 0

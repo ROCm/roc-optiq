@@ -221,6 +221,10 @@ AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,
 // when scripting is not built in.
 bool AssistantScriptFetchPending(const AssistantToolContext& context);
 
+// Whether the user pressed Run on the offer and the script is still running.
+// Always false when scripting is not built in.
+bool AssistantScriptRunning(const AssistantToolContext& context);
+
 // Whether a table read that has landed was sorted by the wrong column, because
 // the index it sent was resolved against the header an earlier read left in
 // the slot. The panel runs the tool again when it was. Always false for a

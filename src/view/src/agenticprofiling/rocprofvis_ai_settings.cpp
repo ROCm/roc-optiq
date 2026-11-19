@@ -177,7 +177,7 @@ SettingsManager::HasAssistantToken(const std::string& provider_name) const
  * The key is returned only while the endpoint's URL still has the origin saved
  * with it, so an edited URL cannot carry the key to a new host. A key with no
  * origin - saved by an older build, or while the URL had no scheme - is given
- * the current origin here, once.
+ * the current origin here, once, and is not used while the store refuses that.
  */
 bool
 SettingsManager::GetAssistantToken(const std::string& provider_name,
@@ -222,9 +222,13 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
         }
         else if(!SecretStore::Set(key, stored))
         {
-            // The key still works for this read; the next one tries again.
+            // Still unbound, the key would follow whatever URL is set at the next
+            // read, an edited one included. Not used until the binding is kept.
             spdlog::warn("Could not record which host the saved assistant key "
-                         "belongs to");
+                         "belongs to, so it is not used");
+            AssistantWipeSecret(stored);
+            AssistantWipeSecret(out_token);
+            return false;
         }
         AssistantWipeSecret(stored);
         saved_origin = origin;

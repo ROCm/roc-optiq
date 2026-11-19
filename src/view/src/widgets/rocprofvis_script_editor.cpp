@@ -730,8 +730,12 @@ ScriptEditor::SaveToFile()
     FileFilter py_filter;
     py_filter.m_name       = "Python";
     py_filter.m_extensions = { "py" };
+    // Taken now: an offer can land while the dialog is open, and must not be
+    // written out under the name the user picked for this script.
     app->ShowSaveFileDialog("Save Script", { py_filter }, m_file_path,
-                            [this](std::string path) { WriteFile(path); });
+                            [this, source = m_source](std::string path) {
+                                WriteFile(path, source);
+                            });
 }
 
 void
@@ -763,7 +767,7 @@ ScriptEditor::ReadFile(const std::string& path)
 }
 
 void
-ScriptEditor::WriteFile(const std::string& path)
+ScriptEditor::WriteFile(const std::string& path, const std::string& source)
 {
     if(path.empty())
     {
@@ -777,7 +781,7 @@ ScriptEditor::WriteFile(const std::string& path)
                                                 NotificationLevel::Error);
         return;
     }
-    file.write(m_source.data(), static_cast<std::streamsize>(m_source.size()));
+    file.write(source.data(), static_cast<std::streamsize>(source.size()));
     // Close explicitly and check: a buffered write can fail on flush (e.g. a
     // full disk), which is_open() cannot catch, so do not report "Saved" blindly.
     file.close();
@@ -786,6 +790,11 @@ ScriptEditor::WriteFile(const std::string& path)
         m_status = "Could not write file";
         NotificationManager::GetInstance().Show("Failed to write " + path,
                                                 NotificationLevel::Error);
+        return;
+    }
+    // An offer that replaced the text meanwhile is not what the file holds.
+    if(m_source != source)
+    {
         return;
     }
     m_saved_source = m_source;

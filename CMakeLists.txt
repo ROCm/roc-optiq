@@ -1021,6 +1021,13 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
+# Pre-release marker for DEB/RPM versions (nightly builds pass e.g.
+# -DROCPROFVIS_PACKAGE_VERSION_SUFFIX=~20261116). The '~' sorts below the plain
+# version, so a later stable build still upgrades a nightly.
+set(ROCPROFVIS_PACKAGE_VERSION_SUFFIX "" CACHE STRING "Suffix appended to the DEB/RPM package version (e.g. ~20261116)")
+set(CPACK_DEBIAN_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}${ROCPROFVIS_PACKAGE_VERSION_SUFFIX}")
+set(CPACK_RPM_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}${ROCPROFVIS_PACKAGE_VERSION_SUFFIX}")
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
@@ -1087,10 +1094,10 @@ execute_process( COMMAND rpm --eval %{?dist}
                  RESULT_VARIABLE PROC_RESULT
                  OUTPUT_VARIABLE EVAL_RESULT
                  OUTPUT_STRIP_TRAILING_WHITESPACE)
-# A '~' pre-release marker (nightly builds, e.g. 1~20261116) is left without the
-# distro tag so the filename and embedded release match.
+# Nightly builds (version suffix set) are left without the distro tag so the
+# filename and embedded release match.
 if(PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL ""
-   AND NOT CPACK_RPM_PACKAGE_RELEASE MATCHES "~")
+   AND ROCPROFVIS_PACKAGE_VERSION_SUFFIX STREQUAL "")
   string(APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}")
 endif()
 message(STATUS "Using CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
@@ -1101,10 +1108,10 @@ set(CPACK_RPM_PACKAGE_AUTOREQPROV "yes")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
 
 if("DEB" IN_LIST CPACK_GENERATOR)
-  message(STATUS "Expected DEB Filename: ${CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_<ARCH>.deb")
+  message(STATUS "Expected DEB Filename: ${CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME}_${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_<ARCH>.deb")
 endif()
 if("RPM" IN_LIST CPACK_GENERATOR)
-  message(STATUS "Expected RPM Filename: ${CPACK_RPM_RV_RUNTIME_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}.<ARCH>.rpm")
+  message(STATUS "Expected RPM Filename: ${CPACK_RPM_RV_RUNTIME_PACKAGE_NAME}-${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}.<ARCH>.rpm")
 endif()
 
 # Include packaging

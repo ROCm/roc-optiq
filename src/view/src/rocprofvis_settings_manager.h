@@ -105,6 +105,12 @@ MakeDefaultAssistantProvider()
     return provider;
 }
 
+// The endpoint URL as it may be saved and shown. The settings file is plain
+// text, so a key pasted into the URL must not reach it: userinfo, a fragment,
+// and every query parameter but an API version are dropped. Compiled with or
+// without the assistant, because the settings file is written either way.
+std::string AssistantStorableUrl(const std::string& url);
+
 typedef struct AssistantSettings
 {
     std::vector<AssistantProvider> providers;
@@ -512,7 +518,9 @@ private:
     void SerializeProfilerSettings(jt::Json& json);
     void DeserializeProfilerSettings(jt::Json& json);
     void SerializeAssistantSettings(jt::Json& json);
-    void DeserializeAssistantSettings(jt::Json& json);
+    // True when a saved URL held something AssistantStorableUrl drops, which
+    // the file then still holds.
+    bool DeserializeAssistantSettings(jt::Json& json);
     // The endpoint name is the credential-store key, so it has to be unique.
     void MakeAssistantProviderNamesUnique();
     void SerializeAppWindowSettings(jt::Json& json);

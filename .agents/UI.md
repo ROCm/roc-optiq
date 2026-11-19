@@ -864,7 +864,11 @@ Ask Optiq offers a script through `OptiqActions::ProposeScript`, which
 fills this tab and selects it; nothing runs until the user presses Run
 or Reject. `ScriptApproval` is that state machine, and
 `ScriptExecuteCompleteEvent` is filtered by trace source id because
-every editor hears every one of them.
+every editor hears every one of them. The source is read-only while an
+offer waits, and Run is disabled for `SCRIPT_OFFER_MIN_READ_SECONDS`
+after the offer first draws: it lands under a Run button that was
+already there, so a click aimed at the user's own script must not run
+the new one.
 
 ## 8. Track Item Hierarchy
 
@@ -2924,7 +2928,22 @@ Rules that are easy to get wrong here:
   clients cannot enter the reserved band below it.
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
-  `UserSettings::assistant`, and holds only name, URL, and model.
+  `UserSettings::assistant`, and holds only name, URL, and model. A key
+  pasted into the URL is kept out too: `AssistantStorableUrl` drops
+  userinfo, a fragment, and every query parameter but an API version,
+  when the file is read, when OK is pressed, and when it is written, and
+  the hover cards show the URL without its query.
+- **Nothing the model reads, and nothing it sends back, may carry the
+  key.** `AssistantRedactKey` blanks the turn's key in the question
+  before it is shown or kept (`SendCurrentInput`), in every tool reply
+  before it is logged or kept (`AppendToolReply`), in every message as
+  the client serializes it, and in the reply, error text and tool calls
+  an endpoint returns. A new path that puts text in front of the model
+  or on screen has to pass one of those points.
+- **A next step is shown as it is sent.** A click sends the step as the
+  user's own message, which is what unlocks notes, bookmarks and tab
+  switches, so `PrintableStep` removes the `##` that would hide part of
+  a button label.
 
 ## 13. Remote / SSH and Profiler Launch UI
 

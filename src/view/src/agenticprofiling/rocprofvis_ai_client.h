@@ -76,6 +76,15 @@ std::string AssistantUrlOrigin(const std::string& url);
 // conversation would cross the network unencrypted.
 bool AssistantUrlIsCleartext(const std::string& url);
 
+// Overwrites the whole buffer of a copy of the key before it is emptied or
+// freed, so the bytes do not sit in released memory.
+void AssistantWipeSecret(std::string& text);
+
+// Blanks every copy of the key in text. Looks for the key as it is sent,
+// without the whitespace a paste brings along, because that is the form an
+// echo of it carries. A key too short to tell from ordinary words is left.
+void AssistantRedactKey(const std::string& api_token, std::string& text);
+
 /**
  * @brief One POST to an OpenAI chat-completions endpoint, which the caller can
  * abandon.

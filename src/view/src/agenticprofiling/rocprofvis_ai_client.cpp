@@ -100,6 +100,9 @@ constexpr size_t ASSISTANT_MAX_ERROR_TEXT_BYTES = 400;
 constexpr size_t ASSISTANT_MIN_REDACTED_KEY_BYTES = 8;
 constexpr char   ASSISTANT_REDACTED_KEY[]         = "[key]";
 constexpr char   ASSISTANT_TRUNCATION_MARK[]      = "...";
+// What trimming takes off either end of a pasted key: the characters
+// std::isspace matches in the C locale.
+constexpr char ASSISTANT_KEY_BLANKS[] = " \t\n\v\f\r";
 
 constexpr char ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
@@ -737,13 +740,23 @@ ParseChatCompletion(jt::Json& root, bool allow_tool_calls, AssistantChatResult& 
     }
 }
 
+// A copy of text with the key blanked. Nothing the model reads may carry the
+// key, whatever put it there: a script that printed it, a trace that recorded
+// it, or the user typing it into the question.
+std::string
+WithoutKey(const std::string& api_token, std::string text)
+{
+    AssistantRedactKey(api_token, text);
+    return text;
+}
+
 // Serializes one conversation message the way the chat API expects it.
 jt::Json
-MessageToJson(const AssistantMessage& message)
+MessageToJson(const AssistantMessage& message, const std::string& api_token)
 {
     jt::Json json;
     json["role"]    = message.role;
-    json["content"] = message.content;
+    json["content"] = WithoutKey(api_token, message.content);
 
     if(message.role == "tool")
     {
@@ -762,7 +775,8 @@ MessageToJson(const AssistantMessage& message)
         json["tool_calls"][i]["type"]                  = "function";
         json["tool_calls"][i]["function"]["name"]      = call.name;
         json["tool_calls"][i]["function"]["arguments"] =
-            call.arguments.empty() ? "{}" : call.arguments;
+            call.arguments.empty() ? std::string("{}")
+                                   : WithoutKey(api_token, call.arguments);
     }
     return json;
 }
@@ -796,7 +810,7 @@ BuildRequestBody(const AssistantChatRequest& request, EndpointFlavour flavour)
 
     for(size_t i = 0; i < request.messages.size(); ++i)
     {
-        body["messages"][i] = MessageToJson(request.messages[i]);
+        body["messages"][i] = MessageToJson(request.messages[i], request.api_token);
     }
     if(request.enable_tools)
     {
@@ -932,15 +946,7 @@ LoggableUrl(const std::string& url)
 void
 ScrubErrorText(const std::string& api_token, std::string& error)
 {
-    if(api_token.size() >= ASSISTANT_MIN_REDACTED_KEY_BYTES)
-    {
-        size_t found = error.find(api_token);
-        while(found != std::string::npos)
-        {
-            error.replace(found, api_token.size(), ASSISTANT_REDACTED_KEY);
-            found = error.find(api_token, found + std::strlen(ASSISTANT_REDACTED_KEY));
-        }
-    }
+    AssistantRedactKey(api_token, error);
 
     if(error.size() > ASSISTANT_MAX_ERROR_TEXT_BYTES)
     {
@@ -965,12 +971,12 @@ struct ResolvedEndpoint
     std::string     path;
 };
 
-// The key without the whitespace a paste tends to bring along: httplib refuses a
-// header value that ends in a space or newline, so every request would fail.
-std::string
-ApiToken(const AssistantChatRequest& request)
+// Whether the request carries a key at all, asked without copying it.
+bool
+HasApiToken(const AssistantChatRequest& request)
 {
-    return Core::String::trim_copy(request.api_token);
+    return request.api_token.find_first_not_of(ASSISTANT_KEY_BLANKS) !=
+           std::string::npos;
 }
 
 // Works out the address to post to and checks it is one we may use. Returns an
@@ -1017,7 +1023,7 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
     {
         return ASSISTANT_BAD_URL_ERROR;
     }
-    if(!ApiToken(request).empty() && !OriginMayCarryToken(endpoint_out.origin))
+    if(HasApiToken(request) && !OriginMayCarryToken(endpoint_out.origin))
     {
         return ASSISTANT_INSECURE_URL_ERROR;
     }
@@ -1028,22 +1034,36 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
 httplib::Headers
 AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
 {
-    httplib::Headers  headers;
-    const std::string token = ApiToken(request);
-    if(token.empty())
+    httplib::Headers headers;
+    // The key without the whitespace a paste tends to bring along: httplib
+    // refuses a header value that ends in a space or newline, so every request
+    // would fail.
+    std::string token = Core::String::trim_copy(request.api_token);
+    if(!token.empty())
     {
-        return headers;
+        if(flavour == EndpointFlavour::kAzure)
+        {
+            headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, token);
+        }
+        else
+        {
+            headers.emplace(ASSISTANT_OPENAI_AUTH_HEADER,
+                            std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + token);
+        }
     }
-    if(flavour == EndpointFlavour::kAzure)
-    {
-        headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, token);
-    }
-    else
-    {
-        headers.emplace(ASSISTANT_OPENAI_AUTH_HEADER,
-                        std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + token);
-    }
+    AssistantWipeSecret(token);
     return headers;
+}
+
+// The auth header is this client's own copy of the key, so it is wiped once
+// the request is over. httplib keeps copies of its own that it does not wipe.
+void
+WipeAuthHeaders(httplib::Headers& headers)
+{
+    for(httplib::Headers::value_type& header : headers)
+    {
+        AssistantWipeSecret(header.second);
+    }
 }
 
 // Turns a response that did arrive into a reply or an error.
@@ -1125,6 +1145,44 @@ AssistantUrlIsCleartext(const std::string& url)
     return origin.compare(0, 7, "http://") == 0 && !OriginIsLoopback(origin);
 }
 
+void
+AssistantWipeSecret(std::string& text)
+{
+    // Out to the capacity, so what an earlier and longer value left behind goes
+    // too. Volatile keeps the compiler from dropping the writes as dead stores.
+    text.resize(text.capacity());
+    volatile char* bytes = text.data();
+    for(size_t i = 0; i < text.size(); i++)
+    {
+        bytes[i] = '\0';
+    }
+    text.clear();
+}
+
+void
+AssistantRedactKey(const std::string& api_token, std::string& text)
+{
+    // Trimmed in place by offsets, so the search makes no further copy of it.
+    const size_t first = api_token.find_first_not_of(ASSISTANT_KEY_BLANKS);
+    if(first == std::string::npos)
+    {
+        return;
+    }
+    const size_t length = api_token.find_last_not_of(ASSISTANT_KEY_BLANKS) + 1 - first;
+    // Blanking a shorter key could mangle ordinary words in the text.
+    if(length < ASSISTANT_MIN_REDACTED_KEY_BYTES)
+    {
+        return;
+    }
+    const char* const key   = api_token.data() + first;
+    size_t            found = text.find(key, 0, length);
+    while(found != std::string::npos)
+    {
+        text.replace(found, length, ASSISTANT_REDACTED_KEY);
+        found = text.find(key, found + std::strlen(ASSISTANT_REDACTED_KEY), length);
+    }
+}
+
 AssistantChatResult
 AssistantChatCall::Send(const AssistantChatRequest& request)
 {
@@ -1171,14 +1229,15 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     client.set_socket_options(SuppressSigpipe);
 #endif
 
-    const httplib::Headers headers = AuthHeaders(request, endpoint.flavour);
-    const std::string      body =
+    httplib::Headers  headers = AuthHeaders(request, endpoint.flavour);
+    const std::string body =
         BuildRequestBody(request, endpoint.flavour).toString();
     const std::string loggable = LoggableUrl(endpoint.url);
     spdlog::info("Assistant POST {}", loggable);
 
     if(!Adopt(&client))
     {
+        WipeAuthHeaders(headers);
         result.cancelled = true;
         return result;
     }
@@ -1208,6 +1267,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         }
     }
     Release();
+    WipeAuthHeaders(headers);
 
     if(!response)
     {
@@ -1232,8 +1292,16 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     }
 
     InterpretResponse(*response, request.enable_tools, result);
-    // The trimmed key is the one that was sent, so it is the one echoed back.
-    ScrubErrorText(ApiToken(request), result.error);
+    // An endpoint that echoes the key would otherwise put it in the transcript,
+    // a toast, the log, and any export, or hand it to a tool as an argument.
+    ScrubErrorText(request.api_token, result.error);
+    AssistantRedactKey(request.api_token, result.reply);
+    for(AssistantToolCall& call : result.tool_calls)
+    {
+        AssistantRedactKey(request.api_token, call.id);
+        AssistantRedactKey(request.api_token, call.name);
+        AssistantRedactKey(request.api_token, call.arguments);
+    }
     // A 404 is nearly always the URL being shaped wrong, so name what we asked
     // for. Added after the scrub so a long provider message cannot cut it off.
     if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)

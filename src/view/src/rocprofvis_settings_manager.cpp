@@ -612,11 +612,18 @@ SettingsManager::LoadSettingsJson()
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
-        DeserializeAssistantSettings(result.second);
+        const bool assistant_url_cleaned = DeserializeAssistantSettings(result.second);
         DeserializeAppWindowSettings(result.second);
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         MigrateLegacyAssistantToken();
 #endif
+        // The file held a key inside an assistant URL. Rewritten now, with
+        // everything else as it was just read, so the key does not stay on disk
+        // until the next save.
+        if(assistant_url_cleaned)
+        {
+            SaveSettingsJson();
+        }
     }
     else
     {
@@ -1169,9 +1176,96 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     }
 }
 
+// The longest value an API version takes, e.g. "2025-01-01-preview". Shorter
+// than any key, so one cannot be kept by naming it api-version.
+constexpr size_t ASSISTANT_API_VERSION_MAX_CHARS = 24;
+
+// Whether one "name=value" query parameter is an API version, the only kind
+// that is saved: Azure-style endpoints need it, and it is not a secret.
+static bool
+IsApiVersionParameter(const std::string& parameter)
+{
+    const size_t equals = parameter.find('=');
+    if(equals == std::string::npos)
+    {
+        return false;
+    }
+    std::string name = parameter.substr(0, equals);
+    for(char& c : name)
+    {
+        if(c >= 'A' && c <= 'Z')
+        {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    const size_t value_size = parameter.size() - equals - 1;
+    if((name != "api-version" && name != "apiversion") || value_size == 0 ||
+       value_size > ASSISTANT_API_VERSION_MAX_CHARS)
+    {
+        return false;
+    }
+    for(size_t i = equals + 1; i < parameter.size(); ++i)
+    {
+        const char c = parameter[i];
+        if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+             c == '-' || c == '.' || c == '_'))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string
+AssistantStorableUrl(const std::string& url)
+{
+    // A fragment is never sent, so nothing from it on is worth keeping.
+    std::string  kept        = url.substr(0, url.find('#'));
+    std::string  query;
+    const size_t query_start = kept.find('?');
+    if(query_start != std::string::npos)
+    {
+        query = kept.substr(query_start + 1);
+        kept.resize(query_start);
+    }
+
+    // Userinfo is everything in the authority up to its last '@'.
+    const size_t scheme_end    = kept.find("://");
+    const size_t authority     = (scheme_end == std::string::npos) ? 0 : scheme_end + 3;
+    const size_t path_start    = kept.find('/', authority);
+    const size_t authority_end = (path_start == std::string::npos) ? kept.size()
+                                                                   : path_start;
+    const size_t at = kept.rfind('@', authority_end);
+    if(at != std::string::npos && at >= authority)
+    {
+        kept.erase(authority, at + 1 - authority);
+    }
+
+    // No list of key-like parameter names would be complete, so the query is
+    // filtered the other way round: only what is known to be harmless stays.
+    std::string kept_query;
+    size_t      begin = 0;
+    while(begin < query.size())
+    {
+        size_t end = query.find('&', begin);
+        if(end == std::string::npos)
+        {
+            end = query.size();
+        }
+        const std::string parameter = query.substr(begin, end - begin);
+        if(IsApiVersionParameter(parameter))
+        {
+            kept_query += kept_query.empty() ? '?' : '&';
+            kept_query += parameter;
+        }
+        begin = end + 1;
+    }
+    return kept + kept_query;
+}
+
 // The API keys are deliberately absent: those live in the credential store.
-// The URL is written as typed, query included, since an Azure-style endpoint
-// needs its api-version; the settings page warns when it may carry a secret.
+// The URL goes through AssistantStorableUrl here as well as when it is
+// accepted, because this also runs while Preferences holds a half-typed one.
 void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
@@ -1181,7 +1275,8 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
     {
         jt::Json& entry = as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS][i++];
         entry[JSON_KEY_SETTINGS_ASSISTANT_NAME]         = provider.name;
-        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = provider.endpoint_url;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] =
+            AssistantStorableUrl(provider.endpoint_url);
         entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
     }
     as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE] =
@@ -1228,7 +1323,7 @@ SettingsManager::MakeAssistantProviderNamesUnique()
     }
 }
 
-void
+bool
 SettingsManager::DeserializeAssistantSettings(jt::Json& json)
 {
     jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
@@ -1281,6 +1376,24 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
         m_usersettings.assistant.providers.push_back(provider);
     }
 
+    // A file from before URLs were filtered, or one edited by hand, may hold a
+    // key in the URL. It is dropped from memory here, so what is used matches
+    // what is stored, and the caller rewrites the file.
+    bool url_cleaned = false;
+    for(AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        const std::string storable = AssistantStorableUrl(provider.endpoint_url);
+        if(storable != provider.endpoint_url)
+        {
+            spdlog::warn("Removed credentials or query parameters from the saved URL "
+                         "of assistant endpoint \"{}\". Put its key in Edit > "
+                         "Preferences > Assistant.",
+                         provider.name);
+            provider.endpoint_url = storable;
+            url_cleaned           = true;
+        }
+    }
+
     m_usersettings.assistant.active = 0;
     if(as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].isLong())
     {
@@ -1291,6 +1404,7 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
             m_usersettings.assistant.active = static_cast<size_t>(active);
         }
     }
+    return url_cleaned;
 }
 
 const AssistantProvider*

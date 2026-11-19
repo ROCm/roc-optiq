@@ -51,20 +51,6 @@ AssistantTokenKey(const std::string& provider_name)
 // a line break.
 constexpr char ASSISTANT_TOKEN_ORIGIN_SEPARATOR = '\n';
 
-// Overwrites the whole buffer of a key before it is emptied or freed. The
-// volatile pointer keeps the compiler from dropping the writes as dead stores.
-void
-WipeSecret(std::string& text)
-{
-    text.resize(text.capacity());
-    volatile char* bytes = text.data();
-    for(size_t i = 0; i < text.size(); i++)
-    {
-        bytes[i] = '\0';
-    }
-    text.clear();
-}
-
 // Drops the session copy of an endpoint's key, if there is one.
 void
 ForgetSessionToken(std::map<std::string, std::string>& session_tokens,
@@ -74,7 +60,7 @@ ForgetSessionToken(std::map<std::string, std::string>& session_tokens,
         session_tokens.find(provider_name);
     if(session != session_tokens.end())
     {
-        WipeSecret(session->second);
+        AssistantWipeSecret(session->second);
         session_tokens.erase(session);
     }
 }
@@ -128,34 +114,6 @@ SplitStoredToken(const std::string& stored, std::string& origin_out,
     const size_t token_start = has_origin ? separator + 1 : first;
     token_out                = stored.substr(token_start, last + 1 - token_start);
 }
-
-// True when the URL has userinfo or a query string, either of which is often a
-// credential and would be saved in the settings file as typed. A query that is
-// only the Azure API version is not a secret; any other one warns, since no
-// list of key-like parameter names would be complete.
-bool
-UrlMayCarrySecret(const std::string& url)
-{
-    const size_t scheme_end      = url.find("://");
-    const size_t authority_start = (scheme_end == std::string::npos) ? 0 : scheme_end + 3;
-    if(url.find('@', authority_start) < url.find_first_of("/?#", authority_start))
-    {
-        return true;
-    }
-
-    const size_t query_start = url.find('?');
-    if(query_start == std::string::npos)
-    {
-        return false;
-    }
-    const std::string query =
-        url.substr(query_start + 1, url.find('#', query_start) - query_start - 1);
-    const bool only_api_version =
-        query.find('&') == std::string::npos &&
-        (query.compare(0, 12, "api-version=") == 0 ||
-         query.compare(0, 11, "apiVersion=") == 0);
-    return !query.empty() && !only_api_version;
-}
 }  // namespace
 
 // Moves a key written before endpoints were named onto the first endpoint, once
@@ -180,21 +138,25 @@ SettingsManager::MigrateLegacyAssistantToken()
     // The single endpoint that existed before the list did is the first one.
     const std::string key =
         AssistantTokenKey(m_usersettings.assistant.providers.front().name);
-    if(key == ASSISTANT_TOKEN_SECRET_KEY)
+    if(key != ASSISTANT_TOKEN_SECRET_KEY)
     {
-        return;
+        std::string existing_token;
+        const bool  already_migrated =
+            SecretStore::Get(key, existing_token) && !existing_token.empty();
+        AssistantWipeSecret(existing_token);
+        if(already_migrated || SecretStore::Set(key, legacy_token))
+        {
+            SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
+        }
+        else
+        {
+            // Leave the old entry alone rather than destroying the only copy.
+            spdlog::warn("Could not migrate the saved assistant key; leaving it in "
+                         "place");
+        }
     }
-
-    std::string existing_token;
-    const bool  already_migrated =
-        SecretStore::Get(key, existing_token) && !existing_token.empty();
-    if(!already_migrated && !SecretStore::Set(key, legacy_token))
-    {
-        // Leave the old entry alone rather than destroying the only copy.
-        spdlog::warn("Could not migrate the saved assistant key; leaving it in place");
-        return;
-    }
-    SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
+    // Like every other copy of the key, wiped once its job is done.
+    AssistantWipeSecret(legacy_token);
 }
 
 bool
@@ -202,7 +164,7 @@ SettingsManager::HasAssistantToken(const std::string& provider_name) const
 {
     std::string unused;
     const bool  has_token = GetAssistantToken(provider_name, unused);
-    WipeSecret(unused);
+    AssistantWipeSecret(unused);
     return has_token;
 }
 
@@ -249,13 +211,13 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
 
     std::string saved_origin;
     SplitStoredToken(stored, saved_origin, out_token);
-    WipeSecret(stored);
+    AssistantWipeSecret(stored);
     if(saved_origin.empty() && !origin.empty() && !out_token.empty())
     {
         stored = JoinStoredToken(origin, out_token);
         if(in_session)
         {
-            WipeSecret(session->second);
+            AssistantWipeSecret(session->second);
             session->second = stored;
         }
         else if(!SecretStore::Set(key, stored))
@@ -264,7 +226,7 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
             spdlog::warn("Could not record which host the saved assistant key "
                          "belongs to");
         }
-        WipeSecret(stored);
+        AssistantWipeSecret(stored);
         saved_origin = origin;
     }
 
@@ -272,7 +234,7 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
     {
         return true;
     }
-    WipeSecret(out_token);
+    AssistantWipeSecret(out_token);
     return false;
 }
 
@@ -307,7 +269,7 @@ SettingsManager::SetAssistantToken(const std::string& provider_name,
     {
         m_assistant_token_session[provider_name] = stored;
     }
-    WipeSecret(stored);
+    AssistantWipeSecret(stored);
     return saved;
 }
 
@@ -377,12 +339,12 @@ SettingsPanel::RenderAssistantSettings()
             "Unencrypted connection: questions and trace data sent to this "
             "endpoint can be read or altered on the network.");
     }
-    if(UrlMayCarrySecret(provider.endpoint_url))
+    if(AssistantStorableUrl(provider.endpoint_url) != provider.endpoint_url)
     {
         ImGui::TextWrapped(
-            "Anything in the URL, including a key in the query string, is "
-            "saved in plain text in the settings file. Put the key in the "
-            "Key field instead.");
+            "The settings file is plain text, so credentials, a fragment, and "
+            "every query parameter except api-version are removed from this "
+            "URL when you press OK. Put the key in the Key field instead.");
     }
     ImGui::PopStyleColor();
 
@@ -469,7 +431,7 @@ SettingsPanel::RenderAssistantSettings()
 
     if(ImGui::Button("Clear stored key"))
     {
-        WipeSecret(m_assistant_token_draft);
+        AssistantWipeSecret(m_assistant_token_draft);
         m_assistant_clear_token = true;
         m_settings_changed      = true;
     }
@@ -488,17 +450,28 @@ SettingsPanel::ApplyAssistantTokenEdits()
         erase_failed |= !m_settings.ClearAssistantToken(orphan);
     }
 
-    if(m_usersettings.assistant.active < m_usersettings.assistant.providers.size())
-    {
-        ApplyAssistantEndpointDefaults(
-            m_usersettings.assistant.providers[m_usersettings.assistant.active]);
-    }
-
     // The dialog closes on OK, so a notification is the only way the user
     // learns that the store refused a change or that a key was dropped.
     const auto warn = [](const char* message) {
         NotificationManager::GetInstance().Show(message, NotificationLevel::Warning);
     };
+    if(m_usersettings.assistant.active < m_usersettings.assistant.providers.size())
+    {
+        AssistantProvider& provider =
+            m_usersettings.assistant.providers[m_usersettings.assistant.active];
+        ApplyAssistantEndpointDefaults(provider);
+        // The URL that is kept is the one that can be saved, so what this
+        // session sends matches what the next one loads. The origin a key is
+        // bound to holds neither userinfo nor query, so it does not change.
+        const std::string storable = AssistantStorableUrl(provider.endpoint_url);
+        if(storable != provider.endpoint_url)
+        {
+            provider.endpoint_url = storable;
+            warn("Credentials and query parameters other than api-version were "
+                 "removed from the assistant URL, because the settings file is "
+                 "plain text. Put the key in the Key field.");
+        }
+    }
     const std::string provider_name = ActiveAssistantProviderName();
     if(m_assistant_clear_token)
     {
@@ -544,7 +517,7 @@ SettingsPanel::AssistantOriginChanged() const
 void
 SettingsPanel::DiscardAssistantTokenEdits()
 {
-    WipeSecret(m_assistant_token_draft);
+    AssistantWipeSecret(m_assistant_token_draft);
     m_assistant_orphaned_providers.clear();
     m_assistant_clear_token  = false;
     m_assistant_token_stored = -1;
@@ -579,7 +552,7 @@ SettingsPanel::ResetAssistantOptions()
     m_usersettings.assistant.providers.clear();
     m_usersettings.assistant.providers.push_back(default_provider);
     m_usersettings.assistant.active = 0;
-    WipeSecret(m_assistant_token_draft);
+    AssistantWipeSecret(m_assistant_token_draft);
     // The default endpoint has nothing configured now, so its key should go too.
     m_assistant_clear_token = true;
     // The endpoint being edited may have another name now: ask the store again.

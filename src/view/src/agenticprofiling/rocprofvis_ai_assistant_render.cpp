@@ -278,6 +278,16 @@ SplitMessageLines(const std::string& text)
     return lines;
 }
 
+// The endpoint as a hover card may show it: no userinfo, query or fragment. A
+// key pasted into the URL would otherwise be on screen for anyone watching a
+// screen share, and the settings hold the URL as typed until OK is pressed.
+std::string
+DisplayEndpoint(const std::string& url)
+{
+    const std::string kept = AssistantStorableUrl(url);
+    return kept.substr(0, kept.find('?'));
+}
+
 // A trace the link menu can offer: open, loaded, and read as one trace.
 bool
 CanLinkTrace(const AssistantToolContext& context)
@@ -612,6 +622,8 @@ AssistantPanel::RenderHeaderCard()
                               : provider->model.empty()
                                   ? std::string(ASSISTANT_DEFAULT_MODEL)
                                   : provider->model;
+    const std::string endpoint =
+        configured ? DisplayEndpoint(provider->endpoint_url) : std::string();
 
     const AssistantToolContext view     = MakeAssistantToolContext(m_view_project_id);
     const bool                 can_link = CanLinkTrace(view);
@@ -668,7 +680,7 @@ AssistantPanel::RenderHeaderCard()
         }
         else
         {
-            SetTooltipStyled("%s\n%s", model.c_str(), provider->endpoint_url.c_str());
+            SetTooltipStyled("%s\n%s", model.c_str(), endpoint.c_str());
         }
     }
 
@@ -676,7 +688,7 @@ AssistantPanel::RenderHeaderCard()
     // on their own lines because both are per-tab.
     if(configured)
     {
-        RenderContextChip(model, provider->endpoint_url);
+        RenderContextChip(model, endpoint);
     }
     if(!view.trace_name.empty())
     {

@@ -49,6 +49,10 @@ constexpr float  SCRIPT_DOT_RADIUS            = 2.0f;
 constexpr int    SCRIPT_DOT_COUNT             = 3;
 constexpr float  SCRIPT_DOT_SPACING           = 3.0f;
 constexpr float  SCRIPT_DOT_SPEED             = 5.0f;
+// How long a script Ask Optiq offered has to be on screen before Run takes a
+// click. Far too short to read one; long enough that a click cannot land on it
+// by having been aimed at what was there before.
+constexpr double SCRIPT_OFFER_MIN_READ_SECONDS = 1.0;
 
 // Even-spacing sample from SCRIPTING.md so the first Run does something
 // visible against a loaded system trace.
@@ -172,6 +176,7 @@ ScriptEditor::ProposeScript(const std::string& source)
     m_progress_percent = 0;
     m_running          = false;
     m_approval         = ScriptApproval::kPending;
+    m_offer_shown_time = -1.0;
     m_status           = "Waiting for you";
     return true;
 }
@@ -325,6 +330,18 @@ ScriptEditor::RenderHeaderCard()
                    &settings);
 
     const bool awaiting_decision = m_approval == ScriptApproval::kPending;
+    // An offer replaces the source under a Run button that was already there,
+    // with the same id. A press begun on the user's own script, a second click
+    // of a double-click, or a key held on Run would otherwise run text nobody
+    // has read. Disabling the button drops a press already in progress, and it
+    // stays off until the offer has been on screen for a moment.
+    if(awaiting_decision && m_offer_shown_time < 0.0)
+    {
+        m_offer_shown_time = ImGui::GetTime();
+    }
+    const bool just_offered =
+        awaiting_decision &&
+        ImGui::GetTime() - m_offer_shown_time < SCRIPT_OFFER_MIN_READ_SECONDS;
     const float gap              = style.ItemInnerSpacing.x;
     const float header_icon_size =
         ImGui::GetFontSize() * SCRIPT_HEADER_ICON_SCALE;
@@ -363,7 +380,7 @@ ScriptEditor::RenderHeaderCard()
         ImGui::SameLine(0.0f, 0.0f);
     }
 
-    const bool can_run = CanRun();
+    const bool can_run = CanRun() && !just_offered;
     if(!can_run)
     {
         ImGui::BeginDisabled();

@@ -104,6 +104,9 @@ private:
     // wipe its output. Empty when nothing is running here.
     std::string    m_running_source_id;
     ScriptApproval m_approval;
+    // ImGui time at which the pending offer was first drawn, negative until it
+    // has been. Run stays off for a moment after that: see RenderHeaderCard.
+    double m_offer_shown_time = -1.0;
 
     EventManager::SubscriptionToken m_complete_token;
     EventManager::SubscriptionToken m_progress_token;

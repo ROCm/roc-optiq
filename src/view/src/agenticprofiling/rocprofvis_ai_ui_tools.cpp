@@ -74,7 +74,8 @@ Actions(const AssistantToolContext& context)
 }
 
 // Cuts text to max_chars and marks the cut. Backs up to the start of a UTF-8
-// character first, since a note is saved into the project file.
+// character first: a note is saved into the project file, and a next step is
+// sent back as a message.
 std::string
 TrimNoteText(std::string text, size_t max_chars)
 {
@@ -106,6 +107,28 @@ ClampToTrace(const TimelineModel& timeline, double& start_ns, double& end_ns)
     return end_ns > start_ns;
 }
 
+// A next step as its button shows it, which is also what a click sends as the
+// user's own message. ImGui hides whatever follows "##" in a label, so a step
+// carrying that marker would send words the user never saw - and words the
+// user sends are what unlock notes, bookmarks and tab switches. The marker and
+// control characters are taken out, so the button shows all of it.
+std::string
+PrintableStep(const std::string& text)
+{
+    std::string step;
+    step.reserve(text.size());
+    for(const char c : text)
+    {
+        if(c == '#' && !step.empty() && step.back() == '#')
+        {
+            continue;
+        }
+        const bool control = static_cast<unsigned char>(c) < 0x20 || c == 0x7F;
+        step += control ? ' ' : c;
+    }
+    return TrimNoteText(Core::String::trim_copy(step), ASSISTANT_MAX_NEXT_STEP_CHARS);
+}
+
 // Reads the stacked follow-up buttons out of offer_next_steps arguments.
 AssistantToolStartResult
 OfferNextStepsResult(const jt::Json& args)
@@ -133,14 +156,10 @@ OfferNextStepsResult(const jt::Json& args)
         {
             continue;
         }
-        std::string step = Core::String::trim_copy(entry.getString());
+        const std::string step = PrintableStep(entry.getString());
         if(step.empty())
         {
             continue;
-        }
-        if(step.size() > ASSISTANT_MAX_NEXT_STEP_CHARS)
-        {
-            step.resize(ASSISTANT_MAX_NEXT_STEP_CHARS);
         }
         result.next_steps.push_back(step);
         if(result.next_steps.size() >= ASSISTANT_MAX_NEXT_STEPS)
@@ -420,7 +439,10 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
                           "Switched tabs");
     }
     // A ref is unambiguous even when two paths have the same basename. The
-    // labels remain accepted when they name exactly one tab.
+    // labels remain accepted when they name exactly one tab. The id a ref
+    // resolves to is a file path, so it is kept apart from the name the reply
+    // may quote back.
+    std::string       target     = name;
     const std::string ref_prefix = "tab_";
     if(name.compare(0, ref_prefix.size(), ref_prefix) == 0)
     {
@@ -440,11 +462,11 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
         }
         if(matched_id != nullptr)
         {
-            name = *matched_id;
+            target = *matched_id;
         }
     }
     std::string selected_id;
-    if(actions.SelectTab(name, selected_id, selected))
+    if(actions.SelectTab(target, selected_id, selected))
     {
         if(selected_id == context.project_id)
         {

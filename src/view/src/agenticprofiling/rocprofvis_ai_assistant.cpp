@@ -103,20 +103,6 @@ constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
 // result, so a query that keeps failing answers well before the deadline.
 constexpr uint32_t ASSISTANT_STATS_MAX_RERUNS = 4;
 
-// Overwrites a key's whole buffer before it is emptied or freed, so the bytes
-// do not sit in released memory. Volatile, so the writes are not optimised out.
-void
-WipeString(std::string& text)
-{
-    text.resize(text.capacity());
-    volatile char* bytes = text.data();
-    for(size_t i = 0; i < text.size(); i++)
-    {
-        bytes[i] = '\0';
-    }
-    text.clear();
-}
-
 }  // namespace
 
 AssistantPanel* AssistantPanel::s_instance = nullptr;
@@ -185,7 +171,7 @@ AssistantPanel::AssistantPanel()
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
-    WipeString(m_turn_token);
+    AssistantWipeSecret(m_turn_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tab_closed_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSummaryComplete),
@@ -494,7 +480,7 @@ AssistantPanel::ResetTurn()
     // A request still unwinding reads its own copy of these, never the members.
     m_turn_endpoint_url.clear();
     m_turn_model.clear();
-    WipeString(m_turn_token);
+    AssistantWipeSecret(m_turn_token);
     // Left in, the write-up nudge tells every later turn not to call tools.
     if(m_force_final)
     {
@@ -649,7 +635,7 @@ AssistantPanel::StartHttpRequest()
     m_pending = std::async(std::launch::async,
                            [call = m_call, request = std::move(request)]() mutable {
                                AssistantChatResult result = call->Send(request);
-                               WipeString(request.api_token);
+                               AssistantWipeSecret(request.api_token);
                                return result;
                            });
 }
@@ -756,6 +742,18 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
+    // Fixes where this turn's requests go, and with which key. Taken here so
+    // it also covers a turn that waits on the summary warmup first. Nothing
+    // below returns without starting the turn, so ResetTurn wipes this copy.
+    AssistantProvider endpoint = *provider;
+    ApplyAssistantEndpointDefaults(endpoint);
+    m_turn_endpoint_url = endpoint.endpoint_url;
+    m_turn_model        = endpoint.model;
+    settings.GetAssistantToken(endpoint.name, m_turn_token);
+    // A key pasted into the question would sit in the transcript, and from
+    // there go into an export or onto the clipboard.
+    AssistantRedactKey(m_turn_token, question);
+
     conversation.next_steps.clear();
 
     const std::string display =
@@ -777,14 +775,6 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_fetch_wait      = FetchWait();
     // Starts this turn's allowance of pinned notes.
     BeginAssistantUiTurn();
-
-    // Fixes where this turn's requests go, and with which key. Taken here so
-    // it also covers a turn that waits on the summary warmup first.
-    AssistantProvider endpoint = *provider;
-    ApplyAssistantEndpointDefaults(endpoint);
-    m_turn_endpoint_url = endpoint.endpoint_url;
-    m_turn_model        = endpoint.model;
-    settings.GetAssistantToken(endpoint.name, m_turn_token);
 
     if(TryStartSummaryWarmup(question))
     {
@@ -1304,9 +1294,13 @@ AssistantPanel::AppendToolReply(const AssistantToolCall& call, const std::string
     tool_message.name         = call.name;
     tool_message.tool_call_id = call.id;
     tool_message.content      = content.empty() ? "(empty)" : content;
+    // A script the user approved runs unsandboxed and can print the key, and a
+    // trace can have recorded it. Blanked before the reply is logged or kept,
+    // the way the client blanks one a provider echoes.
+    AssistantRedactKey(m_turn_token, tool_message.content);
 
-    // The whole exchange, verbatim, so an answer can be checked against what
-    // the model was actually given rather than against what it says it read.
+    // The whole exchange, as the model was given it, so an answer can be
+    // checked against what it actually read rather than what it says it read.
     // Nothing else records this: the transcript shows only the final prose, and
     // these rows are dropped when the turn ends. At debug level, so a normal
     // session does not pay for it - raise the log level to inspect a turn.

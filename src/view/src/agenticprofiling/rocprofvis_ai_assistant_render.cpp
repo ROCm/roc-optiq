@@ -1641,9 +1641,29 @@ AssistantPanel::RenderComposer()
                            !ImGui::GetIO().KeyShift && !Busy() && can_ask;
 
     ImGui::SameLine(0.0f, gap);
-    ImGui::BeginDisabled(Busy() || !can_ask || conversation.input.empty());
-    const bool send = AccentButton("Send", ImVec2(ASSISTANT_SEND_WIDTH, 0.0f), &settings);
-    ImGui::EndDisabled();
+    bool send = false;
+    bool stop = false;
+    if(busy_here)
+    {
+        // Stop takes Send's place, so the second click of a double-click on
+        // Send lands on it and must not end the turn the first one started.
+        const bool double_click =
+            ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+            ImGui::GetIO().MouseClickedLastCount[ImGuiMouseButton_Left] > 1;
+        stop = ColoredButton("Stop", settings.GetColor(Colors::kButton),
+                             settings.GetColor(Colors::kButtonHovered),
+                             settings.GetColor(Colors::kButtonActive),
+                             settings.GetColor(Colors::kTextMain),
+                             "Stop this answer and keep the conversation",
+                             ImVec2(ASSISTANT_SEND_WIDTH, 0.0f)) &&
+               !double_click;
+    }
+    else
+    {
+        ImGui::BeginDisabled(Busy() || !can_ask || conversation.input.empty());
+        send = AccentButton("Send", ImVec2(ASSISTANT_SEND_WIDTH, 0.0f), &settings);
+        ImGui::EndDisabled();
+    }
 
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(conversation.lines.empty());
@@ -1688,7 +1708,11 @@ AssistantPanel::RenderComposer()
     // the transcript has to leave above the composer.
     m_composer_height = ImGui::GetCursorPosY() - start_y;
 
-    if(send || submitted)
+    if(stop)
+    {
+        StopTurn();
+    }
+    else if(send || submitted)
     {
         SendCurrentInput(false);
     }

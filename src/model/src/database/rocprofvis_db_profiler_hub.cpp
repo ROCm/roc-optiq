@@ -5,6 +5,7 @@
 
 #include "rocprofvis_db_profiler_hub.h"
 #include "rocprofvis_db_summary_cache.h"
+#include "rocprofvis_shared_types.h"
 #include <profiler-hub/c/profiler_hub_trim.h>
 #include "rocprofvis_db_profiler_hub_ext.h"
 #include "rocprofvis_db_query_builder.h"
@@ -12,6 +13,8 @@
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -1436,22 +1439,22 @@ ProfilerHub::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
         {
             future->DeleteProfilerHubFuture(ph_future);
             ShowProgress(0, "Failed trimming trace!", kRPVDbError, future);
-            return future->SetPromise(result);
+            return result;
         }
         result = future->WaitAndDeleteProfilerHubFuture(ph_future);
         if(result != kRocProfVisDmResultSuccess)
         {
             ShowProgress(0, "Failed trimming trace!", kRPVDbError, future);
-            return future->SetPromise(result);
+            return result;
         }
         ShowProgress(100 - future->Progress(), "Trace successfully trimmed!",
                      kRPVDbSuccess, future);
-        return future->SetPromise(kRocProfVisDmResultSuccess);
+        return kRocProfVisDmResultSuccess;
     }
 
     ShowProgress(0, "Failed trimming trace!", kRPVDbError, future);
-    return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort
-                                                    : kRocProfVisDmResultDbAccessFailed);
+    return future->Interrupted() ? kRocProfVisDmResultDbAbort
+                                 : kRocProfVisDmResultDbAccessFailed;
 }
 
 bool
@@ -1475,6 +1478,260 @@ convert_dm_ph_event_type(rocprofvis_dm_event_operation_t dm_type,
         default: return false;
     }
     return true;
+}
+
+namespace
+{
+
+uint64_t
+parse_catalog_id(const char* text)
+{
+    if(text == nullptr || text[0] == '\0') return UINT64_MAX;
+    char*              end   = nullptr;
+    unsigned long long value = std::strtoull(text, &end, 10);
+    if(end == text) return UINT64_MAX;
+    return static_cast<uint64_t>(value);
+}
+
+void
+add_unique_id(std::vector<uint64_t>& ids, uint64_t id)
+{
+    if(std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+}
+
+// Processor, process, and thread ids from the topology carry the source guid
+// in the high bits. Event rows store the local catalog id only.
+bool
+decode_source_id(uint64_t id, uint64_t& local_id, uint32_t& source_index, bool& have_source)
+{
+    const uint32_t encoded = static_cast<uint32_t>(id >> TOPOLOGY_INSTANCE_BIT_POS);
+    local_id               = id & TOPOLOGY_ID_MASK;
+    if(encoded == 0)
+    {
+        return true;
+    }
+    if(have_source && source_index != encoded)
+    {
+        return false;
+    }
+    source_index = encoded;
+    have_source  = true;
+    return true;
+}
+
+// Strips the source guid from the summary agent, process, and thread ids so
+// every trace queries with its local row ids. Node ids are full trace hashes
+// and are not encoded, so they are left as they are.
+void
+strip_summary_ids(uint64_t& agent, bool has_agent, uint64_t& process_id, bool has_process,
+                  uint64_t& thread_id, bool has_thread)
+{
+    uint32_t source_index = 0;
+    bool     have_source  = false;
+    if(has_agent)
+    {
+        decode_source_id(agent, agent, source_index, have_source);
+    }
+    if(has_process)
+    {
+        decode_source_id(process_id, process_id, source_index, have_source);
+    }
+    if(has_thread)
+    {
+        decode_source_id(thread_id, thread_id, source_index, have_source);
+    }
+}
+
+}  // namespace
+
+bool
+ProfilerHub::IdentifierOnSource(DbInstance* instance, trace_identifier_t kind, uint64_t id)
+{
+    if(instance == nullptr) return false;
+    const uint32_t guid = instance->GuidIndex();
+    const char*    table = "Node";
+    switch(kind)
+    {
+        case trace_identifier_t::node: table = "Node"; break;
+        case trace_identifier_t::agent: table = "Agent"; break;
+        case trace_identifier_t::process: table = "Process"; break;
+        case trace_identifier_t::thread: table = "Thread"; break;
+    }
+    const char* text = CachedTables(guid)->Catalog().CellText(table, id, "id");
+    if(text != nullptr && text[0] != '\0') return true;
+
+    for(int index = 0; index < NumTracks(); ++index)
+    {
+        rocprofvis_dm_track_params_t* props = TrackPropertiesAt(index);
+        if(props == nullptr) continue;
+        auto* track_instance =
+            static_cast<DbInstance*>(props->track_indentifiers.db_instance);
+        if(track_instance == nullptr || track_instance->GuidIndex() != guid) continue;
+        const rocprofvis_dm_track_identifiers_t& ids = props->track_indentifiers;
+        switch(kind)
+        {
+            case trace_identifier_t::node:
+                if(ids.id[TRACK_ID_NODE] == id) return true;
+                break;
+            case trace_identifier_t::agent:
+                if(GpuAndPMCTracks(ids.category) && ids.id[TRACK_ID_AGENT] == id) return true;
+                break;
+            case trace_identifier_t::process:
+                if((RegionTracks(ids.category) || ids.category == kRocProfVisDmStreamTrack) &&
+                   ids.id[TRACK_ID_PID] == id)
+                {
+                    return true;
+                }
+                break;
+            case trace_identifier_t::thread:
+                if(RegionTracks(ids.category) && ids.id[TRACK_ID_TID] == id) return true;
+                break;
+        }
+    }
+    return false;
+}
+
+const char*
+ProfilerHub::CatalogTextAnywhere(const char* table, uint64_t row_id, const char* column)
+{
+    for(auto& guid : DbInstances())
+    {
+        const char* text =
+            CachedTables(guid.first.GuidIndex())->Catalog().CellText(table, row_id, column);
+        if(text != nullptr && text[0] != '\0') return text;
+    }
+    return nullptr;
+}
+
+void
+ProfilerHub::RemapFilterIds(DbInstance* instance, source_filter_ids& filter)
+{
+    if(instance == nullptr) return;
+    const uint32_t       guid    = instance->GuidIndex();
+    const InformationCatalog& catalog = CachedTables(guid)->Catalog();
+
+    if(filter.has_agent && filter.agent != 0 &&
+       !IdentifierOnSource(instance, trace_identifier_t::agent, filter.agent))
+    {
+        const char* type       = CatalogTextAnywhere("Agent", filter.agent, "type");
+        const char* type_index = CatalogTextAnywhere("Agent", filter.agent, "type_index");
+        std::vector<uint64_t> matches;
+        const CatalogTable*   agents = catalog.FindTable("Agent");
+        if(type != nullptr && type_index != nullptr && agents != nullptr)
+        {
+            for(size_t row = 0; row < agents->NumRows(); ++row)
+            {
+                const char* row_type  = agents->CellTextByIndex(row, "type");
+                const char* row_index = agents->CellTextByIndex(row, "type_index");
+                if(row_type == nullptr || row_index == nullptr ||
+                   std::strcmp(row_type, type) != 0 || std::strcmp(row_index, type_index) != 0)
+                {
+                    continue;
+                }
+                if(filter.has_node)
+                {
+                    const uint64_t nid = parse_catalog_id(agents->CellTextByIndex(row, "nid"));
+                    if(nid != UINT64_MAX && nid != filter.node) continue;
+                }
+                const uint64_t id = parse_catalog_id(agents->CellTextByIndex(row, "id"));
+                if(id != UINT64_MAX) add_unique_id(matches, id);
+            }
+        }
+        if(matches.size() == 1)
+        {
+            filter.agent = matches[0];
+        }
+        else
+        {
+            filter.has_agent = false;
+        }
+    }
+
+    if(filter.has_process &&
+       !IdentifierOnSource(instance, trace_identifier_t::process, filter.process_id))
+    {
+        const char* os_pid = CatalogTextAnywhere("Process", filter.process_id, "pid");
+        uint64_t    local  = 0;
+        if(os_pid != nullptr && catalog.FindRowId("Process", "pid", os_pid, local))
+        {
+            filter.process_id = local;
+        }
+        else
+        {
+            std::vector<uint64_t> local_ids;
+            for(int index = 0; index < NumTracks(); ++index)
+            {
+                rocprofvis_dm_track_params_t* props = TrackPropertiesAt(index);
+                if(props == nullptr) continue;
+                auto* track_instance =
+                    static_cast<DbInstance*>(props->track_indentifiers.db_instance);
+                if(track_instance == nullptr || track_instance->GuidIndex() != guid) continue;
+                const rocprofvis_dm_track_identifiers_t& ids = props->track_indentifiers;
+                if(filter.has_node && ids.id[TRACK_ID_NODE] != filter.node) continue;
+                if(!RegionTracks(ids.category) && ids.category != kRocProfVisDmStreamTrack) continue;
+                add_unique_id(local_ids, ids.id[TRACK_ID_PID]);
+            }
+            if(local_ids.size() == 1)
+            {
+                filter.process_id = local_ids[0];
+            }
+            else
+            {
+                filter.has_process = false;
+            }
+        }
+    }
+
+    if(filter.has_thread &&
+       !IdentifierOnSource(instance, trace_identifier_t::thread, filter.thread_id))
+    {
+        const char* os_tid = CatalogTextAnywhere("Thread", filter.thread_id, "tid");
+        uint64_t    local  = 0;
+        if(os_tid != nullptr && catalog.FindRowId("Thread", "tid", os_tid, local))
+        {
+            filter.thread_id = local;
+        }
+        else
+        {
+            std::vector<uint64_t> local_ids;
+            for(int index = 0; index < NumTracks(); ++index)
+            {
+                rocprofvis_dm_track_params_t* props = TrackPropertiesAt(index);
+                if(props == nullptr) continue;
+                auto* track_instance =
+                    static_cast<DbInstance*>(props->track_indentifiers.db_instance);
+                if(track_instance == nullptr || track_instance->GuidIndex() != guid) continue;
+                const rocprofvis_dm_track_identifiers_t& ids = props->track_indentifiers;
+                if(!RegionTracks(ids.category)) continue;
+                if(filter.has_node && ids.id[TRACK_ID_NODE] != filter.node) continue;
+                if(filter.has_process && ids.id[TRACK_ID_PID] != filter.process_id) continue;
+                add_unique_id(local_ids, ids.id[TRACK_ID_TID]);
+            }
+            if(local_ids.size() == 1)
+            {
+                filter.thread_id = local_ids[0];
+            }
+            else
+            {
+                filter.has_thread = false;
+            }
+        }
+    }
+}
+
+std::vector<ProfilerHub::source_filter_ids>
+ProfilerHub::FiltersForSource(DbInstance* instance, const source_filter_ids& filter)
+{
+    if(instance == nullptr || DbInstances().size() <= 1)
+    {
+        return { filter };
+    }
+
+    // Every trace runs the query. A node that is not on this trace matches no
+    // rows here, so its rows are not folded into another node's summary.
+    source_filter_ids local = filter;
+    RemapFilterIds(instance, local);
+    return { local };
 }
 
 uint32_t
@@ -2657,6 +2914,8 @@ ProfilerHub::SummarizeNameDurations(
         const bool has_agent   = des.get("agent", agent);
         const bool has_process = des.get("process", process_id);
         const bool has_thread  = des.get("thread", thread_id);
+        // One summary request is repeated for every trace. Use local row ids.
+        strip_summary_ids(agent, has_agent, process_id, has_process, thread_id, has_thread);
         const bool tracks_selected = des.getArray("tracks", tracks);
         const bool search_query    = des.getArray("filters", filters);
         des.get("include_substring", include_substring);
@@ -2736,35 +2995,54 @@ ProfilerHub::SummarizeNameDurations(
         if(result != kRocProfVisDmResultSuccess) break;
         if(event_types.empty()) continue;
 
-        ph_event_query_t event_query = nullptr;
-        const bool has_source = request.db_instance != nullptr && DbInstances().size() > 1;
-        const uint32_t source_index = has_source ? request.db_instance->GuidIndex() : 0;
-        const rocprofvis_dm_result_t opened = open_event_query(
-            m_ph_trace, has_time, start, end, has_node, node, has_agent, agent, has_process,
-            process_id, has_thread, thread_id, has_track ? &hub_track : nullptr,
-            has_track ? 1u : 0u, event_types.data(), (uint32_t) event_types.size(), filters,
-            include_substring, include_category, partial_matching, has_source, source_index,
-            event_query);
-        if(opened != kRocProfVisDmResultSuccess)
-        {
-            result = opened;
-            break;
-        }
-        event_queries.push_back(event_query);
+        // The same node, agent, process, and thread ids are attached to every
+        // trace. Ask this trace for its own nodes, with ids that exist there.
+        source_filter_ids incoming;
+        incoming.has_node    = has_node;
+        incoming.has_agent   = has_agent;
+        incoming.has_process = has_process;
+        incoming.has_thread  = has_thread;
+        incoming.node        = node;
+        incoming.agent       = agent;
+        incoming.process_id  = process_id;
+        incoming.thread_id   = thread_id;
+        const std::vector<source_filter_ids> locals =
+            FiltersForSource(request.db_instance, incoming);
 
         std::unordered_map<std::string, rocprofvis_db_name_duration_t> request_groups;
-        for(uint32_t event_type : event_types)
+        for(const source_filter_ids& local : locals)
         {
-            HubSummarySink sink;
-            sink.groups     = &request_groups;
-            sink.event_type = event_type;
-            const ph_result_t summarized = ph_event_query_summarize_durations(
-                event_query, event_type, rocprofvis_hub_duration_summary_row, &sink, nullptr);
-            if(summarized != PH_RESULT_SUCCESS)
+            ph_event_query_t event_query = nullptr;
+            const bool has_source = request.db_instance != nullptr && DbInstances().size() > 1;
+            const uint32_t source_index = has_source ? request.db_instance->GuidIndex() : 0;
+            const rocprofvis_dm_result_t opened = open_event_query(
+                m_ph_trace, has_time, start, end, local.has_node, local.node, local.has_agent,
+                local.agent, local.has_process, local.process_id, local.has_thread,
+                local.thread_id, has_track ? &hub_track : nullptr, has_track ? 1u : 0u,
+                event_types.data(), (uint32_t) event_types.size(), filters, include_substring,
+                include_category, partial_matching, has_source, source_index, event_query);
+            if(opened != kRocProfVisDmResultSuccess)
             {
-                result = hub_query_result(summarized);
+                result = opened;
                 break;
             }
+            event_queries.push_back(event_query);
+
+            for(uint32_t event_type : event_types)
+            {
+                HubSummarySink sink;
+                sink.groups     = &request_groups;
+                sink.event_type = event_type;
+                const ph_result_t summarized = ph_event_query_summarize_durations(
+                    event_query, event_type, rocprofvis_hub_duration_summary_row, &sink,
+                    nullptr);
+                if(summarized != PH_RESULT_SUCCESS)
+                {
+                    result = hub_query_result(summarized);
+                    break;
+                }
+            }
+            if(result != kRocProfVisDmResultSuccess) break;
         }
         if(result != kRocProfVisDmResultSuccess) break;
         std::vector<rocprofvis_db_name_duration_t> request_rows;
@@ -2821,6 +3099,8 @@ ProfilerHub::GetEventTablesAsync(
         bool has_agent      = des.get("agent", agent);
         bool has_process    = des.get("process", process_id);
         bool has_thread     = des.get("thread", thread_id);
+        // One summary request is repeated for every trace. Use local row ids.
+        strip_summary_ids(agent, has_agent, process_id, has_process, thread_id, has_thread);
         bool tracks_selected = des.getArray("tracks", tracks);
         bool search_query    = des.getArray("filters", filters);
         des.get("include_substring", include_substring);
@@ -2918,54 +3198,73 @@ ProfilerHub::GetEventTablesAsync(
             continue;
         }
 
-        ph_event_query_t event_query = nullptr;
-        const bool     has_source =
-            query.first != nullptr && DbInstances().size() > 1;
-        const uint32_t source_index = has_source ? query.first->GuidIndex() : 0;
-        rocprofvis_dm_result_t opened = open_event_query(
-            m_ph_trace, has_time, start, end, has_node, node, has_agent, agent, has_process,
-            process_id, has_thread, thread_id, has_track ? &hub_track : nullptr,
-            has_track ? 1u : 0u, event_types.data(), (uint32_t) event_types.size(), filters,
-            include_substring, include_category, partial_matching, has_source, source_index,
-            event_query);
-        if(opened != kRocProfVisDmResultSuccess)
+        // The same node, agent, process, and thread ids are attached to every
+        // trace. Ask this trace for its own nodes, with ids that exist there.
+        source_filter_ids incoming;
+        incoming.has_node    = has_node;
+        incoming.has_agent   = has_agent;
+        incoming.has_process = has_process;
+        incoming.has_thread  = has_thread;
+        incoming.node        = node;
+        incoming.agent       = agent;
+        incoming.process_id  = process_id;
+        incoming.thread_id   = thread_id;
+        const std::vector<source_filter_ids> locals = FiltersForSource(query.first, incoming);
+        bool                                  primary_slot = true;
+        for(const source_filter_ids& local : locals)
         {
-            free_event_queries(event_queries);
-            return opened;
-        }
-        event_queries.push_back(event_query);
-
-        hub_table_job job;
-        job.query        = event_query;
-        job.db_instance  = query.first;
-        job.record_count = record_count;
-        job.after_id       = 0;
-        job.last_id        = UINT64_MAX;
-        job.page_size      = kHubTablePage;
-        job.sample_node    = sample_node;
-        job.sample_agent   = sample_agent;
-        job.sample_counter = sample_counter;
-        if(one_type_per_job)
-        {
-            for(size_t index = 0; index < event_types.size(); ++index)
+            ph_event_query_t event_query = nullptr;
+            const bool     has_source =
+                query.first != nullptr && DbInstances().size() > 1;
+            const uint32_t source_index = has_source ? query.first->GuidIndex() : 0;
+            rocprofvis_dm_result_t opened = open_event_query(
+                m_ph_trace, has_time, start, end, local.has_node, local.node, local.has_agent,
+                local.agent, local.has_process, local.process_id, local.has_thread,
+                local.thread_id, has_track ? &hub_track : nullptr, has_track ? 1u : 0u,
+                event_types.data(), (uint32_t) event_types.size(), filters, include_substring,
+                include_category, partial_matching, has_source, source_index, event_query);
+            if(opened != kRocProfVisDmResultSuccess)
             {
-                job.event_types   = { event_types[index] };
-                job.operations    = { operations[index] };
-                job.table_indices = { index == 0 ? (uint32_t) query_index
-                                                 : table_processor->AddPackedTable() };
+                free_event_queries(event_queries);
+                return opened;
+            }
+            event_queries.push_back(event_query);
+
+            hub_table_job job;
+            job.query          = event_query;
+            job.db_instance    = query.first;
+            job.record_count   = record_count;
+            job.after_id       = 0;
+            job.last_id        = UINT64_MAX;
+            job.page_size      = kHubTablePage;
+            job.sample_node    = sample_node;
+            job.sample_agent   = sample_agent;
+            job.sample_counter = sample_counter;
+            if(one_type_per_job)
+            {
+                for(size_t index = 0; index < event_types.size(); ++index)
+                {
+                    job.event_types   = { event_types[index] };
+                    job.operations    = { operations[index] };
+                    job.table_indices = { primary_slot && index == 0
+                                              ? (uint32_t) query_index
+                                              : table_processor->AddPackedTable() };
+                    base_jobs.push_back(job);
+                }
+            }
+            else
+            {
+                job.event_types = event_types;
+                job.operations  = operations;
+                job.table_indices.push_back(primary_slot ? (uint32_t) query_index
+                                                         : table_processor->AddPackedTable());
+                for(size_t index = 1; index < event_types.size(); ++index)
+                {
+                    job.table_indices.push_back(table_processor->AddPackedTable());
+                }
                 base_jobs.push_back(job);
             }
-        }
-        else
-        {
-            job.event_types = event_types;
-            job.operations  = operations;
-            job.table_indices.push_back((uint32_t) query_index);
-            for(size_t index = 1; index < event_types.size(); ++index)
-            {
-                job.table_indices.push_back(table_processor->AddPackedTable());
-            }
-            base_jobs.push_back(job);
+            primary_slot = false;
         }
     }
 

@@ -60,7 +60,8 @@ namespace DataModel
 
     typedef struct rocprofvis_db_compound_query_info {
         uint32_t track;
-        uint32_t guid_id;
+        // One statement is emitted once per guid. Every guid stays with it.
+        std::vector<uint32_t> guid_ids;
     } rocprofvis_db_compound_query_info;
 
 

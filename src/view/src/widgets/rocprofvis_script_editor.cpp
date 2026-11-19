@@ -49,9 +49,8 @@ constexpr float  SCRIPT_DOT_RADIUS            = 2.0f;
 constexpr int    SCRIPT_DOT_COUNT             = 3;
 constexpr float  SCRIPT_DOT_SPACING           = 3.0f;
 constexpr float  SCRIPT_DOT_SPEED             = 5.0f;
-// How long a script Ask Optiq offered has to be on screen before Run takes a
-// click. Far too short to read one; long enough that a click cannot land on it
-// by having been aimed at what was there before.
+// How long an offered script is on screen before Run takes a click: too short
+// to read one, long enough that a click aimed at what it replaced cannot land.
 constexpr double SCRIPT_OFFER_MIN_READ_SECONDS = 1.0;
 
 // Even-spacing sample from SCRIPTING.md so the first Run does something
@@ -330,11 +329,8 @@ ScriptEditor::RenderHeaderCard()
                    &settings);
 
     const bool awaiting_decision = m_approval == ScriptApproval::kPending;
-    // An offer replaces the source under a Run button that was already there,
-    // with the same id. A press begun on the user's own script, a second click
-    // of a double-click, or a key held on Run would otherwise run text nobody
-    // has read. Disabling the button drops a press already in progress, and it
-    // stays off until the offer has been on screen for a moment.
+    // An offer lands under a Run button that was already there, so a click
+    // aimed at the user's own script must not run it: Run stays off for a moment.
     if(awaiting_decision && m_offer_shown_time < 0.0)
     {
         m_offer_shown_time = ImGui::GetTime();
@@ -342,6 +338,11 @@ ScriptEditor::RenderHeaderCard()
     const bool just_offered =
         awaiting_decision &&
         ImGui::GetTime() - m_offer_shown_time < SCRIPT_OFFER_MIN_READ_SECONDS;
+    // A press begun before the offer was drawn and held past that moment was
+    // aimed at what the offer replaced, wherever it is let go.
+    const bool stale_press =
+        awaiting_decision && ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+        ImGui::GetIO().MouseClickedTime[ImGuiMouseButton_Left] < m_offer_shown_time;
     const float gap              = style.ItemInnerSpacing.x;
     const float header_icon_size =
         ImGui::GetFontSize() * SCRIPT_HEADER_ICON_SCALE;
@@ -385,7 +386,7 @@ ScriptEditor::RenderHeaderCard()
     {
         ImGui::BeginDisabled();
     }
-    if(AccentButton("Run", ImVec2(run_width, button_height), &settings))
+    if(AccentButton("Run", ImVec2(run_width, button_height), &settings) && !stale_press)
     {
         Run();
     }

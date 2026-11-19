@@ -868,7 +868,8 @@ every editor hears every one of them. The source is read-only while an
 offer waits, and Run is disabled for `SCRIPT_OFFER_MIN_READ_SECONDS`
 after the offer first draws: it lands under a Run button that was
 already there, so a click aimed at the user's own script must not run
-the new one.
+the new one. A press that began before the offer drew is ignored for the
+same reason, however long it was held.
 
 ## 8. Track Item Hierarchy
 

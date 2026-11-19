@@ -346,7 +346,13 @@ TrimAssistantText(std::string text, size_t max_chars, const char* truncation_not
 {
     if(text.size() > max_chars)
     {
-        text.resize(max_chars);
+        // Back to the start of a UTF-8 character, so none is cut in half.
+        size_t cut = max_chars;
+        while(cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+        {
+            --cut;
+        }
+        text.resize(cut);
         text += truncation_note;
     }
     return text;

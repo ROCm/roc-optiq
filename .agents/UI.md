@@ -869,7 +869,9 @@ offer waits, and Run is disabled for `SCRIPT_OFFER_MIN_READ_SECONDS`
 after the offer first draws: it lands under a Run button that was
 already there, so a click aimed at the user's own script must not run
 the new one. A press that began before the offer drew is ignored for the
-same reason, however long it was held.
+same reason, however long it was held. Save writes the text as it was
+when Save was pressed, so an offer that lands while the dialog is open
+is not saved under the name the user picked for their own script.
 
 ## 8. Track Item Hierarchy
 
@@ -2945,7 +2947,10 @@ Rules that are easy to get wrong here:
   pasted into the URL is kept out too: `AssistantStorableUrl` drops
   userinfo, a fragment, and every query parameter but an API version,
   when the file is read, when OK is pressed, and when it is written, and
-  the hover cards show the URL without its query.
+  the hover cards show the URL without its query. A key saved before
+  keys were bound to an origin is bound to the URL's origin at its first
+  read, and `GetAssistantToken` does not hand it out while the store
+  refuses that write: left unbound, it would follow an edited URL.
 - **Nothing the model reads, and nothing it sends back, may carry the
   key.** `AssistantRedactKey` blanks the turn's key in the question
   before it is shown or kept (`SendCurrentInput`), in every tool reply

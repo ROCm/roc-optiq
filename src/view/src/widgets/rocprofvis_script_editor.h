@@ -72,7 +72,8 @@ private:
     void        LoadFromFile();
     void        SaveToFile();
     void        ReadFile(const std::string& path);
-    void        WriteFile(const std::string& path);
+    // Writes source, the text as it was when Save was pressed.
+    void        WriteFile(const std::string& path, const std::string& source);
     void        RenderHeaderCard();
     void        RenderProposalBanner();
     void        RenderSource(const ImVec2& size);

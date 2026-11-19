@@ -779,11 +779,10 @@ reasoning moved to the section it belongs to.
   `m_running_source_id` set and the request in flight. The old run's
   completion event still matches that id, so it overwrites the new
   offer's output while approval stays `kPending` and Ask Optiq waits
-  out its deadline. It also discards an unsaved draft without asking.
-  Cancel or refuse the propose while a run is live, and clear
-  `m_running_source_id` on every path that leaves Running.
+  out its deadline. Cancel or refuse the propose while a run is live,
+  and clear `m_running_source_id` on every path that leaves Running.
 - **File dialogs capture raw `this`.** `LoadFromFile` / `SaveToFile`
-  hand `[this](std::string path)` to `AppWindow::ShowOpenFileDialog` /
+  hand callbacks that capture `this` to `AppWindow::ShowOpenFileDialog` /
   `ShowSaveFileDialog`, which hold the callback until the user
   confirms. Closing the trace tab destroys the `ScriptEditor` first,
   and `UpdateNativeFileDialog` can then call into freed memory; tab
@@ -791,13 +790,6 @@ reasoning moved to the section it belongs to.
   a generation token, or cancelling pending dialogs on teardown. It is
   the same shape §3's run generation solves on the binding side: a
   callback outliving the thing it points at.
-- **A cancelled run is reported to the model as a failure.**
-  `GetLastScriptResult` returns false for "never ran", "failed" and
-  "cancelled" alike, and `FinishAssistantScriptFetch` turns that into
-  *"The script failed:"*, so the assistant may try to fix and re-offer
-  a script the user deliberately stopped. It handles `kRejected`,
-  `kFailedToStart`, `kPending` and `kRunning` separately already;
-  cancel needs the same treatment.
 
 ### Sandbox
 

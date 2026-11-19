@@ -355,13 +355,14 @@ LinkTraces(const AssistantToolContext& baseline, const AssistantToolContext& tar
 }  // namespace
 
 void
-AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t track_id)
+AssistantPanel::RenderActivityChart(const std::string& project_id, ChatLine& line)
 {
     const AssistantToolContext context = MakeAssistantToolContext(project_id);
     if(context.data_provider == nullptr)
     {
         return;
     }
+    const uint64_t track_id = line.track_id;
 
     // Bin count follows the column width, so bars stay legible when the dock is
     // dragged narrow.
@@ -371,8 +372,23 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
                      static_cast<float>(ASSISTANT_CHART_MIN_BINS),
                      static_cast<float>(ASSISTANT_CHART_MAX_BINS)));
 
-    const std::vector<double> bins =
-        GetAssistantActivityBins(context, track_id, bin_count);
+    // Cutting the strip sums every track's minimap row, and ranking the tracks
+    // does it again, which is too much to repeat on every frame a chart is on
+    // screen. The minimap does not change once the trace has loaded, so the
+    // strip is kept until the bin count does. An empty one is a trace still
+    // loading, and is asked for again.
+    if(line.chart_bin_count != bin_count || line.chart_bins.empty())
+    {
+        line.chart_bin_count = bin_count;
+        line.chart_bins      = GetAssistantActivityBins(context, track_id, bin_count);
+        line.chart_rows.clear();
+        if(!line.chart_bins.empty() && track_id == INVALID_UINT64_INDEX)
+        {
+            line.chart_rows =
+                GetAssistantActivityRows(context, bin_count, ASSISTANT_CHART_ROWS);
+        }
+    }
+    const std::vector<double>& bins = line.chart_bins;
     if(bins.empty())
     {
         return;
@@ -416,8 +432,7 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
         return;
     }
 
-    const std::vector<AssistantActivityRow> rows =
-        GetAssistantActivityRows(context, bin_count, ASSISTANT_CHART_ROWS);
+    const std::vector<AssistantActivityRow>& rows = line.chart_rows;
     if(rows.empty())
     {
         return;
@@ -1144,7 +1159,7 @@ AssistantPanel::RenderTranscript()
 
 void
 AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
-                                  const ChatLine& line)
+                                  ChatLine& line)
 {
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = settings.GetDefaultStyle();
@@ -1163,8 +1178,7 @@ AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
 
     if(line.speaker == Speaker::kChart)
     {
-        // The chart is rebuilt from the whole minimap each frame, so a card
-        // scrolled out of view skips it.
+        // A card scrolled out of view draws nothing.
         if(BeginPanelCard("##chart_card", PanelCardTone::kPanel, ASSISTANT_CARD_PADDING,
                           true, &settings))
         {
@@ -1183,7 +1197,7 @@ AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
             PanelIcon(ICON_CHART_BAR, Colors::kAccent, &settings);
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
             PanelFieldLabel(title.c_str(), false, &settings);
-            RenderActivityChart(chart_project, line.track_id);
+            RenderActivityChart(chart_project, line);
         }
         EndPanelCard();
         ImGui::PopID();

@@ -73,6 +73,17 @@ Actions(const AssistantToolContext& context)
                         context.trace_view);
 }
 
+// The result of an action carried out exactly as asked: see
+// AssistantToolStartResult::settled. A refusal, a listing, or an action that
+// landed somewhere other than asked stays a plain DoneResult.
+AssistantToolStartResult
+SettledResult(const std::string& content, const std::string& status)
+{
+    AssistantToolStartResult result = DoneResult(content, status);
+    result.settled                  = true;
+    return result;
+}
+
 // Cuts text to max_chars and marks the cut. Backs up to the start of a UTF-8
 // character first: a note is saved into the project file, and a next step is
 // sent back as a message.
@@ -204,9 +215,9 @@ ToolShowPanel(const AssistantToolContext& context, const jt::Json& args,
                               OptiqActions::PanelName(panel) + " panel here.",
                           "Panel unavailable");
     }
-    return DoneResult(std::string(visible ? "Opened the " : "Closed the ") +
-                          OptiqActions::PanelName(panel) + " panel.",
-                      visible ? "Opened a panel" : "Closed a panel");
+    return SettledResult(std::string(visible ? "Opened the " : "Closed the ") +
+                             OptiqActions::PanelName(panel) + " panel.",
+                         visible ? "Opened a panel" : "Closed a panel");
 }
 
 AssistantToolStartResult
@@ -217,7 +228,7 @@ ToolResetView(const AssistantToolContext& context, const jt::Json&, const std::s
         return DoneResult("Reset view is only available on a system trace.",
                           "Not available");
     }
-    return DoneResult("Zoomed back out to the whole trace.", "Reset the view");
+    return SettledResult("Zoomed back out to the whole trace.", "Reset the view");
 }
 
 AssistantToolStartResult
@@ -228,7 +239,7 @@ ToolMeasure(const AssistantToolContext& context, const jt::Json& args,
     if(JsonUtils::GetBool(args, "clear", false))
     {
         actions.ClearMeasurement();
-        return DoneResult("Cleared the measurement.", "Cleared measurement");
+        return SettledResult("Cleared the measurement.", "Cleared measurement");
     }
 
     const double start_ns = JsonUtils::GetDouble(args, "start_ns", -1.0);
@@ -245,7 +256,7 @@ ToolMeasure(const AssistantToolContext& context, const jt::Json& args,
 
     SettingsManager& settings    = SettingsManager::GetInstance();
     const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
-    return DoneResult(
+    return SettledResult(
         "Measured " +
             nanosecond_to_formatted_str(end_ns - start_ns, time_format, true) +
             " on the timeline.",
@@ -289,9 +300,9 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
         {
             return DoneResult("Could not save that bookmark.", "Bookmark failed");
         }
-        return DoneResult("Saved the current view to bookmark " +
-                              std::to_string(slot) + ".",
-                          "Saved a bookmark");
+        return SettledResult("Saved the current view to bookmark " +
+                                 std::to_string(slot) + ".",
+                             "Saved a bookmark");
     }
     if(action == "goto")
     {
@@ -301,8 +312,8 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
                                   " is empty.\n" + saved.str(),
                               "No such bookmark");
         }
-        return DoneResult("Jumped to bookmark " + std::to_string(slot) + ".",
-                          "Used a bookmark");
+        return SettledResult("Jumped to bookmark " + std::to_string(slot) + ".",
+                             "Used a bookmark");
     }
     if(action == "remove")
     {
@@ -311,8 +322,8 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
             return DoneResult("Bookmark " + std::to_string(slot) + " is empty.",
                               "No such bookmark");
         }
-        return DoneResult("Removed bookmark " + std::to_string(slot) + ".",
-                          "Removed a bookmark");
+        return SettledResult("Removed bookmark " + std::to_string(slot) + ".",
+                             "Removed a bookmark");
     }
     return DoneResult("Unknown action. Use save, goto, remove, or list.",
                       "Bad action");
@@ -384,7 +395,8 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
     }
     const bool selected = context.timeline_selection != nullptr &&
                           context.timeline_selection->HasValidTimeRangeSelection();
-    if(selected && (time_ns < view_start || time_ns > view_end))
+    const bool outside  = selected && (time_ns < view_start || time_ns > view_end);
+    if(outside)
     {
         // The user moved on, or the model reused a timestamp from an earlier
         // window. Either way the note is not where the conversation is.
@@ -394,7 +406,10 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
             << "), so say where the note went rather than calling it the "
                "selected interval, or call goto first and annotate again.";
     }
-    return DoneResult(out.str(), "Left a note");
+    AssistantToolStartResult result = DoneResult(out.str(), "Left a note");
+    // A note that missed the selection may be redone after a goto.
+    result.settled = !outside;
+    return result;
 }
 
 AssistantToolStartResult
@@ -435,8 +450,8 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     std::string selected;
     if(actions.SelectAnalysisTab(name, selected))
     {
-        return DoneResult("Opened the " + selected + " tab in the details panel.",
-                          "Switched tabs");
+        return SettledResult("Opened the " + selected + " tab in the details panel.",
+                             "Switched tabs");
     }
     // A ref is unambiguous even when two paths have the same basename. The
     // labels remain accepted when they name exactly one tab. The id a ref
@@ -470,17 +485,17 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     {
         if(selected_id == context.project_id)
         {
-            return DoneResult("Trace " + selected + " is already in front.",
-                              "Switched tabs");
+            return SettledResult("Trace " + selected + " is already in front.",
+                                 "Switched tabs");
         }
         // The turn stays with its own trace, so say where the user went rather
         // than let the model think it can now read the other one.
         AssistantToolStartResult result =
-            DoneResult("Switched the user to trace " + selected +
-                           ". This conversation stays with " + context.trace_name +
-                           ", so read and change nothing more here; questions about " +
-                           selected + " continue in its own conversation.",
-                       "Switched tabs");
+            SettledResult("Switched the user to trace " + selected +
+                              ". This conversation stays with " + context.trace_name +
+                              ", so read and change nothing more here; questions about " +
+                              selected + " continue in its own conversation.",
+                          "Switched tabs");
         result.stop_tool_queue = true;
         return result;
     }
@@ -518,7 +533,7 @@ ToolFlowArrows(const AssistantToolContext& context, const jt::Json& args,
             " They only draw for a selected event, so call goto with an "
             "event_uuid and track_id to see them.";
     }
-    return DoneResult(message, visible ? "Flow arrows on" : "Flow arrows off");
+    return SettledResult(message, visible ? "Flow arrows on" : "Flow arrows off");
 }
 
 AssistantToolStartResult
@@ -799,7 +814,11 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
                "__trackId came from a table read on this trace";
     }
     out << ".";
-    return DoneResult(out.str(), "Moved the view");
+    AssistantToolStartResult result = DoneResult(out.str(), "Moved the view");
+    // Settled only when the view went where it was sent and the event named
+    // was selected. Anything short of that the model may want to correct.
+    result.settled = has_range && !range_dropped && (targets.empty() || have_focus);
+    return result;
 }
 
 const AssistantToolEntry k_ui_tool_handlers[] = {

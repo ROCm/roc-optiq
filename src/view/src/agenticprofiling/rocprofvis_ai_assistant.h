@@ -78,6 +78,12 @@ private:
         // kChart only: the trace the chart draws, which a read of a linked
         // trace makes different from the conversation's own.
         std::string project_id;
+        // kChart only: the strip as last drawn. The minimap it is cut from is
+        // built once when the trace loads, so it is cut again only when the
+        // column's width asks for another bin count.
+        size_t                            chart_bin_count = 0;
+        std::vector<double>               chart_bins;
+        std::vector<AssistantActivityRow> chart_rows;
     };
 
     /*
@@ -174,14 +180,14 @@ private:
 
     void AppendLine(Speaker speaker, const std::string& text);
     void        AppendChart(const std::string& project_id, uint64_t track_id);
-    void        RenderActivityChart(const std::string& project_id, uint64_t track_id);
+    void        RenderActivityChart(const std::string& project_id, ChatLine& line);
     void        RenderHeaderCard();
     void        RenderLinkMenu();
     // The model, context, and token-usage pill under the title.
     void        RenderContextChip(const std::string& model, const std::string& endpoint);
     void        RenderTranscript();
     void        RenderMessageCard(Conversation& conversation, size_t index,
-                                  const ChatLine& line);
+                                  ChatLine& line);
     void        RenderSelectableMessage(Conversation& conversation, size_t index,
                                         const std::string& text, Colors text_color);
     TextSelect* MessageSelect(Conversation& conversation, size_t index);
@@ -292,6 +298,11 @@ private:
     // A trace switch ends this batch. Every remaining call still gets a tool
     // reply, but none of its body runs against a tab that has not switched yet.
     bool m_stop_tool_queue;
+    // Whether the batch being run offered next steps, and whether everything
+    // else in it was an action carried out as asked. Both true means the model
+    // has nothing left to react to, so its next round is the write-up.
+    bool m_batch_offered_steps;
+    bool m_batch_settled;
     // Keeps contention retries on the first wait's timeout deadline.
     uint32_t m_fetch_retries;
     // The trace the turn belongs to. Its tools read this trace and its replies

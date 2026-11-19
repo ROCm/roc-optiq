@@ -241,8 +241,8 @@ MakeAssistantToolsJson()
             "that line's level and id to see the same breakdown for one device, "
             "process or thread, without running a query.\n"
             "Each top list keeps only the busiest names plus an Others row; use "
-            "top_events for a full ranking. Call this first when the briefing is "
-            "empty or its totals are 0.",
+            "top_events for a full ranking. Call this first when the briefing "
+            "says the summary is not loaded.",
             summary_params);
 
     jt::Json top_params = ObjectParams();
@@ -333,7 +333,8 @@ MakeAssistantToolsJson()
              "event's own start and end from its row, not a wider window around "
              "it: the timeline merges neighbouring events into one bar until it "
              "is zoomed in far enough, and a merged bar cannot be selected. "
-             "Optional - omitted, the event's own span is looked up instead.");
+             "Optional for an event whose row you read last or whose "
+             "event_details you loaded: its own span is used instead.");
     AddParam(goto_params, "end_ns", "number", "Range end in nanoseconds.");
     AddParam(goto_params, "track_id", "integer",
              "__trackId of the event. Pass it whenever you pass event_uuid; without "

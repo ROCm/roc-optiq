@@ -143,6 +143,7 @@ AppWindow::AppWindow()
 , m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
 , m_use_native_file_dialog(false)
 , m_init_file_dialog(false)
+, m_file_dialog_self_managed(false)
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
 , m_is_native_file_dialog_open(false)
 #endif
@@ -180,7 +181,7 @@ AppWindow::~AppWindow()
     m_profiler_launcher_dialog.reset();
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_ssh_test_dialog.reset();
+    m_ssh_file_dialog.reset();
 #endif
     AppMonitor::DestroyInstance();
 
@@ -538,7 +539,7 @@ AppWindow::BeginAppShutdown()
     m_profiler_launcher_dialog.reset();
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_ssh_test_dialog.reset();
+    m_ssh_file_dialog.reset();
 #endif
 
     if(!m_provider_cleanup_jobs.empty())
@@ -835,9 +836,9 @@ AppWindow::Render()
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(m_ssh_test_dialog)
+    if(m_ssh_file_dialog)
     {
-        m_ssh_test_dialog->Render();
+        m_ssh_file_dialog->Render();
     }
 #endif
     m_confirmation_dialog->Render();
@@ -858,8 +859,6 @@ AppWindow::Render()
     // ImGuiStyleVar_WindowRounding
     ImGui::PopStyleVar(3);
 
-    RenderFileDialog();
-
     LogViewer::GetInstance()->Render();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
@@ -876,7 +875,12 @@ AppWindow::Render()
     // render notifications last
     NotificationManager::GetInstance().Render();
 
-    RenderDisableScreen();
+    // Workaround for nesting the file dialog inside the settings panel (modal in modal)...
+    if(!m_file_dialog_self_managed)
+    {
+        // File dialog: Native - draw disabled screen, Imgui - draw dialog...
+        RenderFileDialog();
+    }
 }
 
 void
@@ -937,8 +941,22 @@ AppWindow::RenderShutdownState()
 }
 
 void
+AppWindow::SetFileDialogSelfManaged(bool self_managed)
+{
+    m_file_dialog_self_managed = self_managed;
+}
+
+void
 AppWindow::RenderFileDialog()
 {
+    RenderDisableScreen();
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_is_native_file_dialog_open)
+    {
+        return;
+    }
+#endif
+
     if(!ImGuiFileDialog::Instance()->IsOpened(FILE_DIALOG_NAME))
     {
         return;  // No file dialog is opened, nothing to render
@@ -1880,11 +1898,11 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 void
 AppWindow::HandleTestRemoteSSH()
 {
-    if(!m_ssh_test_dialog)
+    if(!m_ssh_file_dialog)
     {
-        m_ssh_test_dialog = std::make_unique<SshTestDialog>(this);
+        m_ssh_file_dialog = std::make_unique<SshFileDialog>(this);
     }
-    m_ssh_test_dialog->Show();
+    m_ssh_file_dialog->Show();
 }
 
 #endif // ROCPROFVIS_ENABLE_REMOTE

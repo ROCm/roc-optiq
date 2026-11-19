@@ -4,14 +4,15 @@
 #pragma once
 
 /**
- * @brief Private wiring between the three parts of the executor. The public
- * surface is rocprofvis_ai_tools.h; nothing outside the agenticprofiling
- * directory should include this header.
+ * @brief Private wiring between the parts of the executor. The public surface
+ * is rocprofvis_ai_tools.h; nothing outside the agenticprofiling directory
+ * should include this header.
  *
  * Tool bodies are split by what they touch: rocprofvis_ai_ui_tools.cpp drives
  * Optiq through OptiqActions and answers in the same call,
- * rocprofvis_ai_data_tools.cpp reads the data model and usually parks a fetch
- * for the panel to poll, and rocprofvis_ai_script_tools.cpp has the model write
+ * rocprofvis_ai_data_tools.cpp reads a system trace's data model and usually
+ * parks a fetch for the panel to poll, rocprofvis_ai_compute_tools.cpp reads a
+ * compute workload, and rocprofvis_ai_script_tools.cpp has the model write
  * Python that computes the answer. Each body file owns its handler table and
  * hands it to the dispatcher, so the handlers keep internal linkage.
  */
@@ -59,9 +60,35 @@ AssistantToolTable GetAssistantUiToolHandlers();
 AssistantToolTable GetAssistantDataToolHandlers();
 AssistantToolTable GetAssistantScriptToolHandlers();
 
+// The compute reads, searched instead of the data table on a compute trace.
+// Nothing in here touches TraceDataModel, which is empty on such a trace. Empty
+// when compute support is not built in, and the dispatcher then turns a compute
+// tab away before searching it.
+AssistantToolTable GetAssistantComputeToolHandlers();
+
+// The handful of UI tools that mean the same thing on either kind of trace, so
+// a compute turn is not left unable to answer "switch to my other trace". Kept
+// apart from the full UI table because most of that table drives a timeline.
+AssistantToolTable GetAssistantSharedUiToolHandlers();
+
 // Formats a finished script run, or the decision that stopped it. Reached
 // through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
+
+// Formats the compute metric values that just landed in the assistant's store.
+// Reached through FinishAssistantFetch like every other fetch kind.
+std::string FinishAssistantComputeFetch(const AssistantToolContext& context,
+                                        const AssistantFetchState&  fetch);
+
+// The compute half of the briefing. Lives beside the compute tools so the
+// system data tools carry none of it.
+std::string BuildAssistantComputeBriefing(const AssistantToolContext& context);
+
+// Drops the layer-retry marks kernel_pc_samples keeps for the call in
+// progress. Every way a call can end has to call this - FinishCurrentTool and
+// ResetTurn - or the next call on the same kernel reads as a continuation and
+// does not retry what this one could not read.
+void ResetAssistantPcRead();
 
 // --- Helpers both halves need, defined beside the dispatcher ---------------
 
@@ -89,6 +116,18 @@ bool CheckArrayLength(const std::vector<jt::Json>& entries,
 // Yields the selected time range, or the whole trace if nothing is selected.
 void SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
                              double& end_ns);
+
+// Finds the link a model-supplied ref names among this trace's links: a group
+// id first, then the other trace's file name or role when only one matches. An
+// empty ref picks the only link there is. Writes the reason to error_out on
+// failure, listing what is linked.
+bool
+ResolveAssistantLink(const AssistantToolContext& context, const std::string& ref,
+                     TraceLink& link_out, std::string& error_out);
+
+// Why a linked trace cannot be read right now, or empty when it can.
+std::string
+LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link);
 
 }  // namespace View
 }  // namespace RocProfVis

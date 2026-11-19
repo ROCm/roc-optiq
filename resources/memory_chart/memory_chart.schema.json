@@ -24,16 +24,16 @@
         "category": {
             "description": "Accent color bucket. Omit to infer from the label text.",
             "type": "string",
-            "enum": ["read", "write", "atomic", "util", "hit", "stall", "misc"]
+            "enum": ["read", "write", "atomic", "util", "hit", "stall", "neutral"]
         },
         "contentItem": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
-                "metric": { "$ref": "#/definitions/metricRef" },
+                "metric_id": { "$ref": "#/definitions/metricRef" },
                 "metric_name": {
                     "type": "string",
-                    "description": "Database metric name (compute_metric_definition.name). When metric-id remap is enabled, the chart replaces `metric` with the category-3 (3.x.x) id that has this name. `title` remains the display override."
+                    "description": "Database metric name (compute_metric_definition.name). When metric-id remap is enabled, the chart replaces `metric_id` with the category-3 (3.x.x) id that has this name. `title` remains the display override."
                 },
                 "title": { "type": "string" },
                 "category": { "$ref": "#/definitions/category" },
@@ -64,10 +64,10 @@
                 "from": { "$ref": "#/definitions/blockId", "description": "Id of the block the arrow starts at." },
                 "to": { "$ref": "#/definitions/blockId", "description": "Id of the block the arrow ends at." },
                 "direction": { "type": "string", "enum": ["forward", "backward", "both"] },
-                "metric": { "$ref": "#/definitions/metricRef" },
+                "metric_id": { "$ref": "#/definitions/metricRef" },
                 "metric_name": {
                     "type": "string",
-                    "description": "Database metric name (compute_metric_definition.name). When metric-id remap is enabled, the chart replaces `metric` with the category-3 (3.x.x) id that has this name. `title` remains the display override."
+                    "description": "Database metric name (compute_metric_definition.name). When metric-id remap is enabled, the chart replaces `metric_id` with the category-3 (3.x.x) id that has this name. `title` remains the display override."
                 },
                 "title": { "type": "string" },
                 "category": { "$ref": "#/definitions/category" },

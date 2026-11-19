@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_ssh_uri.h"
-#include "rocprofvis_utils.h"
+#include "../rocprofvis_settings_manager.h"
 #include "rocprofvis_core_string_utils.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <system_error>
+#include <spdlog/spdlog.h>
 
 namespace RocProfVis
 {
@@ -121,18 +123,27 @@ namespace View
         return ToHex(Fnv1a64(canon));
     }
 
-    std::string RemoteUri::GetLocalResultPathString()
+    std::string
+    RemoteUri::GetLocalResultPathString()
     {
-        std::string remote = GetRemoteResultPathString();
-        auto pos = remote.rfind('/');
+        std::string remote   = GetRemoteResultPathString();
+        auto        pos      = remote.rfind('/');
         std::string filename = pos == std::string::npos ? remote : remote.substr(pos + 1);
-        std::filesystem::path config_root = get_application_config_path(true);
-        std::filesystem::path cache_root  = config_root / "remote_cache";
-        std::filesystem::path key_root = cache_root / GetRemoteCacheKey();
+        std::string const& dest =
+            SettingsManager::GetInstance().GetUserSettings().remote_cache_path;
+        std::filesystem::path key_root =
+            std::filesystem::path(dest.empty() ? SettingsManager::GetInstance()
+                                                     .GetDefaultUserSettings()
+                                                     .remote_cache_path
+                                               : dest) /
+            GetRemoteCacheKey();
 
-        if (!std::filesystem::exists(key_root))
+        std::error_code ec;
+        std::filesystem::create_directories(key_root, ec);
+        if(ec)
         {
-            std::filesystem::create_directories(key_root);
+            spdlog::error("Cannot create remote files folder {}: {}", key_root.string(),
+                          ec.message());
         }
 
         std::filesystem::path path = key_root / filename;

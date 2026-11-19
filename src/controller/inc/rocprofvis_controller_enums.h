@@ -731,6 +731,7 @@ typedef enum rocprofvis_controller_remote_status_t : uint32_t
     kRPVControllerSshDownloadStarted,
     kRPVControllerSshDownloadProgress,
     kRPVControllerSshBrowsingProgress,
+    kRPVControllerSshCancelled,
     kRPVControllerSshFailed,
     kRPVControllerSshCompleted
 } rocprofvis_controller_remote_status_t;

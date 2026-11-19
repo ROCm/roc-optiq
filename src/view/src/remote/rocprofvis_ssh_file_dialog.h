@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "rocprofvis_ssh_uri.h"
+#include "rocprofvis_remote_file_browser.h"
+#include "rocprofvis_remote_trace_orchestrator.h"
 #include "rocprofvis_ssh_connection_store.h"
 #include "rocprofvis_ssh_session.h"
 #include "rocprofvis_ssh_settings_dialog.h"
-#include "rocprofvis_remote_trace_orchestrator.h"
-#include "rocprofvis_remote_file_browser.h"
+#include "rocprofvis_ssh_uri.h"
 
 #include <memory>
 #include <string>
@@ -29,11 +29,11 @@ class AppWindow;
 // The connection configuration is owned as a std::shared_ptr<RemoteUri> so it
 // can be shared with the spawned RemoteTraceOrchestrator / SshSession, which
 // read it lazily across the whole non-blocking workflow.
-class SshTestDialog
+class SshFileDialog
 {
 public:
-    explicit SshTestDialog(AppWindow* app_window);
-    ~SshTestDialog();
+    explicit SshFileDialog(AppWindow* app_window);
+    ~SshFileDialog();
 
     // Starts the open-remote flow (from the File menu).
     void Show();
@@ -60,11 +60,11 @@ private:
     std::unique_ptr<RemoteTraceOrchestrator> m_orchestrator;
     // Shared remote file/directory picker. Owns its own SSH session for listing
     // directories, reading the connection from m_uri.
-    RemoteFileBrowser                        m_file_browser;
+    RemoteFileBrowser m_file_browser;
 
-    bool                                     m_failure_reported;
-    bool                                     m_show_progress_popup;
-    FileStat::Snapshot                       m_last_progress;
+    bool               m_failure_reported;
+    bool               m_show_progress_popup;
+    FileStat::Snapshot m_last_progress;
 };
 
 }  // namespace View

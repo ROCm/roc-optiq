@@ -32,22 +32,21 @@ KbdintState& KbdintForFrame() { static KbdintState s; return s; }
 
 // Header band shared by the auth modals: glyph, title, and a dim one-line
 // subtitle, matching the "Open Remote Trace" dialog header.
-void RenderAuthHeaderCard(const char* id, const char* glyph, Colors glyph_color,
-                          const char* title, const char* subtitle)
+void
+RenderAuthHeaderCard(const char* id, const char* glyph, Colors glyph_color,
+                     const char* title)
 {
     SettingsManager&  settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style    = ImGui::GetStyle();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
 
-    BeginPanelCard(id, PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true, &settings);
-    PanelIcon(glyph, glyph_color, &settings);
+    BeginPanelCard(id, PanelCardTone::kPanel, style.WindowPadding, true, &settings);
+    PanelIcon(glyph, glyph_color, &settings,
+              settings.GetFontManager().GetFontSize(FontSize::kMedium));
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::BeginGroup();
-    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-    ImGui::TextUnformatted(title);
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedium));
+    ImGui::TextWrapped("%s", title);
     ImGui::PopFont();
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted(subtitle);
-    ImGui::PopStyleColor();
     ImGui::EndGroup();
     EndPanelCard();
 }
@@ -86,32 +85,20 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         }
 
         SettingsManager&  settings = SettingsManager::GetInstance();
-        const ImGuiStyle& style    = ImGui::GetStyle();
+        const ImGuiStyle& style    = settings.GetDefaultStyle();
 
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup(ImGuiCond_Always);
-        // Borderless card-stack: the window hugs the cards (like the remote
-        // trace dialog) and the header band carries the title instead of the
-        // native title bar.
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
         ImGui::SetNextWindowSize(ImVec2(480, 0));
 
-        if(ImGui::BeginPopupModal("SSH Authentication", nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-                                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+        if(ImGui::BeginPopupModal(
+               "SSH Authentication", nullptr,
+               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
-            constexpr float BUTTON_WIDTH = 104.0f;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
-
-            RenderAuthHeaderCard("##ssh_auth_header", ICON_LOCKED, Colors::kAccent,
-                                 "SSH Authentication", "Enter your credentials to continue.");
-
-            BeginPanelCard("##ssh_auth_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
+            BeginPanelCard("##ssh_auth_body", PanelCardTone::kPanel, style.WindowPadding,
                            true, &settings);
             {
                 if(!req->name.empty())
@@ -138,40 +125,34 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             }
             EndPanelCard();
 
-            BeginPanelCard("##ssh_auth_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
-                           true, &settings);
+            float button_width =
+                ImGui::CalcTextSize("Cancel").x + 2.0f * style.FramePadding.x;
+            float total = button_width * 2.0f + style.ItemSpacing.x;
+            float avail = ImGui::GetContentRegionAvail().x;
+            if(avail > total)
             {
-                const float total = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
-                const float avail = ImGui::GetContentRegionAvail().x;
-                if(avail > total)
-                {
-                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
-                }
-                if(ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0)))
-                {
-                    ssh_session->CancelRequest();
-                    st = {};
-                    ImGui::CloseCurrentPopup();
-                    ssh_session->GetPromptRequest()->ClearUpdated();
-                }
-                ImGui::SameLine();
-                if(AccentButton("Submit", ImVec2(BUTTON_WIDTH, 0), &settings))
-                {
-                    std::vector<std::string> resp = st.answers;
-
-                    ssh_session->SubmitPromptResponses(resp);
-                    st = {};
-                    ImGui::CloseCurrentPopup();
-                    ssh_session->GetPromptRequest()->ClearUpdated();
-                }
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
             }
-            EndPanelCard();
+            if(ImGui::Button("Cancel", ImVec2(button_width, 0)))
+            {
+                ssh_session->CancelRequest();
+                st = {};
+                ImGui::CloseCurrentPopup();
+                ssh_session->GetPromptRequest()->ClearUpdated();
+            }
+            ImGui::SameLine();
+            if(AccentButton("Submit", ImVec2(button_width, 0), &settings))
+            {
+                std::vector<std::string> resp = st.answers;
 
-            ImGui::PopStyleVar();  // ItemSpacing
+                ssh_session->SubmitPromptResponses(resp);
+                st = {};
+                ImGui::CloseCurrentPopup();
+                ssh_session->GetPromptRequest()->ClearUpdated();
+            }
+
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
-        popup_style.PopStyles();
         return true;
     }
 
@@ -188,90 +169,76 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         }
 
         SettingsManager&  settings = SettingsManager::GetInstance();
-        const ImGuiStyle& style    = ImGui::GetStyle();
+        const ImGuiStyle& style    = settings.GetDefaultStyle();
 
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup(ImGuiCond_Always);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
         ImGui::SetNextWindowSize(ImVec2(440, 0));
 
-        if(ImGui::BeginPopupModal("SSH Host Key", nullptr,
-                                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-                                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+        if(ImGui::BeginPopupModal(
+               "SSH Host Key", nullptr,
+               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                   ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
             const bool        mismatch = req->state == HostKeyState::Mismatch;
             const std::string server =
                 req->port == 22 ? req->host : req->host + ":" + std::to_string(req->port);
 
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
+            RenderAuthHeaderCard(
+                "##ssh_hostkey_header", mismatch ? ICON_UNLOCKED : ICON_CHAIN,
+                mismatch ? Colors::kBgError : Colors::kAccent,
+                mismatch ? "This server's key is different from last time. That "
+                           "is normal after a reinstall. If you did not expect "
+                           "it, cancel."
+                         : "First time connecting to this server. Optiq will "
+                           "remember it.");
 
-            RenderAuthHeaderCard("##ssh_hostkey_header", mismatch ? ICON_UNLOCKED : ICON_CHAIN,
-                                 mismatch ? Colors::kBgError : Colors::kAccent,
-                                 mismatch ? "Server key changed" : "Trust this server?",
-                                 server.c_str());
-
-            BeginPanelCard("##ssh_hostkey_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
-                           true, &settings);
+            BeginPanelCard("##ssh_hostkey_body", PanelCardTone::kPanel,
+                           style.WindowPadding, true, &settings);
             {
-                ImGui::TextWrapped("%s",
-                                   mismatch
-                                       ? "This server's key is different from last time. That "
-                                         "is normal after a reinstall. If you did not expect "
-                                         "it, cancel."
-                                       : "First time connecting to this server. Optiq will "
-                                         "remember it.");
-                ImGui::Spacing();
-                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
-                ImGui::TextWrapped("Key fingerprint %s", req->fingerprint_sha256_b64.c_str());
+                ImGui::PushFont(nullptr,
+                                settings.GetFontManager().GetFontSize(FontSize::kSmall));
+                ImGui::TextDisabled("Host");
+                ImGui::TextWrapped("%s", server.c_str());
+                ImGui::TextDisabled("Key fingerprint");
+                ImGui::TextWrapped("%s", req->fingerprint_sha256_b64.c_str());
                 ImGui::PopFont();
-                ImGui::PopStyleColor();
             }
             EndPanelCard();
 
-            BeginPanelCard("##ssh_hostkey_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
-                           true, &settings);
+            constexpr float BUTTON_WIDTH = 104.0f;
+            const char* trust_label = mismatch ? "Trust new key" : "Trust and connect";
+            const float trust_width =
+                ImGui::CalcTextSize(trust_label).x + style.FramePadding.x * 4.0f;
+            const float total = trust_width + BUTTON_WIDTH + style.ItemSpacing.x;
+            const float avail = ImGui::GetContentRegionAvail().x;
+            if(avail > total)
             {
-                constexpr float BUTTON_WIDTH = 104.0f;
-                const char*     trust_label  = mismatch ? "Trust new key" : "Trust and connect";
-                const float     trust_width =
-                    ImGui::CalcTextSize(trust_label).x + style.FramePadding.x * 4.0f;
-                const float total = trust_width + BUTTON_WIDTH + style.ItemSpacing.x;
-                const float avail = ImGui::GetContentRegionAvail().x;
-                if(avail > total)
-                {
-                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
-                }
-
-                auto decide = [&](HostKeyDecision decision) {
-                    ssh_session->SubmitHostKeyDecision(decision);
-                    ImGui::CloseCurrentPopup();
-                    ssh_session->GetHostKeyRequest()->ClearUpdated();
-                };
-                // A changed key makes Cancel the highlighted, safe choice.
-                if(mismatch ? AccentButton("Cancel", ImVec2(BUTTON_WIDTH, 0), &settings)
-                            : ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0)))
-                {
-                    decide(HostKeyDecision::Reject);
-                }
-                ImGui::SameLine();
-                if(mismatch ? ImGui::Button(trust_label, ImVec2(trust_width, 0))
-                            : AccentButton(trust_label, ImVec2(trust_width, 0), &settings))
-                {
-                    decide(HostKeyDecision::TrustPermanently);
-                }
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
             }
-            EndPanelCard();
 
-            ImGui::PopStyleVar();  // ItemSpacing
+            auto decide = [&](HostKeyDecision decision) {
+                ssh_session->SubmitHostKeyDecision(decision);
+                ImGui::CloseCurrentPopup();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
+            };
+            // A changed key makes Cancel the highlighted, safe choice.
+            if(mismatch ? AccentButton("Cancel", ImVec2(BUTTON_WIDTH, 0), &settings)
+                        : ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0)))
+            {
+                decide(HostKeyDecision::Reject);
+            }
+            ImGui::SameLine();
+            if(mismatch ? ImGui::Button(trust_label, ImVec2(trust_width, 0))
+                        : AccentButton(trust_label, ImVec2(trust_width, 0), &settings))
+            {
+                decide(HostKeyDecision::TrustPermanently);
+            }
+
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
-        popup_style.PopStyles();
         return true;
     }
 
@@ -281,7 +248,8 @@ bool RenderSshAuthModal(SshSession* ssh_session)
     return false;
 }
 
-void RenderSshAuthModals()
+void
+RenderSshAuthModals()
 {
     // A session whose owner renders its own auth modal nested inside its own
     // modal window (e.g. the remote file browser) must not be rendered here:

@@ -111,10 +111,19 @@ namespace View
         // The latest check result is stored in m_last_result.
         uint64_t Poll();
 
+        // True for a remote status that ends a phase.
+        bool IsTerminalStatus(uint64_t status);
+
         // Common registration: allocates a future, calls start_fn, and on
         // success registers a MonitorOperation. Returns the operation id or 0.
         uint64_t BeginOperation(SshOperation operation, MonitorOperationType monitor_type,
                 std::function<rocprofvis_result_t(rocprofvis_controller_future_t*)> start_fn);
+        // As above, plus teardown_fn, which the monitor runs after the future is
+        // freed once the operation's job has returned (or was never started).
+        // teardown_fn must capture by value, never this session.
+        uint64_t BeginOperation(SshOperation operation, MonitorOperationType monitor_type,
+                std::function<rocprofvis_result_t(rocprofvis_controller_future_t*)> start_fn,
+                MonitorOperation::TeardownFn teardown_fn);
 
         rocprofvis_result_t AllocateConnection(const char* host, int port);
         rocprofvis_result_t StartConnection(rocprofvis_controller_future_t* future);
@@ -122,7 +131,6 @@ namespace View
         rocprofvis_result_t StartAuthentication(const char* user, const char* password, const char* identity_file, const char* passphrase, rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartExecution(rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartExecution(const char* command_line, rocprofvis_controller_future_t* future);
-        rocprofvis_result_t StartDownloadOp(rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartDownloadOp(const char* remote_path, const char* local_path, rocprofvis_controller_future_t* future);
         rocprofvis_result_t StartBrowsingOp(const char* remote_path, rocprofvis_controller_future_t* future);
         rocprofvis_result_t CheckConnection();

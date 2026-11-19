@@ -237,6 +237,16 @@ get_application_config_path(bool create_dirs);
 std::string 
 get_application_log_path(bool create_dirs);
 
+/*
+ * Default folder for files downloaded from remote hosts: <Downloads>/ROCm-Optiq,
+ * where Downloads is the Windows known folder (which follows a moved or
+ * redirected Downloads), ~/Downloads on macOS, and XDG_DOWNLOAD_DIR from
+ * user-dirs.dirs on Linux (falling back to ~/Downloads). When no Downloads
+ * folder can be determined, <config>/remote_cache. The folder is not created.
+ */
+std::string
+get_default_remote_cache_path();
+
 std::string
 compact_number_format(double number);
 

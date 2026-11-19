@@ -74,18 +74,30 @@ public:
     static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
 
-    // Ask Optiq's table reads. A background reader sharing the ids above would
+    // Ask Optiq's reads. A background reader sharing the ids above would
     // be refused whenever a tab happened to be loading, and - worse - would
     // overwrite the rows that tab is showing once it was not. Its own client id
     // gives it its own request ids, its own controller tables, and its own
     // model slots, so the two never meet. Anything else that reads tables
     // without being a tab wants the same treatment and a client id of its own.
-    static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
-    static const uint64_t     ASSISTANT_EVENT_TABLE_REQUEST_ID;
-    static const uint64_t     ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
-    static const uint64_t     ASSISTANT_EVENT_SEARCH_REQUEST_ID;
-    static const uint64_t     ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
-    static const uint64_t     ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
+    //
+    // On a compute trace the same id partitions FetchMetrics: the request id
+    // comes from MakeClientRequestId and the values land in their own
+    // ComputeDataModel store, which is what lets the assistant read metrics
+    // while a metric table is showing its own.
+    //
+    // Not 1 or 2: those are COMPARE_CLIENT_ID, and the compare panes build
+    // their event, sample and top-events request ids from them - the same
+    // request types the assistant reads.
+    static constexpr uint64_t ASSISTANT_CLIENT_ID = 3;
+    static_assert(ASSISTANT_CLIENT_ID < RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID,
+                  "The assistant's client id must stay inside the reserved band, or "
+                  "IdGenerator will eventually hand it to a widget.");
+    static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    static const uint64_t ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
 #endif
@@ -239,7 +251,9 @@ public:
     void SetTrackDataReadyCallback(
         const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
-    void SetSummaryDataReadyCallback(const std::function<void()>& callback);
+    // Called when the summary request finishes. The argument is true only when
+    // the summary was written. TraceView turns this into a SummaryEvent.
+    void SetSummaryDataReadyCallback(const std::function<void(bool)>& callback);
     void SetTraceLoadedCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
@@ -285,6 +299,10 @@ public:
     ComputeDataModel& ComputeModel();
 
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
+    // Whether the last metrics fetch this client issued landed. A failed fetch
+    // adds nothing to the client's store, which otherwise reads the same as a
+    // fetch of metrics the trace does not record. False before the first.
+    bool LastMetricsFetchSucceeded(uint64_t client_id) const;
     bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
     bool FetchPcSampling(const PcSamplingRequestParams& params);
 
@@ -433,7 +451,7 @@ private:
         m_event_data_ready_callback;
 
     // Called when summary data has changed
-    std::function<void()> m_summary_data_ready_callback;
+    std::function<void(bool)> m_summary_data_ready_callback;
     // Callback when trace is saved
     std::function<void(bool)> m_save_trace_callback;
     // Callback when database cleanup has completed
@@ -534,6 +552,9 @@ private:
     // Stores a pending replacement submission for a PC sampling layer whose
     // in-flight request is being cancelled. Keyed by the per-layer request ID.
     std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
+
+    // Outcome of each client's most recent metrics fetch, by client id.
+    std::unordered_map<uint64_t, bool> m_metrics_fetch_succeeded;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,

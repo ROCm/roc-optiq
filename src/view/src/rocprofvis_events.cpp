@@ -444,6 +444,19 @@ RequestProgressUpdateEvent::GetMessage() const
     return m_message;
 }
 
+SummaryEvent::SummaryEvent(const std::string& trace_path, bool success)
+: RocEvent(static_cast<int>(RocEvents::kSummaryComplete), trace_path)
+, m_success(success)
+{
+    m_event_type = RocEventType::kSummaryEvent;
+}
+
+bool
+SummaryEvent::Succeeded() const
+{
+    return m_success;
+}
+
 ScriptExecuteCompleteEvent::ScriptExecuteCompleteEvent(bool success,
                                                        const std::string& text,
                                                        const std::string& error,

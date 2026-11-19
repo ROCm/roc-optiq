@@ -378,7 +378,7 @@ RocprofComputeBackend::RenderProfilingOptions(rocprofvis_profiler_operation_t op
     bool changed = false;
     if(operation == kRPVProfilerOperationCapture)
     {
-        const ImGuiStyle& style = ImGui::GetStyle();
+        const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
         ImGui::BeginGroup();
         LaunchSubHeader("OUTPUT");
         changed |= ToggleSwitch("Overwrite", &m_settings.profile_overwrite);
@@ -391,8 +391,10 @@ RocprofComputeBackend::RenderProfilingOptions(rocprofvis_profiler_operation_t op
         ImGui::TextUnformatted("Roofline");
         ImGui::SameLine();
         int roofline = static_cast<int>(m_settings.profile_roofline);
-        ImGui::SetNextItemWidth(ImGui::CalcTextSize("Roofline Only").x +
-                                2.0f * style.FramePadding.x + ImGui::GetFrameHeight());
+        float pcsampling_width = ImGui::CalcTextSize("Stochastic").x +
+                                 2.0f * style.FramePadding.x + ImGui::GetFrameHeight();
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("PC sampling").x + pcsampling_width -
+                                ImGui::CalcTextSize("Roofline").x);
         if(ImGui::Combo("##roofline", &roofline, "Enabled\0Roofline Only\0Disabled\0\0"))
         {
             m_settings.profile_roofline =
@@ -406,8 +408,7 @@ RocprofComputeBackend::RenderProfilingOptions(rocprofvis_profiler_operation_t op
         ImGui::TextUnformatted("PC sampling");
         ImGui::SameLine();
         int pcsampling = static_cast<int>(m_settings.profile_pc_sampling);
-        ImGui::SetNextItemWidth(ImGui::CalcTextSize("Stochastic").x +
-                                2.0f * style.FramePadding.x + ImGui::GetFrameHeight());
+        ImGui::SetNextItemWidth(pcsampling_width);
         if(ImGui::Combo("##pcsampling", &pcsampling,
                         "Disabled\0Stochastic\0Host trap\0\0"))
         {

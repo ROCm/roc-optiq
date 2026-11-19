@@ -75,10 +75,9 @@ public:
 
     // Open traces. Names match the tab labels the user sees. The tab bar brings a
     // selected trace forward when it next draws, so ActiveTab() names the old one
-    // until then; SelectTab reports the tab it picked instead. Asking for the
-    // label already in front moves to the next tab that shares it, and a
-    // shared label is reported with the tab's position.
+    // until then; SelectTab reports the tab it picked instead.
     std::vector<std::string> ListTabs() const;
+    std::vector<std::string> ListTabIds() const;
     std::string              ActiveTab() const;
     bool                     SelectTab(const std::string& name, std::string& selected_id,
                                        std::string& selected_label);

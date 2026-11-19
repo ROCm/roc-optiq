@@ -79,11 +79,9 @@ std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
 // may offer one again.
 void ResetAssistantScriptOffers();
 
-// Tells the UI tools a turn is starting, with the text the user typed (not the
-// prompt built around it). Resets the per-turn count of pinned notes and
-// decides from the user's own words whether switch_tab may reach another trace
-// this turn, so those limits hold even if text in the trace steers the model.
-void BeginAssistantUiTurn(const std::string& user_message);
+// Tells the UI tools a turn is starting. Resets the per-turn count of pinned
+// notes, so that limit holds even if text in the trace steers the model.
+void BeginAssistantUiTurn();
 
 // Formats the compute metric values that just landed in the assistant's store.
 // Reached through FinishAssistantFetch like every other fetch kind.
@@ -95,9 +93,9 @@ std::string FinishAssistantComputeFetch(const AssistantToolContext& context,
 std::string BuildAssistantComputeBriefing(const AssistantToolContext& context);
 
 // Drops the layer-retry marks kernel_pc_samples keeps for the call in
-// progress. Every way a call can end has to call this - FinishCurrentTool,
-// AbandonBatchForNewTrace, and ResetTurn - or the next call on the same kernel
-// reads as a continuation and does not retry what this one could not read.
+// progress. Every way a call can end has to call this - FinishCurrentTool and
+// ResetTurn - or the next call on the same kernel reads as a continuation and
+// does not retry what this one could not read.
 void ResetAssistantPcRead();
 
 // --- Helpers both halves need, defined beside the dispatcher ---------------
@@ -129,6 +127,18 @@ bool CheckArrayLength(const std::vector<jt::Json>& entries,
 // Yields the selected time range, or the whole trace if nothing is selected.
 void SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
                              double& end_ns);
+
+// Finds the link a model-supplied ref names among this trace's links: a group
+// id first, then the other trace's file name or role when only one matches. An
+// empty ref picks the only link there is. Writes the reason to error_out on
+// failure, listing what is linked.
+bool
+ResolveAssistantLink(const AssistantToolContext& context, const std::string& ref,
+                     TraceLink& link_out, std::string& error_out);
+
+// Why a linked trace cannot be read right now, or empty when it can.
+std::string
+LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link);
 
 }  // namespace View
 }  // namespace RocProfVis

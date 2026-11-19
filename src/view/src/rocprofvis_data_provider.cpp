@@ -362,7 +362,7 @@ DataProvider::SetTrackDataReadyCallback(
 }
 
 void
-DataProvider::SetSummaryDataReadyCallback(const std::function<void()>& callback)
+DataProvider::SetSummaryDataReadyCallback(const std::function<void(bool)>& callback)
 {
     m_summary_data_ready_callback = callback;
 }
@@ -3424,6 +3424,7 @@ DataProvider::ProcessCleanupDatabaseRequest(RequestInfo& req)
 void
 DataProvider::ProcessSummaryRequest(RequestInfo& req)
 {
+    const bool succeeded = req.response_code == kRocProfVisResultSuccess;
     if(req.request_args)
     {
         rocprofvis_controller_arguments_free(req.request_args);
@@ -3432,13 +3433,17 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     if(req.request_obj_handle)
     {
         rocprofvis_controller_summary_metrics_t* metrics_handle = req.request_obj_handle;
-        if(req.response_code == kRocProfVisResultSuccess)
+        if(succeeded)
         {
             m_model.GetSummary().Clear();
             m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
             CreateSummaryData(metrics_handle, scratch);
             m_model.GetSummary().UpdateValueStrings();
+        }
+        else if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Summary request cancelled");
         }
         else
         {
@@ -3449,7 +3454,7 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     }
     if(m_summary_data_ready_callback)
     {
-        m_summary_data_ready_callback();
+        m_summary_data_ready_callback(succeeded);
     }
 }
 

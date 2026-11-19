@@ -161,6 +161,10 @@ struct AssistantToolStartResult
     // A trace switch is a barrier: later calls in the same batch were planned
     // for a tab state that has not landed yet, so they receive skipped replies.
     bool stop_tool_queue = false;
+    // An action carried out exactly as asked, whose reply holds nothing the
+    // model has to react to: no rows, no refusal, nothing to try again. A
+    // batch made only of these and an offer of next steps is the model's last.
+    bool settled = false;
     // How long the panel waits before calling this a timeout. Zero takes the
     // default, which suits a query; a tool waiting on the user needs longer.
     uint32_t                 timeout_seconds = 0;

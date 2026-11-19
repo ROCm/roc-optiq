@@ -99,6 +99,11 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
+// How long a question waits for the summary preload before going out without
+// it. Past this the briefing says the summary is still loading, and the
+// model's get_summary parks on the same request, so its first round runs
+// alongside a slow summary instead of queueing behind it for minutes.
+constexpr uint32_t ASSISTANT_WARMUP_TIMEOUT_SECONDS = 10;
 // How often a read asks again after the UI dropped what it was waiting for - a
 // range change voiding track statistics, a change of selection clearing an
 // event - so one that keeps being dropped answers well before the deadline.
@@ -134,6 +139,8 @@ AssistantPanel::AssistantPanel()
 , m_tool_round(0)
 , m_force_final(false)
 , m_stop_tool_queue(false)
+, m_batch_offered_steps(false)
+, m_batch_settled(false)
 , m_fetch_retries(0)
 , m_turn_is_compute(false)
 , m_tab_closed_token(EventManager::InvalidSubscriptionToken)
@@ -1152,10 +1159,12 @@ AssistantPanel::BeginToolQueue(const std::vector<AssistantToolCall>& calls,
     assistant_message.tool_calls = calls;
     TurnConversation().messages.push_back(assistant_message);
 
-    m_pending_calls   = calls;
-    m_next_call_index = 0;
-    m_fetch_retries   = 0;
-    m_stop_tool_queue = false;
+    m_pending_calls       = calls;
+    m_next_call_index     = 0;
+    m_fetch_retries       = 0;
+    m_stop_tool_queue     = false;
+    m_batch_offered_steps = false;
+    m_batch_settled       = true;
     RunNextTool();
 }
 
@@ -1212,16 +1221,13 @@ AssistantPanel::RunNextTool()
     if(started.set_next_steps)
     {
         TurnConversation().next_steps = started.next_steps;
-        // Called alone, it is the model's last step before writing, and the
-        // prose of a tools-on round is discarded anyway (see HandleHttpResult),
-        // so go straight to the tools-off round. With sibling calls the model
-        // has not yet read their results. ResetTurn clears the queue.
-        if(m_pending_calls.size() == 1)
-        {
-            AppendToolReply(call, started.content);
-            BeginFinalAnswer();
-            return;
-        }
+        m_batch_offered_steps         = true;
+    }
+    else if(!started.settled)
+    {
+        // Rows to read, a refusal, or an action that missed: the model may
+        // want another call once it has seen this reply.
+        m_batch_settled = false;
     }
     if(started.stop_tool_queue)
     {
@@ -1258,7 +1264,8 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
                                      ? AssistantToolStatusLabel(tool_name)
                                      : started.status_line;
     m_fetch_wait.started       = started_at;
-    m_fetch_wait.timeout_seconds = started.timeout_seconds;
+    m_fetch_wait.timeout_seconds =
+        warmup ? ASSISTANT_WARMUP_TIMEOUT_SECONDS : started.timeout_seconds;
 }
 
 // Hands one tool's output back to the model and moves on to the next. Warmup
@@ -1328,6 +1335,18 @@ AssistantPanel::ContinueAfterTools()
     m_next_call_index = 0;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
+    // The model offers next steps as its last tool. When the rest of the batch
+    // was actions carried out as asked, nothing in the replies calls for
+    // another tool, and the draft a tools-on round would write is the one
+    // HandleHttpResult discards - so go straight to the tools-off round. A
+    // batch that read data, or in which an action missed, gets its round.
+    const bool last_batch = m_batch_offered_steps && m_batch_settled;
+    m_batch_offered_steps = false;
+    if(last_batch)
+    {
+        BeginFinalAnswer();
+        return;
+    }
     StartHttpRequest();
 }
 
@@ -1478,19 +1497,24 @@ AssistantPanel::PollToolFetch()
     // and it has an outstanding offer to clear either way.
     if(pending && m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
     {
-        // A table read holds a slot nothing but the assistant uses. Left to
-        // run, a query that outlived its deadline keeps that slot, and the
-        // narrower one the model tries next waits behind it.
-        const AssistantFetchKind kind = m_fetch_wait.fetch.kind;
-        if(m_fetch_wait.owns_requests && (kind == AssistantFetchKind::kTopEvents ||
-                                          kind == AssistantFetchKind::kEventInstances ||
-                                          kind == AssistantFetchKind::kDataTable))
+        // A table or metric read holds a slot nothing but the assistant uses.
+        // Left to run, a query that outlived its deadline keeps that slot, and
+        // the narrower one the model tries next waits behind it.
+        const AssistantFetchKind kind    = m_fetch_wait.fetch.kind;
+        const bool               metrics = kind == AssistantFetchKind::kComputeMetrics;
+        if(m_fetch_wait.owns_requests &&
+           (metrics || kind == AssistantFetchKind::kTopEvents ||
+            kind == AssistantFetchKind::kEventInstances ||
+            kind == AssistantFetchKind::kDataTable))
         {
             CancelOwnedFetch();
-            FinishCurrentTool(m_fetch_wait.prefix + "Timed out waiting for " +
-                              m_fetch_wait.tool_name +
-                              ", so its query was cancelled. Narrow the window, the "
-                              "tracks or the filters and call it again.");
+            FinishCurrentTool(
+                m_fetch_wait.prefix + "Timed out waiting for " + m_fetch_wait.tool_name +
+                ", so its query was cancelled. " +
+                (metrics ? "Read less at once: one table with get_metrics, for one "
+                           "kernel."
+                         : "Narrow the window, the tracks or the filters and call it "
+                           "again."));
             return;
         }
         FinishCurrentTool("Timed out waiting for " + m_fetch_wait.tool_name + ".");

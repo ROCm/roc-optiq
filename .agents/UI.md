@@ -2771,7 +2771,17 @@ Rules that are easy to get wrong here:
 - **Tool rounds and the answer are separate HTTP calls.** When the
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
-  user reads.
+  user reads. The draft round is skipped when a batch offered next steps
+  and everything else in it was a UI action carried out as asked
+  (`AssistantToolStartResult::settled`): nothing in those replies calls
+  for another tool, so `ContinueAfterTools` goes straight to the
+  tools-off round. A batch that read data, or in which an action
+  missed, still gets its round. A UI tool sets `settled` only on the
+  path where it did exactly what was asked.
+- **The summary preload waits ten seconds, not for the summary.** Past
+  `ASSISTANT_WARMUP_TIMEOUT_SECONDS` the question goes out, the briefing
+  says the summary is still loading instead of printing zero totals,
+  and `get_summary` parks on the request already in flight.
 - **The prompt is a shared base plus one body per trace kind.**
   `AssistantSystemPrompt(is_compute)` concatenates
   `ASSISTANT_SHARED_OPENING`, then either

@@ -37,6 +37,8 @@ public:
     DataProvider* GetDataProvider() override { return &m_data_provider; }
 
     std::shared_ptr<RocWidget> GetToolbar() override;
+    // This trace's kernel list visibility, or null before the view is created.
+    bool* KernelListVisible();
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
 
     friend struct ComputeViewTestPeer;

@@ -35,6 +35,7 @@
 #include "widgets/rocprofvis_tab_container.h"
 
 #include <cstdio>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -175,7 +176,11 @@ struct ComputeViewTestPeer
 
 struct ComputeKernelDetailsViewTestPeer
 {
+    using LayoutSettings = ComputeKernelDetailsView::LayoutSettings;
+
     ComputeKernelDetailsView& v;
+    LayoutSettings&    Layout() const { return v.m_layout; }
+    PresetComponent&   LayoutPreset() const { return *v.m_preset; }
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
     ComputeTableView*  TableViewPtr() const
     {
@@ -355,6 +360,23 @@ struct MetricTableTestPeer
         }
         return count;
     }
+    // Comparison columns ("Avg A", "Avg \xCE\x94%", ...) whose "Send metric to
+    // kernel details" value is the header itself rather than its value ("Avg").
+    // `checked` counts the value columns looked at.
+    size_t ColumnsSendingHeader(size_t& checked) const
+    {
+        size_t wrong = 0;
+        for(const auto& column : t.m_columns)
+        {
+            const std::string* value = t.ColumnValueName(column.first);
+            if(value == nullptr) continue;
+            checked++;
+            const std::string& header = column.second;
+            if(header == *value || header.compare(0, value->size() + 1, *value + " ") != 0)
+                wrong++;
+        }
+        return wrong;
+    }
 };
 
 struct ComputeTableViewTestPeer
@@ -375,6 +397,29 @@ struct ComputeTableViewTestPeer
         }
         return count;
     }
+    // Comparison columns across every built table that send their header as the
+    // value name; `checked` counts the value columns looked at.
+    size_t CompareColumnsSendingHeader(size_t& checked) const
+    {
+        size_t wrong = 0;
+        for(const auto& table : v.m_table_widgets)
+        {
+            wrong += MetricTableTestPeer{ table.second }.ColumnsSendingHeader(checked);
+        }
+        return wrong;
+    }
+    // Each table's widget; the ImGui table ids (and so scroll positions) follow it.
+    std::map<uint64_t, const MetricTable*> TableWidgets() const
+    {
+        std::map<uint64_t, const MetricTable*> widgets;
+        for(const auto& table : v.m_table_widgets)
+        {
+            widgets[table.first] = &table.second;
+        }
+        return widgets;
+    }
+    // What a compare option change or a fetched kernel does to the tables.
+    void RebuildTables() { v.RebuildTableDataCache(); }
     bool   IsTableShown(uint64_t table_key) const
     {
         return v.m_enabled_tables.count(table_key) > 0;
@@ -427,6 +472,8 @@ struct KernelMetricTableTestPeer
     size_t MetricColumnCount() const { return v.m_metrics_params.size(); }
     // True until every workload's rows of the latest query have arrived.
     bool Fetching() const { return v.m_cycle_active || v.m_fetch_requested; }
+    // Whether the latest query reported an error (e.g. an invalid filter).
+    bool ShowedFetchError() const { return v.m_fetch_error_shown; }
 };
 
 // EventSearch's state lives in its protected base InfiniteScrollTable, so this

@@ -1552,13 +1552,15 @@ on each tab when a sort mixes them; a line under the search names a
 non-default sort and the active filters (with Clear). Clicking a kernel in
 another workload selects that workload too.
 
-State lives in `AppWindowSettings` (`compute_layout_template`,
-`compute_layout_slots` - boxes beyond the template's count keep their panels
-for when it grows - `compute_maximized` / `compute_maximized_pane`,
-`compute_kernel_list_table`), so it persists across sessions and databases.
-`show_compute_*` mirror which panels are in a box: `SyncPanelToggles()` treats a
-change to them (View > Compute Profiler Panels, the Panels checklist) as a
-show/hide request and then mirrors the boxes back. `RebuildLayout()` rebuilds
+State lives in the view's `m_layout` (`LayoutSettings`: `layout_template`,
+`slots` - boxes beyond the template's count keep their panels for when it
+grows - `maximized` / `maximized_pane`, `kernel_list_table`), so each open
+compute trace has its own layout and a new one starts from the default. The
+`ComputeKernelDetailsLayout` preset (toolbar Presets) saves and restores it.
+Panels are placed only through the boxes (drag, the header's panel picker, an
+empty box's dropdown); `show_kernel_list` (View > Show Kernel List, which acts
+on the active compute tab through `ComputeView::KernelListVisible()`, and the
+rail's hide button) shows the kernel rail. `RebuildLayout()` rebuilds
 the tree only when the template, maximize or kernel rail change; box contents
 change without a rebuild. Box headers (`RenderPaneHeader`): the title is a drag
 handle (ImGui drag-drop payload `PANE_DRAG_PAYLOAD`), the arrow opens the panel
@@ -1569,11 +1571,12 @@ and hides the kernel rail; double-clicking the title toggles it) and hide
 card child is its drop target: right after `EndChild` it is the last item, so
 `HandleSlotDrop` uses the public `BeginDragDropTarget()` (as `TimelineView`
 does for track reordering), highlights the box and swaps on drop. Empty boxes
-offer the panels not shown. Kernel Details uses no `imgui_internal.h` API.
+offer the panels not shown in a dropdown (one width however many there are).
+Kernel Details uses no `imgui_internal.h` API.
 `RenderLayoutControls()` draws the Layout combo (thumbnails, Reset layout; the
 closed combo's thumbnail and name are drawn with the draw list over its frame,
-clipped before the arrow) and the Panels checklist; `ComputeView::RenderToolbar()`
-puts them at the left of the app toolbar, on the same row as Presets (right-aligned),
+clipped before the arrow); `ComputeView::RenderToolbar()`
+puts it at the left of the app toolbar, on the same row as Presets (right-aligned),
 so the workspace has no toolbar row of its own. The nested `Preset` saves the layout
 with user presets (`PresetManager::ComputeKernelDetailsLayout`), including each
 panel's `SaveLayout` keys. Each leaf pane comes from `MakeRenderPane()`: the pane itself carries zero item spacing (a
@@ -2441,10 +2444,7 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   Use `AddRecentFile / RemoveRecentFile / ClearRecentFiles`.
 - `GetAppWindowSettings()` -> show/hide flags (`show_toolbar`,
   `show_details_panel`, `show_sidebar`, `show_histogram`,
-  `show_summary`, and the Kernel Details layout: `show_compute_kernel_list`,
-  `show_compute_memory_chart`, `show_compute_roofline`, `show_compute_metric_tables`, `show_compute_isa`,
-  `show_compute_workload_details`, `show_compute_pinned_metrics`, `compute_layout_template`, `compute_layout_slots`, `compute_maximized`,
-  `compute_maximized_pane`, `compute_kernel_list_table`).
+  `show_summary`). The compute Kernel Details layout is per view, not here.
 - `GetColor(Colors)` returns an `ImU32`. The `Colors` enum lists
   every themed color (background tiers, accents, table borders,
   flame chart, line chart, ruler, scrubber, comparison highlight,

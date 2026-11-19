@@ -25,8 +25,11 @@ class ComputeSelection;
 class KernelMetricTable;
 struct KernelInfo;
 
+// Most boxes a layout template has.
+constexpr int32_t COMPUTE_LAYOUT_MAX_SLOTS = 4;
+
 // Workspace panels of Kernel Details, in default placement order. Stored as ints
-// in AppWindowSettings::compute_layout_slots and in saved presets: append only.
+// in saved presets: append only.
 enum class ComputePane : int32_t
 {
     kMemoryChart,
@@ -38,9 +41,8 @@ enum class ComputePane : int32_t
     kCount
 };
 
-// Box arrangements of the workspace. Stored as an int in
-// AppWindowSettings::compute_layout_template and in saved presets: append only
-// (kMainBelow is 0, the default).
+// Box arrangements of the workspace. Stored as an int in saved presets: append
+// only.
 enum class ComputeLayoutTemplate : int32_t
 {
     kMainBelow,       // One large box over two side by side.
@@ -59,9 +61,9 @@ enum class ComputeLayoutTemplate : int32_t
 // B are chosen; the rest is a box layout
 // picked from ComputeLayoutTemplate, each box showing one panel. Panels move by
 // dragging a box's title onto another box (the two swap) or by the box's panel
-// picker; any box can be maximized to fill the tab. Template, box contents and
-// maximize live in AppWindowSettings (so they persist and match View > Compute
-// Profiler Panels) and are saved with user presets.
+// picker; an empty box offers the panels not shown; any box can be maximized to
+// fill the tab. Template, box contents and maximize belong to this view, so
+// each open trace has its own; user presets save and restore them.
 //
 // Each panel is a ComputeKernelDetailsPane; this view handles the boxes, the
 // kernel rail and the comparison, and reaches the panels only through that
@@ -80,12 +82,28 @@ public:
     void Render() override;
     void Update() override;
 
-    // The Layout combo and Panels checklist, for ComputeView's toolbar.
+    // The Layout combo, for ComputeView's toolbar.
     void RenderLayoutControls();
+    // Whether the kernel rail is shown, for the View menu.
+    bool& KernelListVisible() { return m_layout.show_kernel_list; }
 
     friend struct ComputeKernelDetailsViewTestPeer;
 
 private:
+    // The arrangement the user chose. Template and pane values are stored as
+    // ComputeLayoutTemplate / ComputePane ints, as presets save them, and are
+    // checked when read.
+    struct LayoutSettings
+    {
+        int32_t layout_template = static_cast<int32_t>(ComputeLayoutTemplate::kMainBelow);
+        // Pane per box; -1 = empty.
+        int32_t slots[COMPUTE_LAYOUT_MAX_SLOTS] = { 0, 1, 2, 3 };
+        bool    maximized         = false;  // maximized_pane fills the tab.
+        int32_t maximized_pane    = 0;
+        bool    show_kernel_list  = true;
+        bool    kernel_list_table = false;  // The rail shows the full metric table.
+    };
+
     // Everything the split tree depends on; it is rebuilt when this changes.
     struct LayoutState
     {
@@ -145,7 +163,6 @@ private:
     bool           IsPaneAvailable(ComputePane pane) const;
     // The available panel a stored pane value names, or kCount.
     ComputePane    AvailablePane(int32_t value) const;
-    bool&          PaneVisibleSetting(ComputePane pane) const;
     ComputeLayoutTemplate CurrentTemplate() const;
     int32_t        ActiveSlotCount() const;
     ComputePane    SlotPane(int32_t slot) const;
@@ -154,12 +171,8 @@ private:
     void           AssignSlot(int32_t slot, ComputePane pane);
     void           SwapSlots(int32_t a, int32_t b);
     void           ClearSlot(int32_t slot);
-    void           PlacePane(ComputePane pane);
     void           SetTemplate(ComputeLayoutTemplate layout);
     void           ResetLayout();
-    // Applies Panels / View-menu toggles to the boxes, then mirrors the boxes
-    // back into the toggles.
-    void           SyncPanelToggles();
 
     // Split tree.
     LayoutState CurrentLayoutState() const;
@@ -179,15 +192,16 @@ private:
 
     // Drawing.
     void RenderLayoutMenu();
-    void RenderPanelsMenu();
     // Title (a drag handle for box `slot` when `draggable`, followed by the
     // box's panel picker when `pickable`), then buttons right-aligned. Returns
     // the clicked button's index or -1; title_double_clicked reports a
-    // double-click on the title.
+    // double-click on the title, and row_width (when set) the width the row
+    // needs to fit without clipping.
     int32_t RenderPaneHeader(const char* title, int32_t slot, bool draggable,
                              bool pickable,
                              const ComputeKernelDetailsPane::HeaderButton* buttons,
-                             int32_t count, bool& title_double_clicked);
+                             int32_t count, bool& title_double_clicked,
+                             float* row_width = nullptr);
     void RenderPanelPicker(int32_t slot);
     void RenderSlot(int32_t slot);
     void RenderPane(ComputePane pane, int32_t slot);
@@ -237,6 +251,12 @@ private:
 
     uint64_t m_client_id;
 
+    LayoutSettings m_layout;
+    // Card widths that fit the kernel rail's and each box's header row, as last
+    // drawn; the rail and boxes are kept at least this wide.
+    float                                       m_rail_header_width = 0.0f;
+    std::array<float, COMPUTE_LAYOUT_MAX_SLOTS> m_slot_header_widths{};
+
     // One pane per box, the maximized pane, and the kernel rail.
     std::array<LayoutItem::Ptr, COMPUTE_LAYOUT_MAX_SLOTS> m_slot_panes;
     LayoutItem::Ptr                                      m_maximized_pane;
@@ -247,10 +267,6 @@ private:
     int32_t                          m_layout_root;  // Its root node, or -1.
     LayoutState                      m_built_layout;
     bool                             m_layout_built = false;
-
-    // Panel toggles as last mirrored from the boxes; a difference is a user toggle.
-    std::array<bool, static_cast<size_t>(ComputePane::kCount)> m_synced_toggles{};
-    bool                                                      m_toggles_synced = false;
 
     // Kernel rail, the one place kernels (A and B) are chosen: every workload's
     // kernels by total duration, and the list's search text.

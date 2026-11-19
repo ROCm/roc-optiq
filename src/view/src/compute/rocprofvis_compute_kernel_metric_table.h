@@ -32,8 +32,10 @@ public:
     // The selection's workload (metric picking follows it). The table lists every
     // workload's kernels, so it fetches only when it has nothing yet.
     void FetchData(uint32_t workload_id);
-    // One workload's rows arrived, or failed with `error_message`. The last one
-    // shows them all, or keeps the previous rows when every workload failed.
+    // One workload's rows arrived, or failed. `error_message` (e.g. a filter
+    // that could not be applied) may come with either and is shown once per
+    // query. The last one shows them all, or keeps the previous rows when every
+    // workload failed.
     void HandleNewData(bool success, const std::string& error_message);
     void SetQuery(const std::string& query);
     void SetExternalQuery(MetricId metric_id, const std::string& value_name);
@@ -139,6 +141,7 @@ private:
     std::vector<uint32_t>                 m_fetch_workloads;
     size_t                                m_fetch_index    = 0;
     size_t                                m_fetch_failures = 0;
+    bool                                  m_fetch_error_shown = false;
     bool                                  m_cycle_active   = false;
     bool                                  m_fetch_next   = false;
     std::vector<std::string>              m_pending_header;

@@ -702,25 +702,37 @@ ComputeTableView::RenderEmptyState()
 void
 ComputeTableView::RebuildTableDataCache()
 {
-    m_table_widgets.clear();
-
     auto&    model       = m_data_provider.ComputeModel();
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-
-    if(workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    const WorkloadInfo* workload = workload_id == ComputeSelection::INVALID_SELECTION_ID
+                                       ? nullptr
+                                       : model.GetWorkload(workload_id);
+    if(!workload)
     {
+        m_table_widgets.clear();
         return;
     }
 
-    const WorkloadInfo* workload = model.GetWorkload(workload_id);
-    if(!workload)
-        return;
-
+    // Tables are refilled in place: a table's ImGui id comes from its widget's
+    // address, so keeping the widget keeps its scroll position.
     std::vector<ListedTable> listed;
     ListTables(*workload, listed);
+    std::set<uint64_t> listed_keys;
     for(const ListedTable& table : listed)
     {
+        listed_keys.insert(table.Key());
         AddTable(table);
+    }
+    for(auto it = m_table_widgets.begin(); it != m_table_widgets.end();)
+    {
+        if(listed_keys.count(it->first) == 0)
+        {
+            it = m_table_widgets.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
     }
 
     RestoreMetricPining();
@@ -751,6 +763,7 @@ ComputeTableView::AddTable(const ListedTable& listed)
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
     if(kernel_id == ComputeSelection::INVALID_SELECTION_ID)
     {
+        widget.Clear();
         return;
     }
 

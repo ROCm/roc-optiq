@@ -334,28 +334,42 @@ struct ShowSummaryGuard
 };
 
 // Puts every Kernel Details panel in a box (2 x 2 grid, not maximized) and the
-// kernel rail in table mode for the test's lifetime, then restores the user's
+// kernel rail in table mode for the test's lifetime, then restores the view's
 // layout. Panels outside a box are not rendered, so their widgets would never
 // submit the ImGui windows/items the compute tests look for.
 struct ComputePanelsGuard
 {
-    AppWindowSettings prev;
-    ComputePanelsGuard()
-        : prev(SettingsManager::GetInstance().GetAppWindowSettings())
+    ComputeKernelDetailsView*                        kd;
+    ComputeKernelDetailsViewTestPeer::LayoutSettings prev;
+    explicit ComputePanelsGuard(ComputeView* cv)
+        : kd(cv ? ComputeViewTestPeer{*cv}.KernelDetailsPtr() : nullptr)
     {
-        AppWindowSettings& s        = SettingsManager::GetInstance().GetAppWindowSettings();
-        s.show_compute_kernel_list  = true;
-        s.compute_kernel_list_table = true;
-        s.compute_layout_template   = static_cast<int32_t>(ComputeLayoutTemplate::kGrid);
+        if(!kd)
+        {
+            return;
+        }
+        ComputeKernelDetailsViewTestPeer::LayoutSettings& s = Layout();
+        prev                = s;
+        s.show_kernel_list  = true;
+        s.kernel_list_table = true;
+        s.layout_template   = static_cast<int32_t>(ComputeLayoutTemplate::kGrid);
         for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
         {
-            s.compute_layout_slots[slot] = slot;
+            s.slots[slot] = slot;
         }
-        s.compute_maximized = false;
+        s.maximized = false;
     }
     ~ComputePanelsGuard()
     {
-        SettingsManager::GetInstance().GetAppWindowSettings() = prev;
+        if(kd)
+        {
+            Layout() = prev;
+        }
+    }
+    // The view's layout; only valid when kd is set.
+    ComputeKernelDetailsViewTestPeer::LayoutSettings& Layout() const
+    {
+        return ComputeKernelDetailsViewTestPeer{*kd}.Layout();
     }
 };
 
@@ -755,8 +769,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // m_workload_info fills when the panel renders, so give it the grid's
         // fourth box.
-        ComputePanelsGuard panels_guard;
-        SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots[3] =
+        ComputePanelsGuard panels_guard{ cv };
+        panels_guard.Layout().slots[3] =
             static_cast<int32_t>(ComputePane::kWorkloadDetails);
         ctx->Yield(3);
 
@@ -875,7 +889,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
 
         CompareGuard       compare_guard{ kd_peer };
-        ComputePanelsGuard panels_guard;
+        ComputePanelsGuard panels_guard{ cv };
         ctx->Yield(3);
 
         kd_peer.CompareWith(target_workload, target_kernel);
@@ -886,6 +900,19 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(table_peer.IsComparing());
 
         WaitForCompareDeltas(ctx, table_peer);
+        IM_CHECK(table_peer.DeltaPctCellCount() > 0);
+
+        // "Send metric to kernel details" sends a compare column's value ("Avg"),
+        // which the kernel table can query, never its header ("Avg A").
+        size_t value_columns = 0;
+        IM_CHECK_EQ(table_peer.CompareColumnsSendingHeader(value_columns), (size_t)0);
+        IM_CHECK(value_columns > 0);
+
+        // A rebuild (a compare option change, a fetch landing) refills the
+        // tables in place, so their ImGui ids and scroll positions stay.
+        const std::map<uint64_t, const MetricTable*> widgets = table_peer.TableWidgets();
+        table_peer.RebuildTables();
+        IM_CHECK(table_peer.TableWidgets() == widgets);
         IM_CHECK(table_peer.DeltaPctCellCount() > 0);
 
         // The roofline plots A and B from the first frames on.
@@ -937,7 +964,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(roofline != nullptr);
         if (roofline == nullptr) return;
 
-        ComputePanelsGuard panels_guard;  // every panel in a box, none maximized
+        ComputePanelsGuard panels_guard{ cv };  // every panel in a box, none maximized
         ctx->Yield(10);
 
         ImPlotContext* plots   = ImPlot::GetCurrentContext();
@@ -953,9 +980,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const float       box_w = plot->FrameRect.GetWidth();
         CaptureForReview(ctx, "roofline_in_box");
 
-        AppWindowSettings& s     = SettingsManager::GetInstance().GetAppWindowSettings();
-        s.compute_maximized_pane = static_cast<int32_t>(ComputePane::kRoofline);
-        s.compute_maximized      = true;
+        panels_guard.Layout().maximized_pane = static_cast<int32_t>(ComputePane::kRoofline);
+        panels_guard.Layout().maximized      = true;
         ctx->Yield(10);
         CaptureForReview(ctx, "roofline_maximized");
 
@@ -971,6 +997,46 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(same(plot->Axes[ImAxis_X1].Range.Max, box_x.Max));
         IM_CHECK(same(plot->Axes[ImAxis_Y1].Range.Min, box_y.Min));
         IM_CHECK(same(plot->Axes[ImAxis_Y1].Range.Max, box_y.Max));
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_layout_preset_round_trip");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
+        ComputeKernelDetailsViewTestPeer kd_peer{*kd};
+        ComputePanelsGuard               panels_guard{ cv };
+
+        // A layout unlike the default: grid, two boxes swapped, one empty, the
+        // kernel rail hidden in table mode.
+        ComputeKernelDetailsViewTestPeer::LayoutSettings& layout = kd_peer.Layout();
+        std::swap(layout.slots[0], layout.slots[1]);
+        layout.slots[2]         = -1;
+        layout.show_kernel_list = false;
+        const ComputeKernelDetailsViewTestPeer::LayoutSettings saved = layout;
+        jt::Json json;
+        IM_CHECK(kd_peer.LayoutPreset().ToJson(json));
+
+        kd_peer.LayoutPreset().Reset();
+        ctx->Yield(2);
+        const bool reset_to_default =
+            layout.layout_template != saved.layout_template && layout.show_kernel_list;
+
+        IM_CHECK(kd_peer.LayoutPreset().FromJson(json));
+        ctx->Yield(2);
+        bool slots_restored = true;
+        for (int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
+        {
+            slots_restored = slots_restored && layout.slots[slot] == saved.slots[slot];
+        }
+        IM_CHECK(reset_to_default);
+        IM_CHECK(layout.layout_template == saved.layout_template);
+        IM_CHECK(slots_restored);
+        IM_CHECK(layout.show_kernel_list == saved.show_kernel_list);
+        IM_CHECK(layout.kernel_list_table == saved.kernel_list_table);
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_inline_compare_across_workloads");
@@ -1003,7 +1069,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const uint32_t target_kernel = other->ordered_kernels.front()->id;
 
         CompareGuard       compare_guard{ kd_peer };
-        ComputePanelsGuard panels_guard;
+        ComputePanelsGuard panels_guard{ cv };
         ctx->Yield(3);
 
         kd_peer.CompareWith(other->id, target_kernel);
@@ -1132,7 +1198,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             bool                      prev;
             ~ShownTableGuard() { peer.ShowTable(key, prev); }
         } shown_table_guard{ peer, table_key, peer.IsTableShown(table_key) };
-        ComputePanelsGuard panels_guard;
+        ComputePanelsGuard panels_guard{ cv };
         peer.ShowTable(table_key, true);
 
         ctx->Yield(3);
@@ -1897,7 +1963,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        ComputePanelsGuard panels_guard;
+        ComputePanelsGuard panels_guard{ cv };
         ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
         IM_CHECK(kd != nullptr);
         if (kd == nullptr) return;
@@ -1967,7 +2033,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        ComputePanelsGuard panels_guard;  // kernel rail in Table mode
+        ComputePanelsGuard panels_guard{ cv };  // kernel rail in Table mode
         ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
         IM_CHECK(kd != nullptr);
         if (kd == nullptr) return;
@@ -2073,7 +2139,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        ComputePanelsGuard panels_guard;  // kernel rail in Table mode
+        ComputePanelsGuard panels_guard{ cv };  // kernel rail in Table mode
         ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
         IM_CHECK(kd != nullptr);
         if (kd == nullptr) return;
@@ -2165,6 +2231,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ctx->LogWarning("SKIP filter check: every kernel has the same duration");
         }
 
+        // A filter the query cannot apply succeeds with no rows and is reported.
+        peer.ApplyFilter(2, "5");
+        wait_fetch();
+        const bool invalid_filter_reported = peer.ShowedFetchError();
+
         // Restore: no filters, sorted by duration again.
         kt->ClearAllFilters();
         wait_fetch();
@@ -2183,6 +2254,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(follows_default);
         IM_CHECK(sorted_by_name);
         IM_CHECK(follows_sort);
+        IM_CHECK(invalid_filter_reported);
         if (distinct)
         {
             IM_CHECK(filtered_rows > 0 && filtered_rows < kernel_count);
@@ -2197,7 +2269,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        ComputePanelsGuard panels_guard;  // 2x2 grid: the ISA pane in the fourth box
+        ComputePanelsGuard panels_guard{ cv };  // 2x2 grid: the ISA pane in the fourth box
         ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
         IM_CHECK(kd != nullptr);
         if (kd == nullptr) return;
@@ -2331,8 +2403,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
 
         CompareGuard       compare_guard{ kd_peer };
-        ComputePanelsGuard panels_guard;
-        SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots[3] =
+        ComputePanelsGuard panels_guard{ cv };
+        panels_guard.Layout().slots[3] =
             static_cast<int32_t>(ComputePane::kWorkloadDetails);
         ctx->Yield(3);
         auto shown_workload = [&]() {

@@ -46,7 +46,6 @@ constexpr float RAIL_TABLE_MIN_WIDTH_EMS = 24.0f;
 
 // Toolbar combos, in frame heights, and the Layout menu's row / thumbnail sizes.
 constexpr float LAYOUT_COMBO_WIDTH_FRAMES = 11.0f;
-constexpr float PANELS_COMBO_WIDTH_FRAMES = 9.0f;
 constexpr float LAYOUT_ROW_HEIGHT_FRAMES  = 1.35f;
 constexpr float THUMBNAIL_ASPECT          = 1.6f;
 constexpr float THUMBNAIL_INSET           = 3.0f;
@@ -54,8 +53,8 @@ constexpr float THUMBNAIL_LABEL_GAP       = 8.0f;
 constexpr float THUMBNAIL_GAP             = 1.0f;
 constexpr float THUMBNAIL_ROUNDING        = 1.5f;
 constexpr float THUMBNAIL_FILL_ALPHA      = 0.3f;
-// The Panels combo's "N of M panels" preview.
-constexpr size_t PANELS_PREVIEW_SIZE = 32;
+// An empty box's panel combo, in frame heights.
+constexpr float EMPTY_BOX_COMBO_WIDTH_FRAMES = 9.0f;
 
 // Box title handle and drop feedback.
 constexpr const char* PANE_DRAG_PAYLOAD      = "COMPUTE_PANE_BOX";
@@ -76,6 +75,8 @@ constexpr float  KERNEL_TAB_ROUNDING     = 4.0f;
 constexpr float  KERNEL_TAB_TRACK_ALPHA  = 0.6f;
 constexpr float  KERNEL_TOOLTIP_WIDTH    = 480.0f;
 constexpr size_t KERNEL_NAME_MAX_CHARS   = 512;
+// Templated names run to thousands of characters; the tooltip shows this many.
+constexpr size_t KERNEL_TOOLTIP_MAX_CHARS = 400;
 // Anti-aliased edges reach this far past a tab's rect.
 constexpr float  KERNEL_TAB_CULL_MARGIN  = 1.0f;
 // The tab's stats line, which may lead with the workload's name.
@@ -175,12 +176,6 @@ IsSlotIndex(int32_t slot)
     return slot >= 0 && slot < COMPUTE_LAYOUT_MAX_SLOTS;
 }
 
-static AppWindowSettings&
-WindowSettings()
-{
-    return SettingsManager::GetInstance().GetAppWindowSettings();
-}
-
 // The kernel rail's share of the tab; the full table needs far more width than
 // the tab list.
 static float
@@ -259,6 +254,15 @@ EndPaneCard()
     ImGui::EndChild();
 }
 
+// The width a pane card needs for a row `row_width` wide inside its padding and
+// border.
+static float
+PaneCardWidth(float row_width)
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    return row_width + (style.WindowPadding.x + style.ChildBorderSize) * 2.0f;
+}
+
 static ImVec2
 BadgeSize(const char* text)
 {
@@ -310,12 +314,14 @@ IconWidth(const char* icon)
 }
 
 // An icon button with frame padding, on `bg`, in the app's hover / press colors.
+// It is padded and sized like a text button beside it; the icon font's line
+// height differs.
 static bool
 FramedIconButton(const char* icon, const char* tooltip, ImU32 bg)
 {
     SettingsManager& settings = SettingsManager::GetInstance();
-    return IconButton(icon, IconFont(), ImVec2(0, 0), tooltip, false,
-                      settings.GetDefaultStyle().FramePadding, bg,
+    return IconButton(icon, IconFont(), ImVec2(0.0f, ImGui::GetFrameHeight()), tooltip, false,
+                      ImGui::GetStyle().FramePadding, bg,
                       settings.GetColor(Colors::kButtonHovered),
                       settings.GetColor(Colors::kButtonActive));
 }
@@ -327,6 +333,41 @@ SameLineRightAligned(float width)
     ImGui::SameLine();
     const float x = ImGui::GetCursorPosX();
     ImGui::SetCursorPosX(std::max(x, x + ImGui::GetContentRegionAvail().x - width));
+}
+
+// Whether the mouse is over the trailing ellipsis of `shown`, a name elided
+// from `full` and drawn from `pos` on a line `height` tall.
+static bool
+IsEllipsisHovered(const std::string& shown, const std::string& full, ImVec2 pos,
+                  float height)
+{
+    if(shown == full)
+    {
+        return false;
+    }
+    const float  end_x = pos.x + ImGui::CalcTextSize(shown.c_str()).x;
+    const ImVec2 min(end_x - ImGui::CalcTextSize(TEXT_ELLIPSIS).x, pos.y);
+    return ImGui::IsMouseHoveringRect(min, ImVec2(end_x, pos.y + height));
+}
+
+// A tooltip with a kernel's name, wrapped and cut short so it stays a readable
+// size.
+static void
+KernelNameTooltip(const std::string& name)
+{
+    BeginTooltipStyled();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + KERNEL_TOOLTIP_WIDTH);
+    if(name.size() > KERNEL_TOOLTIP_MAX_CHARS)
+    {
+        const std::string capped = name.substr(0, KERNEL_TOOLTIP_MAX_CHARS) + TEXT_ELLIPSIS;
+        ImGui::TextUnformatted(capped.c_str());
+    }
+    else
+    {
+        ImGui::TextUnformatted(name.c_str());
+    }
+    ImGui::PopTextWrapPos();
+    EndTooltipStyled();
 }
 
 ComputeKernelDetailsView::ComputeKernelDetailsView(
@@ -428,7 +469,7 @@ ComputeKernelDetailsView::CreateLayoutItems()
     m_rail_pane = MakeRenderPane([this]() { RenderKernelRail(); });
 
     m_root_split = std::make_shared<HSplitContainer>(m_rail_pane, nullptr);
-    m_root_split->SetSplit(RailSplitRatio(WindowSettings().compute_kernel_list_table));
+    m_root_split->SetSplit(RailSplitRatio(m_layout.kernel_list_table));
     m_root_split->SetSplitterSize(PANE_GUTTER);
 }
 
@@ -557,27 +598,10 @@ ComputeKernelDetailsView::AvailablePane(int32_t value) const
     return IsPaneAvailable(pane) ? pane : ComputePane::kCount;
 }
 
-bool&
-ComputeKernelDetailsView::PaneVisibleSetting(ComputePane pane) const
-{
-    AppWindowSettings& settings = WindowSettings();
-    switch(pane)
-    {
-        case ComputePane::kRoofline: return settings.show_compute_roofline;
-        case ComputePane::kMetricTables: return settings.show_compute_metric_tables;
-        case ComputePane::kIsa: return settings.show_compute_isa;
-        case ComputePane::kWorkloadDetails: return settings.show_compute_workload_details;
-        case ComputePane::kPinnedMetrics: return settings.show_compute_pinned_metrics;
-        case ComputePane::kMemoryChart:
-        case ComputePane::kCount: break;
-    }
-    return settings.show_compute_memory_chart;
-}
-
 ComputeLayoutTemplate
 ComputeKernelDetailsView::CurrentTemplate() const
 {
-    const int32_t value = WindowSettings().compute_layout_template;
+    const int32_t value = m_layout.layout_template;
     return value >= 0 && value < static_cast<int32_t>(ComputeLayoutTemplate::kCount)
                ? static_cast<ComputeLayoutTemplate>(value)
                : ComputeLayoutTemplate::kMainBelow;
@@ -592,7 +616,7 @@ ComputeKernelDetailsView::ActiveSlotCount() const
 ComputePane
 ComputeKernelDetailsView::SlotPane(int32_t slot) const
 {
-    return IsSlotIndex(slot) ? AvailablePane(WindowSettings().compute_layout_slots[slot])
+    return IsSlotIndex(slot) ? AvailablePane(m_layout.slots[slot])
                              : ComputePane::kCount;
 }
 
@@ -613,9 +637,7 @@ ComputeKernelDetailsView::ActiveSlotOf(ComputePane pane) const
 ComputePane
 ComputeKernelDetailsView::MaximizedPane() const
 {
-    const AppWindowSettings& settings = WindowSettings();
-    return settings.compute_maximized ? AvailablePane(settings.compute_maximized_pane)
-                                      : ComputePane::kCount;
+    return m_layout.maximized ? AvailablePane(m_layout.maximized_pane) : ComputePane::kCount;
 }
 
 void
@@ -626,7 +648,7 @@ ComputeKernelDetailsView::AssignSlot(int32_t slot, ComputePane pane)
         return;
     }
     // A panel lives in one box at most: taking it from another box swaps the two.
-    int32_t*      slots = WindowSettings().compute_layout_slots;
+    int32_t*      slots = m_layout.slots;
     const int32_t value = static_cast<int32_t>(pane);
     for(int32_t other = 0; other < COMPUTE_LAYOUT_MAX_SLOTS; ++other)
     {
@@ -644,8 +666,7 @@ ComputeKernelDetailsView::SwapSlots(int32_t a, int32_t b)
 {
     if(IsSlotIndex(a) && IsSlotIndex(b) && a != b)
     {
-        int32_t* slots = WindowSettings().compute_layout_slots;
-        std::swap(slots[a], slots[b]);
+        std::swap(m_layout.slots[a], m_layout.slots[b]);
     }
 }
 
@@ -656,37 +677,18 @@ ComputeKernelDetailsView::ClearSlot(int32_t slot)
     {
         return;
     }
-    AppWindowSettings& settings = WindowSettings();
-    if(settings.compute_maximized &&
-       settings.compute_maximized_pane == settings.compute_layout_slots[slot])
+    if(m_layout.maximized && m_layout.maximized_pane == m_layout.slots[slot])
     {
-        settings.compute_maximized = false;
+        m_layout.maximized = false;
     }
-    settings.compute_layout_slots[slot] = EMPTY_SLOT_VALUE;
-}
-
-void
-ComputeKernelDetailsView::PlacePane(ComputePane pane)
-{
-    // First empty box; with every box in use, the panel takes the last one.
-    const int32_t count = ActiveSlotCount();
-    for(int32_t slot = 0; slot < count; ++slot)
-    {
-        if(SlotPane(slot) == ComputePane::kCount)
-        {
-            AssignSlot(slot, pane);
-            return;
-        }
-    }
-    AssignSlot(count - 1, pane);
+    m_layout.slots[slot] = EMPTY_SLOT_VALUE;
 }
 
 void
 ComputeKernelDetailsView::SetTemplate(ComputeLayoutTemplate layout)
 {
-    AppWindowSettings& settings      = WindowSettings();
-    settings.compute_layout_template = static_cast<int32_t>(layout);
-    settings.compute_maximized       = false;
+    m_layout.layout_template = static_cast<int32_t>(layout);
+    m_layout.maximized       = false;
     // Boxes keep their panels in order; empty boxes take panels not yet shown, so
     // a larger arrangement starts full.
     const int32_t count = ActiveSlotCount();
@@ -711,56 +713,12 @@ ComputeKernelDetailsView::SetTemplate(ComputeLayoutTemplate layout)
 void
 ComputeKernelDetailsView::ResetLayout()
 {
-    AppWindowSettings& settings      = WindowSettings();
-    settings.compute_layout_template = static_cast<int32_t>(ComputeLayoutTemplate::kMainBelow);
-    for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
-    {
-        settings.compute_layout_slots[slot] = slot;
-    }
-    settings.compute_maximized        = false;
-    settings.show_compute_kernel_list = true;
+    m_layout = LayoutSettings();
     SetKernelRailTableMode(false);
     for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
     {
         pane->ResetLayout();
     }
-}
-
-void
-ComputeKernelDetailsView::SyncPanelToggles()
-{
-    for(int32_t i = 0; i < PANE_COUNT; ++i)
-    {
-        const ComputePane pane = PaneAt(i);
-        if(!IsPaneAvailable(pane))
-        {
-            continue;
-        }
-        const bool toggle = PaneVisibleSetting(pane);
-        if(m_toggles_synced && toggle != m_synced_toggles[static_cast<size_t>(i)])
-        {
-            const int32_t slot = ActiveSlotOf(pane);
-            if(toggle && slot < 0)
-            {
-                PlacePane(pane);
-            }
-            else if(!toggle && slot >= 0)
-            {
-                ClearSlot(slot);
-            }
-        }
-    }
-    for(int32_t i = 0; i < PANE_COUNT; ++i)
-    {
-        const ComputePane pane = PaneAt(i);
-        if(IsPaneAvailable(pane))
-        {
-            const bool shown                         = ActiveSlotOf(pane) >= 0;
-            PaneVisibleSetting(pane)                 = shown;
-            m_synced_toggles[static_cast<size_t>(i)] = shown;
-        }
-    }
-    m_toggles_synced = true;
 }
 
 ComputeKernelDetailsView::LayoutState
@@ -769,7 +727,7 @@ ComputeKernelDetailsView::CurrentLayoutState() const
     LayoutState state;
     state.layout      = CurrentTemplate();
     state.maximized   = MaximizedPane() != ComputePane::kCount;
-    state.kernel_rail = WindowSettings().show_compute_kernel_list;
+    state.kernel_rail = m_layout.show_kernel_list;
     return state;
 }
 
@@ -866,9 +824,9 @@ void
 ComputeKernelDetailsView::UpdatePaneMinSizes()
 {
     const float em       = ImGui::GetFontSize();
-    const float rail_min = em * (WindowSettings().compute_kernel_list_table
-                                     ? RAIL_TABLE_MIN_WIDTH_EMS
-                                     : RAIL_LIST_MIN_WIDTH_EMS);
+    const float rail_min = std::max(
+        em * (m_layout.kernel_list_table ? RAIL_TABLE_MIN_WIDTH_EMS : RAIL_LIST_MIN_WIDTH_EMS),
+        m_rail_header_width);
     m_root_split->SetMinLeftWidth(rail_min);
     float workspace_min = em * WORKSPACE_MIN_WIDTH_EMS;
     if(m_layout_root != NO_LAYOUT_NODE)
@@ -932,28 +890,30 @@ ImVec2
 ComputeKernelDetailsView::SlotMinSize(int32_t slot) const
 {
     const ComputePane pane = SlotPane(slot);
-    return pane == ComputePane::kCount ? ComputeKernelDetailsPane::DefaultMinSize()
-                                       : Pane(pane).MinSize();
+    ImVec2 size = pane == ComputePane::kCount ? ComputeKernelDetailsPane::DefaultMinSize()
+                                              : Pane(pane).MinSize();
+    if(IsSlotIndex(slot))
+    {
+        size.x = std::max(size.x, m_slot_header_widths[static_cast<size_t>(slot)]);
+    }
+    return size;
 }
 
 void
 ComputeKernelDetailsView::SetKernelRailTableMode(bool table)
 {
-    WindowSettings().compute_kernel_list_table = table;
+    m_layout.kernel_list_table = table;
     m_root_split->SetSplit(RailSplitRatio(table));
 }
 
 void
 ComputeKernelDetailsView::RenderLayoutControls()
 {
-    // The app toolbar has no item spacing; the labels, combos and their
-    // dropdowns need the app's default.
+    // The app toolbar has no item spacing; the label, combo and its dropdown
+    // need the app's default.
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         SettingsManager::GetInstance().GetDefaultStyle().ItemSpacing);
     RenderLayoutMenu();
-    ImGui::SameLine();
-    VerticalSeparator();
-    RenderPanelsMenu();
     ImGui::PopStyleVar();
 }
 
@@ -1035,51 +995,11 @@ ComputeKernelDetailsView::RenderLayoutMenu()
     }
 }
 
-void
-ComputeKernelDetailsView::RenderPanelsMenu()
-{
-    int32_t shown = 0;
-    int32_t total = 0;
-    for(int32_t i = 0; i < PANE_COUNT; ++i)
-    {
-        const ComputePane pane = PaneAt(i);
-        if(IsPaneAvailable(pane))
-        {
-            total++;
-            shown += ActiveSlotOf(pane) >= 0 ? 1 : 0;
-        }
-    }
-    char preview[PANELS_PREVIEW_SIZE];
-    std::snprintf(preview, sizeof(preview), "%d of %d panels", static_cast<int>(shown),
-                  static_cast<int>(total));
-
-    ImGui::TextUnformatted("Panels:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * PANELS_COMBO_WIDTH_FRAMES);
-    PushComboStyles();
-    if(ImGui::BeginCombo("##compute_panels", preview))
-    {
-        ImGui::Checkbox("Kernels", &WindowSettings().show_compute_kernel_list);
-        ImGui::Separator();
-        for(int32_t i = 0; i < PANE_COUNT; ++i)
-        {
-            const ComputePane pane = PaneAt(i);
-            if(IsPaneAvailable(pane))
-            {
-                // Applied to the boxes by SyncPanelToggles next frame.
-                ImGui::Checkbox(Pane(pane).Title(), &PaneVisibleSetting(pane));
-            }
-        }
-        ImGui::EndCombo();
-    }
-    PopComboStyles();
-}
-
 int32_t
 ComputeKernelDetailsView::RenderPaneHeader(
     const char* title, int32_t slot, bool draggable, bool pickable,
     const ComputeKernelDetailsPane::HeaderButton* buttons, int32_t count,
-    bool& title_double_clicked)
+    bool& title_double_clicked, float* row_width)
 {
     SettingsManager&  settings   = SettingsManager::GetInstance();
     const ImGuiStyle& style      = settings.GetDefaultStyle();
@@ -1133,6 +1053,7 @@ ComputeKernelDetailsView::RenderPaneHeader(
             EndTooltipStyled();
         }
     }
+    float row_w = title_size.x;
     if(pickable)
     {
         ImGui::SameLine(0.0f, button_gap);
@@ -1141,6 +1062,7 @@ ComputeKernelDetailsView::RenderPaneHeader(
         {
             ImGui::OpenPopup("panel_picker");
         }
+        row_w = ImGui::GetItemRectMax().x - title_min.x;
         RenderPanelPicker(slot);
     }
 
@@ -1153,8 +1075,9 @@ ComputeKernelDetailsView::RenderPaneHeader(
         {
             buttons_w += buttons[i].icon ? IconWidth(buttons[i].icon)
                                          : ImGui::CalcTextSize(buttons[i].label).x;
-            buttons_w += style.FramePadding.x * 2.0f;
+            buttons_w += ImGui::GetStyle().FramePadding.x * 2.0f;
         }
+        row_w += ImGui::GetStyle().ItemSpacing.x + buttons_w;
         SameLineRightAligned(buttons_w);
         for(int32_t i = 0; i < count; ++i)
         {
@@ -1189,6 +1112,10 @@ ComputeKernelDetailsView::RenderPaneHeader(
         }
     }
 
+    if(row_width)
+    {
+        *row_width = row_w;
+    }
     ImGui::PushStyleColor(ImGuiCol_Separator, settings.GetColor(Colors::kBorderColor));
     ImGui::Separator();
     ImGui::PopStyleColor();
@@ -1294,7 +1221,6 @@ ComputeKernelDetailsView::HandleSlotDrop(int32_t slot)
 void
 ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
 {
-    AppWindowSettings&        settings  = WindowSettings();
     ComputeKernelDetailsPane& panel     = Pane(pane);
     const bool                maximized = slot == MAXIMIZED_SLOT;
 
@@ -1316,15 +1242,19 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
             maximize_button
         };
     }
-    buttons[hide_button] = { ICON_X_CIRCLED, nullptr,
-                             "Hide (empties the box; turn it back on from Panels)", false,
+    buttons[hide_button] = { ICON_X_CIRCLED, nullptr, "Hide (empties the box)", false,
                              hide_button };
 
     BeginPaneCard("pane_card");
     bool          title_double_clicked = false;
+    float         header_w             = 0.0f;
     const int32_t clicked =
         RenderPaneHeader(panel.Title(), slot, !maximized, !maximized, buttons,
-                         hide_button + 1, title_double_clicked);
+                         hide_button + 1, title_double_clicked, &header_w);
+    if(IsSlotIndex(slot))
+    {
+        m_slot_header_widths[static_cast<size_t>(slot)] = PaneCardWidth(header_w);
+    }
     ImGui::BeginChild("pane_body", ImVec2(0, 0));
     panel.RenderBody(maximized);
     ImGui::EndChild();
@@ -1334,17 +1264,17 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
         HandleSlotDrop(slot);
     }
 
-    // Settings changes take effect as a relayout on the next frame. Double-clicking
+    // Layout changes take effect as a relayout on the next frame. Double-clicking
     // the title toggles maximize.
     const bool toggle_maximize = title_double_clicked || clicked == maximize_button;
     if(toggle_maximize && maximized)
     {
-        settings.compute_maximized = false;
+        m_layout.maximized = false;
     }
     else if(toggle_maximize)
     {
-        settings.compute_maximized_pane = static_cast<int32_t>(pane);
-        settings.compute_maximized      = true;
+        m_layout.maximized_pane = static_cast<int32_t>(pane);
+        m_layout.maximized      = true;
     }
     else if(clicked == hide_button)
     {
@@ -1353,7 +1283,7 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
         {
             ClearSlot(box);
         }
-        settings.compute_maximized = false;
+        m_layout.maximized = false;
     }
     else if(clicked >= 0)
     {
@@ -1366,47 +1296,49 @@ ComputeKernelDetailsView::RenderEmptySlot(int32_t slot)
 {
     BeginPaneCard("empty_card");
     bool title_double_clicked = false;
-    RenderPaneHeader("Empty box", slot, false, true, nullptr, 0, title_double_clicked);
+    float header_w = 0.0f;
+    RenderPaneHeader("Empty box", slot, false, true, nullptr, 0, title_double_clicked,
+                     &header_w);
+    if(IsSlotIndex(slot))
+    {
+        m_slot_header_widths[static_cast<size_t>(slot)] = PaneCardWidth(header_w);
+    }
 
     ImGui::BeginChild("empty_body", ImVec2(0, 0));
-    // Offer the panels not shown anywhere as one-click choices, centred.
-    std::array<ComputePane, static_cast<size_t>(ComputePane::kCount)> unshown{};
-    size_t                                                            unshown_count = 0;
-    for(int32_t i = 0; i < PANE_COUNT; ++i)
+    // Offer the panels not shown anywhere in a centred dropdown, which stays one
+    // width however many there are.
+    bool any_unshown = false;
+    for(int32_t i = 0; i < PANE_COUNT && !any_unshown; ++i)
     {
         const ComputePane pane = PaneAt(i);
-        if(IsPaneAvailable(pane) && ActiveSlotOf(pane) < 0)
-        {
-            unshown[unshown_count] = pane;
-            unshown_count++;
-        }
+        any_unshown            = IsPaneAvailable(pane) && ActiveSlotOf(pane) < 0;
     }
-    const ImGuiStyle& style = ImGui::GetStyle();
-    const char*       hint  = unshown_count == 0 ? "Drag a panel's title here to move it."
-                                                 : "Drag a panel here, or show:";
+    const char* hint = any_unshown ? "Drag a panel here, or show:"
+                                   : "Drag a panel's title here to move it.";
     ImGui::Dummy(ImVec2(0.0f, ImGui::GetFrameHeight()));
     CenterNextTextItem(hint);
     ImGui::TextDisabled("%s", hint);
-    if(unshown_count > 0)
+    if(any_unshown)
     {
-        float row_w = style.ItemSpacing.x * static_cast<float>(unshown_count - 1);
-        for(size_t i = 0; i < unshown_count; ++i)
+        const float combo_w = std::min(ImGui::GetFrameHeight() * EMPTY_BOX_COMBO_WIDTH_FRAMES,
+                                       ImGui::GetContentRegionAvail().x);
+        CenterNextItem(combo_w);
+        ImGui::SetNextItemWidth(combo_w);
+        PushComboStyles();
+        if(ImGui::BeginCombo("##empty_box_panel", "Choose a panel"))
         {
-            row_w += ImGui::CalcTextSize(Pane(unshown[i]).Title()).x +
-                     style.FramePadding.x * 2.0f;
-        }
-        CenterNextItem(row_w);
-        for(size_t i = 0; i < unshown_count; ++i)
-        {
-            if(i > 0)
+            for(int32_t i = 0; i < PANE_COUNT; ++i)
             {
-                ImGui::SameLine();
+                const ComputePane pane = PaneAt(i);
+                if(IsPaneAvailable(pane) && ActiveSlotOf(pane) < 0 &&
+                   ImGui::Selectable(Pane(pane).Title()))
+                {
+                    AssignSlot(slot, pane);
+                }
             }
-            if(ImGui::Button(Pane(unshown[i]).Title()))
-            {
-                AssignSlot(slot, unshown[i]);
-            }
+            ImGui::EndCombo();
         }
+        PopComboStyles();
     }
     ImGui::EndChild();
     EndPaneCard();
@@ -1421,22 +1353,23 @@ ComputeKernelDetailsView::RenderKernelRail()
     constexpr int32_t TABLE_BUTTON = 1;
     constexpr int32_t HIDE_BUTTON  = 2;
 
-    AppWindowSettings& settings = WindowSettings();
-    const bool         table    = settings.compute_kernel_list_table;
+    const bool table = m_layout.kernel_list_table;
     const ComputeKernelDetailsPane::HeaderButton buttons[] = {
         { nullptr, "List", "Kernels as tabs, by total duration", !table, LIST_BUTTON },
         { nullptr, "Table", "Full kernel table: sort, filter and add metric columns",
           table, TABLE_BUTTON },
-        { ICON_X_CIRCLED, nullptr, "Hide (turn it back on from Panels)", false,
-          HIDE_BUTTON },
+        { ICON_X_CIRCLED, nullptr, "Hide (turn it back on from View > Show Kernel List)",
+          false, HIDE_BUTTON },
     };
 
     BeginPaneCard("kernel_rail_card");
     bool          title_double_clicked = false;
+    float         header_w             = 0.0f;
     const int32_t clicked =
         RenderPaneHeader("Kernels", -1, false, false, buttons,
                          static_cast<int32_t>(IM_ARRAYSIZE(buttons)),
-                         title_double_clicked);
+                         title_double_clicked, &header_w);
+    m_rail_header_width = PaneCardWidth(header_w);
     ImGui::BeginChild("kernel_rail_body", ImVec2(0, 0), ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if(m_compare.enabled)
@@ -1464,7 +1397,7 @@ ComputeKernelDetailsView::RenderKernelRail()
     }
     else if(clicked == HIDE_BUTTON)
     {
-        settings.show_compute_kernel_list = false;
+        m_layout.show_kernel_list = false;
     }
 }
 
@@ -1785,7 +1718,8 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
                            "B");
     }
     const std::string name = ElideWithEllipsis(kernel.name, text_w, KERNEL_NAME_MAX_CHARS);
-    draw_list->AddText(ImVec2(text_x, y), settings.GetColor(Colors::kTextMain), name.c_str());
+    const ImVec2      name_pos(text_x, y);
+    draw_list->AddText(name_pos, settings.GetColor(Colors::kTextMain), name.c_str());
     y += line_h + KERNEL_TAB_LINE_GAP;
     draw_list->AddText(ImVec2(text_x, y), settings.GetColor(Colors::kTextDim), stats);
     y += line_h + KERNEL_TAB_LINE_GAP;
@@ -1800,14 +1734,9 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
                              settings.GetColor(Colors::kAccent),
                              KERNEL_TAB_BAR_HEIGHT * 0.5f);
 
-    if(body_hovered)
+    if(body_hovered && IsEllipsisHovered(name, kernel.name, name_pos, line_h))
     {
-        BeginTooltipStyled();
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + KERNEL_TOOLTIP_WIDTH);
-        ImGui::TextUnformatted(kernel.name.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::TextDisabled("%s", stats);
-        EndTooltipStyled();
+        KernelNameTooltip(kernel.name);
     }
     else if(slot_hovered && (is_a || is_b || can_be_b))
     {
@@ -2084,13 +2013,11 @@ ComputeKernelDetailsView::RenderCompareCard()
         {
             ImGui::PopStyleVar();
         }
-        if(kernel && name != kernel->name && ImGui::IsItemHovered())
+        if(kernel && ImGui::IsItemHovered() &&
+           IsEllipsisHovered(name, kernel->name, ImGui::GetItemRectMin(),
+                             ImGui::GetItemRectSize().y))
         {
-            BeginTooltipStyled();
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + KERNEL_TOOLTIP_WIDTH);
-            ImGui::TextUnformatted(kernel->name.c_str());
-            ImGui::PopTextWrapPos();
-            EndTooltipStyled();
+            KernelNameTooltip(kernel->name);
         }
         if(workload_line)
         {
@@ -2151,7 +2078,7 @@ ComputeKernelDetailsView::RenderCompareCard()
     }
 
     // Stop comparing, right-aligned on the controls' row.
-    SameLineRightAligned(IconWidth(ICON_X_CIRCLED) + style.FramePadding.x * 2.0f);
+    SameLineRightAligned(IconWidth(ICON_X_CIRCLED) + ImGui::GetStyle().FramePadding.x * 2.0f);
     if(FramedIconButton(ICON_X_CIRCLED, "Stop comparing",
                         settings.GetColor(Colors::kTransparent)))
     {
@@ -2174,7 +2101,6 @@ ComputeKernelDetailsView::RenderCompareCard()
 void
 ComputeKernelDetailsView::Render()
 {
-    SyncPanelToggles();
     const LayoutState state = CurrentLayoutState();
     if(!m_layout_built || state.layout != m_built_layout.layout ||
        state.maximized != m_built_layout.maximized ||
@@ -2206,17 +2132,16 @@ ComputeKernelDetailsView::Preset::Preset(ComputeKernelDetailsView& widget)
 bool
 ComputeKernelDetailsView::Preset::ToJson(jt::Json& json)
 {
-    const AppWindowSettings& settings = WindowSettings();
-    json[JSON_KEY_LAYOUT_TEMPLATE]    = settings.compute_layout_template;
+    const LayoutSettings& layout   = m_widget.m_layout;
+    json[JSON_KEY_LAYOUT_TEMPLATE] = layout.layout_template;
     for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
     {
-        json[JSON_KEY_LAYOUT_SLOTS][static_cast<size_t>(slot)] =
-            settings.compute_layout_slots[slot];
+        json[JSON_KEY_LAYOUT_SLOTS][static_cast<size_t>(slot)] = layout.slots[slot];
     }
-    json[JSON_KEY_LAYOUT_MAXIMIZED]         = settings.compute_maximized;
-    json[JSON_KEY_LAYOUT_MAXIMIZED_PANE]    = settings.compute_maximized_pane;
-    json[JSON_KEY_LAYOUT_KERNEL_LIST]       = settings.show_compute_kernel_list;
-    json[JSON_KEY_LAYOUT_KERNEL_LIST_TABLE] = settings.compute_kernel_list_table;
+    json[JSON_KEY_LAYOUT_MAXIMIZED]         = layout.maximized;
+    json[JSON_KEY_LAYOUT_MAXIMIZED_PANE]    = layout.maximized_pane;
+    json[JSON_KEY_LAYOUT_KERNEL_LIST]       = layout.show_kernel_list;
+    json[JSON_KEY_LAYOUT_KERNEL_LIST_TABLE] = layout.kernel_list_table;
     json[JSON_KEY_COMPARE_FOLLOW_BY_NAME]   = m_widget.m_compare.follow_by_name;
     for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_widget.m_panes)
     {
@@ -2232,8 +2157,8 @@ ComputeKernelDetailsView::Preset::FromJson(jt::Json& json)
     {
         return false;
     }
-    AppWindowSettings& settings = WindowSettings();
-    bool               result   = true;
+    LayoutSettings& layout = m_widget.m_layout;
+    bool            result = true;
     auto read_bool = [&json, &result](const char* key, bool& out) {
         if(json.contains(key))
         {
@@ -2261,7 +2186,7 @@ ComputeKernelDetailsView::Preset::FromJson(jt::Json& json)
         }
     };
 
-    read_int(JSON_KEY_LAYOUT_TEMPLATE, settings.compute_layout_template);
+    read_int(JSON_KEY_LAYOUT_TEMPLATE, layout.layout_template);
     if(json.contains(JSON_KEY_LAYOUT_SLOTS) && json[JSON_KEY_LAYOUT_SLOTS].isArray())
     {
         std::vector<jt::Json>& slots = json[JSON_KEY_LAYOUT_SLOTS].getArray();
@@ -2270,14 +2195,14 @@ ComputeKernelDetailsView::Preset::FromJson(jt::Json& json)
         {
             if(slots[i].isLong())
             {
-                settings.compute_layout_slots[i] = static_cast<int32_t>(slots[i].getLong());
+                layout.slots[i] = static_cast<int32_t>(slots[i].getLong());
             }
         }
     }
-    read_bool(JSON_KEY_LAYOUT_MAXIMIZED, settings.compute_maximized);
-    read_int(JSON_KEY_LAYOUT_MAXIMIZED_PANE, settings.compute_maximized_pane);
-    read_bool(JSON_KEY_LAYOUT_KERNEL_LIST, settings.show_compute_kernel_list);
-    bool table = settings.compute_kernel_list_table;
+    read_bool(JSON_KEY_LAYOUT_MAXIMIZED, layout.maximized);
+    read_int(JSON_KEY_LAYOUT_MAXIMIZED_PANE, layout.maximized_pane);
+    read_bool(JSON_KEY_LAYOUT_KERNEL_LIST, layout.show_kernel_list);
+    bool table = layout.kernel_list_table;
     read_bool(JSON_KEY_LAYOUT_KERNEL_LIST_TABLE, table);
     m_widget.SetKernelRailTableMode(table);
     read_bool(JSON_KEY_COMPARE_FOLLOW_BY_NAME, m_widget.m_compare.follow_by_name);

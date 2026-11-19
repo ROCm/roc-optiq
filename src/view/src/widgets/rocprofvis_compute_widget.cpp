@@ -219,12 +219,15 @@ FindOrAddColumn(const std::string& name, std::map<uint32_t, std::string>& column
 }
 
 // The values compared across `a_table` and `b_table`, with the shown comparison
-// columns of each (added to `columns` when missing).
+// columns of each (added to `columns`, and their value to `column_values`, when
+// missing).
 static std::vector<CompareValueColumns>
 AddCompareColumns(const AvailableMetrics::Table*   a_table,
                   const AvailableMetrics::Table*   b_table,
                   const MetricCompareOptions&      options,
-                  std::map<uint32_t, std::string>& columns, uint32_t& last_column_index)
+                  std::map<uint32_t, std::string>& columns,
+                  std::map<uint32_t, std::string>& column_values,
+                  uint32_t&                        last_column_index)
 {
     std::vector<std::string>         value_names = CompareValueNames(a_table, b_table);
     std::vector<CompareValueColumns> values(value_names.size());
@@ -234,10 +237,12 @@ AddCompareColumns(const AvailableMetrics::Table*   a_table,
         {
             if(options.columns.test(column))
             {
-                values[value].columns[column] = FindOrAddColumn(
+                const uint32_t index = FindOrAddColumn(
                     CompareColumnName(value_names[value],
                                       static_cast<MetricCompareColumn>(column)),
                     columns, last_column_index);
+                values[value].columns[column] = index;
+                column_values[index]          = value_names[value];
             }
         }
         values[value].value_name = std::move(value_names[value]);
@@ -353,7 +358,10 @@ MetricTableBase::MetricTableBase(std::string event_source_id)
 , m_event_source_id(std::move(event_source_id))
 , m_last_column_index(0)
 {
-    m_table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+    // The columns are fixed in code (nothing to resize, reorder or hide), and
+    // the ids are per-run addresses, so there are no settings worth saving.
+    m_table_flags =
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings;
     SetTableTitle("");
 }
 
@@ -363,6 +371,17 @@ MetricTableBase::SetTableTitle(std::string title)
     m_table_title = std::move(title);
     m_panel_id_str = GenUniqueName("##" + m_table_title + "_panel_");
     m_table_id_str = GenUniqueName("##" + m_table_title + "_table");
+}
+
+void
+MetricTableBase::UpdateLayoutId()
+{
+    m_layout_id.clear();
+    for(const std::pair<const uint32_t, std::string>& column : m_columns)
+    {
+        m_layout_id += column.second;
+        m_layout_id += '\n';
+    }
 }
 
 void
@@ -466,6 +485,10 @@ MetricTableBase::Render()
         table_h = GetTableHeight();
     }
     const ImVec2 table_size = { 0, table_h };
+    // Each column layout is a table of its own: when one table id changes its
+    // columns, ImGui carries the columns it can match by name (e.g. Unit) over
+    // at their old positions, which puts them out of order.
+    ImGui::PushID(m_layout_id.c_str(), m_layout_id.c_str() + m_layout_id.size());
     if(ImGui::BeginTable(m_table_id_str.c_str(), num_columns, table_flags, table_size))
     {
         ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
@@ -537,6 +560,7 @@ MetricTableBase::Render()
         }
         ImGui::EndTable();
     }
+    ImGui::PopID();
 
     pop_panel();
 }
@@ -595,10 +619,11 @@ MetricTableBase::ContextMenu(const char* value_to_copy, uint32_t column_index,
         {
             TogglePin(row.first);
         }
-        if(!m_event_source_id.empty() &&
+        const std::string* value_name = ColumnValueName(column_index);
+        if(value_name && !m_event_source_id.empty() &&
            IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
         {
-            AddMetricToKernelDetails(row.first, m_columns[column_index]);
+            AddMetricToKernelDetails(row.first, *value_name);
         }
         ImGui::EndPopup();
     }
@@ -732,14 +757,11 @@ MetricTableBase::AddMetricToKernelDetails(const MetricId& metric_id,
             m_event_source_id));
 }
 
-bool
-MetricTableBase::IsValueColumn(uint32_t column_index) const
+const std::string*
+MetricTableBase::ColumnValueName(uint32_t column_index) const
 {
-    // not equal pin column, MetricId, Metric Name and Metric Unit
-    return column_index != 0 &&
-           column_index != 1 &&
-           column_index != 2 &&
-           column_index != LAST_INDEX;
+    std::map<uint32_t, std::string>::const_iterator it = m_column_values.find(column_index);
+    return it != m_column_values.end() && !it->second.empty() ? &it->second : nullptr;
 }
 
 bool
@@ -776,12 +798,13 @@ MetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         }
         // Value columns only (not the pin, id, name or unit). A B-only row has no
         // metric id of A's to send.
-        if(IsValueColumn(column_index) && !IsBOnlyRowKey(row.first))
+        const std::string* value_name = ColumnValueName(column_index);
+        if(value_name && !IsBOnlyRowKey(row.first))
         {
             if(!m_event_source_id.empty() &&
                IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
-                AddMetricToKernelDetails(row.first, m_columns[column_index]);
+                AddMetricToKernelDetails(row.first, *value_name);
             }
         }
         ImGui::EndPopup();
@@ -798,6 +821,7 @@ void
 MetricTable::Populate(const AvailableMetrics::Table& table,
                            const MetricValueLookup&       get_value)
 {
+    Clear();
     m_table_flags &= ~(ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit);
     FillDefaultColumns(m_columns, m_last_column_index);
     SetTableTitle(table.name);
@@ -809,8 +833,12 @@ MetricTable::Populate(const AvailableMetrics::Table& table,
     else
     {
         for(const auto& value_name : table.value_names)
-            m_columns[m_last_column_index++] = value_name;
+        {
+            m_column_values[m_last_column_index] = value_name;
+            m_columns[m_last_column_index++]     = value_name;
+        }
     }
+    UpdateLayoutId();
 
     char buf[64];
     for(const auto* entry : table.ordered_entries)
@@ -870,8 +898,9 @@ MetricTable::PopulateComparison(uint32_t category_id, const AvailableMetrics::Ta
     m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit;
     FillDefaultColumns(m_columns, m_last_column_index);
     SetTableTitle(named->name);
-    const std::vector<CompareValueColumns> values =
-        AddCompareColumns(a_table, b_table, options, m_columns, m_last_column_index);
+    const std::vector<CompareValueColumns> values = AddCompareColumns(
+        a_table, b_table, options, m_columns, m_column_values, m_last_column_index);
+    UpdateLayoutId();
 
     std::set<uint32_t> matched_b;
     if(a_table)
@@ -939,6 +968,8 @@ MetricTable::Clear()
 {
     m_rows.clear();
     m_columns.clear();
+    m_column_values.clear();
+    m_layout_id.clear();
 }
 
 bool
@@ -958,6 +989,7 @@ PinnedMetricTable::PinnedMetricTable(DataProvider&                     data_prov
 , m_client_id(client_id)
 {
     FillDefaultColumns(m_columns, m_last_column_index);
+    UpdateLayoutId();
     m_table_flags |= ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
     SetTableTitle("Pinned Metrics");
     m_max_rows_in_table = 7;
@@ -975,6 +1007,7 @@ PinnedMetricTable::Update()
 
     RowMap                          new_rows;
     std::map<uint32_t, std::string> new_columns;
+    std::map<uint32_t, std::string> new_column_values;
     uint32_t                        new_last_column_index = 0;
 
     FillDefaultColumns(new_columns, new_last_column_index);
@@ -983,7 +1016,8 @@ PinnedMetricTable::Update()
     {
         if(m_compare)
         {
-            FillCompareRow(metric_id, new_columns, new_last_column_index, new_rows);
+            FillCompareRow(metric_id, new_columns, new_column_values, new_last_column_index,
+                           new_rows);
             continue;
         }
         if(!HasMetricInCurrentWorkload(metric_id))
@@ -991,12 +1025,14 @@ PinnedMetricTable::Update()
             FillUnavailableRow(metric_id, new_rows);
             continue;
         }
-        UpdateColumns(metric_id, new_columns, new_last_column_index);
+        UpdateColumns(metric_id, new_columns, new_column_values, new_last_column_index);
         FillTableRow(metric_id, new_columns, new_rows);
     }
 
     m_rows.swap(new_rows);
     m_columns.swap(new_columns);
+    m_column_values.swap(new_column_values);
+    UpdateLayoutId();
     m_last_column_index = new_last_column_index;
     m_pending_pinned_ids.clear();
     m_rebuild_pending = false;
@@ -1019,12 +1055,13 @@ PinnedMetricTable::ContextMenu(const char* value_to_copy, uint32_t column_index,
         }
 
         // A pin A's workload lacks (shown from B) has no metric of A's to send.
-        if(IsValueColumn(column_index) && HasMetricInCurrentWorkload(row.first))
+        const std::string* value_name = ColumnValueName(column_index);
+        if(value_name && HasMetricInCurrentWorkload(row.first))
         {
             if(!m_event_source_id.empty() &&
                IconMenuItem(ICON_ARROW_FORWARD, "Send metric to kernel details"))
             {
-                AddMetricToKernelDetails(row.first, m_columns[column_index]);
+                AddMetricToKernelDetails(row.first, *value_name);
             }
         }
 
@@ -1071,6 +1108,7 @@ PinnedMetricTable::ClearCompareSource()
 void
 PinnedMetricTable::FillCompareRow(const MetricId&                  key,
                                   std::map<uint32_t, std::string>& columns,
+                                  std::map<uint32_t, std::string>& column_values,
                                   uint32_t&                        last_column_index,
                                   RowMap&                          rows)
 {
@@ -1094,8 +1132,9 @@ PinnedMetricTable::FillCompareRow(const MetricId&                  key,
         return;
     }
     // Pins mix tables, so columns are the union of every pin's.
-    const std::vector<CompareValueColumns> values = AddCompareColumns(
-        a_table, b_table, m_compare->options, columns, last_column_index);
+    const std::vector<CompareValueColumns> values =
+        AddCompareColumns(a_table, b_table, m_compare->options, columns, column_values,
+                          last_column_index);
 
     Row row;
     row.pinned = true;
@@ -1129,13 +1168,15 @@ PinnedMetricTable::AddRow(MetricId metric_id)
         return;
     }
 
-    UpdateColumns(metric_id, m_columns, m_last_column_index);
+    UpdateColumns(metric_id, m_columns, m_column_values, m_last_column_index);
+    UpdateLayoutId();
     FillTableRow(metric_id, m_columns, m_rows);
 }
 
 void
 PinnedMetricTable::UpdateColumns(MetricId                        metric_id,
                                  std::map<uint32_t, std::string>& columns,
+                                 std::map<uint32_t, std::string>& column_values,
                                  uint32_t&                        last_column_index)
 {
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
@@ -1146,7 +1187,7 @@ PinnedMetricTable::UpdateColumns(MetricId                        metric_id,
 
     for(const auto& name : GetTable(metric_id, workload_id).value_names)
     {
-        FindOrAddColumn(name, columns, last_column_index);
+        column_values[FindOrAddColumn(name, columns, last_column_index)] = name;
     }
 }
 

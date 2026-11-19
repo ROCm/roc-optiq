@@ -9,6 +9,7 @@
 #endif
 #include "ImGuiFileDialog.h"
 
+#include "compute/rocprofvis_compute_view.h"
 #include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
@@ -1339,17 +1340,23 @@ AppWindow::RenderViewMenu(Project* project)
             ApplyPanelVisibilitySettings();
         }
 
-        // Kernel Details reads these every frame, so no apply step is needed.
+        // Each compute trace has its own layout, so this toggles the active tab's
+        // kernel list. Its other panels are picked in its boxes.
         ImGui::SeparatorText("Compute Profiler Panels");
-        ImGui::MenuItem("Show Kernel List", nullptr, &settings.show_compute_kernel_list);
-        ImGui::MenuItem("Show Memory Chart", nullptr, &settings.show_compute_memory_chart);
-        ImGui::MenuItem("Show Roofline", nullptr, &settings.show_compute_roofline);
-        ImGui::MenuItem("Show Metric Tables", nullptr, &settings.show_compute_metric_tables);
-        ImGui::MenuItem("Show Pinned Metrics", nullptr,
-                        &settings.show_compute_pinned_metrics);
-        ImGui::MenuItem("Show ISA", nullptr, &settings.show_compute_isa);
-        ImGui::MenuItem("Show Workload Details", nullptr,
-                        &settings.show_compute_workload_details);
+        bool* kernel_list_visible = nullptr;
+        if(active_tab)
+        {
+            auto active_compute_view =
+                std::dynamic_pointer_cast<ComputeView>(active_tab->m_widget);
+            if(active_compute_view)
+            {
+                kernel_list_visible = active_compute_view->KernelListVisible();
+            }
+        }
+        bool no_kernel_list = false;
+        ImGui::MenuItem("Show Kernel List", nullptr,
+                        kernel_list_visible ? kernel_list_visible : &no_kernel_list,
+                        kernel_list_visible != nullptr);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,

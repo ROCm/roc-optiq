@@ -45,6 +45,8 @@ constexpr float COL_DEFAULT_CHAR_LIMIT    = 30.0f;
 constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
 constexpr float kTooltipMaxWidth = 600.0f;
+// Templated kernel names run to thousands of characters; a tooltip shows this many.
+constexpr size_t TOOLTIP_MAX_CHARS = 400;
 
 constexpr const char* JSON_KEY_SELECTION            = "selection";
 constexpr const char* JSON_KEY_SELECTION_ID         = "id";
@@ -221,8 +223,9 @@ KernelMetricTable::StartFetchCycle()
         }
     }
     m_fetch_index    = 0;
-    m_fetch_failures = 0;
-    m_fetch_next     = false;
+    m_fetch_failures    = 0;
+    m_fetch_error_shown = false;
+    m_fetch_next        = false;
     m_pending_header.clear();
     m_pending_rows.clear();
     m_pending_row_workloads.clear();
@@ -268,14 +271,15 @@ KernelMetricTable::HandleNewData(bool success, const std::string& error_message)
     {
         return;
     }
+    // An invalid filter succeeds with no rows and a message. One query runs per
+    // workload, so each of them reports it; show it once.
+    if(!m_fetch_error_shown && !error_message.empty())
+    {
+        NotificationManager::GetInstance().Show(error_message, NotificationLevel::Error);
+        m_fetch_error_shown = true;
+    }
     if(!success)
     {
-        // One query runs per workload, so an invalid filter fails each of them;
-        // report it once.
-        if(m_fetch_failures == 0 && !error_message.empty())
-        {
-            NotificationManager::GetInstance().Show(error_message, NotificationLevel::Error);
-        }
         ++m_fetch_failures;
     }
     else
@@ -996,7 +1000,16 @@ KernelMetricTable::Render()
                                                                     ImVec2(kTooltipMaxWidth, FLT_MAX));
                                 BeginTooltipStyled();
                                 ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
-                                ImGui::TextUnformatted(cell.c_str());
+                                if(cell.size() > TOOLTIP_MAX_CHARS)
+                                {
+                                    const std::string capped =
+                                        cell.substr(0, TOOLTIP_MAX_CHARS) + TEXT_ELLIPSIS;
+                                    ImGui::TextUnformatted(capped.c_str());
+                                }
+                                else
+                                {
+                                    ImGui::TextUnformatted(cell.c_str());
+                                }
                                 ImGui::PopTextWrapPos();
                                 EndTooltipStyled();
                             }

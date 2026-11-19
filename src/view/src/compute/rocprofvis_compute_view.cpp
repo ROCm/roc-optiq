@@ -399,6 +399,12 @@ ComputeView::GetToolbar()
     return m_tool_bar;
 }
 
+bool*
+ComputeView::KernelListVisible()
+{
+    return m_kernel_details ? &m_kernel_details->KernelListVisible() : nullptr;
+}
+
 void
 ComputeView::RenderToolbar()
 {

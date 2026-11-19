@@ -115,13 +115,24 @@ protected:
     void FillDefaultColumns(std::map<uint32_t, std::string>& columns,
                             std::uint32_t&                    last_column_index);
     void AddMetricToKernelDetails(const MetricId& metric_id, const std::string& value_name);
-    bool IsValueColumn(uint32_t column_index) const;
+    // The value name column `column_index` shows, as the kernel table queries
+    // it; null for the pin, id, name and unit columns, and a table's single
+    // unnamed value.
+    const std::string* ColumnValueName(uint32_t column_index) const;
     bool CanBePinned();
     virtual void RenderEmptyTable() = 0;
     // Only way to set the title: the ImGui ids are derived from it.
     void SetTableTitle(std::string title);
+    // Call after every change to m_columns.
+    void UpdateLayoutId();
 
     std::map<uint32_t, std::string> m_columns;
+    // The column names joined; each column layout is a table of its own (see
+    // Render).
+    std::string                     m_layout_id;
+    // Value name of each value column, by column index; every comparison
+    // column of a value ("Avg A", "Avg B", ...) maps to it ("Avg").
+    std::map<uint32_t, std::string> m_column_values;
     std::uint32_t                   m_last_column_index = 0;
     RowMap                          m_rows;
 
@@ -208,6 +219,7 @@ private:
     // A pin of a row only B has compares B's metric with an empty A; a pin A's
     // workload lacks is unavailable.
     void FillCompareRow(const MetricId& key, std::map<uint32_t, std::string>& columns,
+                        std::map<uint32_t, std::string>& column_values,
                         uint32_t& last_column_index, RowMap& rows);
 
     void ContextMenu(const char* value_to_copy, uint32_t column_index,
@@ -217,6 +229,7 @@ private:
                             RowMap& rows);
     void UpdateColumns(MetricId                        metric_id,
                        std::map<uint32_t, std::string>& columns,
+                       std::map<uint32_t, std::string>& column_values,
                        uint32_t&                        last_column_index);
     void FillTableRow(const MetricId&              metric_id,
                       const std::map<uint32_t, std::string>& columns,

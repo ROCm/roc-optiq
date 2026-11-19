@@ -1429,8 +1429,10 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
 
 // Renders the statistics the analysis model computed for one track.
 std::string
-FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
+FormatTrackStatistics(const AssistantToolContext& context,
+                      const AssistantFetchState&  fetch)
 {
+    const uint64_t   track_id = fetch.track_id;
     const TrackInfo* track =
         context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
     if(track == nullptr)
@@ -1452,6 +1454,12 @@ FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
     for(const AnalysisTrackStatistics::Stat& stat : stats->stats)
     {
         out << stat.name << ": " << stat.FullValue() << "\n";
+    }
+    // The track's pill draws whatever this slot holds until the range next
+    // changes. Stale makes a drawn track ask again for its own window.
+    if(!fetch.covers_pill_window)
+    {
+        stats->state = AnalysisTrackStatistics::kStale;
     }
     return out.str();
 }
@@ -2561,6 +2569,13 @@ ToolTrackStatistics(const AssistantToolContext& context, const jt::Json& args,
     AssistantFetchState fetch;
     fetch.kind     = AssistantFetchKind::kTrackStatistics;
     fetch.track_id = track_id;
+    // The pill asks for the selected range, and for the view when there is none.
+    double selected_start = 0.0;
+    double selected_end   = 0.0;
+    fetch.covers_pill_window =
+        context.timeline_selection != nullptr &&
+        context.timeline_selection->GetSelectedTimeRange(selected_start, selected_end) &&
+        selected_start == start_ns && selected_end == end_ns;
 
     const uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
         static_cast<uint32_t>(track_id), 0, 0,
@@ -2924,6 +2939,29 @@ AssistantTrackStatisticsDropped(const AssistantToolContext& context, uint64_t tr
                       : stats->state != AnalysisTrackStatistics::kReady);
 }
 
+// A cancelled request never lands, which would leave the slot waiting on it
+// and the pill blank. Stale makes a drawn track ask again for its own window.
+void
+ReleaseAssistantTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
+{
+    if(context.data_provider == nullptr)
+    {
+        return;
+    }
+    const TrackInfo* track =
+        context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
+    if(track == nullptr)
+    {
+        return;
+    }
+    const AnalysisTrackStatistics* stats =
+        context.data_provider->DataModel().GetAnalysis().RegisterTrack(*track);
+    if(stats != nullptr)
+    {
+        stats->state = AnalysisTrackStatistics::kStale;
+    }
+}
+
 // Formats the rows of a fetch that has landed, by the kind of fetch it was.
 std::string
 FinishAssistantFetch(const AssistantToolContext& context,
@@ -2984,7 +3022,7 @@ FinishAssistantFetch(const AssistantToolContext& context,
     }
     if(fetch.kind == AssistantFetchKind::kTrackStatistics)
     {
-        return FormatTrackStatistics(context, fetch.track_id);
+        return FormatTrackStatistics(context, fetch);
     }
     if(fetch.kind == AssistantFetchKind::kComputeMetrics)
     {

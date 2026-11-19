@@ -117,6 +117,9 @@ struct AssistantFetchState
     uint64_t    summary_id = INVALID_UINT64_INDEX;
     // kernel_triage: name the standard tables that came back empty.
     bool        compute_triage = false;
+    // track_statistics read the window the track's own pill shows. The two
+    // share a slot, so numbers for any other window are handed back once read.
+    bool        covers_pill_window = false;
     // A table read's sort: the model's sort_by (may be empty), the tool's own
     // default column, and the index sent - for AssistantFetchNeedsRerun.
     std::string sort_by;
@@ -229,6 +232,11 @@ bool AssistantFetchNeedsRerun(const AssistantToolContext& context,
 // was dropped.
 bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
                                      uint64_t track_id, bool in_flight);
+
+// Hands the statistics slot back to the track's pill when a track_statistics
+// read is given up in flight.
+void ReleaseAssistantTrackStatistics(const AssistantToolContext& context,
+                                     uint64_t                    track_id);
 
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,

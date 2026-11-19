@@ -32,6 +32,9 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 
 namespace RocProfVis
 {
@@ -77,6 +80,14 @@ constexpr const char* ASSISTANT_COMPACTED_TOOL_REPLY =
 constexpr const char* ASSISTANT_SKIPPED_TOOL_REPLY =
     "Not run because switch_tab moved the user to another trace. This "
     "conversation stays with its original trace.";
+// Answers the call in flight, and those queued behind it, when the user stops
+// the turn. The endpoint rejects a history in which a call has no reply.
+constexpr const char* ASSISTANT_STOPPED_TOOL_REPLY =
+    "Not finished: the user stopped this turn.";
+// Closes a stopped turn in the history, so the next question is not read as a
+// follow-up to one the user gave up on.
+constexpr const char* ASSISTANT_STOPPED_REPLY =
+    "(The user stopped this turn before an answer was written.)";
 // How long a tool waits for its rows. Sized for a query over a large trace
 // rather than a small one: cutting a live query off and telling the model it
 // timed out is worse than making the user wait, because the model answers
@@ -391,9 +402,9 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
     return out.str();
 }
 
-// Takes back a script still waiting on Run or Reject when the turn ends with
-// nobody left to hear the choice. The offer sits on the turn's own trace,
-// whichever tab is in front.
+// Lets go of the script a turn was waiting on when it ends with nobody left to
+// hear the outcome. The offer sits on the turn's own trace, whichever tab is
+// in front.
 void
 AssistantPanel::WithdrawScriptOffer()
 {
@@ -402,12 +413,54 @@ AssistantPanel::WithdrawScriptOffer()
     {
         return;
     }
-    // Declined rather than cleared, so the editor does not go on to present
-    // the unapproved script as the user's own.
     const AssistantToolContext context = MakeToolContext();
-    OptiqActions(context.data_provider, context.timeline_selection, context.trace_view)
-        .RejectScriptProposal();
+    OptiqActions               actions(context.data_provider, context.timeline_selection,
+                                       context.trace_view);
+    if(actions.ScriptProposalState() == ScriptApproval::kPending)
+    {
+        // Declined rather than cleared, so the editor does not go on to present
+        // the unapproved script as the user's own.
+        actions.RejectScriptProposal();
+    }
+    else
+    {
+        // Already answered. A run the user approved carries on as their own,
+        // so the editor must not report it as never run.
+        actions.ClearScriptProposal();
+    }
 #endif
+}
+
+// Ends the running turn and keeps the conversation, which Clear does not.
+void
+AssistantPanel::StopTurn()
+{
+    if(!Busy())
+    {
+        return;
+    }
+    // A turn stopped while its summary preload ran never sent its question.
+    const bool asked = !m_fetch_wait.warmup;
+    // Only a parked tool leaves calls unanswered: a request goes out after
+    // every call of its round has a reply.
+    if(m_phase == Phase::kToolWait)
+    {
+        for(size_t i = m_next_call_index; i < m_pending_calls.size(); ++i)
+        {
+            AppendToolReply(m_pending_calls[i], ASSISTANT_STOPPED_TOOL_REPLY);
+        }
+    }
+    ResetTurn();
+    Conversation& conversation = TurnConversation();
+    conversation.next_steps.clear();
+    if(asked)
+    {
+        AssistantMessage stopped;
+        stopped.role    = "assistant";
+        stopped.content = ASSISTANT_STOPPED_REPLY;
+        conversation.messages.push_back(stopped);
+    }
+    AppendLine(Speaker::kStatus, "Stopped before an answer was written.");
 }
 
 void
@@ -427,6 +480,12 @@ AssistantPanel::ResetTurn()
             {
                 context.data_provider->CancelRequest(request_id);
             }
+        }
+        // The track's pill shares this slot and may by now own the request
+        // under the same id, so the cancel must not leave it waiting.
+        if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics)
+        {
+            ReleaseAssistantTrackStatistics(context, m_fetch_wait.fetch.track_id);
         }
     }
     AbandonPendingRequest();

@@ -736,12 +736,16 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     }
     if(have_focus)
     {
-        out << " and selected one event as the focal point, so its details, flow "
-               "arrows and call stack are loaded";
+        // Selecting takes any uuid, and only the fetch it starts finds out
+        // whether the trace has that event, so the details are not promised.
+        out << " and selected the event with __uuid \"" << focus.second
+            << "\" as the focal point";
         if(marked > 1)
         {
             out << ", with " << (marked - 1) << " more highlighted around it";
         }
+        out << ". Its details, flow arrows and call stack load from that __uuid, so "
+               "they stay empty if it is not an event of this trace";
     }
     else if(!targets.empty())
     {

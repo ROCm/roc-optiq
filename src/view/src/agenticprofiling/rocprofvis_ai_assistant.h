@@ -201,7 +201,10 @@ private:
     void        ClearConversation();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
-    // Stops the Script tab waiting on Run or Reject for a turn that is over.
+    // The Stop button: ends the running turn and keeps the conversation.
+    void StopTurn();
+    // Declines a script still waiting on Run or Reject for a turn that is over,
+    // and lets go of one the user already answered.
     void WithdrawScriptOffer();
     // Non-blocking cancellation for a UI action. The future is reaped later.
     void AbandonPendingRequest();

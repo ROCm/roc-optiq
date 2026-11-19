@@ -10,6 +10,7 @@
 #include "rocprofvis_db_profiler_hub_ext.h"
 #include "rocprofvis_db_query_builder.h"
 #include "rocprofvis_db_table_processor.h"
+#include "spdlog/spdlog.h"
 #include <yaml-cpp/yaml.h>
 #include <algorithm>
 #include <cstdint>
@@ -167,8 +168,17 @@ ProfilerHub::Detect(rocprofvis_db_filename_t filename)
     {
         return kAutodetect;
     }
-    ph_file_probe_t probe_result;
-    if(PH_RESULT_SUCCESS == ph_probe_file(filename, &probe_result)) return kProfilerHub;
+    ph_file_probe_t probe_result = {};
+    ph_result_t     probe_status = ph_probe_file(filename, &probe_result);
+    spdlog::info("ProfilerHub::Detect '{}' probe_status={} schema={} version={}.{}.{}",
+                  filename != nullptr ? filename : "", static_cast<int>(probe_status),
+                  static_cast<int>(probe_result.trace_schema),
+                  probe_result.schema_version.major, probe_result.schema_version.minor,
+                  probe_result.schema_version.patch);
+    if(probe_status == PH_RESULT_SUCCESS)
+    {
+        return kProfilerHub;
+    }
     return kAutodetect;
 }
 
@@ -1379,7 +1389,6 @@ ProfilerHub::BuildEventSearchQuery(
     rocprofvis_dm_sort_order_t sort_order, uint64_t max_count, uint64_t offset,
     bool count_only, rocprofvis_dm_string_t& query)
 {
-    (void) filter;
     for (int i = 0; i < num; i++)
     {
         std::string semantic_query = BuildSemanticSourceFilter(
@@ -1397,7 +1406,7 @@ ProfilerHub::BuildEventSearchQuery(
     }
 
     return TableProcessor::BuildTableSemanticSubQuery(
-        kRPVDMTableUseCaseEventSearch, nullptr, nullptr, nullptr, sort_column, sort_order,
+        kRPVDMTableUseCaseEventSearch, filter, nullptr, nullptr, sort_column, sort_order,
         max_count, offset, count_only, false, query);
 }
 

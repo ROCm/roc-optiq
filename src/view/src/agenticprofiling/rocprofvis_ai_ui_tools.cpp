@@ -534,9 +534,10 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     const uint64_t track_id =
         JsonU64(args, "track_id",
                 JsonU64(args, "__trackId", TimelineSelection::INVALID_SELECTION_ID));
-    const uint64_t event_uuid =
-        JsonU64(args, "event_uuid",
-                JsonU64(args, "event_id", TimelineSelection::INVALID_SELECTION_ID));
+    const uint64_t event_uuid = JsonU64(
+        args, "event_uuid",
+        JsonU64(args, "__uuid",
+                JsonU64(args, "event_id", TimelineSelection::INVALID_SELECTION_ID)));
     if(context.timeline_selection == nullptr)
     {
         return DoneResult("Timeline selection is not available.", "goto failed");
@@ -637,22 +638,30 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     }
 
     // Naming the culprit event but no window is the obvious way to call this,
-    // so derive the window from the events rather than refusing. Only works for
-    // events the view has already loaded; when it does not, the selection below
-    // still happens and only the framing is skipped.
+    // so the window comes from the events instead: their own spans, as the rows
+    // the assistant read or the details it loaded have them. An event nothing
+    // in memory describes adds nothing, so the entry a wrong uuid leaves empty
+    // cannot stretch the window back to time zero. When no span is known the
+    // selection below still happens and only the framing is skipped.
     if(!has_range && !targets.empty())
     {
-        std::vector<uint64_t> ids;
-        ids.reserve(targets.size());
-        for(const std::pair<uint64_t, uint64_t>& target : targets)
-        {
-            ids.push_back(target.second);
-        }
         double found_start = 0.0;
         double found_end   = 0.0;
-        if(context.data_provider->DataModel().GetEvents().GetEventTimeRange(
-               ids, found_start, found_end) &&
-           std::isfinite(found_start) && std::isfinite(found_end) &&
+        bool   found       = false;
+        for(const std::pair<uint64_t, uint64_t>& target : targets)
+        {
+            const AssistantEventSighting sighting =
+                FindAssistantEvent(context, target.second);
+            if(!sighting.has_span)
+            {
+                continue;
+            }
+            found_start = found ? std::min(found_start, sighting.start_ns)
+                                : sighting.start_ns;
+            found_end   = found ? std::max(found_end, sighting.end_ns) : sighting.end_ns;
+            found       = true;
+        }
+        if(found && std::isfinite(found_start) && std::isfinite(found_end) &&
            found_start >= 0.0 && found_end > found_start &&
            ClampToTrace(timeline, found_start, found_end))
         {
@@ -749,25 +758,37 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     {
         out << "Left the timeline where it was, because the range you gave is outside "
                "this trace, whose "
-            << trace_window << ", and that event is not loaded in the view yet";
+            << trace_window
+            << ", and the event's own start and end are not in the rows read last - "
+               "pass them from its row";
     }
     else
     {
-        out << "Left the timeline where it was, because no window was given and "
-               "that event is not loaded in the view yet";
+        out << "Left the timeline where it was, because no window was given and the "
+               "event's own start and end are not in the rows read last - pass them "
+               "as start_ns and end_ns from its row";
     }
     if(have_focus)
     {
-        // Selecting takes any uuid, and only the fetch it starts finds out
-        // whether the trace has that event, so the details are not promised.
-        out << " and selected the event with __uuid \"" << focus.second
-            << "\" as the focal point";
+        out << (has_range ? " and selected" : ". Selected") << " the event with __uuid \""
+            << focus.second << "\" as the focal point";
         if(marked > 1)
         {
             out << ", with " << (marked - 1) << " more highlighted around it";
         }
-        out << ". Its details, flow arrows and call stack load from that __uuid, so "
-               "they stay empty if it is not an event of this trace";
+        // Selecting takes any uuid. A row the assistant read or details it
+        // loaded can vouch for one; without either, only the fetch the
+        // selection starts finds out, so nothing is promised.
+        if(FindAssistantEvent(context, focus.second).seen)
+        {
+            out << ". Its details, flow arrows and call stack load in the details "
+                   "panel";
+        }
+        else
+        {
+            out << ". Its details, flow arrows and call stack load from that __uuid, "
+                   "so they stay empty if it is not an event of this trace";
+        }
     }
     else if(!targets.empty())
     {

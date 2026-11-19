@@ -99,9 +99,10 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
-// How often track_statistics asks again after a range change dropped its
-// result, so a query that keeps failing answers well before the deadline.
-constexpr uint32_t ASSISTANT_STATS_MAX_RERUNS = 4;
+// How often a read asks again after the UI dropped what it was waiting for - a
+// range change voiding track statistics, a change of selection clearing an
+// event - so one that keeps being dropped answers well before the deadline.
+constexpr uint32_t ASSISTANT_MAX_DROPPED_RERUNS = 4;
 
 }  // namespace
 
@@ -449,31 +450,40 @@ AssistantPanel::StopTurn()
     AppendLine(Speaker::kStatus, "Stopped before an answer was written.");
 }
 
+// Cancels the requests the parked tool started itself, on the provider they
+// went to. A wait behind someone else's request leaves that request alone.
+void
+AssistantPanel::CancelOwnedFetch()
+{
+    if(!m_fetch_wait.active || !m_fetch_wait.owns_requests ||
+       m_fetch_wait.fetch.kind == AssistantFetchKind::kScript)
+    {
+        return;
+    }
+    const std::string          project_id = m_fetch_wait.fetch.project_id.empty()
+                                                ? m_turn_project_id
+                                                : m_fetch_wait.fetch.project_id;
+    const AssistantToolContext context    = MakeAssistantToolContext(project_id);
+    if(context.data_provider != nullptr)
+    {
+        for(uint64_t request_id : m_fetch_wait.request_ids)
+        {
+            context.data_provider->CancelRequest(request_id);
+        }
+    }
+    // The track's pill shares this slot and may by now own the request under
+    // the same id, so the cancel must not leave it waiting.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics)
+    {
+        ReleaseAssistantTrackStatistics(context, m_fetch_wait.fetch.track_id);
+    }
+}
+
 void
 AssistantPanel::ResetTurn()
 {
     WithdrawScriptOffer();
-    if(m_fetch_wait.active && m_fetch_wait.owns_requests &&
-       m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
-    {
-        const std::string          project_id = m_fetch_wait.fetch.project_id.empty()
-                                                    ? m_turn_project_id
-                                                    : m_fetch_wait.fetch.project_id;
-        const AssistantToolContext context    = MakeAssistantToolContext(project_id);
-        if(context.data_provider != nullptr)
-        {
-            for(uint64_t request_id : m_fetch_wait.request_ids)
-            {
-                context.data_provider->CancelRequest(request_id);
-            }
-        }
-        // The track's pill shares this slot and may by now own the request
-        // under the same id, so the cancel must not leave it waiting.
-        if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics)
-        {
-            ReleaseAssistantTrackStatistics(context, m_fetch_wait.fetch.track_id);
-        }
-    }
+    CancelOwnedFetch();
     AbandonPendingRequest();
     ResetAssistantPcRead();
     ResetAssistantScriptOffers();
@@ -1468,6 +1478,21 @@ AssistantPanel::PollToolFetch()
     // and it has an outstanding offer to clear either way.
     if(pending && m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
     {
+        // A table read holds a slot nothing but the assistant uses. Left to
+        // run, a query that outlived its deadline keeps that slot, and the
+        // narrower one the model tries next waits behind it.
+        const AssistantFetchKind kind = m_fetch_wait.fetch.kind;
+        if(m_fetch_wait.owns_requests && (kind == AssistantFetchKind::kTopEvents ||
+                                          kind == AssistantFetchKind::kEventInstances ||
+                                          kind == AssistantFetchKind::kDataTable))
+        {
+            CancelOwnedFetch();
+            FinishCurrentTool(m_fetch_wait.prefix + "Timed out waiting for " +
+                              m_fetch_wait.tool_name +
+                              ", so its query was cancelled. Narrow the window, the "
+                              "tracks or the filters and call it again.");
+            return;
+        }
         FinishCurrentTool("Timed out waiting for " + m_fetch_wait.tool_name + ".");
         return;
     }
@@ -1504,19 +1529,30 @@ AssistantPanel::PollToolFetch()
                               m_fetch_wait.fetch.kind != AssistantFetchKind::kSummary;
     if(not_our_rows && timed_out)
     {
+        // kernel_pc_samples parks every layer this way, its own reads included,
+        // so here the slot was not busy: a layer landed, but past the deadline.
+        if(m_fetch_wait.fetch.kind == AssistantFetchKind::kPcSampling)
+        {
+            FinishCurrentTool("kernel_pc_samples ran out of time reading the PC "
+                              "samples. The layers it did read are kept, so calling "
+                              "it again carries on from there.");
+            return;
+        }
         FinishCurrentTool("Timed out waiting to run " + m_fetch_wait.tool_name +
                           " because its shared data request remained busy.");
         return;
     }
 
-    // Our own rows are asked for again too, inside the same deadline, when a
-    // range change (often the model's own goto) dropped the statistics while
-    // they were in flight, or the sort column was resolved against the header
-    // an earlier query left behind.
+    // Our own rows are asked for again too, inside the same deadline, when the
+    // UI took them away while they were in flight - a range change dropped the
+    // statistics, or a change of selection cleared the event, and either is
+    // often the model's own goto - or when the sort column was resolved
+    // against the header an earlier query left behind.
+    const bool dropped = m_fetch_wait.stats_dropped ||
+                         AssistantEventDetailsDropped(context, m_fetch_wait.fetch);
     if(not_our_rows ||
-       (!timed_out &&
-        ((m_fetch_wait.stats_dropped && m_fetch_retries < ASSISTANT_STATS_MAX_RERUNS) ||
-         AssistantFetchNeedsRerun(context, m_fetch_wait.fetch))))
+       (!timed_out && ((dropped && m_fetch_retries < ASSISTANT_MAX_DROPPED_RERUNS) ||
+                       AssistantFetchNeedsRerun(context, m_fetch_wait.fetch))))
     {
         ++m_fetch_retries;
         m_fetch_wait.active = false;

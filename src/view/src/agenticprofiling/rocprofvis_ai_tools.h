@@ -238,6 +238,13 @@ bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
 void ReleaseAssistantTrackStatistics(const AssistantToolContext& context,
                                      uint64_t                    track_id);
 
+// Whether an event_details read that has landed lost its event. A change of
+// selection - a click, or a goto earlier in the same batch - clears the whole
+// event model, and replies for an event that is no longer there are dropped.
+// The panel runs the tool again when it did. False for any other fetch.
+bool AssistantEventDetailsDropped(const AssistantToolContext& context,
+                                  const AssistantFetchState&  fetch);
+
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,
                                  const AssistantFetchState&  fetch);

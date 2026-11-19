@@ -83,23 +83,12 @@ SettledResult(const std::string& content, const std::string& status)
     return result;
 }
 
-// Cuts text to max_chars and marks the cut, at the start of a UTF-8 character:
-// a note is saved into the project file, and a next step is sent as a message.
+// Cuts a note or a next step to max_chars and marks the cut. A note is saved
+// into the project file, and a next step is sent as a message.
 std::string
 TrimNoteText(std::string text, size_t max_chars)
 {
-    if(text.size() <= max_chars)
-    {
-        return text;
-    }
-    size_t cut = max_chars;
-    while(cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
-    {
-        --cut;
-    }
-    text.resize(cut);
-    text += "...";
-    return text;
+    return TrimAssistantText(std::move(text), max_chars, "...");
 }
 
 // Holds a window to the trace. False when none of it lies inside.

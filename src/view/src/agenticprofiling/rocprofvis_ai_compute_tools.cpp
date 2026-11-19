@@ -1353,9 +1353,8 @@ StartComputeMetricsFetch(const AssistantToolContext& context,
                           "Fetch refused");
     }
 
-    // The slot is the assistant's own, so a turn that is stopped, or a read
-    // that outlives its deadline, may cancel it rather than leave the next
-    // metric read queued behind it.
+    // The slot is the assistant's own, so a stopped turn or a timed-out read
+    // may cancel it rather than leave the next metric read queued behind it.
     result.started_fetch     = true;
     result.owns_requests     = true;
     result.fetch.workload_id = workload.id;

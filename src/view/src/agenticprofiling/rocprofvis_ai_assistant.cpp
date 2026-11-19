@@ -99,14 +99,11 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
-// How long a question waits for the summary preload before going out without
-// it. Past this the briefing says the summary is still loading, and the
-// model's get_summary parks on the same request, so its first round runs
-// alongside a slow summary instead of queueing behind it for minutes.
+// How long a question waits for the summary preload. Past it the question goes
+// out and get_summary parks on the same request, alongside the first round.
 constexpr uint32_t ASSISTANT_WARMUP_TIMEOUT_SECONDS = 10;
-// How often a read asks again after the UI dropped what it was waiting for - a
-// range change voiding track statistics, a change of selection clearing an
-// event - so one that keeps being dropped answers well before the deadline.
+// How often a read asks again after the UI dropped what it waited for, so one
+// that keeps being dropped answers well before the deadline.
 constexpr uint32_t ASSISTANT_MAX_DROPPED_RERUNS = 4;
 
 }  // namespace
@@ -768,9 +765,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
-    // Fixes where this turn's requests go, and with which key. Taken here so
-    // it also covers a turn that waits on the summary warmup first. Nothing
-    // below returns without starting the turn, so ResetTurn wipes this copy.
+    // Fixes where this turn's requests go and with which key, warmup included.
+    // Nothing below returns without starting the turn, so ResetTurn wipes it.
     AssistantProvider endpoint = *provider;
     ApplyAssistantEndpointDefaults(endpoint);
     m_turn_endpoint_url = endpoint.endpoint_url;
@@ -1305,9 +1301,8 @@ AssistantPanel::AppendToolReply(const AssistantToolCall& call, const std::string
     tool_message.name         = call.name;
     tool_message.tool_call_id = call.id;
     tool_message.content      = content.empty() ? "(empty)" : content;
-    // A script the user approved runs unsandboxed and can print the key, and a
-    // trace can have recorded it. Blanked before the reply is logged or kept,
-    // the way the client blanks one a provider echoes.
+    // An approved script can print the key and a trace can have recorded it,
+    // so it is blanked before the reply is logged or kept.
     AssistantRedactKey(m_turn_token, tool_message.content);
 
     // The whole exchange, as the model was given it, so an answer can be
@@ -1329,11 +1324,8 @@ AssistantPanel::ContinueAfterTools()
     m_next_call_index = 0;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
-    // The model offers next steps as its last tool. When the rest of the batch
-    // was actions carried out as asked, nothing in the replies calls for
-    // another tool, and the draft a tools-on round would write is the one
-    // HandleHttpResult discards - so go straight to the tools-off round. A
-    // batch that read data, or in which an action missed, gets its round.
+    // An offer of next steps beside actions carried out as asked leaves nothing
+    // to react to, so skip the draft round HandleHttpResult would discard.
     const bool last_batch = m_batch_offered_steps && m_batch_settled;
     m_batch_offered_steps = false;
     if(last_batch)
@@ -1566,11 +1558,8 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    // Our own rows are asked for again too, inside the same deadline, when the
-    // UI took them away while they were in flight - a range change dropped the
-    // statistics, or a change of selection cleared the event, and either is
-    // often the model's own goto - or when the sort column was resolved
-    // against the header an earlier query left behind.
+    // Our own rows are asked for again, inside the same deadline, when the UI
+    // dropped them in flight or the sort column came from a stale header.
     const bool dropped = m_fetch_wait.stats_dropped ||
                          AssistantEventDetailsDropped(context, m_fetch_wait.fetch);
     if(not_our_rows ||

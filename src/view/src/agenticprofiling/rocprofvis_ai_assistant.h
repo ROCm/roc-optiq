@@ -130,7 +130,8 @@ private:
         // A track_statistics read that was voided while it waited, so the
         // numbers in the shared slot are not this tool's.
         bool stats_dropped = false;
-        // This turn started the request ids, so Clear/tab close may cancel them.
+        // This turn started the request ids, so it may cancel them when it
+        // ends, or when a read that holds a slot outlives its deadline.
         bool owns_requests = false;
         // The summary preload, which has no tool call to answer and resumes the
         // queued turn instead.
@@ -291,15 +292,14 @@ private:
     std::vector<AssistantToolCall> m_pending_calls;
     size_t                         m_next_call_index;
     uint32_t                       m_tool_round;
-    // Set when the tool budget runs out: the next request goes out without
-    // tools, so the model has to write up what it already gathered.
+    // Set for the write-up round, which goes out without tools so the model
+    // writes up what it gathered. A spent tool budget forces the same round.
     bool     m_force_final;
     // A trace switch ends this batch. Every remaining call still gets a tool
     // reply, but none of its body runs against a tab that has not switched yet.
     bool m_stop_tool_queue;
-    // Whether the batch being run offered next steps, and whether everything
-    // else in it was an action carried out as asked. Both true means the model
-    // has nothing left to react to, so its next round is the write-up.
+    // Whether the batch offered next steps, and whether everything else in it
+    // was an action carried out as asked. Both true: the write-up comes next.
     bool m_batch_offered_steps;
     bool m_batch_settled;
     // Keeps contention retries on the first wait's timeout deadline.

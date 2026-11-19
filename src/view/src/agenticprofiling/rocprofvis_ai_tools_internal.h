@@ -140,10 +140,8 @@ ResolveAssistantLink(const AssistantToolContext& context, const std::string& ref
 std::string
 LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link);
 
-// What is already in memory about an event the model named: the event model's
-// entry once its details have loaded, else a row of the assistant's own reads
-// of this trace. It costs no query, so it can confirm an event but never rule
-// one out - a uuid from an earlier read may have been overwritten since.
+// What memory already holds about an event: its loaded details, else a row the
+// assistant read. No query, so it can confirm an event but never rule one out.
 struct AssistantEventSighting
 {
     bool seen = false;

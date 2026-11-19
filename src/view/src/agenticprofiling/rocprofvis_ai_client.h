@@ -80,9 +80,8 @@ bool AssistantUrlIsCleartext(const std::string& url);
 // freed, so the bytes do not sit in released memory.
 void AssistantWipeSecret(std::string& text);
 
-// Blanks every copy of the key in text. Looks for the key as it is sent,
-// without the whitespace a paste brings along, because that is the form an
-// echo of it carries. A key too short to tell from ordinary words is left.
+// Blanks every copy of the key in text, in the trimmed form it is sent in.
+// A key too short to tell from ordinary words is left alone.
 void AssistantRedactKey(const std::string& api_token, std::string& text);
 
 /**

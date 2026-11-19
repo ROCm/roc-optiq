@@ -278,9 +278,8 @@ SplitMessageLines(const std::string& text)
     return lines;
 }
 
-// The endpoint as a hover card may show it: no userinfo, query or fragment. A
-// key pasted into the URL would otherwise be on screen for anyone watching a
-// screen share, and the settings hold the URL as typed until OK is pressed.
+// The endpoint as a hover card may show it: no userinfo, query or fragment,
+// since the settings hold a key pasted into the URL until OK is pressed.
 std::string
 DisplayEndpoint(const std::string& url)
 {
@@ -372,11 +371,8 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, ChatLine& lin
                      static_cast<float>(ASSISTANT_CHART_MIN_BINS),
                      static_cast<float>(ASSISTANT_CHART_MAX_BINS)));
 
-    // Cutting the strip sums every track's minimap row, and ranking the tracks
-    // does it again, which is too much to repeat on every frame a chart is on
-    // screen. The minimap does not change once the trace has loaded, so the
-    // strip is kept until the bin count does. An empty one is a trace still
-    // loading, and is asked for again.
+    // Cutting the strip sums every minimap row, twice, so it is kept until the
+    // bin count changes. An empty one is a trace still loading: asked again.
     if(line.chart_bin_count != bin_count || line.chart_bins.empty())
     {
         line.chart_bin_count = bin_count;

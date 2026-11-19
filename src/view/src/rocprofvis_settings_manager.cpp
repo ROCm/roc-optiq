@@ -617,9 +617,8 @@ SettingsManager::LoadSettingsJson()
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         MigrateLegacyAssistantToken();
 #endif
-        // The file held a key inside an assistant URL. Rewritten now, with
-        // everything else as it was just read, so the key does not stay on disk
-        // until the next save.
+        // The file held a key inside an assistant URL. Rewritten now, as just
+        // read, so the key does not stay on disk until the next save.
         if(assistant_url_cleaned)
         {
             SaveSettingsJson();
@@ -1264,8 +1263,7 @@ AssistantStorableUrl(const std::string& url)
 }
 
 // The API keys are deliberately absent: those live in the credential store.
-// The URL goes through AssistantStorableUrl here as well as when it is
-// accepted, because this also runs while Preferences holds a half-typed one.
+// The URL is filtered here too, since Preferences may hold a half-typed one.
 void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
@@ -1376,9 +1374,8 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
         m_usersettings.assistant.providers.push_back(provider);
     }
 
-    // A file from before URLs were filtered, or one edited by hand, may hold a
-    // key in the URL. It is dropped from memory here, so what is used matches
-    // what is stored, and the caller rewrites the file.
+    // An older or hand-edited file may hold a key in the URL. Dropped from
+    // memory here, so use matches storage, and the caller rewrites the file.
     bool url_cleaned = false;
     for(AssistantProvider& provider : m_usersettings.assistant.providers)
     {

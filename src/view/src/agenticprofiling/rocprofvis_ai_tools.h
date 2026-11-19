@@ -161,9 +161,8 @@ struct AssistantToolStartResult
     // A trace switch is a barrier: later calls in the same batch were planned
     // for a tab state that has not landed yet, so they receive skipped replies.
     bool stop_tool_queue = false;
-    // An action carried out exactly as asked, whose reply holds nothing the
-    // model has to react to: no rows, no refusal, nothing to try again. A
-    // batch made only of these and an offer of next steps is the model's last.
+    // An action carried out exactly as asked, with nothing in its reply to
+    // react to. A batch of only these and an offer of next steps is the last.
     bool settled = false;
     // How long the panel waits before calling this a timeout. Zero takes the
     // default, which suits a query; a tool waiting on the user needs longer.
@@ -242,10 +241,8 @@ bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
 void ReleaseAssistantTrackStatistics(const AssistantToolContext& context,
                                      uint64_t                    track_id);
 
-// Whether an event_details read that has landed lost its event. A change of
-// selection - a click, or a goto earlier in the same batch - clears the whole
-// event model, and replies for an event that is no longer there are dropped.
-// The panel runs the tool again when it did. False for any other fetch.
+// Whether an event_details read that landed lost its event to a change of
+// selection, which clears the event model. The panel then runs it again.
 bool AssistantEventDetailsDropped(const AssistantToolContext& context,
                                   const AssistantFetchState&  fetch);
 

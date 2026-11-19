@@ -2756,7 +2756,7 @@ Integration points:
   main view, and renders it with `RenderDocked()`. The View menu binds
   `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
 - `TraceView` and `AnalysisView` expose the plain accessors
-  `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
+  `OptiqActions` needs (`ResetView`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into
   their members.
 

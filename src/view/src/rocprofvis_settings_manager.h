@@ -105,10 +105,8 @@ MakeDefaultAssistantProvider()
     return provider;
 }
 
-// The endpoint URL as it may be saved and shown. The settings file is plain
-// text, so a key pasted into the URL must not reach it: userinfo, a fragment,
-// and every query parameter but an API version are dropped. Compiled with or
-// without the assistant, because the settings file is written either way.
+// The endpoint URL as it may be saved and shown: without userinfo, a fragment,
+// or any query parameter but an API version, any of which may be a pasted key.
 std::string AssistantStorableUrl(const std::string& url);
 
 typedef struct AssistantSettings

@@ -73,9 +73,8 @@ Actions(const AssistantToolContext& context)
                         context.trace_view);
 }
 
-// The result of an action carried out exactly as asked: see
-// AssistantToolStartResult::settled. A refusal, a listing, or an action that
-// landed somewhere other than asked stays a plain DoneResult.
+// The result of an action carried out exactly as asked (see settled). A
+// refusal, a listing, or an action that missed stays a plain DoneResult.
 AssistantToolStartResult
 SettledResult(const std::string& content, const std::string& status)
 {
@@ -84,9 +83,8 @@ SettledResult(const std::string& content, const std::string& status)
     return result;
 }
 
-// Cuts text to max_chars and marks the cut. Backs up to the start of a UTF-8
-// character first: a note is saved into the project file, and a next step is
-// sent back as a message.
+// Cuts text to max_chars and marks the cut, at the start of a UTF-8 character:
+// a note is saved into the project file, and a next step is sent as a message.
 std::string
 TrimNoteText(std::string text, size_t max_chars)
 {
@@ -118,11 +116,8 @@ ClampToTrace(const TimelineModel& timeline, double& start_ns, double& end_ns)
     return end_ns > start_ns;
 }
 
-// A next step as its button shows it, which is also what a click sends as the
-// user's own message. ImGui hides whatever follows "##" in a label, so a step
-// carrying that marker would send words the user never saw - and words the
-// user sends are what unlock notes, bookmarks and tab switches. The marker and
-// control characters are taken out, so the button shows all of it.
+// A next step as its button shows it, which a click sends as the user's own
+// words. ImGui hides what follows "##", so that and control characters go.
 std::string
 PrintableStep(const std::string& text)
 {
@@ -454,9 +449,7 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
                              "Switched tabs");
     }
     // A ref is unambiguous even when two paths have the same basename. The
-    // labels remain accepted when they name exactly one tab. The id a ref
-    // resolves to is a file path, so it is kept apart from the name the reply
-    // may quote back.
+    // labels remain accepted when they name exactly one tab.
     std::string       target     = name;
     const std::string ref_prefix = "tab_";
     if(name.compare(0, ref_prefix.size(), ref_prefix) == 0)
@@ -477,6 +470,7 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
         }
         if(matched_id != nullptr)
         {
+            // A file path, so it is kept apart from the name the reply quotes.
             target = *matched_id;
         }
     }
@@ -658,12 +652,8 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         range_dropped = true;
     }
 
-    // Naming the culprit event but no window is the obvious way to call this,
-    // so the window comes from the events instead: their own spans, as the rows
-    // the assistant read or the details it loaded have them. An event nothing
-    // in memory describes adds nothing, so the entry a wrong uuid leaves empty
-    // cannot stretch the window back to time zero. When no span is known the
-    // selection below still happens and only the framing is skipped.
+    // An event named with no window is framed by its own span, from a row read
+    // or its loaded details. With neither, the click below still happens.
     if(!has_range && !targets.empty())
     {
         double found_start = 0.0;
@@ -805,9 +795,8 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         {
             out << ", with " << (marked - 1) << " more highlighted around it";
         }
-        // Selecting takes any uuid. A row the assistant read or details it
-        // loaded can vouch for one; without either, only the fetch the
-        // selection starts finds out, so nothing is promised.
+        // Selecting takes any uuid. Only a row read or loaded details can
+        // vouch for one, so without either nothing is promised.
         if(FindAssistantEvent(context, focus.second).seen)
         {
             out << ". Its details, flow arrows and call stack load in the details "

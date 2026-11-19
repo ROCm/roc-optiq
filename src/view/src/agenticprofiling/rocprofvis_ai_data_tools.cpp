@@ -935,9 +935,8 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
     }
     out << "\n";
 
-    // Rows are numbered by their place in the whole result, and the footer
-    // names the slice. Counted from the page alone, a read with an offset is
-    // told that rows it has already seen are still to come.
+    // Rows are numbered by their place in the whole result. Counted from the
+    // page, a read with an offset is told rows it has seen are still to come.
     const std::shared_ptr<TableRequestParams> params = tables.GetTableParams(type);
     const uint64_t offset    = params ? params->m_start_row : 0;
     const size_t   row_count = std::min(data.size(), limit);
@@ -959,10 +958,8 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
         }
         line << "\n";
         const std::string text = line.str();
-        // Wide rows fill the result long before the row limit does. Stopping
-        // on a whole row lets the footer say where, instead of the trim
-        // cutting one in half and the footer with it. The first row always
-        // prints, so paging by the offset the footer gives cannot stall.
+        // Wide rows fill the result before the row limit does, so stop on a
+        // whole one. The first always prints, so paging by offset cannot stall.
         if(row > 0 && rows.size() + text.size() > ASSISTANT_MAX_RESULT_CHARS)
         {
             break;
@@ -1070,9 +1067,8 @@ TrackTypeName(TrackInfo::TrackType type)
     }
 }
 
-// An entry FetchEvent made that no reply filled: no name, arguments, extended
-// data, flow links or call stack. FetchEvent records one for any uuid it is
-// asked about, so this is what a uuid the trace lacks looks like.
+// An entry no reply filled. FetchEvent records one for any uuid it is asked
+// about, so this is what a uuid the trace lacks looks like.
 bool
 EventEntryIsEmpty(const EventInfo& event)
 {

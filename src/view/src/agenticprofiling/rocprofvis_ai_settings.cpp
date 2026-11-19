@@ -460,9 +460,8 @@ SettingsPanel::ApplyAssistantTokenEdits()
         AssistantProvider& provider =
             m_usersettings.assistant.providers[m_usersettings.assistant.active];
         ApplyAssistantEndpointDefaults(provider);
-        // The URL that is kept is the one that can be saved, so what this
-        // session sends matches what the next one loads. The origin a key is
-        // bound to holds neither userinfo nor query, so it does not change.
+        // Kept as it can be saved, so this session sends what the next one
+        // loads. A key's origin holds neither userinfo nor query: unchanged.
         const std::string storable = AssistantStorableUrl(provider.endpoint_url);
         if(storable != provider.endpoint_url)
         {

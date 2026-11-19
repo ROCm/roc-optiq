@@ -740,9 +740,8 @@ ParseChatCompletion(jt::Json& root, bool allow_tool_calls, AssistantChatResult& 
     }
 }
 
-// A copy of text with the key blanked. Nothing the model reads may carry the
-// key, whatever put it there: a script that printed it, a trace that recorded
-// it, or the user typing it into the question.
+// A copy of text with the key blanked. Nothing the model reads may carry it,
+// whether a script printed it, a trace recorded it, or the user typed it.
 std::string
 WithoutKey(const std::string& api_token, std::string text)
 {
@@ -1035,9 +1034,8 @@ httplib::Headers
 AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
 {
     httplib::Headers headers;
-    // The key without the whitespace a paste tends to bring along: httplib
-    // refuses a header value that ends in a space or newline, so every request
-    // would fail.
+    // Without the whitespace a paste brings along: httplib refuses a header
+    // value that ends in a space or newline, so every request would fail.
     std::string token = Core::String::trim_copy(request.api_token);
     if(!token.empty())
     {

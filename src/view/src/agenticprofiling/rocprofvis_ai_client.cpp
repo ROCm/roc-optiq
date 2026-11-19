@@ -1238,7 +1238,6 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     if(!Adopt(&client))
     {
         WipeAuthHeaders(headers);
-        result.cancelled = true;
         return result;
     }
     const std::chrono::steady_clock::time_point started =
@@ -1274,7 +1273,6 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         // Cancel() closed this socket on purpose, so the failure is expected.
         if(Cancelled())
         {
-            result.cancelled = true;
             return result;
         }
         result.error =
@@ -1287,7 +1285,6 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     // A cancel during the retry wait leaves the first, failed response in hand.
     if(Cancelled())
     {
-        result.cancelled = true;
         return result;
     }
 

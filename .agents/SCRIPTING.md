@@ -460,7 +460,7 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
   chain as every other UI action, so nothing in `agenticprofiling/`
   keeps a pointer to a view that a closing tab could take away.
 - **The wait is on a person, so it gets its own deadline.**
-  `AssistantToolStartResult::timeout_seconds` overrides the 45s a fetch
+  `AssistantToolStartResult::timeout_seconds` overrides the 350s a fetch
   runs under; the script tool asks for 300. The panel also routes a
   timed-out `kScript` fetch back through
   `FinishAssistantScriptFetch` rather than reporting a generic timeout,
@@ -472,9 +472,10 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
   so a script that never started still answers the assistant instead of
   waiting out the full five minutes. `AssistantScriptFetchPending` is
   true for `kPending` and `kRunning` only.
-- **An offer is pinned to its trace.** `Run` refuses when the tab in
-  front is not the trace the script was written against, the same
-  mistake `m_turn_project_id` guards elsewhere.
+- **An offer is pinned to its trace.** There is one editor per trace
+  and the tool offers into the turn's own, refusing when that trace is
+  not in front, so `Run` can only start the script on the trace it was
+  written against.
 - **Events are filtered by source id.** Every editor hears every
   `ScriptExecuteCompleteEvent`, and there is one editor per trace, so
   each answers only events carrying the trace it started a run on.

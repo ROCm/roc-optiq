@@ -80,6 +80,9 @@ private:
         // False when the tool piggybacked on a fetch already in flight: the rows
         // that land answer someone else's query, so the tool must run again.
         bool started_fetch = false;
+        // A track_statistics read that was voided while it waited, so the
+        // numbers in the shared slot are not this tool's.
+        bool stats_dropped = false;
         // The summary preload, which has no tool call to answer and resumes the
         // queued turn instead.
         bool                  warmup = false;

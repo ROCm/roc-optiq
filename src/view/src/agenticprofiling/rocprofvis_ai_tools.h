@@ -187,10 +187,13 @@ bool AssistantScriptFetchPending(const AssistantToolContext& context);
 bool AssistantFetchNeedsRerun(const AssistantToolContext& context,
                               const AssistantFetchState&  fetch);
 
-// Whether a track_statistics result was dropped before it landed. The track
-// pills share the slot, so a change of selection or view invalidates it.
+// Whether a track_statistics read is void. The track pills share the slot: a
+// change of selection or view marks it stale, and the pill of a drawn track
+// then cancels the request and issues its own under the same id. in_flight is
+// whether that id is still pending; once it clears, anything short of ready
+// was dropped.
 bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
-                                     uint64_t                    track_id);
+                                     uint64_t track_id, bool in_flight);
 
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,

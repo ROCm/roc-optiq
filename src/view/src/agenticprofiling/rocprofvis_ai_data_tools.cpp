@@ -826,8 +826,18 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
                rocprofvis_dm_event_operation_t op, bool require_op,
                std::string& error_out, std::string& note_out)
 {
-    jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    if(!mutable_args.contains("track_ids") || !mutable_args["track_ids"].isArray())
+    jt::Json&  mutable_args = const_cast<jt::Json&>(args);
+    const bool present =
+        mutable_args.contains("track_ids") && !mutable_args["track_ids"].isNull();
+    // Present but not an array is a mistake, not "every track": reading them
+    // all would be reported as a read of the track that was named.
+    if(present && !mutable_args["track_ids"].isArray())
+    {
+        error_out = "track_ids must be an array of track ids from list_tracks.";
+        return std::vector<uint64_t>();
+    }
+    // An empty array names no track, the same as leaving the argument out.
+    if(!present || mutable_args["track_ids"].getArray().empty())
     {
         return require_op ? TracksForOperation(context, op, note_out)
                           : std::vector<uint64_t>();
@@ -842,9 +852,9 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
     const TimelineModel&  timeline = context.data_provider->DataModel().GetTimeline();
     std::vector<uint64_t> tracks;
     tracks.reserve(std::min(entries.size(), ASSISTANT_MAX_TRACKS));
-    for(jt::Json& entry : entries)
+    for(size_t i = 0; i < entries.size(); ++i)
     {
-        const uint64_t track_id = JsonU64Value(entry, INVALID_UINT64_INDEX);
+        const uint64_t track_id = JsonU64Value(entries[i], INVALID_UINT64_INDEX);
         if(track_id == INVALID_UINT64_INDEX)
         {
             error_out =
@@ -866,8 +876,20 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
         tracks.push_back(track_id);
         if(tracks.size() >= ASSISTANT_MAX_TRACKS)
         {
+            // Ids past the cap are not read, so the result has to say so.
+            if(i + 1 < entries.size())
+            {
+                note_out = TrackCapNote(tracks.size(), entries.size());
+            }
             break;
         }
+    }
+    // Every named track lacked the operation. Returned empty with no error, the
+    // caller reports that no track in the trace carries it.
+    if(tracks.empty())
+    {
+        error_out = "None of those track_ids carry that kind of event. list_tracks "
+                    "shows each track's ops.";
     }
     return tracks;
 }
@@ -2679,10 +2701,12 @@ AssistantFetchNeedsRerun(const AssistantToolContext& context,
     return wanted != ASSISTANT_SORT_COLUMN_UNKNOWN && wanted != fetch.sort_column;
 }
 
-// Anything short of ready once the request has cleared means the model dropped
-// the reply, which a change of selection or view does to every track.
+// A change of selection or view marks every track stale. In flight that is
+// already final: the reply is discarded, or a pill replaces the request. Once
+// the request has cleared, anything short of ready means the reply was dropped.
 bool
-AssistantTrackStatisticsDropped(const AssistantToolContext& context, uint64_t track_id)
+AssistantTrackStatisticsDropped(const AssistantToolContext& context, uint64_t track_id,
+                                bool in_flight)
 {
     if(context.data_provider == nullptr)
     {
@@ -2696,7 +2720,9 @@ AssistantTrackStatisticsDropped(const AssistantToolContext& context, uint64_t tr
     }
     const AnalysisTrackStatistics* stats =
         context.data_provider->DataModel().GetAnalysis().RegisterTrack(*track);
-    return stats != nullptr && stats->state != AnalysisTrackStatistics::kReady;
+    return stats != nullptr &&
+           (in_flight ? stats->state < AnalysisTrackStatistics::kRequested
+                      : stats->state != AnalysisTrackStatistics::kReady);
 }
 
 // Formats the rows of a fetch that has landed, by the kind of fetch it was.

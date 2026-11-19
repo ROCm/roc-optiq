@@ -418,7 +418,9 @@ AssistantPanel::RestoreTrimmedBriefing()
         }
         question = &message;
     }
-    if(question != nullptr)
+    // The write-up round can follow a tab change made while the last reply was
+    // on its way, and the trace in front is then not the one the rows are from.
+    if(question != nullptr && CurrentProjectId() == m_turn_project_id)
     {
         question->content = ASSISTANT_BRIEFING_HEADER +
                             BuildAssistantBriefing(MakeToolContext()) + "\n" +
@@ -906,6 +908,7 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
     m_phase                    = Phase::kToolWait;
     m_fetch_wait.active        = true;
     m_fetch_wait.started_fetch = started.started_fetch;
+    m_fetch_wait.stats_dropped = false;
     m_fetch_wait.warmup        = warmup;
     m_fetch_wait.request_ids   = started.request_ids;
     m_fetch_wait.fetch         = started.fetch;
@@ -1099,6 +1102,15 @@ AssistantPanel::PollToolFetch()
     const bool pending   = AnyFetchPending(context);
     const bool timed_out = elapsed.count() >= deadline;
 
+    // A range change voids a statistics read in flight, and a drawn track's
+    // pill then replaces it under the same request id. Noted while it shows,
+    // or the pill's numbers land as this tool's.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics &&
+       AssistantTrackStatisticsDropped(context, m_fetch_wait.fetch.track_id, pending))
+    {
+        m_fetch_wait.stats_dropped = true;
+    }
+
     if(pending && !timed_out)
     {
         // Say how long, so a slow query reads as working rather than frozen.
@@ -1179,14 +1191,23 @@ AssistantPanel::PollToolFetch()
     // an earlier query left behind.
     if(not_our_rows ||
        (!timed_out &&
-        ((m_fetch_wait.fetch.kind == AssistantFetchKind::kTrackStatistics &&
-          m_fetch_retries < ASSISTANT_STATS_MAX_RERUNS &&
-          AssistantTrackStatisticsDropped(context, m_fetch_wait.fetch.track_id)) ||
+        ((m_fetch_wait.stats_dropped && m_fetch_retries < ASSISTANT_STATS_MAX_RERUNS) ||
          AssistantFetchNeedsRerun(context, m_fetch_wait.fetch))))
     {
         ++m_fetch_retries;
         m_fetch_wait.active = false;
         RunNextTool();
+        return;
+    }
+
+    // Out of re-runs or time. Anything the slot holds now is a pill's, for its
+    // own window.
+    if(m_fetch_wait.stats_dropped)
+    {
+        FinishCurrentTool(m_fetch_wait.prefix +
+                          "The track statistics were dropped before they could be "
+                          "read: the selection or view changed while the query ran, "
+                          "or it failed. Call track_statistics again.");
         return;
     }
 

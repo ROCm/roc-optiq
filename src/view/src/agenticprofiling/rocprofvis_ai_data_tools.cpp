@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -929,10 +930,18 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
     }
     out << "\n";
 
-    const size_t row_count = std::min(data.size(), limit);
+    // Rows are numbered by their place in the whole result, and the footer
+    // names the slice. Counted from the page alone, a read with an offset is
+    // told that rows it has already seen are still to come.
+    const std::shared_ptr<TableRequestParams> params = tables.GetTableParams(type);
+    const uint64_t offset    = params ? params->m_start_row : 0;
+    const size_t   row_count = std::min(data.size(), limit);
+    std::string    rows      = out.str();
+    size_t         shown     = 0;
     for(size_t row = 0; row < row_count; ++row)
     {
-        out << (row + 1) << ".";
+        std::ostringstream line;
+        line << (offset + row + 1) << ".";
         for(size_t column_index : columns)
         {
             if(column_index >= data[row].size())
@@ -941,17 +950,48 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
             }
             const std::string& name  = header[column_index];
             const char*        quote = ColumnNeedsQuoting(name) ? "\"" : "";
-            out << " " << name << "=" << quote << data[row][column_index] << quote;
+            line << " " << name << "=" << quote << data[row][column_index] << quote;
         }
-        out << "\n";
+        line << "\n";
+        const std::string text = line.str();
+        // Wide rows fill the result long before the row limit does. Stopping
+        // on a whole row lets the footer say where, instead of the trim
+        // cutting one in half and the footer with it. The first row always
+        // prints, so paging by the offset the footer gives cannot stall.
+        if(row > 0 && rows.size() + text.size() > ASSISTANT_MAX_RESULT_CHARS)
+        {
+            break;
+        }
+        rows += text;
+        ++shown;
     }
 
-    const uint64_t total = tables.GetTableTotalRowCount(type);
-    if(total > row_count)
+    // Added after the trim, so it survives a first row too long to fit.
+    const uint64_t     total = tables.GetTableTotalRowCount(type);
+    const uint64_t     end   = offset + shown;
+    const bool         more  = total > end || shown < row_count;
+    std::ostringstream footer;
+    if(shown == 0)
     {
-        out << "... " << (total - row_count) << " more rows not shown\n";
+        footer << "rows: 0";
+        if(offset > 0)
+        {
+            footer << " at offset " << offset << ", which is past the end of the "
+                   << total << " in this result";
+        }
+        footer << "\n";
     }
-    return TrimResult(out.str());
+    else if(offset > 0 || more)
+    {
+        footer << "rows " << (offset + 1) << "-" << end << " of "
+               << std::max<uint64_t>(total, offset + row_count);
+        if(more)
+        {
+            footer << " - pass offset=" << end << " for the next page";
+        }
+        footer << "\n";
+    }
+    return TrimResult(std::move(rows)) + footer.str();
 }
 
 // For an empty read, names the filter columns the table does not have. Such a
@@ -1025,23 +1065,49 @@ TrackTypeName(TrackInfo::TrackType type)
     }
 }
 
+// An entry FetchEvent made that no reply filled: no name, arguments, extended
+// data, flow links or call stack. FetchEvent records one for any uuid it is
+// asked about, so this is what a uuid the trace lacks looks like.
+bool
+EventEntryIsEmpty(const EventInfo& event)
+{
+    return event.basic_info.name.empty() && event.args.empty() &&
+           event.ext_info.empty() && event.flow_info.empty() &&
+           event.call_stack_info.empty();
+}
+
+// Says how many entries a capped list left out, so that a list cut short is
+// not read as the whole of it.
+void
+AppendOmittedNote(std::ostringstream& out, size_t total, size_t cap)
+{
+    if(total > cap)
+    {
+        out << "  ... " << (total - cap) << " more not shown\n";
+    }
+}
+
 // Renders one event's arguments, flow links, and call stack as text.
 std::string
 FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
 {
     const EventInfo* event =
         context.data_provider->DataModel().GetEvents().GetEvent(event_id);
-    // FetchEvent records an entry for any uuid it is asked about, so one that
-    // came back with nothing, not even a name, is a uuid this trace lacks.
-    if(event == nullptr ||
-       (event->basic_info.name.empty() && event->args.empty() && event->ext_info.empty() &&
-        event->flow_info.empty() && event->call_stack_info.empty()))
+    // Gone altogether means a change of selection cleared it while it loaded,
+    // more often than the panel was willing to ask again.
+    if(event == nullptr)
+    {
+        return "The details were cleared before they could be read, because the "
+               "selection changed while they loaded. That says nothing about the "
+               "event - call event_details again.";
+    }
+    if(EventEntryIsEmpty(*event))
     {
         // Take the empty entry back out, or a later goto would read it as an
         // event at time zero. Not while it is selected: the events view holds
         // a pointer to a selected entry.
-        if(event != nullptr && (context.timeline_selection == nullptr ||
-                                !context.timeline_selection->EventSelected(event_id)))
+        if(context.timeline_selection == nullptr ||
+           !context.timeline_selection->EventSelected(event_id))
         {
             context.data_provider->DataModel().GetEvents().RemoveEvent(event_id);
         }
@@ -1049,7 +1115,8 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
     }
 
     std::ostringstream out;
-    out << "event_uuid: " << event_id << "\n";
+    // Quoted like every uuid the model is expected to pass back as a string.
+    out << "event_uuid: \"" << event_id << "\"\n";
     if(!event->basic_info.name.empty())
     {
         out << "name: " << event->basic_info.name << "\n";
@@ -1078,6 +1145,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->args.size(), ASSISTANT_MAX_EVENT_ARGS);
     }
 
     if(!event->ext_info.empty())
@@ -1092,6 +1160,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->ext_info.size(), ASSISTANT_MAX_EXT_ROWS);
     }
 
     if(!event->flow_info.empty())
@@ -1108,6 +1177,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->flow_info.size(), ASSISTANT_MAX_FLOW_ROWS);
     }
 
     if(!event->call_stack_info.empty())
@@ -1127,6 +1197,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->call_stack_info.size(), ASSISTANT_MAX_CALL_STACK);
     }
 
     if(event->args.empty() && event->ext_info.empty() && event->flow_info.empty() &&
@@ -1735,7 +1806,16 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     }
 
     // Headline numbers only. The top events and counters are left out so the
-    // model has to fetch them rather than answer from the briefing alone.
+    // model has to fetch them rather than answer from the briefing alone. A
+    // summary that has not loaded prints no totals at all: zeroes would read
+    // as a trace in which nothing ran.
+    if(!AssistantSummaryLoaded(context))
+    {
+        out << "summary: not loaded yet, so this briefing has no totals. Call "
+               "get_summary, which loads it, before saying anything about how much "
+               "time the trace holds.\n";
+        return out.str();
+    }
     const SummaryModel& model = context.data_provider->DataModel().GetSummary();
     const SummaryInfo::AggregateMetrics& summary = model.GetSummaryData();
     out << "summary:\n";
@@ -1968,7 +2048,8 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::
     const std::vector<const TrackInfo*> tracks =
         context.data_provider->DataModel().GetTimeline().GetTrackList();
     std::ostringstream out;
-    size_t             shown = 0;
+    size_t             shown   = 0;
+    size_t             omitted = 0;
     for(const TrackInfo* track : tracks)
     {
         if(track == nullptr)
@@ -1981,6 +2062,12 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::
            track->topology.type != TrackInfo::SampledThread &&
            track->topology.type != TrackInfo::Counter)
         {
+            continue;
+        }
+        // Counted past the cap, so the reply can say how much it left out.
+        if(shown >= ASSISTANT_MAX_LIST_TRACKS)
+        {
+            ++omitted;
             continue;
         }
         out << "track_id=" << track->id << " type=" << TrackTypeName(track->topology.type)
@@ -2002,17 +2089,21 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::
         }
         out << "\n";
         ++shown;
-        if(shown >= ASSISTANT_MAX_LIST_TRACKS)
-        {
-            out << "... additional tracks omitted\n";
-            break;
-        }
     }
     if(shown == 0)
     {
         return DoneResult("No queue/thread tracks found.", "No tracks");
     }
-    return DoneResult(TrimResult(out.str()), "Listed tracks");
+    // Added after the trim, so a long listing cannot cut it off.
+    std::string omitted_note;
+    if(omitted > 0)
+    {
+        omitted_note = "... " + std::to_string(omitted) +
+                       " more tracks not listed. trace_overview ranks the busiest "
+                       "tracks, and rows from search_events carry the __trackId of the "
+                       "track they sit on.\n";
+    }
+    return DoneResult(TrimResult(out.str()) + omitted_note, "Listed tracks");
 }
 
 AssistantToolStartResult
@@ -2490,8 +2581,10 @@ AssistantToolStartResult
 ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                  const std::string& tool_name)
 {
-    const uint64_t event_uuid =
-        JsonU64(args, "event_uuid", JsonU64(args, "event_id", 0));
+    // __uuid is how the rows spell the column, so a call copied from one is
+    // read rather than sent back for a rename.
+    const uint64_t event_uuid = JsonU64(
+        args, "event_uuid", JsonU64(args, "__uuid", JsonU64(args, "event_id", 0)));
     if(event_uuid == 0)
     {
         return DoneResult(
@@ -2512,7 +2605,8 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                                                  RequestType::kFetchEventCallStack)
     };
 
-    const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
+    const uint64_t track_id =
+        JsonU64(args, "track_id", JsonU64(args, "__trackId", INVALID_UINT64_INDEX));
     // FetchEvent creates the event's model entry, which the flow and call stack
     // replies are dropped without, and chains the extended-data fetch that
     // carries the arguments. A track id only lets it seed the name and duration
@@ -2617,8 +2711,14 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
             "search_events needs terms, e.g. {\"terms\":[\"gemm\"]}.",
             "Missing terms");
     }
+    // Terms past the cap are not searched, which changes what matches, so the
+    // result has to say so.
+    std::string terms_note;
     if(terms.size() > ASSISTANT_MAX_SEARCH_TERMS)
     {
+        terms_note = "terms: only the first " +
+                     std::to_string(ASSISTANT_MAX_SEARCH_TERMS) + " of " +
+                     std::to_string(terms.size()) + " were searched\n";
         terms.resize(ASSISTANT_MAX_SEARCH_TERMS);
     }
 
@@ -2666,7 +2766,8 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     const size_t limit = RowLimitFromArgs(args);
     double start_ns = 0.0;
     double end_ns   = 0.0;
-    const std::string scope = WindowFromArgs(context, args, start_ns, end_ns, false);
+    const std::string scope =
+        WindowFromArgs(context, args, start_ns, end_ns, false) + terms_note;
 
     const uint64_t      request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
     AssistantFetchState fetch      = TableFetch(
@@ -2960,6 +3061,81 @@ ReleaseAssistantTrackStatistics(const AssistantToolContext& context, uint64_t tr
     {
         stats->state = AnalysisTrackStatistics::kStale;
     }
+}
+
+// FetchEvent leaves an entry for every uuid it is asked about, so one that is
+// gone once the replies have landed was cleared along with the selection.
+bool
+AssistantEventDetailsDropped(const AssistantToolContext& context,
+                             const AssistantFetchState&  fetch)
+{
+    return fetch.kind == AssistantFetchKind::kEventDetails &&
+           context.data_provider != nullptr &&
+           context.data_provider->DataModel().GetEvents().GetEvent(fetch.event_id) ==
+               nullptr;
+}
+
+AssistantEventSighting
+FindAssistantEvent(const AssistantToolContext& context, uint64_t event_uuid)
+{
+    AssistantEventSighting sighting;
+    if(context.data_provider == nullptr)
+    {
+        return sighting;
+    }
+    const EventInfo* event =
+        context.data_provider->DataModel().GetEvents().GetEvent(event_uuid);
+    if(event != nullptr && !EventEntryIsEmpty(*event))
+    {
+        sighting.seen     = true;
+        sighting.start_ns = event->basic_info.start_ts;
+        sighting.end_ns   = event->basic_info.start_ts + event->basic_info.duration;
+        sighting.has_span = sighting.end_ns > sighting.start_ns;
+        return sighting;
+    }
+
+    // The slots whose rows are events. Top events and samples carry no uuid.
+    const TableType slots[] = { TableType::kAssistantEventTable,
+                                TableType::kAssistantSearchTable,
+                                TableType::kAssistantSummaryKernelTable,
+                                TableType::kAssistantSummaryMemoryTable,
+                                TableType::kAssistantSummaryThreadTable };
+    const TablesModel& tables = context.data_provider->DataModel().GetTables();
+    const std::string  wanted = std::to_string(event_uuid);
+    for(const TableType slot : slots)
+    {
+        const std::vector<std::string>& header = tables.GetTableHeader(slot);
+        const size_t uuid_column =
+            static_cast<size_t>(std::find(header.begin(), header.end(), "__uuid") -
+                                header.begin());
+        // A grouped read, or a slot nothing has landed in, has no such column.
+        if(uuid_column == header.size())
+        {
+            continue;
+        }
+        const size_t start_column = static_cast<size_t>(
+            std::find(header.begin(), header.end(), "start") - header.begin());
+        const size_t end_column = static_cast<size_t>(
+            std::find(header.begin(), header.end(), "end") - header.begin());
+        const bool has_span_columns =
+            start_column < header.size() && end_column < header.size();
+        for(const std::vector<std::string>& row : tables.GetTableData(slot))
+        {
+            if(uuid_column >= row.size() || row[uuid_column] != wanted)
+            {
+                continue;
+            }
+            sighting.seen = true;
+            if(has_span_columns && start_column < row.size() && end_column < row.size())
+            {
+                sighting.start_ns = std::strtod(row[start_column].c_str(), nullptr);
+                sighting.end_ns   = std::strtod(row[end_column].c_str(), nullptr);
+                sighting.has_span = sighting.end_ns > sighting.start_ns;
+            }
+            return sighting;
+        }
+    }
+    return sighting;
 }
 
 // Formats the rows of a fetch that has landed, by the kind of fetch it was.

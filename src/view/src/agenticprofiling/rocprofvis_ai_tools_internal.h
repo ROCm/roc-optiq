@@ -140,5 +140,21 @@ ResolveAssistantLink(const AssistantToolContext& context, const std::string& ref
 std::string
 LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link);
 
+// What is already in memory about an event the model named: the event model's
+// entry once its details have loaded, else a row of the assistant's own reads
+// of this trace. It costs no query, so it can confirm an event but never rule
+// one out - a uuid from an earlier read may have been overwritten since.
+struct AssistantEventSighting
+{
+    bool seen = false;
+    // The event's own start and end, when what was found carries them.
+    bool   has_span = false;
+    double start_ns = 0.0;
+    double end_ns   = 0.0;
+};
+
+AssistantEventSighting
+FindAssistantEvent(const AssistantToolContext& context, uint64_t event_uuid);
+
 }  // namespace View
 }  // namespace RocProfVis

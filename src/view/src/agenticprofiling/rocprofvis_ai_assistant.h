@@ -206,6 +206,8 @@ private:
     // Declines a script still waiting on Run or Reject for a turn that is over,
     // and lets go of one the user already answered.
     void WithdrawScriptOffer();
+    // Cancels the requests the parked tool started itself.
+    void CancelOwnedFetch();
     // Non-blocking cancellation for a UI action. The future is reaped later.
     void AbandonPendingRequest();
     void ReapAbandonedRequests();

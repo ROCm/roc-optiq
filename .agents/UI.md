@@ -2916,7 +2916,10 @@ Rules that are easy to get wrong here:
   against the original timeout deadline. It returns a timeout rather
   than treating the other query's rows as its own.
 - **HTTP runs on a worker via `std::async`, and must stay cancellable.**
-  `AssistantChatCall::Cancel()` closes the socket. Clear and tab close move
+  `AssistantChatCall::Cancel()` closes the socket. One that lands before
+  httplib has a request in flight finds no socket to close, so `Send`
+  also passes an upload-progress callback that stops the body write
+  once `Cancel()` has been called. Clear and tab close move
   the cancelled future to `m_abandoned`, which `Update()` reaps when ready,
   rather than destroy a `std::async` future and block the UI; final panel
   destruction cancels and joins every remaining worker.

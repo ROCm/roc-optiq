@@ -1240,8 +1240,13 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     }
     const std::chrono::steady_clock::time_point started =
         std::chrono::steady_clock::now();
-    httplib::Result response =
-        client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+    // A cancel that lands before the request is under way finds no socket to
+    // close, so the body write checks for one and gives up.
+    const httplib::UploadProgress unless_cancelled = [this](size_t, size_t) {
+        return !Cancelled();
+    };
+    httplib::Result response = client.Post(endpoint.path, headers, body,
+                                           ASSISTANT_JSON_CONTENT_TYPE, unless_cancelled);
     // The client stays adopted across the retry so Cancel() can stop that too.
     const int wait_seconds = RetryWaitSeconds(response, started);
     if(wait_seconds > 0 && !Cancelled())
@@ -1259,8 +1264,8 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         }
         if(!Cancelled())
         {
-            response =
-                client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+            response = client.Post(endpoint.path, headers, body,
+                                   ASSISTANT_JSON_CONTENT_TYPE, unless_cancelled);
         }
     }
     Release();

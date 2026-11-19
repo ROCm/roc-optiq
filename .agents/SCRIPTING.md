@@ -461,14 +461,18 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
   keeps a pointer to a view that a closing tab could take away.
 - **The wait is on a person, so it gets its own deadline.**
   `AssistantToolStartResult::timeout_seconds` overrides the 350s a fetch
-  runs under; the script tool asks for 300. The panel also routes a
-  timed-out `kScript` fetch back through
+  runs under; the script tool asks for 300. Pressing Run starts that
+  deadline again (`AssistantScriptRunning`), so a run approved late in
+  the reading time is not reported unfinished seconds after it began.
+  The panel also routes a timed-out `kScript` fetch back through
   `FinishAssistantScriptFetch` rather than reporting a generic timeout,
   because only that side knows whether the user never answered or the
   run was abandoned, and it has an outstanding offer to clear.
 - **`ScriptApproval` is the whole state machine.** `kPending` ->
-  `kRunning` -> `kFinished` on approval, `kRejected` on refusal, and
-  `kFailedToStart` when an approved run could not begin - which exists
+  `kRunning` -> `kFinished` on approval, `kRejected` on refusal or when
+  the user stops the approved run (so the model hears it was their
+  decision and is not asked to fix a failure), and `kFailedToStart`
+  when an approved run could not begin - which exists
   so a script that never started still answers the assistant instead of
   waiting out the full five minutes. `AssistantScriptFetchPending` is
   true for `kPending` and `kRunning` only.

@@ -731,6 +731,12 @@ ScriptEditor::ReadFile(const std::string& path)
                                                 NotificationLevel::Error);
         return;
     }
+    // Loading over an offer Ask Optiq waits on declines it. Left pending, Run
+    // would execute this file as the script it wrote.
+    if(m_approval == ScriptApproval::kPending)
+    {
+        Reject();
+    }
     m_source.assign((std::istreambuf_iterator<char>(file)),
                     std::istreambuf_iterator<char>());
     m_saved_source = m_source;

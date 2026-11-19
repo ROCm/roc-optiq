@@ -551,6 +551,10 @@ OptiqActions::SelectRange(double start_ns, double end_ns)
         return false;
     }
     m_timeline_selection->SelectTimeRange(start_ns, end_ns);
+    // The timeline applies this when the selection event is dispatched next
+    // frame. Applied now, a statistics read later in the same batch is not
+    // voided mid-flight by the range it was asked under.
+    m_data_provider->DataModel().GetAnalysis().SetAnalysisRange(start_ns, end_ns);
     return true;
 }
 

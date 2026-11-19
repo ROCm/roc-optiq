@@ -104,6 +104,11 @@ constexpr uint64_t ASSISTANT_MAX_OFFSET = 1000000;
 // is not an event of its own.
 constexpr const char* ASSISTANT_SUMMARY_REMAINDER_NAME = "Others";
 
+// What get_summary answers when the summary loaded with nothing in it.
+constexpr const char* ASSISTANT_EMPTY_SUMMARY_REPLY =
+    "The summary loaded and holds no kernel, memory or thread activity. Use "
+    "top_events or track_events to see what this trace does hold.";
+
 // Names compare_traces lists per event family when not told otherwise, and the
 // most it will list. Every row is two runs' figures, so a page costs double.
 constexpr int32_t ASSISTANT_COMPARE_DEFAULT_ROWS = 10;
@@ -1746,6 +1751,16 @@ FetchStartedResult(const AssistantToolContext& context, uint64_t request_id,
 
 }  // namespace
 
+// True after a successful summary request even when the trace had no activity
+// to put in it. That empty result must not be fetched again in a loop.
+static bool
+AssistantSummaryCurrent(const AssistantToolContext& context)
+{
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    return model.GetRevision() != 0 &&
+           context.data_provider->DataModel().GetTopology().GetRevision() ==
+               model.GetRevision();
+}
 
 // Builds the short trace description the model sees before it asks anything.
 std::string
@@ -1805,17 +1820,21 @@ BuildAssistantBriefing(const AssistantToolContext& context)
         }
     }
 
-    // Headline numbers only. The top events and counters are left out so the
-    // model has to fetch them rather than answer from the briefing alone. A
-    // summary that has not loaded prints no totals at all: zeroes would read
-    // as a trace in which nothing ran.
+    // Zero totals would read as a trace in which nothing ran, so they are only
+    // printed for a summary that holds something. An empty one is still loaded.
     if(!AssistantSummaryLoaded(context))
     {
-        out << "summary: not loaded yet, so this briefing has no totals. Call "
-               "get_summary, which loads it, before saying anything about how much "
-               "time the trace holds.\n";
+        out << (AssistantSummaryCurrent(context)
+                    ? "summary: loaded, and it holds no kernel, memory or thread "
+                      "activity. Use top_events or track_events to see what this "
+                      "trace does hold.\n"
+                    : "summary: not loaded yet, so this briefing has no totals. Call "
+                      "get_summary, which loads it, before saying anything about how "
+                      "much time the trace holds.\n");
         return out.str();
     }
+    // Headline numbers only. The top events and counters are left out so the
+    // model has to fetch them rather than answer from the briefing alone.
     const SummaryModel& model = context.data_provider->DataModel().GetSummary();
     const SummaryInfo::AggregateMetrics& summary = model.GetSummaryData();
     out << "summary:\n";
@@ -1852,17 +1871,6 @@ AssistantSummaryLoaded(const AssistantToolContext& context)
                 0 ||
             SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryThread) >
                 0);
-}
-
-// True after a successful summary request even when the trace had no activity
-// to put in it. That empty result must not be fetched again in a loop.
-static bool
-AssistantSummaryCurrent(const AssistantToolContext& context)
-{
-    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
-    return model.GetRevision() != 0 &&
-           context.data_provider->DataModel().GetTopology().GetRevision() ==
-               model.GetRevision();
 }
 
 // Returns one track's activity, or the whole trace's, normalized to its peak.
@@ -2024,14 +2032,18 @@ ToolGetSummary(const AssistantToolContext& context, const jt::Json& args,
                               summary_fetch.summary_id)),
                           "Read summary");
     }
+    // Loaded with nothing in it: asking again would fetch the same nothing.
+    if(AssistantSummaryCurrent(context))
+    {
+        return DoneResult(ASSISTANT_EMPTY_SUMMARY_REPLY, "Summary empty");
+    }
     if(context.data_provider->FetchSummary())
     {
         return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
                              "Loading summary...", true);
     }
-    // The fetch was refused and nothing is in flight - that was checked on the
-    // way in - so the summary really is empty. Formatting it anyway would hand
-    // the model a page of zeroes that reads like a measurement.
+    // Refused with nothing in flight, which was checked on the way in. Formatting
+    // the empty model would hand over zeroes that read like a measurement.
     return DoneResult("The summary could not be loaded for this trace. "
                       "Use top_events or track_events instead.",
                       "Summary unavailable");
@@ -3150,8 +3162,10 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         if(!AssistantSummaryLoaded(context))
         {
-            return "The summary could not be loaded for this trace. "
-                   "Use top_events or track_events instead.";
+            return AssistantSummaryCurrent(context)
+                       ? ASSISTANT_EMPTY_SUMMARY_REPLY
+                       : "The summary could not be loaded for this trace. "
+                         "Use top_events or track_events instead.";
         }
         return TrimResult(
             FormatRequestedSummary(context, fetch.summary_level, fetch.summary_id));

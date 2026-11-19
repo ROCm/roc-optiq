@@ -266,6 +266,21 @@ AssistantPanel::HandleTabClosed(const std::string& project_id)
         ResetTurn();
     }
     m_conversations.erase(project_id);
+    // A chart another conversation drew of this trace, through a link, kept a
+    // strip cut from the model that just went. Reopened, it is cut again.
+    for(std::pair<const std::string, std::unique_ptr<Conversation>>& entry :
+        m_conversations)
+    {
+        for(ChatLine& line : entry.second->lines)
+        {
+            if(line.speaker == Speaker::kChart && line.project_id == project_id)
+            {
+                line.chart_bin_count = 0;
+                line.chart_bins.clear();
+                line.chart_rows.clear();
+            }
+        }
+    }
 }
 
 void
@@ -1475,24 +1490,30 @@ AssistantPanel::PollToolFetch()
     // and it has an outstanding offer to clear either way.
     if(pending && m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
     {
-        // A table or metric read holds a slot nothing but the assistant uses.
-        // Left to run, a query that outlived its deadline keeps that slot, and
-        // the narrower one the model tries next waits behind it.
+        // Left to run, a table or metric query keeps the assistant's slot from
+        // the narrower read tried next, and late statistics land as the pill's.
         const AssistantFetchKind kind    = m_fetch_wait.fetch.kind;
         const bool               metrics = kind == AssistantFetchKind::kComputeMetrics;
+        const bool               stats   = kind == AssistantFetchKind::kTrackStatistics;
         if(m_fetch_wait.owns_requests &&
-           (metrics || kind == AssistantFetchKind::kTopEvents ||
+           (metrics || stats || kind == AssistantFetchKind::kTopEvents ||
             kind == AssistantFetchKind::kEventInstances ||
             kind == AssistantFetchKind::kDataTable))
         {
             CancelOwnedFetch();
-            FinishCurrentTool(
-                m_fetch_wait.prefix + "Timed out waiting for " + m_fetch_wait.tool_name +
-                ", so its query was cancelled. " +
-                (metrics ? "Read less at once: one table with get_metrics, for one "
-                           "kernel."
-                         : "Narrow the window, the tracks or the filters and call it "
-                           "again."));
+            const char* advice = "Narrow the window, the tracks or the filters and call "
+                                 "it again.";
+            if(metrics)
+            {
+                advice = "Read less at once: one table with get_metrics, for one kernel.";
+            }
+            else if(stats)
+            {
+                advice = "Narrow the window and call it again.";
+            }
+            FinishCurrentTool(m_fetch_wait.prefix + "Timed out waiting for " +
+                              m_fetch_wait.tool_name + ", so its query was cancelled. " +
+                              advice);
             return;
         }
         FinishCurrentTool("Timed out waiting for " + m_fetch_wait.tool_name + ".");

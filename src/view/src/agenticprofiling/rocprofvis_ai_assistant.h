@@ -78,9 +78,8 @@ private:
         // kChart only: the trace the chart draws, which a read of a linked
         // trace makes different from the conversation's own.
         std::string project_id;
-        // kChart only: the strip as last drawn. The minimap it is cut from is
-        // built once when the trace loads, so it is cut again only when the
-        // column's width asks for another bin count.
+        // kChart only: the strip as last cut. The minimap is built once per
+        // load, so it is cut again only for another bin count or a closed tab.
         size_t                            chart_bin_count = 0;
         std::vector<double>               chart_bins;
         std::vector<AssistantActivityRow> chart_rows;

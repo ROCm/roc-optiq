@@ -50,11 +50,11 @@ struct AssistantChatRequest
     bool compute_tools = false;
 };
 
-// What came back, or why nothing did.
+// What came back, or why nothing did. A call that was cancelled says neither,
+// with ok false and no error: whoever cancelled it discards the result unread.
 struct AssistantChatResult
 {
-    bool                           ok        = false;
-    bool                           cancelled = false;
+    bool                           ok = false;
     std::string                    reply;
     std::string                    error;
     std::string                    finish_reason;

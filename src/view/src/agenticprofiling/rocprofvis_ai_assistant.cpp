@@ -537,12 +537,6 @@ AssistantPanel::AbandonPendingRequest()
         }
         m_abandoned.push_back(std::move(abandoned));
     }
-    else if(m_call != nullptr)
-    {
-        // No async request owns this call, so stopping it cannot strand a
-        // future whose destructor waits on the UI thread.
-        m_call->Cancel();
-    }
     m_call.reset();
 }
 
@@ -782,15 +776,10 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     if(explain_view)
     {
         ResetHistory(conversation);
-        m_tool_round  = 0;
-        m_force_final = false;
     }
 
-    m_pending_calls.clear();
-    m_next_call_index = 0;
-    m_fetch_retries   = 0;
-    m_fetch_wait      = FetchWait();
-    // Starts this turn's allowance of pinned notes.
+    // The turn state is already clean: every way a turn ends goes through
+    // ResetTurn. Starts this turn's allowance of pinned notes.
     BeginAssistantUiTurn();
 
     if(TryStartSummaryWarmup(question))
@@ -1080,14 +1069,6 @@ AssistantPanel::TrimConversation()
 void
 AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
 {
-    // Nothing to report on a request we abandoned, but still reset so a turn is
-    // never left mid-phase with nothing in flight.
-    if(result.cancelled)
-    {
-        ResetTurn();
-        TurnConversation().next_steps.clear();
-        return;
-    }
     // A length-limit error can still name what was spent. Record it before any
     // path below resets the turn.
     NoteTokenUsage(result);
@@ -1118,11 +1099,9 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
         return;
     }
 
-    const std::string reply =
-        result.reply.empty()
-            ? std::string("I gathered the data but could not put an answer together. "
-                          "Ask me something more specific and I'll dig in again.")
-            : result.reply;
+    // Never empty here: the client turns a reply with neither prose nor tool
+    // calls into an error, and no tool call survives to this point.
+    const std::string& reply = result.reply;
 
     ResetTurn();
     AppendLine(Speaker::kAssistant, reply);
@@ -1440,8 +1419,7 @@ AssistantPanel::PollToolFetch()
         // Say how long, so a slow query reads as working rather than frozen.
         // Assigned directly: every frame, SetStatus would pin the transcript
         // to the bottom for the whole wait.
-        if(elapsed.count() >= ASSISTANT_SLOW_FETCH_NOTICE_SECONDS &&
-           !m_fetch_wait.tool_name.empty())
+        if(elapsed.count() >= ASSISTANT_SLOW_FETCH_NOTICE_SECONDS)
         {
             m_status =
                 m_fetch_wait.status + " (" + std::to_string(elapsed.count()) + "s)";

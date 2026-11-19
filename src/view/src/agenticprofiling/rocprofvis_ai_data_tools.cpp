@@ -2029,14 +2029,9 @@ ToolGetSummary(const AssistantToolContext& context, const jt::Json& args,
         return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
                              "Loading summary...", true);
     }
-    if(context.data_provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
-    {
-        return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
-                             "Loading summary...", false);
-    }
-    // The fetch was refused and nothing is in flight, so the summary really
-    // is empty. Formatting it anyway would hand the model a page of zeroes
-    // that reads like a measurement.
+    // The fetch was refused and nothing is in flight - that was checked on the
+    // way in - so the summary really is empty. Formatting it anyway would hand
+    // the model a page of zeroes that reads like a measurement.
     return DoneResult("The summary could not be loaded for this trace. "
                       "Use top_events or track_events instead.",
                       "Summary unavailable");
@@ -2902,13 +2897,14 @@ ToolCompareTraces(const AssistantToolContext& context, const jt::Json& args,
             return PendingResult(DataProvider::SUMMARY_REQUEST_ID, fetch,
                                  AssistantToolStatusLabel(tool_name), false);
         }
-        const bool queued = provider->FetchSummary();
-        if(queued || provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
+        if(provider->FetchSummary())
         {
+            // Owned, so a stopped turn cancels it, but not started_fetch: the
+            // tool runs again once it lands instead of formatting it.
             AssistantToolStartResult waiting =
                 PendingResult(DataProvider::SUMMARY_REQUEST_ID, fetch,
                               AssistantToolStatusLabel(tool_name), false);
-            waiting.owns_requests = queued;
+            waiting.owns_requests = true;
             return waiting;
         }
         return DoneResult("The summary of " + side->trace_name +

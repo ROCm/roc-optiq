@@ -985,20 +985,25 @@ rocprofvis_result_t PcSampling::GetDouble(rocprofvis_property_t property, uint64
         switch(property)
         {
             case kRPVControllerPCSamplingPcSampleStateActiveThreadPercent:
-            {
-                if(index < m_pc_sample_states.size())
-                {
-                    *value = m_pc_sample_states[index].active_thread_percent;
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
-            }
             case kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent:
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    *value = m_pc_sample_states[index].wave_occupancy_percent;
-                    result = kRocProfVisResultSuccess;
+                    const PcSampleState&         state = m_pc_sample_states[index];
+                    const std::optional<double>& percent =
+                        property ==
+                                kRPVControllerPCSamplingPcSampleStateActiveThreadPercent
+                            ? state.active_thread_percent
+                            : state.wave_occupancy_percent;
+                    if(percent)
+                    {
+                        *value = *percent;
+                        result = kRocProfVisResultSuccess;
+                    }
+                    else
+                    {
+                        result = kRocProfVisResultNotLoaded;
+                    }
                 }
                 break;
             }

@@ -1,0 +1,9 @@
+# Copyright Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+# CPack runs this once per generator, so the tarball can differ from DEB/RPM.
+# The tarball is flat: bin/, lib/ and share/ sit at its root, and the user picks
+# the destination with `tar -C`. DEB and RPM keep the install prefix.
+if(CPACK_GENERATOR STREQUAL "TGZ")
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+endif()

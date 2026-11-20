@@ -43,7 +43,7 @@ namespace DataModel
 		{"workload_sub_name", kRPVComputeColumnWorkloadSubName},
 		{"sys_info_extdata", kRPVComputeColumnWorkloadSysInfo},
 		{"profiling_config_extdata", kRPVComputeColumnWorkloadProfileConfig},
-		{"memory_chart_extdata", kRPVComputeColumnWorkloadMemoryChart},
+		{"memory_chart_layout_extdata", kRPVComputeColumnWorkloadMemoryChart},
 		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
 		{"kernel_uuid", kRPVComputeColumnKernelUUID},
 		{"kernel_name", kRPVComputeColumnKernelName},
@@ -159,9 +159,9 @@ namespace DataModel
 			query_out += "sub_name as workload_sub_name, ";
 			query_out += "sys_info_extdata, ";
 			query_out += "profiling_config_extdata ";
-      if (m_db != nullptr && m_db->m_has_memory_chart_extdata)
+      if (m_db != nullptr && m_db->m_has_memory_chart_layout_extdata)
 		  {
-			  query_out += ", memory_chart_extdata ";
+			  query_out += ", memory_chart_layout_extdata ";
 		  }
 			query_out += "FROM ";
 			query_out += "compute_workload";
@@ -527,20 +527,28 @@ namespace DataModel
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query_out =
-					"SELECT s.pc_sample_state_uuid, "
-					"s.instruction_uuid AS pc_sample_state_instruction_uuid, "
-					"COALESCE(s.total_count, 0) AS pc_sample_state_total_count, "
-					"s.issue_count AS pc_sample_state_issue_count, "
-					"s.stall_count AS pc_sample_state_stall_count, "
-					"COALESCE(s.active_thread_percent, 0.0) AS pc_sample_state_active_thread_percent, "
-					"COALESCE(s.wave_occupancy_percent, 0.0) AS pc_sample_state_wave_occupancy_percent, "
-					"COALESCE(s.dispatch_uuid, 0) AS pc_sample_state_dispatch_uuid "
-					"FROM compute_pc_sample_state s "
-					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
-					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
-					"WHERE ks.kernel_uuid = ";
-				query_out += params[0].param_str;
+                query_out = "SELECT s.pc_sample_state_uuid, "
+                            "s.instruction_uuid AS pc_sample_state_instruction_uuid, "
+                            "COALESCE(s.total_count, 0) AS pc_sample_state_total_count, "
+                            "s.issue_count AS pc_sample_state_issue_count, "
+                            "s.stall_count AS pc_sample_state_stall_count, ";
+                query_out += m_db == nullptr || m_db->m_has_pc_active_thread_percent
+                                 ? "s.active_thread_percent"
+                                 : "NULL";
+                query_out += " AS pc_sample_state_active_thread_percent, ";
+                query_out += m_db == nullptr || m_db->m_has_pc_wave_occupancy_percent
+                                 ? "s.wave_occupancy_percent"
+                                 : "NULL";
+                query_out +=
+                    " AS pc_sample_state_wave_occupancy_percent, "
+                    "COALESCE(s.dispatch_uuid, 0) AS pc_sample_state_dispatch_uuid "
+                    "FROM compute_pc_sample_state s "
+                    "JOIN compute_instruction_line il ON il.instruction_uuid = "
+                    "s.instruction_uuid "
+                    "JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = "
+                    "il.kernel_symbol_uuid "
+                    "WHERE ks.kernel_uuid = ";
+                query_out += params[0].param_str;
 				query_out += " ORDER BY s.pc_sample_state_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
@@ -1162,10 +1170,17 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		{			
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
 			m_query_factory.SetVersion(m_db_version.c_str());
-			// Best-effort detection of the optional memory_chart_extdata column so
+			// Best-effort detection of the optional memory_chart_layout_extdata column so
 			// the workload query includes it only when present.
-			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_extdata';", &CallbackDetectMemoryChartColumn);
-			if (kRocProfVisDmResultSuccess != CreateIndexes()) break;
+			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_layout_extdata';", &CallbackDetectMemoryChartColumn);
+            m_has_pc_wave_occupancy_percent = false;
+            m_has_pc_active_thread_percent  = false;
+            ExecuteSQLQuery(
+                future, &tmp_db_instance,
+                "SELECT name FROM pragma_table_info('compute_pc_sample_state') "
+                "WHERE name IN ('wave_occupancy_percent', 'active_thread_percent');",
+                &CallbackDetectPcSamplingMetricColumns);
+            if (kRocProfVisDmResultSuccess != CreateIndexes()) break;
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
 			
@@ -1517,12 +1532,30 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
 		// A returned row means the column exists in compute_workload.
-		db->m_has_memory_chart_extdata = true;
+		db->m_has_memory_chart_layout_extdata = true;
 		callback_params->future->CountThisRow();
 		return 0;
 	}
 
-	int ComputeDatabase::CallbackGetComputeGeneric(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
+    int
+    ComputeDatabase::CallbackDetectPcSamplingMetricColumns(void* data, int /*argc*/,
+                                                           sqlite3_stmt* stmt,
+                                                           char**        azColName)
+    {
+        ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+        auto* callback_params =
+            static_cast<rocprofvis_db_query_callback_parameters*>(data);
+        auto*       db   = static_cast<ComputeDatabase*>(callback_params->db);
+        const char* name = db->Sqlite3ColumnText(
+            (void*) &CallbackDetectPcSamplingMetricColumns, stmt, azColName, 0);
+        db->m_has_pc_wave_occupancy_percent |=
+            strcmp(name, "wave_occupancy_percent") == 0;
+        db->m_has_pc_active_thread_percent |= strcmp(name, "active_thread_percent") == 0;
+        callback_params->future->CountThisRow();
+        return 0;
+    }
+
+    int ComputeDatabase::CallbackGetComputeGeneric(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
 		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
 		rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;

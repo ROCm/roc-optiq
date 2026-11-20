@@ -303,6 +303,25 @@ OptiqActions::ListTabs() const
     return names;
 }
 
+std::vector<std::string>
+OptiqActions::ListTabIds() const
+{
+    std::vector<std::string> ids;
+    AppWindow*               app = AppWindow::GetInstance();
+    if(app == nullptr || !app->GetTabContainer())
+    {
+        return ids;
+    }
+    for(const TabItem* tab : app->GetTabContainer()->GetTabs())
+    {
+        if(tab != nullptr)
+        {
+            ids.push_back(tab->m_id);
+        }
+    }
+    return ids;
+}
+
 std::string
 OptiqActions::ActiveTab() const
 {
@@ -316,7 +335,8 @@ OptiqActions::ActiveTab() const
 }
 
 bool
-OptiqActions::SelectTab(const std::string& name)
+OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
+                        std::string& selected_label)
 {
     AppWindow* app = AppWindow::GetInstance();
     if(app == nullptr || !app->GetTabContainer() || name.empty())
@@ -328,11 +348,25 @@ OptiqActions::SelectTab(const std::string& name)
     // container that owns the tabs; the details panel resolves its inner tabs
     // through the same call.
     std::shared_ptr<TabContainer> container = app->GetTabContainer();
-    const TabItem*                match    = container->FindTabByLabel(name);
+    const TabItem*                match     = nullptr;
+    for(const TabItem* tab : container->GetTabs())
+    {
+        if(tab != nullptr && tab->m_id == name)
+        {
+            match = tab;
+            break;
+        }
+    }
+    if(match == nullptr)
+    {
+        match = container->FindTabByLabel(name);
+    }
     if(match == nullptr)
     {
         return false;
     }
+    selected_id    = match->m_id;
+    selected_label = match->m_label;
     container->SetActiveTab(match->m_id);
     return true;
 }
@@ -351,9 +385,10 @@ OptiqActions::ActiveAnalysisTab() const
 }
 
 bool
-OptiqActions::SelectAnalysisTab(const std::string& name)
+OptiqActions::SelectAnalysisTab(const std::string& name, std::string& selected_label)
 {
-    return m_trace_view != nullptr && m_trace_view->SelectAnalysisTab(name);
+    return m_trace_view != nullptr &&
+           m_trace_view->SelectAnalysisTab(name, selected_label);
 }
 
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
@@ -367,7 +402,8 @@ OptiqActions::ProposeScript(const std::string& source)
     {
         return false;
     }
-    m_trace_view->SelectAnalysisTab("Script");
+    std::string script_tab;
+    m_trace_view->SelectAnalysisTab("Script", script_tab);
     return true;
 }
 

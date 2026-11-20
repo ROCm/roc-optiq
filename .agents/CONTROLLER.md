@@ -977,6 +977,11 @@ the kernel-owned `PcSampling` handle, and calls the corresponding synchronous
 stage helper. The helper creates model DB futures through `ExecuteQuery`, adds
 them as dependent controller futures, waits for their result on the worker,
 copies the temporary model table into `QueryDataStore`, and deletes that table.
+The job's result goes through `PcSamplingJobResult`: the model answers
+`kRocProfVisDmResultNotSupported` for a compute schema older than 2.2, and
+that comes back as `kRocProfVisResultNotSupported` rather than
+`kRocProfVisResultUnknownError`, so the View can tell a trace that cannot hold
+PC samples from a read that failed.
 
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
@@ -1024,6 +1029,14 @@ metadata by default for compatibility, unless the caller sets
 that opt-out because it does not consume the metadata. Per-table flags on
 `PcSampling` prevent repeated queries while `m_source_line_cache` stores source
 lines separately by file UUID.
+
+Sample states retain issued/stalled counts and wave-occupancy / active-thread
+percentages as optional values. The existing percentage `GetDouble` properties
+return `kRocProfVisResultNotLoaded` without writing the output for a SQL NULL;
+measured `0.0` returns success. `StorePcSamplingRows` replaces the row vector
+before populating it, so empty SQL cells leave fresh optionals unset. Percentages
+are part of the completed state group and remain available after a stall-detail
+failure or retry. The View performs percentage-range validation and aggregation.
 
 Only `kRPVControllerPcSamplingArgsKernelId` is required by the ISA and stall
 entry points. The stall entry point also accepts the optional
@@ -1518,6 +1531,12 @@ different and repeated lookup UUIDs, NULL type IDs, missing lookup rows, NULL
 lookup text, and successful all-unavailable results. Each ISA fetch checks the
 future's job result before reading its output. Changes to PC-sampling fetchers
 or their property bank should extend this coverage.
+Percentage scenarios cover the reported hotspot values, measured zero, independent
+NULLs, row replacement, invalid getter arguments, and retained metrics across a
+stall-detail failure and retry.
+Additional schema scenarios remove either or both percentage columns before
+controller loading and verify that sample counts, stall details, and any remaining
+metric are still loaded successfully.
 
 `rocprofvis_controller_test_database.h` provides the shared `TemporaryDatabase`
 utility for PC-sampling and summary fixtures. It owns a copied database file,

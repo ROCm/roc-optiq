@@ -33,6 +33,10 @@ struct ProfilerLaunchSpec
     // install in a non-standard location. Empty uses the default search.
     std::string tool_directory;
 
+    // Python virtual environment to run the tool in
+    // (LaunchConfig::python_environment). Empty for none.
+    std::string python_environment;
+
     // Where the profiler is expected to write its output. This does not put
     // anything on the command line - the output path already appears in
     // profiler_argv wherever the profiler's CLI expects it - and the controller
@@ -44,6 +48,10 @@ struct ProfilerLaunchSpec
     // working directory. Only the child is affected.
     std::string working_directory;
 
+    // Selects the controller's scrape rules with `tool`. Captured at launch so
+    // a later edit of the dialog does not change how this run's output is read.
+    rocprofvis_profiler_operation_t operation = kRPVProfilerOperationDefault;
+
     // The complete argument list following argv[0], as emitted by
     // IProfilerBackend::FlattenToExecution. Each entry becomes one argv entry
     // verbatim - no whitespace splitting, no shell interpretation.
@@ -51,6 +59,15 @@ struct ProfilerLaunchSpec
 
     std::vector<std::pair<std::string, std::string>> env_vars;
 };
+
+/*
+ * Allocates a profiler config holding `spec`'s tool, directories, Python
+ * environment, arguments and environment variables. Connection settings are
+ * left to the caller. Returns nullptr if the config cannot be allocated or the
+ * tool is not one the controller knows; the caller frees it with
+ * rocprofvis_profiler_config_free.
+ */
+rocprofvis_profiler_config_t* AllocProfilerConfig(const ProfilerLaunchSpec& spec);
 
 // Shared base for view-layer profiler sessions. Owns the profiler C API
 // objects (config / session handle / future) and the AppMonitor operation that
@@ -73,6 +90,12 @@ public:
 
     virtual rocprofvis_profiler_state_t GetState() const;
     virtual std::string                 GetOutput();
+
+    // Trace file the controller scraped for this run. Success fills `out`.
+    // NotSupported means the run does not produce a trace file. NotAvailable
+    // means one was expected and could not be read. `out` is left untouched
+    // unless the result is Success.
+    rocprofvis_result_t GetTraceFilePath(std::string& out) const;
     void                                ClearOutput();
     int32_t                             GetExitCode() const;
 

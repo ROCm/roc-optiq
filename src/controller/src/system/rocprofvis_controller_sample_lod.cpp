@@ -27,6 +27,7 @@ void SampleLOD::CalculateChildValues(void)
     m_child_max_timestamp       = DBL_MIN;
     std::vector<double> values;
     double total_duration = 0;
+    double value_sum      = 0;
     for(Sample* sample : m_children)
     {
         if(sample)
@@ -41,6 +42,7 @@ void SampleLOD::CalculateChildValues(void)
             m_child_max                = std::max(m_child_max, value);
             m_child_mean += value * duration;
             total_duration += duration;
+            value_sum += value;
             values.push_back(value);
         }
     }
@@ -66,7 +68,8 @@ void SampleLOD::CalculateChildValues(void)
 
         m_child_median = (values[lower] + values[upper]) / 2;
     }
-    m_child_mean = total_duration != 0 ? m_child_mean / total_duration : 0;
+    m_child_mean = total_duration > 0 ? m_child_mean / total_duration
+                                      : value_sum / num_children;
     SetValue(m_child_mean);
 }
 

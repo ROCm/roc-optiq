@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_profiler_tool.h"
+#include "rocprofvis_controller_profiler_cmdline.h"
 
 #include "spdlog/spdlog.h"
 
@@ -97,6 +98,7 @@ char const* GetBinaryName(rocprofvis_profiler_tool_t tool)
 
 rocprofvis_result_t ResolvePath(rocprofvis_profiler_tool_t tool,
                                 std::string const&         tool_directory,
+                                std::string const&         python_environment,
                                 std::string&               out_path)
 {
     char const* binary_name = GetBinaryName(tool);
@@ -107,6 +109,17 @@ rocprofvis_result_t ResolvePath(rocprofvis_profiler_tool_t tool,
     }
 
     std::string const file_name = with_suffix(binary_name);
+
+#ifndef _WIN32
+    // The launch refuses a relative environment (ProfilerConfig::
+    // ValidatePythonEnvironment), so resolving against this process's working
+    // directory would show a tool that can never run.
+    if (!python_environment.empty() && !std::filesystem::path(python_environment).is_absolute())
+    {
+        spdlog::error("Python environment must be an absolute path, got '{}'", python_environment);
+        return kRocProfVisResultInvalidArgument;
+    }
+#endif
 
     if (!tool_directory.empty())
     {
@@ -131,6 +144,23 @@ rocprofvis_result_t ResolvePath(rocprofvis_profiler_tool_t tool,
         out_path = candidate.lexically_normal().string();
         return kRocProfVisResultSuccess;
     }
+
+#ifndef _WIN32
+    // A tool installed into the Python environment wins, as it does remotely,
+    // where the bare name is looked up after activate. Most environments only
+    // hold the tool's Python packages, so a miss falls through.
+    if (!python_environment.empty())
+    {
+        std::filesystem::path candidate =
+            std::filesystem::path(Cmdline::PythonEnvironmentPath(python_environment, "bin")) /
+            file_name;
+        if (is_executable_file(candidate))
+        {
+            out_path = candidate.lexically_normal().string();
+            return kRocProfVisResultSuccess;
+        }
+    }
+#endif
 
     std::string rocm_path = get_env("ROCM_PATH");
 #ifndef _WIN32

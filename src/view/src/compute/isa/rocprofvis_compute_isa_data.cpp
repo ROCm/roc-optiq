@@ -4,6 +4,9 @@
 #include "rocprofvis_compute_isa_data.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdio>
 #include <iterator>
 #include <utility>
 
@@ -14,6 +17,8 @@ namespace View
 
 static_assert(std::size(IsaDataBuilder::STALL_REASONS) ==
               static_cast<size_t>(IsaDataBuilder::StallReasonKind::kUnknown));
+static_assert(std::size(IsaDataBuilder::INSTRUCTION_TYPES) ==
+              static_cast<size_t>(IsaDataBuilder::InstructionKind::kUnknown));
 
 const CodeObjectStore*
 IsaDataBuilder::FindCodeObject(const PcSamplingData& data, uint64_t code_object_uuid)
@@ -51,6 +56,7 @@ IsaDataBuilder::AggregateSampleCounts(const PcSamplingData& data)
 {
     SampleAggregation aggregation;
     aggregation.counts_by_instruction.reserve(data.pc_sample_states.size());
+    aggregation.metrics_by_instruction.reserve(data.pc_sample_states.size());
     aggregation.sample_state_by_uuid.reserve(data.pc_sample_states.size());
     for(const PcSampleState& state : data.pc_sample_states)
     {
@@ -60,6 +66,10 @@ IsaDataBuilder::AggregateSampleCounts(const PcSamplingData& data)
                 .first->second;
         AccumulateSampleCounts(
             counts, { state.total_count, state.issue_count, state.stall_count });
+        AccumulateSampleMetrics(
+            aggregation.metrics_by_instruction[state.instruction_uuid],
+            { MakeSamplePercentage(state.total_count, state.wave_occupancy_percent),
+              MakeSamplePercentage(state.total_count, state.active_thread_percent) });
         aggregation.sample_state_by_uuid.emplace(state.pc_sample_state_uuid, &state);
     }
     return aggregation;
@@ -96,6 +106,65 @@ IsaDataBuilder::AccumulateSampleCounts(SampleCounts& total, const SampleCounts& 
     };
     add_progress(total.issue_count, counts.issue_count);
     add_progress(total.stall_count, counts.stall_count);
+}
+
+IsaDataBuilder::SamplePercentage
+IsaDataBuilder::MakeSamplePercentage(uint64_t                     sample_count,
+                                     const std::optional<double>& percent)
+{
+    SamplePercentage value;
+    // States without observations cannot contribute or invalidate a measured mean.
+    if(sample_count > 0)
+    {
+        value.sample_count = sample_count;
+        value.missing      = !percent.has_value();
+        if(percent)
+        {
+            value.invalid =
+                !std::isfinite(*percent) || *percent < 0.0 || *percent > MAX_PERCENTAGE;
+            if(!value.invalid)
+            {
+                value.weighted_sum = static_cast<double>(sample_count) * *percent;
+            }
+        }
+    }
+    return value;
+}
+
+void
+IsaDataBuilder::AccumulateSamplePercentage(SamplePercentage&       total,
+                                           const SamplePercentage& value)
+{
+    total.invalid |= value.invalid;
+    total.invalid |= !AddSampleCount(total.sample_count, value.sample_count);
+    total.missing |= value.missing;
+    total.weighted_sum += value.weighted_sum;
+}
+
+void
+IsaDataBuilder::AccumulateSampleMetrics(SampleMetrics& total, const SampleMetrics& value)
+{
+    AccumulateSamplePercentage(total.wave_occupancy, value.wave_occupancy);
+    AccumulateSamplePercentage(total.active_threads, value.active_threads);
+}
+
+IsaDataBuilder::PercentageSummary
+IsaDataBuilder::SummarizePercentage(const SamplePercentage& value)
+{
+    PercentageSummary summary;
+    if(value.invalid)
+    {
+        summary.availability = SamplingAvailability::kInvalid;
+    }
+    else if(value.sample_count > 0 && !value.missing)
+    {
+        summary.availability = SamplingAvailability::kValid;
+        // Only bound rounding error after every contributing measurement was validated.
+        summary.percent =
+            std::clamp(value.weighted_sum / static_cast<double>(value.sample_count), 0.0,
+                       MAX_PERCENTAGE);
+    }
+    return summary;
 }
 
 std::unordered_map<uint64_t, std::string>
@@ -330,6 +399,20 @@ IsaDataBuilder::FormatSampleCount(uint64_t value)
     return formatted_count;
 }
 
+std::string
+IsaDataBuilder::FormatSamplePercentage(const PercentageSummary& value)
+{
+    if(value.availability != SamplingAvailability::kValid)
+    {
+        return u8"\u2014";
+    }
+    constexpr size_t TEXT_CAPACITY       = 32;
+    char             text[TEXT_CAPACITY] = {};
+    std::snprintf(text, sizeof(text), "%.1f%%",
+                  value.percent == 0.0 ? 0.0 : value.percent);
+    return text;
+}
+
 IsaDataBuilder::SamplingSummary
 IsaDataBuilder::SummarizeSampling(const SampleCounts& counts)
 {
@@ -391,6 +474,35 @@ IsaDataBuilder::GetStallReasonName(StallReasonKind kind)
     return "Unknown";
 }
 
+IsaDataBuilder::InstructionKind
+IsaDataBuilder::ResolveInstructionKind(std::string_view text)
+{
+    std::string name(text);
+    std::transform(name.begin(), name.end(), name.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
+    for(const InstructionTypeInfo& type : INSTRUCTION_TYPES)
+    {
+        if(name == type.name)
+        {
+            return type.kind;
+        }
+    }
+    return InstructionKind::kUnknown;
+}
+
+const char*
+IsaDataBuilder::GetInstructionTypeName(InstructionKind kind)
+{
+    for(const InstructionTypeInfo& type : INSTRUCTION_TYPES)
+    {
+        if(type.kind == kind)
+        {
+            return type.name;
+        }
+    }
+    return "Unknown / unavailable";
+}
+
 std::vector<IsaDataBuilder::IsaRow>
 IsaDataBuilder::BuildInstructions(const PcSamplingData& data, uint64_t code_object_uuid)
 {
@@ -400,12 +512,54 @@ IsaDataBuilder::BuildInstructions(const PcSamplingData& data, uint64_t code_obje
     {
         return rows;
     }
+    std::unordered_map<uint64_t, InstructionKind> instruction_kinds;
+    instruction_kinds.reserve(data.instruction_type_lookup_map.size());
+    for(const auto& [uuid, text] : data.instruction_type_lookup_map)
+    {
+        instruction_kinds.emplace(uuid, ResolveInstructionKind(text));
+    }
     for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
     {
         for(const InstructionLine& instruction : kernel_symbol.instruction_lines)
         {
             IsaRow row;
-            row.instruction        = instruction.instruction;
+            row.instruction = instruction.instruction;
+            if(instruction.instruction_type_uuid)
+            {
+                const auto kind =
+                    instruction_kinds.find(*instruction.instruction_type_uuid);
+                if(kind != instruction_kinds.end())
+                {
+                    row.instruction_kind = kind->second;
+                }
+            }
+            row.instruction_type_name = GetInstructionTypeName(row.instruction_kind);
+            if(row.instruction_kind == InstructionKind::kUnknown &&
+               instruction.instruction_type_uuid)
+            {
+                const auto type = data.instruction_type_lookup_map.find(
+                    *instruction.instruction_type_uuid);
+                if(type != data.instruction_type_lookup_map.end() &&
+                   !type->second.empty())
+                {
+                    row.instruction_type_name = type->second;
+                }
+            }
+            constexpr const char* WHITESPACE = " \t\r\n\f\v";
+            const size_t          begin = row.instruction.find_first_not_of(WHITESPACE);
+            if(begin != std::string::npos)
+            {
+                const size_t end = row.instruction.find_first_of(WHITESPACE, begin);
+                const size_t token_end =
+                    end == std::string::npos ? row.instruction.size() : end;
+                // Labels, directives, and standalone comments are not mnemonics.
+                if(row.instruction[begin] != ';' && row.instruction[begin] != '#' &&
+                   row.instruction[begin] != '.' && row.instruction[token_end - 1] != ':')
+                {
+                    row.mnemonic_begin = begin;
+                    row.mnemonic_end   = token_end;
+                }
+            }
             row.id                 = instruction.instruction_uuid;
             row.code_object_offset = instruction.code_object_offset;
             rows.push_back(std::move(row));
@@ -441,6 +595,7 @@ IsaDataBuilder::PrepareSampling(const PcSamplingData& data)
     sampling.reasons_by_instruction =
         BuildStallReasonCounts(data, aggregation, sampling.reason_text);
     sampling.counts_by_instruction = std::move(aggregation.counts_by_instruction);
+    sampling.metrics_by_instruction = std::move(aggregation.metrics_by_instruction);
     return sampling;
 }
 
@@ -449,15 +604,19 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
                                const PreparedSamplingData& sampling)
 {
     const StallReasonCounts empty_reasons;
+    const SampleMetrics     empty_metrics;
     uint64_t                hottest_instruction_samples = 0;
     for(IsaRow& row : rows)
     {
         const auto counts_it  = sampling.counts_by_instruction.find(row.id);
+        const auto metrics_it = sampling.metrics_by_instruction.find(row.id);
         const auto reasons_it = sampling.reasons_by_instruction.find(row.id);
         UpdateSamplingRow(
             row,
             counts_it != sampling.counts_by_instruction.end() ? counts_it->second
                                                               : SampleCounts{},
+            metrics_it != sampling.metrics_by_instruction.end() ? metrics_it->second
+                                                                : empty_metrics,
             reasons_it != sampling.reasons_by_instruction.end() ? reasons_it->second
                                                                 : empty_reasons,
             sampling.reason_text);
@@ -472,11 +631,14 @@ IsaDataBuilder::UpdateSampling(std::vector<IsaRow>&        rows,
 
 void
 IsaDataBuilder::UpdateSamplingRow(
-    SamplingRow& row, const SampleCounts& counts, const StallReasonCounts& reasons,
+    SamplingRow& row, const SampleCounts& counts, const SampleMetrics& metrics,
+    const StallReasonCounts&                         reasons,
     const std::unordered_map<uint64_t, std::string>& reason_text)
 {
     row.sample_counts                = counts;
     row.sampling                     = SummarizeSampling(counts);
+    row.wave_occupancy               = SummarizePercentage(metrics.wave_occupancy);
+    row.active_threads               = SummarizePercentage(metrics.active_threads);
     row.stall_reason_sample_count    = 0;
     row.stall_reason_counts_overflow = reasons.overflow;
     row.unclassified_stall_count     = 0;
@@ -544,6 +706,7 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
     struct SourceSampling
     {
         SampleCounts      counts{ 0, 0, 0 };
+        SampleMetrics     metrics;
         StallReasonCounts reasons;
         bool              has_samples = false;
     };
@@ -569,6 +732,11 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
         SourceSampling& sampling = line->second;
         sampling.has_samples     = true;
         AccumulateSampleCounts(sampling.counts, counts);
+        const auto metrics = prepared.metrics_by_instruction.find(instruction_uuid);
+        if(metrics != prepared.metrics_by_instruction.end())
+        {
+            AccumulateSampleMetrics(sampling.metrics, metrics->second);
+        }
         const auto reasons = prepared.reasons_by_instruction.find(instruction_uuid);
         if(reasons != prepared.reasons_by_instruction.end())
         {
@@ -580,7 +748,7 @@ IsaDataBuilder::UpdateSourceSampling(std::vector<SourceRow>&     rows,
     {
         const SourceSampling& sampling = sampling_by_line.at(row.id);
         UpdateSamplingRow(row, sampling.has_samples ? sampling.counts : SampleCounts{},
-                          sampling.reasons, prepared.reason_text);
+                          sampling.metrics, sampling.reasons, prepared.reason_text);
         if(row.sampling.availability != SamplingAvailability::kInvalid)
         {
             hottest_source_samples =

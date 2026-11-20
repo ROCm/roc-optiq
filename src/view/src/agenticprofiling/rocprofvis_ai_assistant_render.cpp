@@ -1620,10 +1620,15 @@ AssistantPanel::RenderComposer()
     ImGui::SetNextItemWidth(input_width);
     // A focused text item suppresses hotkeys. The box is read-only while a turn
     // is running or the trace cannot be asked about, so hold the request until
-    // it can take keys again.
+    // it can take keys again. A turn can run for minutes, and by then the user
+    // may be typing in a search box or a dialog, so the caret goes back only
+    // while keyboard focus is still in this card, where the send left it.
     if(m_focus_input && !Busy() && can_ask)
     {
-        ImGui::SetKeyboardFocusHere();
+        if(ImGui::IsWindowFocused())
+        {
+            ImGui::SetKeyboardFocusHere();
+        }
         m_focus_input = false;
     }
     InputTextStringWithHint("##assistant_input", hint.c_str(), conversation.input,

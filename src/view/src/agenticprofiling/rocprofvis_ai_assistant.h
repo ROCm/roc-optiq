@@ -254,7 +254,8 @@ private:
 
     bool  m_visible;
     // A single-line input lets go of the caret on Enter, and Send takes it, so
-    // the frame after a send hands it back.
+    // a send asks for it back. It is handed back once the box can be typed in
+    // again, and only if keyboard focus has stayed in the composer until then.
     bool  m_focus_input;
     float m_dock_width;
     Phase m_phase;

@@ -46,6 +46,8 @@ static constexpr bool kRemapFallbackMemoryChartMetricIds = true;
 // template can be tuned without a rebuild. Remove once template selection is stable.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
+static constexpr const char* JSON_KEY_LAYOUT_FIT_MEMORY_CHART = "fit_memory_chart";
+
 // Smallest scale fit-to-view shrinks to; below it text stops being legible, so
 // the chart scrolls instead.
 static constexpr float MIN_FIT_SCALE = 0.4f;
@@ -1160,9 +1162,9 @@ ComputeMemoryChartView::ResolveMetric(const MemChartMetricRef& ref) const
 const AvailableMetrics::Entry*
 ComputeMemoryChartView::FindMetricDefinition(const MemChartMetricRef& ref) const
 {
-    if(!ref.valid || !m_compute_selection) return nullptr;
+    if(!ref.valid) return nullptr;
 
-    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t workload_id = SourceWorkload();
     if(workload_id == ComputeSelection::INVALID_SELECTION_ID) return nullptr;
 
     MetricId id;
@@ -2938,6 +2940,190 @@ ComputeMemoryChartView::DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos,
     ImVec2 sz = ImGui::CalcTextSize(text);
     ShowMetricTooltip(pos, {pos.x + sz.x, pos.y + sz.y}, ref, show_description,
                       show_raw_value);
+}
+
+ComputeMemoryChartPane::ComputeMemoryChartPane(
+    const IKernelCompare& compare, DataProvider& data_provider,
+    std::shared_ptr<ComputeSelection> compute_selection)
+: ComputeSidedPane(compare)
+, m_chart(data_provider, compute_selection)
+, m_chart_b(data_provider, compute_selection)
+, m_chart_b_workload(ComputeSelection::INVALID_SELECTION_ID)
+{
+    // B's chart never follows the selection.
+    m_chart_b.SetSource(ComputeSelection::INVALID_SELECTION_ID,
+                        ComputeSelection::INVALID_SELECTION_ID);
+}
+
+const char*
+ComputeMemoryChartPane::Title() const
+{
+    return "Memory Chart";
+}
+
+int32_t
+ComputeMemoryChartPane::HeaderButtons(HeaderButton* buttons) const
+{
+    int32_t count = ComputeSidedPane::HeaderButtons(buttons);
+    if(m_compare.IsComparing() && m_compare.DeltaAvailable())
+    {
+        AddHeaderButton(buttons, count,
+                        { nullptr, "\xCE\x94", "Show B - A (how B differs from A)",
+                          m_side == CompareSide::kDelta, SHOW_DELTA_BUTTON });
+    }
+    // A compact (overview) chart is always fitted, so Fit only applies at size.
+    if(!DisplayedChart().IsCompact())
+    {
+        AddHeaderButton(buttons, count,
+                        { nullptr, "Fit",
+                          "Shrink the whole chart to fit the box "
+                          "(off: actual size, scroll)",
+                          m_chart.GetFitToView(), FIT_BUTTON });
+    }
+    return count;
+}
+
+void
+ComputeMemoryChartPane::OnHeaderButton(int32_t id)
+{
+    if(id == SHOW_DELTA_BUTTON)
+    {
+        ShowSide(CompareSide::kDelta);
+    }
+    else if(id == FIT_BUTTON)
+    {
+        SetFit(!m_chart.GetFitToView());
+    }
+    else
+    {
+        ComputeSidedPane::OnHeaderButton(id);
+    }
+}
+
+void
+ComputeMemoryChartPane::RenderBody(bool maximized)
+{
+    // Maximized it is always at actual size; in a box it falls back to a
+    // fitted overview when the box is too small to read it.
+    ComputeMemoryChartView& chart = DisplayedChart();
+    chart.SetAutoCompact(!maximized);
+    chart.Render();
+}
+
+void
+ComputeMemoryChartPane::OnWorkloadSelected(uint32_t workload_id)
+{
+    m_chart.LoadWorkloadLayout(workload_id);
+}
+
+void
+ComputeMemoryChartPane::OnKernelSelected(uint32_t)
+{
+    m_chart.FetchMemChartMetrics();
+}
+
+void
+ComputeMemoryChartPane::OnMetricsFetched(uint64_t client_id)
+{
+    if(m_chart.GetClientId() == client_id)
+    {
+        m_chart.UpdateMetrics();
+    }
+    else if(m_chart_b.GetClientId() == client_id)
+    {
+        m_chart_b.UpdateMetrics();
+        // A's B - A values read B's metrics.
+        m_chart.RefreshValues();
+    }
+}
+
+void
+ComputeMemoryChartPane::OnCompareStarted()
+{
+    // Open on the difference where there is one to show.
+    m_side = m_compare.DeltaAvailable() ? CompareSide::kDelta : CompareSide::kA;
+}
+
+void
+ComputeMemoryChartPane::ApplyCompare(bool target_changed)
+{
+    if(m_compare.IsComparing())
+    {
+        const uint32_t workload_id = m_compare.CompareWorkloadId();
+        if(target_changed)
+        {
+            if(workload_id != m_chart_b_workload)
+            {
+                m_chart_b.LoadWorkloadLayout(workload_id);
+                m_chart_b_workload = workload_id;
+            }
+            m_chart_b.SetSource(workload_id, m_compare.CompareKernelId());
+            m_chart_b.FetchMemChartMetrics();
+        }
+        if(m_side == CompareSide::kDelta && !m_compare.DeltaAvailable())
+        {
+            m_side = CompareSide::kA;
+        }
+    }
+    m_chart.SetDeltaTarget(ShownSide() == CompareSide::kDelta ? &m_chart_b : nullptr);
+}
+
+void
+ComputeMemoryChartPane::SaveLayout(jt::Json& json) const
+{
+    json[JSON_KEY_LAYOUT_FIT_MEMORY_CHART] = m_chart.GetFitToView();
+}
+
+bool
+ComputeMemoryChartPane::LoadLayout(jt::Json& json)
+{
+    bool result = true;
+    if(json.contains(JSON_KEY_LAYOUT_FIT_MEMORY_CHART))
+    {
+        if(json[JSON_KEY_LAYOUT_FIT_MEMORY_CHART].isBool())
+        {
+            SetFit(json[JSON_KEY_LAYOUT_FIT_MEMORY_CHART].getBool());
+        }
+        else
+        {
+            result = false;
+        }
+    }
+    return result;
+}
+
+void
+ComputeMemoryChartPane::ResetLayout()
+{
+    SetFit(false);
+}
+
+const char*
+ComputeMemoryChartPane::ShowBTooltip() const
+{
+    return m_compare.DeltaAvailable()
+               ? ComputeSidedPane::ShowBTooltip()
+               : "Show B (the compare target). B - A needs A and B on the\n"
+                 "same GPU architecture.";
+}
+
+void
+ComputeMemoryChartPane::SetFit(bool fit)
+{
+    m_chart.SetFitToView(fit);
+    m_chart_b.SetFitToView(fit);
+}
+
+const ComputeMemoryChartView&
+ComputeMemoryChartPane::DisplayedChart() const
+{
+    return ShownSide() == CompareSide::kB ? m_chart_b : m_chart;
+}
+
+ComputeMemoryChartView&
+ComputeMemoryChartPane::DisplayedChart()
+{
+    return ShownSide() == CompareSide::kB ? m_chart_b : m_chart;
 }
 
 }  // namespace View

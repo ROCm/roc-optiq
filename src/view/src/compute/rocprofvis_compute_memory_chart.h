@@ -4,6 +4,7 @@
 #pragma once
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "model/compute/rocprofvis_memory_chart_model.h"
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "rocprofvis_event_manager.h"
 
 #include <cstdint>
@@ -314,6 +315,47 @@ private:
     float                   m_natural_canvas_h    = 0.0f;
     float                   m_layout_extra_height = 0.0f;
     bool                    m_layout_dirty        = true;
+};
+
+// The Kernel Details panel of the memory chart of A, of B, or (A and B on one
+// GPU architecture) B - A.
+class ComputeMemoryChartPane : public ComputeSidedPane
+{
+public:
+    ComputeMemoryChartPane(const IKernelCompare& compare, DataProvider& data_provider,
+                           std::shared_ptr<ComputeSelection> compute_selection);
+
+    const char* Title() const override;
+    int32_t     HeaderButtons(HeaderButton* buttons) const override;
+    void        OnHeaderButton(int32_t id) override;
+    void        RenderBody(bool maximized) override;
+    void        OnWorkloadSelected(uint32_t workload_id) override;
+    void        OnKernelSelected(uint32_t kernel_id) override;
+    void        OnMetricsFetched(uint64_t client_id) override;
+    void        OnCompareStarted() override;
+    void        ApplyCompare(bool target_changed) override;
+    void        SaveLayout(jt::Json& json) const override;
+    bool        LoadLayout(jt::Json& json) override;
+    void        ResetLayout() override;
+
+protected:
+    const char* ShowBTooltip() const override;
+
+private:
+    static constexpr int32_t SHOW_DELTA_BUTTON = FIRST_OWN_BUTTON;
+    static constexpr int32_t FIT_BUTTON        = FIRST_OWN_BUTTON + 1;
+
+    // A and B share one Fit setting, so switching sides keeps the view.
+    void                          SetFit(bool fit);
+    const ComputeMemoryChartView& DisplayedChart() const;
+    ComputeMemoryChartView&       DisplayedChart();
+
+    ComputeMemoryChartView m_chart;
+    // The compare target's chart; its own layout, so B of another GPU
+    // architecture draws its own hierarchy.
+    ComputeMemoryChartView m_chart_b;
+    // Workload whose layout m_chart_b has loaded.
+    uint32_t               m_chart_b_workload;
 };
 
 }  // namespace View

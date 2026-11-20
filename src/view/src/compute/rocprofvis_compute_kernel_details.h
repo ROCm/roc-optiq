@@ -210,13 +210,9 @@ private:
     void HandleSlotDrop(int32_t slot);
     void RenderKernelRail();
     void RenderKernelList();
-    // The kernel table's sort and filters, when they reorder or narrow the list.
-    void RenderKernelListOrder();
-    // `can_compare` is CanCompare(); `workload_label` names the workload on the
-    // tab when headers cannot.
+    // `can_compare` is CanCompare().
     void RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id, bool selected,
-                         bool can_compare, float total_duration,
-                         const char* workload_label);
+                         bool can_compare, float total_duration);
     void RefreshKernelList();
 
     // Comparison.
@@ -277,8 +273,8 @@ private:
         float                          total_duration;
     };
     std::vector<KernelGroup> m_kernel_groups;
-    // The list shows the kernel table's rows, in its order and after its
-    // filters, so both modes list the same; until the table has rows, the groups.
+    // The list keeps its own order whatever the kernel table's sort and filters:
+    // the groups' kernels, workload by workload.
     struct ListedKernel
     {
         const WorkloadInfo* workload;
@@ -286,7 +282,14 @@ private:
         float               workload_duration;
     };
     std::vector<ListedKernel> ListedKernels() const;
-    std::string              m_kernel_filter;
+    // Rebuilds m_shown_kernels when the groups or the search text changed.
+    void                      RefreshShownKernels(bool filter_changed);
+    std::string               m_kernel_filter;
+    // ListedKernels() after the search, as the list draws it.
+    std::vector<ListedKernel> m_shown_kernels;
+    bool                      m_shown_kernels_dirty = true;
+    // Whether anything was listed before the search narrowed it.
+    bool                      m_any_kernels_listed  = false;
     // Last selection the list showed; a change from elsewhere scrolls it into view.
     uint32_t                 m_kernel_list_selection;
     uint32_t                 m_kernel_list_selection_workload;

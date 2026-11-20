@@ -1470,7 +1470,16 @@ workflow, shown in the rail's Table mode), the box layout, and the compare
 state. The workspace panels are pane wrappers (below); the view reaches them
 only through their base class.
 
-#### Pane wrappers (`rocprofvis_compute_kernel_details_panes.{h,cpp}`)
+#### Pane wrappers
+
+`ComputeKernelDetailsPane`, `ComputeSidedPane`, `IKernelCompare` and
+`CompareSide` live in `rocprofvis_compute_kernel_details_panes.{h,cpp}`; each
+concrete panel lives with the widget it wraps (`ComputeMemoryChartPane` in
+`rocprofvis_compute_memory_chart`, `ComputeRooflinePane` in
+`rocprofvis_compute_roofline`, `ComputeMetricTablesPane` /
+`ComputePinnedMetricsPane` in `rocprofvis_compute_table_view`,
+`ComputeIsaPane` in `isa/rocprofvis_compute_isa_view`, `ComputeWorkloadPane`
+in `rocprofvis_compute_workload_view`).
 
 `ComputeKernelDetailsPane` is the abstract panel. The view owns one per
 `ComputePane` (`m_panes`, all created, available or not), draws its card and
@@ -1484,7 +1493,10 @@ for everything panel-specific:
 - `MinSize()` - the smallest box it fits in, in pixels at the current font
   (`DefaultMinSize()`: 12 em x 5 frames, also used for empty boxes).
 - `Update()`, `OnWorkloadSelected` / `OnKernelSelected` /
-  `OnMetricsFetched(client_id)` (forwarded from the view's event handlers),
+  `OnMetricsFetched(client_id)` (forwarded from the view's event handlers;
+  the wrapped widgets do not subscribe to these events themselves, they
+  expose calls the panel makes, e.g. `ComputeIsaView::SetSelectedKernel`,
+  `ComputeTableView::OnKernelSelected`),
   `OnCompareStarted()`, `OnCompareSwapping()` (before A and B trade places;
   the metric tables remap their pins) and `ApplyCompare(target_changed)`.
 - `SaveLayout` / `LoadLayout` / `ResetLayout` - its own settings as keys of
@@ -1508,7 +1520,7 @@ Concrete panels (each owns its widget, chromeless):
   `m_chart.SetDeltaTarget(&m_chart_b)`; B's metrics arriving refresh A's
   delta values.
 - `ComputeRooflinePane` - `Roofline` (`SetMode` switches `SingleKernel` /
-  `Compare`); min width `ROOFLINE_MIN_WIDTH_EMS` for its three labelled peak
+  `Compare`); min width `ROOFLINE_PANE_MIN_WIDTH_EMS` for its three labelled peak
   / bandwidth combos.
 - `ComputeMetricTablesPane` - `ComputeTableView` (opt-in metric tables); min
   width in frame heights for its toolbar, wider while comparing (Compare
@@ -1544,13 +1556,12 @@ box count and unit rectangles (the Layout menu thumbnails). Each box shows one `
 panel is shown elsewhere. The kernel rail is the only place kernels are
 chosen (the compute toolbar has no workload / kernel combos): Table mode shows
 `m_kernel_metric_table`, which lists every workload's kernels, and List mode
-shows the same rows as vertical tabs, in the table's sort and after its
-filters (`ListedKernels`; by total duration from `m_kernel_groups` until the
-table has rows). With several workloads the List puts a header over each
-workload while the order keeps its kernels together, and names the workload
-on each tab when a sort mixes them; a line under the search names a
-non-default sort and the active filters (with Clear). Clicking a kernel in
-another workload selects that workload too.
+shows them as vertical tabs in a fixed order, each workload's kernels by total
+duration (`ListedKernels`, from `m_kernel_groups`), independent of the table's
+sort and filters; only the List's own search narrows it (the filtered list is
+cached and rebuilt when the search text changes). With several workloads the
+List puts a header over each workload. Clicking a kernel in another workload
+selects that workload too.
 
 State lives in the view's `m_layout` (`LayoutSettings`: `layout_template`,
 `slots` - boxes beyond the template's count keep their panels for when it
@@ -1617,8 +1628,8 @@ of the list). Rules:
 
 Handles `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched` (forwarded to the
-panels: A's and B's charts), `kNewTableData`, `kComputeShowMetricInKernelDetails`
-events.
+panels: A's and B's charts, the metric tables), `kNewTableData`,
+`kComputeShowMetricInKernelDetails` events.
 
 ### `Roofline` (`rocprofvis_compute_roofline.{h,cpp}`)
 
@@ -1734,8 +1745,7 @@ and sorts them into `m_rows` / `m_row_workloads`, which it renders (the model's
 table holds only the last response). With several workloads the hidden id
 column shows each row's workload (sorted client side, no filter), frozen with
 the name; clicking a row calls `ComputeSelection::Select(workload, kernel)`.
-`GetShownKernels()` exposes the rows as (workload, kernel) ids for the rail's
-List, which mirrors the table's order and filters.
+The rail's List does not follow the table's sort or filters.
 The current sort column carries `DefaultSort` every frame and the table stays
 `Sortable` during fetches, so ImGui rebuilding its sort specs (columns added or
 removed) keeps the chosen sort; after a query or re-sort the selected row is

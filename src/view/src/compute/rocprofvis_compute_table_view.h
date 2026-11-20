@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_presets.h"
 #include "widgets/rocprofvis_compute_widget.h"
 #include <memory>
@@ -37,6 +37,12 @@ public:
 
     void Update() override;
     void Render() override;
+
+    // The selection's workload or kernel changed, or metrics arrived for the
+    // client `client_id`.
+    void OnWorkloadSelected();
+    void OnKernelSelected();
+    void OnMetricsFetched(uint64_t client_id);
 
     // Skip the card and title, for a container that draws its own pane header.
     void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
@@ -143,13 +149,50 @@ private:
     bool                 m_compare_loading       = false;
     MetricCompareOptions m_compare_options;
 
-    EventManager::SubscriptionToken m_workload_selection_changed_token;
-    EventManager::SubscriptionToken m_kernel_selection_changed_token;
-    EventManager::SubscriptionToken m_metrics_fetched_token;
-
     std::unique_ptr<Preset> m_preset;
 
     friend struct ComputeTableViewTestPeer;
+};
+
+// The Kernel Details panel of the metric tables; they add B and difference
+// columns while comparing.
+class ComputeMetricTablesPane : public ComputeKernelDetailsPane
+{
+public:
+    ComputeMetricTablesPane(const IKernelCompare&             compare,
+                            std::shared_ptr<ComputeTableView> table_view);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    ImVec2      MinSize() const override;
+    void        Update() override;
+    void        OnWorkloadSelected(uint32_t workload_id) override;
+    void        OnKernelSelected(uint32_t kernel_id) override;
+    void        OnMetricsFetched(uint64_t client_id) override;
+    void        OnCompareSwapping() override;
+    void        ApplyCompare(bool target_changed) override;
+
+    friend struct ComputeKernelDetailsViewTestPeer;
+
+private:
+    std::shared_ptr<ComputeTableView> m_table_view;
+};
+
+// The metric tables' pins in a Kernel Details panel of their own, so they stay
+// in view; the Metric Tables panel leaves them out while this one is shown.
+// The Metric Tables panel forwards the events for the view they share.
+class ComputePinnedMetricsPane : public ComputeKernelDetailsPane
+{
+public:
+    ComputePinnedMetricsPane(const IKernelCompare&             compare,
+                             std::shared_ptr<ComputeTableView> table_view);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    void        SetShown(bool shown) override;
+
+private:
+    std::shared_ptr<ComputeTableView> m_table_view;
 };
 
 }  // namespace View

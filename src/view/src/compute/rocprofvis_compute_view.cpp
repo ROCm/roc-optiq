@@ -76,6 +76,9 @@ RenderFloatingWindow(const std::string& title, bool* open, ImVec2 relative_pos,
         return;
     }
 
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos + viewport->WorkSize * relative_pos,
                             ImGuiCond_FirstUseEver);

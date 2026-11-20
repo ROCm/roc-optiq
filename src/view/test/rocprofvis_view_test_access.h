@@ -25,6 +25,7 @@
 #include "compute/isa/rocprofvis_compute_isa_view.h"
 #include "compute/rocprofvis_compute_kernel_details.h"
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
+#include "compute/rocprofvis_compute_memory_chart.h"
 #include "compute/rocprofvis_compute_roofline.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_workload_view.h"

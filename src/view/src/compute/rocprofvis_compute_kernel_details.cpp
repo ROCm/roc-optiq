@@ -3,9 +3,13 @@
 
 #include "rocprofvis_compute_kernel_details.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "isa/rocprofvis_compute_isa_view.h"
 #include "rocprofvis_compute_kernel_metric_table.h"
+#include "rocprofvis_compute_memory_chart.h"
+#include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_table_view.h"
+#include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -1424,6 +1428,26 @@ ComputeKernelDetailsView::RefreshKernelList()
         group.total_duration = static_cast<float>(total);
         m_kernel_groups.push_back(std::move(group));
     }
+    m_shown_kernels_dirty = true;
+}
+
+void
+ComputeKernelDetailsView::RefreshShownKernels(bool filter_changed)
+{
+    if(!m_shown_kernels_dirty && !filter_changed)
+    {
+        return;
+    }
+    m_shown_kernels_dirty = false;
+
+    m_shown_kernels      = ListedKernels();
+    m_any_kernels_listed = !m_shown_kernels.empty();
+    m_shown_kernels.erase(std::remove_if(m_shown_kernels.begin(), m_shown_kernels.end(),
+                                         [this](const ListedKernel& item) {
+                                             return !contains_ignore_case(
+                                                 item.kernel->name, m_kernel_filter);
+                                         }),
+                          m_shown_kernels.end());
 }
 
 void
@@ -1432,8 +1456,9 @@ ComputeKernelDetailsView::RenderKernelList()
     RefreshKernelList();
 
     ImGui::SetNextItemWidth(-FLT_MIN);
-    InputTextStringWithHint("##kernel_filter", "Search kernels", m_kernel_filter);
-    RenderKernelListOrder();
+    const bool filter_changed =
+        InputTextStringWithHint("##kernel_filter", "Search kernels", m_kernel_filter);
+    RefreshShownKernels(filter_changed);
     ImGui::Spacing();
 
     ImGui::BeginChild("kernel_list_scroll", ImVec2(0, 0));
@@ -1443,42 +1468,14 @@ ComputeKernelDetailsView::RenderKernelList()
     const bool scroll_to_selected = selected_kernel != m_kernel_list_selection ||
                                     selected_workload != m_kernel_list_selection_workload;
 
-    std::vector<ListedKernel> shown      = ListedKernels();
-    const bool                any_listed = !shown.empty();
-    shown.erase(std::remove_if(shown.begin(), shown.end(),
-                               [this](const ListedKernel& item) {
-                                   return !contains_ignore_case(item.kernel->name,
-                                                                m_kernel_filter);
-                               }),
-                shown.end());
-    // Several workloads get a header per workload while the order keeps each
-    // workload's kernels together; a sort that mixes them names the workload
-    // on each tab instead.
-    const bool            grouped = m_kernel_groups.size() > 1;
-    bool                  mixed   = false;
-    std::vector<uint32_t> seen_workloads;
-    for(size_t i = 0; grouped && i < shown.size(); ++i)
-    {
-        const uint32_t workload_id = shown[i].workload->id;
-        if(i > 0 && shown[i - 1].workload->id == workload_id)
-        {
-            continue;
-        }
-        if(std::find(seen_workloads.begin(), seen_workloads.end(), workload_id) !=
-           seen_workloads.end())
-        {
-            mixed = true;
-            break;
-        }
-        seen_workloads.push_back(workload_id);
-    }
-
+    // Several workloads get a header per workload.
+    const bool grouped         = m_kernel_groups.size() > 1;
     const bool can_compare     = CanCompare();
     uint32_t   header_workload = ComputeSelection::INVALID_SELECTION_ID;
-    for(const ListedKernel& item : shown)
+    for(const ListedKernel& item : m_shown_kernels)
     {
         const uint32_t workload_id = item.workload->id;
-        if(grouped && !mixed && workload_id != header_workload)
+        if(grouped && workload_id != header_workload)
         {
             ImGui::SeparatorText(item.workload->name.c_str());
             header_workload = workload_id;
@@ -1487,98 +1484,27 @@ ComputeKernelDetailsView::RenderKernelList()
             workload_id == selected_workload && item.kernel->id == selected_kernel;
         ImGui::PushID(static_cast<int>(workload_id));
         RenderKernelTab(*item.kernel, workload_id, selected, can_compare,
-                        item.workload_duration,
-                        mixed ? item.workload->name.c_str() : nullptr);
+                        item.workload_duration);
         ImGui::PopID();
         if(selected && scroll_to_selected)
         {
             ImGui::SetScrollHereY(0.5f);
         }
     }
-    if(shown.empty())
+    if(m_shown_kernels.empty())
     {
-        const bool filtered =
-            m_kernel_metric_table && m_kernel_metric_table->GetActiveFilterCount() > 0;
-        ImGui::TextDisabled("%s", any_listed ? "No kernels match the search."
-                                  : filtered ? "No kernels match the Table's filters."
-                                             : "No kernels.");
+        ImGui::TextDisabled("%s", m_any_kernels_listed ? "No kernels match the search."
+                                                       : "No kernels.");
     }
     m_kernel_list_selection          = m_compute_selection->GetSelectedKernel();
     m_kernel_list_selection_workload = m_compute_selection->GetSelectedWorkload();
     ImGui::EndChild();
 }
 
-void
-ComputeKernelDetailsView::RenderKernelListOrder()
-{
-    if(!m_kernel_metric_table || !m_kernel_metric_table->HasShownKernels())
-    {
-        return;
-    }
-    const bool   sorted  = !m_kernel_metric_table->IsDefaultSort();
-    const size_t filters = m_kernel_metric_table->GetActiveFilterCount();
-    if(!sorted && filters == 0)
-    {
-        return;
-    }
-    ImGui::PushTextWrapPos(0.0f);
-    if(sorted)
-    {
-        ImGui::TextDisabled("Table sort: %s (%s)",
-                            m_kernel_metric_table->GetSortColumnName().c_str(),
-                            m_kernel_metric_table->IsSortAscending() ? "ascending"
-                                                                     : "descending");
-    }
-    if(filters > 0)
-    {
-        size_t total = 0;
-        for(const KernelGroup& group : m_kernel_groups)
-        {
-            total += group.kernels.size();
-        }
-        ImGui::TextDisabled("Table filters: %zu of %zu kernels",
-                            m_kernel_metric_table->GetShownKernels().size(), total);
-        const char* clear_label = "Clear filters";
-        ImGui::SameLine();
-        if(ImGui::GetContentRegionAvail().x <
-           ImGui::CalcTextSize(clear_label).x + ImGui::GetStyle().FramePadding.x * 2.0f)
-        {
-            ImGui::NewLine();
-        }
-        if(ImGui::SmallButton(clear_label))
-        {
-            m_kernel_metric_table->ClearAllFilters();
-        }
-    }
-    ImGui::PopTextWrapPos();
-}
-
 std::vector<ComputeKernelDetailsView::ListedKernel>
 ComputeKernelDetailsView::ListedKernels() const
 {
     std::vector<ListedKernel> listed;
-    if(m_kernel_metric_table && m_kernel_metric_table->HasShownKernels())
-    {
-        const ComputeDataModel& model = m_data_provider.ComputeModel();
-        for(const KernelMetricTable::ShownKernel& shown :
-            m_kernel_metric_table->GetShownKernels())
-        {
-            const KernelInfo* kernel = model.GetKernelInfo(shown.workload_id, shown.kernel_id);
-            if(!kernel)
-            {
-                continue;
-            }
-            for(const KernelGroup& group : m_kernel_groups)
-            {
-                if(group.workload->id == shown.workload_id)
-                {
-                    listed.push_back({ group.workload, kernel, group.total_duration });
-                    break;
-                }
-            }
-        }
-        return listed;
-    }
     for(const KernelGroup& group : m_kernel_groups)
     {
         for(const KernelInfo* kernel : group.kernels)
@@ -1592,8 +1518,7 @@ ComputeKernelDetailsView::ListedKernels() const
 void
 ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id,
                                           bool selected, bool can_compare,
-                                          float total_duration,
-                                          const char* workload_label)
+                                          float total_duration)
 {
     SettingsManager& settings = SettingsManager::GetInstance();
     const float      line_h   = ImGui::GetTextLineHeight();
@@ -1683,9 +1608,7 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
         total_duration > 0.0f ? static_cast<float>(duration / total_duration) : 0.0f;
     const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
     char             stats[KERNEL_TAB_STATS_SIZE];
-    std::snprintf(stats, sizeof(stats), "%s%s%.1f%%   %s   %llu calls",
-                  workload_label ? workload_label : "", workload_label ? "   " : "",
-                  share * 100.0f,
+    std::snprintf(stats, sizeof(stats), "%.1f%%   %s   %llu calls", share * 100.0f,
                   nanosecond_to_formatted_str(duration, time_format, true).c_str(),
                   static_cast<unsigned long long>(
                       kernel.dispatch_metrics[KernelInfo::InvocationCount]));

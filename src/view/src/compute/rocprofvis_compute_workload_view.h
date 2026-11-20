@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "widgets/rocprofvis_widget.h"
 #include <cstdint>
 #include <memory>
@@ -54,6 +55,29 @@ protected:
     uint32_t            m_shown_workload_id;  // Used while not following the selection.
 
     friend struct ComputeWorkloadViewTestPeer;
+};
+
+// The Kernel Details panel of the workload details of A's or B's workload.
+class ComputeWorkloadPane : public ComputeSidedPane
+{
+public:
+    ComputeWorkloadPane(const IKernelCompare& compare, DataProvider& data_provider,
+                        std::shared_ptr<ComputeSelection> compute_selection);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    void        Update() override;
+    void        ApplyCompare(bool target_changed) override;
+
+    friend struct ComputeKernelDetailsViewTestPeer;
+
+protected:
+    const char* ShowATooltip() const override;
+    const char* ShowBTooltip() const override;
+
+private:
+    std::shared_ptr<ComputeSelection>    m_compute_selection;
+    std::shared_ptr<ComputeWorkloadView> m_workload_view;
 };
 
 }  // namespace View

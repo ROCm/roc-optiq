@@ -2196,7 +2196,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(sorted_after);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "compute_kernel_list_follows_table");
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_list_ignores_table_order");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
@@ -2238,20 +2238,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
             for (int i = 0; i < 300 && peer.Fetching(); i++) ctx->Yield(2);
             ctx->Yield(3);
         };
-        // The List shows the table's rows, in the table's order.
-        auto list_matches_table = [&]() {
-            const std::vector<std::pair<uint32_t, uint32_t>> listed = kd_peer.ListedKernels();
-            const std::vector<std::vector<std::string>>& rows = peer.Rows();
-            if (listed.size() != rows.size()) return false;
-            for (size_t r = 0; r < rows.size(); r++)
-            {
-                if (rows[r].empty() || listed[r].first != peer.RowWorkloads()[r] ||
-                    std::to_string(listed[r].second) != rows[r][0])
-                    return false;
-            }
-            return true;
-        };
-        const bool follows_default = list_matches_table();
+        // The List keeps its own order (each workload's kernels by duration)
+        // whatever the table's sort and filters.
+        const std::vector<std::pair<uint32_t, uint32_t>> initial_list = kd_peer.ListedKernels();
+        auto list_unchanged = [&]() { return kd_peer.ListedKernels() == initial_list; };
+        const bool lists_every_kernel = initial_list.size() == kernel_count;
 
         // Re-sort the table by name.
         ImGuiTable* table = find_table();
@@ -2260,7 +2251,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->TableClickHeader(table->ID, "Name");
         wait_fetch();
         const bool sorted_by_name = peer.SortColumnIndex() == 1;
-        const bool follows_sort   = list_matches_table();
+        const bool ignores_sort   = list_unchanged();
 
         // Filter out the shortest kernels (Duration > the least duration).
         const std::vector<std::vector<std::string>>& rows = peer.Rows();
@@ -2274,17 +2265,17 @@ void RegisterAppTests(ImGuiTestEngine* e)
             if (cur < min) shortest = r;
         }
         size_t filtered_rows   = 0;
-        bool   follows_filter  = true;
+        bool   ignores_filter  = true;
         if (distinct)
         {
             const std::string filter = "> " + rows[shortest][2];
             peer.ApplyFilter(2, filter.c_str());
             wait_fetch();
             filtered_rows  = peer.Rows().size();
-            follows_filter = list_matches_table();
+            ignores_filter = list_unchanged();
             kd_peer.SetKernelRailTable(false);
             ctx->Yield(5);
-            CaptureForReview(ctx, "kernel_list_follows_table");
+            CaptureForReview(ctx, "kernel_list_ignores_table_order");
             kd_peer.SetKernelRailTable(true);
             ctx->Yield(3);
         }
@@ -2313,17 +2304,17 @@ void RegisterAppTests(ImGuiTestEngine* e)
             }
         }
 
-        IM_CHECK(follows_default);
+        IM_CHECK(lists_every_kernel);
         IM_CHECK(sorted_by_name);
-        IM_CHECK(follows_sort);
+        IM_CHECK(ignores_sort);
         IM_CHECK(invalid_filter_reported);
         if (distinct)
         {
             IM_CHECK(filtered_rows > 0 && filtered_rows < kernel_count);
-            IM_CHECK(follows_filter);
+            IM_CHECK(ignores_filter);
         }
         IM_CHECK(peer.Rows().size() == kernel_count);
-        IM_CHECK(list_matches_table());
+        IM_CHECK(list_unchanged());
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_isa_compare_shows_a_or_b");

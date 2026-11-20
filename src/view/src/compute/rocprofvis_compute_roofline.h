@@ -3,9 +3,11 @@
 
 #pragma once
 #include "compute/rocprofvis_compute_model_types.h"
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "rocprofvis_controller_enums.h"
 #include "widgets/rocprofvis_widget.h"
 #include <bitset>
+#include <memory>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -224,6 +226,27 @@ private:
     SettingsManager& m_settings;
 
     friend struct RooflineTestPeer;
+};
+
+// The Kernel Details panel of the roofline; it plots A and B together while
+// comparing.
+class ComputeRooflinePane : public ComputeKernelDetailsPane
+{
+public:
+    ComputeRooflinePane(const IKernelCompare& compare, DataProvider& data_provider);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    ImVec2      MinSize() const override;
+    void        Update() override;
+    void        OnWorkloadSelected(uint32_t workload_id) override;
+    void        OnKernelSelected(uint32_t kernel_id) override;
+    void        ApplyCompare(bool target_changed) override;
+
+    friend struct ComputeKernelDetailsViewTestPeer;
+
+private:
+    std::shared_ptr<Roofline> m_roofline;
 };
 
 }  // namespace View

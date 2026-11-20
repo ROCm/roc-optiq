@@ -250,5 +250,62 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
     ImGui::EndChild();
 }
 
+ComputeWorkloadPane::ComputeWorkloadPane(
+    const IKernelCompare& compare, DataProvider& data_provider,
+    std::shared_ptr<ComputeSelection> compute_selection)
+: ComputeSidedPane(compare)
+, m_compute_selection(compute_selection)
+, m_workload_view(std::make_shared<ComputeWorkloadView>(data_provider, compute_selection))
+{}
+
+const char*
+ComputeWorkloadPane::Title() const
+{
+    return "Workload Details";
+}
+
+void
+ComputeWorkloadPane::RenderBody(bool)
+{
+    // B of A's workload shows the same details, so say it is not stale.
+    if(ShownSide() == CompareSide::kB &&
+       m_compare.CompareWorkloadId() == m_compute_selection->GetSelectedWorkload())
+    {
+        ImGui::TextDisabled("A and B are in the same workload.");
+    }
+    m_workload_view->Render();
+}
+
+void
+ComputeWorkloadPane::Update()
+{
+    m_workload_view->Update();
+}
+
+void
+ComputeWorkloadPane::ApplyCompare(bool)
+{
+    if(ShownSide() == CompareSide::kB)
+    {
+        m_workload_view->ShowWorkload(m_compare.CompareWorkloadId());
+    }
+    else
+    {
+        m_workload_view->FollowSelection();
+    }
+}
+
+const char*
+ComputeWorkloadPane::ShowATooltip() const
+{
+    return "Show A's workload (the selected kernel's)";
+}
+
+const char*
+ComputeWorkloadPane::ShowBTooltip() const
+{
+    return "Show B's workload (the compare target's)";
+}
+
 }  // namespace View
 }  // namespace RocProfVis

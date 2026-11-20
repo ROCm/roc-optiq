@@ -101,38 +101,6 @@ KernelMetricTable::WorkloadName(uint32_t workload_id) const
     return workload ? workload->name : NO_NAME;
 }
 
-bool
-KernelMetricTable::IsDefaultSort() const
-{
-    return m_sort_column_index == DURATION_COLUMN_INDEX &&
-           m_sort_order == kRPVControllerSortOrderDescending;
-}
-
-bool
-KernelMetricTable::IsSortAscending() const
-{
-    return m_sort_order == kRPVControllerSortOrderAscending;
-}
-
-std::string
-KernelMetricTable::GetSortColumnName() const
-{
-    if(m_sort_column_index == ID_COLUMN_INDEX && ShowsWorkloadColumn())
-    {
-        return "Workload";
-    }
-    if(m_sort_column_index >= 0 && m_sort_column_index < PERMANENT_COLUMN_COUNT)
-    {
-        return m_permanent_column_names[m_sort_column_index];
-    }
-    const int metric = m_sort_column_index - PERMANENT_COLUMN_COUNT;
-    if(metric >= 0 && metric < static_cast<int>(m_metrics_column_names.size()))
-    {
-        return m_metrics_column_names[metric];
-    }
-    return std::string();
-}
-
 size_t
 KernelMetricTable::GetActiveFilterCount() const
 {
@@ -258,7 +226,11 @@ KernelMetricTable::RequestWorkloadRows(uint32_t workload_id)
                   workload_id, m_sort_column_index,
                   m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC",
                   filter_map.size());
-    if(!m_data_provider.FetchMetricPivotTable(params))
+    if(m_data_provider.FetchMetricPivotTable(params))
+    {
+        m_response_outstanding = true;
+    }
+    else
     {
         m_cycle_active = false;
     }
@@ -267,7 +239,9 @@ KernelMetricTable::RequestWorkloadRows(uint32_t workload_id)
 void
 KernelMetricTable::HandleNewData(bool success, const std::string& error_message)
 {
-    if(!m_cycle_active || m_fetch_index >= m_fetch_workloads.size())
+    m_response_outstanding = false;
+    // A new query or sort is waiting: these rows answer the old one.
+    if(m_fetch_requested || !m_cycle_active || m_fetch_index >= m_fetch_workloads.size())
     {
         return;
     }
@@ -361,17 +335,10 @@ KernelMetricTable::FinishFetchCycle()
 
     m_rows.clear();
     m_row_workloads.clear();
-    m_shown_kernels.clear();
     m_rows.reserve(order.size());
     m_row_workloads.reserve(order.size());
-    m_shown_kernels.reserve(order.size());
     for(size_t index : order)
     {
-        const std::vector<std::string>& row = m_pending_rows[index];
-        m_shown_kernels.push_back(
-            { m_pending_row_workloads[index],
-              row.empty() ? ComputeSelection::INVALID_SELECTION_ID
-                          : ParseKernelId(row[ID_COLUMN_INDEX]) });
         m_rows.push_back(std::move(m_pending_rows[index]));
         m_row_workloads.push_back(m_pending_row_workloads[index]);
     }
@@ -411,13 +378,14 @@ KernelMetricTable::Update()
     bool request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
-    // A new query or sort restarts the cycle once the request in flight is done.
-    if(!request_pending && m_fetch_requested)
+    // A new query or sort restarts the cycle once the request in flight is done
+    // and its response handled.
+    if(!request_pending && !m_response_outstanding && m_fetch_requested)
     {
         m_fetch_requested = false;
         StartFetchCycle();
     }
-    else if(!request_pending && m_fetch_next)
+    else if(!request_pending && !m_fetch_requested && m_fetch_next)
     {
         m_fetch_next = false;
         if(m_cycle_active && m_fetch_index < m_fetch_workloads.size())
@@ -1046,13 +1014,17 @@ KernelMetricTable::Render()
                         std::vector<std::string>        row_cells;
                         row_cells.reserve(header.size());
                         // Hidden columns have a header name starting with '_'. Remap
-                        // the data-column index to its visible-list position.
+                        // the data-column index to its visible-list position. The id
+                        // column is shown as the row's workload when there are several.
                         int cell_index = 0;
                         for(int col = 0; col < static_cast<int>(header.size()) &&
                                          col < static_cast<int>(menu_row.size());
                             col++)
                         {
-                            if(!header[col].empty() && header[col][0] == '_')
+                            const bool shows_workload =
+                                col == ID_COLUMN_INDEX && workload_column;
+                            if(!shows_workload && !header[col].empty() &&
+                               header[col][0] == '_')
                             {
                                 continue;
                             }
@@ -1060,8 +1032,10 @@ KernelMetricTable::Render()
                             {
                                 cell_index = static_cast<int>(row_cells.size());
                             }
-                            row_cells.push_back(menu_row[col].empty() ? "N/A"
-                                                                      : menu_row[col]);
+                            const std::string& cell =
+                                shows_workload ? WorkloadName(m_row_workloads[m_cell_menu.row])
+                                               : menu_row[col];
+                            row_cells.push_back(cell.empty() ? "N/A" : cell);
                         }
                         AddCopyRowCellMenuItems(row_cells.data(),
                                                 static_cast<int>(row_cells.size()),

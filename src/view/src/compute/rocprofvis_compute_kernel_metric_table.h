@@ -50,20 +50,6 @@ public:
     // Tints the compare target's row; invalid ids for none.
     void SetMarkedKernel(uint32_t workload_id, uint32_t kernel_id);
 
-    // The kernels shown, in the table's order and after its filters, for a
-    // kernel list that mirrors the table. Replaced only when a query's rows have
-    // all arrived; HasShownKernels is false until the first have.
-    struct ShownKernel
-    {
-        uint32_t workload_id;
-        uint32_t kernel_id;
-    };
-    bool HasShownKernels() const { return !m_header.empty(); }
-    const std::vector<ShownKernel>& GetShownKernels() const { return m_shown_kernels; }
-    // Longest total duration first, the kernel list's own order.
-    bool        IsDefaultSort() const;
-    bool        IsSortAscending() const;
-    std::string GetSortColumnName() const;
     size_t      GetActiveFilterCount() const;
     void        ClearAllFilters();
 
@@ -136,7 +122,6 @@ private:
     std::vector<std::string>              m_header;
     std::vector<std::vector<std::string>> m_rows;
     std::vector<uint32_t>                 m_row_workloads;
-    std::vector<ShownKernel>              m_shown_kernels;
     // The fetch cycle in progress.
     std::vector<uint32_t>                 m_fetch_workloads;
     size_t                                m_fetch_index    = 0;
@@ -144,6 +129,9 @@ private:
     bool                                  m_fetch_error_shown = false;
     bool                                  m_cycle_active   = false;
     bool                                  m_fetch_next   = false;
+    // A request has finished but its TableDataEvent is still queued. A new
+    // cycle waits for it, or it would be taken as the new cycle's first rows.
+    bool                                  m_response_outstanding = false;
     std::vector<std::string>              m_pending_header;
     std::vector<std::vector<std::string>> m_pending_rows;
     std::vector<uint32_t>                 m_pending_row_workloads;

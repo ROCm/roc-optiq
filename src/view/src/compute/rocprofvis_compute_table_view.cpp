@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -40,6 +41,10 @@ constexpr float PINNED_MAX_HEIGHT_RATIO = 0.5f;
 // Shortest a table whose rows scroll gets, in frame heights, however small the
 // pane.
 constexpr float MIN_TABLE_HEIGHT_FRAMES = 5.0f;
+// The Kernel Details panel's toolbar row: the table picker and expand /
+// collapse, and while comparing the Compare options too.
+constexpr float METRIC_TABLES_PANE_MIN_WIDTH_FRAMES         = 18.0f;
+constexpr float METRIC_TABLES_PANE_COMPARE_MIN_WIDTH_FRAMES = 25.0f;
 
 // Shown until the user picks otherwise: System Speed-of-Light, the headline
 // per-kernel table.
@@ -86,76 +91,48 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
         m_pinned_metric_table.RefillTable(m_pinned_metrics);
     });
 
-    auto workload_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
-        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
-            ResetWorkloadData();
-        }
-    };
-
-    m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
-        workload_changed_handler);
-
-    auto kernel_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
-        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
-            FetchAllMetrics();
-        }
-    };
-
-    m_kernel_selection_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
-        kernel_changed_handler);
-
-    auto metrics_fetched_handler = [this](std::shared_ptr<RocEvent> e) {
-        auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
-        if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
-            // A fetch refused while another ran is retried once one lands.
-            if(m_fetch_pending)
-            {
-                FetchAllMetrics();
-            }
-            if(m_compare_fetch_pending)
-            {
-                FetchCompareMetrics();
-            }
-            if(evt->GetClientId() == m_client_id)
-            {
-                m_metrics_loading = false;
-                RebuildTableDataCache();
-                m_pinned_metric_table.RefillTable(m_pinned_metrics);
-            }
-            else if(m_compare_active && evt->GetClientId() == m_compare_client_id)
-            {
-                m_compare_loading = false;
-                RebuildTableDataCache();
-                m_pinned_metric_table.RefillTable(m_pinned_metrics);
-            }
-        }
-    };
-
-    m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kComputeMetricsFetched), metrics_fetched_handler);
-
     m_widget_name = GenUniqueName("ComputeTableView");
     m_preset = std::make_unique<Preset>(*this);
 }
 
-ComputeTableView::~ComputeTableView()
+ComputeTableView::~ComputeTableView() {}
+
+void
+ComputeTableView::OnWorkloadSelected()
 {
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
-        m_workload_selection_changed_token);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
-        m_kernel_selection_changed_token);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeMetricsFetched),
-        m_metrics_fetched_token);
+    ResetWorkloadData();
+}
+
+void
+ComputeTableView::OnKernelSelected()
+{
+    FetchAllMetrics();
+}
+
+void
+ComputeTableView::OnMetricsFetched(uint64_t client_id)
+{
+    // A fetch refused while another ran is retried once one lands.
+    if(m_fetch_pending)
+    {
+        FetchAllMetrics();
+    }
+    if(m_compare_fetch_pending)
+    {
+        FetchCompareMetrics();
+    }
+    if(client_id == m_client_id)
+    {
+        m_metrics_loading = false;
+        RebuildTableDataCache();
+        m_pinned_metric_table.RefillTable(m_pinned_metrics);
+    }
+    else if(m_compare_active && client_id == m_compare_client_id)
+    {
+        m_compare_loading = false;
+        RebuildTableDataCache();
+        m_pinned_metric_table.RefillTable(m_pinned_metrics);
+    }
 }
 
 void
@@ -947,6 +924,103 @@ ComputeTableView::Preset::Reset()
     m_widget.m_compare_options = MetricCompareOptions();
     m_widget.RebuildTableDataCache();
     m_widget.RefreshPins();
+}
+
+ComputeMetricTablesPane::ComputeMetricTablesPane(const IKernelCompare&             compare,
+                                                 std::shared_ptr<ComputeTableView> table_view)
+: ComputeKernelDetailsPane(compare)
+, m_table_view(std::move(table_view))
+{
+    m_table_view->SetChromeless(true);
+}
+
+const char*
+ComputeMetricTablesPane::Title() const
+{
+    return "Metric Tables";
+}
+
+void
+ComputeMetricTablesPane::RenderBody(bool)
+{
+    m_table_view->Render();
+}
+
+ImVec2
+ComputeMetricTablesPane::MinSize() const
+{
+    const float frames = m_compare.IsComparing()
+                             ? METRIC_TABLES_PANE_COMPARE_MIN_WIDTH_FRAMES
+                             : METRIC_TABLES_PANE_MIN_WIDTH_FRAMES;
+    return ImVec2(ImGui::GetFrameHeight() * frames, DefaultMinSize().y);
+}
+
+void
+ComputeMetricTablesPane::Update()
+{
+    m_table_view->Update();
+}
+
+void
+ComputeMetricTablesPane::OnWorkloadSelected(uint32_t)
+{
+    m_table_view->OnWorkloadSelected();
+}
+
+void
+ComputeMetricTablesPane::OnKernelSelected(uint32_t)
+{
+    m_table_view->OnKernelSelected();
+}
+
+void
+ComputeMetricTablesPane::OnMetricsFetched(uint64_t client_id)
+{
+    m_table_view->OnMetricsFetched(client_id);
+}
+
+void
+ComputeMetricTablesPane::OnCompareSwapping()
+{
+    m_table_view->SwapComparePins();
+}
+
+void
+ComputeMetricTablesPane::ApplyCompare(bool)
+{
+    if(m_compare.IsComparing())
+    {
+        m_table_view->SetCompareTarget(m_compare.CompareWorkloadId(),
+                                       m_compare.CompareKernelId());
+    }
+    else
+    {
+        m_table_view->ClearCompareTarget();
+    }
+}
+
+ComputePinnedMetricsPane::ComputePinnedMetricsPane(const IKernelCompare&             compare,
+                                                   std::shared_ptr<ComputeTableView> table_view)
+: ComputeKernelDetailsPane(compare)
+, m_table_view(std::move(table_view))
+{}
+
+const char*
+ComputePinnedMetricsPane::Title() const
+{
+    return "Pinned Metrics";
+}
+
+void
+ComputePinnedMetricsPane::RenderBody(bool)
+{
+    m_table_view->RenderPinnedMetricsPane();
+}
+
+void
+ComputePinnedMetricsPane::SetShown(bool shown)
+{
+    m_table_view->SetPinnedMetricsPaneShown(shown);
 }
 
 }  // namespace View

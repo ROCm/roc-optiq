@@ -92,6 +92,8 @@ constexpr const char* HINT_EMPTY_COMPARE_INIT = "Select a kernel for comparison.
 constexpr const char* HINT_EMPTY_BOTH_KERNELS =
     "No data available for the baseline or target kernel.";
 constexpr const char* DELTA                   = "\xCE\x94";
+// The Kernel Details panel's three labelled peak / bandwidth combos share one row.
+constexpr float ROOFLINE_PANE_MIN_WIDTH_EMS = 44.0f;
 
 Roofline::Roofline(DataProvider& data_provider, Mode mode)
 : m_requested_primary_workload_id(ComputeSelection::INVALID_SELECTION_ID)
@@ -2149,6 +2151,69 @@ Roofline::FilterBandwidthType(
         }
     }
     return filter_type;
+}
+
+ComputeRooflinePane::ComputeRooflinePane(const IKernelCompare& compare,
+                                         DataProvider&         data_provider)
+: ComputeKernelDetailsPane(compare)
+, m_roofline(std::make_shared<Roofline>(data_provider, Roofline::SingleKernel))
+{
+    m_roofline->SetChromeless(true);
+}
+
+const char*
+ComputeRooflinePane::Title() const
+{
+    return "Roofline";
+}
+
+void
+ComputeRooflinePane::RenderBody(bool)
+{
+    m_roofline->Render();
+}
+
+ImVec2
+ComputeRooflinePane::MinSize() const
+{
+    return ImVec2(ImGui::GetFontSize() * ROOFLINE_PANE_MIN_WIDTH_EMS,
+                  DefaultMinSize().y);
+}
+
+void
+ComputeRooflinePane::Update()
+{
+    m_roofline->Update();
+}
+
+void
+ComputeRooflinePane::OnWorkloadSelected(uint32_t workload_id)
+{
+    m_roofline->SetWorkload(workload_id);
+}
+
+void
+ComputeRooflinePane::OnKernelSelected(uint32_t kernel_id)
+{
+    m_roofline->SetKernel(kernel_id);
+}
+
+void
+ComputeRooflinePane::ApplyCompare(bool target_changed)
+{
+    if(m_compare.IsComparing())
+    {
+        m_roofline->SetMode(Roofline::Compare);
+        if(target_changed)
+        {
+            m_roofline->SetCompareTarget(m_compare.CompareWorkloadId(),
+                                         m_compare.CompareKernelId());
+        }
+    }
+    else
+    {
+        m_roofline->SetMode(Roofline::SingleKernel);
+    }
 }
 
 }  // namespace View

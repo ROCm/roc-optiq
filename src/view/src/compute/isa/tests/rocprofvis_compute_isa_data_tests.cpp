@@ -1202,7 +1202,7 @@ TEST_CASE("Issue states merge by instruction UUID and retain both branch outcome
     CHECK(rows[0].instruction_kind == IsaDataBuilder::InstructionKind::kBranch);
     REQUIRE(rows[0].issue_states.states.size() == 2);
     CHECK(rows[0].issue_states.total_count == 150);
-    CHECK(rows[0].issue_states.dominant_label == "Not taken 73.3%");
+    CHECK(rows[0].issue_states.dominant_label == "NOT_TAKEN 73.3%");
     REQUIRE(rows[0].issue_states.bar_order.size() == 2);
     CHECK(rows[0].issue_states.states[rows[0].issue_states.bar_order[0]].kind ==
           IsaDataBuilder::IssueStateKind::kBranchTaken);

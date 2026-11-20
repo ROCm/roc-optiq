@@ -20,7 +20,7 @@ namespace View
 
 constexpr float       SAMPLING_BAR_HEIGHT_FRACTION           = 0.9f;
 constexpr const char* SAMPLING_STATE_COLUMN_LABEL            = "Sampling State";
-constexpr const char* ISSUE_STATE_COLUMN_LABEL                        = "Sampled state";
+constexpr const char* ISSUE_STATE_COLUMN_LABEL                        = "Execution State";
 constexpr float       STALL_REASON_TOOLTIP_REASON_WIDTH_IN_CHARACTERS = 42.0f;
 constexpr float       STALL_REASON_TOOLTIP_MAX_HEIGHT_FRACTION        = 0.5f;
 constexpr float       STALL_REASON_TOOLTIP_SCROLL_LINES               = 3.0f;
@@ -33,8 +33,12 @@ constexpr float       ISSUE_STATE_SINGLE_COLOR_ALPHA                  = 0.2f;
 static float
 get_issue_state_label_width()
 {
-    return std::max(ImGui::CalcTextSize("NO_INST >99.9%").x,
-                    ImGui::CalcTextSize("Not taken >99.9%").x);
+    float width = 0.0f;
+    for(const IsaDataBuilder::IssueStateInfo& state : IsaDataBuilder::ISSUE_STATES)
+    {
+        width = std::max(width, ImGui::CalcTextSize(state.label).x);
+    }
+    return width + ImGui::CalcTextSize(" >99.9%").x;
 }
 
 struct SampleMetricPresentation
@@ -192,7 +196,7 @@ render_issue_state_color_legend()
     std::array<ColorLegendEntry, std::size(ISSUE_STATE_PRESENTATIONS) + 1> entries;
     for(size_t i = 0; i < std::size(ISSUE_STATE_PRESENTATIONS); ++i)
     {
-        entries[i] = { IsaDataBuilder::ISSUE_STATES[i].name,
+        entries[i] = { IsaDataBuilder::ISSUE_STATES[i].label,
                        ISSUE_STATE_PRESENTATIONS[i].color };
     }
     entries.back() = { "Other / unknown", Colors::kTextDim };

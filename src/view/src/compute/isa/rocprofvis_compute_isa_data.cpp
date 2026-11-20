@@ -503,16 +503,8 @@ IsaDataBuilder::SummarizeIssueStates(
             const IssueState& dominant   = summary.states.front();
             const size_t      kind_index = static_cast<size_t>(dominant.kind);
             const char*       label      = kind_index < std::size(ISSUE_STATES)
-                                               ? ISSUE_STATES[kind_index].name
+                                               ? ISSUE_STATES[kind_index].label
                                                : dominant.text.c_str();
-            if(dominant.kind == IssueStateKind::kBranchTaken)
-            {
-                label = "Taken";
-            }
-            else if(dominant.kind == IssueStateKind::kBranchNotTaken)
-            {
-                label = "Not taken";
-            }
             std::string percent = FormatSamplePercentage(
                 { SamplingAvailability::kValid, dominant.percent });
             if(percent == "100.0%" && dominant.count < summary.total_count)

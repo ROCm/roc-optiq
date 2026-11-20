@@ -228,8 +228,8 @@ constexpr WelcomeTip kWelcomeTips[] = {
     { "Baseline Comparison",
       "Set a percentage threshold to highlight only the differences above it." },
     { "Topology",
-      "Hiding a process in the System Topology sidebar hides every queue, stream, and "
-      "thread under it." },
+      "Hiding a process in the System Topology sidebar hides every stream and thread "
+      "under it." },
     { "Baseline Comparison",
       "Compare two kernels in the same workload, not just two runs of it." },
     { "Presets",

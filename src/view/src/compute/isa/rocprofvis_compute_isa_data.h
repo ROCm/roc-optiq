@@ -174,8 +174,11 @@ public:
     {
         IssueStateKind kind;
         const char*    name;
+        // Display labels default to the canonical SDK name.
+        const char* label = name;
     };
 
+    // Shared SDK names and display labels for parsing, rows, sizing, and legends.
     inline static constexpr IssueStateInfo ISSUE_STATES[] = {
         { IssueStateKind::kNoInstruction, "NO_INST" },
         { IssueStateKind::kValu, "VALU" },
@@ -183,8 +186,8 @@ public:
         { IssueStateKind::kFlat, "FLAT" },
         { IssueStateKind::kLds, "LDS" },
         { IssueStateKind::kBarrier, "BARRIER" },
-        { IssueStateKind::kBranchTaken, "BRANCH_TAKEN" },
-        { IssueStateKind::kBranchNotTaken, "BRANCH_NOT_TAKEN" }
+        { IssueStateKind::kBranchTaken, "BRANCH_TAKEN", "TAKEN" },
+        { IssueStateKind::kBranchNotTaken, "BRANCH_NOT_TAKEN", "NOT_TAKEN" }
     };
 
     struct IssueState

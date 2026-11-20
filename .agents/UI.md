@@ -1656,7 +1656,7 @@ The ISA implementation is organized as follows:
   `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
   order. Compile-time assertions check the metric array against the enum, both
   widgets' sampling-column positions, and their total column counts. Sampling State
-  is visible by default; Sampled state and both percentage columns use
+  is visible by default; Execution State and both percentage columns use
   `DefaultHide` and can be enabled independently through the native header menu.
   Each bar cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,
@@ -1671,7 +1671,7 @@ The ISA implementation is organized as follows:
   Percentages use one
   decimal place over a monochrome `kPcSamplingMetricBar` fill on a fixed 0-100% scale.
   Bars share rectangular geometry and clipping. Sampling State and percentage bars
-  use the `kBorderGray` outline around the filled extent; Sampled state omits the
+  use the `kBorderGray` outline around the filled extent; Execution State omits the
   outline to reduce visual noise. Sampling State uses `show_value = false`;
   the two percentage modes use `true`. `DrawBarValue` uses `kTextOnAccent` inside
   fills that fit the label, or `kTextMain` beside short fills. Narrow columns that
@@ -1680,8 +1680,8 @@ The ISA implementation is organized as follows:
   dim em dash. All modes share cell hit testing and forward clicks to row selection even
   when unavailable, and retained state metrics render while stall details fail or
   reload. Their availability is independent of the issued/stalled bar breakdown.
-  Sampled state cells show a cached dominant-state label and share (for example,
-  `NO_INST 86.7%` or `Not taken 92%`) over a full-width distribution bar. Shares
+  Execution State cells show a cached dominant-state label and share (for example,
+  `NO_INST 86.7%` or `NOT_TAKEN 92%`) over a full-width distribution bar. Shares
   use all samples in that row; hotness stays in Sampling State. The bar fills the
   cell behind the label, using translucent colors and foreground `kTextMain` text
   for readability in both themes. The default width fits the padded label, without
@@ -1761,6 +1761,10 @@ The ISA implementation is organized as follows:
   identity. Entries sort by descending count, then label and lookup UUID. The
   summary also caches `bar_order` indices sorted by category, label and UUID,
   plus a `dominant_label` with a compact percentage and readable branch outcome.
+  `ISSUE_STATES` is the shared catalog of canonical SDK names and display labels.
+  Labels default to the SDK name; branch overrides are defined only in that catalog.
+  Row labels, the header legend, and column sizing all consume its display labels.
+  Parsing uses canonical SDK names, while tooltip rows retain captured lookup text.
   A rounded dominant share below 100% uses `>99.9%` rather than implying no other
   state was recorded. Each entry also caches an `IssueStateKind` from its captured label, independently of
   lookup IDs, including case-insensitive and SDK-prefixed names. Unrecognized
@@ -2084,7 +2088,7 @@ shared `SamplingStateRenderer` metric cells and headers.
 and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
 into these vectors. Counts remain optional, preserving unrecorded values and
 measured zero. Fresh rows replace previous records on every load. Prepared issue-state
-data feeds the optional Sampled state column in ISA and source sampling rows.
+data feeds the optional Execution State column in ISA and source sampling rows.
 Dispatch UUID remains available only on the controller handle.
 Instruction samples are optional: absent sample/lookup tables or empty results
 must not downgrade the existing sampling columns. Missing instruction-sample

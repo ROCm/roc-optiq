@@ -197,12 +197,12 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
             ImGuiWindow* popup = GImGui->OpenPopupStack.back().Window;
             IM_CHECK(popup != nullptr);
             ctx->SetRef(ImGuiTestRef(popup->ID));
-            ctx->ItemClick("Sampled state");
+            ctx->ItemClick("Execution State");
             ctx->PopupCloseAll();
             ctx->Yield(3);
             IM_CHECK(vars.issue_visible);
             IM_CHECK(vars.text.find("NO_INST 86.7%") != std::string::npos);
-            IM_CHECK(vars.text.find("Not taken 92%") != std::string::npos);
+            IM_CHECK(vars.text.find("NOT_TAKEN 92%") != std::string::npos);
             IM_CHECK(vars.text.find("NO_INST: 1,649") == std::string::npos);
             IM_CHECK(vars.text.find("BRANCH_NOT_TAKEN:") == std::string::npos);
             IM_CHECK(vars.no_instruction_width > 0.0f);

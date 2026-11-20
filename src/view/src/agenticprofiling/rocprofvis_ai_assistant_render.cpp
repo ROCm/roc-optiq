@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "imgui.h"
-#include "immarkdown.h"
+#include "widgets/rocprofvis_markdown.h"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
@@ -37,31 +37,31 @@ namespace View
 namespace
 {
 
-constexpr float  ASSISTANT_MIN_WIDTH      = 440.0f;
-constexpr float  ASSISTANT_MAX_WIDTH      = 900.0f;
-constexpr float  ASSISTANT_SPLITTER_WIDTH = 6.0f;
+constexpr float ASSISTANT_MIN_WIDTH      = 440.0f;
+constexpr float ASSISTANT_MAX_WIDTH      = 900.0f;
+constexpr float ASSISTANT_SPLITTER_WIDTH = 6.0f;
 // Same padding the remote/profiler dialogs use.
 constexpr ImVec2 ASSISTANT_WINDOW_PADDING = ImVec2(14.0f, 12.0f);
 constexpr ImVec2 ASSISTANT_CARD_PADDING   = ImVec2(14.0f, 10.0f);
 constexpr float  ASSISTANT_SEND_WIDTH     = 80.0f;
 // Composer row: input, Send, and three icon buttons (copy, export, clear),
 // with four gaps between the five items.
-constexpr float  ASSISTANT_COMPOSER_MIN_INPUT_WIDTH = 80.0f;
-constexpr int    ASSISTANT_COMPOSER_ICON_BUTTONS    = 3;
-constexpr int    ASSISTANT_COMPOSER_GAP_COUNT       = 4;
-constexpr float  ASSISTANT_DOT_RADIUS     = 2.5f;
-constexpr int    ASSISTANT_DOT_COUNT      = 3;
-constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
-constexpr float  ASSISTANT_DOT_SPEED      = 5.0f;
+constexpr float ASSISTANT_COMPOSER_MIN_INPUT_WIDTH = 80.0f;
+constexpr int   ASSISTANT_COMPOSER_ICON_BUTTONS    = 3;
+constexpr int   ASSISTANT_COMPOSER_GAP_COUNT       = 4;
+constexpr float ASSISTANT_DOT_RADIUS               = 2.5f;
+constexpr int   ASSISTANT_DOT_COUNT                = 3;
+constexpr float ASSISTANT_DOT_SPACING              = 4.0f;
+constexpr float ASSISTANT_DOT_SPEED                = 5.0f;
 
-constexpr size_t   ASSISTANT_CHART_MAX_BINS        = 64;
-constexpr size_t   ASSISTANT_CHART_MIN_BINS        = 16;
-constexpr float    ASSISTANT_CHART_PX_PER_BIN      = 5.0f;
-constexpr size_t   ASSISTANT_CHART_ROWS            = 5;
-constexpr float    ASSISTANT_CHART_HEIGHT          = 52.0f;
-constexpr float    ASSISTANT_CHART_ROW_HEIGHT      = 12.0f;
-constexpr float    ASSISTANT_CHART_ROW_GAP         = 2.0f;
-constexpr float    ASSISTANT_CHART_MIN_ALPHA       = 0.12f;
+constexpr size_t ASSISTANT_CHART_MAX_BINS   = 64;
+constexpr size_t ASSISTANT_CHART_MIN_BINS   = 16;
+constexpr float  ASSISTANT_CHART_PX_PER_BIN = 5.0f;
+constexpr size_t ASSISTANT_CHART_ROWS       = 5;
+constexpr float  ASSISTANT_CHART_HEIGHT     = 52.0f;
+constexpr float  ASSISTANT_CHART_ROW_HEIGHT = 12.0f;
+constexpr float  ASSISTANT_CHART_ROW_GAP    = 2.0f;
+constexpr float  ASSISTANT_CHART_MIN_ALPHA  = 0.12f;
 
 // Breaks a button label onto extra lines so a long follow-up still fits.
 std::string
@@ -81,9 +81,9 @@ WrapButtonLabel(const std::string& text, float wrap_width)
     size_t      i = 0;
     while(i < text.size())
     {
-        const size_t space = text.find(' ', i);
-        const size_t next  = (space == std::string::npos) ? text.size() : space;
-        const std::string word = text.substr(i, next - i);
+        const size_t      space     = text.find(' ', i);
+        const size_t      next      = (space == std::string::npos) ? text.size() : space;
+        const std::string word      = text.substr(i, next - i);
         const std::string candidate = line.empty() ? word : line + " " + word;
         if(!line.empty() && ImGui::CalcTextSize(candidate.c_str()).x > wrap_width)
         {
@@ -111,22 +111,32 @@ WrapButtonLabel(const std::string& text, float wrap_width)
     return out.empty() ? text : out;
 }
 
-// Replies come from a model, so only web links open; anything else, such as a
-// file path or a program, would be launched by the shell.
-void
-OpenReplyLink(const std::string& url)
+// Replies come from a model, so only web links open. The callback is also
+// asked while drawing, with activate false, and must not open anything then.
+// A click asks again and confirms before the browser is launched, because a
+// reply can be steered by names and paths in the trace.
+bool
+OpenReplyLink(const std::string& url, bool activate)
 {
-    if(url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0)
+    const bool web = url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0;
+    if(web && activate)
     {
-        open_url(url);
+        AppWindow* window = AppWindow::GetInstance();
+        if(window != nullptr)
+        {
+            window->ShowConfirmationDialog("Open link",
+                                           "Open this link in your browser?\n\n" + url,
+                                           [url]() { open_url(url); });
+        }
     }
+    return web;
 }
 
-ImMarkdown::Style
+markdown_style_t
 MessageStyle(Colors text_color)
 {
-    SettingsManager&  settings = SettingsManager::GetInstance();
-    ImMarkdown::Style style;
+    SettingsManager& settings = SettingsManager::GetInstance();
+    markdown_style_t style;
     style.code_font         = settings.GetFontManager().GetFont(FontType::kCode);
     style.text_color        = settings.GetColor(text_color);
     style.link_color        = settings.GetColor(Colors::kAccent);
@@ -136,7 +146,9 @@ MessageStyle(Colors text_color)
     style.header_background = settings.GetColor(Colors::kTableHeaderBg);
     style.open_link         = OpenReplyLink;
     return style;
-}}  // namespace
+}
+
+}  // namespace
 
 void
 AssistantPanel::RenderActivityChart(uint64_t track_id)
@@ -150,10 +162,10 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
     // Bin count follows the column width, so bars stay legible when the dock is
     // dragged narrow.
     const float  avail_width = ImGui::GetContentRegionAvail().x;
-    const size_t bin_count   = static_cast<size_t>(
-        std::clamp(avail_width / ASSISTANT_CHART_PX_PER_BIN,
-                     static_cast<float>(ASSISTANT_CHART_MIN_BINS),
-                     static_cast<float>(ASSISTANT_CHART_MAX_BINS)));
+    const size_t bin_count =
+        static_cast<size_t>(std::clamp(avail_width / ASSISTANT_CHART_PX_PER_BIN,
+                                       static_cast<float>(ASSISTANT_CHART_MIN_BINS),
+                                       static_cast<float>(ASSISTANT_CHART_MAX_BINS)));
 
     const std::vector<double> bins =
         GetAssistantActivityBins(context, track_id, bin_count);
@@ -170,13 +182,13 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
     const ImVec4      accent =
         ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kAccent));
 
-    ImDrawList*  draw  = ImGui::GetWindowDrawList();
-    const float  width = ImGui::GetContentRegionAvail().x;
-    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImDrawList*  draw      = ImGui::GetWindowDrawList();
+    const float  width     = ImGui::GetContentRegionAvail().x;
+    const ImVec2 origin    = ImGui::GetCursorScreenPos();
     const float  bar_width = width / static_cast<float>(bins.size());
 
-    draw->AddRectFilled(origin, ImVec2(origin.x + width, origin.y + ASSISTANT_CHART_HEIGHT),
-                        bg);
+    draw->AddRectFilled(origin,
+                        ImVec2(origin.x + width, origin.y + ASSISTANT_CHART_HEIGHT), bg);
     for(size_t i = 0; i < bins.size(); ++i)
     {
         const float height =
@@ -226,8 +238,7 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
 
     // Rows butt up against each other so they read as one strip; default item
     // spacing would band them.
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                        ImVec2(0.0f, ASSISTANT_CHART_ROW_GAP));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, ASSISTANT_CHART_ROW_GAP));
     for(const AssistantActivityRow& row : rows)
     {
         if(row.bins.empty())
@@ -255,8 +266,7 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
         // Fill the lane first, so idle stretches read as gaps rather than holes.
         const float x_start = row_origin.x + label_width;
         draw->AddRectFilled(ImVec2(x_start, row_origin.y),
-                            ImVec2(x_start + strip_width, row_origin.y + row_height),
-                            bg);
+                            ImVec2(x_start + strip_width, row_origin.y + row_height), bg);
 
         const float cell_width = strip_width / static_cast<float>(row.bins.size());
         for(size_t i = 0; i < row.bins.size(); ++i)
@@ -267,12 +277,13 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
                 continue;
             }
             ImVec4 cell = accent;
-            cell.w = ASSISTANT_CHART_MIN_ALPHA + value * (1.0f - ASSISTANT_CHART_MIN_ALPHA);
+            cell.w =
+                ASSISTANT_CHART_MIN_ALPHA + value * (1.0f - ASSISTANT_CHART_MIN_ALPHA);
             const float x0 = x_start + cell_width * static_cast<float>(i);
-            draw->AddRectFilled(ImVec2(x0, row_origin.y),
-                                ImVec2(x0 + std::max(1.0f, cell_width),
-                                       row_origin.y + row_height),
-                                ImGui::ColorConvertFloat4ToU32(cell));
+            draw->AddRectFilled(
+                ImVec2(x0, row_origin.y),
+                ImVec2(x0 + std::max(1.0f, cell_width), row_origin.y + row_height),
+                ImGui::ColorConvertFloat4ToU32(cell));
         }
     }
     ImGui::PopStyleVar();
@@ -284,16 +295,16 @@ void
 AssistantPanel::RenderToolbarButton()
 {
     SettingsManager& settings = SettingsManager::GetInstance();
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgFrame)));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(
+                                               settings.GetColor(Colors::kBgFrame)));
     ImGui::PushStyleColor(
         ImGuiCol_ButtonHovered,
         ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kButtonHovered)));
     ImGui::PushStyleColor(
         ImGuiCol_ButtonActive,
         ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kButtonActive)));
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextMain)));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(
+                                             settings.GetColor(Colors::kTextMain)));
     if(ImGui::Button("Ask Optiq"))
     {
         GetInstance()->ToggleVisible();
@@ -345,8 +356,7 @@ AssistantPanel::RenderSplitter()
 
     ImGui::GetWindowDrawList()->AddRectFilled(
         origin, ImVec2(origin.x + ASSISTANT_SPLITTER_WIDTH, origin.y + height),
-        settings.GetColor(hovered || active ? Colors::kAccent
-                                            : Colors::kSplitterColor));
+        settings.GetColor(hovered || active ? Colors::kAccent : Colors::kSplitterColor));
 }
 
 void
@@ -450,7 +460,8 @@ AssistantPanel::RenderHeaderCard()
     {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
-        ImGui::TextWrapped("Set the URL, model, and key in Edit > Preferences > Assistant.");
+        ImGui::TextWrapped(
+            "Set the URL, model, and key in Edit > Preferences > Assistant.");
         ImGui::PopStyleColor();
     }
 
@@ -465,10 +476,9 @@ AssistantPanel::RenderTranscript()
 
     // Last frame's measured composer height; the estimate is only for frame one.
     const float composer_height =
-        m_composer_height > 0.0f
-            ? m_composer_height
-            : ImGui::GetFrameHeight() + style.ItemSpacing.y * 2.0f +
-                  ASSISTANT_CARD_PADDING.y * 2.0f;
+        m_composer_height > 0.0f ? m_composer_height
+                                 : ImGui::GetFrameHeight() + style.ItemSpacing.y * 2.0f +
+                                       ASSISTANT_CARD_PADDING.y * 2.0f;
 
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ASSISTANT_CARD_PADDING);
@@ -497,10 +507,9 @@ AssistantPanel::RenderTranscript()
     // Drawn from live state rather than stored, so it cannot outlive its turn.
     if(Busy() && !m_status.empty())
     {
-        RenderLoadingIndicatorDots(ASSISTANT_DOT_RADIUS, ASSISTANT_DOT_COUNT,
-                                   ASSISTANT_DOT_SPACING,
-                                   settings.GetColor(Colors::kAccent),
-                                   ASSISTANT_DOT_SPEED);
+        RenderLoadingIndicatorDots(
+            ASSISTANT_DOT_RADIUS, ASSISTANT_DOT_COUNT, ASSISTANT_DOT_SPACING,
+            settings.GetColor(Colors::kAccent), ASSISTANT_DOT_SPEED);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x * 2.0f);
         PanelFieldLabel(m_status.c_str(), false, &settings);
     }
@@ -547,8 +556,7 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
     }
 
     const bool user = line.speaker == Speaker::kUser;
-    BeginPanelCard("##message_card",
-                   user ? PanelCardTone::kFrame : PanelCardTone::kPanel,
+    BeginPanelCard("##message_card", user ? PanelCardTone::kFrame : PanelCardTone::kPanel,
                    ASSISTANT_CARD_PADDING, true, &settings);
     if(user)
     {
@@ -566,7 +574,7 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
     ImGui::PopID();
 }
 
-ImMarkdown::View*
+MarkdownView*
 AssistantPanel::MessageView(size_t index)
 {
     if(index >= m_lines.size())
@@ -581,12 +589,11 @@ AssistantPanel::MessageView(size_t index)
     {
         // Only replies are Markdown; what the user typed and notices show as
         // written.
-        const uint32_t format = m_lines[index].speaker == Speaker::kAssistant
-                                    ? ImMarkdown::kNone
-                                    : ImMarkdown::kPlain;
-        m_message_views[index] = std::make_unique<ImMarkdown::View>();
+        const uint32_t format =
+            m_lines[index].speaker == Speaker::kAssistant ? 0u : MARKDOWN_PLAIN;
+        m_message_views[index] = std::make_unique<MarkdownView>();
         m_message_views[index]->SetText(m_lines[index].text,
-                                        ImMarkdown::kSelectable | format);
+                                        MARKDOWN_SELECTABLE | format);
     }
     return m_message_views[index].get();
 }
@@ -595,7 +602,7 @@ void
 AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
                                         Colors text_color)
 {
-    ImMarkdown::View* view = MessageView(index);
+    MarkdownView* view = MessageView(index);
     if(view == nullptr)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
@@ -641,10 +648,9 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
 void
 AssistantPanel::RenderSuggestedActions()
 {
-    SettingsManager& settings = SettingsManager::GetInstance();
+    SettingsManager&         settings = SettingsManager::GetInstance();
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
-    const bool configured =
-        provider != nullptr && !provider->endpoint_url.empty();
+    const bool configured = provider != nullptr && !provider->endpoint_url.empty();
 
     const bool show_explain = m_lines.empty() && m_next_steps.empty() && !Busy();
     if(!show_explain && m_next_steps.empty())
@@ -675,9 +681,9 @@ AssistantPanel::RenderSuggestedActions()
         return;
     }
 
-    const float wrap_width = std::max(
-        1.0f, ImGui::GetContentRegionAvail().x - ImGui::GetStyle().FramePadding.x * 2.0f);
-    int clicked = -1;
+    const float wrap_width = std::max(1.0f, ImGui::GetContentRegionAvail().x -
+                                                ImGui::GetStyle().FramePadding.x * 2.0f);
+    int         clicked    = -1;
     for(size_t i = 0; i < m_next_steps.size(); ++i)
     {
         ImGui::PushID(static_cast<int>(i));
@@ -747,8 +753,8 @@ AssistantPanel::BuildTranscriptText() const
                 }
                 else
                 {
-                    out += "_[Activity chart for track " +
-                           std::to_string(line.track_id) + "]_\n\n";
+                    out += "_[Activity chart for track " + std::to_string(line.track_id) +
+                           "]_\n\n";
                 }
                 break;
         }
@@ -877,8 +883,8 @@ AssistantPanel::RenderComposer()
     // ICON_ARROW_IN_BOX reads as "import" (it is the Import-from-Basic glyph), so
     // a document icon is used here to mean "write the conversation out to a file".
     if(IconButton(ICON_DOCUMENT, settings.GetFontManager().GetFont(FontType::kIcon),
-                  ImVec2(icon_size, icon_size), "Export the conversation to a file", false,
-                  ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
+                  ImVec2(icon_size, icon_size), "Export the conversation to a file",
+                  false, ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),
                   settings.GetColor(Colors::kButtonActive)))
     {
@@ -907,8 +913,8 @@ AssistantPanel::RenderComposer()
 
     // EndChild already advanced the cursor past one ItemSpacing, which the
     // transcript's reservation has to include too.
-    m_composer_height = ImGui::GetCursorPosY() - start_y +
-                        settings.GetDefaultStyle().ItemSpacing.y;
+    m_composer_height =
+        ImGui::GetCursorPosY() - start_y + settings.GetDefaultStyle().ItemSpacing.y;
 
     if(send || submitted)
     {

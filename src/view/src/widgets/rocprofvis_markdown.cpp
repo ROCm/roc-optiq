@@ -1,11 +1,13 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "immarkdown.h"
+#include "rocprofvis_markdown.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cctype>
 #include <cfloat>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <unordered_map>
@@ -13,7 +15,9 @@
 
 #include "imgui_internal.h"
 
-namespace ImMarkdown
+namespace RocProfVis
+{
+namespace View
 {
 
 namespace
@@ -55,14 +59,30 @@ constexpr size_t  MAX_EMPHASIS_RUN   = 3;
 constexpr size_t  TASK_MARKER_LENGTH = 3;
 constexpr uint8_t MAX_NESTING        = 16;
 // Bounds the recursion of inline matching on hostile input.
-constexpr int           MAX_INLINE_DEPTH = 16;
+constexpr int32_t       MAX_INLINE_DEPTH = 16;
 constexpr unsigned char FIRST_NON_ASCII  = 0x80;
-constexpr int           DECIMAL_BASE     = 10;
+constexpr int32_t       DECIMAL_BASE     = 10;
+// A tab advances to the next multiple of this many columns.
+constexpr int32_t TAB_COLUMNS             = 4;
+constexpr int32_t INDENTED_CODE_COLUMNS   = 4;
+constexpr int32_t QUOTE_MARKER_MAX_INDENT = 3;
+// ImGui reports 1 for a click, 2 for a double-click, 3 for a triple-click.
+constexpr int32_t CLICKS_PER_WORD = 2;
+constexpr int32_t CLICKS_PER_LINE = 3;
+constexpr float   HALF            = 0.5f;
+constexpr float   TWICE           = 2.0f;
+// Offsets into the drawn text are uint32_t.
+constexpr size_t MAX_MARKDOWN_BYTES = 0xffffffffu;
+// Past this many steps the parse stops and the view draws the source as plain
+// text, so a hostile reply cannot stall the UI thread.
+constexpr size_t MIN_PARSE_STEPS      = 100000;
+constexpr size_t PARSE_STEPS_PER_BYTE = 64;
 
 constexpr size_t      NPOS        = std::string_view::npos;
 constexpr const char* BULLET_TEXT = "\xE2\x80\xA2 ";  // U+2022 and a space
 
-static_assert(sizeof(Style::heading_scale) / sizeof(Style::heading_scale[0]) ==
+static_assert(sizeof(markdown_style_t::heading_scale) /
+                      sizeof(markdown_style_t::heading_scale[0]) ==
                   MAX_HEADING_LEVEL,
               "one scale per heading level");
 
@@ -79,8 +99,8 @@ enum SpanFlags : uint32_t
     kFauxItalic = 1u << 5,
 };
 
-// A run of one style, as a range of Document::text.
-struct Span
+// A run of one style, as a range of document_t::text.
+struct span_t
 {
     uint32_t begin = 0;
     uint32_t end   = 0;
@@ -97,6 +117,13 @@ enum class BlockKind : uint8_t
     kTable
 };
 
+enum class Alignment : uint8_t
+{
+    kLeft,
+    kCenter,
+    kRight
+};
+
 enum class Marker : uint8_t
 {
     kNone,
@@ -106,12 +133,12 @@ enum class Marker : uint8_t
     kTaskDone
 };
 
-struct Cell
+struct cell_t
 {
-    std::vector<Span> spans;
+    std::vector<span_t> spans;
 };
 
-struct Block
+struct block_t
 {
     BlockKind kind   = BlockKind::kParagraph;
     uint8_t   level  = 0;  // heading level, 1 to 6
@@ -119,61 +146,60 @@ struct Block
     uint8_t   list   = 0;  // list nesting depth
     Marker    marker = Marker::kNone;
     // The marker as it copies: "• ", "3. ", "[x] ".
-    Span marker_span;
+    span_t marker_span;
     // A list block straight after another, with no blank line between.
-    bool              tight = false;
-    std::vector<Span> spans;
-    // Tables: the header row first, and each column's alignment, -1 left,
-    // 0 center, 1 right.
-    std::vector<std::vector<Cell>> rows;
-    std::vector<int>               align;
+    bool                tight = false;
+    std::vector<span_t> spans;
+    // Tables: the header row first, then one alignment per column.
+    std::vector<std::vector<cell_t>> rows;
+    std::vector<Alignment>           align;
 };
 
-struct Document
+struct document_t
 {
     // What selection copies: the text as drawn, blocks on their own lines and
     // table cells split by tabs.
     std::string              text;
-    std::vector<Block>       blocks;
+    std::vector<block_t>     blocks;
     std::vector<std::string> links;
 };
 
 // ----------------------------------------------------------------- helpers
 
 bool
-IsBlank(char c)
+is_blank(char c)
 {
     return c == ' ' || c == '\t';
 }
 
 // The ends of the text count as whitespace.
 bool
-IsSpace(char c)
+is_space(char c)
 {
     return c == '\0' || c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
 bool
-IsPunct(char c)
+is_punct(char c)
 {
     return std::ispunct(static_cast<unsigned char>(c)) != 0;
 }
 
 bool
-IsWordChar(char c)
+is_word_char(char c)
 {
     const unsigned char byte = static_cast<unsigned char>(c);
     return std::isalnum(byte) != 0 || c == '_' || byte >= FIRST_NON_ASCII;
 }
 
 bool
-StartsWith(std::string_view text, std::string_view prefix)
+starts_with(std::string_view text, std::string_view prefix)
 {
     return text.substr(0, prefix.size()) == prefix;
 }
 
 size_t
-RunLength(std::string_view text, size_t at)
+run_length(std::string_view text, size_t at)
 {
     size_t length = 0;
     while(at + length < text.size() && text[at + length] == text[at])
@@ -183,14 +209,69 @@ RunLength(std::string_view text, size_t at)
     return length;
 }
 
-size_t
-LeadingSpaces(std::string_view text)
+// Bytes of leading spaces and tabs, and the column they reach. A tab advances
+// to the next multiple of TAB_COLUMNS, so a list nested with tabs keeps its
+// depth.
+struct column_indent_t
 {
-    return std::min(text.find_first_not_of(' '), text.size());
+    size_t  bytes   = 0;
+    int32_t columns = 0;
+};
+
+column_indent_t
+measure_indent(std::string_view text)
+{
+    column_indent_t out;
+    while(out.bytes < text.size())
+    {
+        const char c = text[out.bytes];
+        if(c == ' ')
+        {
+            ++out.columns;
+            ++out.bytes;
+        }
+        else if(c == '\t')
+        {
+            const int32_t stop = TAB_COLUMNS - (out.columns % TAB_COLUMNS);
+            out.columns += stop;
+            ++out.bytes;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return out;
 }
 
 std::string_view
-Trim(std::string_view text)
+strip_columns(std::string_view text, int32_t columns)
+{
+    int32_t got   = 0;
+    size_t  bytes = 0;
+    while(bytes < text.size() && got < columns)
+    {
+        if(text[bytes] == ' ')
+        {
+            ++got;
+            ++bytes;
+        }
+        else if(text[bytes] == '\t')
+        {
+            const int32_t stop = TAB_COLUMNS - (got % TAB_COLUMNS);
+            got += stop;
+            ++bytes;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return text.substr(bytes);
+}
+
+std::string_view
+trim(std::string_view text)
 {
     const size_t first = std::min(text.find_first_not_of(" \t"), text.size());
     const size_t last  = text.find_last_not_of(" \t");
@@ -198,35 +279,39 @@ Trim(std::string_view text)
 }
 
 ImVec2
-At(const ImVec2& origin, float x, float y)
+offset_pos(const ImVec2& origin, float x, float y)
 {
     return ImVec2(origin.x + x, origin.y + y);
 }
 
 // Strips up to max_depth block quote markers and reports how many there were.
 std::string_view
-StripQuotes(std::string_view line, uint8_t max_depth, uint8_t& depth)
+strip_quotes(std::string_view line, uint8_t max_depth, uint8_t& depth)
 {
-    depth        = 0;
-    size_t first = line.find_first_not_of(' ');
-    while(depth < max_depth && first != NPOS && line[first] == '>')
+    depth = 0;
+    while(depth < max_depth)
     {
+        const column_indent_t indent = measure_indent(line);
+        if(indent.columns > QUOTE_MARKER_MAX_INDENT || indent.bytes >= line.size() ||
+           line[indent.bytes] != '>')
+        {
+            break;
+        }
         ++depth;
-        line.remove_prefix(first + 1);
-        if(!line.empty() && line[0] == ' ')
+        line.remove_prefix(indent.bytes + 1);
+        if(!line.empty() && (line[0] == ' ' || line[0] == '\t'))
         {
             line.remove_prefix(1);
         }
-        first = line.find_first_not_of(' ');
     }
     return line;
 }
 
 // Three or more of one of - * _, with nothing else but spaces.
 bool
-IsRule(std::string_view text)
+is_rule(std::string_view text)
 {
-    const std::string_view trimmed   = Trim(text);
+    const std::string_view trimmed   = trim(text);
     const char             marker    = trimmed.empty() ? '\0' : trimmed[0];
     const char             allowed[] = { marker, ' ', '\0' };
     return (marker == '-' || marker == '*' || marker == '_') &&
@@ -237,9 +322,9 @@ IsRule(std::string_view text)
 
 // The heading level an underline of = or - gives the paragraph above, or 0.
 size_t
-SetextLevel(std::string_view text)
+setext_level(std::string_view text)
 {
-    const std::string_view trimmed = Trim(text);
+    const std::string_view trimmed = trim(text);
     const char             marker  = trimmed.empty() ? '\0' : trimmed[0];
     size_t                 level   = 0;
     if((marker == '=' || marker == '-') && trimmed.find_first_not_of(marker) == NPOS)
@@ -251,14 +336,14 @@ SetextLevel(std::string_view text)
 
 // The length of a list marker and the space after it, or 0.
 size_t
-ListMarker(std::string_view text, bool& ordered, int& number)
+list_marker(std::string_view text, bool& ordered, int32_t& number)
 {
     size_t digits = 0;
     number        = 0;
     while(digits < text.size() && digits <= MAX_ORDERED_DIGITS &&
           std::isdigit(static_cast<unsigned char>(text[digits])) != 0)
     {
-        number = number * DECIMAL_BASE + (text[digits] - '0');
+        number = number * DECIMAL_BASE + static_cast<int32_t>(text[digits] - '0');
         ++digits;
     }
     ordered = digits > 0 && digits <= MAX_ORDERED_DIGITS && digits < text.size() &&
@@ -274,78 +359,84 @@ ListMarker(std::string_view text, bool& ordered, int& number)
     {
         marker = 1;
     }
-    const bool spaced = marker > 0 && (marker == text.size() || IsBlank(text[marker]));
-    return spaced && !IsRule(text) ? marker : 0;
+    const bool spaced = marker > 0 && (marker == text.size() || is_blank(text[marker]));
+    return spaced && !is_rule(text) ? marker : 0;
 }
 
 std::string_view
-HeadingText(std::string_view text)
+heading_text(std::string_view text)
 {
-    text = Trim(text);
+    text = trim(text);
     // A closing run of # counts only after a space.
     const size_t last = text.find_last_not_of('#');
     if(last == NPOS)
     {
         text = std::string_view();
     }
-    else if(last + 1 < text.size() && IsBlank(text[last]))
+    else if(last + 1 < text.size() && is_blank(text[last]))
     {
-        text = Trim(text.substr(0, last));
+        text = trim(text.substr(0, last));
     }
     return text;
 }
 
-std::vector<std::string_view>
-SplitRow(std::string_view row)
+void
+split_row(std::string_view row, std::vector<std::string_view>& cells)
 {
-    row = Trim(row);
+    cells.clear();
+    row = trim(row);
     if(!row.empty() && row.front() == '|')
     {
         row.remove_prefix(1);
     }
-    if(!row.empty() && row.back() == '|' && (row.size() < 2 || row[row.size() - 2] != '\\'))
+    if(!row.empty() && row.back() == '|' &&
+       (row.size() < 2 || row[row.size() - 2] != '\\'))
     {
         row.remove_suffix(1);
     }
-    std::vector<std::string_view> cells;
-    size_t                        start = 0;
+    size_t start = 0;
     for(size_t at = 0; at <= row.size(); ++at)
     {
         if(at == row.size() || (row[at] == '|' && (at == 0 || row[at - 1] != '\\')))
         {
-            cells.push_back(Trim(row.substr(start, at - start)));
+            cells.push_back(trim(row.substr(start, at - start)));
             start = at + 1;
         }
     }
-    return cells;
 }
 
 // A table's delimiter row, such as |---|:-:|--:|, and its alignments.
 bool
-DelimiterRow(std::string_view row, std::vector<int>& align)
+delimiter_row(std::string_view row, std::vector<Alignment>& align,
+              std::vector<std::string_view>& cells)
 {
     align.clear();
+    split_row(row, cells);
     bool valid = row.find_first_of("|-") != NPOS;
-    for(std::string_view cell : SplitRow(row))
+    for(std::string_view cell : cells)
     {
-        const bool left  = !cell.empty() && cell.front() == ':';
-        const bool right = cell.size() > 1 && cell.back() == ':';
+        const bool             left  = !cell.empty() && cell.front() == ':';
+        const bool             right = cell.size() > 1 && cell.back() == ':';
         const std::string_view dashes =
             cell.substr(left ? 1 : 0, cell.size() - (left ? 1 : 0) - (right ? 1 : 0));
         valid = valid && !dashes.empty() && dashes.find_first_not_of('-') == NPOS;
         if(left && right)
         {
-            align.push_back(0);
+            align.push_back(Alignment::kCenter);
+        }
+        else if(right)
+        {
+            align.push_back(Alignment::kRight);
         }
         else
         {
-            align.push_back(right ? 1 : -1);
+            align.push_back(Alignment::kLeft);
         }
     }
     return valid;
 }
 
-struct Flanking
+struct flanking_t
 {
     bool open  = false;
     bool close = false;
@@ -355,71 +446,165 @@ struct Flanking
 // wraps starts right after it, and closes when that text ends right before
 // it, which keeps `a * b` and `float*, int*` as written. An underscore also
 // refuses to open or close inside a word, so snake_case stays whole.
-Flanking
-Flank(std::string_view text, size_t at, size_t length)
+flanking_t
+flank(std::string_view text, size_t at, size_t length)
 {
     const char before = at > 0 ? text[at - 1] : '\0';
     const char after  = at + length < text.size() ? text[at + length] : '\0';
     const bool left =
-        !IsSpace(after) && (!IsPunct(after) || IsSpace(before) || IsPunct(before));
+        !is_space(after) && (!is_punct(after) || is_space(before) || is_punct(before));
     const bool right =
-        !IsSpace(before) && (!IsPunct(before) || IsSpace(after) || IsPunct(after));
-    Flanking result;
+        !is_space(before) && (!is_punct(before) || is_space(after) || is_punct(after));
+    flanking_t result;
     result.open  = left;
     result.close = right;
     if(text[at] == '_')
     {
-        result.open  = left && (!right || IsPunct(before));
-        result.close = right && (!left || IsPunct(after));
+        result.open  = left && (!right || is_punct(before));
+        result.close = right && (!left || is_punct(after));
     }
     return result;
 }
 
-// Where a run of exactly `ticks` backticks starts, at or after `from`.
-size_t
-FindTicks(std::string_view text, size_t from, size_t ticks)
+// Scratch for one parse. The closer map records runs already searched, so a
+// string of unmatched markers is linear instead of exponential. Tick runs are
+// indexed once per inline string.
+struct parse_state_t
 {
-    size_t at = text.find('`', from);
-    while(at != NPOS && RunLength(text, at) != ticks)
+    size_t                                          steps  = 0;
+    size_t                                          limit  = 0;
+    bool                                            failed = false;
+    std::unordered_map<uint64_t, size_t>            closers;
+    std::unordered_map<size_t, std::vector<size_t>> tick_runs;
+    const char*                                     tick_data = nullptr;
+    size_t                                          tick_size = 0;
+};
+
+bool
+charge(parse_state_t& state)
+{
+    ++state.steps;
+    if(state.steps > state.limit)
     {
-        at = text.find('`', at + RunLength(text, at));
+        state.failed = true;
+        return false;
     }
-    return at;
+    return true;
+}
+
+void
+index_ticks(parse_state_t& state, std::string_view text)
+{
+    if(state.tick_data == text.data() && state.tick_size == text.size())
+    {
+        return;
+    }
+    state.tick_runs.clear();
+    state.tick_data = text.data();
+    state.tick_size = text.size();
+    size_t at       = 0;
+    while(at < text.size() && !state.failed)
+    {
+        if(!charge(state))
+        {
+            return;
+        }
+        if(text[at] != '`')
+        {
+            ++at;
+            continue;
+        }
+        size_t length = 0;
+        while(at + length < text.size() && text[at + length] == '`')
+        {
+            ++length;
+        }
+        state.tick_runs[length].push_back(at);
+        at += length;
+    }
+}
+
+// Where a run of exactly `ticks` backticks starts, at or after `from`.
+// The search starts after an opening run, so a longer run is not matched by
+// a suffix of itself.
+size_t
+find_ticks(parse_state_t& state, std::string_view text, size_t from, size_t ticks)
+{
+    if(state.failed)
+    {
+        return NPOS;
+    }
+    index_ticks(state, text);
+    const std::unordered_map<size_t, std::vector<size_t>>::const_iterator found =
+        state.tick_runs.find(ticks);
+    if(found == state.tick_runs.end())
+    {
+        return NPOS;
+    }
+    const std::vector<size_t>::const_iterator at =
+        std::lower_bound(found->second.begin(), found->second.end(), from);
+    return at == found->second.end() ? NPOS : *at;
 }
 
 // Past the code span starting at `at`, or past its backticks if it never
 // closes.
 size_t
-SkipCodeSpan(std::string_view text, size_t at)
+skip_code_span(parse_state_t& state, std::string_view text, size_t at)
 {
-    const size_t ticks = RunLength(text, at);
-    const size_t close = FindTicks(text, at + ticks, ticks);
+    const size_t ticks = run_length(text, at);
+    const size_t close = find_ticks(state, text, at + ticks, ticks);
     return close == NPOS ? at + ticks : close + ticks;
 }
 
 size_t
-EmphasisWidth(char marker, size_t run)
+emphasis_width(char marker, size_t run)
 {
     return marker == '~' ? run : std::min(run, MAX_EMPHASIS_RUN);
 }
 
+uint64_t
+closer_key(size_t from, char marker, size_t width, int32_t depth)
+{
+    const uint64_t which = marker == '*' ? 1u : (marker == '_' ? 2u : 3u);
+    return (static_cast<uint64_t>(from) << 16) | (which << 8) |
+           (static_cast<uint64_t>(width) << 4) | static_cast<uint32_t>(depth);
+}
+
 // Where the run closing `width` markers starts, scanning from `from`. Pairs
 // nested inside are skipped whole, so the nearest opener gets the nearest
-// closer.
+// closer. A failed search is remembered, so unmatched openers are not
+// explored again.
 size_t
-FindCloser(std::string_view text, size_t from, char marker, size_t width, int depth)
+find_closer(parse_state_t& state, std::string_view text, size_t from, char marker,
+            size_t width, int32_t depth)
 {
+    if(state.failed)
+    {
+        return NPOS;
+    }
+    const uint64_t key = closer_key(from, marker, width, depth);
+    const std::unordered_map<uint64_t, size_t>::const_iterator known =
+        state.closers.find(key);
+    if(known != state.closers.end())
+    {
+        return known->second;
+    }
+
     size_t at    = from;
     size_t close = NPOS;
     while(close == NPOS && at < text.size())
     {
+        if(!charge(state))
+        {
+            return NPOS;
+        }
         if(text[at] == '\\')
         {
             at += 2;
         }
         else if(text[at] == '`')
         {
-            at = SkipCodeSpan(text, at);
+            at = skip_code_span(state, text, at);
         }
         else if(text[at] != marker)
         {
@@ -427,18 +612,22 @@ FindCloser(std::string_view text, size_t from, char marker, size_t width, int de
         }
         else
         {
-            const size_t   run  = RunLength(text, at);
-            const Flanking side = Flank(text, at, run);
-            size_t         next = at + run;
+            const size_t     run  = run_length(text, at);
+            const flanking_t side = flank(text, at, run);
+            size_t           next = at + run;
             if(side.close && run >= width && (marker != '~' || run == width))
             {
                 close = at;
             }
             else if(side.open && depth < MAX_INLINE_DEPTH)
             {
-                const size_t nested_width = EmphasisWidth(marker, run);
+                const size_t nested_width = emphasis_width(marker, run);
                 const size_t nested =
-                    FindCloser(text, at + run, marker, nested_width, depth + 1);
+                    find_closer(state, text, at + run, marker, nested_width, depth + 1);
+                if(state.failed)
+                {
+                    return NPOS;
+                }
                 if(nested != NPOS)
                 {
                     next = nested + nested_width;
@@ -447,25 +636,30 @@ FindCloser(std::string_view text, size_t from, char marker, size_t width, int de
             at = next;
         }
     }
+    state.closers.emplace(key, close);
     return close;
 }
 
 // The ']' closing the '[' at `open`, past nested brackets, escapes, and code.
 size_t
-FindBracket(std::string_view text, size_t open)
+find_bracket(parse_state_t& state, std::string_view text, size_t open)
 {
-    int    level = 0;
-    size_t at    = open;
-    size_t close = NPOS;
+    int32_t level = 0;
+    size_t  at    = open;
+    size_t  close = NPOS;
     while(close == NPOS && at < text.size())
     {
+        if(!charge(state))
+        {
+            return NPOS;
+        }
         if(text[at] == '\\')
         {
             at += 2;
         }
         else if(text[at] == '`')
         {
-            at = SkipCodeSpan(text, at);
+            at = skip_code_span(state, text, at);
         }
         else
         {
@@ -487,7 +681,7 @@ FindBracket(std::string_view text, size_t open)
     return close;
 }
 
-struct Destination
+struct destination_t
 {
     size_t begin = 0;
     size_t end   = 0;
@@ -496,17 +690,17 @@ struct Destination
 };
 
 size_t
-SkipLinkSpace(std::string_view text, size_t at)
+skip_link_space(std::string_view text, size_t at)
 {
     return std::min(text.find_first_not_of(" \t\n", at), text.size());
 }
 
 // The (destination "title") after a link label, starting at `at`.
 bool
-ParseDestination(std::string_view text, size_t at, Destination& out)
+parse_destination(std::string_view text, size_t at, destination_t& out)
 {
-    bool valid = at < text.size() && text[at] == '(';
-    size_t i   = valid ? SkipLinkSpace(text, at + 1) : text.size();
+    bool   valid = at < text.size() && text[at] == '(';
+    size_t i     = valid ? skip_link_space(text, at + 1) : text.size();
     if(valid && i < text.size() && text[i] == '<')
     {
         const size_t close = text.find('>', i + 1);
@@ -517,9 +711,9 @@ ParseDestination(std::string_view text, size_t at, Destination& out)
     }
     else if(valid)
     {
-        out.begin  = i;
-        int parens = 0;
-        while(i < text.size() && !IsSpace(text[i]) && (text[i] != ')' || parens > 0))
+        out.begin      = i;
+        int32_t parens = 0;
+        while(i < text.size() && !is_space(text[i]) && (text[i] != ')' || parens > 0))
         {
             if(text[i] == '(')
             {
@@ -534,12 +728,12 @@ ParseDestination(std::string_view text, size_t at, Destination& out)
         i       = std::min(i, text.size());
         out.end = i;
     }
-    i = SkipLinkSpace(text, i);
+    i = skip_link_space(text, i);
     if(valid && i < text.size() && (text[i] == '"' || text[i] == '\''))
     {
         const size_t close = text.find(text[i], i + 1);
         valid              = close != NPOS;
-        i                  = valid ? SkipLinkSpace(text, close + 1) : text.size();
+        i                  = valid ? skip_link_space(text, close + 1) : text.size();
     }
     valid     = valid && i < text.size() && text[i] == ')';
     out.after = i + 1;
@@ -549,22 +743,24 @@ ParseDestination(std::string_view text, size_t at, Destination& out)
 // The length of a bare http://, https://, or www. URL at `at`, or 0. Trailing
 // punctuation and an unmatched ')' belong to the sentence around it.
 size_t
-BareUrlLength(std::string_view text, size_t at)
+bare_url_length(std::string_view text, size_t at)
 {
-    const std::string_view rest   = text.substr(at);
-    const bool             starts = StartsWith(rest, "https://") ||
-                        StartsWith(rest, "http://") || StartsWith(rest, "www.");
-    const bool bounded = at == 0 || IsSpace(text[at - 1]) || text[at - 1] == '(' ||
+    const std::string_view rest = text.substr(at);
+    const bool starts = starts_with(rest, "https://") || starts_with(rest, "http://") ||
+                        starts_with(rest, "www.");
+    const bool bounded = at == 0 || is_space(text[at - 1]) || text[at - 1] == '(' ||
                          text[at - 1] == '*' || text[at - 1] == '_';
     size_t end = 0;
     if(starts && bounded)
     {
-        while(end < rest.size() && !IsSpace(rest[end]) && rest[end] != '<')
+        while(end < rest.size() && !is_space(rest[end]) && rest[end] != '<')
         {
             ++end;
         }
-        size_t opened = static_cast<size_t>(std::count(rest.begin(), rest.begin() + end, '('));
-        size_t closed = static_cast<size_t>(std::count(rest.begin(), rest.begin() + end, ')'));
+        size_t opened =
+            static_cast<size_t>(std::count(rest.begin(), rest.begin() + end, '('));
+        size_t closed =
+            static_cast<size_t>(std::count(rest.begin(), rest.begin() + end, ')'));
         while(end > 0 && (std::strchr("?!.,:;*_~'\"", rest[end - 1]) != nullptr ||
                           (rest[end - 1] == ')' && closed > opened)))
         {
@@ -580,35 +776,52 @@ BareUrlLength(std::string_view text, size_t at)
 }
 
 bool
-IsAutolink(std::string_view inner)
+is_autolink(std::string_view inner)
 {
     const bool spaced = inner.find_first_of(" \t\n<") != NPOS;
-    const bool scheme = StartsWith(inner, "http://") || StartsWith(inner, "https://") ||
-                        StartsWith(inner, "mailto:");
+    const bool scheme = starts_with(inner, "http://") || starts_with(inner, "https://") ||
+                        starts_with(inner, "mailto:");
     const bool email = inner.find('@') != NPOS && inner.find('.') != NPOS;
     return !inner.empty() && !spaced && (scheme || email);
 }
 
 bool
-IsBreakTag(std::string_view inner)
+equals_ignore_case(std::string_view text, std::string_view lower)
 {
-    std::string lower(Trim(inner));
-    for(char& c : lower)
+    if(text.size() != lower.size())
     {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return false;
     }
-    return lower == "br" || lower == "br/" || lower == "br /";
+    for(size_t i = 0; i < text.size(); ++i)
+    {
+        const unsigned char byte = static_cast<unsigned char>(text[i]);
+        const char          folded =
+            byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a') : text[i];
+        if(folded != lower[i])
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
-struct Entity
+bool
+is_break_tag(std::string_view inner)
+{
+    const std::string_view trimmed = trim(inner);
+    return equals_ignore_case(trimmed, "br") || equals_ignore_case(trimmed, "br/") ||
+           equals_ignore_case(trimmed, "br /");
+}
+
+struct entity_t
 {
     std::string_view name;
     std::string_view text;
 };
 
-constexpr Entity ENTITIES[] = {
-    { "&amp;", "&" },   { "&lt;", "<" },   { "&gt;", ">" },   { "&quot;", "\"" },
-    { "&#39;", "'" },   { "&apos;", "'" }, { "&nbsp;", " " },
+constexpr entity_t ENTITIES[] = {
+    { "&amp;", "&" }, { "&lt;", "<" },   { "&gt;", ">" },   { "&quot;", "\"" },
+    { "&#39;", "'" }, { "&apos;", "'" }, { "&nbsp;", " " },
 };
 
 // ------------------------------------------------------------------ parser
@@ -616,15 +829,28 @@ constexpr Entity ENTITIES[] = {
 class Parser
 {
 public:
-    explicit Parser(Document& document)
+    explicit Parser(document_t& document)
     : m_doc(document)
     {}
 
-    void Parse(std::string_view source)
+    // False when the text is too large to index or the step budget runs out.
+    // The caller then draws the source as plain text.
+    bool Parse(std::string_view source)
     {
-        size_t start = 0;
-        while(start <= source.size())
+        assert(source.size() <= MAX_MARKDOWN_BYTES);
+        if(source.size() > MAX_MARKDOWN_BYTES)
         {
+            m_state.failed = true;
+            return false;
+        }
+        m_state.limit = std::max(source.size() * PARSE_STEPS_PER_BYTE, MIN_PARSE_STEPS);
+        size_t start  = 0;
+        while(start <= source.size() && !m_state.failed)
+        {
+            if(!charge(m_state))
+            {
+                break;
+            }
             const size_t     end  = std::min(source.find('\n', start), source.size());
             std::string_view line = source.substr(start, end - start);
             if(!line.empty() && line.back() == '\r')
@@ -635,29 +861,42 @@ public:
             start = end + 1;
         }
         Flush();
+        return !m_state.failed;
     }
 
 private:
     struct ListLevel
     {
-        size_t marker_indent  = 0;
-        size_t content_indent = 0;
-        bool   ordered        = false;
-        int    number         = 0;
+        int32_t marker_indent  = 0;
+        int32_t content_indent = 0;
+        bool    ordered        = false;
+        int32_t number         = 0;
     };
 
     void Line(std::string_view line)
     {
+        if(m_state.failed)
+        {
+            return;
+        }
         if(m_fence_length > 0 && !CodeLine(line))
         {
             return;
         }
+        if(m_indented)
+        {
+            if(ContinueIndented(line))
+            {
+                return;
+            }
+            m_indented = false;
+        }
 
-        uint8_t          quote   = 0;
-        std::string_view rest    = StripQuotes(line, MAX_NESTING, quote);
-        const size_t     indent  = LeadingSpaces(rest);
-        std::string_view content = rest.substr(indent);
-        if(Trim(content).empty())
+        uint8_t               quote   = 0;
+        std::string_view      rest    = strip_quotes(line, MAX_NESTING, quote);
+        const column_indent_t indent  = measure_indent(rest);
+        std::string_view      content = rest.substr(indent.bytes);
+        if(trim(content).empty())
         {
             Flush();
             m_table = -1;
@@ -687,11 +926,26 @@ private:
         }
         m_table = -1;
 
-        const bool in_item = m_lists.empty() || indent >= m_lists.back().content_indent;
-        if(m_open && in_item && SetextLevel(content) > 0)
+        // Four columns of indent at the root is a code block. It does not
+        // interrupt a paragraph, and a list item keeps its own indent.
+        if(!m_open && m_lists.empty() && indent.columns >= INDENTED_CODE_COLUMNS)
         {
-            Block& heading = Open(BlockKind::kHeading);
-            heading.level  = static_cast<uint8_t>(SetextLevel(content));
+            Flush();
+            Open(BlockKind::kCode);
+            m_indented   = true;
+            m_code_lines = 0;
+            ContinueIndented(line);
+            m_blank = false;
+            return;
+        }
+
+        const bool in_item =
+            m_lists.empty() || indent.columns >= m_lists.back().content_indent;
+        if(m_open && in_item && setext_level(content) > 0)
+        {
+            block_t& heading = Open(BlockKind::kHeading);
+            heading.level    = static_cast<uint8_t>(setext_level(content));
+            assert(heading.level >= 1 && heading.level <= MAX_HEADING_LEVEL);
             Inline(heading.spans, m_paragraph, 0, -1, 0);
             m_paragraph.clear();
             m_open  = false;
@@ -699,8 +953,8 @@ private:
             return;
         }
 
-        size_t content_indent = indent;
-        if(!ListItem(content, indent, content_indent))
+        int32_t content_indent = indent.columns;
+        if(!ListItem(content, indent.columns, content_indent))
         {
             if(m_open && !StartsBlock(content))
             {
@@ -708,7 +962,7 @@ private:
                 m_blank = false;
                 return;
             }
-            while(!m_lists.empty() && indent < m_lists.back().content_indent)
+            while(!m_lists.empty() && indent.columns < m_lists.back().content_indent)
             {
                 m_lists.pop_back();
             }
@@ -717,23 +971,58 @@ private:
         m_blank = false;
     }
 
+    // True when this line belongs to the open indented code block.
+    bool ContinueIndented(std::string_view line)
+    {
+        uint8_t          quote = 0;
+        std::string_view rest  = strip_quotes(line, m_quote, quote);
+        if(quote < m_quote)
+        {
+            return false;
+        }
+        block_t& code = m_doc.blocks.back();
+        if(trim(rest).empty())
+        {
+            if(m_code_lines > 0)
+            {
+                Append(code.spans, "\n", kCode, -1);
+            }
+            ++m_code_lines;
+            return true;
+        }
+        const column_indent_t indent = measure_indent(rest);
+        if(indent.columns < INDENTED_CODE_COLUMNS)
+        {
+            return false;
+        }
+        if(m_code_lines > 0)
+        {
+            Append(code.spans, "\n", kCode, -1);
+        }
+        Append(code.spans, strip_columns(rest, INDENTED_CODE_COLUMNS), kCode, -1);
+        ++m_code_lines;
+        return true;
+    }
+
     // Returns true when the line closed the fence and still needs reading.
     bool CodeLine(std::string_view line)
     {
-        uint8_t          quote = 0;
-        std::string_view rest  = StripQuotes(line, m_fence_quote, quote);
-        bool             done  = quote < m_fence_quote;
-        rest.remove_prefix(std::min(LeadingSpaces(rest), m_fence_indent));
-        const std::string_view trimmed = Trim(rest);
+        uint8_t               quote        = 0;
+        std::string_view      rest         = strip_quotes(line, m_fence_quote, quote);
+        bool                  done         = quote < m_fence_quote;
+        const column_indent_t fence_indent = measure_indent(rest);
+        const int32_t         strip    = std::min(fence_indent.columns, m_fence_indent);
+        rest                           = strip_columns(rest, strip);
+        const std::string_view trimmed = trim(rest);
         const size_t           run =
-            !trimmed.empty() && trimmed[0] == m_fence ? RunLength(trimmed, 0) : 0;
+            !trimmed.empty() && trimmed[0] == m_fence ? run_length(trimmed, 0) : 0;
         if(!done && run >= m_fence_length && run == trimmed.size())
         {
             m_fence_length = 0;
         }
         else if(!done)
         {
-            Block& code = m_doc.blocks.back();
+            block_t& code = m_doc.blocks.back();
             if(m_code_lines > 0)
             {
                 Append(code.spans, "\n", kCode, -1);
@@ -750,11 +1039,11 @@ private:
 
     // Opens a list item when the line starts with a marker, leaving its text
     // in `content`.
-    bool ListItem(std::string_view& content, size_t indent, size_t& content_indent)
+    bool ListItem(std::string_view& content, int32_t indent, int32_t& content_indent)
     {
         bool         ordered = false;
-        int          number  = 0;
-        const size_t marker  = ListMarker(content, ordered, number);
+        int32_t      number  = 0;
+        const size_t marker  = list_marker(content, ordered, number);
         if(marker == 0)
         {
             return false;
@@ -770,13 +1059,15 @@ private:
             has_sibling = true;
             m_lists.pop_back();
         }
-        const size_t spaces = LeadingSpaces(content.substr(marker));
-        ListLevel    level;
+        const column_indent_t spaces = measure_indent(content.substr(marker));
+        ListLevel             level;
         level.marker_indent = indent;
-        level.content_indent =
-            indent + marker + std::max<size_t>(std::min(spaces, MAX_LIST_SPACES), 1);
-        level.ordered = ordered;
-        level.number  = number;
+        const int32_t gap =
+            std::max(std::min(spaces.columns, static_cast<int32_t>(MAX_LIST_SPACES)),
+                     int32_t{ 1 });
+        level.content_indent = indent + static_cast<int32_t>(marker) + gap;
+        level.ordered        = ordered;
+        level.number         = number;
         // A list counts on from its first number, whatever the next ones say.
         if(ordered && has_sibling && sibling.ordered && sibling.marker_indent == indent)
         {
@@ -786,7 +1077,7 @@ private:
         {
             m_lists.push_back(level);
         }
-        content        = content.substr(std::min(marker + spaces, content.size()));
+        content        = content.substr(std::min(marker + spaces.bytes, content.size()));
         content_indent = level.content_indent;
         m_marker       = ordered ? Marker::kNumber : Marker::kBullet;
         m_number       = level.number;
@@ -795,11 +1086,11 @@ private:
                           content[2] == ']' &&
                           (content[1] == ' ' || content[1] == 'x' || content[1] == 'X') &&
                           (content.size() == TASK_MARKER_LENGTH ||
-                           IsBlank(content[TASK_MARKER_LENGTH]));
+                           is_blank(content[TASK_MARKER_LENGTH]));
         if(task)
         {
             m_marker = content[1] == ' ' ? Marker::kTask : Marker::kTaskDone;
-            content  = Trim(content.substr(TASK_MARKER_LENGTH));
+            content  = trim(content.substr(TASK_MARKER_LENGTH));
         }
         return true;
     }
@@ -808,32 +1099,40 @@ private:
     bool StartsBlock(std::string_view content) const
     {
         bool         ordered = false;
-        int          number  = 0;
-        const size_t hashes  = !content.empty() && content[0] == '#' ? RunLength(content, 0) : 0;
-        const bool   heading = hashes > 0 && hashes <= MAX_HEADING_LEVEL &&
-                             (hashes == content.size() || IsBlank(content[hashes]));
+        int32_t      number  = 0;
+        const size_t hashes =
+            !content.empty() && content[0] == '#' ? run_length(content, 0) : 0;
+        const bool heading = hashes > 0 && hashes <= MAX_HEADING_LEVEL &&
+                             (hashes == content.size() || is_blank(content[hashes]));
         const bool fence = !content.empty() && (content[0] == '`' || content[0] == '~') &&
-                           RunLength(content, 0) >= MIN_FENCE_LENGTH;
-        std::vector<int> align;
-        return heading || fence || IsRule(content) ||
-               ListMarker(content, ordered, number) > 0 || TableStarts(content, align);
+                           run_length(content, 0) >= MIN_FENCE_LENGTH;
+        return heading || fence || is_rule(content) ||
+               list_marker(content, ordered, number) > 0 || TableStarts(content);
     }
 
     // Whether the open paragraph is a table header and this its delimiter row.
-    bool TableStarts(std::string_view content, std::vector<int>& align) const
+    bool TableStarts(std::string_view content) const
     {
-        return m_open && m_paragraph.find('\n') == std::string::npos &&
-               m_paragraph.find('|') != std::string::npos && DelimiterRow(content, align) &&
-               align.size() == SplitRow(m_paragraph).size();
+        if(!(m_open && m_paragraph.find('\n') == std::string::npos &&
+             m_paragraph.find('|') != std::string::npos))
+        {
+            return false;
+        }
+        if(!delimiter_row(content, m_align_scratch, m_cells))
+        {
+            return false;
+        }
+        split_row(m_paragraph, m_header_cells);
+        return m_align_scratch.size() == m_header_cells.size();
     }
 
-    void Content(std::string_view content, size_t indent)
+    void Content(std::string_view content, int32_t indent)
     {
-        const char       first  = content.empty() ? '\0' : content[0];
-        const size_t     fence  = (first == '`' || first == '~') ? RunLength(content, 0) : 0;
-        const size_t     hashes = first == '#' ? RunLength(content, 0) : 0;
-        std::vector<int> align;
-        if(fence >= MIN_FENCE_LENGTH && (first == '~' || content.find('`', fence) == NPOS))
+        const char   first  = content.empty() ? '\0' : content[0];
+        const size_t fence  = (first == '`' || first == '~') ? run_length(content, 0) : 0;
+        const size_t hashes = first == '#' ? run_length(content, 0) : 0;
+        if(fence >= MIN_FENCE_LENGTH &&
+           (first == '~' || content.find('`', fence) == NPOS))
         {
             Flush();
             Open(BlockKind::kCode);
@@ -843,27 +1142,28 @@ private:
             m_fence_quote  = m_quote;
             m_code_lines   = 0;
         }
-        else if(IsRule(content))
+        else if(is_rule(content))
         {
             Flush();
             Open(BlockKind::kRule);
         }
         else if(hashes > 0 && hashes <= MAX_HEADING_LEVEL &&
-                (hashes == content.size() || IsBlank(content[hashes])))
+                (hashes == content.size() || is_blank(content[hashes])))
         {
             Flush();
-            Block& heading = Open(BlockKind::kHeading);
-            heading.level  = static_cast<uint8_t>(hashes);
-            Inline(heading.spans, HeadingText(content.substr(hashes)), 0, -1, 0);
+            block_t& heading = Open(BlockKind::kHeading);
+            heading.level    = static_cast<uint8_t>(hashes);
+            assert(heading.level >= 1 && heading.level <= MAX_HEADING_LEVEL);
+            Inline(heading.spans, heading_text(content.substr(hashes)), 0, -1, 0);
         }
-        else if(TableStarts(content, align))
+        else if(TableStarts(content))
         {
             const std::string header = m_paragraph;
             m_paragraph.clear();
-            m_open       = false;
-            Block& table = Open(BlockKind::kTable);
-            table.align  = align;
-            m_table      = static_cast<int32_t>(m_doc.blocks.size() - 1);
+            m_open         = false;
+            block_t& table = Open(BlockKind::kTable);
+            table.align    = m_align_scratch;
+            m_table        = static_cast<int32_t>(m_doc.blocks.size() - 1);
             AddRow(table, header);
         }
         else if(m_open)
@@ -888,14 +1188,14 @@ private:
     {
         if(m_open)
         {
-            Block& block = Open(BlockKind::kParagraph);
+            block_t& block = Open(BlockKind::kParagraph);
             Inline(block.spans, m_paragraph, 0, -1, 0);
             m_paragraph.clear();
             m_open = false;
         }
     }
 
-    Block& Open(BlockKind kind)
+    block_t& Open(BlockKind kind)
     {
         const bool blank        = m_open ? m_paragraph_blank : m_blank;
         const bool follows_item = !m_doc.blocks.empty() && m_doc.blocks.back().list > 0;
@@ -903,12 +1203,12 @@ private:
         {
             m_doc.text += '\n';
         }
-        Block& block = m_doc.blocks.emplace_back();
-        block.kind   = kind;
-        block.quote  = m_quote;
-        block.list   = static_cast<uint8_t>(m_lists.size());
-        block.tight  = !blank && follows_item && block.list > 0;
-        block.marker = m_marker;
+        block_t& block = m_doc.blocks.emplace_back();
+        block.kind     = kind;
+        block.quote    = m_quote;
+        block.list     = static_cast<uint8_t>(m_lists.size());
+        block.tight    = !blank && follows_item && block.list > 0;
+        block.marker   = m_marker;
         if(m_marker != Marker::kNone)
         {
             std::string marker = BULLET_TEXT;
@@ -932,30 +1232,38 @@ private:
         return block;
     }
 
-    void AddRow(Block& table, std::string_view row)
+    void AddRow(block_t& table, std::string_view row)
     {
-        std::vector<std::string_view> cells = SplitRow(row);
-        cells.resize(table.align.size());
+        split_row(row, m_cells);
+        m_cells.resize(table.align.size());
+        assert(m_cells.size() == table.align.size());
         if(!table.rows.empty())
         {
             m_doc.text += '\n';
         }
-        std::vector<Cell>& out = table.rows.emplace_back();
-        out.resize(cells.size());
-        for(size_t column = 0; column < cells.size(); ++column)
+        std::vector<cell_t>& out = table.rows.emplace_back();
+        out.resize(m_cells.size());
+        for(size_t column = 0; column < m_cells.size(); ++column)
         {
             if(column > 0)
             {
                 m_doc.text += '\t';
             }
-            Inline(out[column].spans, cells[column], 0, -1, 0);
+            Inline(out[column].spans, m_cells[column], 0, -1, 0);
         }
     }
 
-    void Append(std::vector<Span>& spans, std::string_view text, uint32_t flags, int32_t link)
+    void Append(std::vector<span_t>& spans, std::string_view text, uint32_t flags,
+                int32_t link)
     {
-        if(text.empty())
+        if(text.empty() || m_state.failed)
         {
+            return;
+        }
+        assert(m_doc.text.size() + text.size() <= MAX_MARKDOWN_BYTES);
+        if(m_doc.text.size() + text.size() > MAX_MARKDOWN_BYTES)
+        {
+            m_state.failed = true;
             return;
         }
         const uint32_t begin = static_cast<uint32_t>(m_doc.text.size());
@@ -968,11 +1276,12 @@ private:
         }
         else
         {
-            Span span;
+            span_t span;
             span.begin = begin;
             span.end   = end;
             span.flags = flags;
             span.link  = link;
+            assert(span.begin <= span.end && span.end <= m_doc.text.size());
             spans.push_back(span);
         }
     }
@@ -985,7 +1294,7 @@ private:
 
     // Newlines in code spans read as spaces, and one space either side goes
     // when both are there.
-    void AppendCode(std::vector<Span>& spans, std::string_view code, uint32_t flags,
+    void AppendCode(std::vector<span_t>& spans, std::string_view code, uint32_t flags,
                     int32_t link)
     {
         std::string text(code);
@@ -998,12 +1307,22 @@ private:
         Append(spans, text, flags, link);
     }
 
-    void Inline(std::vector<Span>& spans, std::string_view s, uint32_t flags, int32_t link,
-                int depth)
+    void Inline(std::vector<span_t>& spans, std::string_view s, uint32_t flags,
+                int32_t link, int32_t depth)
     {
-        size_t plain = 0;
-        size_t i     = 0;
-        while(i < s.size())
+        if(m_state.failed)
+        {
+            return;
+        }
+        // Closer positions belong to this string. A nested call parses a
+        // different slice, so the maps are rebuilt when this one resumes.
+        m_state.closers.clear();
+        m_state.tick_runs.clear();
+        m_state.tick_data = nullptr;
+        m_state.tick_size = 0;
+        size_t plain      = 0;
+        size_t i          = 0;
+        while(i < s.size() && !m_state.failed)
         {
             const char   c        = s[i];
             const char   next     = i + 1 < s.size() ? s[i + 1] : '\0';
@@ -1012,7 +1331,7 @@ private:
             {
                 i = consumed;
             }
-            else if(c == '\\' && IsPunct(next))
+            else if(c == '\\' && is_punct(next))
             {
                 // The escaped character starts the next literal run.
                 Append(spans, s.substr(plain, i - plain), flags, link);
@@ -1030,8 +1349,8 @@ private:
     // Handles the inline construct at `at`, if one starts there, and returns
     // where the text resumes; 0 when there is none. `plain` is where the
     // pending literal text starts, and moves only past what was consumed.
-    size_t Construct(std::vector<Span>& spans, std::string_view s, size_t at,
-                     uint32_t flags, int32_t link, int depth, size_t& plain)
+    size_t Construct(std::vector<span_t>& spans, std::string_view s, size_t at,
+                     uint32_t flags, int32_t link, int32_t depth, size_t& plain)
     {
         const char c      = s[at];
         const char next   = at + 1 < s.size() ? s[at + 1] : '\0';
@@ -1050,15 +1369,15 @@ private:
             Append(spans, s.substr(plain, end - plain), flags, link);
             Append(spans, hard ? "\n" : " ", flags, link);
             resume = at + (c == '\\' ? 2 : 1);
-            resume += LeadingSpaces(s.substr(resume));
+            resume += measure_indent(s.substr(resume)).bytes;
             took = true;
         }
         else if(c == '`')
         {
             // An unmatched run stays text, but whole, so its backticks never
             // pair up among themselves.
-            const size_t ticks = RunLength(s, at);
-            const size_t close = FindTicks(s, at + ticks, ticks);
+            const size_t ticks = run_length(s, at);
+            const size_t close = find_ticks(m_state, s, at + ticks, ticks);
             resume             = close == NPOS ? at + ticks : close + ticks;
             took               = close != NPOS;
             if(took)
@@ -1072,15 +1391,17 @@ private:
         {
             resume = Emphasis(spans, s, at, flags, link, depth, plain, took);
         }
-        else if((c == '[' || (c == '!' && next == '[')) && link < 0 && depth < MAX_INLINE_DEPTH)
+        else if((c == '[' || (c == '!' && next == '[')) && link < 0 &&
+                depth < MAX_INLINE_DEPTH)
         {
-            const size_t label = c == '!' ? at + 1 : at;
-            const size_t close = FindBracket(s, label);
-            Destination  target;
-            if(close != NPOS && ParseDestination(s, close + 1, target))
+            const size_t  label = c == '!' ? at + 1 : at;
+            const size_t  close = find_bracket(m_state, s, label);
+            destination_t target;
+            if(close != NPOS && parse_destination(s, close + 1, target))
             {
                 Append(spans, s.substr(plain, at - plain), flags, link);
-                const std::string_view url = s.substr(target.begin, target.end - target.begin);
+                const std::string_view url =
+                    s.substr(target.begin, target.end - target.begin);
                 std::string_view text = s.substr(label + 1, close - label - 1);
                 if(text.empty())
                 {
@@ -1096,28 +1417,29 @@ private:
             const size_t           close = s.find('>', at + 1);
             const std::string_view inner =
                 close == NPOS ? std::string_view() : s.substr(at + 1, close - at - 1);
-            if(close != NPOS && IsBreakTag(inner))
+            if(close != NPOS && is_break_tag(inner))
             {
                 Append(spans, s.substr(plain, at - plain), flags, link);
                 Append(spans, "\n", flags, link);
                 resume = close + 1;
                 took   = true;
             }
-            else if(close != NPOS && link < 0 && IsAutolink(inner))
+            else if(close != NPOS && link < 0 && is_autolink(inner))
             {
                 Append(spans, s.substr(plain, at - plain), flags, link);
                 const bool email = inner.find(':') == NPOS;
-                Append(spans, inner, flags,
-                       AddLink(email ? "mailto:" + std::string(inner) : std::string(inner)));
+                Append(
+                    spans, inner, flags,
+                    AddLink(email ? "mailto:" + std::string(inner) : std::string(inner)));
                 resume = close + 1;
                 took   = true;
             }
         }
         else if(c == '&')
         {
-            for(const Entity& entity : ENTITIES)
+            for(const entity_t& entity : ENTITIES)
             {
-                if(!took && StartsWith(s.substr(at), entity.name))
+                if(!took && starts_with(s.substr(at), entity.name))
                 {
                     Append(spans, s.substr(plain, at - plain), flags, link);
                     Append(spans, entity.text, flags, link);
@@ -1128,13 +1450,14 @@ private:
         }
         else if((c == 'h' || c == 'w') && link < 0)
         {
-            const size_t length = BareUrlLength(s, at);
+            const size_t length = bare_url_length(s, at);
             if(length > 0)
             {
                 Append(spans, s.substr(plain, at - plain), flags, link);
-                const std::string_view url = s.substr(at, length);
-                const std::string target =
-                    StartsWith(url, "www.") ? "http://" + std::string(url) : std::string(url);
+                const std::string_view url    = s.substr(at, length);
+                const std::string      target = starts_with(url, "www.")
+                                                    ? "http://" + std::string(url)
+                                                    : std::string(url);
                 Append(spans, url, flags, AddLink(target));
                 resume = at + length;
                 took   = true;
@@ -1147,18 +1470,19 @@ private:
         return resume;
     }
 
-    size_t Emphasis(std::vector<Span>& spans, std::string_view s, size_t at, uint32_t flags,
-                    int32_t link, int depth, size_t plain, bool& took)
+    size_t Emphasis(std::vector<span_t>& spans, std::string_view s, size_t at,
+                    uint32_t flags, int32_t link, int32_t depth, size_t plain, bool& took)
     {
         const char   marker = s[at];
-        const size_t run    = RunLength(s, at);
-        const size_t width  = EmphasisWidth(marker, run);
+        const size_t run    = run_length(s, at);
+        const size_t width  = emphasis_width(marker, run);
         // The run's last `width` markers open; any before them are text.
         const size_t open  = at + run - width;
         size_t       close = NPOS;
-        if((marker != '~' || run == 2) && depth < MAX_INLINE_DEPTH && Flank(s, at, run).open)
+        if((marker != '~' || run == 2) && depth < MAX_INLINE_DEPTH &&
+           flank(s, at, run).open)
         {
-            close = FindCloser(s, at + run, marker, width, 0);
+            close = find_closer(m_state, s, at + run, marker, width, 0);
         }
         // With no partner the whole run stays text, left in the literal run.
         size_t resume = at + run;
@@ -1171,14 +1495,14 @@ private:
                 added = width == 1 ? kItalic : (width == 2 ? kBold : kBold | kItalic);
             }
             Append(spans, s.substr(plain, open - plain), flags, link);
-            Inline(spans, s.substr(open + width, close - open - width), flags | added, link,
-                   depth + 1);
+            Inline(spans, s.substr(open + width, close - open - width), flags | added,
+                   link, depth + 1);
             resume = close + width;
         }
         return resume;
     }
 
-    Document&              m_doc;
+    document_t&            m_doc;
     std::string            m_paragraph;
     bool                   m_open            = false;  // m_paragraph is a paragraph
     bool                   m_paragraph_blank = false;  // a blank line came before it
@@ -1186,25 +1510,41 @@ private:
     uint8_t                m_quote           = 0;
     std::vector<ListLevel> m_lists;
     // Owed to the next block opened.
-    Marker  m_marker = Marker::kNone;
-    int     m_number = 0;
-    int32_t m_table  = -1;  // the open table, as a block index
-    char    m_fence  = '\0';
-    size_t  m_fence_length = 0;
-    size_t  m_fence_indent = 0;
-    uint8_t m_fence_quote  = 0;
-    size_t  m_code_lines   = 0;
+    Marker        m_marker       = Marker::kNone;
+    int32_t       m_number       = 0;
+    int32_t       m_table        = -1;  // the open table, as a block index
+    char          m_fence        = '\0';
+    size_t        m_fence_length = 0;
+    int32_t       m_fence_indent = 0;
+    uint8_t       m_fence_quote  = 0;
+    size_t        m_code_lines   = 0;
+    bool          m_indented     = false;
+    parse_state_t m_state;
+    // Reused so a line does not allocate a vector to ask what it starts.
+    mutable std::vector<Alignment>        m_align_scratch;
+    mutable std::vector<std::string_view> m_cells;
+    mutable std::vector<std::string_view> m_header_cells;
 };
 
 void
-BuildPlain(Document& document, std::string_view text)
+build_plain(document_t& document, std::string_view text)
 {
-    document.text.assign(text.data(), text.size());
-    Block& block = document.blocks.emplace_back();
+    assert(text.size() <= MAX_MARKDOWN_BYTES);
+    document.text.clear();
+    document.text.reserve(std::min(text.size(), MAX_MARKDOWN_BYTES));
+    for(char c : text)
+    {
+        if(c != '\r' && document.text.size() < MAX_MARKDOWN_BYTES)
+        {
+            document.text.push_back(c);
+        }
+    }
+    block_t& block = document.blocks.emplace_back();
     if(!document.text.empty())
     {
-        Span span;
+        span_t span;
         span.end = static_cast<uint32_t>(document.text.size());
+        assert(span.end <= document.text.size());
         block.spans.push_back(span);
     }
 }
@@ -1237,7 +1577,7 @@ enum class Paint : uint8_t
     kHeaderBackground
 };
 
-struct Fragment
+struct fragment_t
 {
     // Top left of the glyphs and the line box, relative to the view.
     float    x      = 0.0f;
@@ -1248,14 +1588,14 @@ struct Fragment
     float    ascent = 0.0f;
     float    size   = 0.0f;
     ImFont*  font   = nullptr;
-    uint32_t begin  = 0;  // the range of Document::text drawn
+    uint32_t begin  = 0;  // the range of document_t::text drawn
     uint32_t end    = 0;
     uint32_t flags  = 0;
     int32_t  link   = -1;
     Role     role   = Role::kText;
 };
 
-struct Shape
+struct shape_t
 {
     ShapeKind kind  = ShapeKind::kRect;
     Paint     paint = Paint::kLine;
@@ -1263,25 +1603,25 @@ struct Shape
     ImVec2    max;
 };
 
-struct Layout
+struct layout_t
 {
-    std::vector<Fragment> fragments;
-    std::vector<Shape>    shapes;
-    float                 height = 0.0f;
+    std::vector<fragment_t> fragments;
+    std::vector<shape_t>    shapes;
+    float                   height = 0.0f;
 };
 
-struct Fonts
+struct fonts_t
 {
-    ImFont* regular = nullptr;
-    ImFont* bold    = nullptr;
-    ImFont* italic  = nullptr;
-    ImFont* code    = nullptr;
-    float   size    = 0.0f;
+    ImFont* regular                          = nullptr;
+    ImFont* bold                             = nullptr;
+    ImFont* italic                           = nullptr;
+    ImFont* code                             = nullptr;
+    float   size                             = 0.0f;
     float   heading_scale[MAX_HEADING_LEVEL] = {};
 };
 
 bool
-SameFonts(const Fonts& a, const Fonts& b)
+same_fonts(const fonts_t& a, const fonts_t& b)
 {
     bool same = a.regular == b.regular && a.bold == b.bold && a.italic == b.italic &&
                 a.code == b.code && a.size == b.size;
@@ -1292,10 +1632,10 @@ SameFonts(const Fonts& a, const Fonts& b)
     return same;
 }
 
-Fonts
-ResolveFonts(const Style& style)
+fonts_t
+resolve_fonts(const markdown_style_t& style)
 {
-    Fonts fonts;
+    fonts_t fonts;
     fonts.regular = style.font != nullptr ? style.font : ImGui::GetFont();
     fonts.bold    = style.bold_font;
     fonts.italic  = style.italic_font;
@@ -1311,7 +1651,8 @@ ResolveFonts(const Style& style)
 class Layouter
 {
 public:
-    Layouter(const Document& document, const Fonts& fonts, float width, Layout& layout)
+    Layouter(const document_t& document, const fonts_t& fonts, float width,
+             layout_t& layout)
     : m_doc(document)
     , m_fonts(fonts)
     , m_width(width)
@@ -1320,15 +1661,15 @@ public:
 
     void Run()
     {
-        float        y        = 0.0f;
-        const Block* previous = nullptr;
-        for(const Block& block : m_doc.blocks)
+        float          y        = 0.0f;
+        const block_t* previous = nullptr;
+        for(const block_t& block : m_doc.blocks)
         {
             const float gap = previous != nullptr ? Em(Gap(block)) : 0.0f;
             y += gap;
-            const float  x0    = Em(block.quote * QUOTE_INDENT + block.list * LIST_INDENT);
-            const float  x1    = std::max(x0 + Em(MIN_COLUMN_WIDTH), m_width);
-            const float  top   = y;
+            const float  x0  = Em(block.quote * QUOTE_INDENT + block.list * LIST_INDENT);
+            const float  x1  = std::max(x0 + Em(MIN_COLUMN_WIDTH), m_width);
+            const float  top = y;
             const size_t first = m_layout.fragments.size();
             y                  = Body(block, x0, x1, y);
             if(block.marker != Marker::kNone)
@@ -1340,7 +1681,8 @@ public:
                 // Bars run through the gap when the block above is in the quote.
                 const bool  joined = previous != nullptr && previous->quote > level;
                 const float bar    = Em(level * QUOTE_INDENT);
-                AddShape(ShapeKind::kRect, Paint::kLine, ImVec2(bar, joined ? top - gap : top),
+                AddShape(ShapeKind::kRect, Paint::kLine,
+                         ImVec2(bar, joined ? top - gap : top),
                          ImVec2(bar + Em(QUOTE_BAR_WIDTH), y));
             }
             previous = &block;
@@ -1350,7 +1692,7 @@ public:
 
 private:
     // How a piece of text is drawn.
-    struct Ink
+    struct ink_t
     {
         ImFont*  font   = nullptr;
         float    ascent = 0.0f;
@@ -1361,9 +1703,9 @@ private:
 
     // Spaces held back until the next word lands on the same line, so a line
     // never ends in them.
-    struct Pending
+    struct pending_t
     {
-        Ink      ink;
+        ink_t    ink;
         uint32_t begin = 0;
         uint32_t end   = 0;
         float    width = 0.0f;
@@ -1371,7 +1713,7 @@ private:
 
     float Em(float value) const { return value * m_fonts.size; }
 
-    static float Gap(const Block& block)
+    static float Gap(const block_t& block)
     {
         float gap = BLOCK_GAP;
         if(block.kind == BlockKind::kHeading)
@@ -1385,35 +1727,38 @@ private:
         return gap;
     }
 
-    static Role TextRole(const Block& block)
+    static Role TextRole(const block_t& block)
     {
         return block.quote > 0 ? Role::kQuote : Role::kText;
     }
 
-    float Body(const Block& block, float x0, float x1, float y)
+    float Body(const block_t& block, float x0, float x1, float y)
     {
         float bottom = y;
         if(block.kind == BlockKind::kParagraph)
         {
-            bottom = Inline(block.spans, x0, x1, y, m_fonts.size, TextRole(block), 0, -1);
+            bottom = Inline(block.spans, x0, x1, y, m_fonts.size, TextRole(block), 0,
+                            Alignment::kLeft);
         }
         else if(block.kind == BlockKind::kHeading)
         {
+            assert(block.level >= 1 && block.level <= MAX_HEADING_LEVEL);
             const float size = m_fonts.size * m_fonts.heading_scale[block.level - 1];
-            bottom           = Inline(block.spans, x0, x1, y, size, Role::kHeading, kBold, -1);
+            bottom           = Inline(block.spans, x0, x1, y, size, Role::kHeading, kBold,
+                                      Alignment::kLeft);
         }
         else if(block.kind == BlockKind::kCode)
         {
             const float pad = Em(CODE_PADDING);
             bottom = Inline(block.spans, x0 + pad, x1 - pad, y + pad, m_fonts.size,
-                            Role::kCodeBlock, 0, -1) +
+                            Role::kCodeBlock, 0, Alignment::kLeft) +
                      pad;
             AddShape(ShapeKind::kRect, Paint::kCodeBackground, ImVec2(x0, y),
                      ImVec2(x1, bottom));
         }
         else if(block.kind == BlockKind::kRule)
         {
-            const float middle = y + Em(RULE_HEIGHT) * 0.5f;
+            const float middle = y + Em(RULE_HEIGHT) * HALF;
             AddShape(ShapeKind::kRect, Paint::kLine, ImVec2(x0, middle),
                      ImVec2(x1, middle + LINE_THICKNESS));
             bottom = y + Em(RULE_HEIGHT);
@@ -1425,11 +1770,11 @@ private:
         return bottom;
     }
 
-    Ink InkFor(uint32_t flags, int32_t link, Role role, float size) const
+    ink_t InkFor(uint32_t flags, int32_t link, Role role, float size) const
     {
         const bool bold   = (flags & kBold) != 0;
         const bool italic = (flags & kItalic) != 0;
-        Ink        ink;
+        ink_t      ink;
         ink.font = m_fonts.regular;
         if((flags & kCode) != 0)
         {
@@ -1458,32 +1803,31 @@ private:
         return ink;
     }
 
-    float Measure(const Ink& ink, uint32_t begin, uint32_t end) const
+    float Measure(const ink_t& ink, uint32_t begin, uint32_t end) const
     {
         const char* text = m_doc.text.data();
         return ink.font->CalcTextSizeA(m_size, FLT_MAX, 0.0f, text + begin, text + end).x;
     }
 
     // Lays spans out from (x0, y), wrapping at x1, and returns the bottom.
-    // align is -1 left, 0 center, 1 right.
-    float Inline(const std::vector<Span>& spans, float x0, float x1, float y, float size,
-                 Role role, uint32_t extra, int align)
+    float Inline(const std::vector<span_t>& spans, float x0, float x1, float y,
+                 float size, Role role, uint32_t extra, Alignment align)
     {
-        m_x0         = x0;
-        m_x1         = x1;
-        m_x          = x0;
-        m_y          = y;
-        m_size       = size;
-        m_align      = align;
-        m_line_first = m_layout.fragments.size();
-        m_line_empty = true;
-        m_soft       = false;
-        m_pending    = Pending();
+        m_x0             = x0;
+        m_x1             = x1;
+        m_x              = x0;
+        m_y              = y;
+        m_size           = size;
+        m_align          = align;
+        m_line_first     = m_layout.fragments.size();
+        m_line_empty     = true;
+        m_soft           = false;
+        m_pending        = pending_t();
         const char* text = m_doc.text.data();
-        for(const Span& span : spans)
+        for(const span_t& span : spans)
         {
-            const Ink ink = InkFor(span.flags | extra, span.link, role, size);
-            uint32_t  at  = span.begin;
+            const ink_t ink = InkFor(span.flags | extra, span.link, role, size);
+            uint32_t    at  = span.begin;
             while(at < span.end)
             {
                 uint32_t stop = at;
@@ -1493,7 +1837,7 @@ private:
                 }
                 if(text[at] == '\n')
                 {
-                    m_pending = Pending();
+                    m_pending = pending_t();
                     EndLine(false);
                     ++at;
                 }
@@ -1512,12 +1856,12 @@ private:
                 }
             }
         }
-        m_pending = Pending();
+        m_pending = pending_t();
         EndLine(false);
         return m_y;
     }
 
-    void Spaces(const Ink& ink, uint32_t begin, uint32_t end)
+    void Spaces(const ink_t& ink, uint32_t begin, uint32_t end)
     {
         const float width = Measure(ink, begin, end);
         if(m_line_empty && !m_soft)
@@ -1537,12 +1881,12 @@ private:
 
     // Places a word, wrapping first when it does not fit, and returns where
     // the text resumes: before the end when the word was cut.
-    uint32_t Word(const Ink& ink, uint32_t begin, uint32_t end)
+    uint32_t Word(const ink_t& ink, uint32_t begin, uint32_t end)
     {
         const float width = Measure(ink, begin, end);
         if(!m_line_empty && m_x + m_pending.width + width > m_x1)
         {
-            m_pending = Pending();
+            m_pending = pending_t();
             EndLine(true);
         }
         FlushPending();
@@ -1551,11 +1895,12 @@ private:
         {
             // Wider than a whole line: cut it where the line runs out.
             const char* text = m_doc.text.data();
-            const char* cut =
-                ink.font->CalcWordWrapPosition(m_size, text + begin, text + end, m_x1 - m_x0);
+            const char* cut  = ink.font->CalcWordWrapPosition(m_size, text + begin,
+                                                              text + end, m_x1 - m_x0);
             if(cut <= text + begin)
             {
-                cut = text + begin + ImTextCountUtf8BytesFromChar(text + begin, text + end);
+                cut =
+                    text + begin + ImTextCountUtf8BytesFromChar(text + begin, text + end);
             }
             stop = static_cast<uint32_t>(cut - text);
         }
@@ -1573,12 +1918,12 @@ private:
         {
             Piece(m_pending.ink, m_pending.begin, m_pending.end, m_pending.width);
         }
-        m_pending = Pending();
+        m_pending = pending_t();
     }
 
-    void Piece(const Ink& ink, uint32_t begin, uint32_t end, float width)
+    void Piece(const ink_t& ink, uint32_t begin, uint32_t end, float width)
     {
-        Fragment* last = m_line_empty ? nullptr : &m_layout.fragments.back();
+        fragment_t* last = m_line_empty ? nullptr : &m_layout.fragments.back();
         if(last != nullptr && last->end == begin && last->font == ink.font &&
            last->flags == ink.flags && last->link == ink.link && last->role == ink.role)
         {
@@ -1587,18 +1932,18 @@ private:
         }
         else if(begin < end)
         {
-            Fragment& fragment = m_layout.fragments.emplace_back();
-            fragment.x         = m_x;
-            fragment.width     = width;
-            fragment.ascent    = ink.ascent;
-            fragment.size      = m_size;
-            fragment.font      = ink.font;
-            fragment.begin     = begin;
-            fragment.end       = end;
-            fragment.flags     = ink.flags;
-            fragment.link      = ink.link;
-            fragment.role      = ink.role;
-            m_line_empty       = false;
+            fragment_t& fragment = m_layout.fragments.emplace_back();
+            fragment.x           = m_x;
+            fragment.width       = width;
+            fragment.ascent      = ink.ascent;
+            fragment.size        = m_size;
+            fragment.font        = ink.font;
+            fragment.begin       = begin;
+            fragment.end         = end;
+            fragment.flags       = ink.flags;
+            fragment.link        = ink.link;
+            fragment.role        = ink.role;
+            m_line_empty         = false;
         }
         m_x += width;
     }
@@ -1613,14 +1958,14 @@ private:
             height = std::max(height, m_layout.fragments[i].size);
         }
         float shift = 0.0f;
-        if(m_align >= 0)
+        if(m_align != Alignment::kLeft)
         {
             const float room = std::max(m_x1 - m_x, 0.0f);
-            shift            = m_align == 0 ? room * 0.5f : room;
+            shift            = m_align == Alignment::kCenter ? room * HALF : room;
         }
         for(size_t i = m_line_first; i < m_layout.fragments.size(); ++i)
         {
-            Fragment& fragment = m_layout.fragments[i];
+            fragment_t& fragment = m_layout.fragments[i];
             fragment.x += shift;
             fragment.y      = m_y + ascent - fragment.ascent;
             fragment.top    = m_y;
@@ -1635,37 +1980,37 @@ private:
 
     void AddShape(ShapeKind kind, Paint paint, ImVec2 min, ImVec2 max)
     {
-        Shape& shape = m_layout.shapes.emplace_back();
-        shape.kind   = kind;
-        shape.paint  = paint;
-        shape.min    = min;
-        shape.max    = max;
+        shape_t& shape = m_layout.shapes.emplace_back();
+        shape.kind     = kind;
+        shape.paint    = paint;
+        shape.min      = min;
+        shape.max      = max;
     }
 
     // The marker hangs in the indent, centered on the item's first line.
-    void AddMarker(const Block& block, float x0, float top, size_t first)
+    void AddMarker(const block_t& block, float x0, float top, size_t first)
     {
         const bool  has_lead = first < m_layout.fragments.size();
         const float line_top = has_lead ? m_layout.fragments[first].top : top;
         const float line_bottom =
             has_lead ? m_layout.fragments[first].bottom : top + m_fonts.size;
-        const float middle = (line_top + line_bottom) * 0.5f;
+        const float middle = (line_top + line_bottom) * HALF;
         const float right  = x0 - Em(MARKER_GAP);
         const Paint paint  = block.quote > 0 ? Paint::kQuote : Paint::kText;
         if(block.marker == Marker::kBullet)
         {
             const float radius = Em(BULLET_RADIUS);
             AddShape(block.list % 2 == 1 ? ShapeKind::kDisc : ShapeKind::kCircle, paint,
-                     ImVec2(right - 2.0f * radius, middle - radius),
+                     ImVec2(right - TWICE * radius, middle - radius),
                      ImVec2(right, middle + radius));
         }
         else if(block.marker == Marker::kNumber)
         {
             m_size              = m_fonts.size;
-            const Ink      ink  = InkFor(0, -1, TextRole(block), m_fonts.size);
+            const ink_t    ink  = InkFor(0, -1, TextRole(block), m_fonts.size);
             const uint32_t end  = block.marker_span.end - 1;  // without its space
             const float    wide = Measure(ink, block.marker_span.begin, end);
-            Fragment&      mark = m_layout.fragments.emplace_back();
+            fragment_t&    mark = m_layout.fragments.emplace_back();
             mark.x              = right - wide;
             mark.width          = wide;
             mark.top            = line_top;
@@ -1676,25 +2021,26 @@ private:
             mark.begin          = block.marker_span.begin;
             mark.end            = end;
             mark.role           = ink.role;
-            mark.y = has_lead ? m_layout.fragments[first].y + m_layout.fragments[first].ascent -
-                                    ink.ascent
-                              : line_top;
+            mark.y              = has_lead ? m_layout.fragments[first].y +
+                                    m_layout.fragments[first].ascent - ink.ascent
+                                           : line_top;
         }
         else
         {
             const float box = Em(TASK_BOX_SIZE);
-            AddShape(block.marker == Marker::kTask ? ShapeKind::kBox : ShapeKind::kCheckedBox,
-                     paint, ImVec2(right - box, middle - box * 0.5f),
-                     ImVec2(right, middle + box * 0.5f));
+            AddShape(block.marker == Marker::kTask ? ShapeKind::kBox
+                                                   : ShapeKind::kCheckedBox,
+                     paint, ImVec2(right - box, middle - box * HALF),
+                     ImVec2(right, middle + box * HALF));
         }
     }
 
     // A cell's width on one line.
-    float Natural(const std::vector<Span>& spans, uint32_t extra)
+    float Natural(const std::vector<span_t>& spans, uint32_t extra)
     {
         float width = 0.0f;
         m_size      = m_fonts.size;
-        for(const Span& span : spans)
+        for(const span_t& span : spans)
         {
             width += Measure(InkFor(span.flags | extra, span.link, Role::kText, m_size),
                              span.begin, span.end);
@@ -1702,7 +2048,7 @@ private:
         return width;
     }
 
-    float Table(const Block& table, float x0, float x1, float y)
+    float Table(const block_t& table, float x0, float x1, float y)
     {
         const size_t       columns = table.align.size();
         const float        pad     = Em(CELL_PADDING);
@@ -1713,7 +2059,8 @@ private:
             for(size_t row = 0; row < table.rows.size(); ++row)
             {
                 const float natural =
-                    Natural(table.rows[row][column].spans, row == 0 ? kBold : 0) + 2.0f * pad;
+                    Natural(table.rows[row][column].spans, row == 0 ? kBold : 0) +
+                    TWICE * pad;
                 widths[column] = std::max(widths[column], natural);
             }
             total += widths[column];
@@ -1734,12 +2081,13 @@ private:
         {
             float x      = x0;
             float bottom = y;
+            assert(table.rows[row].size() == columns);
             for(size_t column = 0; column < columns; ++column)
             {
                 const float cell_bottom =
-                    Inline(table.rows[row][column].spans, x + pad, x + widths[column] - pad,
-                           y + pad, m_fonts.size, TextRole(table), row == 0 ? kBold : 0,
-                           table.align[column]);
+                    Inline(table.rows[row][column].spans, x + pad,
+                           x + widths[column] - pad, y + pad, m_fonts.size,
+                           TextRole(table), row == 0 ? kBold : 0, table.align[column]);
                 bottom = std::max(bottom, cell_bottom + pad);
                 x += widths[column];
             }
@@ -1765,27 +2113,27 @@ private:
         return y;
     }
 
-    const Document& m_doc;
-    const Fonts&    m_fonts;
-    const float     m_width;
-    Layout&         m_layout;
+    const document_t& m_doc;
+    const fonts_t&    m_fonts;
+    const float       m_width;
+    layout_t&         m_layout;
 
     // The line being built.
-    float   m_x0         = 0.0f;
-    float   m_x1         = 0.0f;
-    float   m_x          = 0.0f;
-    float   m_y          = 0.0f;
-    float   m_size       = 0.0f;
-    int     m_align      = -1;
-    size_t  m_line_first = 0;
-    bool    m_line_empty = true;
-    bool    m_soft       = false;  // the line began where the one above wrapped
-    Pending m_pending;
+    float     m_x0         = 0.0f;
+    float     m_x1         = 0.0f;
+    float     m_x          = 0.0f;
+    float     m_y          = 0.0f;
+    float     m_size       = 0.0f;
+    Alignment m_align      = Alignment::kLeft;
+    size_t    m_line_first = 0;
+    bool      m_line_empty = true;
+    bool      m_soft       = false;  // the line began where the one above wrapped
+    pending_t m_pending;
 };
 
 // ----------------------------------------------------------------- drawing
 
-struct Palette
+struct palette_t
 {
     ImU32 text              = 0;
     ImU32 heading           = 0;
@@ -1799,32 +2147,33 @@ struct Palette
 };
 
 ImU32
-Pick(ImU32 color, ImU32 fallback)
+pick_color(ImU32 color, ImU32 fallback)
 {
     return color != 0 ? color : fallback;
 }
 
-Palette
-ResolvePalette(const Style& style)
+palette_t
+resolve_palette(const markdown_style_t& style)
 {
-    Palette palette;
-    palette.text    = Pick(style.text_color, ImGui::GetColorU32(ImGuiCol_Text));
-    palette.heading = Pick(style.heading_color, palette.text);
-    palette.link    = Pick(style.link_color, ImGui::GetColorU32(ImGuiCol_TextLink));
-    palette.code    = Pick(style.code_color, palette.text);
+    palette_t palette;
+    palette.text    = pick_color(style.text_color, ImGui::GetColorU32(ImGuiCol_Text));
+    palette.heading = pick_color(style.heading_color, palette.text);
+    palette.link    = pick_color(style.link_color, ImGui::GetColorU32(ImGuiCol_TextLink));
+    palette.code    = pick_color(style.code_color, palette.text);
     palette.code_background =
-        Pick(style.code_background, ImGui::GetColorU32(ImGuiCol_FrameBg));
-    palette.quote = Pick(style.quote_color, ImGui::GetColorU32(ImGuiCol_TextDisabled));
-    palette.line  = Pick(style.line_color, ImGui::GetColorU32(ImGuiCol_Separator));
+        pick_color(style.code_background, ImGui::GetColorU32(ImGuiCol_FrameBg));
+    palette.quote =
+        pick_color(style.quote_color, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+    palette.line = pick_color(style.line_color, ImGui::GetColorU32(ImGuiCol_Separator));
     palette.header_background =
-        Pick(style.header_background, ImGui::GetColorU32(ImGuiCol_TableHeaderBg));
+        pick_color(style.header_background, ImGui::GetColorU32(ImGuiCol_TableHeaderBg));
     palette.selection =
-        Pick(style.selection_color, ImGui::GetColorU32(ImGuiCol_TextSelectedBg));
+        pick_color(style.selection_color, ImGui::GetColorU32(ImGuiCol_TextSelectedBg));
     return palette;
 }
 
 ImU32
-PaintColor(const Palette& palette, Paint paint)
+paint_color(const palette_t& palette, Paint paint)
 {
     ImU32 color = palette.line;
     if(paint == Paint::kText)
@@ -1846,11 +2195,22 @@ PaintColor(const Palette& palette, Paint paint)
     return color;
 }
 
+// True when the callback will open this link. Asking does not open it.
+bool
+link_opens(const markdown_style_t& style, const document_t& document, int32_t link)
+{
+    if(link < 0 || !style.open_link)
+    {
+        return false;
+    }
+    return style.open_link(document.links[static_cast<size_t>(link)], false);
+}
+
 ImU32
-FragmentColor(const Palette& palette, const Fragment& fragment)
+fragment_color(const palette_t& palette, const fragment_t& fragment, bool linked)
 {
     ImU32 color = palette.text;
-    if(fragment.link >= 0)
+    if(linked)
     {
         color = palette.link;
     }
@@ -1870,26 +2230,21 @@ FragmentColor(const Palette& palette, const Fragment& fragment)
 }
 
 bool
-IsBackground(Paint paint)
+is_background(Paint paint)
 {
     return paint == Paint::kCodeBackground || paint == Paint::kHeaderBackground;
 }
 
-bool g_selection_enabled = true;
-// The view that holds the one selection; any other clears its own.
-uint64_t g_active_view = 0;
-uint64_t g_view_count  = 0;
-
-struct CachedView
+struct cached_view_t
 {
-    std::unique_ptr<View> view;
-    int                   frame = 0;
+    std::unique_ptr<MarkdownView> view;
+    int                           frame = 0;
 };
 
-std::unordered_map<ImGuiID, CachedView>&
-ViewCache()
+std::unordered_map<ImGuiID, cached_view_t>&
+view_cache()
 {
-    static std::unordered_map<ImGuiID, CachedView> cache;
+    static std::unordered_map<ImGuiID, cached_view_t> cache;
     return cache;
 }
 
@@ -1897,16 +2252,20 @@ int g_cache_frame = -1;
 
 }  // namespace
 
+bool     MarkdownView::s_selection_enabled = true;
+uint64_t MarkdownView::s_active_view       = 0;
+uint64_t MarkdownView::s_view_count        = 0;
+
 // -------------------------------------------------------------------- view
 
-struct View::Impl
+struct MarkdownView::Impl
 {
     std::string source;
-    uint32_t    flags  = kSelectable;
+    uint32_t    flags  = MARKDOWN_SELECTABLE;
     bool        parsed = false;
-    Document    document;
-    Layout      layout;
-    Fonts       layout_fonts;
+    document_t  document;
+    layout_t    layout;
+    fonts_t     layout_fonts;
     float       layout_width = -1.0f;
     bool        laid_out     = false;
     // The selection, as offsets into document.text; empty when they match.
@@ -1922,12 +2281,13 @@ struct View::Impl
     // The text offset nearest a point, relative to the view.
     uint32_t HitTest(const ImVec2& point) const
     {
-        const Fragment* best    = nullptr;
-        float           best_dy = FLT_MAX;
-        float           best_dx = FLT_MAX;
-        for(const Fragment& fragment : layout.fragments)
+        const fragment_t* best    = nullptr;
+        float             best_dy = FLT_MAX;
+        float             best_dx = FLT_MAX;
+        for(const fragment_t& fragment : layout.fragments)
         {
-            const float dy = std::max({ fragment.top - point.y, point.y - fragment.bottom, 0.0f });
+            const float dy =
+                std::max({ fragment.top - point.y, point.y - fragment.bottom, 0.0f });
             const float dx = std::max(
                 { fragment.x - point.x, point.x - (fragment.x + fragment.width), 0.0f });
             if(dy < best_dy || (dy == best_dy && dx < best_dx))
@@ -1950,7 +2310,7 @@ struct View::Impl
                 const char* next = at + ImTextCountUtf8BytesFromChar(at, end);
                 const float advance =
                     best->font->CalcTextSizeA(best->size, FLT_MAX, 0.0f, at, next).x;
-                done = point.x < x + advance * 0.5f;
+                done = point.x < x + advance * HALF;
                 if(!done)
                 {
                     x += advance;
@@ -1962,10 +2322,10 @@ struct View::Impl
         return offset;
     }
 
-    int32_t LinkAt(const ImVec2& point) const
+    int32_t Linkoffset_pos(const ImVec2& point) const
     {
         int32_t link = -1;
-        for(const Fragment& fragment : layout.fragments)
+        for(const fragment_t& fragment : layout.fragments)
         {
             if(fragment.link >= 0 && point.x >= fragment.x &&
                point.x < fragment.x + fragment.width && point.y >= fragment.top &&
@@ -1982,19 +2342,19 @@ struct View::Impl
         const std::string& text  = document.text;
         uint32_t           begin = std::min(at, static_cast<uint32_t>(text.size()));
         // Just past a word's end still means that word.
-        if((begin == text.size() || !IsWordChar(text[begin])) && begin > 0 &&
-           IsWordChar(text[begin - 1]))
+        if((begin == text.size() || !is_word_char(text[begin])) && begin > 0 &&
+           is_word_char(text[begin - 1]))
         {
             --begin;
         }
         uint32_t end = begin;
-        if(begin < text.size() && IsWordChar(text[begin]))
+        if(begin < text.size() && is_word_char(text[begin]))
         {
-            while(begin > 0 && IsWordChar(text[begin - 1]))
+            while(begin > 0 && is_word_char(text[begin - 1]))
             {
                 --begin;
             }
-            while(end < text.size() && IsWordChar(text[end]))
+            while(end < text.size() && is_word_char(text[end]))
             {
                 ++end;
             }
@@ -2010,14 +2370,15 @@ struct View::Impl
 
     void SelectLine(uint32_t at)
     {
-        const std::string& text    = document.text;
-        const size_t       before  = at > 0 ? text.rfind('\n', at - 1) : std::string::npos;
-        const size_t       after   = text.find('\n', at);
+        const std::string& text   = document.text;
+        const size_t       before = at > 0 ? text.rfind('\n', at - 1) : std::string::npos;
+        const size_t       after  = text.find('\n', at);
         anchor = before == std::string::npos ? 0 : static_cast<uint32_t>(before + 1);
         caret  = static_cast<uint32_t>(after == std::string::npos ? text.size() : after);
     }
 
-    bool Interact(const ImRect& bb, ImGuiID item, const Style& style, bool selectable)
+    bool Interact(const ImRect& bb, ImGuiID item, const markdown_style_t& style,
+                  bool selectable)
     {
         bool hovered = false;
         bool held    = false;
@@ -2027,32 +2388,33 @@ struct View::Impl
                                   ImGuiButtonFlags_PressedOnClick);
         const ImGuiIO& io = ImGui::GetIO();
         const ImVec2   point(io.MousePos.x - bb.Min.x, io.MousePos.y - bb.Min.y);
-        const int32_t  link  = hovered ? LinkAt(point) : -1;
-        const bool     opens = link >= 0 && static_cast<bool>(style.open_link);
+        const int32_t  link  = hovered ? Linkoffset_pos(point) : -1;
+        const bool     opens = link_opens(style, document, link);
         if(hovered)
         {
             ImGui::SetMouseCursor(opens ? ImGuiMouseCursor_Hand
                                         : (selectable ? ImGuiMouseCursor_TextInput
                                                       : ImGuiMouseCursor_Arrow));
-            if(link >= 0 && !dragging)
+            if(opens && !dragging)
             {
-                ImGui::SetTooltip("%s", document.links[static_cast<size_t>(link)].c_str());
+                ImGui::SetTooltip("%s",
+                                  document.links[static_cast<size_t>(link)].c_str());
             }
         }
         if(hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             const uint32_t at     = HitTest(point);
-            const int      clicks = ImGui::GetMouseClickedCount(ImGuiMouseButton_Left);
+            const int32_t  clicks = ImGui::GetMouseClickedCount(ImGuiMouseButton_Left);
             dragging              = false;
             pressed_link          = clicks == 1 ? link : -1;
             if(selectable)
             {
-                g_active_view = id;
-                if(clicks % 3 == 0)
+                MarkdownView::s_active_view = id;
+                if(clicks % CLICKS_PER_LINE == 0)
                 {
                     SelectLine(at);
                 }
-                else if(clicks % 2 == 0)
+                else if(clicks % CLICKS_PER_WORD == 0)
                 {
                     SelectWord(at);
                 }
@@ -2069,7 +2431,7 @@ struct View::Impl
         }
         if(selectable && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
         {
-            g_active_view = id;
+            MarkdownView::s_active_view = id;
         }
         if(dragging && held && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
@@ -2083,14 +2445,14 @@ struct View::Impl
         {
             if(pressed_link >= 0 && pressed_link == link && anchor == caret && opens)
             {
-                style.open_link(document.links[static_cast<size_t>(pressed_link)]);
+                style.open_link(document.links[static_cast<size_t>(pressed_link)], true);
             }
             dragging     = false;
             pressed_link = -1;
         }
 
         bool copied = false;
-        if(selectable && g_active_view == id)
+        if(selectable && MarkdownView::s_active_view == id)
         {
             if(ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_A))
             {
@@ -2099,58 +2461,67 @@ struct View::Impl
             }
             if(ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && anchor != caret)
             {
-                ImGui::SetClipboardText(document.text.substr(Begin(), End() - Begin()).c_str());
+                ImGui::SetClipboardText(
+                    document.text.substr(Begin(), End() - Begin()).c_str());
                 copied = true;
             }
         }
         return copied;
     }
 
-    void Draw(ImDrawList* draw, const ImVec2& origin, const Palette& palette) const
+    void Draw(ImDrawList* draw, const ImVec2& origin, const palette_t& palette,
+              const markdown_style_t& style) const
     {
         const char* text = document.text.data();
-        for(const Shape& shape : layout.shapes)
+        for(const shape_t& shape : layout.shapes)
         {
-            if(IsBackground(shape.paint))
+            if(is_background(shape.paint))
             {
-                draw->AddRectFilled(At(origin, shape.min.x, shape.min.y),
-                                    At(origin, shape.max.x, shape.max.y),
-                                    PaintColor(palette, shape.paint), BOX_ROUNDING);
+                draw->AddRectFilled(offset_pos(origin, shape.min.x, shape.min.y),
+                                    offset_pos(origin, shape.max.x, shape.max.y),
+                                    paint_color(palette, shape.paint), BOX_ROUNDING);
             }
         }
-        for(const Fragment& fragment : layout.fragments)
+        for(const fragment_t& fragment : layout.fragments)
         {
             if((fragment.flags & kCode) != 0 && fragment.role != Role::kCodeBlock)
             {
                 const float pad = fragment.size * INLINE_CODE_PADDING;
-                draw->AddRectFilled(At(origin, fragment.x - pad, fragment.top),
-                                    At(origin, fragment.x + fragment.width + pad, fragment.bottom),
+                draw->AddRectFilled(offset_pos(origin, fragment.x - pad, fragment.top),
+                                    offset_pos(origin, fragment.x + fragment.width + pad,
+                                               fragment.bottom),
                                     palette.code_background, BOX_ROUNDING);
             }
         }
         if(anchor != caret)
         {
-            for(const Fragment& fragment : layout.fragments)
+            for(const fragment_t& fragment : layout.fragments)
             {
                 const uint32_t begin = std::max(fragment.begin, Begin());
                 const uint32_t end   = std::min(fragment.end, End());
                 if(begin < end)
                 {
                     const char* first = text + fragment.begin;
-                    const float x0 =
-                        fragment.font->CalcTextSizeA(fragment.size, FLT_MAX, 0.0f, first, text + begin).x;
-                    const float x1 =
-                        fragment.font->CalcTextSizeA(fragment.size, FLT_MAX, 0.0f, first, text + end).x;
-                    draw->AddRectFilled(At(origin, fragment.x + x0, fragment.top),
-                                        At(origin, fragment.x + x1, fragment.bottom),
-                                        palette.selection);
+                    const float x0    = fragment.font
+                                         ->CalcTextSizeA(fragment.size, FLT_MAX, 0.0f,
+                                                         first, text + begin)
+                                         .x;
+                    const float x1 = fragment.font
+                                         ->CalcTextSizeA(fragment.size, FLT_MAX, 0.0f,
+                                                         first, text + end)
+                                         .x;
+                    draw->AddRectFilled(
+                        offset_pos(origin, fragment.x + x0, fragment.top),
+                        offset_pos(origin, fragment.x + x1, fragment.bottom),
+                        palette.selection);
                 }
             }
         }
-        for(const Fragment& fragment : layout.fragments)
+        for(const fragment_t& fragment : layout.fragments)
         {
-            const ImU32  color    = FragmentColor(palette, fragment);
-            const ImVec2 position = At(origin, fragment.x, fragment.y);
+            const bool   linked   = link_opens(style, document, fragment.link);
+            const ImU32  color    = fragment_color(palette, fragment, linked);
+            const ImVec2 position = offset_pos(origin, fragment.x, fragment.y);
             const char*  begin    = text + fragment.begin;
             const char*  end      = text + fragment.end;
             const int    first    = draw->VtxBuffer.Size;
@@ -2158,8 +2529,8 @@ struct View::Impl
             if((fragment.flags & kFauxBold) != 0)
             {
                 draw->AddText(fragment.font, fragment.size,
-                              ImVec2(position.x + FAUX_BOLD_OFFSET, position.y), color, begin,
-                              end);
+                              ImVec2(position.x + FAUX_BOLD_OFFSET, position.y), color,
+                              begin, end);
             }
             if((fragment.flags & kFauxItalic) != 0)
             {
@@ -2173,33 +2544,35 @@ struct View::Impl
             if((fragment.flags & kStrike) != 0)
             {
                 const float y = position.y + fragment.ascent * STRIKE_POSITION;
-                draw->AddLine(ImVec2(position.x, y), ImVec2(position.x + fragment.width, y),
-                              color, LINE_THICKNESS);
+                draw->AddLine(ImVec2(position.x, y),
+                              ImVec2(position.x + fragment.width, y), color,
+                              LINE_THICKNESS);
             }
-            if(fragment.link >= 0)
+            if(linked)
             {
                 const float y = position.y + fragment.ascent + LINE_THICKNESS;
-                draw->AddLine(ImVec2(position.x, y), ImVec2(position.x + fragment.width, y),
-                              color, LINE_THICKNESS);
+                draw->AddLine(ImVec2(position.x, y),
+                              ImVec2(position.x + fragment.width, y), color,
+                              LINE_THICKNESS);
             }
         }
-        for(const Shape& shape : layout.shapes)
+        for(const shape_t& shape : layout.shapes)
         {
-            const ImVec2 min = At(origin, shape.min.x, shape.min.y);
-            const ImVec2 max = At(origin, shape.max.x, shape.max.y);
-            const ImVec2 center((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
-            const ImU32  color = PaintColor(palette, shape.paint);
-            if(shape.kind == ShapeKind::kRect && !IsBackground(shape.paint))
+            const ImVec2 min = offset_pos(origin, shape.min.x, shape.min.y);
+            const ImVec2 max = offset_pos(origin, shape.max.x, shape.max.y);
+            const ImVec2 center((min.x + max.x) * HALF, (min.y + max.y) * HALF);
+            const ImU32  color = paint_color(palette, shape.paint);
+            if(shape.kind == ShapeKind::kRect && !is_background(shape.paint))
             {
                 draw->AddRectFilled(min, max, color);
             }
             else if(shape.kind == ShapeKind::kDisc)
             {
-                draw->AddCircleFilled(center, (max.x - min.x) * 0.5f, color);
+                draw->AddCircleFilled(center, (max.x - min.x) * HALF, color);
             }
             else if(shape.kind == ShapeKind::kCircle)
             {
-                draw->AddCircle(center, (max.x - min.x) * 0.5f, color, 0, LINE_THICKNESS);
+                draw->AddCircle(center, (max.x - min.x) * HALF, color, 0, LINE_THICKNESS);
             }
             else if(shape.kind == ShapeKind::kBox || shape.kind == ShapeKind::kCheckedBox)
             {
@@ -2214,36 +2587,37 @@ struct View::Impl
                                        min.y + (max.y - min.y) * CHECK_MARK[i].y);
                 }
                 draw->AddPolyline(points, static_cast<int>(std::size(CHECK_MARK)), color,
-                                  ImDrawFlags_None, LINE_THICKNESS * 2.0f);
+                                  ImDrawFlags_None, LINE_THICKNESS * TWICE);
             }
         }
     }
 };
 
-View::View()
+MarkdownView::MarkdownView()
 : m_impl(std::make_unique<Impl>())
 {
-    m_impl->id = ++g_view_count;
+    m_impl->id = ++s_view_count;
 }
 
-View::~View() = default;
+MarkdownView::~MarkdownView() = default;
 
 void
-View::SetText(std::string_view text, uint32_t flags)
+MarkdownView::SetText(std::string_view text, uint32_t flags)
 {
     Impl& state = *m_impl;
     if(!state.parsed || state.flags != flags || state.source != text)
     {
         state.source.assign(text.data(), text.size());
         state.flags    = flags;
-        state.document = Document();
-        if((flags & kPlain) != 0)
+        state.document = document_t();
+        if((flags & MARKDOWN_PLAIN) != 0)
         {
-            BuildPlain(state.document, text);
+            build_plain(state.document, text);
         }
-        else
+        else if(!Parser(state.document).Parse(text))
         {
-            Parser(state.document).Parse(text);
+            state.document = document_t();
+            build_plain(state.document, text);
         }
         state.parsed   = true;
         state.laid_out = false;
@@ -2254,80 +2628,82 @@ View::SetText(std::string_view text, uint32_t flags)
 }
 
 bool
-View::Render(const Style& style)
+MarkdownView::Render(const markdown_style_t& style)
 {
     Impl&        state  = *m_impl;
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     bool         copied = false;
     if(!window->SkipItems)
     {
-        const Fonts  fonts  = ResolveFonts(style);
-        const ImVec2 origin = window->DC.CursorPos;
-        const float  width  = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
+        const fonts_t fonts  = resolve_fonts(style);
+        const ImVec2  origin = window->DC.CursorPos;
+        const float   width  = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
         if(!state.laid_out || state.layout_width != width ||
-           !SameFonts(state.layout_fonts, fonts))
+           !same_fonts(state.layout_fonts, fonts))
         {
-            state.layout = Layout();
+            state.layout = layout_t();
             Layouter(state.document, fonts, width, state.layout).Run();
             state.layout_fonts = fonts;
             state.layout_width = width;
             state.laid_out     = true;
         }
 
-        const ImRect  bb(origin, ImVec2(origin.x + width, origin.y + state.layout.height));
+        const ImRect bb(origin, ImVec2(origin.x + width, origin.y + state.layout.height));
         const ImGuiID item = window->GetID(m_impl.get());
         ImGui::ItemSize(bb);
         if(ImGui::ItemAdd(bb, item))
         {
-            const bool selectable = (state.flags & kSelectable) != 0 && g_selection_enabled;
+            const bool selectable = (state.flags & MARKDOWN_SELECTABLE) != 0 &&
+                                    MarkdownView::s_selection_enabled;
             if(selectable || !state.document.links.empty())
             {
                 copied = state.Interact(bb, item, style, selectable);
             }
-            if((!selectable || g_active_view != state.id) && !state.dragging)
+            if((!selectable || MarkdownView::s_active_view != state.id) &&
+               !state.dragging)
             {
                 state.anchor = state.caret;
             }
-            state.Draw(window->DrawList, origin, ResolvePalette(style));
+            state.Draw(window->DrawList, origin, resolve_palette(style), style);
         }
     }
     return copied;
 }
 
 bool
-View::HasSelection() const
+MarkdownView::HasSelection() const
 {
     return m_impl->anchor != m_impl->caret;
 }
 
 std::string
-View::GetSelectedText() const
+MarkdownView::GetSelectedText() const
 {
     return m_impl->document.text.substr(m_impl->Begin(), m_impl->End() - m_impl->Begin());
 }
 
 const std::string&
-View::GetPlainText() const
+MarkdownView::GetPlainText() const
 {
     return m_impl->document.text;
 }
 
 void
-View::SelectAll()
+MarkdownView::SelectAll()
 {
-    m_impl->anchor = 0;
-    m_impl->caret  = static_cast<uint32_t>(m_impl->document.text.size());
-    g_active_view  = m_impl->id;
+    m_impl->anchor              = 0;
+    m_impl->caret               = static_cast<uint32_t>(m_impl->document.text.size());
+    MarkdownView::s_active_view = m_impl->id;
 }
 
 void
-View::ClearSelection()
+MarkdownView::ClearSelection()
 {
     m_impl->anchor = m_impl->caret;
 }
 
 void
-View::Copy() const
+MarkdownView::Copy() const
 {
     if(HasSelection())
     {
@@ -2336,24 +2712,25 @@ View::Copy() const
 }
 
 bool
-Text(const char* id, std::string_view text, uint32_t flags, const Style& style)
+render_markdown(const char* id, std::string_view text, uint32_t flags,
+                const markdown_style_t& style)
 {
-    std::unordered_map<ImGuiID, CachedView>& cache = ViewCache();
-    const int                                frame = ImGui::GetFrameCount();
+    std::unordered_map<ImGuiID, cached_view_t>& cache = view_cache();
+    const int                                   frame = ImGui::GetFrameCount();
     if(g_cache_frame != frame)
     {
         // Views not drawn last frame are gone from the screen.
         g_cache_frame = frame;
-        for(std::unordered_map<ImGuiID, CachedView>::iterator it = cache.begin();
+        for(std::unordered_map<ImGuiID, cached_view_t>::iterator it = cache.begin();
             it != cache.end();)
         {
             it = it->second.frame < frame - 1 ? cache.erase(it) : std::next(it);
         }
     }
-    CachedView& entry = cache[ImGui::GetID(id)];
+    cached_view_t& entry = cache[ImGui::GetID(id)];
     if(entry.view == nullptr)
     {
-        entry.view = std::make_unique<View>();
+        entry.view = std::make_unique<MarkdownView>();
     }
     entry.frame = frame;
     entry.view->SetText(text, flags);
@@ -2361,15 +2738,16 @@ Text(const char* id, std::string_view text, uint32_t flags, const Style& style)
 }
 
 void
-SetSelectionEnabled(bool enabled)
+MarkdownView::SetSelectionEnabled(bool enabled)
 {
-    g_selection_enabled = enabled;
+    s_selection_enabled = enabled;
 }
 
 bool
-IsSelectionEnabled()
+MarkdownView::IsSelectionEnabled()
 {
-    return g_selection_enabled;
+    return s_selection_enabled;
 }
 
-}  // namespace ImMarkdown
+}  // namespace View
+}  // namespace RocProfVis

@@ -16,7 +16,7 @@
 #include "imgui.h"
 #include "spdlog/spdlog.h"
 // ~AssistantPanel() destroys m_message_views, which needs the complete type.
-#include "immarkdown.h"
+#include "widgets/rocprofvis_markdown.h"
 
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
@@ -45,23 +45,23 @@ namespace
 // Only the starting width lives here, because the constructor seeds the member
 // with it. The rest of the panel geometry belongs to the drawing half, in
 // rocprofvis_ai_assistant_render.cpp.
-constexpr float  ASSISTANT_DEFAULT_WIDTH  = 520.0f;
+constexpr float ASSISTANT_DEFAULT_WIDTH = 520.0f;
 // Covers a whole self-directed investigation, not a single lookup.
 constexpr uint32_t ASSISTANT_MAX_TOOL_ROUNDS = 20;
 // How much of the conversation travels upstream. Every round re-sends all of
 // it, so this bounds what a long session costs per round instead of letting the
 // bill grow with the square of its length. Comfortably more than one full tool
 // budget, so a single turn is never cut short by it.
-constexpr size_t   ASSISTANT_MAX_CONVERSATION_MESSAGES = 60;
+constexpr size_t ASSISTANT_MAX_CONVERSATION_MESSAGES = 60;
 // The same bill measured the way it is actually charged. A message count
 // cannot bound one investigation: that is a single question followed by round
 // after round of tool replies, so it never reaches a second user message to cut
 // on, and one reply alone may be ASSISTANT_MAX_RESULT_CHARS wide. Roughly four
 // characters to the token.
-constexpr size_t   ASSISTANT_MAX_CONVERSATION_CHARS = 120000;
+constexpr size_t ASSISTANT_MAX_CONVERSATION_CHARS = 120000;
 // Tool replies newer than this are never compacted, however long the history
 // has run. These are the rows the answer is about to be written from.
-constexpr size_t   ASSISTANT_RECENT_TOOL_REPLIES = 8;
+constexpr size_t ASSISTANT_RECENT_TOOL_REPLIES = 8;
 // Stands in for a tool reply dropped from the history. Says plainly that the
 // rows can be had again, so a model that still needs them asks rather than
 // invents.
@@ -78,11 +78,11 @@ constexpr const char* ASSISTANT_SKIPPED_TOOL_REPLY =
 // around the gap instead of reporting it. Past this the user is better served
 // by being told the query is too broad than by a spinner, and Clear cancels it
 // at any point.
-constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
+constexpr int ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // When a fetch passes this, the status starts counting up. Long enough that an
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
-constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
+constexpr int64_t ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
 
 }  // namespace
 
@@ -121,10 +121,7 @@ AssistantPanel::AssistantPanel()
 }
 
 // Aborts anything in flight, so quitting mid-answer does not wait on the network.
-AssistantPanel::~AssistantPanel()
-{
-    CancelPendingRequest();
-}
+AssistantPanel::~AssistantPanel() { CancelPendingRequest(); }
 
 void
 AssistantPanel::ToggleVisible()
@@ -200,8 +197,8 @@ AssistantPanel::MakeToolContext() const
         return context;
     }
 
-    context.trace_name = project->GetName();
-    context.is_compute = project->GetTraceType() == Project::Compute;
+    context.trace_name  = project->GetName();
+    context.is_compute  = project->GetTraceType() == Project::Compute;
     RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
     if(root_view != nullptr)
     {
@@ -308,7 +305,7 @@ AssistantPanel::ResetTurn()
 {
     CancelPendingRequest();
     ResetAssistantPcRead();
-    m_phase           = Phase::kIdle;
+    m_phase = Phase::kIdle;
     m_pending_calls.clear();
     m_next_call_index = 0;
     m_tool_round      = 0;
@@ -374,9 +371,8 @@ AssistantPanel::StartHttpRequest()
                  request.messages.size());
 
     m_call    = std::make_shared<AssistantChatCall>();
-    m_pending = std::async(std::launch::async, [call = m_call, request]() {
-        return call->Send(request);
-    });
+    m_pending = std::async(std::launch::async,
+                           [call = m_call, request]() { return call->Send(request); });
 }
 
 void
@@ -440,8 +436,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     {
         AppendLine(Speaker::kStatus,
                    "Set the assistant URL in Edit > Preferences > Assistant.");
-        NotificationManager::GetInstance().Show(
-            "Assistant URL is not set", NotificationLevel::Warning);
+        NotificationManager::GetInstance().Show("Assistant URL is not set",
+                                                NotificationLevel::Warning);
         return;
     }
 
@@ -712,7 +708,7 @@ void
 AssistantPanel::BeginFinalAnswer()
 {
     AssistantMessage nudge;
-    nudge.role    = "user";
+    nudge.role = "user";
     nudge.content =
         "Do not call any more tools. Write your answer now, reading the numbers you "
         "already gathered and saying what they mean for this workload.";
@@ -775,16 +771,16 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
 {
     const std::chrono::steady_clock::time_point started_at =
         m_fetch_retries > 0 && !warmup ? m_fetch_wait.started
-                                        : std::chrono::steady_clock::now();
-    m_phase                    = Phase::kToolWait;
-    m_fetch_wait.active        = true;
-    m_fetch_wait.started_fetch = started.started_fetch;
-    m_fetch_wait.warmup        = warmup;
-    m_fetch_wait.request_ids   = started.request_ids;
-    m_fetch_wait.fetch         = started.fetch;
-    m_fetch_wait.tool_name     = tool_name;
-    m_fetch_wait.prefix        = started.content;
-    m_fetch_wait.started       = started_at;
+                                       : std::chrono::steady_clock::now();
+    m_phase                      = Phase::kToolWait;
+    m_fetch_wait.active          = true;
+    m_fetch_wait.started_fetch   = started.started_fetch;
+    m_fetch_wait.warmup          = warmup;
+    m_fetch_wait.request_ids     = started.request_ids;
+    m_fetch_wait.fetch           = started.fetch;
+    m_fetch_wait.tool_name       = tool_name;
+    m_fetch_wait.prefix          = started.content;
+    m_fetch_wait.started         = started_at;
     m_fetch_wait.timeout_seconds = started.timeout_seconds;
 }
 
@@ -953,11 +949,11 @@ AssistantPanel::PollToolFetch()
 
     const std::chrono::seconds elapsed = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - m_fetch_wait.started);
-    const int64_t deadline = m_fetch_wait.timeout_seconds > 0
-                                 ? static_cast<int64_t>(m_fetch_wait.timeout_seconds)
-                                 : ASSISTANT_FETCH_TIMEOUT_SECONDS;
-    const bool pending   = AnyFetchPending(context);
-    const bool timed_out = elapsed.count() >= deadline;
+    const int64_t deadline  = m_fetch_wait.timeout_seconds > 0
+                                  ? static_cast<int64_t>(m_fetch_wait.timeout_seconds)
+                                  : ASSISTANT_FETCH_TIMEOUT_SECONDS;
+    const bool    pending   = AnyFetchPending(context);
+    const bool    timed_out = elapsed.count() >= deadline;
 
     if(pending && !timed_out)
     {
@@ -1013,8 +1009,8 @@ AssistantPanel::PollToolFetch()
     // load must not leave the query it was blocking with no time to run.
     if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTraceLoading)
     {
-        m_fetch_retries     = 0;
-        m_fetch_wait        = FetchWait();
+        m_fetch_retries = 0;
+        m_fetch_wait    = FetchWait();
         RunNextTool();
         return;
     }

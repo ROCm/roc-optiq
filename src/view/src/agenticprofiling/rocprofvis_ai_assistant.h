@@ -15,15 +15,12 @@
 #include <string>
 #include <vector>
 
-namespace ImMarkdown
-{
-class View;
-}  // namespace ImMarkdown
-
 namespace RocProfVis
 {
 namespace View
 {
+
+class MarkdownView;
 
 enum class Colors;
 
@@ -85,30 +82,30 @@ private:
         bool started_fetch = false;
         // The summary preload, which has no tool call to answer and resumes the
         // queued turn instead.
-        bool                  warmup = false;
-        std::vector<uint64_t> request_ids;
-        AssistantFetchState   fetch;
-        std::string           tool_name;
-        std::string           prefix;
+        bool                                  warmup = false;
+        std::vector<uint64_t>                 request_ids;
+        AssistantFetchState                   fetch;
+        std::string                           tool_name;
+        std::string                           prefix;
         std::chrono::steady_clock::time_point started;
         // Zero takes the default fetch deadline. A tool waiting on the user
         // rather than on a query sets its own, much longer.
-        uint32_t              timeout_seconds = 0;
+        uint32_t timeout_seconds = 0;
     };
 
     AssistantPanel();
     ~AssistantPanel() override;
 
-    void AppendLine(Speaker speaker, const std::string& text);
-    void AppendChart(uint64_t track_id);
-    void RenderActivityChart(uint64_t track_id);
-    void        RenderHeaderCard();
-    void        RenderTranscript();
-    void        RenderMessageCard(size_t index, const ChatLine& line);
-    void              RenderSelectableMessage(size_t index, const std::string& text,
-                                              Colors text_color);
-    ImMarkdown::View* MessageView(size_t index);
-    void              RenderComposer();
+    void          AppendLine(Speaker speaker, const std::string& text);
+    void          AppendChart(uint64_t track_id);
+    void          RenderActivityChart(uint64_t track_id);
+    void          RenderHeaderCard();
+    void          RenderTranscript();
+    void          RenderMessageCard(size_t index, const ChatLine& line);
+    void          RenderSelectableMessage(size_t index, const std::string& text,
+                                          Colors text_color);
+    MarkdownView* MessageView(size_t index);
+    void          RenderComposer();
     // Explain this view on an empty chat, or the model's offered follow-ups
     // after a turn.
     void RenderSuggestedActions();
@@ -120,15 +117,15 @@ private:
     std::string BuildTranscriptText() const;
     void        CopyTranscript();
     void        ExportTranscript();
-    void SendCurrentInput(bool explain_view);
-    void ResetTurn();
-    void CancelPendingRequest();
-    void StartHttpRequest();
-    void PollToolFetch();
-    void HandleHttpResult(const AssistantChatResult& result);
-    void BeginToolQueue(const std::vector<AssistantToolCall>& calls,
-                        const std::string&                    assistant_text);
-    void RunNextTool();
+    void        SendCurrentInput(bool explain_view);
+    void        ResetTurn();
+    void        CancelPendingRequest();
+    void        StartHttpRequest();
+    void        PollToolFetch();
+    void        HandleHttpResult(const AssistantChatResult& result);
+    void        BeginToolQueue(const std::vector<AssistantToolCall>& calls,
+                               const std::string&                    assistant_text);
+    void        RunNextTool();
     // Spends one extra round on the answer, with tools off so the model writes
     // prose instead of reaching for another call.
     void BeginFinalAnswer();
@@ -149,11 +146,10 @@ private:
     AssistantToolContext MakeToolContext() const;
     std::string          CurrentProjectId() const;
     std::string          RestartHint(bool kind_changed) const;
-    std::string          BuildUserPrompt(const std::string& question,
-                                         bool               include_briefing) const;
-    bool                 NeedsBriefing();
-    void                 TrimConversation();
-    bool                 Busy() const;
+    std::string BuildUserPrompt(const std::string& question, bool include_briefing) const;
+    bool        NeedsBriefing();
+    void        TrimConversation();
+    bool        Busy() const;
 
     static AssistantPanel* s_instance;
 
@@ -170,7 +166,7 @@ private:
     std::vector<ChatLine> m_lines;
     // Parallel to m_lines. Text rows create one; charts do not. Cleared with
     // the transcript so a new conversation does not keep an old highlight.
-    std::vector<std::unique_ptr<ImMarkdown::View>> m_message_views;
+    std::vector<std::unique_ptr<MarkdownView>> m_message_views;
 
     std::string                    m_queued_question;
     std::vector<AssistantMessage>  m_conversation;
@@ -179,7 +175,7 @@ private:
     uint32_t                       m_tool_round;
     // Set when the tool budget runs out: the next request goes out without
     // tools, so the model has to write up what it already gathered.
-    bool     m_force_final;
+    bool m_force_final;
     // Keeps contention retries on the first wait's timeout deadline.
     uint32_t m_fetch_retries;
     // The trace this turn is about, which is what catches the user switching
@@ -190,7 +186,7 @@ private:
     // set changes only at the point the model is told the trace changed, and
     // the schema a round goes out with always matches the tools the dispatcher
     // will run for it.
-    bool        m_turn_is_compute;
+    bool m_turn_is_compute;
     // The trace the briefing in the conversation describes. A follow-up about
     // the same trace does not repeat it; a different one does.
     std::string m_briefed_project_id;

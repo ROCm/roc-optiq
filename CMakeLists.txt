@@ -239,9 +239,8 @@ set(VIEW_FILES
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_query_builder.cpp
-    # ImMarkdown: Markdown and selectable text for any ImGui window.
-    thirdparty/ImMarkdown/immarkdown.cpp
-    thirdparty/ImMarkdown/immarkdown.h
+    src/view/src/widgets/rocprofvis_markdown.cpp
+    src/view/src/widgets/rocprofvis_markdown.h
 )
 
 # TEMPORARY (trace compare): compare-files dialog. Remove this guard when the
@@ -462,7 +461,6 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImMarkdown)
 # TEMPORARY (profiler launch): remove when the profiler feature graduates.
 if(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
@@ -515,6 +513,19 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
+
+    # Markdown parsing has no ImGui calls on SetText, but the widget is one
+    # translation unit, so the test links Dear ImGui for the draw code.
+    set(MARKDOWN_TEST_NAME ${TARGET_NAME}-markdown-tests)
+    add_executable(${MARKDOWN_TEST_NAME}
+        src/view/test/rocprofvis_markdown_tests.cpp
+        src/view/src/widgets/rocprofvis_markdown.cpp
+        src/view/src/widgets/rocprofvis_markdown.h)
+    target_compile_options(${MARKDOWN_TEST_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
+    target_include_directories(${MARKDOWN_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+    target_link_libraries(${MARKDOWN_TEST_NAME} PRIVATE imgui Catch2::Catch2WithMain)
+    add_test(NAME ${MARKDOWN_TEST_NAME} COMMAND ${MARKDOWN_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
@@ -569,7 +580,6 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/test
-        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/ImMarkdown
         ${Vulkan_INCLUDE_DIRS}
         ${Vulkan_INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc

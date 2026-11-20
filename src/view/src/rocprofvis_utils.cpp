@@ -68,13 +68,26 @@ sanitize_base_dir(const std::string& raw)
     }
     return normalized;
 }
+
+// Magnitude of a finite ns value truncated toward zero, writing "-" to `sign` only
+// when the truncated magnitude is non-zero, matching nanosecond_to_timecode_str.
+static uint64_t
+split_ns_sign(double ns, const char*& sign)
+{
+    uint64_t magnitude = static_cast<uint64_t>(std::abs(ns));
+    sign               = (std::signbit(ns) && magnitude > 0) ? "-" : "";
+    return magnitude;
+}
 }  // namespace View
 }  // namespace RocProfVis
 
 std::string
 RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
+    if(!std::isfinite(time_point_ns)) return "NaN";
+    const char*        sign    = "";
+    uint64_t           ns_uint = split_ns_sign(time_point_ns, sign);
     std::ostringstream oss;
-    oss << static_cast<uint64_t>(time_point_ns);
+    oss << sign << ns_uint;
     if(include_units)
     {
         oss << " " << timeformat_sufix(TimeFormat::kNanoseconds);
@@ -86,11 +99,12 @@ std::string
 RocProfVis::View::nanosecond_to_us_str(double ns, bool include_units)
 {
     if(!std::isfinite(ns)) return "NaN";
-    uint64_t           ns_uint = static_cast<uint64_t>(ns);
+    const char*        sign    = "";
+    uint64_t           ns_uint = split_ns_sign(ns, sign);
     uint64_t           us_uint = ns_uint / TimeConstants::ns_per_us;
     uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_us;
     std::ostringstream oss;
-    oss << us_uint << '.' << std::setw(3) << std::setfill('0') << ns_rem;
+    oss << sign << us_uint << '.' << std::setw(3) << std::setfill('0') << ns_rem;
     if(include_units)
     {
         oss << " " << timeformat_sufix(TimeFormat::kMicroseconds);
@@ -102,11 +116,12 @@ std::string
 RocProfVis::View::nanosecond_to_ms_str(double ns, bool include_units)
 {
     if(!std::isfinite(ns)) return "NaN";
-    uint64_t           ns_uint = static_cast<uint64_t>(ns);
+    const char*        sign    = "";
+    uint64_t           ns_uint = split_ns_sign(ns, sign);
     uint64_t           ms_uint = ns_uint / TimeConstants::ns_per_ms;
     uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_ms;
     std::ostringstream oss;
-    oss << ms_uint << '.' << std::setw(6) << std::setfill('0') << ns_rem;
+    oss << sign << ms_uint << '.' << std::setw(6) << std::setfill('0') << ns_rem;
     if(include_units)
     {
         oss << " " << timeformat_sufix(TimeFormat::kMilliseconds);
@@ -118,11 +133,12 @@ std::string
 RocProfVis::View::nanosecond_to_s_str(double ns, bool include_units)
 {
     if(!std::isfinite(ns)) return "NaN";
-    uint64_t           ns_uint = static_cast<uint64_t>(ns);
+    const char*        sign    = "";
+    uint64_t           ns_uint = split_ns_sign(ns, sign);
     uint64_t           s_uint  = ns_uint / TimeConstants::ns_per_s;
     uint64_t           ns_rem  = ns_uint % TimeConstants::ns_per_s;
     std::ostringstream oss;
-    oss << s_uint << '.' << std::setw(9) << std::setfill('0') << ns_rem;
+    oss << sign << s_uint << '.' << std::setw(9) << std::setfill('0') << ns_rem;
     if(include_units)
     { 
         oss << " " << timeformat_sufix(TimeFormat::kSeconds);

@@ -61,6 +61,7 @@ SettingsPanel::Show()
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     DiscardAssistantTokenEdits();
     m_assistant_show_token = false;
+    RequestAssistantModels(true);
 #endif
 }
 
@@ -250,6 +251,13 @@ SettingsPanel::Render()
                 m_should_open = false;
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                 DiscardAssistantTokenEdits();
+                // Cancel restored the saved endpoint, so restore its list. OK
+                // already looked the draft up with only the key typed for it;
+                // never hand an old stored key to a newly accepted URL here.
+                if(!m_settings_confirmed)
+                {
+                    RequestAssistantModels(true);
+                }
 #endif
                 ImGui::CloseCurrentPopup();
             }

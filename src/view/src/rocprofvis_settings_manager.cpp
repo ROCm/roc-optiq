@@ -1305,6 +1305,18 @@ SettingsManager::GetActiveAssistantProvider() const
 }
 
 void
+SettingsManager::SetActiveAssistantModel(const std::string& model)
+{
+    std::vector<AssistantProvider>& providers = m_usersettings.assistant.providers;
+    if(model.empty() || m_usersettings.assistant.active >= providers.size())
+    {
+        return;
+    }
+    providers[m_usersettings.assistant.active].model = model;
+    SaveSettingsJson();
+}
+
+void
 SettingsManager::SerializeAppWindowSettings(jt::Json& json)
 {
     jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];

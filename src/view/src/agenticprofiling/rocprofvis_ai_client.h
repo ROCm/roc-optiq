@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <future>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -16,6 +19,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+struct assistant_model_catalog_request_t;
 
 // One function call the model asked for. Arguments arrive as a JSON string.
 struct AssistantToolCall
@@ -108,6 +113,59 @@ private:
     httplib::Client*   m_client    = nullptr;
     bool               m_cancelled = false;
 };
+
+/**
+ * @brief The models an endpoint lists, looked up on a worker thread so the UI
+ * never waits on the network.
+ *
+ * An OpenAI-compatible server lists its models beside the chat route, at
+ * {base}/models. An Azure-style URL usually points at a gateway in front of
+ * the deployments, and a gateway lists the names they take at the host's
+ * /v1/models. The key goes only where the chat request would send it, in the
+ * same header, and redirects are refused for the same reason. A host that
+ * lists nothing leaves the list empty; nothing about chat depends on it.
+ */
+class AssistantModelCatalog
+{
+public:
+    AssistantModelCatalog() = default;
+    ~AssistantModelCatalog();
+    AssistantModelCatalog(const AssistantModelCatalog&)            = delete;
+    AssistantModelCatalog& operator=(const AssistantModelCatalog&) = delete;
+
+    // Looks the endpoint up. A lookup already running for the same URL and key
+    // is left to finish; one for anything else is abandoned.
+    void Request(const std::string& endpoint_url, const std::string& api_token);
+
+    // Collects a finished lookup. Returns true while one is still running, so
+    // the caller can keep frames coming until the list lands.
+    bool Poll();
+
+    // The names the last finished lookup found, sorted, and the URL it asked.
+    // A list belongs to that URL and should not be offered for another.
+    const std::vector<std::string>& Models() const;
+    const std::string&              Url() const;
+
+private:
+    std::shared_ptr<assistant_model_catalog_request_t> m_request;
+    std::future<std::vector<std::string>>              m_lookup;
+    std::string                                        m_lookup_url;
+    size_t                                             m_lookup_key_hash = 0;
+    // Replaced lookups, kept until their workers return so no destructor
+    // blocks the frame that replaced them.
+    std::vector<std::future<std::vector<std::string>>> m_abandoned;
+    // Socket shutdown runs away from the UI thread; cpp-httplib may hold its
+    // socket mutex while DNS or connect is in progress.
+    std::vector<std::future<void>> m_stops;
+
+    std::vector<std::string> m_models;
+    std::string              m_url;
+};
+
+// True when two endpoint URLs send credentials to the same scheme, host, and
+// port. Paths and query strings do not change credential ownership.
+bool
+AssistantEndpointsShareOrigin(const std::string& first, const std::string& second);
 
 }  // namespace View
 }  // namespace RocProfVis

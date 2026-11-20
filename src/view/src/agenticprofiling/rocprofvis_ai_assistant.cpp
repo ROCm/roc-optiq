@@ -126,7 +126,8 @@ AddressRequest(AssistantChatRequest& request)
     return true;
 }
 
-// Drops a leading "1." or "1)", or a bullet.
+// Drops a leading "1." or "1)", or a bullet. A dot with a digit after it is a
+// decimal point, as in "2.5 ms gaps", so that line is kept whole.
 std::string
 StripListMarker(const std::string& line)
 {
@@ -137,7 +138,13 @@ StripListMarker(const std::string& line)
     }
     if(digits > 0 && digits < line.size() && (line[digits] == '.' || line[digits] == ')'))
     {
-        return line.substr(digits + 1);
+        const size_t after   = digits + 1;
+        const bool   decimal = line[digits] == '.' && after < line.size() &&
+                               line[after] >= '0' && line[after] <= '9';
+        if(!decimal)
+        {
+            return line.substr(after);
+        }
     }
     for(const char* bullet : ASSISTANT_NEXT_STEP_BULLETS)
     {

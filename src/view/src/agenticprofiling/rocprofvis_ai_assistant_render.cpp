@@ -2047,9 +2047,15 @@ AssistantPanel::RenderActivityCard()
         DescribeActivity(tool_wait, m_force_final, m_fetch_wait.warmup, m_tool_round,
                          m_fetch_wait.tool_name, kind, contended, m_status);
     const bool show_scope = tool_wait && !holding && !m_fetch_wait.warmup;
-    const std::vector<std::string> chips =
-        show_scope ? m_activity_scope : StepChips(m_turn_steps);
-    const ImU32 accent = settings.GetColor(Colors::kAccent);
+    // A read can run for minutes, so its chips are drawn from where RunNextTool
+    // left them rather than copied every frame.
+    std::vector<std::string> step_chips;
+    if(!show_scope)
+    {
+        step_chips = StepChips(m_turn_steps);
+    }
+    const std::vector<std::string>& chips  = show_scope ? m_activity_scope : step_chips;
+    const ImU32                     accent = settings.GetColor(Colors::kAccent);
 
     BeginPanelCard("##assistant_activity", PanelCardTone::kFrame, ASSISTANT_CARD_PADDING,
                    true, &settings);

@@ -317,7 +317,14 @@ AssistantPanel::SetStatus(const std::string& text)
     }
     m_status                   = text;
     Conversation& conversation = TurnConversation();
-    if(conversation.scroll_to_bottom)
+    if(m_turn_project_id != m_view_project_id)
+    {
+        // Another trace's transcript is on screen, so there is no reader here
+        // to drag, and the scroll area the two share will be wherever that one
+        // left it. Come back on the status line instead.
+        FollowTranscript(conversation);
+    }
+    else if(conversation.scroll_to_bottom)
     {
         conversation.scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
     }

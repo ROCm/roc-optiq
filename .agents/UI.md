@@ -2996,7 +2996,10 @@ Rules that are easy to get wrong here:
   in progress, so a slow-fetch timer cannot drag a reader back down
   after they scroll away. The target is `Conversation` state, because a
   turn can write to a trace that is not in front; it is spent when that
-  transcript is next drawn.
+  transcript is next drawn. Every conversation draws into the same
+  scroll area, so one coming back into view would open wherever another
+  trace's was left: while its transcript is off screen, a status change
+  does start a follow.
 - **A tool only formats rows from a fetch it started.** Several table
   request IDs and result slots are shared with the normal UI. If a tool
   finds one busy, it waits for that owner and retries its own query

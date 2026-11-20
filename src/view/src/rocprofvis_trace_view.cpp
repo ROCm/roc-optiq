@@ -783,9 +783,12 @@ TraceView::RenderToolbar()
 
         ImFont* icon_font =
             m_settings_manager.GetFontManager().GetFont(FontType::kIcon);
+        // "###" keeps the button's ID independent of its glyph, so UI tests still
+        // find it when the icon changes.
+        const std::string minimap_label = std::string(ICON_MINIMAP) + "###minimap_toggle";
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
         ImGui::PushFont(icon_font, 0.0f);
-        if(ImGui::Button(ICON_MINIMAP))
+        if(ImGui::Button(minimap_label.c_str()))
         {
             m_show_minimap_popup = !m_show_minimap_popup;
         }

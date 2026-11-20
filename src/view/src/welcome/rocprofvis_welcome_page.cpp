@@ -888,10 +888,12 @@ WelcomePage::RenderTipsCard(float extra_height)
     const ImU32 hover  = settings.GetColor(Colors::kButtonHovered);
     const ImU32 press  = settings.GetColor(Colors::kButtonActive);
     ImGui::SameLine(std::max(row_x, row_x + row_w - nav_w), 0.0f);
+    // No icon size is passed, so the arrows keep the body's font size. A size
+    // read back from ImGui already includes the display scale, and passing it
+    // on would apply that scale a second time.
     const bool previous =
         IconButton(ICON_CHEVRON_LEFT, icons, ImVec2(button, button), "Previous tip",
-                   false, ImVec2(0.0f, 0.0f), idle, hover, press, "welcome_tip_previous",
-                   font_size);
+                   false, ImVec2(0.0f, 0.0f), idle, hover, press, "welcome_tip_previous");
     ImGui::SameLine(0.0f, gap);
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     ImGui::TextUnformatted(position);
@@ -899,7 +901,7 @@ WelcomePage::RenderTipsCard(float extra_height)
     ImGui::SameLine(0.0f, gap);
     const bool next =
         IconButton(ICON_CHEVRON_RIGHT, icons, ImVec2(button, button), "Next tip", false,
-                   ImVec2(0.0f, 0.0f), idle, hover, press, "welcome_tip_next", font_size);
+                   ImVec2(0.0f, 0.0f), idle, hover, press, "welcome_tip_next");
 
     // Every tip takes the tallest one's height, so browsing never moves the
     // rest of the page.

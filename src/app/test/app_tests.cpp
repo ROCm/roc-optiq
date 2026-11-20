@@ -2963,6 +2963,43 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(still_missing);
     };
 
+    // AIPROFVIS-703: a .rpv whose compare_files holds a non-string entry used to abort
+    // the app inside jt::Json::getString(). It must fail as a corrupted project.
+    t = IM_REGISTER_TEST(e, "app", "sys_project_malformed_compare_files_error");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if (app == nullptr) return;
+
+        const fs::path rpv_path =
+            fs::temp_directory_path() / "rocprofvis_malformed_compare_files.rpv";
+        {
+            std::ofstream out(rpv_path);
+            IM_CHECK(out.is_open());
+            if (!out.is_open()) return;
+            out << "{\"general\": {\"version\": \"1.0\", \"compare_files\": [1, 2]}}";
+        }
+
+        Project     proj;
+        std::string path   = rpv_path.string();
+        const Project::OpenResult result = proj.Open(path);
+        const std::string message = ProjectTestPeer{proj}.OpenErrorMessage();
+
+        std::error_code ec;
+        fs::remove(rpv_path, ec);
+
+        // Close the queued error dialog so it doesn't block later tests.
+        ctx->Yield(2);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        IM_CHECK(result == Project::OpenResult::Failed);
+        IM_CHECK(message.find("invalid or corrupted") != std::string::npos);
+    };
+
     // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
     // Presence/shape only -- the args come back asynchronously through the
     // controller, with no single table to build a value oracle from.

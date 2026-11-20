@@ -394,13 +394,15 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             }
         }
 
+        rocprofvis_result_t fetch_result = kRocProfVisResultSuccess;
         if(fetch_ranges.size())
         {
             for(auto& range : fetch_ranges)
             {
+                rocprofvis_result_t range_result = kRocProfVisResultSuccess;
                 if(future->IsCancelled())
                 {
-                    result = kRocProfVisResultCancelled;
+                    range_result = kRocProfVisResultCancelled;
                 }
                 else
                 {
@@ -409,8 +411,12 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
                     double fetch_end =
                         GetStartTimestamp() + ((range.second + 1) * kSegmentDuration);
 
-                    result = FetchFromDataModel(fetch_start, fetch_end, future);
-                    spdlog::debug("FetchFromDataModel for track {} ({}-{}) = {}, cancelled={}",GetId(),fetch_start, fetch_end,(uint32_t)result, future->IsCancelled());
+                    // The processed flags below must be cleared even if the fetch
+                    // throws, or later fetches of these segments wait forever.
+                    range_result = CallCatchingExceptions([&]() {
+                        return FetchFromDataModel(fetch_start, fetch_end, future);
+                    });
+                    spdlog::debug("FetchFromDataModel for track {} ({}-{}) = {}, cancelled={}",GetId(),fetch_start, fetch_end,(uint32_t)range_result, future->IsCancelled());
 
                 }
                 {
@@ -418,15 +424,16 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
                     for(uint32_t i = range.first; i <= range.second; i++)
                     {
                         GetSegments()->SetProcessed(i, false);
-                        GetSegments()->SetValid(i, result == kRocProfVisResultSuccess );
+                        GetSegments()->SetValid(i, range_result == kRocProfVisResultSuccess);
                     }
                 }
                 m_state_changed.notify_all();
+
+                if(fetch_result == kRocProfVisResultSuccess)
+                {
+                    fetch_result = range_result;
+                }
             }
-        }
-        else
-        {
-            result = kRocProfVisResultOutOfRange;
         }
 
         {
@@ -443,13 +450,17 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             });
         }
 
-        // Walking the segments would report kRocProfVisResultOutOfRange for a
-        // cancelled fetch, because the segments it needs were never populated.
-        // The cancellation has to survive so the view knows the data is missing
-        // and must be re-requested when the track comes back into view.
-        if(result != kRocProfVisResultCancelled)
+        // Walking the segments after a failed or cancelled fetch would report
+        // success (or kRocProfVisResultOutOfRange) for a range with missing data.
+        // The failure has to survive so callers don't cache or display partial
+        // data, and the view re-requests it when the track comes back into view.
+        if(fetch_result == kRocProfVisResultSuccess)
         {
             result = GetSegments()->FetchSegments(start, end, user_ptr, future, func);
+        }
+        else
+        {
+            result = fetch_result;
         }
     }
 
@@ -613,11 +624,17 @@ Track::WaitForAndProcessTraceReadRequests(
     const std::vector<trace_read_request_t>& requests,
     Future* future)
 {
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result =
+        requests.empty() ? kRocProfVisResultOutOfRange : kRocProfVisResultSuccess;
 
     for(const trace_read_request_t& request : requests)
     {
-        result = ProcessTraceReadRequest(trace, dm_track_type, request, future);
+        rocprofvis_result_t request_result =
+            ProcessTraceReadRequest(trace, dm_track_type, request, future);
+        if(result == kRocProfVisResultSuccess)
+        {
+            result = request_result;
+        }
         future->RemoveDependentFuture(request.future);
         rocprofvis_db_future_free(request.future);
     }
@@ -654,6 +671,7 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
         data, kRPVDMNumberOfRecordsUInt64, 0);
     if(num_records > 0)
     {
+        // The slice must be deleted below even if processing its records throws.
         switch(dm_track_type)
         {
             case kRocProfVisDmRegionTrack:
@@ -665,12 +683,14 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
             case kRocProfVisDmHipEventTrack:
             case kRocProfVisDmStreamTrack:
             {
-                result = ProcessEventRecords(data, num_records, future);
+                result = CallCatchingExceptions(
+                    [&]() { return ProcessEventRecords(data, num_records, future); });
                 break;
             }
             case kRocProfVisDmPmcTrack:
             {
-                result = ProcessPmcSampleRecords(data, num_records, future);
+                result = CallCatchingExceptions(
+                    [&]() { return ProcessPmcSampleRecords(data, num_records, future); });
                 break;
             }
             default:

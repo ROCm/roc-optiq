@@ -84,6 +84,14 @@ constexpr float ASSISTANT_CONTEXT_DIVIDER_GAP   = 8.0f;
 constexpr float ASSISTANT_CONTEXT_TIP_WIDTH     = 300.0f;
 constexpr float ASSISTANT_CONTEXT_TIP_BAR_H     = 6.0f;
 constexpr float ASSISTANT_CONTEXT_TIP_NUM_WIDTH = 72.0f;
+// The arrow after the model name when the endpoint lists others, as a fraction
+// of the pill's text height, and the rows its list shows before scrolling.
+constexpr float       ASSISTANT_MODEL_ARROW_SCALE     = 0.5f;
+constexpr float       ASSISTANT_MODEL_ARROW_GAP       = 5.0f;
+constexpr int         ASSISTANT_MODEL_MENU_ROWS       = 12;
+constexpr float       ASSISTANT_MODEL_MENU_MIN_WIDTH  = 240.0f;
+constexpr float       ASSISTANT_MODEL_MENU_MAX_SCREEN = 0.75f;
+constexpr const char* ASSISTANT_MODEL_POPUP           = "##assistant_models";
 // imgui.h does not publish IM_PI.
 constexpr float ASSISTANT_PI = 3.14159265f;
 
@@ -559,6 +567,9 @@ AssistantPanel::RenderDocked()
 {
     if(!m_visible)
     {
+        // Reopening asks for the model list again, in case the endpoint could
+        // not be reached the last time.
+        m_models_requested = false;
         return;
     }
 
@@ -611,6 +622,17 @@ AssistantPanel::RenderHeaderCard()
                               : provider->model.empty()
                                   ? std::string(ASSISTANT_DEFAULT_MODEL)
                                   : provider->model;
+
+    // With the key the chat request would use, so the list is what it can reach.
+    if(configured && !m_models_requested)
+    {
+        AssistantProvider endpoint = *provider;
+        ApplyAssistantEndpointDefaults(endpoint);
+        std::string token;
+        settings.GetAssistantToken(endpoint.name, token);
+        m_model_catalog.Request(endpoint.endpoint_url, token);
+        m_models_requested = true;
+    }
 
     const AssistantToolContext view     = MakeAssistantToolContext(m_view_project_id);
     const bool                 can_link = CanLinkTrace(view);
@@ -835,14 +857,23 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
                           ImGui::CalcTextSize(out_label).x;
     const float pads = ASSISTANT_CONTEXT_CHIP_PAD_X * 2.0f;
 
+    // An arrow after the name means the pill opens the endpoint's model list.
+    // Dimmed while an answer is on its way, which keeps a turn on one model.
+    const bool listed =
+        !m_model_catalog.Models().empty() && m_model_catalog.Url() == endpoint;
+    const bool  can_pick = listed && !Busy();
+    const float arrow_w  = text_h * ASSISTANT_MODEL_ARROW_SCALE;
+    const float picker_w = listed ? ASSISTANT_MODEL_ARROW_GAP + arrow_w : 0.0f;
+
     // A narrow dock drops the usage first, then the budget, then shortens the
     // model name. The ring and the conversation size always stay.
     std::string label       = model;
     bool        show_usage  = conversation.usage_reported;
     bool        show_budget = true;
     auto        total       = [&]() {
-        return pads + ImGui::CalcTextSize(label.c_str()).x + divider_w + context_w +
-               (show_budget ? budget_w : 0.0f) + (show_usage ? usage_w : 0.0f);
+        return pads + ImGui::CalcTextSize(label.c_str()).x + picker_w + divider_w +
+               context_w + (show_budget ? budget_w : 0.0f) +
+               (show_usage ? usage_w : 0.0f);
     };
     if(show_usage && total() > avail)
     {
@@ -854,14 +885,25 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     }
     if(total() > avail)
     {
-        label = ElideWithEllipsis(model,
-                                  std::max(0.0f, avail - (pads + divider_w + context_w)));
+        label = ElideWithEllipsis(
+            model, std::max(0.0f, avail - (pads + picker_w + divider_w + context_w)));
     }
     const float width = total();
 
-    ImGui::InvisibleButton("##assistant_context_chip",
-                           ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
-    const bool hovered = ImGui::IsItemHovered();
+    const bool pressed = ImGui::InvisibleButton(
+        "##assistant_context_chip", ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool  hovered    = ImGui::IsItemHovered();
+    const float model_edge = origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X +
+                             ImGui::CalcTextSize(label.c_str()).x + picker_w;
+    const bool model_hovered = hovered && ImGui::GetIO().MousePos.x <= model_edge;
+    if(can_pick && model_hovered)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    if(pressed && can_pick && model_hovered)
+    {
+        ImGui::OpenPopup(ASSISTANT_MODEL_POPUP);
+    }
 
     ImDrawList*  draw     = ImGui::GetWindowDrawList();
     const float  center_y = origin.y + chip_h * 0.5f;
@@ -891,6 +933,16 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     };
 
     run(label.c_str(), main);
+    if(listed)
+    {
+        x += ASSISTANT_MODEL_ARROW_GAP;
+        const float top    = center_y - arrow_w * 0.25f;
+        const float bottom = center_y + arrow_w * 0.25f;
+        draw->AddTriangleFilled(ImVec2(x, top), ImVec2(x + arrow_w, top),
+                                ImVec2(x + arrow_w * 0.5f, bottom),
+                                can_pick ? main : dim);
+        x += arrow_w;
+    }
     rule();
 
     const ImVec2 ring_center(x + ring_d * 0.5f, center_y);
@@ -929,12 +981,73 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     }
     ImGui::PopFont();
 
-    if(hovered)
+    if(hovered && !ImGui::IsPopupOpen(ASSISTANT_MODEL_POPUP))
     {
         BeginTooltipStyled();
         RenderContextTooltip(conversation, load, fill, model, endpoint);
         EndTooltipStyled();
     }
+    RenderModelMenu(ImVec2(chip_min.x, chip_max.y + ASSISTANT_CONTEXT_CHIP_BELOW), model,
+                    endpoint);
+}
+
+// The model list under the pill, with the model in use checked. A pick is
+// saved like any setting, and the next request goes to it.
+void
+AssistantPanel::RenderModelMenu(const ImVec2& anchor, const std::string& model,
+                                const std::string& endpoint)
+{
+    if(!ImGui::IsPopupOpen(ASSISTANT_MODEL_POPUP))
+    {
+        return;
+    }
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float       max_h =
+        ImGui::GetTextLineHeightWithSpacing() * ASSISTANT_MODEL_MENU_ROWS +
+        style.WindowPadding.y * 2.0f;
+    float row_w = 0.0f;
+    for(const std::string& name : m_model_catalog.Models())
+    {
+        row_w = std::max(row_w, ImGui::CalcTextSize(name.c_str()).x);
+    }
+    const float max_w =
+        ImGui::GetMainViewport()->WorkSize.x * ASSISTANT_MODEL_MENU_MAX_SCREEN;
+    const float popup_w = std::min(max_w, std::max(ASSISTANT_MODEL_MENU_MIN_WIDTH,
+                                                   row_w + style.WindowPadding.x * 2.0f));
+    ImGui::SetNextWindowPos(anchor, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(popup_w, 0.0f), ImVec2(popup_w, max_h));
+    PushContextMenuStyles();
+    if(ImGui::BeginPopup(ASSISTANT_MODEL_POPUP, ImGuiWindowFlags_HorizontalScrollbar))
+    {
+        if(m_model_catalog.Url() != endpoint || m_model_catalog.Models().empty())
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        for(size_t i = 0;
+            m_model_catalog.Url() == endpoint && i < m_model_catalog.Models().size(); ++i)
+        {
+            const std::string& name     = m_model_catalog.Models()[i];
+            const bool         selected = name == model;
+            ImGui::PushID(static_cast<int>(i));
+            const ImVec2 text_pos = ImGui::GetCursorScreenPos();
+            const bool   picked =
+                ImGui::Selectable("##model", selected, ImGuiSelectableFlags_None,
+                                  ImVec2(row_w, ImGui::GetTextLineHeight()));
+            ImGui::GetWindowDrawList()->AddText(
+                text_pos, ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
+            if(picked && !selected)
+            {
+                SettingsManager::GetInstance().SetActiveAssistantModel(name);
+            }
+            if(selected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
+    PopContextMenuStyles();
 }
 
 // The pill's hover card: which endpoint answers, the history against its

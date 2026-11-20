@@ -57,6 +57,10 @@ private:
     void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
+    // Looks up the models of the endpoint as this page has it, with the key OK
+    // would save. `saved_settings` is true only before editing or after
+    // OK/Cancel, when the stored key is known to belong to this URL.
+    void RequestAssistantModels(bool saved_settings = false);
 #endif
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 

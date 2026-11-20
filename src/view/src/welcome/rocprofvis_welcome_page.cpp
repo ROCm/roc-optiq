@@ -236,7 +236,7 @@ constexpr WelcomeTip kWelcomeTips[] = {
       "Pin the metrics you check on every kernel and save them as a preset to bring them "
       "back in one click." },
     { "Shortcuts",
-      "Every shortcut in these tips can be changed in Edit > Preferences, and the tips "
+      "Most shortcuts in these tips can be changed in Edit > Preferences, and the tips "
       "show your keys." },
     { "Anywhere",
       "Optiq doesn't need ROCm installed. Copy a trace to any Windows, Linux, or macOS "

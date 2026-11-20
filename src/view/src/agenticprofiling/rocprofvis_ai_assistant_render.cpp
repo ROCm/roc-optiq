@@ -1094,13 +1094,14 @@ AssistantPanel::RenderTranscript()
 
     // The reader went looking at something earlier. Stop following, or the next
     // frame pulls them back to our target. Messages are child windows, so the
-    // wheel has to count over them too.
+    // wheel has to count over them too. The scrollbar is tested unclipped: it
+    // lies outside the clip rectangle this child gives its contents.
     const ImRect scrollbar =
         ImGui::GetWindowScrollbarRect(ImGui::GetCurrentWindow(), ImGuiAxis_Y);
     const bool scrollbar_clicked =
         scrollbar.GetWidth() > 0.0f &&
         ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-        ImGui::IsMouseHoveringRect(scrollbar.Min, scrollbar.Max);
+        ImGui::IsMouseHoveringRect(scrollbar.Min, scrollbar.Max, false);
     if((ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
         ImGui::GetIO().MouseWheel > 0.0f) ||
        scrollbar_clicked)

@@ -33,11 +33,9 @@ namespace View
 namespace
 {
 
-constexpr size_t ASSISTANT_MAX_HIGHLIGHTS      = 12;
-constexpr size_t ASSISTANT_MAX_NEXT_STEPS      = 3;
-constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
-constexpr uint64_t ASSISTANT_TAB_REF_OFFSET      = 14695981039346656037ULL;
-constexpr uint64_t ASSISTANT_TAB_REF_PRIME       = 1099511628211ULL;
+constexpr size_t   ASSISTANT_MAX_HIGHLIGHTS = 12;
+constexpr uint64_t ASSISTANT_TAB_REF_OFFSET = 14695981039346656037ULL;
+constexpr uint64_t ASSISTANT_TAB_REF_PRIME  = 1099511628211ULL;
 
 // Stable for one project id without sending its full path to the model. The
 // mapping is recomputed from the open tabs, so closing another tab cannot
@@ -62,65 +60,6 @@ Actions(const AssistantToolContext& context)
 {
     return OptiqActions(context.data_provider, context.timeline_selection,
                         context.trace_view);
-}
-
-// Reads the stacked follow-up buttons out of offer_next_steps arguments.
-AssistantToolStartResult
-OfferNextStepsResult(const jt::Json& args)
-{
-    jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    if(!mutable_args.contains("steps") || !mutable_args["steps"].isArray())
-    {
-        return DoneResult("offer_next_steps needs a steps array of 1 to 3 strings.",
-                          "Missing steps");
-    }
-
-    std::vector<jt::Json>& entries = mutable_args["steps"].getArray();
-    std::string            length_error;
-    if(!CheckArrayLength(entries, "steps", length_error))
-    {
-        return DoneResult(length_error, "Too many steps");
-    }
-
-    AssistantToolStartResult result =
-        DoneResult("Offered next steps under the chat.", "Offered next steps");
-    result.set_next_steps = true;
-    for(jt::Json& entry : entries)
-    {
-        if(!entry.isString())
-        {
-            continue;
-        }
-        std::string step = Core::String::trim_copy(entry.getString());
-        if(step.empty())
-        {
-            continue;
-        }
-        if(step.size() > ASSISTANT_MAX_NEXT_STEP_CHARS)
-        {
-            step.resize(ASSISTANT_MAX_NEXT_STEP_CHARS);
-        }
-        result.next_steps.push_back(step);
-        if(result.next_steps.size() >= ASSISTANT_MAX_NEXT_STEPS)
-        {
-            break;
-        }
-    }
-    if(result.next_steps.empty())
-    {
-        return DoneResult("offer_next_steps needs at least one non-empty step.",
-                          "Missing steps");
-    }
-    return result;
-}
-
-// The only tool that runs without a trace, since it just puts buttons under
-// the chat.
-AssistantToolStartResult
-ToolOfferNextSteps(const AssistantToolContext&, const jt::Json& args,
-                   const std::string&)
-{
-    return OfferNextStepsResult(args);
 }
 
 AssistantToolStartResult
@@ -667,7 +606,6 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
 }
 
 const AssistantToolEntry k_ui_tool_handlers[] = {
-    { "offer_next_steps", ToolOfferNextSteps },
     { "show_panel", ToolShowPanel },
     { "reset_view", ToolResetView },
     { "measure", ToolMeasure },
@@ -679,12 +617,11 @@ const AssistantToolEntry k_ui_tool_handlers[] = {
 };
 
 /*
- * The two above that mean the same thing whatever kind of trace is in front.
+ * The one above that means the same thing whatever kind of trace is in front.
  *
- * offer_next_steps only writes buttons under the chat. switch_tab reads
- * AppWindow's tab container, and the details-panel half of it already
- * null-guards the TraceView, so on a compute trace it lists the open traces and
- * switches between them without mentioning tabs that are not there.
+ * switch_tab reads AppWindow's tab container, and the details-panel half of it
+ * already null-guards the TraceView, so on a compute trace it lists the open
+ * traces and switches between them without mentioning tabs that are not there.
  *
  * show_panel is deliberately absent. Six of its eight panels are persisted in
  * AppWindowSettings and apply to system traces, so on a compute tab it would
@@ -692,7 +629,6 @@ const AssistantToolEntry k_ui_tool_handlers[] = {
  * to the model than an unknown tool, because it answers as though it worked.
  */
 const AssistantToolEntry k_shared_ui_tool_handlers[] = {
-    { "offer_next_steps", ToolOfferNextSteps },
     { "switch_tab", ToolSwitchTab },
 };
 

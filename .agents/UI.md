@@ -159,6 +159,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 |   \-- view/             # << This is the UI. Read sections 6-14. >>
 |       +-- inc/          # rocprofvis_view_module.h (entry: init/render/destroy)
 |       +-- src/          # All UI classes
+|       |   +-- animations/ # Reusable animations (see 7.16)
 |       |   +-- compute/  # Compute-only views
 |       |   +-- icons/    # Icon font glyph constants & ranges
 |       |   +-- model/    # UI-side data models (cached projections)
@@ -879,6 +880,25 @@ fills this tab and selects it; nothing runs until the user presses Run
 or Reject. `ScriptApproval` is that state machine, and
 `ScriptExecuteCompleteEvent` is filtered by trace source id because
 every editor hears every one of them.
+
+### 7.16 `src/view/src/animations/` - reusable animations
+
+Animations get a folder of their own beside `widgets/`, one file pair
+each. An animation here is a free function drawn inline like a widget
+helper. `RenderLoadingSlots` sets the pattern: the caller passes the
+time since its wait began rather than the animation reading a global
+clock, so it always starts on its first frame, and the animation calls
+`RenderScheduler::RequestRender()` itself so frames keep coming while it
+is on screen. The bouncing-dots spinner predates the folder and stays in
+`rocprofvis_gui_helpers.h` (7.6).
+
+- `RenderLoadingSlots(slot_count, elapsed_seconds, settings)` -
+  `rocprofvis_loading_slots.{h,cpp}`. Holds the place of rows still on
+  their way: a column of button-sized slots, each a miniature timeline
+  track that a playhead sweeps across, laying event blocks down behind
+  it, with each slot a beat behind the one above. Drawn under the same
+  `FramePadding` as the buttons it stands in for, it takes exactly their
+  room. Ask Optiq shows it while the follow-up buttons are written.
 
 ## 8. Track Item Hierarchy
 
@@ -2643,7 +2663,7 @@ compute turn, so the prompt, the schema and the Explain-this-view text
 are always the system ones; the compute versions are still compiled, but
 nothing sends them. And the panel turns a compute trace away before a
 turn starts (`CanAskTrace`, `SendCurrentInput`), with
-`StartAssistantTool` refusing every tool but `offer_next_steps` on one
+`StartAssistantTool` refusing every tool on one
 behind it. System traces behave the same either way. A new compute path that does not run through one of
 those three needs a guard of its own.
 
@@ -2674,8 +2694,8 @@ Layered, transport at the bottom and the panel at the top:
   columns must be names the returned rows carry (`node`, not the SQL
   `nodeId`), since a filter on any other name matches nothing.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
-  `StartAssistantTool`, which parses the arguments, refuses everything
-  but `offer_next_steps` when no trace is ready, parks while a trace is
+  `StartAssistantTool`, which parses the arguments, refuses every tool
+  when no trace is open, parks while a trace is
   still loading, then searches the tables for the kind of trace the turn
   is about - system gets UI, data and script; compute gets shared-UI and
   compute, or is refused outright when compute support is not built in.
@@ -2687,20 +2707,17 @@ Layered, transport at the bottom and the panel at the top:
   Nothing outside `agenticprofiling/` includes it.
 - `rocprofvis_ai_ui_tools.cpp` - the tools that change Optiq rather
   than read it: `goto`, `show_panel`, `switch_tab`, `flow_arrows`,
-  `annotate`, `bookmark`, `measure`, `reset_view`, and
-  `offer_next_steps`. Every one goes through `OptiqActions` and answers
-  in the same call, so none of them park a fetch or touch a request id.
-  `offer_next_steps` is a UI side-effect rather than a read: it fills
-  the stacked follow-up buttons under the chat. Unprompted UI mutation
+  `annotate`, `bookmark`, `measure`, and `reset_view`. Every one goes
+  through `OptiqActions` and answers in the same call, so none of them
+  park a fetch or touch a request id. Unprompted UI mutation
   is `goto` (zoom and select events) plus `flow_arrows` with
   `visible=true` alongside a selection, since the arrows only draw for
   a selected event and would otherwise stay invisible to a user who had
   switched them off. Notes, bookmarks, measure pins, panels, tabs,
   arrow restyling, and reset_view wait until the user asked.
-  Also owns `GetAssistantSharedUiToolHandlers`, the two entries that
-  mean the same thing on either kind of trace: `offer_next_steps`, which
-  needs no trace at all, and `switch_tab`, whose details-panel half
-  already null-guards the `TraceView`. `show_panel` is deliberately not
+  Also owns `GetAssistantSharedUiToolHandlers`, the one entry that
+  means the same thing on either kind of trace: `switch_tab`, whose
+  details-panel half already null-guards the `TraceView`. `show_panel` is deliberately not
   in it - six of its eight panels are persisted in `AppWindowSettings`
   and apply to system traces, so on a compute tab it would report
   opening a panel the user cannot see, and a false success is worse to
@@ -2828,9 +2845,10 @@ panel shows as a status line.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
   singleton like `LogViewer`. Owns the per-trace conversations, the
   docked column, and the turn loop. The composer shows **Explain this
-  view** on an empty chat, then replaces it with up to three stacked
-  next-step buttons from `offer_next_steps`. Clicking a step sends that
-  text as the next user message.
+  view** on an empty chat. Once an answer is on screen it shows up to
+  three stacked follow-up buttons, and `RenderLoadingSlots` holds their
+  place while the follow-up request writes them. Clicking a step sends
+  that text as the next user message.
 
 Integration points:
 
@@ -2849,7 +2867,7 @@ Rules that are easy to get wrong here:
   the client finds an inline harmony call it drops the prose, because
   what surrounds the call is the model's commentary on it rather than
   an answer. So every tool - including UI-only ones like
-  `offer_next_steps` - goes through `BeginToolQueue` and answers the
+  `show_panel` - goes through `BeginToolQueue` and answers the
   model on the next round. A code path that consumes a tool call
   without queueing it ends the turn with an empty transcript. The
   harmony scan only runs on rounds where tools were offered, so a
@@ -2858,6 +2876,26 @@ Rules that are easy to get wrong here:
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
   user reads.
+- **The follow-up buttons are a request of their own, after the
+  answer.** `StartNextStepsRequest` sends `AssistantNextStepsPrompt`
+  plus the question, the answer, the briefing of the turn's trace and
+  the user's last eight earlier questions, tools off, on a second
+  `AssistantChatCall` (`m_steps_call`). It never makes the panel
+  `Busy()`, so the composer stays usable while the slots animate. It
+  belongs to the conversation of the trace in `m_steps_project_id`:
+  the next send or Clear in that conversation, closing that trace, and
+  another answer's follow-up request abandon it through `m_abandoned`
+  like a turn's request, and a reply lands only in a conversation that
+  still exists. The tokens it reports are added to that conversation's
+  totals in the header pill, without replacing the last reply's figures.
+  A failure costs only the buttons, never a transcript
+  line. Do not turn them back into a tool: a tool
+  the model calls last spends a whole round before the answer, and the
+  user waits through it with nothing to read. `ParseNextSteps` takes one
+  per line and strips the numbering, bullets and quotes models add
+  anyway. Because that request sees no tool results, its prompt carries
+  what the analyst can and cannot do for each trace kind - a follow-up
+  it cannot act on only earns an apology when clicked.
 - **The prompt is a shared base plus one body per trace kind.**
   `AssistantSystemPrompt(is_compute)` concatenates
   `ASSISTANT_SHARED_OPENING`, then either
@@ -2933,14 +2971,14 @@ Rules that are easy to get wrong here:
   when the summary reports counters, since a page of counters already
   carries their statistics. It has it land on a one-line *suspicion*
   in the user's phrasing ("I suspect the same buffer is being copied
-  back and forth"), then hand over through `offer_next_steps`. The
+  back and forth"), then hand over to the follow-up buttons. The
   counterweight is `IT IS FINE IF NOTHING IS WRONG`: a checklist plus a
   request for a suspicion will otherwise make the model find a culprit
   in a perfectly healthy trace, so the prompt states outright that
   "nothing here looks pathological" is a real answer and that a
   suspicion has to rest on a figure it can name. It dives without asking only when the
   user names something specific or has already said to go deeper.
-  Clicking a next-step button sends that text as the next user message,
+  Clicking a follow-up button sends that text as the next user message,
   so the hand-off needs no new machinery. This is the one place the
   prompt permits ending on an offer, which is why several other
   sections say "on an overview the range alone is enough" - an overview
@@ -3636,6 +3674,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Show a transient toast                        | `NotificationManager::GetInstance().Show(message, level)`                                      |
 | Show progress for a long-running task         | `NotificationManager::GetInstance().ShowPersistent(id, msg, level)` + `UpdateProgress(id, ...)`|
 | Show a spinner while loading                  | `RenderLoadingIndicator(color, ...)` and gate behind `LoadingTimer`                            |
+| Hold the place of buttons still loading       | `RenderLoadingSlots(count, elapsed_seconds)` from `animations/`                                |
 | Render a glyph button                         | `IconButton(ICON_FOO, fonts.GetFont(FontType::kIcon), ...)`                                    |
 | Render an X close button                      | `XButton(id, tooltip, settings)`                                                               |
 | Render a heading                              | `SectionTitle(text, large, settings)`                                                          |
@@ -3958,9 +3997,10 @@ All under `agenticprofiling/`, compiled only with
   `AssistantToolNameList` ->
   `agenticprofiling/rocprofvis_ai_tool_schema.h` -> Thread-safe, reads
   no view state. The first and last take `is_compute`.
-- `AssistantSystemPrompt` ->
+- `AssistantSystemPrompt`, `AssistantNextStepsPrompt` ->
   `agenticprofiling/rocprofvis_ai_prompts.h` -> Shared base plus the
-  body for the trace kind passed in.
+  body for the trace kind passed in, and the follow-up request's whole
+  system message.
 - `BuildAssistantWhereClause`, `AssistantGroupByFromArgs`,
   `ResolveAssistantSortColumn` ->
   `agenticprofiling/rocprofvis_ai_tool_query.h` -> Model arguments to
@@ -4138,6 +4178,10 @@ All under `agenticprofiling/`, compiled only with
 - `DebugWindow` (dev only) -> `rocprofvis_debug_window.h`.
 - `LogViewer` -> `rocprofvis_log_viewer.h`.
 - `ScriptEditor` -> `rocprofvis_script_editor.h` (scripting flag).
+
+### Animations (`src/view/src/animations/`)
+
+- `RenderLoadingSlots` -> `rocprofvis_loading_slots.h`.
 
 ### Tree types and constants
 

@@ -93,7 +93,7 @@ private:
         std::vector<std::unique_ptr<TextSelect>> message_select;
         std::vector<std::vector<std::string>>    message_lines;
         std::vector<AssistantMessage>            messages;
-        // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
+        // Clickable follow-ups for the last answer. Cleared on a new turn.
         std::vector<std::string> next_steps;
         std::string              input;
         // Whether messages already carry this trace's briefing.
@@ -180,8 +180,8 @@ private:
                                         const std::string& text, Colors text_color);
     TextSelect* MessageSelect(Conversation& conversation, size_t index);
     void        RenderComposer();
-    // Explain this view on an empty chat, or the model's offered follow-ups
-    // after a turn.
+    // Explain this view on an empty chat, the follow-ups after a turn, or the
+    // slots holding their place while they are written.
     void RenderSuggestedActions();
     void RenderSplitter();
     // Transient progress text, kept outside the transcript so it disappears
@@ -196,10 +196,21 @@ private:
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
     // Non-blocking cancellation for a UI action. The future is reaped later.
+    // The turn's request and the follow-up request share the one hand-off.
+    void AbandonRequest(std::shared_ptr<AssistantChatCall>& call,
+                        std::future<AssistantChatResult>&   pending);
     void AbandonPendingRequest();
+    void AbandonNextStepsRequest();
     void ReapAbandonedRequests();
     // Blocking cancellation for final panel destruction only.
     void CancelPendingRequest();
+    // Asks for the follow-up buttons once the answer is on screen: a request of
+    // its own, tools off, carrying the question, the answer, the briefing and the
+    // user's earlier questions, but none of the tool results. It runs on its own
+    // call so it never makes the panel Busy - the user can type while it loads,
+    // and the next send or Clear in its conversation cancels it.
+    void StartNextStepsRequest(const std::string& answer);
+    void PollNextStepsRequest();
     void StartHttpRequest();
     void PollToolFetch();
     void HandleHttpResult(const AssistantChatResult& result);
@@ -253,6 +264,10 @@ private:
     static AssistantPanel* s_instance;
 
     bool  m_visible;
+    // Whether the transcript showed its newest line last frame. The buttons that
+    // replace the placeholder slots can be taller, which shrinks the transcript
+    // under a reader who was following the newest line.
+    bool  m_transcript_at_bottom;
     float m_dock_width;
     Phase m_phase;
 
@@ -298,6 +313,18 @@ private:
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
     std::vector<AbandonedRequest>      m_abandoned;
+
+    // How many follow-ups one answer gets.
+    static constexpr size_t MAX_NEXT_STEPS = 3;
+    // The follow-up request, apart from m_call so it never makes the panel
+    // Busy, and when it went out, so the placeholder slots start their first
+    // sweep on an empty track.
+    std::shared_ptr<AssistantChatCall>    m_steps_call;
+    std::future<AssistantChatResult>      m_steps_pending;
+    std::chrono::steady_clock::time_point m_steps_started;
+    // The trace whose conversation those follow-ups are for. Empty unless the
+    // request is out.
+    std::string m_steps_project_id;
 };
 
 }  // namespace View

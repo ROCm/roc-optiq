@@ -228,6 +228,8 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
     src/view/src/widgets/rocprofvis_notification_manager.cpp
+    src/view/src/animations/rocprofvis_loading_slots.cpp
+    src/view/src/animations/rocprofvis_loading_slots.h
     src/view/src/compute/rocprofvis_compute_view.cpp
     src/view/src/compute/rocprofvis_compute_table_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_details.cpp

@@ -311,7 +311,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
         const char* pmc_table_name = "PMC";
         std::map<uint32_t, uint64_t> allocated_memory_per_agent;
         std::map<uint32_t, uint64_t> pmc_id_per_agent;
-        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle(pmc_table_name);
+        CatalogTable* pmc_table = (CatalogTable*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle(pmc_table_name);
         auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
         std::vector<store_params> v;
         v.reserve(mem_act_per_guid.size());
@@ -326,7 +326,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
                 if (it == pmc_id_per_agent.end())
                 {
                     uint32_t num = static_cast<uint32_t>(pmc_table->NumRows());
-                    uint64_t pmc_id = num ? std::atoll(pmc_table->GetCellByIndex(num - 1, "id")) : 0;
+                    uint64_t pmc_id = num ? std::atoll(pmc_table->CellTextByIndex(num - 1, "id")) : 0;
                     pmc_id++;
                     pmc_table->AddRow(pmc_id);
 
@@ -745,16 +745,16 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
 
 
 rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance ){
-    TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
+    CatalogTable* table = (CatalogTable*)CachedTables(db_instance)->GetTableHandle("StreamToHw");
     uint32_t stream_id = static_cast<uint32_t>(TrackPropertiesAt(stream_track_index)->track_indentifiers.id[TRACK_ID_STREAM]);
 
     for (int ind = 0; ind < table->NumRows(); ind++)
     {
-        uint64_t id = std::atoll(table->GetCellByIndex(ind, Builder::STREAM_ID_SERVICE_NAME));
+        uint64_t id = std::atoll(table->CellTextByIndex(ind, Builder::STREAM_ID_SERVICE_NAME));
         if (id == stream_id)
         {
-            uint32_t op = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::OPERATION_SERVICE_NAME)));
-            std::string agent = table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME);
+            uint32_t op = static_cast<uint32_t>(std::atoll(table->CellTextByIndex(ind, Builder::OPERATION_SERVICE_NAME)));
+            std::string agent = table->CellTextByIndex(ind, Builder::AGENT_ID_SERVICE_NAME);
             uint32_t agent_id = 0;
             if (agent.empty() && op == kRocProfVisDmOperationMemoryAllocate)
             {
@@ -766,9 +766,9 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateStreamToHardwareFlowProperties(u
             }
             else
             {
-                agent_id = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::AGENT_ID_SERVICE_NAME)));
+                agent_id = static_cast<uint32_t>(std::atoll(table->CellTextByIndex(ind, Builder::AGENT_ID_SERVICE_NAME)));
             }
-            uint32_t queue_id = static_cast<uint32_t>(std::atoll(table->GetCellByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME)));
+            uint32_t queue_id = static_cast<uint32_t>(std::atoll(table->CellTextByIndex(ind, Builder::QUEUE_ID_SERVICE_NAME)));
             uint32_t track;
             if (TrackTracker()->FindTrack(
                 TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op), 
@@ -794,11 +794,11 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     const char* table_name = "Agent";
-    TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle(table_name);
+    CatalogTable* table = (CatalogTable*)CachedTables(db_instance)->GetTableHandle(table_name);
     for (uint64_t i = 0; i < table->NumRows(); i++)
     {
-        uint64_t agent_id = std::atoll(table->GetCellByIndex(i, "id"));
-        uint64_t node_id = std::atoll(table->GetCellByIndex(i,"nid"));
+        uint64_t agent_id = std::atoll(table->CellTextByIndex(i, "id"));
+        uint64_t node_id = std::atoll(table->CellTextByIndex(i,"nid"));
         bool agent_in_use = false;
         for (int track_id = 0; track_id < NumTracks(); track_id++)
         {
@@ -824,7 +824,7 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
         {
             rocprofvis_dm_track_identifiers_t track_indentifiers;
 
-            uint64_t pid = std::atoll(table->GetCell(i,"pid"));
+            uint64_t pid = std::atoll(table->CellText(i,"pid"));
             track_indentifiers.category = kRocProfVisDmNotATrack;
             track_indentifiers.id[TRACK_ID_NODE] = node_id;
             track_indentifiers.id[TRACK_ID_AGENT] = agent_id;

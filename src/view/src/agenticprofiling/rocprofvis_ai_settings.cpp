@@ -151,13 +151,6 @@ SettingsManager::ClearAssistantToken(const std::string& provider_name)
 }
 
 void
-SettingsPanel::ShowAssistantSettings()
-{
-    Show();
-    m_category = Assistant;
-}
-
-void
 SettingsPanel::RenderAssistantSettings()
 {
     ImGuiStyle& style = ImGui::GetStyle();

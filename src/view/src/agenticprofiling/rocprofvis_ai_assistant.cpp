@@ -620,26 +620,20 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
-    // Enter on an empty composer is not a question, so it must not open
-    // Preferences. Explain this view is a request even when the box is empty.
-    std::string question = conversation.input;
-    if(!explain_view && question.empty())
-    {
-        return;
-    }
-
     SettingsManager&         settings = SettingsManager::GetInstance();
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
     if(provider == nullptr || provider->endpoint_url.empty())
     {
-        // Open the page that fixes it rather than name a menu path to go and find.
         AppendLine(Speaker::kStatus,
-                   "Set the assistant URL in Preferences, then ask again.");
-        AppWindow* app = AppWindow::GetInstance();
-        if(app != nullptr)
-        {
-            app->ShowAssistantSettings();
-        }
+                   "Set the assistant URL in Edit > Preferences > Assistant.");
+        NotificationManager::GetInstance().Show(
+            "Assistant URL is not set", NotificationLevel::Warning);
+        return;
+    }
+
+    std::string question = conversation.input;
+    if(!explain_view && question.empty())
+    {
         return;
     }
 

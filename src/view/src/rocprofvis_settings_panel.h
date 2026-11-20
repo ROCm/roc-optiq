@@ -17,18 +17,7 @@ namespace View
 class SettingsPanel
 {
 public:
-    SettingsPanel(SettingsManager& settings);
-    ~SettingsPanel();
-
-    void Show();
-#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-    // Opens on the Assistant page, so the panel can send a user who has not set
-    // it up straight there.
-    void ShowAssistantSettings();
-#endif
-    void Render();
-
-private:
+    // The pages of the dialog, in the order its list shows them.
     enum Category
     {
         Display,
@@ -41,6 +30,15 @@ private:
         Other,
     };
 
+    SettingsPanel(SettingsManager& settings);
+    ~SettingsPanel();
+
+    void Show();
+    // Opens the dialog on the given page.
+    void ShowAtCategory(Category category);
+    void Render();
+
+private:
     void RenderDisplayOptions();
     void RenderTrackOptions();
     void RenderUnitOptions();

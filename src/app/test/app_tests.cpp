@@ -369,6 +369,34 @@ struct AssistantPanelOpen
     ~AssistantPanelOpen() { *AssistantPanel::GetInstance()->VisiblePtr() = was_visible; }
 };
 
+// Keeps a test's in-memory edits to the assistant settings from outliving it.
+struct AssistantSettingsRestore
+{
+    AssistantSettings saved;
+    AssistantSettingsRestore()
+    : saved(SettingsManager::GetInstance().GetUserSettings().assistant)
+    {}
+    ~AssistantSettingsRestore()
+    {
+        SettingsManager::GetInstance().GetUserSettings().assistant = saved;
+    }
+};
+
+// Whether Preferences is open on the Assistant page, the only page that draws
+// the URL field. Cancels the dialog if it is open at all.
+bool
+CancelAssistantSettings(ImGuiTestContext* ctx)
+{
+    ctx->SetRef("//Settings");
+    const bool on_assistant_page = ctx->ItemExists("**/##assistant_url");
+    if(ctx->ItemExists("**/Cancel"))
+    {
+        ctx->ItemClick("**/Cancel");
+    }
+    ctx->SetRef("Main Window");
+    return on_assistant_page;
+}
+
 bool
 AssistantTraceReady(const std::string& project_id)
 {
@@ -3278,6 +3306,46 @@ void RegisterAppTests(ImGuiTestEngine* e)
         result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
                                     "{\"trace\":\"" + ref + "\"}");
         IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+
+    // The model name in the Ask Optiq header, and the pill that stands in for it
+    // before an endpoint is set, open Preferences on the Assistant page.
+    t           = IM_REGISTER_TEST(e, "app", "common_assistant_header_opens_settings");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        AssistantPanelOpen       panel_open;
+        AssistantSettingsRestore settings_restore;
+        ctx->Yield(3);
+        ctx->SetRef("Main Window");
+
+        // A machine with an endpoint saved draws the model in the pill.
+        if(ctx->ItemExists("**/##assistant_context_chip"))
+        {
+            // The usage figures at its right end report; they are not a link.
+            ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeR);
+            ctx->MouseClick();
+            ctx->Yield(3);
+            IM_CHECK(!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
+
+            ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeL);
+            ctx->MouseClick();
+            ctx->Yield(3);
+            IM_CHECK(CancelAssistantSettings(ctx));
+            ctx->Yield(3);
+        }
+
+        // With no endpoint, a pill in the same place leads to the same page.
+        AssistantSettings& assistant =
+            SettingsManager::GetInstance().GetUserSettings().assistant;
+        for(AssistantProvider& provider : assistant.providers)
+        {
+            provider.endpoint_url.clear();
+        }
+        ctx->Yield(3);
+        IM_CHECK(!ctx->ItemExists("**/##assistant_context_chip"));
+        IM_CHECK(ctx->ItemExists("**/##assistant_setup_chip"));
+        ctx->ItemClick("**/##assistant_setup_chip");
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
     };
 #endif
 }

@@ -246,7 +246,7 @@ TEST_CASE_METHOD(SummaryFailureFixture, "Summary accepts populated and empty tim
           kRPVAnalysisSummaryAggregationLevelTrace);
     const uint64_t memory_events =
         Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
-    INFO(DescribeMemoryEvents(memory_events));
+    WARN(DescribeMemoryEvents(memory_events));
     if(empty)
     {
         CHECK(memory_events == 0);

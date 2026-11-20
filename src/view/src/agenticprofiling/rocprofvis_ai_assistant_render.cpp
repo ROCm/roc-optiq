@@ -900,6 +900,8 @@ ToolDetail(const std::string& tool)
           "Measuring how busy this queue was, or a counter's range and mean, over "
           "the window." },
         { "get_summary", "Loading the summary Optiq builds for the trace." },
+        { "compare_traces",
+          "Loading the summary of each run, which is what the two are compared by." },
         { "kernel_triage", "Reading the standard diagnostic tables for this kernel." },
         { "get_metrics", "Reading hardware counter values from the database." },
         { "kernel_pc_samples",

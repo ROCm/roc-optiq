@@ -531,6 +531,22 @@ struct AssistantPanelTestPeer
         line.text    = text;
         v.ConversationFor(project_id).lines.push_back(line);
     }
+    // Lands an answer in a trace's conversation the way a finished turn does,
+    // without sending anything.
+    void AddAnswer(const std::string& project_id, const std::string& text)
+    {
+        v.m_turn_project_id = project_id;
+        v.AppendLine(AssistantPanel::Speaker::kAssistant, text);
+    }
+    // Whether a trace's transcript still has somewhere to scroll to.
+    bool ScrollPending(const std::string& project_id) const
+    {
+        const std::unordered_map<
+            std::string, std::unique_ptr<AssistantPanel::Conversation>>::const_iterator
+            it = v.m_conversations.find(project_id);
+        return it != v.m_conversations.end() &&
+               (it->second->scroll_to_bottom || it->second->scroll_to_answer);
+    }
     void DropConversation(const std::string& project_id)
     {
         v.m_conversations.erase(project_id);

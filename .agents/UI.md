@@ -2664,7 +2664,12 @@ Layered, transport at the bottom and the panel at the top:
 - `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
   OpenAI chat-completions endpoint over cpp-httplib, plus the reply
   parser (including a "harmony" inline tool-call fallback). Knows
-  nothing about traces.
+  nothing about traces. Also `AssistantModelCatalog`, the endpoint's
+  model list fetched on a worker thread: `{base}/models` beside the chat
+  route, or the host's `/v1/models` for an Azure-style gateway, with the
+  key in the chat request's own header and redirects refused. A
+  plain-http loopback URL with no path is a self-hosted server and gets
+  `/v1` for both chat and the list.
 - `rocprofvis_ai_tool_schema.{h,cpp}` - `BuildAssistantToolsJson`, the
   description of the tool set the model receives. Builds JSON out of
   string literals and touches no view state, which is what makes it
@@ -2853,7 +2858,8 @@ Integration points:
 - The model name in the header pill opens Preferences on the Assistant
   page (`AppWindow::ShowSettings(SettingsPanel::Assistant)`). With no
   endpoint set, a `Not configured` pill takes its place and does the
-  same.
+  same. When the endpoint lists models, the arrow beside the name opens
+  that list.
 - `TraceView` and `AnalysisView` expose the plain accessors
   `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into
@@ -3031,6 +3037,21 @@ Rules that are easy to get wrong here:
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
+  A draft URL receives the stored key only while it has the saved URL's
+  origin. Accepting another origin clears the old key before saving the
+  new URL; if that clear fails, the URL change is rejected.
+- **One model list, two pickers.** The panel owns the
+  `AssistantModelCatalog` and polls it in `Update()`, requesting a render
+  while a lookup runs, since the app draws on demand. The header asks for
+  the saved endpoint each time the panel opens; the settings page asks when
+  the dialog opens, after Cancel, and after the URL or key changes.
+  Preferences keeps the Model field a text field and adds an arrow only
+  when this URL listed models; the arrow on the header pill opens the
+  same list, saved through `SettingsManager::SetActiveAssistantModel`,
+  and is dimmed mid-turn so one answer stays on one model. The model
+  name itself still opens Preferences. A turn pins its endpoint,
+  model, and key before any summary warmup, so Preferences edits cannot
+  move later rounds of that answer to another host.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -3990,7 +4011,7 @@ All under `agenticprofiling/`, compiled only with
   `agenticprofiling/rocprofvis_ai_tool_query.h` -> Model arguments to
   SQL fragments, via whitelists.
 - `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
-  `AssistantMessage`, `AssistantToolCall` ->
+  `AssistantMessage`, `AssistantToolCall`, `AssistantModelCatalog` ->
   `agenticprofiling/rocprofvis_ai_client.h`.
 - `AssistantSettings`, `AssistantProvider` ->
   `rocprofvis_settings_manager.h` -> Saved URL and model; the token

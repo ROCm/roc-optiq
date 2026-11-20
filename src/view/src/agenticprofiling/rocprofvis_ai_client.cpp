@@ -19,10 +19,16 @@
 #include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
+#include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -31,16 +37,44 @@ namespace RocProfVis
 namespace View
 {
 
+// One lookup's cancellation flag and live socket. Each replaced lookup keeps
+// its own state until its worker exits, so cancelling one cannot stop another.
+struct assistant_model_catalog_request_t
+{
+    std::atomic<bool>                     cancelled    = false;
+    std::atomic<bool>                     stop_started = false;
+    std::atomic<bool>                     finished     = false;
+    std::mutex                            mutex;
+    httplib::Client*                      client = nullptr;
+    std::chrono::steady_clock::time_point deadline;
+};
+
 namespace
 {
 
 constexpr int  ASSISTANT_CONNECT_TIMEOUT_SECONDS   = 15;
 constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 120;
+constexpr int  ASSISTANT_HTTP_OK                   = 200;
 constexpr int  ASSISTANT_FIRST_REDIRECT_STATUS     = 300;
 constexpr int  ASSISTANT_FIRST_ERROR_STATUS        = 400;
 constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
 constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
 constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
+constexpr char ASSISTANT_MODELS_SUFFIX[]           = "/models";
+constexpr char ASSISTANT_GATEWAY_MODELS_PATH[]     = "/v1/models";
+constexpr char ASSISTANT_SELF_HOSTED_API_PATH[]    = "/v1";
+
+// A model list is one small GET, so a host that is slow to give one is not
+// worth waiting on. These also bound how long quitting waits on a lookup.
+constexpr int ASSISTANT_CATALOG_CONNECT_TIMEOUT_SECONDS = 3;
+constexpr int ASSISTANT_CATALOG_READ_TIMEOUT_SECONDS    = 5;
+constexpr int ASSISTANT_CATALOG_TOTAL_TIMEOUT_SECONDS   = 8;
+constexpr int ASSISTANT_CATALOG_STOP_RETRY_MS           = 1;
+// The largest public list, OpenRouter's, is about a megabyte and some hundreds
+// of models. Past these the body is not a list worth showing.
+constexpr size_t ASSISTANT_CATALOG_MAX_BYTES    = 8 * 1024 * 1024;
+constexpr size_t ASSISTANT_MAX_LISTED_MODELS    = 1000;
+constexpr size_t ASSISTANT_MAX_MODEL_NAME_BYTES = 256;
 
 // How many tools one reply may ask for. Generous next to what an investigation
 // actually needs, and a ceiling on how much work a single malformed or hostile
@@ -203,12 +237,10 @@ AppendAzureDeployment(std::string& base_url, const std::string& model)
     return true;
 }
 
-// Turns the configured base into the chat-completions URL. Any query string
-// comes off first so the path suffix is not buried inside it. Empty return
-// means an Azure base needs a deployment and the Model field was blank.
+// Takes the query string and any trailing slashes off a base URL, so a route
+// can be appended without landing inside the query. Returns the query.
 std::string
-ChatCompletionsUrl(std::string base_url, const std::string& model,
-                   EndpointFlavour flavour)
+TakeQuery(std::string& base_url)
 {
     std::string  query;
     const size_t query_start = base_url.find('?');
@@ -222,10 +254,44 @@ ChatCompletionsUrl(std::string base_url, const std::string& model,
     {
         base_url.pop_back();
     }
+    return query;
+}
+
+bool
+OriginIsLoopback(const std::string& origin);
+
+// A plain-http loopback URL with no path is a self-hosted server - Ollama, LM
+// Studio, vLLM, llama.cpp - and those serve the API under /v1. Remote servers
+// keep the path they were given, so discovery never changes their chat route.
+void
+AddSelfHostedApiPath(std::string& base_url)
+{
+    const std::string scheme = "http://";
+    const bool        plain_http =
+        Core::String::to_lower_copy(base_url).compare(0, scheme.size(), scheme) == 0;
+    if(plain_http && OriginIsLoopback(base_url) &&
+       base_url.find('/', scheme.size()) == std::string::npos)
+    {
+        base_url += ASSISTANT_SELF_HOSTED_API_PATH;
+    }
+}
+
+// Turns the configured base into the chat-completions URL. Any query string
+// comes off first so the path suffix is not buried inside it. Empty return
+// means an Azure base needs a deployment and the Model field was blank.
+std::string
+ChatCompletionsUrl(std::string base_url, const std::string& model,
+                   EndpointFlavour flavour)
+{
+    std::string query = TakeQuery(base_url);
 
     if(flavour == EndpointFlavour::kAzure)
     {
         StripDeploymentlessCompletions(base_url);
+    }
+    else
+    {
+        AddSelfHostedApiPath(base_url);
     }
 
     if(!HasCompletionsSuffix(base_url))
@@ -288,14 +354,54 @@ HostFromOrigin(const std::string& origin)
     return host;
 }
 
+// True only for a numeric 127/8 IPv4 address. A hostname such as
+// 127.attacker.example must not inherit loopback's plaintext-key exception.
+bool
+IsIpv4Loopback(const std::string& host)
+{
+    if(host.compare(0, 4, "127.") != 0)
+    {
+        return false;
+    }
+    size_t start = 4;
+    for(int32_t octet = 0; octet < 3; ++octet)
+    {
+        const size_t end = host.find('.', start);
+        if((octet < 2 && end == std::string::npos) ||
+           (octet == 2 && end != std::string::npos))
+        {
+            return false;
+        }
+        const size_t stop = end == std::string::npos ? host.size() : end;
+        if(stop == start || stop - start > 3)
+        {
+            return false;
+        }
+        int32_t value = 0;
+        for(size_t i = start; i < stop; ++i)
+        {
+            if(std::isdigit(static_cast<unsigned char>(host[i])) == 0)
+            {
+                return false;
+            }
+            value = value * 10 + static_cast<int32_t>(host[i] - '0');
+        }
+        if(value > 255)
+        {
+            return false;
+        }
+        start = stop + 1;
+    }
+    return true;
+}
+
 // True when the request never leaves this machine, which is what makes a plain
 // http endpoint - a local Ollama or llama.cpp server - safe to send a key to.
 bool
 OriginIsLoopback(const std::string& origin)
 {
     const std::string host = Core::String::to_lower_copy(HostFromOrigin(origin));
-    return host == "localhost" || host == "::1" ||
-           host.compare(0, 4, "127.") == 0;
+    return host == "localhost" || host == "::1" || IsIpv4Loopback(host);
 }
 
 // Whether the API key may be sent to this origin. TLS always qualifies; plain
@@ -834,10 +940,9 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
 
 // The auth header this endpoint shape expects, or none when no key is set.
 httplib::Headers
-AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
+AuthHeaders(const std::string& token, EndpointFlavour flavour)
 {
-    httplib::Headers  headers;
-    const std::string token = ApiToken(request);
+    httplib::Headers headers;
     if(token.empty())
     {
         return headers;
@@ -888,7 +993,277 @@ InterpretResponse(const httplib::Response& response, const std::string& url,
     }
 }
 
+// Where the endpoint lists its models. An OpenAI-style list sits beside the
+// chat route. An Azure-style URL is usually a gateway, which lists the names
+// its deployments take at the host's /v1/models.
+std::string
+ModelCatalogUrl(std::string base_url, EndpointFlavour flavour)
+{
+    const std::string query = TakeQuery(base_url);
+    if(flavour == EndpointFlavour::kAzure)
+    {
+        std::string origin;
+        std::string path;
+        if(!SplitUrl(base_url, origin, path))
+        {
+            return std::string();
+        }
+        return origin + ASSISTANT_GATEWAY_MODELS_PATH + query;
+    }
+
+    AddSelfHostedApiPath(base_url);
+    if(HasCompletionsSuffix(base_url))
+    {
+        base_url.resize(base_url.size() - std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX));
+    }
+    return base_url + ASSISTANT_MODELS_SUFFIX + query;
+}
+
+// A name the Model field can show and a request can carry: bounded, and free
+// of control characters, which would break the request line or the JSON body.
+bool
+IsModelName(const std::string& name)
+{
+    return !name.empty() && name.size() <= ASSISTANT_MAX_MODEL_NAME_BYTES &&
+           std::none_of(name.begin(), name.end(), [](char c) {
+               return std::iscntrl(static_cast<unsigned char>(c)) != 0;
+           });
+}
+
+// The ids of an OpenAI-style list, {"data": [{"id": ...}, ...]}, in the order
+// a person scans them, without repeats or anything that is not a usable name.
+std::vector<std::string>
+ParseModelCatalog(const std::string& body)
+{
+    std::vector<std::string>              models;
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(body);
+    jt::Json&                             root   = parsed.second;
+    if(parsed.first != jt::Json::success || !root.isObject() || !root.contains("data") ||
+       !root["data"].isArray())
+    {
+        return models;
+    }
+
+    for(jt::Json& entry : root["data"].getArray())
+    {
+        if(models.size() >= ASSISTANT_MAX_LISTED_MODELS)
+        {
+            break;
+        }
+        const std::string id = entry.isObject() ? JsonString(entry, "id") : std::string();
+        if(IsModelName(id))
+        {
+            models.push_back(id);
+        }
+    }
+
+    // Case-insensitive first, then exact, so equal names end up adjacent.
+    std::sort(models.begin(), models.end(),
+              [](const std::string& a, const std::string& b) {
+                  const std::string folded_a = Core::String::to_lower_copy(a);
+                  const std::string folded_b = Core::String::to_lower_copy(b);
+                  return folded_a != folded_b ? folded_a < folded_b : a < b;
+              });
+    models.erase(std::unique(models.begin(), models.end()), models.end());
+    return models;
+}
+
+// Marks a request finished on every return from its worker.
+struct model_catalog_finish_t
+{
+    std::shared_ptr<assistant_model_catalog_request_t> request;
+    ~model_catalog_finish_t() { request->finished = true; }
+};
+
+// Stops a lookup's live socket, if it has one. This may wait on cpp-httplib's
+// socket mutex, so interactive cancellation calls it on a worker.
+void
+StopModelCatalogRequest(const std::shared_ptr<assistant_model_catalog_request_t>& request)
+{
+    std::lock_guard<std::mutex> lock(request->mutex);
+    if(request->client != nullptr)
+    {
+        request->client->stop();
+    }
+}
+
+// Marks a lookup cancelled immediately and stops its socket away from the UI.
+// An invalid future means another caller already started the stop.
+std::future<void>
+CancelModelCatalogRequestAsync(
+    const std::shared_ptr<assistant_model_catalog_request_t>& request)
+{
+    if(request == nullptr)
+    {
+        return std::future<void>();
+    }
+    request->cancelled = true;
+    if(request->stop_started.exchange(true))
+    {
+        return std::future<void>();
+    }
+    return std::async(std::launch::async, [request]() {
+        // stop() before Get() has no persistent effect. Retry
+        // until Get either starts and is stopped, or the
+        // worker observes cancellation and returns.
+        while(!request->finished)
+        {
+            StopModelCatalogRequest(request);
+            if(!request->finished)
+            {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(ASSISTANT_CATALOG_STOP_RETRY_MS));
+            }
+        }
+    });
+}
+
+// Final teardown has no UI thread to protect, so it can stop synchronously.
+void
+CancelModelCatalogRequestNow(
+    const std::shared_ptr<assistant_model_catalog_request_t>& request)
+{
+    if(request == nullptr)
+    {
+        return;
+    }
+    request->cancelled = true;
+    if(!request->stop_started.exchange(true))
+    {
+        while(!request->finished)
+        {
+            StopModelCatalogRequest(request);
+            if(!request->finished)
+            {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(ASSISTANT_CATALOG_STOP_RETRY_MS));
+            }
+        }
+    }
+}
+
+// Publishes the worker's client unless cancellation won the race.
+bool
+AdoptModelCatalogClient(const std::shared_ptr<assistant_model_catalog_request_t>& request,
+                        httplib::Client*                                          client)
+{
+    std::lock_guard<std::mutex> lock(request->mutex);
+    if(request->cancelled)
+    {
+        return false;
+    }
+    request->client = client;
+    return true;
+}
+
+// Withdraws the client before its stack frame goes away.
+void
+ReleaseModelCatalogClient(
+    const std::shared_ptr<assistant_model_catalog_request_t>& request)
+{
+    std::lock_guard<std::mutex> lock(request->mutex);
+    request->client = nullptr;
+}
+
+// One model-list request, run on a lookup's worker thread. Returns empty for
+// anything but a usable list, and as soon as the lookup is cancelled; the body
+// receiver is where a cancel lands once the response has started.
+std::vector<std::string>
+FetchModelCatalog(const std::string& endpoint_url, const std::string& api_token,
+                  const std::shared_ptr<assistant_model_catalog_request_t>& request)
+{
+    const model_catalog_finish_t finish{ request };
+    const std::string            base_url = Core::String::trim_copy(endpoint_url);
+    const EndpointFlavour        flavour  = FlavourFromUrl(base_url);
+    const std::string            url      = ModelCatalogUrl(base_url, flavour);
+    std::string                  origin;
+    std::string                  path;
+    if(url.empty() || !SplitUrl(url, origin, path))
+    {
+        return std::vector<std::string>();
+    }
+
+    httplib::Client client(origin);
+    if(!client.is_valid())
+    {
+        return std::vector<std::string>();
+    }
+    client.set_connection_timeout(ASSISTANT_CATALOG_CONNECT_TIMEOUT_SECONDS);
+    client.set_read_timeout(ASSISTANT_CATALOG_READ_TIMEOUT_SECONDS);
+    // Not followed, for the reason Send() gives: the key could go to another host.
+    client.set_follow_location(false);
+
+    const std::string      token = Core::String::trim_copy(api_token);
+    const httplib::Headers headers =
+        OriginMayCarryToken(origin) ? AuthHeaders(token, flavour) : httplib::Headers();
+    const std::string loggable = LoggableUrl(url);
+
+    if(!AdoptModelCatalogClient(request, &client))
+    {
+        return std::vector<std::string>();
+    }
+    if(request->cancelled)
+    {
+        ReleaseModelCatalogClient(request);
+        return std::vector<std::string>();
+    }
+    std::string           body;
+    const httplib::Result response =
+        client.Get(path, headers, [&body, &request](const char* data, size_t length) {
+            if(request->cancelled ||
+               std::chrono::steady_clock::now() >= request->deadline ||
+               body.size() + length > ASSISTANT_CATALOG_MAX_BYTES)
+            {
+                return false;
+            }
+            body.append(data, length);
+            return true;
+        });
+    ReleaseModelCatalogClient(request);
+    if(request->cancelled)
+    {
+        return std::vector<std::string>();
+    }
+    if(!response)
+    {
+        spdlog::info("Assistant model list from {} failed: {}", loggable,
+                     httplib::to_string(response.error()));
+        return std::vector<std::string>();
+    }
+    if(response->status != ASSISTANT_HTTP_OK)
+    {
+        spdlog::info("Assistant model list from {} returned HTTP {}", loggable,
+                     response->status);
+        return std::vector<std::string>();
+    }
+
+    std::vector<std::string> models = ParseModelCatalog(body);
+    spdlog::info("Assistant endpoint lists {} models at {}", models.size(), loggable);
+    return models;
+}
+
 }  // namespace
+
+bool
+AssistantEndpointsShareOrigin(const std::string& first, const std::string& second)
+{
+    std::string normalized_first  = Core::String::trim_copy(first);
+    std::string normalized_second = Core::String::trim_copy(second);
+    TakeQuery(normalized_first);
+    TakeQuery(normalized_second);
+
+    std::string first_origin;
+    std::string first_path;
+    std::string second_origin;
+    std::string second_path;
+    if(!SplitUrl(normalized_first, first_origin, first_path) ||
+       !SplitUrl(normalized_second, second_origin, second_path))
+    {
+        return false;
+    }
+    return Core::String::to_lower_copy(first_origin) ==
+           Core::String::to_lower_copy(second_origin);
+}
 
 AssistantChatResult
 AssistantChatCall::Send(const AssistantChatRequest& request)
@@ -933,7 +1308,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     // redirect, so refusing costs nothing and InterpretResponse says why.
     client.set_follow_location(false);
 
-    const httplib::Headers headers = AuthHeaders(request, endpoint.flavour);
+    const httplib::Headers headers = AuthHeaders(ApiToken(request), endpoint.flavour);
     const std::string      body =
         BuildRequestBody(request, endpoint.flavour).toString();
     const std::string loggable = LoggableUrl(endpoint.url);
@@ -1015,6 +1390,106 @@ AssistantChatCall::Cancelled() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_cancelled;
+}
+
+// The futures join their workers as they are destroyed. A cancelled worker
+// returns at its next body chunk, or when its timeouts run out.
+AssistantModelCatalog::~AssistantModelCatalog()
+{
+    CancelModelCatalogRequestNow(m_request);
+}
+
+void
+AssistantModelCatalog::Request(const std::string& endpoint_url,
+                               const std::string& api_token)
+{
+    // Only a hash of the key is kept, to tell one request from the next.
+    const size_t key_hash = std::hash<std::string>()(Core::String::trim_copy(api_token));
+    if(m_lookup.valid())
+    {
+        if(m_lookup_url == endpoint_url && m_lookup_key_hash == key_hash)
+        {
+            return;
+        }
+        std::future<void> stop = CancelModelCatalogRequestAsync(m_request);
+        if(stop.valid())
+        {
+            m_stops.push_back(std::move(stop));
+        }
+        m_abandoned.push_back(std::move(m_lookup));
+    }
+
+    // Nothing from an earlier response remains selectable during a refresh,
+    // even when the URL and key are unchanged.
+    m_models.clear();
+    m_url.clear();
+
+    m_lookup_url      = endpoint_url;
+    m_lookup_key_hash = key_hash;
+    if(Core::String::trim_copy(endpoint_url).empty())
+    {
+        m_request.reset();
+        m_url = endpoint_url;
+        return;
+    }
+
+    m_request           = std::make_shared<assistant_model_catalog_request_t>();
+    m_request->deadline = std::chrono::steady_clock::now() +
+                          std::chrono::seconds(ASSISTANT_CATALOG_TOTAL_TIMEOUT_SECONDS);
+    m_lookup =
+        std::async(std::launch::async, [endpoint_url, api_token, request = m_request]() {
+            return FetchModelCatalog(endpoint_url, api_token, request);
+        });
+}
+
+bool
+AssistantModelCatalog::Poll()
+{
+    m_abandoned.erase(
+        std::remove_if(m_abandoned.begin(), m_abandoned.end(),
+                       [](const std::future<std::vector<std::string>>& lookup) {
+                           return lookup.wait_for(std::chrono::seconds(0)) ==
+                                  std::future_status::ready;
+                       }),
+        m_abandoned.end());
+    m_stops.erase(std::remove_if(m_stops.begin(), m_stops.end(),
+                                 [](const std::future<void>& stop) {
+                                     return stop.wait_for(std::chrono::seconds(0)) ==
+                                            std::future_status::ready;
+                                 }),
+                  m_stops.end());
+
+    if(!m_lookup.valid())
+    {
+        return false;
+    }
+    if(m_request != nullptr && std::chrono::steady_clock::now() >= m_request->deadline)
+    {
+        std::future<void> stop = CancelModelCatalogRequestAsync(m_request);
+        if(stop.valid())
+        {
+            m_stops.push_back(std::move(stop));
+        }
+    }
+    if(m_lookup.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+    {
+        return true;
+    }
+    m_models = m_lookup.get();
+    m_url    = m_lookup_url;
+    return false;
+}
+
+const std::vector<std::string>&
+AssistantModelCatalog::Models() const
+{
+    return m_models;
+}
+
+const std::string&
+AssistantModelCatalog::Url() const
+{
+    return m_url;
 }
 
 }  // namespace View

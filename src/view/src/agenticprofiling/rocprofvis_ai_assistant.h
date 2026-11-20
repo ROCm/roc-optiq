@@ -51,6 +51,10 @@ public:
     // Toolbar control for the system trace toolbar.
     static void RenderToolbarButton();
 
+    // The models the active endpoint lists. The settings dialog and the model
+    // picker in the header share it, so both offer the same names.
+    AssistantModelCatalog& ModelCatalog();
+
 private:
     friend struct AssistantPanelTestPeer;
 
@@ -174,6 +178,9 @@ private:
     // The model, context, and token-usage pill under the title.
     void        RenderContextChip(const std::string& model, const std::string& endpoint);
     void        RenderSetupChip();
+    // The list the arrow on the pill opens when the endpoint names its models.
+    void        RenderModelMenu(const ImVec2& anchor, const std::string& model,
+                                const std::string& endpoint);
     void        RenderTranscript();
     void        RenderMessageCard(Conversation& conversation, size_t index,
                                   const ChatLine& line);
@@ -293,6 +300,12 @@ private:
     // a round goes out with always matches the tools the dispatcher will run
     // for it.
     bool      m_turn_is_compute;
+    // The endpoint, model, and key are pinned with the turn too. Preferences
+    // may change while tools run, but every round in one answer must go to the
+    // same host and model.
+    std::string m_turn_endpoint_url;
+    std::string m_turn_model;
+    std::string m_turn_api_token;
     FetchWait m_fetch_wait;
 
     EventManager::SubscriptionToken m_tab_closed_token;
@@ -301,6 +314,12 @@ private:
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
     std::vector<AbandonedRequest>      m_abandoned;
+
+    AssistantModelCatalog m_model_catalog;
+    // Set once the open panel has asked for the saved endpoint's models, and
+    // cleared when it closes. The settings dialog asks again whenever the
+    // endpoint or key changes.
+    bool m_models_requested;
 };
 
 }  // namespace View

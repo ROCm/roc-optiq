@@ -453,6 +453,9 @@ public:
 
     // The route the assistant should use, or nullptr when none is configured.
     const AssistantProvider* GetActiveAssistantProvider() const;
+    // Points the active route at another model and saves, for the model picker
+    // in the assistant panel. The URL and key stay as they are.
+    void SetActiveAssistantModel(const std::string& model);
 
     // Assistant API token, one per provider. Stored in the OS credential vault
     // when available, otherwise held in process memory only. Never written to

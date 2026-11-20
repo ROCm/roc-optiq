@@ -2988,7 +2988,10 @@ Rules that are easy to get wrong here:
   beginning rather than its conclusion. Both keep their scroll target
   alive while `RenderTranscript` requests the next few frames. ImGui
   applies `SetScrollHereY` on the following frame, and a message's child
-  height settles after that. Scrolling upward or clicking the scrollbar
+  height settles after that. New next-step buttons follow the bottom
+  too: the composer they enlarge takes its height from the transcript,
+  which would otherwise slide the working status out of view.
+  Scrolling upward or clicking the scrollbar
   cancels either target. `SetStatus` only extends a bottom follow already
   in progress, so a slow-fetch timer cannot drag a reader back down
   after they scroll away.

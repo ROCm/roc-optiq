@@ -1103,7 +1103,11 @@ AssistantPanel::RunNextTool()
     }
     if(started.set_next_steps)
     {
-        TurnConversation().next_steps = started.next_steps;
+        // The buttons take their height out of the transcript, which would
+        // leave the working status under the composer until the answer lands.
+        Conversation& conversation = TurnConversation();
+        conversation.next_steps    = started.next_steps;
+        FollowTranscript(conversation);
     }
     if(started.stop_tool_queue)
     {

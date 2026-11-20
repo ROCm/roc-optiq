@@ -480,7 +480,7 @@ SettingsPanel::RenderOtherSettings()
     if(ImGui::Button("Browse"))
     {
         AppWindow::GetInstance()->ShowPathPickerDialog(
-            "Chose Directory", m_usersettings.remote_cache_path,
+            "Choose Directory", m_usersettings.remote_cache_path,
             [this](std::string path) { m_usersettings.remote_cache_path = path; });
     }
     ImGui::TextUnformatted("Closing options");

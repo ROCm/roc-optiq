@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_event_manager.h"
 #include "rocprofvis_presets.h"
 #include "widgets/rocprofvis_compute_widget.h"
-#include "widgets/rocprofvis_tab_container.h"
 #include <memory>
 #include <set>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -18,36 +19,91 @@ namespace View
 
 class ComputeSelection;
 
-class ComputeTableView: public RocWidget
+// Metric tables for the selected kernel, shown as a pane of
+// ComputeKernelDetailsView. Only System Speed-of-Light is listed until the user
+// turns more on from the Tables picker; each shown table sits under a
+// collapsible, closable header. With a compare target every table (and the
+// pins) compares the selected kernel (A) with it (B).
+class ComputeTableView : public RocWidget
 {
 public:
-    static constexpr const char* TAB_ID = "compute_table_view";
-    static constexpr const char* DISABLED_TOOLTIP =
-        "This database file has no available metrics, so Table View is inactive.";
-
-    static TabItem CreateTabItem(
-        DataProvider& data_provider,
-        const std::shared_ptr<ComputeSelection>& compute_selection);
-    static TabItem CreateTabItem(
-        DataProvider& data_provider,
-        const std::shared_ptr<ComputeSelection>& compute_selection,
-        bool has_available_metrics);
+    static constexpr const char* NO_METRICS_MESSAGE =
+        "This database file has no available metrics.";
 
     ComputeTableView(DataProvider&                     data_provider,
-                     std::shared_ptr<ComputeSelection> compute_selection);
+                     std::shared_ptr<ComputeSelection> compute_selection,
+                     bool                              has_available_metrics = true);
     ~ComputeTableView();
 
     void Update() override;
     void Render() override;
 
+    // The selection's workload or kernel changed, or metrics arrived for the
+    // client `client_id`.
+    void OnWorkloadSelected();
+    void OnKernelSelected();
+    void OnMetricsFetched(uint64_t client_id);
+
+    // Skip the card and title, for a container that draws its own pane header.
+    void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
+
+    // The pinned metrics alone, filling the space given (a pane of their own).
+    void RenderPinnedMetricsPane();
+    // While the pins have a pane of their own, Render() leaves them out.
+    void SetPinnedMetricsPaneShown(bool shown) { m_pinned_pane_shown = shown; }
+
+    // Compare with this kernel (B), possibly of another workload, until
+    // ClearCompareTarget().
+    void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
+    void ClearCompareTarget();
+    // Call before A and B trade places (the selection becomes B and B the old
+    // selection), so each pin keeps naming the same metric.
+    void SwapComparePins();
 
 private:
-    void RenderCategory(const AvailableMetrics::Category& cat);
-    void RebuildTabs();
+    enum class HeaderRequest : uint8_t
+    {
+        kNone,
+        kExpandAll,
+        kCollapseAll,
+    };
+
+    // A table listed for the current kernels: A's, B's, or (keyed alike) both.
+    struct ListedTable
+    {
+        uint32_t                       category_id;
+        const std::string*             category_name;
+        const AvailableMetrics::Table* a;
+        const AvailableMetrics::Table* b;
+        // A's table, else B's.
+        const AvailableMetrics::Table& Named() const { return a ? *a : *b; }
+        uint64_t Key() const { return MetricId::GetTableKey(category_id, Named().id); }
+    };
+
+    // Fills `listed` with the tables of `workload` (A's), then those only B's
+    // workload has.
+    void ListTables(const WorkloadInfo& workload, std::vector<ListedTable>& listed) const;
+    void RenderToolbar(const std::vector<ListedTable>& listed);
+    void RenderTablePicker(const std::vector<ListedTable>& listed);
+    void RenderCompareOptions();
+    // Above the scrolling list of tables, so the pins stay in view.
+    void RenderPinnedMetrics();
+    void RenderTables(const std::vector<ListedTable>& listed);
+    void RenderEmptyState();
+    void ApplyHeaderRequest();
+    void ResetWorkloadData();
     void FetchAllMetrics();
+    void FetchCompareMetrics();
+    // Requests every table of `workload` for `kernel_id` under `client_id`.
+    // `loading` is set once a request is made, and `pending` too when it is
+    // refused (to be retried).
+    void RequestAllTables(const WorkloadInfo& workload, uint32_t kernel_id,
+                          uint64_t client_id, bool& loading, bool& pending);
     void RebuildTableDataCache();
-    void AddTable(uint32_t category_id, const AvailableMetrics::Table* table);
+    void AddTable(const ListedTable& listed);
     void RestoreMetricPining();
+    // Points the pins at the compare target (or back at A alone) and refills them.
+    void RefreshPins();
 
     class Preset : public PresetComponent
     {
@@ -65,20 +121,78 @@ private:
     DataProvider&                             m_data_provider;
     std::shared_ptr<ComputeSelection>         m_compute_selection;
     uint64_t                                  m_client_id;
-    bool                                      m_fetch_pending = false;
-    std::shared_ptr<TabContainer>             m_tabs;
-    std::string                               m_active_tab_id;
+    bool                                      m_has_available_metrics;
+    bool                                      m_fetch_pending   = false;
+    // True from the moment a metric fetch is submitted until its data lands, so
+    // shown tables read "Loading" rather than "No data".
+    bool                                      m_metrics_loading = false;
     std::unordered_map<uint64_t, MetricTable> m_table_widgets;
     PinnedMetricTable                         m_pinned_metric_table;
     std::set<MetricId>                        m_pinned_metrics;
 
-    EventManager::SubscriptionToken m_workload_selection_changed_token;
-    EventManager::SubscriptionToken m_kernel_selection_changed_token;
-    EventManager::SubscriptionToken m_metrics_fetched_token;
+    // Tables the user turned on, by MetricId::GetTableKey. Kept across workload
+    // changes; keys a workload lacks are simply not listed.
+    std::set<uint64_t> m_enabled_tables;
+    std::string        m_picker_filter;
+    HeaderRequest      m_header_request    = HeaderRequest::kNone;
+    bool               m_chromeless        = false;
+    bool               m_pinned_pane_shown = false;
+    // Render's listing, refilled every frame: it points into the model.
+    std::vector<ListedTable> m_listed_tables;
+
+    // Compare target (B) and its metrics, fetched under their own client id.
+    bool                 m_compare_active = false;
+    uint32_t             m_compare_workload_id;
+    uint32_t             m_compare_kernel_id;
+    uint64_t             m_compare_client_id;
+    bool                 m_compare_fetch_pending = false;
+    bool                 m_compare_loading       = false;
+    MetricCompareOptions m_compare_options;
 
     std::unique_ptr<Preset> m_preset;
 
     friend struct ComputeTableViewTestPeer;
+};
+
+// The Kernel Details panel of the metric tables; they add B and difference
+// columns while comparing.
+class ComputeMetricTablesPane : public ComputeKernelDetailsPane
+{
+public:
+    ComputeMetricTablesPane(const IKernelCompare&             compare,
+                            std::shared_ptr<ComputeTableView> table_view);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    ImVec2      MinSize() const override;
+    void        Update() override;
+    void        OnWorkloadSelected(uint32_t workload_id) override;
+    void        OnKernelSelected(uint32_t kernel_id) override;
+    void        OnMetricsFetched(uint64_t client_id) override;
+    void        OnCompareSwapping() override;
+    void        ApplyCompare(bool target_changed) override;
+
+    friend struct ComputeKernelDetailsViewTestPeer;
+
+private:
+    std::shared_ptr<ComputeTableView> m_table_view;
+};
+
+// The metric tables' pins in a Kernel Details panel of their own, so they stay
+// in view; the Metric Tables panel leaves them out while this one is shown.
+// The Metric Tables panel forwards the events for the view they share.
+class ComputePinnedMetricsPane : public ComputeKernelDetailsPane
+{
+public:
+    ComputePinnedMetricsPane(const IKernelCompare&             compare,
+                             std::shared_ptr<ComputeTableView> table_view);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    void        SetShown(bool shown) override;
+
+private:
+    std::shared_ptr<ComputeTableView> m_table_view;
 };
 
 }  // namespace View

@@ -3,9 +3,11 @@
 
 #pragma once
 #include "compute/rocprofvis_compute_model_types.h"
+#include "rocprofvis_compute_kernel_details_panes.h"
 #include "rocprofvis_controller_enums.h"
 #include "widgets/rocprofvis_widget.h"
 #include <bitset>
+#include <memory>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -38,6 +40,11 @@ public:
     void SetWorkload(uint32_t id);
     void SetKernel(uint32_t id);
     void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
+    // Switch what is plotted (e.g. one kernel, or it against the compare
+    // target) without losing the plot's options.
+    void SetMode(Mode mode);
+    // Skip the card and title, for a container that draws its own pane header.
+    void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
 
 private:
     enum MenusMode
@@ -173,6 +180,10 @@ private:
     std::vector<FilterModel> m_filters_intensity_kernel;
     std::vector<FilterModel> m_filters_intensity_bandwidth;
 
+    bool               m_chromeless = false;
+    // Seed of the plot's id, independent of the window drawing it.
+    ImGuiID            m_plot_id    = 0;
+
     // User options...
     uint32_t       m_requested_primary_workload_id;
     uint32_t       m_requested_secondary_workload_id;
@@ -213,6 +224,29 @@ private:
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;
+
+    friend struct RooflineTestPeer;
+};
+
+// The Kernel Details panel of the roofline; it plots A and B together while
+// comparing.
+class ComputeRooflinePane : public ComputeKernelDetailsPane
+{
+public:
+    ComputeRooflinePane(const IKernelCompare& compare, DataProvider& data_provider);
+
+    const char* Title() const override;
+    void        RenderBody(bool maximized) override;
+    ImVec2      MinSize() const override;
+    void        Update() override;
+    void        OnWorkloadSelected(uint32_t workload_id) override;
+    void        OnKernelSelected(uint32_t kernel_id) override;
+    void        ApplyCompare(bool target_changed) override;
+
+    friend struct ComputeKernelDetailsViewTestPeer;
+
+private:
+    std::shared_ptr<Roofline> m_roofline;
 };
 
 }  // namespace View

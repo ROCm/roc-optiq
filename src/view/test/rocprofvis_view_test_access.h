@@ -22,11 +22,13 @@
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_track_details.h"
 #include "rocprofvis_trace_view.h"
+#include "compute/isa/rocprofvis_compute_isa_view.h"
 #include "compute/rocprofvis_compute_kernel_details.h"
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
+#include "compute/rocprofvis_compute_memory_chart.h"
+#include "compute/rocprofvis_compute_roofline.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_workload_view.h"
-#include "compute/rocprofvis_compute_comparison.h"
 #include "compute/rocprofvis_compute_table_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
@@ -42,6 +44,11 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+
+#include <cstdio>
+#include <map>
+#include <utility>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -171,7 +178,7 @@ struct AppWindowTestPeer
 struct ComputeViewTestPeer
 {
     ComputeView& v;
-    TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
+    ComputeKernelDetailsView* KernelDetailsPtr() const { return v.m_kernel_details.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
     bool PopupPending() const { return v.m_error_dialog_state == ComputeView::ErrorDialogState::kPending; }
     const std::string& PopupTitle() const { return v.m_popup_info.title; }
@@ -180,14 +187,144 @@ struct ComputeViewTestPeer
 
 struct ComputeKernelDetailsViewTestPeer
 {
+    using LayoutSettings = ComputeKernelDetailsView::LayoutSettings;
+
     ComputeKernelDetailsView& v;
+    LayoutSettings&    Layout() const { return v.m_layout; }
+    PresetComponent&   LayoutPreset() const { return *v.m_preset; }
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
+    ComputeTableView*  TableViewPtr() const
+    {
+        const ComputeMetricTablesPane* pane =
+            dynamic_cast<const ComputeMetricTablesPane*>(
+                PanePtr(ComputePane::kMetricTables));
+        return pane ? pane->m_table_view.get() : nullptr;
+    }
+    // Same effect as picking B in the compare bar (turns comparing on).
+    void     CompareWith(uint32_t workload_id, uint32_t kernel_id)
+    {
+        v.SetCompareTarget(workload_id, kernel_id);
+    }
+    void     StopCompare() { v.DisableCompare(); }
+    bool     IsComparing() const { return v.m_compare.enabled; }
+    uint32_t CompareWorkloadId() const { return v.m_compare.workload_id; }
+    uint32_t CompareKernelId() const { return v.m_compare.kernel_id; }
+    bool     DeltaAvailable() const { return v.DeltaAvailable(); }
+    bool     MemoryChartShowsDelta() const
+    {
+        return PaneShows(ComputePane::kMemoryChart, CompareSide::kDelta);
+    }
+    Roofline* RooflinePtr() const
+    {
+        const ComputeRooflinePane* pane =
+            dynamic_cast<const ComputeRooflinePane*>(PanePtr(ComputePane::kRoofline));
+        return pane ? pane->m_roofline.get() : nullptr;
+    }
+    ComputeIsaView* IsaViewPtr() const
+    {
+        const ComputeIsaPane* pane =
+            dynamic_cast<const ComputeIsaPane*>(PanePtr(ComputePane::kIsa));
+        return pane ? pane->m_isa_view.get() : nullptr;
+    }
+    bool IsaShowsB() const { return PaneShows(ComputePane::kIsa, CompareSide::kB); }
+    // Same effect as the ISA pane's A / B header buttons.
+    void ShowIsaSide(CompareSide side) { ShowPaneSide(ComputePane::kIsa, side); }
+    ComputeWorkloadView* WorkloadViewPtr() const
+    {
+        const ComputeWorkloadPane* pane = dynamic_cast<const ComputeWorkloadPane*>(
+            PanePtr(ComputePane::kWorkloadDetails));
+        return pane ? pane->m_workload_view.get() : nullptr;
+    }
+    bool WorkloadShowsB() const
+    {
+        return PaneShows(ComputePane::kWorkloadDetails, CompareSide::kB);
+    }
+    // Same effect as the Workload Details pane's A / B header buttons.
+    void ShowWorkloadSide(CompareSide side)
+    {
+        ShowPaneSide(ComputePane::kWorkloadDetails, side);
+    }
+    // The rail List's kernels (workload, kernel), in order, before its search.
+    std::vector<std::pair<uint32_t, uint32_t>> ListedKernels() const
+    {
+        std::vector<std::pair<uint32_t, uint32_t>> listed;
+        for(const ComputeKernelDetailsView::ListedKernel& item : v.ListedKernels())
+        {
+            listed.emplace_back(item.workload->id, item.kernel->id);
+        }
+        return listed;
+    }
+    // Same effects as the rail's List / Table and the memory chart's A / B / delta
+    // header buttons.
+    void SetKernelRailTable(bool table) { v.SetKernelRailTableMode(table); }
+    void ShowMemoryChartSide(CompareSide side)
+    {
+        ShowPaneSide(ComputePane::kMemoryChart, side);
+    }
+
+private:
+    ComputeKernelDetailsPane* PanePtr(ComputePane pane) const
+    {
+        return v.m_panes[static_cast<size_t>(pane)].get();
+    }
+    ComputeSidedPane* SidedPane(ComputePane pane) const
+    {
+        return dynamic_cast<ComputeSidedPane*>(PanePtr(pane));
+    }
+    bool PaneShows(ComputePane pane, CompareSide side) const
+    {
+        const ComputeSidedPane* sided = SidedPane(pane);
+        return sided && sided->m_side == side;
+    }
+    void ShowPaneSide(ComputePane pane, CompareSide side)
+    {
+        if(ComputeSidedPane* sided = SidedPane(pane))
+        {
+            sided->ShowSide(side);
+        }
+    }
+};
+
+struct ComputeIsaViewTestPeer
+{
+    const ComputeIsaView& v;
+    uint32_t CurrentWorkloadId() const { return v.m_current_workload_id; }
+    uint32_t CurrentKernelId() const { return v.m_current_kernel_id; }
+    bool     FollowsSelection() const { return v.m_follow_selection; }
+    // The shown kernel's ISA lines have arrived.
+    bool     IsaLoaded() const { return v.m_isa.fetch.status == CodeLoadState::kLoaded; }
+};
+
+struct RooflineTestPeer
+{
+    const Roofline& v;
+    // Seed of the ImPlot plot's id ("plot" hashed with it).
+    ImGuiID PlotIdSeed() const { return v.m_plot_id; }
+    bool IsCompareMode() const { return v.m_mode == Roofline::Compare; }
+    bool HasSecondaryKernel() const { return v.m_kernel_secondary != nullptr; }
+    // Intensity points plotted for the primary (A) or the secondary (B) kernel.
+    size_t PlottedIntensities(bool secondary) const
+    {
+        const KernelInfo* kernel = secondary ? v.m_kernel_secondary : v.m_kernel_primary;
+        size_t count = 0;
+        for(const auto& item : v.m_items)
+        {
+            if(kernel && item.type == Roofline::ItemModel::Intensity &&
+               item.parent_info.kernel == kernel &&
+               item.visible[Roofline::ItemModel::Visible::Plot])
+            {
+                count++;
+            }
+        }
+        return count;
+    }
 };
 
 struct ComputeWorkloadViewTestPeer
 {
     const ComputeWorkloadView& v;
     const WorkloadInfo* WorkloadInfoPtr() const { return v.m_workload_info; }
+    bool                FollowsSelection() const { return v.m_follow_selection; }
     size_t SystemInfoCols() const
     {
         return v.m_workload_info ? v.m_workload_info->system_info.size() : 0;
@@ -210,48 +347,106 @@ struct ComputeWorkloadViewTestPeer
     }
 };
 
-struct ComputeComparisonViewTestPeer
+struct MetricTableTestPeer
 {
-    ComputeComparisonView& v;
-    ComparisonTable* ComparisonTablePtr() const { return v.m_comparison_table.get(); }
-};
-
-struct ComputeComparisonTableTestPeer
-{
-    ComparisonTable& t;
-    uint32_t TargetWorkloadId() const { return t.m_target_workload_id; }
-    uint32_t TargetKernelId() const { return t.m_target_kernel_id; }
-    size_t   CategoryCount() const { return t.m_categories.size(); }
-    // True while either the baseline or target metrics fetch is still pending.
-    bool RequestsPending() const
+    const MetricTableBase& t;
+    // Filled cells of the columns whose header ends with `suffix` (e.g. the
+    // comparison's "\xCE\x94%"), i.e. values that were actually computed.
+    size_t FilledCells(const std::string& suffix) const
     {
-        return t.m_data_provider.IsRequestPending(t.m_baseline_request_id) ||
-               t.m_data_provider.IsRequestPending(t.m_target_request_id);
-    }
-    // True once a built table has a "\xCE\x94 ##" column, i.e. deltas were
-    // actually computed (not just tables allocated).
-    bool HasDifferenceColumn() const
-    {
-        for(const auto& category : t.m_categories)
+        size_t count = 0;
+        for(const auto& column : t.m_columns)
         {
-            for(const auto& table : category.tables)
+            const std::string& name = column.second;
+            if(name.size() < suffix.size() ||
+               name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0)
             {
-                if(!table) continue;
-                for(const std::string& name : table->OrderedValueNames())
-                {
-                    if(name.rfind("\xCE\x94 ##", 0) == 0) return true;
-                }
+                continue;
+            }
+            for(const auto& row : t.m_rows)
+            {
+                auto cell = row.second.values.find(column.first);
+                if(cell != row.second.values.end() && !cell->second.value.empty()) count++;
             }
         }
-        return false;
+        return count;
+    }
+    // Comparison columns ("Avg A", "Avg \xCE\x94%", ...) whose "Send metric to
+    // kernel details" value is the header itself rather than its value ("Avg").
+    // `checked` counts the value columns looked at.
+    size_t ColumnsSendingHeader(size_t& checked) const
+    {
+        size_t wrong = 0;
+        for(const auto& column : t.m_columns)
+        {
+            const std::string* value = t.ColumnValueName(column.first);
+            if(value == nullptr) continue;
+            checked++;
+            const std::string& header = column.second;
+            if(header == *value || header.compare(0, value->size() + 1, *value + " ") != 0)
+                wrong++;
+        }
+        return wrong;
     }
 };
 
 struct ComputeTableViewTestPeer
 {
     ComputeTableView& v;
+    bool   HasAvailableMetrics() const { return v.m_has_available_metrics; }
     bool   FetchPending() const { return v.m_fetch_pending; }
     size_t TableWidgetCount() const { return v.m_table_widgets.size(); }
+    bool   IsComparing() const { return v.m_compare_active; }
+    bool   CompareLoading() const { return v.m_compare_loading || v.m_compare_fetch_pending; }
+    // Filled B - A percentage cells across every built table.
+    size_t DeltaPctCellCount() const
+    {
+        size_t count = 0;
+        for(const auto& table : v.m_table_widgets)
+        {
+            count += MetricTableTestPeer{ table.second }.FilledCells("\xCE\x94%");
+        }
+        return count;
+    }
+    // Comparison columns across every built table that send their header as the
+    // value name; `checked` counts the value columns looked at.
+    size_t CompareColumnsSendingHeader(size_t& checked) const
+    {
+        size_t wrong = 0;
+        for(const auto& table : v.m_table_widgets)
+        {
+            wrong += MetricTableTestPeer{ table.second }.ColumnsSendingHeader(checked);
+        }
+        return wrong;
+    }
+    // Each table's widget; the ImGui table ids (and so scroll positions) follow it.
+    std::map<uint64_t, const MetricTable*> TableWidgets() const
+    {
+        std::map<uint64_t, const MetricTable*> widgets;
+        for(const auto& table : v.m_table_widgets)
+        {
+            widgets[table.first] = &table.second;
+        }
+        return widgets;
+    }
+    // What a compare option change or a fetched kernel does to the tables.
+    void RebuildTables() { v.RebuildTableDataCache(); }
+    bool   IsTableShown(uint64_t table_key) const
+    {
+        return v.m_enabled_tables.count(table_key) > 0;
+    }
+    // Same effect as ticking/unticking the table in the Tables picker.
+    void ShowTable(uint64_t table_key, bool shown)
+    {
+        if(shown)
+        {
+            v.m_enabled_tables.insert(table_key);
+        }
+        else
+        {
+            v.m_enabled_tables.erase(table_key);
+        }
+    }
     size_t PinnedCount() const { return v.m_pinned_metrics.size(); }
     bool   IsPinned(const MetricId& id) const { return v.m_pinned_metrics.count(id) > 0; }
     MetricId FirstPinned() const { return *v.m_pinned_metrics.begin(); }
@@ -269,9 +464,27 @@ struct ComputeTableViewTestPeer
 // ImGui table sort specs, so a TableClickHeader on a column drives these.
 struct KernelMetricTableTestPeer
 {
-    const KernelMetricTable& v;
+    KernelMetricTable& v;
+    // Same effect as typing `text` into a column's filter and Apply Filters.
+    void ApplyFilter(int column, const char* text)
+    {
+        v.m_pending_column_filters.resize(v.m_permanent_column_names.size() +
+                                          v.m_metrics_params.size());
+        KernelMetricTable::ColumnFilter& filter = v.m_pending_column_filters[column];
+        std::snprintf(filter.filter_text, sizeof(filter.filter_text), "%s", text);
+        filter.is_active = filter.filter_text[0] != '\0';
+        v.ApplyFilters();
+    }
     int SortColumnIndex() const { return v.m_sort_column_index; }
     int SortOrder() const { return v.m_sort_order; }
+    // The shown rows (every workload's) and each row's workload.
+    const std::vector<std::vector<std::string>>& Rows() const { return v.m_rows; }
+    const std::vector<uint32_t>& RowWorkloads() const { return v.m_row_workloads; }
+    size_t MetricColumnCount() const { return v.m_metrics_params.size(); }
+    // True until every workload's rows of the latest query have arrived.
+    bool Fetching() const { return v.m_cycle_active || v.m_fetch_requested; }
+    // Whether the latest query reported an error (e.g. an invalid filter).
+    bool ShowedFetchError() const { return v.m_fetch_error_shown; }
 };
 
 // EventSearch's state lives in its protected base InfiniteScrollTable, so this

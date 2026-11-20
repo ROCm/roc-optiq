@@ -9,6 +9,7 @@
 #endif
 #include "ImGuiFileDialog.h"
 
+#include "compute/rocprofvis_compute_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
@@ -25,6 +26,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+#    include "compute/rocprofvis_compute_tester.h"
+#endif
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
@@ -1412,20 +1416,6 @@ AppWindow::RenderViewMenu(Project* project)
             }
         }
 #endif
-        ImGui::SeparatorText("System Profiler Panels");
-        if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
-                           &settings.show_details_panel))
-        {
-            ApplyPanelVisibilitySettings();
-        }
-        if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
-        {
-            ApplyPanelVisibilitySettings();
-        }
-        if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
-        {
-            ApplyPanelVisibilitySettings();
-        }
         // Compare projects have no summary, so the toggle would do nothing there.
         bool           summary_supported = true;
         const TabItem* active_tab        = m_tab_container->GetActiveTab();
@@ -1441,6 +1431,39 @@ AppWindow::RenderViewMenu(Project* project)
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary,
                         summary_supported);
+
+        ImGui::SeparatorText("System Profiler Panels");
+        if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
+                           &settings.show_details_panel))
+        {
+            ApplyPanelVisibilitySettings();
+        }
+        if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
+        {
+            ApplyPanelVisibilitySettings();
+        }
+        if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
+        {
+            ApplyPanelVisibilitySettings();
+        }
+
+        // Each compute trace has its own layout, so this toggles the active tab's
+        // kernel list. Its other panels are picked in its boxes.
+        ImGui::SeparatorText("Compute Profiler Panels");
+        bool* kernel_list_visible = nullptr;
+        if(active_tab)
+        {
+            auto active_compute_view =
+                std::dynamic_pointer_cast<ComputeView>(active_tab->m_widget);
+            if(active_compute_view)
+            {
+                kernel_list_visible = active_compute_view->KernelListVisible();
+            }
+        }
+        bool no_kernel_list = false;
+        ImGui::MenuItem("Show Kernel List", nullptr,
+                        kernel_list_visible ? kernel_list_visible : &no_kernel_list,
+                        kernel_list_visible != nullptr);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
@@ -2105,6 +2128,7 @@ AppWindow::RenderDeveloperMenu()
         {
             m_show_metrics = !m_show_metrics;
         }
+        ImGui::MenuItem("Show Compute Tester", nullptr, ComputeTester::VisiblePtr());
         // Toggle debug output window
         if(ImGui::MenuItem("Show Debug Output Window", nullptr, m_show_debug_window))
         {

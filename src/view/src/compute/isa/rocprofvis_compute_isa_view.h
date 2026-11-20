@@ -8,9 +8,9 @@
 #include <set>
 #include <string>
 
+#include "compute/rocprofvis_compute_kernel_details_panes.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_code_widgets.h"
-#include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_split_containers.h"
 
 namespace RocProfVis
@@ -19,23 +19,29 @@ namespace View
 {
 
 class DataProvider;
-struct TabItem;
 enum class PcSamplingLayer : uint32_t;
 
+// Source/ISA correlation with PC-sampling counts, shown as a pane of
+// ComputeKernelDetailsView when the database has ISA lines.
 class ComputeIsaView : public RocWidget
 {
 public:
-    static constexpr const char* TAB_ID = "isa_view";
-
-    [[nodiscard]] static TabItem CreateTabItem(DataProvider& data_provider);
-    [[nodiscard]] static TabItem CreateTabItem(DataProvider& data_provider,
-                                               bool          has_isa_lines);
-
     explicit ComputeIsaView(DataProvider& data_provider);
     ~ComputeIsaView() override;
 
     void Update() override;
     void Render() override;
+
+    // The selection changed; shown whenever the view follows it.
+    void SetSelectedWorkload(uint32_t workload_id);
+    void SetSelectedKernel(uint32_t kernel_id);
+    // Show this kernel (e.g. a compare target) instead of the selected one until
+    // FollowSelection(). One view serves both: the data provider has a single
+    // PC-sampling callback.
+    void ShowKernel(uint32_t workload_id, uint32_t kernel_id);
+    void FollowSelection();
+
+    friend struct ComputeIsaViewTestPeer;
 
 private:
     struct PcSamplingFetchState
@@ -79,7 +85,6 @@ private:
     void RenderControlPanel();
     void RenderDevelopmentNotice(float button_width);
     void RenderSourceFileDropdown();
-    void SubscribeToEvents();
     void SelectWorkload(uint32_t workload_id);
     void LoadData(uint32_t kernel_id);
     void ClearCodeData();
@@ -114,6 +119,10 @@ private:
 
     uint32_t             m_current_kernel_id   = ComputeSelection::INVALID_SELECTION_ID;
     uint32_t             m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+    // The selection as last announced, shown whenever the view follows it.
+    uint32_t             m_selected_kernel_id   = ComputeSelection::INVALID_SELECTION_ID;
+    uint32_t             m_selected_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+    bool                 m_follow_selection     = true;
     uint32_t             m_fetch_generation    = 0;
     uint64_t             m_next_request_token  = 0;
     IsaPane              m_isa;
@@ -125,9 +134,29 @@ private:
     LineSelection m_line_selection;
 
     float m_control_panel_height = 0.0f;
+};
 
-    EventManager::SubscriptionToken m_kernel_selection_changed_token;
-    EventManager::SubscriptionToken m_workload_selection_changed_token;
+// The Kernel Details panel of the ISA of A or B: one view that shows B's
+// kernel, since the data provider has a single PC-sampling callback.
+class ComputeIsaPane : public ComputeSidedPane
+{
+public:
+    ComputeIsaPane(const IKernelCompare& compare, DataProvider& data_provider,
+                   bool has_isa_lines);
+
+    const char* Title() const override;
+    bool        IsAvailable() const override;
+    void        RenderBody(bool maximized) override;
+    void        Update() override;
+    void        OnWorkloadSelected(uint32_t workload_id) override;
+    void        OnKernelSelected(uint32_t kernel_id) override;
+    void        ApplyCompare(bool target_changed) override;
+
+    friend struct ComputeKernelDetailsViewTestPeer;
+
+private:
+    // Null when the database has no ISA lines.
+    std::shared_ptr<ComputeIsaView> m_isa_view;
 };
 
 }  // namespace View

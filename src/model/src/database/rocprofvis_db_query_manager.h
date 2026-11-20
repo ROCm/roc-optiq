@@ -9,7 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include "rocprofvis_db_query_builder.h"
-#include "rocprofvis_db_table_processor.h"
+#include "rocprofvis_db_systems.h"
 
 namespace RocProfVis
 {
@@ -64,40 +64,20 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
         // Database constructor
         // @param path - full path to database file
         QueryManager( rocprofvis_db_filename_t path, RpvSqliteExecuteQueryCallback callback_add_any_record) : 
-                        SystemDatabase(path), SqliteDatabase(this), m_callback_add_any_record(callback_add_any_record),
-            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
+                        SystemDatabase(path), SqliteDatabase(this), m_callback_add_any_record(callback_add_any_record) {};
         // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~QueryManager() {};
 
         // Method to open sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Open() override { return OpenAsSqlite(); };
+        bool IsSourceFile(rocprofvis_dm_charptr_t path) override;
         // Method to close sqlite database
         // @return status of operation
         rocprofvis_dm_result_t Close()  override { return CloseAsSqlite(); };
         // Method to interrupt a running sqlite query
         // @param connection - sqlite connection running the query
         void InterruptQuery(void* connection) override { InterruptAsSqlite(connection); };
-
-        // worker method to execute database query
-        // @param query - database query 
-        // @param description - database description
-        // @param object - future object providing asynchronous execution mechanism 
-        // @return status of operation
-        rocprofvis_dm_result_t  ExecuteQuery(
-            rocprofvis_dm_charptr_t query,
-            rocprofvis_dm_charptr_t description,
-            Future* future) override; 
-
-        // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
-        // @param query - database query 
-        // @param file_path output path to write .CSV
-        // @param future - future object providing asynchronous execution mechanism 
-        // @return status of operation
-        rocprofvis_dm_result_t ExportTableCSV(
-            rocprofvis_dm_charptr_t query,
-            rocprofvis_dm_charptr_t file_path,
-            Future* future) override;
 
     protected:
         // ----------------------------------Query builders------------------------------------------
@@ -246,6 +226,10 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_track_params_t* props,
             rocprofvis_db_query_type_t query_type) = 0;
 
+        virtual void BuildOpQueryMap(
+            slice_query_map_t& slice_query_map,
+            rocprofvis_dm_event_operation_t op);
+
         // Searches for strings matching the passed in list of filter strings and builds a WHERE IN clause for the table query.
         // @param num_string_table_filters - number of filter strings
         // @param string_table_filters - array of filter strings
@@ -347,9 +331,17 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
             rocprofvis_dm_handle_t handle,
             RpvCallback callback) override;
 
-        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+        rocprofvis_dm_result_t SummarizeNameDurations(
+            const std::vector<rocprofvis_db_duration_summary_query_t>& queries,
+            Future* future,
+            std::vector<rocprofvis_db_name_duration_t>& rows) override;
+
+        // SummarizeNameDurations does not apply the FILTER command yet, so the
+        // summary stays on the in-memory aggregation path
+        bool EventSummaryInSqlite() const override { return false; }
+
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
-        virtual std::string GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
+        virtual std::string GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter) { return std::string(); }
 
         //--------------------------------------Table accessors-----------------------------------------------------------------
         std::string TableColumnText(void* func, void* handle, char** azColName, int index) override;
@@ -365,9 +357,7 @@ class QueryManager : public SystemDatabase, public SqliteDatabase
 
         RpvSqliteExecuteQueryCallback m_callback_add_any_record;
 
-    protected:
-        TableProcessor m_table_processor[kRPVTableDataTypesNum];
-
+        std::mutex                    m_histogram_lock;
        
 };
 

@@ -41,6 +41,9 @@ public:
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
     void ResetProgress();
+    // Keeps the error message a finished db future left, if any, for
+    // kRPVControllerFutureLastErrorMessage.
+    void KeepErrorMessage(rocprofvis_db_future_t db_future);
     static void ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data);
 
 private:
@@ -50,6 +53,7 @@ private:
     std::mutex m_mutex;
     uint16_t m_progress_percentage;
     std::string m_progress_message;
+    std::string m_last_error_message;
     std::unordered_map<uint64_t, uint16_t> m_progress_map;
 };
 

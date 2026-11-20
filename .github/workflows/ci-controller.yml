@@ -75,6 +75,10 @@ on:
         description: 'Experimental: multi-window / floating windows'
         type: boolean
         default: true
+      exp_enable_profiler_hub:
+        description: 'Experimental: Profiler Hub trace support'
+        type: boolean
+        default: true
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -131,6 +135,7 @@ jobs:
       exp-enable-vendor-python: ${{ github.event_name == 'schedule' || inputs.exp_enable_vendor_python }}
       exp-enable-trace-compare: ${{ github.event_name == 'schedule' || inputs.exp_enable_trace_compare }}
       exp-enable-multi-window: ${{ github.event_name == 'schedule' || inputs.exp_enable_multi_window }}
+      exp-enable-profiler-hub: ${{ github.event_name == 'schedule' || inputs.exp_enable_profiler_hub }}
     steps:
       - name: Set OS versions
         id: setup-os-versions
@@ -181,6 +186,7 @@ jobs:
       enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
+      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -218,6 +224,7 @@ jobs:
       enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
+      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}
 
   ci-windows:
     name: Windows CI
@@ -229,7 +236,7 @@ jobs:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
+      s3_root_directory: 'nightly'
 
   ci-windows-experimental:
     name: Windows CI - Experimental
@@ -241,7 +248,7 @@ jobs:
       os_version: ${{ needs.setup.outputs.windows-os-versions }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
+      s3_root_directory: 'nightly-experimental'
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: ${{ needs.setup.outputs.exp-crypto-backend }}
@@ -253,6 +260,7 @@ jobs:
       enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
+      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}
 
   ci-mac:
     name: macOS CI
@@ -288,6 +296,7 @@ jobs:
       enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
+      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}
 
   ci-asan:
     name: Ubuntu ASAN
@@ -332,3 +341,4 @@ jobs:
       enable_vendor_python: ${{ fromJSON(needs.setup.outputs.exp-enable-vendor-python) }}
       enable_trace_compare: ${{ fromJSON(needs.setup.outputs.exp-enable-trace-compare) }}
       enable_multi_window: ${{ fromJSON(needs.setup.outputs.exp-enable-multi-window) }}
+      enable_profiler_hub: ${{ fromJSON(needs.setup.outputs.exp-enable-profiler-hub) }}

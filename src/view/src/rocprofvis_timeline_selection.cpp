@@ -20,6 +20,7 @@ TimelineSelection::TimelineSelection(DataProvider& dp)
 , m_selected_range_end(INVALID_SELECTION_TIME)
 , m_data_provider(dp)
 , m_last_highlighted_event_id(INVALID_SELECTION_ID)
+, m_range_anchor_id(INVALID_SELECTION_ID)
 {}
 
 TimelineSelection::~TimelineSelection() {}
@@ -48,6 +49,7 @@ void
 TimelineSelection::UnselectAllTracks()
 {
     m_selected_track_ids.clear();
+    m_range_anchor_id = INVALID_SELECTION_ID;
     SendTrackSelectionChanged(INVALID_SELECTION_ID, false);
 }
 
@@ -61,6 +63,70 @@ TimelineSelection::ToggleSelectTrack(TrackItem& track)
     else
     {
         SelectTrack(track);
+    }
+}
+
+void
+TimelineSelection::ClickTrack(TrackItem& track, const std::vector<uint64_t>& row_order,
+                              bool ctrl, bool shift)
+{
+    const uint64_t track_id = track.GetID();
+    if(shift && m_range_anchor_id != INVALID_SELECTION_ID)
+    {
+        auto first = std::find(row_order.begin(), row_order.end(), m_range_anchor_id);
+        auto last  = std::find(row_order.begin(), row_order.end(), track_id);
+        if(first != row_order.end() && last != row_order.end())
+        {
+            if(last < first)
+            {
+                std::swap(first, last);
+            }
+            std::vector<uint64_t> span(first, last + 1);
+            if(ctrl)
+            {
+                GetSelectedTracks(span);
+            }
+            SetSelectedTracks(span);
+            return;
+        }
+    }
+
+    if(ctrl)
+    {
+        ToggleSelectTrack(track);
+    }
+    else
+    {
+        SetSelectedTracks({ track_id });
+    }
+    m_range_anchor_id = track_id;
+}
+
+void
+TimelineSelection::SetSelectedTracks(const std::vector<uint64_t>& track_ids)
+{
+    // The same per-track events a single click sends. Listeners only flag a
+    // refresh per event, so selecting many tracks still refreshes once.
+    const std::unordered_set<uint64_t> next(track_ids.begin(), track_ids.end());
+    std::vector<uint64_t>              removed;
+    for(uint64_t id : m_selected_track_ids)
+    {
+        if(next.count(id) == 0)
+        {
+            removed.push_back(id);
+        }
+    }
+    for(uint64_t id : removed)
+    {
+        m_selected_track_ids.erase(id);
+        SendTrackSelectionChanged(id, false);
+    }
+    for(uint64_t id : track_ids)
+    {
+        if(m_selected_track_ids.insert(id).second)
+        {
+            SendTrackSelectionChanged(id, true);
+        }
     }
 }
 

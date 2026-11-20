@@ -9,6 +9,9 @@
 #include "rocprofvis_db_compute.h"
 #include "rocprofvis_db_trace_processor.h"
 
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+#include "rocprofvis_db_profiler_hub.h"
+#endif
 #ifdef TEST
 #define ROCPROFVIS_DM_PROPSYMBOL(handle, property) ((RocProfVis::DataModel::DmBase*)handle)->GetPropertySymbol(property)
 #else
@@ -59,14 +62,40 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
-#ifdef ROCPROFVIS_PERFETTO_ENABLED
-        db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+        db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
         if (db_type == rocprofvis_db_type_t::kAutodetect)
 #endif
         {
-            db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+            db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+            if (db_type == rocprofvis_db_type_t::kAutodetect)
+#endif
+            {
+                db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+            }
         }
-    } 
+    }
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    if (db_type == rocprofvis_db_type_t::kProfilerHub)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::ProfilerHub(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            } else {
+                delete db;
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database using profiler hub!",
+                    nullptr);
+            }
+        }
+        catch(std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
+#endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
     {
@@ -299,6 +328,23 @@ rocprofvis_db_future_cancel(rocprofvis_db_future_t object)
     ROCPROFVIS_ASSERT_MSG_RETURN(object,
                                  RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL, );
     ((RocProfVis::DataModel::Future*) object)->SetInterrupted();
+}
+
+/****************************************************************************************************
+ * @brief Gets the message the last operation left for the user, such as a table filter that
+ *        could not be applied
+ *
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @return message owned by the future, empty when there is none
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_charptr_t
+rocprofvis_db_future_get_error_message(rocprofvis_db_future_t object)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(object,
+                                 RocProfVis::DataModel::ERROR_FUTURE_CANNOT_BE_NULL, "");
+    return ((RocProfVis::DataModel::Future*) object)->ErrorMessage();
 }
 
 /****************************************************************************************************

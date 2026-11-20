@@ -263,17 +263,6 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(rocprofvis_controlle
 rocprofvis_result_t rocprofvis_controller_table_export_csv(rocprofvis_controller_t* controller, rocprofvis_controller_table_t* table, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, char const* path);
 
 /*
-* Setup the summary based on the values in 'args' and fetch data.
-* @param controller The controller.
-* @param table The summary controller to fetch data from
-* @param args The arguments that setup the summary
-* @param result The future to wait on
-* @param output The summary metrics container to write to
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_controller_summary_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_summary_t* summary, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_summary_metrics_t* output);
-
-/*
 * Allocate a metrics container used for carrying compute trace metric data.
 * @returns A valid metrics container object, or nullptr.
 */
@@ -297,7 +286,8 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controll
 
 /*
  * Fetch the PC sampling code objects, kernel symbols, and ISA lines needed to show
- * the ISA pane for a specific kernel asynchronously.
+ * the ISA pane for a specific kernel asynchronously. The future's result is
+ * kRocProfVisResultNotSupported when the trace's compute schema predates PC sampling.
  * @param controller The controller
  * @param args Input arguments (kernel id)
  * @param result The future to wait on
@@ -308,7 +298,8 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_isa_lines_async(rocp
 
 /*
  * Fetch PC sampling source-file metadata, instruction/source mappings, and source
- * lines for a specific kernel and source file asynchronously.
+ * lines for a specific kernel and source file asynchronously. The future's result is
+ * kRocProfVisResultNotSupported when the trace's compute schema predates PC sampling.
  * @param controller The controller
  * @param args Input arguments (kernel id, source file id; 0 selects the first file)
  * @param result The future to wait on
@@ -323,6 +314,8 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
  * Fetch PC sample states and stall reasons for a specific kernel asynchronously.
  * Instruction sample metadata is also fetched unless the optional
  * kRPVControllerPcSamplingArgsIncludeInstructionSamples argument is zero.
+ * The future's result is kRocProfVisResultNotSupported when the trace's compute
+ * schema predates PC sampling.
  * @param controller The controller
  * @param args Input arguments (kernel id and optional instruction-sample flag)
  * @param result The future to wait on

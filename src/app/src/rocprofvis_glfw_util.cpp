@@ -272,5 +272,12 @@ is_fullscreen_active(GLFWwindow* window)
     return glfwGetWindowMonitor(window) != nullptr;
 }
 
+void
+set_window_class_hints(const char* name)
+{
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, name);
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, name);
+}
+
 }  // namespace Platform
 }  // namespace RocProfVis

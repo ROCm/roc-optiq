@@ -4,12 +4,14 @@
 #pragma once
 
 #include "rocprofvis_model_types.h"
+#include "rocprofvis_tables_model.h"
 
 namespace RocProfVis
 {
 namespace View
 {
 
+enum class TimeFormat;
 /**
  * @brief Manages aggregated trace statistics.
  *
@@ -19,18 +21,40 @@ namespace View
 class SummaryModel
 {
 public:
-    SummaryModel()  = default;
+    SummaryModel();
     ~SummaryModel() = default;
 
     // Summary data access
-    const SummaryInfo::AggregateMetrics& GetSummaryData() const { return m_summary; }
-    SummaryInfo::AggregateMetrics&       GetSummaryData() { return m_summary; }
+    const SummaryInfo::AggregateMetrics& GetSummaryData() const;
+    SummaryInfo::AggregateMetrics&       GetSummaryData();
 
-    void SetSummaryData(SummaryInfo::AggregateMetrics&& summary);
-    void Clear();
+    const TablesModel& GetTables() const;
+    TablesModel&       GetTables();
+
+    const std::vector<SummaryInfo::AggregateMetrics>& GetSummaryNodes() const;
+
+    const SummaryInfo::TopOpEvents* TopOpEvents(
+        const SummaryInfo::AggregateMetrics&   metrics,
+        rocprofvis_analysis_summary_category_t type) const;
+
+    void RegisterEventValue(SummaryInfo::Value& value);
+    void RegisterCounterValue(SummaryInfo::Value& value);
+    void RegisterTimeunitValue(SummaryInfo::Value& value);
+    void UpdateValueStrings();
+
+    void     SetRevision(uint64_t revision);
+    uint64_t GetRevision() const;
+    void     Clear();
 
 private:
     SummaryInfo::AggregateMetrics m_summary;
+    TablesModel                   m_tables;
+
+    std::vector<SummaryInfo::Value*> m_event_values;
+    std::vector<SummaryInfo::Value*> m_counter_values;
+    std::vector<SummaryInfo::Value*> m_timeunit_values;
+
+    uint64_t m_revision;
 };
 
 }  // namespace View

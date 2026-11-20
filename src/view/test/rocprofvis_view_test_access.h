@@ -32,6 +32,16 @@
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#    include "agenticprofiling/rocprofvis_ai_trace_links.h"
+// Dropping a conversation destroys its TextSelects, which needs the full type.
+#    include "textselect.hpp"
+#endif
+
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -450,37 +460,96 @@ struct TraceViewTestPeer
 struct SummaryViewTestPeer
 {
     const SummaryView& v;
-    TopKernels* TopKernelsPtr() const { return v.m_top_kernels.get(); }
+    SummaryTopEvents* TopEventsPtr(rocprofvis_analysis_summary_category_t category) const
+    {
+        return v.m_top_events[category].get();
+    }
+    TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
 };
 
-// TopKernels drives the pie/bar/table kernel selection. The pie is ImPlot-canvas
-// drawn (no ImGui widget ID), so tests drive the model path (ToggleSelectKernel)
-// rather than clicking a wedge, and assert on m_selected_idx.
-struct TopKernelsTestPeer
+// SummaryTopEvents drives the pie/bar/table top-event selection for one category.
+// The pie is ImPlot-canvas drawn (no ImGui widget ID), so tests drive the model path
+// (ToggleSelectEvent) rather than clicking a wedge, and assert on m_selected_idx.
+struct SummaryTopEventsTestPeer
 {
-    TopKernels& v;
-    // KernelCount() is 0 when m_kernels is null (pre-load) or empty; one check covers both.
-    size_t                KernelCount() const { return v.m_kernels ? v.m_kernels->size() : 0; }
-    // Return name of kernel at given index
-    std::string KernelName(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).name : std::string{};}
-    double ExecTimeSum(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).exec_time_sum : 0.0;}
+    SummaryTopEvents& v;
+    // EventCount() is 0 when m_op_events is null (pre-load) or empty; one check covers both.
+    size_t      EventCount() const { return v.m_op_events ? v.m_op_events->top.size() : 0; }
+    // Return name of event at given index
+    std::string EventName(size_t idx) const
+    {
+        return (v.m_op_events && idx < v.m_op_events->top.size())
+                   ? v.m_op_events->top[idx].name
+                   : std::string{};
+    }
+    uint64_t DurationSum(size_t idx) const
+    {
+        return (v.m_op_events && idx < v.m_op_events->top.size())
+                   ? v.m_op_events->top[idx]
+                         .metrics[kRPVAnalysisSummaryTopEventMetricDurationSum]
+                         .numeric.uint
+                   : 0;
+    }
     std::optional<size_t> SelectedIdx() const { return v.m_selected_idx; }
     // Current chart/table display mode, exposed as booleans so the private
-    // TopKernels::DisplayMode enum stays encapsulated.
-    bool IsDisplayPie() const { return v.m_display_mode == TopKernels::Pie; }
-    bool IsDisplayBar() const { return v.m_display_mode == TopKernels::Bar; }
-    bool IsDisplayTable() const { return v.m_display_mode == TopKernels::Table; }
-    // The synthetic "Others" bucket, if present. ToggleSelectKernel treats it as a
+    // SummaryTopEvents::DisplayMode enum stays encapsulated.
+    bool IsDisplayPie() const { return v.m_display_mode == SummaryTopEvents::Pie; }
+    bool IsDisplayBar() const { return v.m_display_mode == SummaryTopEvents::Bar; }
+    bool IsDisplayTable() const { return v.m_display_mode == SummaryTopEvents::Table; }
+    // The synthetic "Others" bucket, if present. ToggleSelectEvent treats it as a
     // deselect, so tests must avoid selecting it.
     std::optional<size_t> PaddedIdx() const { return v.m_padded_idx; }
     // Toggles idx; on a cleared baseline (SelectedIdx()==nullopt) that is a select.
     // Caller must ClearSelection() first and avoid the padded index.
-    void                  Select(size_t idx) { v.ToggleSelectKernel(idx); }
+    void                  Select(size_t idx) { v.ToggleSelectEvent(idx); }
     void                  ClearSelection()
     {
-        if(v.m_selected_idx.has_value()) v.ToggleSelectKernel(v.m_selected_idx.value());
+        if(v.m_selected_idx.has_value()) v.ToggleSelectEvent(v.m_selected_idx.value());
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+struct AssistantPanelTestPeer
+{
+    AssistantPanel& v;
+    bool            HasConversation(const std::string& project_id) const
+    {
+        return v.m_conversations.count(project_id) > 0;
+    }
+    size_t LineCount(const std::string& project_id) const
+    {
+        const std::unordered_map<
+            std::string, std::unique_ptr<AssistantPanel::Conversation>>::const_iterator
+            it = v.m_conversations.find(project_id);
+        return it == v.m_conversations.end() ? 0 : it->second->lines.size();
+    }
+    // Puts a user line in a trace's conversation without sending anything.
+    void AddUserLine(const std::string& project_id, const std::string& text)
+    {
+        AssistantPanel::ChatLine line;
+        line.speaker = AssistantPanel::Speaker::kUser;
+        line.text    = text;
+        v.ConversationFor(project_id).lines.push_back(line);
+    }
+    void DropConversation(const std::string& project_id)
+    {
+        v.m_conversations.erase(project_id);
+    }
+    const std::string& ViewProjectId() const { return v.m_view_project_id; }
+};
+
+struct TraceLinkStoreTestPeer
+{
+    TraceLinkStore&    v;
+    const std::string& Path() const { return v.m_file_path; }
+    // Points the store at another file and reloads from it.
+    void UsePath(const std::string& path)
+    {
+        v.m_file_path = path;
+        v.Load();
+    }
+};
+#endif
 
 }  // namespace View
 }  // namespace RocProfVis

@@ -227,14 +227,22 @@ std::string RocpdDatabase::GetLevelSchemaHashStr()
     return hash_str;
 }
 
-std::string RocpdDatabase::GetProcessorIDSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
+std::string RocpdDatabase::GetCriteriaSubquery(rocprofvis_dm_query_criteria_ptr source_filter)
 {
     std::string where_str;
     if(source_filter)
     {
         if(source_filter->agent_id.has_value)
         {
-            where_str += " gpuId = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
+            where_str += std::string(Builder::AGENT_ID_SERVICE_NAME) + " = " + std::to_string(source_filter->agent_id.value & TOPOLOGY_ID_MASK);
+        }
+        if(source_filter->process_id.has_value)
+        {
+            where_str += (where_str.size() ? std::string(" AND ") : std::string()) + Builder::PROCESS_ID_SERVICE_NAME + " = " + std::to_string(source_filter->process_id.value & TOPOLOGY_ID_MASK);
+        }
+        if(source_filter->thread_id.has_value)
+        {
+            where_str += (where_str.size() ? std::string(" AND ") : std::string()) + Builder::THREAD_ID_SERVICE_NAME + " = " + std::to_string(source_filter->thread_id.value & TOPOLOGY_ID_MASK);
         }
     }
     return where_str;
@@ -544,11 +552,11 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
         result = rpDb.ExecuteSQLQuery(future, DbInstancePtrAt(0), "DETACH oldDb;");
 
         ShowProgress(100, "Trace trimmed successfully!", kRPVDbSuccess, future);
-        return future->SetPromise(result);
+        return result;
     }
 
     ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
-    return future->SetPromise(result);
+    return result;
 }
 
 rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num_string_table_filters_t num_string_table_filters,

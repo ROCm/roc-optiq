@@ -152,8 +152,9 @@ typedef enum rocprofvis_db_type_t {
     // chrom trace or perfetto
     kChromeTrace = 5,
     kPerfettoTrace = 6,
-    kGoogleSqlite = 7
-
+    kGoogleSqlite = 7,
+    // supported by profiler hub, detected only when built with ROCPROFVIS_ENABLE_PROFILER_HUB
+    kProfilerHub = 8
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback
@@ -222,6 +223,9 @@ typedef enum  rocprofvis_dm_trace_property_t {
     kRPVDStreamQueueMappingInfoTableHandleIndexed,
     // Topology handle
     kRPVDMTopologyHandle,
+    // 1 when the track histograms share the trace time base, so a time range whose
+    // buckets are all zero holds no events and its slice read can be skipped
+    kRPVDMHistogramAlignedUInt64,
 } rocprofvis_dm_trace_property_t;
 
 // Track properties
@@ -449,6 +453,8 @@ typedef struct rocprofvis_dm_query_criteria_t
 {
     c_optional_uint64_t node_id;
     c_optional_uint64_t agent_id;
+    c_optional_uint64_t process_id;
+    c_optional_uint64_t thread_id;
 
 } rocprofvis_dm_query_criteria_t,  * rocprofvis_dm_query_criteria_ptr;
 
@@ -466,7 +472,9 @@ inline bool operator==(const rocprofvis_dm_query_criteria_t& lhs,
     const rocprofvis_dm_query_criteria_t& rhs)
 {
     return lhs.node_id == rhs.node_id &&
-        lhs.agent_id == rhs.agent_id;
+        lhs.agent_id == rhs.agent_id &&
+        lhs.process_id == rhs.process_id &&
+        lhs.thread_id == rhs.thread_id;
 }
 #endif
 
@@ -477,6 +485,8 @@ typedef enum rocprofvis_dm_hashed_timestamp_tag_t
     kRocProfVisDmHashedTimestampTagTrackSlice = 0,
     // Controller analysis fetches
     kRocProfVisDmHashedTimestampTagAnalysis = 1,
+    // Controller summary fetches
+    kRocProfVisDmHashedTimestampTagSummary = 2,
 } rocprofvis_dm_hashed_timestamp_tag_t;
 
 // Event id structure
@@ -625,6 +635,7 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnMetadataComputeVersion,
     kRPVComputeColumnMetadataGitVersion,
     kRPVComputeColumnMetadataSchemaVersion,
+    kRPVComputeColumnPcSamplingInstructionLineInstructionType,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations

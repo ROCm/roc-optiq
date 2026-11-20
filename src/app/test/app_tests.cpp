@@ -32,6 +32,11 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#    include "agenticprofiling/rocprofvis_ai_tools.h"
+#    include "agenticprofiling/rocprofvis_ai_trace_links.h"
+#endif
 using namespace RocProfVis::View;
 
 namespace
@@ -271,6 +276,15 @@ ImGuiID TrackButtonId(ImGuiTestItemList& items, const std::string& name)
     return 0;
 }
 
+// Ctrl-click toggles one track row and keeps the rest of the selection. A plain
+// click would replace the selection with that track.
+void CtrlClick(ImGuiTestContext* ctx, ImGuiID id)
+{
+    ctx->KeyDown(ImGuiMod_Ctrl);
+    ctx->ItemClick(id);
+    ctx->KeyUp(ImGuiMod_Ctrl);
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -322,6 +336,63 @@ struct TabStateGuard
         if(ctx) ctx->Yield(3);
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+// Points the trace link store at a scratch file for one test and restores the
+// user's own afterwards, so a test never writes their links.
+struct ScratchTraceLinks
+{
+    std::string saved_path;
+    explicit ScratchTraceLinks(const std::string& scratch_path)
+    : saved_path(TraceLinkStoreTestPeer{ AssistantTraceLinks() }.Path())
+    {
+        std::error_code ec;
+        std::filesystem::remove(scratch_path, ec);
+        TraceLinkStoreTestPeer{ AssistantTraceLinks() }.UsePath(scratch_path);
+    }
+    ~ScratchTraceLinks()
+    {
+        TraceLinkStoreTestPeer{ AssistantTraceLinks() }.UsePath(saved_path);
+    }
+};
+
+// Opens the Ask Optiq panel for one test, so it draws and picks the
+// conversation for the tab in front, and puts it back as it was.
+struct AssistantPanelOpen
+{
+    bool was_visible;
+    AssistantPanelOpen()
+    : was_visible(*AssistantPanel::GetInstance()->VisiblePtr())
+    {
+        *AssistantPanel::GetInstance()->VisiblePtr() = true;
+    }
+    ~AssistantPanelOpen() { *AssistantPanel::GetInstance()->VisiblePtr() = was_visible; }
+};
+
+bool
+AssistantTraceReady(const std::string& project_id)
+{
+    const AssistantToolContext context = MakeAssistantToolContext(project_id);
+    return context.data_provider != nullptr &&
+           context.data_provider->GetState() == ProviderState::kReady;
+}
+
+// Copies through shared-read streams, which works while SQLite still holds the
+// source open; a plain copy_file can hit a sharing violation on Windows.
+bool
+CopyFileShared(const std::filesystem::path& from, const std::filesystem::path& to)
+{
+    std::ifstream in(from, std::ios::binary);
+    std::ofstream out(to, std::ios::binary | std::ios::trunc);
+    if(!in || !out)
+    {
+        return false;
+    }
+    out << in.rdbuf();
+    out.close();
+    return !out.fail();
+}
+#endif
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -1540,33 +1611,34 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
-        // FetchSummary + TopKernels::Update only run while the Summary window is
-        // shown; headless with no saved layout it may be closed, leaving the kernel
+        // FetchSummary + SummaryTopEvents::Update only run while the Summary window is
+        // shown; headless with no saved layout it may be closed, leaving the event
         // list null forever. Force it open ourselves rather than depending on another
         // test having flipped this shared setting earlier in the process.
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
-        // Summary data loads asynchronously; let Update() populate the kernel list.
-        // KernelCount() is 0 while m_kernels is still null.
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        // Summary data loads asynchronously; let Update() populate the event list.
+        // EventCount() is 0 while m_op_events is still null.
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
 
         // Pick a real kernel index, skipping the synthetic "Others" bucket (which
-        // ToggleSelectKernel treats as a deselect). Bail if there's nothing else.
+        // ToggleSelectEvent treats as a deselect). Bail if there's nothing else.
         size_t target = 0;
         if (peer.PaddedIdx() == target) target = 1;
-        if (peer.KernelCount() <= target)
+        if (peer.EventCount() <= target)
         {
             ctx->LogWarning("SKIP: summary has no selectable top kernel for this trace");
             return;
         }
 
-        // This drives the model (ToggleSelectKernel) and asserts selection state.
+        // This drives the model (ToggleSelectEvent) and asserts selection state.
         // The pie is ImPlot-canvas drawn with no widget ID, so the click-to-index
         // hit-test is out of scope here; only the selection wiring is covered.
 
@@ -1593,25 +1665,30 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
-        // The Summary fetch (FetchSummary) and TopKernels::Update both run only when
-        // the Summary window is shown; headless with no saved layout it may be closed,
-        // leaving the kernel list null forever. Force it open before draining the load.
+        // The Summary fetch (FetchSummary) and SummaryTopEvents::Update both run only
+        // when the Summary window is shown; headless with no saved layout it may be
+        // closed, leaving the event list null forever. Force it open before draining the load.
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
-        // Summary data loads asynchronously; let Update() populate the kernel list.
-        // KernelCount() is 0 while m_kernels is still null.
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        // Summary data loads asynchronously; let Update() populate the event list.
+        // EventCount() is 0 while m_op_events is still null.
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
 
-        IM_CHECK(peer.KernelCount() > 0);
-        IM_CHECK(!peer.KernelName(0).empty());
-        for (size_t i=1; i < peer.KernelCount();i++){
-            IM_CHECK(peer.ExecTimeSum(0) >= peer.ExecTimeSum(i));
+        IM_CHECK(peer.EventCount() > 0);
+        IM_CHECK(!peer.EventName(0).empty());
+        // The synthetic "Others" bucket totals everything past the top events, so it
+        // can legitimately exceed the first entry; only rank the real events.
+        for (size_t i = 1; i < peer.EventCount(); i++)
+        {
+            if (peer.PaddedIdx() == i) continue;
+            IM_CHECK(peer.DurationSum(0) >= peer.DurationSum(i));
         }
 
     };
@@ -1624,18 +1701,26 @@ void RegisterAppTests(ImGuiTestEngine* e)
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
-        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
-        IM_CHECK(tk != nullptr);
-        if (tk == nullptr) return;
+        SummaryTopEvents* te =
+            SummaryViewTestPeer{*sv}.TopEventsPtr(kRPVAnalysisSummaryCategoryKernel);
+        IM_CHECK(te != nullptr);
+        if (te == nullptr) return;
 
         // The Pie/Bar/Table switcher renders only once the Summary window is
-        // shown and its kernel list has loaded; force it open and drain the
+        // shown and its event list has loaded; force it open and drain the
         // async fetch first (mirrors sys_summary_top_kernel_name).
         ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
-        TopKernelsTestPeer peer{*tk};
-        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
-        IM_CHECK(peer.KernelCount() > 0);
+        SummaryTopEventsTestPeer peer{*te};
+        for (int i = 0; i < 60 && peer.EventCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.EventCount() > 0);
+
+        // The switcher lives in the "Kernel Executions" tab and only the active tab
+        // renders, so bring it to the front before clicking.
+        TabContainer* tc = SummaryViewTestPeer{*sv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        tc->SetActiveTab("Kernel Executions");
 
         // Reaching this point means the load path ran (not the skip), so the
         // mode assertions below genuinely exercise the switcher. Default is Pie.
@@ -1820,6 +1905,57 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // Leave a clean selection for following tests.
         sel->UnselectAllEvents();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_track_selection_modifiers");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        std::vector<FlameTrackItem*> tracks;
+        for (int i = 0; i < 60 && tracks.size() < 3; i++)
+        {
+            tracks = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (tracks.size() < 3) ctx->Yield(2);
+        }
+        if (tracks.size() < 3)
+        {
+            ctx->LogWarning("SKIP: need three displayed tracks for range selection");
+            return;
+        }
+
+        std::vector<uint64_t> rows;
+        for (FlameTrackItem* track : tracks) rows.push_back(track->GetID());
+        auto selected_count = [&]() {
+            std::vector<uint64_t> ids;
+            sel->GetSelectedTracks(ids);
+            return ids.size();
+        };
+
+        sel->UnselectAllTracks();
+        sel->ClickTrack(*tracks[0], rows, false, false);
+        IM_CHECK(selected_count() == 1 && sel->IsTrackSelected(*tracks[0]));
+
+        sel->ClickTrack(*tracks[2], rows, false, true);
+        IM_CHECK(selected_count() == 3);
+        IM_CHECK(sel->IsTrackSelected(*tracks[0]));
+        IM_CHECK(sel->IsTrackSelected(*tracks[1]));
+        IM_CHECK(sel->IsTrackSelected(*tracks[2]));
+
+        sel->ClickTrack(*tracks[1], rows, true, false);
+        IM_CHECK(selected_count() == 2 && !sel->IsTrackSelected(*tracks[1]));
+        sel->ClickTrack(*tracks[2], rows, true, true);
+        IM_CHECK(selected_count() == 3 && sel->IsTrackSelected(*tracks[1]));
+
+        sel->UnselectAllTracks();
         ctx->Yield(2);
     };
 
@@ -2477,9 +2613,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         sel->ClearTimeRange();
         drain();
 
-        // Every select and deselect below is a click on the track's sidebar row,
-        // whose button runs ToggleSelectTrack, so the same click selects an
-        // unselected track and deselects a selected one.
+        // Every select and deselect below is a Ctrl-click on the track's sidebar
+        // row, so the same click selects an unselected track and deselects a
+        // selected one.
         ImGuiWindow* sidebar = FindSidebarWindow(ctx);
         if (sidebar == nullptr) restore();
         IM_CHECK(sidebar != nullptr);
@@ -2515,13 +2651,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
         for (size_t i = 0; i < flames.size() && i < kMaxCandidates && track_b == nullptr; i++)
         {
             if (buttons[i] == 0) continue;
-            ctx->ItemClick(buttons[i]);
+            CtrlClick(ctx, buttons[i]);
             drain();
             // Two same-named tracks resolve to one row, so a click lands on only one
             // of them. The selection model says which, and only then is the count
             // that track's own total.
             const uint64_t rows = sel->IsTrackSelected(*flames[i]) ? row_count() : 0;
-            ctx->ItemClick(buttons[i]);  // same button toggles the track back off
+            CtrlClick(ctx, buttons[i]);  // same button toggles the track back off
             drain();
             if (rows == 0) continue;
             if (track_a == nullptr) { track_a = flames[i]; button_a = buttons[i]; }
@@ -2536,13 +2672,13 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         sel->UnselectAllTracks();
         drain();
-        ctx->ItemClick(button_a);
+        CtrlClick(ctx, button_a);
         drain();
-        ctx->ItemClick(button_b);
+        CtrlClick(ctx, button_b);
         drain();
         const uint64_t count_ab = row_count();
 
-        ctx->ItemClick(button_b);  // toggles B back off, leaving only A selected
+        CtrlClick(ctx, button_b);  // toggles B back off, leaving only A selected
         drain();
         const uint64_t count_a = row_count();
 
@@ -2630,10 +2766,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ImGuiTestItemList sidebar_items;
         ctx->GatherItems(&sidebar_items, "");
 
-        // Fill the table by clicking each flame track's sidebar row. Same-named rows
-        // share one button id and the button toggles, so click the distinct ids once
-        // each. A duplicate-named pair fills from one of the two, which still holds
-        // raw rows to aggregate.
+        // Fill the table by Ctrl-clicking each flame track's sidebar row. Same-named
+        // rows share one button id and Ctrl-click toggles, so click the distinct ids
+        // once each. A duplicate-named pair fills from one of the two, which still
+        // holds raw rows to aggregate.
         std::vector<ImGuiID> track_buttons;
         for (FlameTrackItem* flame : flames)
         {
@@ -2649,7 +2785,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             restore();
             return;
         }
-        for (ImGuiID id : track_buttons) ctx->ItemClick(id);
+        for (ImGuiID id : track_buttons) CtrlClick(ctx, id);
         drain_event_table();
 
         const TablesModel& tables = dp->DataModel().GetTables();
@@ -2947,4 +3083,201 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(arg_count > 0);
         IM_CHECK(have_named_arg);
     };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Each open trace keeps its own Ask Optiq conversation, a link lets one
+    // trace's read tools reach the other, and closing a trace takes its
+    // conversation with it. Drives the tools directly, so no endpoint is needed.
+    t           = IM_REGISTER_TEST(e, "app", "sys_assistant_linked_traces");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        namespace fs   = std::filesystem;
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if(app == nullptr)
+        {
+            return;
+        }
+        TabContainer* tc = AppWindowTestPeer{ *app }.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if(tc == nullptr)
+        {
+            return;
+        }
+        TabStateGuard tab_guard(ctx, tc);
+
+        const fs::path sample("sample/rocpd-transpose.db");
+        if(!fs::exists(sample))
+        {
+            ctx->LogWarning("SKIP: sample/rocpd-transpose.db not found");
+            return;
+        }
+
+        // A second system trace at its own path: the sample copied with its
+        // write-ahead log, so the copy holds the same capture.
+        std::error_code ec;
+        const fs::path  dir = fs::temp_directory_path() / "rocprofvis_assistant_links";
+        fs::create_directories(dir, ec);
+        const fs::path copy = dir / "run2" / sample.filename();
+        fs::create_directories(copy.parent_path(), ec);
+        if(!CopyFileShared(sample, copy))
+        {
+            ctx->LogWarning("SKIP: could not copy the sample db");
+            return;
+        }
+        fs::path sample_wal = sample;
+        sample_wal += "-wal";
+        fs::path copy_wal = copy;
+        copy_wal += "-wal";
+        fs::remove(copy_wal, ec);
+        if(fs::exists(sample_wal))
+        {
+            CopyFileShared(sample_wal, copy_wal);
+        }
+
+        const std::string id_a = fs::weakly_canonical(sample).string();
+        const std::string id_b = fs::weakly_canonical(copy).string();
+        if(app->GetProject(id_a) == nullptr)
+        {
+            ctx->LogWarning("SKIP: start the UI tests with rocpd-transpose.db");
+            return;
+        }
+
+        ScratchTraceLinks      scratch_links((dir / "trace_links.json").string());
+        AssistantPanelOpen     panel_open;
+        AssistantPanelTestPeer peer{ *AssistantPanel::GetInstance() };
+
+        app->OpenFile(id_b);
+        for(int i = 0;
+            i < 3000 && !(AssistantTraceReady(id_a) && AssistantTraceReady(id_b)); i++)
+        {
+            ctx->Yield();
+        }
+        IM_CHECK(AssistantTraceReady(id_a));
+        IM_CHECK(AssistantTraceReady(id_b));
+
+        // The conversation on screen follows the tab, and each keeps its own lines.
+        tc->SetActiveTab(id_b);
+        ctx->Yield(3);
+        IM_CHECK(peer.ViewProjectId() == id_b);
+        peer.AddUserLine(id_a, "about run 1");
+        IM_CHECK(peer.LineCount(id_a) == 1);
+        IM_CHECK(peer.LineCount(id_b) == 0);
+        tc->SetActiveTab(id_a);
+        ctx->Yield(3);
+        IM_CHECK(peer.ViewProjectId() == id_a);
+        IM_CHECK(peer.LineCount(id_a) == 1);
+        peer.DropConversation(id_a);
+
+        // Duplicate visible names are ambiguous, but the listed tab ref picks
+        // one without exposing its full path to the model.
+        AssistantToolStartResult result =
+            StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab",
+                               "{\"name\":\"rocpd-transpose.db\"}");
+        IM_CHECK(result.content.find("Nothing matches") != std::string::npos);
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab", "{}");
+        const size_t first_ref      = result.content.find("ref=");
+        const size_t second_ref     = first_ref == std::string::npos
+                                          ? std::string::npos
+                                          : result.content.find("ref=", first_ref + 4);
+        const size_t second_ref_end = second_ref == std::string::npos
+                                          ? std::string::npos
+                                          : result.content.find(' ', second_ref + 4);
+        IM_CHECK(second_ref != std::string::npos);
+        IM_CHECK(second_ref_end != std::string::npos);
+        if(second_ref == std::string::npos || second_ref_end == std::string::npos)
+        {
+            return;
+        }
+        const std::string target_ref =
+            result.content.substr(second_ref + 4, second_ref_end - second_ref - 4);
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab",
+                                    "{\"name\":\"" + target_ref + "\"}");
+        IM_CHECK(result.stop_tool_queue);
+        ctx->Yield(3);
+        IM_CHECK(app->GetCurrentProject() != nullptr);
+        IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
+
+        // Extra JSON fields are accepted by the endpoint parser. A stale trace
+        // link must not redirect a compute handler into a system data model.
+        AssistantToolContext compute_context;
+        compute_context.is_compute = true;
+#    ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+        result = StartAssistantTool(compute_context, "compute_overview",
+                                    "{\"trace\":\"stale-link\"}");
+        IM_CHECK(result.content.find(
+                     "Linked-trace reads are available only for system traces") !=
+                 std::string::npos);
+#    else
+        result = StartAssistantTool(compute_context, "compute_overview", "{}");
+        IM_CHECK(result.content.find(
+                     "this build of Ask Optiq reads system traces only") !=
+                 std::string::npos);
+#    endif
+
+        // Link the sample as the baseline of its copy.
+        TraceLinkMember baseline;
+        baseline.path  = id_a;
+        baseline.label = "run1";
+        TraceLinkMember target;
+        target.path  = id_b;
+        target.label = "run2";
+        IM_CHECK(AssistantTraceLinks().Link(baseline, target) ==
+                 TraceLinkResult::kLinked);
+        const std::vector<TraceLink> links = AssistantTraceLinks().LinksOf(id_b);
+        IM_CHECK(links.size() == 1);
+        if(links.size() != 1)
+        {
+            return;
+        }
+        const std::string ref = links[0].group_id;
+        IM_CHECK(
+            BuildAssistantLinkBlock(MakeAssistantToolContext(id_b)).find("ref=" + ref) !=
+            std::string::npos);
+
+        // The copy reads the sample's tracks through the link, labelled as such.
+        result = StartAssistantTool(MakeAssistantToolContext(id_b), "list_tracks",
+                                    "{\"trace\":\"" + ref + "\"}");
+        IM_CHECK(!result.pending);
+        IM_CHECK(result.fetch.project_id == id_a);
+        IM_CHECK(result.content.find("[read from linked trace " + ref) !=
+                 std::string::npos);
+        IM_CHECK(result.content.find("track_id=") != std::string::npos);
+
+        // UI tools stay on their own trace, and an unknown ref names what is linked.
+        result =
+            StartAssistantTool(MakeAssistantToolContext(id_b), "goto",
+                               "{\"trace\":\"" + ref + "\",\"start_ns\":0,\"end_ns\":1}");
+        IM_CHECK(result.content.find("only applies to the tools that read data") !=
+                 std::string::npos);
+        result = StartAssistantTool(MakeAssistantToolContext(id_b), "list_tracks",
+                                    "{\"trace\":\"link-none\"}");
+        IM_CHECK(result.content.find("No linked trace matches") != std::string::npos);
+
+        // Two copies of one capture compare as unchanged once both summaries load.
+        result =
+            StartAssistantTool(MakeAssistantToolContext(id_b), "compare_traces", "{}");
+        for(int i = 0; i < 3000 && result.pending; i++)
+        {
+            ctx->Yield();
+            result = StartAssistantTool(MakeAssistantToolContext(id_b), "compare_traces",
+                                        "{}");
+        }
+        IM_CHECK(!result.pending);
+        IM_CHECK(result.content.find("baseline: ") != std::string::npos);
+        IM_CHECK(result.content.find("span_ns: ") != std::string::npos);
+        IM_CHECK(result.content.find("(0, 0.0%)") != std::string::npos);
+        IM_CHECK(result.content.find("new in target") == std::string::npos);
+        IM_CHECK(result.content.find("gone from target") == std::string::npos);
+
+        // Closing the copy drops its conversation; the link stays and reports
+        // the trace as closed.
+        IM_CHECK(peer.HasConversation(id_b));
+        tc->RemoveTab(id_b);
+        ctx->Yield(3);
+        IM_CHECK(!peer.HasConversation(id_b));
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
+                                    "{\"trace\":\"" + ref + "\"}");
+        IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+#endif
 }

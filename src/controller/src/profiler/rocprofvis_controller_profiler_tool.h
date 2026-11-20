@@ -46,19 +46,26 @@ char const* GetBinaryName(rocprofvis_profiler_tool_t tool);
  * The directory must be absolute; a relative one would mean different things to
  * this process and to a child given its own working directory.
  *
- * With no directory configured, the default search is
+ * With no directory configured, the default search is <python_environment>/bin
+ * when a Python environment is given (non-Windows only, matching a remote launch,
+ * which finds the tool after sourcing the environment's activate), then
  * $ROCM_PATH/bin/<name> (defaulting to /opt/rocm on non-Windows), then each
  * $PATH entry in order. Resolving to a full path here, rather than leaving a
  * bare name for execvp, means what runs is decided (and can be shown to the
  * user) before the process is created, and a "not found" is reported as such
  * instead of surfacing later as exit code 127.
  *
+ * A Python environment, when given, must be absolute too (non-Windows only),
+ * since the launch refuses a relative one.
+ *
  * Returns kRocProfVisResultToolNotFound if no candidate exists,
- * kRocProfVisResultInvalidArgument for an unknown tool or a relative directory,
- * and writes the resolved path to out_path on success.
+ * kRocProfVisResultInvalidArgument for an unknown tool, a relative directory or
+ * a relative Python environment, and writes the resolved path to out_path on
+ * success.
  */
 rocprofvis_result_t ResolvePath(rocprofvis_profiler_tool_t tool,
                                 std::string const&         tool_directory,
+                                std::string const&         python_environment,
                                 std::string&               out_path);
 
 } // namespace ProfilerTool

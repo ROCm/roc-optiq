@@ -3,7 +3,6 @@
 paths-ignore:
   - thirdparty/**
   - build/**
-  - Installer/**
   - docs/**
 
 queries:

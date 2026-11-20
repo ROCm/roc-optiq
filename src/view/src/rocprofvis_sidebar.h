@@ -99,6 +99,10 @@ private:
     EventManager::SubscriptionToken          m_metadata_changed_token;
 
     SidebarTree m_sidebar_tree;
+    // Track rows in drawn order. A click lands mid-frame, so it reads the
+    // previous frame's complete list while this frame's is collected.
+    std::vector<uint64_t> m_row_order;
+    std::vector<uint64_t> m_rows_drawn;
     // Revision of the topology tree m_sidebar_tree was built from. Row labels
     // also come from track metadata, so a metadata change rebuilds too even
     // when the topology itself has not moved.

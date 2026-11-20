@@ -32,6 +32,10 @@ Use these shortcuts in the ROCm Systems Profiler trace view.
        - ``Esc``
      * - Multi-select events
        - ``Ctrl`` + click
+     * - Add or remove a track from the selection
+       - ``Ctrl`` + click a track
+     * - Select every track between two tracks
+       - ``Shift`` + click a track
      * - Save the current view to a bookmark
        - ``Ctrl`` + ``0``-``9``
      * - Restore a bookmark

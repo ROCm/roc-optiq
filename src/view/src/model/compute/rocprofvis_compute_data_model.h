@@ -91,10 +91,21 @@ public:
                                                  uint32_t category_id, uint32_t table_id,
                                                  uint32_t entry_id) const;
 
+    const AvailableMetrics::Entry* GetMetricInfo(uint32_t        workload_id,
+                                                 const MetricId& id) const;
+
     static const AvailableMetrics::Entry* GetMetricInfo(const WorkloadInfo& workload,
                                                         uint32_t            category_id,
                                                         uint32_t            table_id,
                                                         uint32_t            entry_id);
+
+    static const AvailableMetrics::Entry* GetMetricInfo(const WorkloadInfo& workload,
+                                                        const MetricId&     id);
+
+    // Create a MetricId from a string representation.
+    // Parse "category.table.entry". Returns false when `text` is not three
+    // numeric segments.
+    static bool MetricIdFromString(const std::string& text, MetricId& out);
 
     // Clear entire model (workloads, metrics, tables, etc)
     void Clear();

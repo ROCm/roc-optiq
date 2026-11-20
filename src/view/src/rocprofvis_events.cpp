@@ -114,10 +114,12 @@ TrackDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
-TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code)
+TableDataEvent::TableDataEvent(const std::string& source_id, uint64_t request_id,
+                               uint64_t response_code, const std::string& error_message)
 : RocEvent(static_cast<int>(RocEvents::kNewTableData), source_id)
 , m_request_id(request_id)
 , m_response_code(response_code)
+, m_error_message(error_message)
 {
     m_event_type = RocEventType::kTableDataEvent;
 }
@@ -132,6 +134,12 @@ uint64_t
 TableDataEvent::GetResponseCode() const
 {
     return m_response_code;
+}
+
+const std::string&
+TableDataEvent::GetErrorMessage() const
+{
+    return m_error_message;
 }
 
 ComputeSelectionChangedEvent::ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id)
@@ -434,6 +442,19 @@ const std::string
 RequestProgressUpdateEvent::GetMessage() const
 {
     return m_message;
+}
+
+SummaryEvent::SummaryEvent(const std::string& trace_path, bool success)
+: RocEvent(static_cast<int>(RocEvents::kSummaryComplete), trace_path)
+, m_success(success)
+{
+    m_event_type = RocEventType::kSummaryEvent;
+}
+
+bool
+SummaryEvent::Succeeded() const
+{
+    return m_success;
 }
 
 ScriptExecuteCompleteEvent::ScriptExecuteCompleteEvent(bool success,

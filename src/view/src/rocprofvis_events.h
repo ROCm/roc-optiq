@@ -32,6 +32,7 @@ enum class RocEvents
     kGoToTimelineSpot,
     kTimeFormatChanged,
     kRequestProgressUpdate,
+    kSummaryComplete,
     kScriptExecuteComplete,
     kProfilerStatusChanged,
     kRemoteStatusChanged,
@@ -57,6 +58,7 @@ enum class RocEventType
     kRangeEvent,
     kNavigationEvent,
     kRequestProgressUpdateEvent,
+    kSummaryEvent,
     kScriptExecuteCompleteEvent,
     kProfilerStatusEvent,
     kRemoteStatusEvent,
@@ -175,13 +177,18 @@ private:
 class TableDataEvent : public RocEvent
 {
 public:
-    TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code);
+    TableDataEvent(const std::string& source_id, uint64_t request_id, uint64_t response_code,
+                   const std::string& error_message);
     uint64_t           GetRequestID() const;
     uint64_t           GetResponseCode() const;
+    // Message the backend left for the user, such as an invalid filter. Can be set
+    // on a successful response.
+    const std::string& GetErrorMessage() const;
 
 private:
     uint64_t    m_request_id;
     uint64_t    m_response_code;
+    std::string m_error_message;
 };
 
 class ScrollToTrackEvent : public RocEvent
@@ -333,6 +340,18 @@ private:
     RequestType m_request_type;
     uint64_t    m_progress_percent;
     std::string m_message;
+};
+
+// A summary request finished on one trace. The source id is that trace's path.
+// Succeeded() is false for an error and for a cancel; neither writes the summary.
+class SummaryEvent : public RocEvent
+{
+public:
+    SummaryEvent(const std::string& trace_path, bool success);
+    bool Succeeded() const;
+
+private:
+    bool m_success;
 };
 
 class ScriptExecuteCompleteEvent : public RocEvent

@@ -22,6 +22,54 @@ bool is_terminal_state(rocprofvis_profiler_state_t state)
 }
 }  // namespace
 
+rocprofvis_profiler_config_t*
+AllocProfilerConfig(const ProfilerLaunchSpec& spec)
+{
+    rocprofvis_profiler_config_t* config = rocprofvis_profiler_config_alloc();
+    if(config == nullptr)
+    {
+        spdlog::error("Failed to allocate profiler config");
+    }
+    else if(rocprofvis_profiler_config_set_tool(config, spec.tool) != kRocProfVisResultSuccess)
+    {
+        spdlog::error("Failed to set profiler tool ({})", static_cast<int>(spec.tool));
+        rocprofvis_profiler_config_free(config);
+        config = nullptr;
+    }
+    else if(rocprofvis_profiler_config_set_operation(config, spec.operation) !=
+            kRocProfVisResultSuccess)
+    {
+        spdlog::error("Failed to set profiler operation ({})", static_cast<int>(spec.operation));
+        rocprofvis_profiler_config_free(config);
+        config = nullptr;
+    }
+    else
+    {
+        if(!spec.tool_directory.empty())
+        {
+            rocprofvis_profiler_config_set_tool_directory(config, spec.tool_directory.c_str());
+        }
+        rocprofvis_profiler_config_set_output_directory(config, spec.output_directory.c_str());
+        rocprofvis_profiler_config_set_working_directory(config, spec.working_directory.c_str());
+        rocprofvis_profiler_config_set_python_environment(config,
+                                                          spec.python_environment.c_str());
+
+        // One call per argument: the controller passes each entry through to the
+        // process untouched, so an argument containing spaces stays one argument.
+        for(std::string const& arg : spec.profiler_argv)
+        {
+            rocprofvis_profiler_config_add_profiler_arg(config, arg.c_str());
+        }
+
+        for(std::pair<std::string, std::string> const& kv : spec.env_vars)
+        {
+            rocprofvis_profiler_config_add_env_var(config, kv.first.c_str(),
+                                                   kv.second.c_str());
+        }
+    }
+    return config;
+}
+
 ProfilerSessionBase::ProfilerSessionBase()
 : m_config(nullptr)
 , m_profiler(nullptr)
@@ -38,38 +86,8 @@ ProfilerSessionBase::~ProfilerSessionBase()
 bool
 ProfilerSessionBase::BuildConfig(const ProfilerLaunchSpec& spec)
 {
-    m_config = rocprofvis_profiler_config_alloc();
-    if(m_config == nullptr)
-    {
-        spdlog::error("Failed to allocate profiler config");
-        return false;
-    }
-
-    if(rocprofvis_profiler_config_set_tool(m_config, spec.tool) != kRocProfVisResultSuccess)
-    {
-        spdlog::error("Failed to set profiler tool ({})", static_cast<int>(spec.tool));
-        return false;
-    }
-    if(!spec.tool_directory.empty())
-    {
-        rocprofvis_profiler_config_set_tool_directory(m_config, spec.tool_directory.c_str());
-    }
-    rocprofvis_profiler_config_set_output_directory(m_config, spec.output_directory.c_str());
-    rocprofvis_profiler_config_set_working_directory(m_config, spec.working_directory.c_str());
-
-    // One call per argument: the controller passes each entry through to the
-    // process untouched, so an argument containing spaces stays one argument.
-    for(auto const& arg : spec.profiler_argv)
-    {
-        rocprofvis_profiler_config_add_profiler_arg(m_config, arg.c_str());
-    }
-
-    for(auto const& kv : spec.env_vars)
-    {
-        rocprofvis_profiler_config_add_env_var(m_config, kv.first.c_str(), kv.second.c_str());
-    }
-
-    return true;
+    m_config = AllocProfilerConfig(spec);
+    return m_config != nullptr;
 }
 
 uint64_t
@@ -139,6 +157,33 @@ ProfilerSessionBase::GetOutput()
 
     buffer[length] = '\0';
     return std::string(buffer.data());
+}
+
+rocprofvis_result_t
+ProfilerSessionBase::GetTraceFilePath(std::string& out) const
+{
+    if(m_profiler == nullptr)
+    {
+        return kRocProfVisResultNotAvailable;
+    }
+
+    uint32_t            length = 0;
+    rocprofvis_result_t result =
+        rocprofvis_profiler_get_trace_path(m_profiler, nullptr, &length);
+    if(result != kRocProfVisResultSuccess || length == 0)
+    {
+        return result == kRocProfVisResultSuccess ? kRocProfVisResultNotAvailable : result;
+    }
+
+    std::vector<char> buffer(static_cast<size_t>(length) + 1, '\0');
+    result = rocprofvis_profiler_get_trace_path(m_profiler, buffer.data(), &length);
+    if(result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    out.assign(buffer.data(), length);
+    return kRocProfVisResultSuccess;
 }
 
 void

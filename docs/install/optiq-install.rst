@@ -384,13 +384,7 @@ Install
    :heading: Install using apt
    :heading-level: 3
 
-   1. Install system dependencies:
-
-      .. code-block:: shell
-
-         sudo apt install libgl1 libopengl0 libdbus-1-3
-
-   2. Register the ROCm Optiq repository:
+   1. Register the ROCm Optiq repository:
 
       .. code-block:: shell
 
@@ -409,14 +403,14 @@ Install
 
          sudo apt update
 
-   3. Install the ROCm Optiq package:
+   2. Install the ROCm Optiq package:
 
       .. code-block:: shell
 
          sudo apt install amdrocm10-roc-optiq
 
 
-   4. Complete the following post-installation steps:
+   3. Complete the following post-installation steps:
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
@@ -448,7 +442,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   5. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: shell
 
@@ -458,12 +452,7 @@ Install
    :heading: Install using apt
    :heading-level: 3
 
-   1. Install system dependencies:
-
-      .. code-block:: shell
-
-         sudo apt install libgl1 libopengl0 libdbus-1-3
-   2. Register the ROCm Optiq repository:
+   1. Register the ROCm Optiq repository:
 
       .. code-block:: shell
 
@@ -482,14 +471,14 @@ Install
 
          sudo apt update
 
-   3. Install the ROCm Optiq package:
+   2. Install the ROCm Optiq package:
 
       .. code-block:: shell
 
          sudo apt install amdrocm10-roc-optiq
 
 
-   4. Complete the following post-installation steps:
+   3. Complete the following post-installation steps:
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
@@ -521,7 +510,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   5. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: shell
 
@@ -531,13 +520,7 @@ Install
    :heading: Install using apt
    :heading-level: 3
 
-   1. Install system dependencies:
-
-      .. code-block:: shell
-
-         sudo apt install libgl1 libopengl0 libdbus-1-3
-
-   2. Register the ROCm Optiq repository:
+   1. Register the ROCm Optiq repository:
 
       .. code-block:: shell
 
@@ -556,14 +539,14 @@ Install
 
          sudo apt update
 
-   3. Install the ROCm Optiq package:
+   2. Install the ROCm Optiq package:
 
       .. code-block:: shell
 
          sudo apt install amdrocm10-roc-optiq
 
 
-   4. Complete the following post-installation steps:
+   3. Complete the following post-installation steps:
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
@@ -595,7 +578,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   5. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: shell
 
@@ -657,7 +640,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -719,7 +702,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -781,7 +764,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -843,7 +826,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -905,7 +888,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -967,7 +950,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   4. Verify your installation:
 
       .. code-block:: bash
 
@@ -988,7 +971,7 @@ Install
 
       .. code-block:: shell
 
-         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz
+         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz
 
 
    3. Extract the tarball:
@@ -998,14 +981,13 @@ Install
          # Set Optiq installation path
          OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
 
-         # Extract to the extras directory
+         # Extract to the set installation path
          mkdir -p $OPTIQ_INSTALL_PATH
-         tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=5
+         tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH
 
       .. note::
 
-         ``OPTIQ_INSTALL_PATH`` can be changed to your preferred location. For example, ``$HOME/roc-optiq``.
-
+         ``OPTIQ_INSTALL_PATH`` can be changed to your preferred location.
 
    4. Complete the following post-installation steps:
 
@@ -1037,6 +1019,10 @@ Install
 
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
+
+      .. note::
+
+         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in Step 3, use the same path in this step for ``OPTIQ_PATH``.
 
    5. Verify your installation:
 
@@ -1058,7 +1044,7 @@ Install
 
       .. code-block:: shell
 
-         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz
+         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz
 
 
    3. Extract the tarball:
@@ -1068,14 +1054,13 @@ Install
          # Set Optiq installation path
          OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
 
-         # Extract to the extras directory
+         # Extract to the set installation path
          mkdir -p $OPTIQ_INSTALL_PATH
-         tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=5
+         tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH
 
       .. note::
 
-         ``OPTIQ_INSTALL_PATH`` can be changed to your preferred location. For example, ``$HOME/roc-optiq``.
-
+         ``OPTIQ_INSTALL_PATH`` can be changed to your preferred location.
 
    4. Complete the following post-installation steps:
 
@@ -1107,6 +1092,10 @@ Install
 
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
+
+      .. note::
+
+         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in Step 3, use the same path in this step for ``OPTIQ_PATH``.
 
    5. Verify your installation:
 
@@ -1128,7 +1117,7 @@ Install
 
       .. code-block:: shell
 
-         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz
+         wget https://stable.repo.amd.com/rocm/extras/rocoptiq/tarball/amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz
 
 
    3. Extract the tarball:
@@ -1138,14 +1127,13 @@ Install
          # Set Optiq installation path
          OPTIQ_INSTALL_PATH="$HOME/roc-optiq"
 
-         # Extract to the extras directory
+         # Extract to the set installation path
          mkdir -p $OPTIQ_INSTALL_PATH
-         tar -xzf amdrocm10-roc-optiq-1.1.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH --strip-components=5
+         tar -xzf amdrocm10-roc-optiq-1.2.0.2-Linux.tar.gz -C $OPTIQ_INSTALL_PATH
 
       .. note::
 
-         ``OPTIQ_INSTALL_PATH`` can be changed to your preferred location. For example, ``$HOME/roc-optiq``.
-
+         ``OPTIQ_INSTALL_PATH`` can be changed to your preferred location.
 
    4. Complete the following post-installation steps:
 
@@ -1178,6 +1166,10 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
+      .. note::
+
+         If you have changed ``OPTIQ_INSTALL_PATH`` to your own preferred location in Step 3, use the same path in this step for ``OPTIQ_PATH``.
+
    5. Verify your installation:
 
       .. code-block:: shell
@@ -1186,9 +1178,9 @@ Install
 
 .. selected-content:: os=macos
 
-   1. Download the ``*-macos.zip`` of the latest ROCm Optiq release from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page.
-   2. Unzip it, then drag and drop ``roc-optiq.app`` from the extracted folder to the ``Applications`` folder.
-   3. Launch ROCm Optiq from **Applications**.
+   1. Download the ``amdrocm10-roc-optiq-*.dmg`` file for the latest ROCm Optiq release from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page.
+   2. Open the disk image, then drag and drop ``roc-optiq.app`` to the ``Applications`` folder.
+   3. Launch ROCm Optiq from ``Applications``.
 
    Settings, logs, and presets are stored at ``~/Library/Application Support/ROCm-Optiq/``.
 
@@ -1310,18 +1302,18 @@ Uninstall
    :heading: Uninstall tarball installation
    :heading-level: 3
 
-   1. Remove the installation directory:
+    1. Remove the installation directory:
    
-      .. important::
-         
-         The following command assumes you had set ``OPTIQ_INSTALL_PATH`` to ``$HOME/roc-optiq`` during installation. 
-         If you have chosen a different installation directory, remove it instead.
-
       .. code-block:: shell
 
          rm -rf "$HOME/roc-optiq"
 
       Then remove ``$HOME/roc-optiq/bin`` from your ``PATH`` variable.
+
+      .. important::
+         
+         The instructions above assume you had set ``OPTIQ_INSTALL_PATH`` to ``$HOME/roc-optiq`` during installation. 
+         If you used a different installation directory, delete that directory instead and remove it from your ``PATH`` variable.
 
    2. Remove ROCm Optiq environment configuration:
 

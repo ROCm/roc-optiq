@@ -3,6 +3,7 @@
 
 #pragma once
 #include "imgui.h"
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -207,10 +208,10 @@ ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_
               ImU32 text_color, const char* tooltip = nullptr,
               ImVec2 size = ImVec2(0.0f, 0.0f));
 
-// Remote download progress modal, shared by the SSH test dialog and the
+// Remote download progress modal, shared by the SSH file dialog and the
 // profiler launcher. The caller opens the popup (ImGui::OpenPopup) and owns
 // show, which is cleared once finished. A total of 0 renders "Starting...".
-void
+bool
 RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
                           uint64_t downloaded, uint64_t total, bool finished,
                           bool& show);
@@ -221,6 +222,14 @@ TableRowHeight();
 // Toast text shown after copying a single cell / a whole row to the clipboard.
 inline constexpr std::string_view COPY_DATA_NOTIFICATION     = "Cell data was copied";
 inline constexpr std::string_view COPY_ROW_DATA_NOTIFICATION = "Row data copied to clipboard";
+
+// An optional coloured byte range within single-line copyable text.
+struct TextColorRange
+{
+    size_t begin = 0;
+    size_t end   = 0;
+    ImU32  color = 0;
+};
 
 // Similar to ImGui::TextUnformatted(), but allows copying the text to the clipboard
 // via left-click or a context menu.
@@ -233,7 +242,8 @@ bool
 CopyableTextUnformatted(
     const char* text, std::string_view unique_id = "", std::string_view notification = "",
     bool one_click_copy = false, bool context_menu = false,
-    std::function<void(const char* value_to_copy)> menu_func = nullptr);
+    std::function<void(const char* value_to_copy)> menu_func   = nullptr,
+    const TextColorRange*                          color_range = nullptr);
 
 // Renders a selectable menu item with an icon (from the icon font) followed by a text label.
 // Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
@@ -246,6 +256,13 @@ IconMenuItem(const char* icon, const char* label, bool enabled = true,
 // Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.
 bool
 IconBeginMenu(const char* icon, const char* label);
+
+// Applies the standard padding and row colors around an arbitrary context popup.
+void
+PushContextMenuStyles();
+
+void
+PopContextMenuStyles();
 
 // Identifies the row/column of the cell whose right-click opened a table's copy
 // context menu. Reusable by any table that wants the shared full-row right-click

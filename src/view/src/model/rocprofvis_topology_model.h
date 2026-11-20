@@ -135,14 +135,23 @@ struct ProcessInfo : public TopologyNode
 {
     explicit ProcessInfo(uint64_t id)
     : TopologyNode(TopologyNodeType::kProcess, id)
+    , pid(0)
     , start_time(0.0)
     , end_time(0.0)
+    , display_index(0)
     {}
 
+    // OS process id, for display. GetId() is the topology id, which is not an OS
+    // pid for every source format.
+    uint64_t    pid;
     double      start_time;
     double      end_time;
     std::string command;
     std::string environment;
+    // 1-based rank across the whole trace: node rows in order, then ascending
+    // process id within a node. The track process decorator colors by it. Set
+    // by Finalize().
+    size_t display_index;
 };
 
 struct ThreadInfo : public TopologyNode
@@ -286,6 +295,18 @@ public:
     static const char* GetProcessorTypeName(
         rocprofvis_controller_processor_type_t processor_type);
 
+    // Number of GPU / CPU processors in the trace.
+    uint32_t GetGPUCount() const;
+    uint32_t GetCPUCount() const;
+    /*
+     * The product name with the most processors of that type, and those
+     * processors. nullptr when the trace has none of that type.
+     */
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+    GetMostNumerousGPU() const;
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+    GetMostNumerousCPU() const;
+
     void Clear();
 
     // Debug. Walks the whole tree, so only call it when the output is wanted.
@@ -309,7 +330,18 @@ private:
      * drifting away from the rows.
      */
     void OrderNodes();
+    /*
+     * Ranks processes without reordering them. Ranked by id rather than load
+     * order because multi-file traces load in parallel, so the load order can
+     * change between sessions.
+     */
+    void RankProcesses();
     void BuildTrackOrder();
+    /*
+     * Groups the GPUs and CPUs by product name and picks the most numerous of
+     * each. Walks the node rows in order, so a tie goes to the product seen first.
+     */
+    void CountProcessors();
 
     // The arena owns every node; all parent/child edges are non-owning.
     std::vector<std::unique_ptr<TopologyNode>>          m_storage;
@@ -324,6 +356,16 @@ private:
     std::unordered_map<uint64_t, ThreadInfo*>           m_sampled_thread_index;
     std::map<std::pair<uint64_t, uint64_t>, QueueInfo*> m_queue_index;
     std::unordered_map<uint64_t, TopologyNode*>         m_track_index;
+
+    // Processor counts...
+    std::unordered_map<std::string, std::vector<const ProcessorInfo*>> m_gpus;
+    uint32_t                                                           m_gpu_count;
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+        m_most_numerous_gpu;
+    std::unordered_map<std::string, std::vector<const ProcessorInfo*>> m_cpus;
+    uint32_t                                                           m_cpu_count;
+    const std::unordered_map<std::string, std::vector<const ProcessorInfo*>>::value_type*
+        m_most_numerous_cpu;
 };
 
 }  // namespace View

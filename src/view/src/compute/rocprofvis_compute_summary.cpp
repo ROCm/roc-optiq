@@ -722,9 +722,10 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                                std::optional<size_t>& hovered_idx)
 {
     (void) plot_style;
-    if(ImGui::BeginTable(
-           "Table", 2 + KernelInfo::NumMetrics,
-           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable))
+    if(ImGui::BeginTable("Table", 2 + KernelInfo::NumMetrics,
+                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders |
+                             ImGuiTableFlags_Resizable |
+                             ImGuiTableFlags_NoSavedSettings))
     {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("##legend",

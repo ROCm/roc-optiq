@@ -301,7 +301,8 @@ void rocprofvis_controller_table_free(rocprofvis_controller_table_t* table);
 
 Implementation: `new SystemTable`. Fetch remains
 `rocprofvis_controller_table_fetch_async` with the existing
-`kRPVControllerTableArgs*` (type, tracks, start/end, node / agent ids,
+`kRPVControllerTableArgs*` (type, tracks, start/end, node / agent /
+process / thread ids,
 filter, group, sort, page).
 
 Per-`use_case` mutex on `SystemTrace` **serializes** a script query
@@ -428,8 +429,13 @@ fetch), not a parallel-only event channel.
   selection or the full trace.
 - **Compute traces have no Script tab.** They have no `AnalysisView`,
   and `Track.events()` / `optiq.table()` are system-oriented anyway -
-  `run_analysis_script` already refuses a compute trace. Give
-  `ComputeView` its own tab when the compute bindings land, not before.
+  `optiq.table` tests positively for a system controller and refuses
+  anything else. Ask Optiq now reads compute traces, but
+  `run_analysis_script` is registered only in its system tool set and
+  the scripting paragraph is appended only to the system prompt, so a
+  compute turn is never told the tool exists rather than being allowed
+  to call it and fail. Give `ComputeView` its own tab when the compute
+  bindings land, not before.
 - Phase 2: page a script-owned table handle with `InfiniteScrollTable`
   using a **unique** request id (not `EVENT_TABLE_REQUEST_ID`).
 
@@ -707,7 +713,8 @@ and a release build does not require a system Python.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
 - ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and
   approval is why.** The table args have since lost `where` (the query
-  layer takes typed node / agent ids instead), so this now covers
+  layer takes typed node / agent / process / thread ids instead), so
+  this now covers
   `filter` and `group`. `Table.fetch` passes those strings to the table
   args untouched, while the assistant's own `BuildAssistantFilterExpression`
   whitelists columns, quotes literals and escapes `LIKE` wildcards,

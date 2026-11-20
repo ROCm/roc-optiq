@@ -31,6 +31,7 @@ constexpr ImWchar icon_ranges[] = {
     0xE270, 0xE270,
     0xE280, 0xE280,
     0xE2C2, 0xE2C2,
+    0xE2CE, 0xE2CE,
     0xE2E2, 0xE2E2,
     0xE2F0, 0xE2F0,
     0xE2FA, 0xE2FA,
@@ -42,6 +43,7 @@ constexpr ImWchar icon_ranges[] = {
     0xE3B4, 0xE3B4,
     0xE3D4, 0xE3D4,
     0xE3E2, 0xE3E2,
+    0xE3E8, 0xE3E8,
     0xE434, 0xE434,
     0xE4A6, 0xE4A6,
     0xE4F6, 0xE4F6,
@@ -66,10 +68,12 @@ inline constexpr const char* ICON_X_CIRCLED     = u8"\uE4F8";
 inline constexpr const char* ICON_DOCUMENT      = u8"\uE23A";
 inline constexpr const char* ICON_FOLDER        = u8"\uE24A";
 inline constexpr const char* ICON_HOME          = u8"\uE2C2";
+inline constexpr const char* ICON_INFORMATION   = u8"\uE2CE";
 inline constexpr const char* ICON_LOCKED        = u8"\uE2FA";
 inline constexpr const char* ICON_UNLOCKED      = u8"\uE306";
 inline constexpr const char* ICON_EYE           = u8"\uE220";
 inline constexpr const char* ICON_GEAR          = u8"\uE270";
+inline constexpr const char* ICON_QUESTION_MARK = u8"\uE3E8";
 inline constexpr const char* ICON_CHAIN         = u8"\uE2E2";
 inline constexpr const char* ICON_ELLIPSIS      = u8"\uE434";
 inline constexpr const char* ICON_ADD_NOTE      = u8"\uE34C";

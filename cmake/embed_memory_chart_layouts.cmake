@@ -8,7 +8,7 @@
 #
 # Every "<key>.json" in MEMCHART_DIR (except *schema* files) becomes a string
 # literal `kMemChartLayout_<key>` plus a row in `kMemChartEmbeddedLayouts`.
-# The runtime picks a layout by GPU-arch key with a "default" fallback.
+# The runtime picks a layout by GPU-arch key. An unknown architecture is N/A.
 
 if(NOT DEFINED MEMCHART_DIR OR NOT DEFINED MEMCHART_OUT)
     message(FATAL_ERROR "embed_memory_chart_layouts: MEMCHART_DIR and MEMCHART_OUT must be set")

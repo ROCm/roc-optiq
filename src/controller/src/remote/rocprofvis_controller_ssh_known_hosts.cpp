@@ -27,6 +27,8 @@ namespace
 {
 
 constexpr int SSH_DEFAULT_PORT = 22;
+// What libssh2_knownhost_checkp takes as "no port".
+constexpr int KNOWNHOST_NO_PORT = -1;
 
 std::string DefaultHomePath()
 {
@@ -74,21 +76,28 @@ std::string Base64Encode(const unsigned char* data, size_t n)
     return out;
 }
 
-// Looks `name` up exactly as written. Port -1 keeps libssh2 from also trying
+// Looks `name` up exactly as written. Given no port, libssh2 does not also try
 // "[name]:port" and then the bare name, which is how a key for one port ends
 // up judged against the entry for another.
 KnownHostMatch CheckName(LIBSSH2_KNOWNHOSTS* known_hosts, const std::string& name,
                          const char* key, size_t key_len, int type_mask)
 {
     KnownHostMatch result = KnownHostMatch::Failure;
-    int rc = libssh2_knownhost_checkp(known_hosts, name.c_str(), -1, key, key_len,
-                                      type_mask, nullptr);
+    int rc = libssh2_knownhost_checkp(known_hosts, name.c_str(), KNOWNHOST_NO_PORT, key,
+                                      key_len, type_mask, nullptr);
     switch(rc)
     {
-        case LIBSSH2_KNOWNHOST_CHECK_MATCH:    result = KnownHostMatch::Match; break;
-        case LIBSSH2_KNOWNHOST_CHECK_MISMATCH: result = KnownHostMatch::Mismatch; break;
-        case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND: result = KnownHostMatch::NotFound; break;
-        default:                               break;
+        case LIBSSH2_KNOWNHOST_CHECK_MATCH:
+            result = KnownHostMatch::Match;
+            break;
+        case LIBSSH2_KNOWNHOST_CHECK_MISMATCH:
+            result = KnownHostMatch::Mismatch;
+            break;
+        case LIBSSH2_KNOWNHOST_CHECK_NOTFOUND:
+            result = KnownHostMatch::NotFound;
+            break;
+        default:
+            break;
     }
     return result;
 }
@@ -151,7 +160,10 @@ bool KnownHosts::Load()
     if(!m_kh || m_path.empty()) return false;
 
     std::ifstream file(m_path, std::ios::binary);
-    if(!file.is_open()) return false;
+    if(!file.is_open())
+    {
+        return false;
+    }
 
     // Line by line rather than libssh2_knownhost_readfile, which stops at the
     // first line it cannot parse. Every entry after such a line would then be
@@ -253,7 +265,10 @@ bool KnownHosts::Add(const std::string& host, int port)
 
 bool KnownHosts::Save() const
 {
-    if (!m_kh || !m_added || m_path.empty()) return false;
+    if (!m_kh || !m_added || m_path.empty())
+    {
+        return false;
+    }
 
     // libssh2 writes nothing into a buffer that is too small but still reports
     // the length it needs, so the first call only sizes the line.

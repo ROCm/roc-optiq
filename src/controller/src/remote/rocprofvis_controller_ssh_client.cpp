@@ -920,7 +920,10 @@ namespace Controller
                 {
                     // The slot is per session, and this is a new one.
                     abstract = libssh2_session_abstract(connection->GetSession());
-                    if(abstract) *abstract = kbd_ctx.get();
+                    if(abstract)
+                    {
+                        *abstract = kbd_ctx.get();
+                    }
                     auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), u.c_str(),
                         &KbdIntCallback);
                 }
@@ -1665,12 +1668,14 @@ namespace Controller
         return false;
     }
 
-    void SshConnection::Disconnect() {
+    void SshConnection::Disconnect()
+    {
         m_net_bridge.Cancel();
         CloseTransport();
     }
 
-    void SshConnection::CloseTransport() {
+    void SshConnection::CloseTransport()
+    {
         if (m_session)
         {
             libssh2_session_disconnect(m_session, "Normal Shutdown");

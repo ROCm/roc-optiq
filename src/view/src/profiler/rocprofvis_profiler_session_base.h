@@ -48,6 +48,10 @@ struct ProfilerLaunchSpec
     // working directory. Only the child is affected.
     std::string working_directory;
 
+    // Selects the controller's scrape rules with `tool`. Captured at launch so
+    // a later edit of the dialog does not change how this run's output is read.
+    rocprofvis_profiler_operation_t operation = kRPVProfilerOperationDefault;
+
     // The complete argument list following argv[0], as emitted by
     // IProfilerBackend::FlattenToExecution. Each entry becomes one argv entry
     // verbatim - no whitespace splitting, no shell interpretation.
@@ -86,6 +90,12 @@ public:
 
     virtual rocprofvis_profiler_state_t GetState() const;
     virtual std::string                 GetOutput();
+
+    // Trace file the controller scraped for this run. Success fills `out`.
+    // NotSupported means the run does not produce a trace file. NotAvailable
+    // means one was expected and could not be read. `out` is left untouched
+    // unless the result is Success.
+    rocprofvis_result_t GetTraceFilePath(std::string& out) const;
     void                                ClearOutput();
     int32_t                             GetExitCode() const;
 

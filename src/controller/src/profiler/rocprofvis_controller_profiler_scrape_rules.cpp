@@ -39,10 +39,6 @@ struct RuleRow
 // the directory is the whole artifact.
 constexpr RuleRow kComputeCapture[] = {
     {kKeyWorkloadDir, R"(Output directory:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
-    // Progress is two values off one line, and rules are flat, so the pattern
-    // appears twice with different groups. Compiling it twice is negligible.
-    {kKeyRunIndex, R"(\[Run\s+(\d+)/(\d+)\])", 1, ScrapePolicy::kLastMatch},
-    {kKeyRunTotal, R"(\[Run\s+(\d+)/(\d+)\])", 2, ScrapePolicy::kLastMatch},
 };
 
 // rocprof-compute analyze. "Created file:" carries a bare filename written
@@ -51,16 +47,15 @@ constexpr RuleRow kComputeAnalyze[] = {
     {kKeyAnalysisDb, R"(Created file:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
 };
 
-// rocprof-sys run and sample. Last match wins within a row: the tool names the
-// database again when it finalizes, and the earlier mentions can be other
-// files.
+// rocprof-sys run, sample, and runtime instrument. Last match wins within a
+// row: the tool names the database again when it finalizes, and the earlier
+// mentions can be other files.
 //
-// Row order is the preference order, and it is the same one the View's
-// ParseTraceOutputPath documents, so the two readers cannot pick different
-// files off the same log: the "Database:" log line first, then the Output
-// Summary box's "File:", then a bare-token sweep for a tool that labels
-// neither. Collapsing the first two into one alternation would let a later
-// summary line outrank the database line, which is the disagreement.
+// Row order is the preference order, and it is the only reader of this log:
+// the "Database:" log line first, then the Output Summary box's "File:", then
+// a bare-token sweep for a tool that labels neither. Collapsing the first two
+// into one alternation would let a later summary line outrank the database
+// line.
 constexpr RuleRow kRocprofSysTrace[] = {
     {kKeyTraceDb, R"(Database:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
     {kKeyTraceDb, R"(File:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
@@ -95,9 +90,14 @@ constexpr RuleSet kRuleSets[] = {
      kRocprofSysTrace, std::size(kRocprofSysTrace)},
     {kRPVProfilerToolRocprofSysSample, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
      kRocprofSysTrace, std::size(kRocprofSysTrace)},
-    // rocprof-sys-instrument writes an instrumented binary whose path is not
-    // yet scraped, rocprof-sys-avail is a probe, and rocprofv3 is not wired up.
-    // All three run for their exit code and are absent on purpose.
+    // Runtime instrumentation runs the target under the same runtime as run,
+    // so it writes and reports the same database. With -o it rewrites the
+    // binary and exits instead; the trace is then unmatched, and the launcher
+    // is the one that knows not to expect it.
+    {kRPVProfilerToolRocprofSysInstrument, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
+     kRocprofSysTrace, std::size(kRocprofSysTrace)},
+    // rocprof-sys-avail is a probe and rocprofv3 is not wired up. Both run for
+    // their exit code and are absent on purpose.
 };
 
 bool version_at_least(RuleSet const& set, uint32_t major, uint32_t minor, uint32_t patch)

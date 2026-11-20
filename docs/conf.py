@@ -13,23 +13,12 @@ flavor options: rocm, rocm-docs-home, rocm-blogs, rocm-ds, instinct, ai-develope
 '''
 html_theme = "rocm_docs_theme"
 html_theme_options = {
-    "flavor": "generic",
-    "header_title": "ROCm™ Optiq 1.1.0",
+    "flavor": "rocm-extras",
+    "header_title": "ROCm™ Optiq 1.2.0",
     "header_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/",
-    "version_list_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/release.html",
-    "nav_secondary_items": {
-        "GitHub": "https://github.com/ROCm/roc-optiq",
-        "Community": "https://github.com/ROCm/roc-optiq/discussions",
-        "Blogs": "https://rocm.blogs.amd.com/",
-        "ROCm Developer Hub": "https://www.amd.com/en/developer/resources/rocm-hub.html",
-        "Instinct™ Docs": "https://instinct.docs.amd.com/",
-        "Infinity Hub": "https://www.amd.com/en/developer/resources/infinity-hub.html",
-        "Support": "https://github.com/ROCm/roc-optiq/issues/new/choose",
-    },
-    "link_main_doc": False,
-
+    "version_list_link": "https://rocm.docs.amd.com/projects/roc-optiq/en/latest/release.html/versions.html",
+    "link_main_doc": True,
 }
-
 
 # This section turns on/off article info
 setting_all_article_info = False
@@ -43,7 +32,7 @@ setting_all_article_info = False
 #                      f.read())
 #    if not match:
 #        raise ValueError("VERSION not found!")
-version_number = "1.1.0"
+version_number = "1.2.0"
 
 # for PDF output on Read the Docs
 project = "ROCm Optiq"
@@ -74,3 +63,4 @@ extensions = [
 html_title = f"{project} {version_number} documentation"
 
 external_projects_current_project = "ROCm™ Optiq"
+external_projects_remote_repository=""

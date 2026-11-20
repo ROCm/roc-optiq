@@ -4,6 +4,7 @@
 #include "rocprofvis_compare_panes.h"
 #include "model/rocprofvis_model_types.h"
 #include "model/rocprofvis_trace_data_model.h"
+#include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_track_item.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -27,6 +28,17 @@ constexpr float PANE_MIN_WIDTH    = 280.0f;
 constexpr float BADGE_GAP_FACTOR = 2.0f;
 // Width of the tooltip shown when a source name has to be elided.
 constexpr float NAME_TOOLTIP_GLYPHS = 24.0f;
+
+static_assert(COMPARE_CLIENT_ID[COMPARE_SOURCE_A] != DataProvider::ASSISTANT_CLIENT_ID &&
+                  COMPARE_CLIENT_ID[COMPARE_SOURCE_B] !=
+                      DataProvider::ASSISTANT_CLIENT_ID,
+              "The compare panes and Ask Optiq read the same table request types, so "
+              "they need different client ids.");
+static_assert(COMPARE_CLIENT_ID[COMPARE_SOURCE_A] <
+                      RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID &&
+                  COMPARE_CLIENT_ID[COMPARE_SOURCE_B] <
+                      RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID,
+              "Compare client ids must stay in the reserved band.");
 
 bool
 IsCompareTrace(const TraceDataModel& model)

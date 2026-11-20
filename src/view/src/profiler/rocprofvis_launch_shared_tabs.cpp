@@ -387,11 +387,27 @@ RenderTargetArgumentsRow(std::string& arguments, float label_w)
 }
 
 bool
-RenderTargetAutoLoadRow(bool& auto_load_trace)
+RenderTargetAutoLoadRow(bool& auto_load_trace, bool enabled, char const* disabled_reason)
 {
     ImGui::Spacing();
-    return ImGui::Checkbox("Open the trace automatically when profiling finishes",
-                           &auto_load_trace);
+    // Drawn from a copy so a disabled row shows unchecked without discarding
+    // the user's choice for when it is enabled again.
+    bool shown   = enabled && auto_load_trace;
+    bool changed = false;
+    ImGui::BeginDisabled(!enabled);
+    if(ImGui::Checkbox("Open the trace automatically when profiling finishes", &shown) &&
+       enabled)
+    {
+        auto_load_trace = shown;
+        changed         = true;
+    }
+    ImGui::EndDisabled();
+    if(!enabled && disabled_reason != nullptr &&
+       ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    {
+        ImGui::SetTooltip("%s", disabled_reason);
+    }
+    return changed;
 }
 
 // The tools folder and Python venv rows sit together, so they share a label

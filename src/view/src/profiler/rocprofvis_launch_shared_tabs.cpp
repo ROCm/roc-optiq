@@ -5,6 +5,7 @@
 #include "../icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_gfx_utils.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_font_manager.h"
@@ -46,16 +47,6 @@ void LaunchHelpTooltip(const char* text)
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
-}
-
-// Linear blend between two packed colors (t in [0,1]).
-ImU32 LerpColor(ImU32 a, ImU32 b, float t)
-{
-    ImVec4 av = ImGui::ColorConvertU32ToFloat4(a);
-    ImVec4 bv = ImGui::ColorConvertU32ToFloat4(b);
-    ImVec4 cv(av.x + (bv.x - av.x) * t, av.y + (bv.y - av.y) * t,
-              av.z + (bv.z - av.z) * t, av.w + (bv.w - av.w) * t);
-    return ImGui::ColorConvertFloat4ToU32(cv);
 }
 
 } // namespace
@@ -264,7 +255,7 @@ bool ToggleSwitch(const char* label, bool* value)
 
     ImU32 off_col = settings.GetColor(Colors::kBorderGray);
     ImU32 on_col  = settings.GetColor(hovered ? Colors::kAccentHover : Colors::kAccent);
-    ImU32 bar_col = LerpColor(off_col, on_col, t);
+    ImU32 bar_col = GfxUtils::LerpColor(off_col, on_col, t);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     dl->AddRectFilled(bar_min, bar_max, bar_col, radius);

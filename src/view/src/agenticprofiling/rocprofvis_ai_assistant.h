@@ -184,6 +184,8 @@ private:
     // after a turn.
     void RenderSuggestedActions();
     void RenderSplitter();
+    // The panel width drawn: the dragged width, within what the window can spare.
+    float DockWidth() const;
     // Transient progress text, kept outside the transcript so it disappears
     // with the spinner when the turn ends.
     void SetStatus(const std::string& text);

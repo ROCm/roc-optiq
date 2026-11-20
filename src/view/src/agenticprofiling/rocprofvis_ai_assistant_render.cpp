@@ -357,6 +357,14 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
         return;
     }
 
+    // A linked trace that was closed and opened again has no minimap until it
+    // has loaded, which is not the same as having no activity.
+    if(context.data_provider->GetState() == ProviderState::kLoading)
+    {
+        ImGui::TextDisabled("This chart's trace is still loading.");
+        return;
+    }
+
     // Bin count follows the column width, so bars stay legible when the dock is
     // dragged narrow.
     const float  avail_width = ImGui::GetContentRegionAvail().x;

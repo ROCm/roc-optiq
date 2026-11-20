@@ -18,22 +18,53 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
+#include <thread>
+#include <vector>
 
 // Tests for the parts of the SSH stack that decide what is trusted and what is
-// sent, and that need no server to exercise: how long a host, path or secret
-// may be before the C ABI mangles it, and what a "trust this host" answer
-// writes to the user's known_hosts file.
+// sent, and that need no server to exercise: how long a host or a prompt
+// answer may be before the C ABI mangles it, and what a "trust this host"
+// answer writes to the user's known_hosts file.
 
 using RocProfVis::Controller::AppendKnownHostLine;
 using RocProfVis::Controller::KnownHostName;
+using RocProfVis::Controller::PromptItem;
+using RocProfVis::Controller::PromptRequest;
 using RocProfVis::Controller::SshConnection;
 
 namespace
 {
+
+// How long a test waits on a worker blocked at a prompt before giving up on
+// it, and how often it looks.
+constexpr std::chrono::seconds      PROMPT_WAIT(10);
+constexpr std::chrono::milliseconds PROMPT_POLL_INTERVAL(1);
+
+// Waits until the connection has a prompt waiting for an answer (`pending`
+// true) or no longer has one (false). False if the wait ran out first.
+bool wait_for_prompt(rocprofvis_handle_t* connection, bool pending)
+{
+    std::chrono::steady_clock::time_point const deadline =
+        std::chrono::steady_clock::now() + PROMPT_WAIT;
+    bool matched = false;
+    while(!matched && std::chrono::steady_clock::now() < deadline)
+    {
+        uint64_t status = kRPVControllerSshIdle;
+        rocprofvis_controller_get_uint64(connection, kRPVControllerRemoteStatus, 0, &status);
+        matched = (status == kRPVControllerSshAuthRequest) == pending;
+        if(!matched)
+        {
+            std::this_thread::sleep_for(PROMPT_POLL_INTERVAL);
+        }
+    }
+    return matched;
+}
 
 // A scratch folder that is removed again, standing in for the user's ~/.ssh.
 class ScratchFolder
@@ -110,6 +141,68 @@ TEST_CASE("A host name longer than a fixed buffer reaches the connection whole",
 
     CHECK(rocprofvis_controller_ssh_connection_free(handle) == kRocProfVisResultSuccess);
     rocprofvis_controller_array_free(output);
+    rocprofvis_controller_arguments_free(args);
+}
+
+TEST_CASE("A prompt answer longer than a fixed buffer reaches the waiting worker whole",
+          "[remote][abi]")
+{
+    // What the user types at a password or one-time-code prompt crosses the C
+    // ABI as a string argument too. Cut short and left unterminated, it would
+    // be sent to the server with whatever followed it in memory.
+    std::string const answer(300, 'p');
+
+    rocprofvis_controller_arguments_t* args      = rocprofvis_controller_arguments_alloc();
+    rocprofvis_controller_arguments_t* responses = rocprofvis_controller_arguments_alloc();
+    rocprofvis_controller_array_t*     output    = rocprofvis_controller_array_alloc(1);
+    REQUIRE(args != nullptr);
+    REQUIRE(responses != nullptr);
+    REQUIRE(output != nullptr);
+    REQUIRE(rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeHost, 0,
+                                             "gpu-node.example.com") == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_set_uint64(responses, kRPVControllerUserNumResponses, 0, 1) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_set_string(responses, kRPVControllerUserResponseIndexed, 0,
+                                             answer.c_str()) == kRocProfVisResultSuccess);
+
+    rocprofvis_handle_t* handle = nullptr;
+    REQUIRE(rocprofvis_controller_ssh_connection_alloc(args, output) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_get_object(output, kRPVControllerArrayEntryIndexed, 0, &handle) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(handle != nullptr);
+    SshConnection* connection = reinterpret_cast<SshConnection*>(handle);
+
+    // The worker's side of a prompt: blocked until the UI answers or cancels.
+    PromptItem prompt;
+    prompt.text = "Password: ";
+    prompt.echo = false;
+    PromptRequest request;
+    request.prompts.push_back(prompt);
+    std::optional<std::vector<std::string>> received;
+    std::thread worker([&]() { received = connection->GetSshBridge()->AskPrompts(request); });
+
+    // No REQUIRE until the worker is joined: leaving this scope while it runs
+    // would end the test binary. A worker that never got its answer is let go
+    // by cancelling the prompt.
+    bool const                asked     = wait_for_prompt(handle, true);
+    rocprofvis_result_t const submitted =
+        asked ? rocprofvis_controller_remote_submit_responses(handle, responses)
+              : kRocProfVisResultUnknownError;
+    if(!asked || !wait_for_prompt(handle, false))
+    {
+        rocprofvis_controller_remote_cancel_prompt(handle);
+    }
+    worker.join();
+
+    CHECK(asked);
+    CHECK(submitted == kRocProfVisResultSuccess);
+    REQUIRE(received.has_value());
+    REQUIRE(received->size() == 1);
+    CHECK(received->front() == answer);
+
+    CHECK(rocprofvis_controller_ssh_connection_free(handle) == kRocProfVisResultSuccess);
+    rocprofvis_controller_array_free(output);
+    rocprofvis_controller_arguments_free(responses);
     rocprofvis_controller_arguments_free(args);
 }
 

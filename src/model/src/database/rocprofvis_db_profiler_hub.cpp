@@ -2901,8 +2901,6 @@ ProfilerHub::SummarizeNameDurations(
         std::vector<rocprofvis_db_name_duration_t> cached_rows;
         if(SummaryCacheFind(cache_directory, cache_key, cached_rows))
         {
-            spdlog::info("ProfilerHub::SummarizeNameDurations cache hit query={}",
-                         request.query);
             MergeNameDurations(groups, cached_rows);
             continue;
         }
@@ -2946,9 +2944,6 @@ ProfilerHub::SummarizeNameDurations(
                 if(end <= UINT64_MAX - origin) end += origin;
             }
         }
-        spdlog::info(
-            "ProfilerHub::SummarizeNameDurations has_time={} start={} end={} query={}",
-            has_time, start, end, request.query);
         if((search_query && (!by_operation || filters.size() == 0)) ||
            (!search_query && !by_operation && (!tracks_selected || tracks.size() != 1)))
         {

@@ -234,19 +234,19 @@ TEST_CASE_METHOD(SummaryFailureFixture, "Summary accepts populated and empty tim
 {
     Initialize();
     bool empty = false;
+    SECTION("Populated range") {}
     SECTION("Empty range")
     {
         start = end + 1;
         end   = start + 1;
         empty = true;
     }
-    SECTION("Populated range") {}
     CHECK(Fetch() == kRocProfVisResultSuccess);
     CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel) ==
           kRPVAnalysisSummaryAggregationLevelTrace);
     const uint64_t memory_events =
         Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
-    WARN(DescribeMemoryEvents(memory_events));
+    INFO(DescribeMemoryEvents(memory_events));
     if(empty)
     {
         CHECK(memory_events == 0);

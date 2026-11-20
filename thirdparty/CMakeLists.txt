@@ -296,6 +296,12 @@ add_library(json STATIC
 )
 target_link_libraries(json PRIVATE double-conversion)
 target_include_directories(json PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp)
+if(MSVC)
+    # jtckdint.h picks a 32-bit __ckd_intmax (long) unless __cplusplus reports the
+    # real standard. Without this flag the parser's overflow check fails for any
+    # integer above 2^31 and silently parses it as a double.
+    target_compile_options(json PRIVATE /Zc:__cplusplus)
+endif()
 
 add_executable(imgui_binary_to_compressed_c
 	imgui/misc/fonts/binary_to_compressed_c.cpp

@@ -2886,7 +2886,9 @@ Rules that are easy to get wrong here:
   the next send or Clear in that conversation, closing that trace, and
   another answer's follow-up request abandon it through `m_abandoned`
   like a turn's request, and a reply lands only in a conversation that
-  still exists. A failure costs only the buttons, never a transcript
+  still exists. The tokens it reports are added to that conversation's
+  totals in the header pill, without replacing the last reply's figures.
+  A failure costs only the buttons, never a transcript
   line. Do not turn them back into a tool: a tool
   the model calls last spends a whole round before the answer, and the
   user waits through it with nothing to read. `ParseNextSteps` takes one

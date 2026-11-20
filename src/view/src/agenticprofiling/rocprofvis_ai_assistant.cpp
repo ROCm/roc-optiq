@@ -712,14 +712,6 @@ AssistantPanel::PollNextStepsRequest()
     m_steps_call.reset();
     m_steps_project_id.clear();
 
-    // The buttons are a convenience, so a failed request costs only them - never
-    // a line in the transcript or a notification.
-    if(!result.ok)
-    {
-        spdlog::warn("Assistant follow-up request failed: {}", result.error);
-        return;
-    }
-    spdlog::debug("Assistant follow-ups:\n{}", result.reply);
     // Looked up rather than created: a conversation that went with its trace
     // must not come back holding only these buttons.
     const std::unordered_map<std::string, std::unique_ptr<Conversation>>::iterator
@@ -729,7 +721,25 @@ AssistantPanel::PollNextStepsRequest()
         return;
     }
     Conversation& conversation = *owner->second;
-    conversation.next_steps    = ParseNextSteps(result.reply, MAX_NEXT_STEPS);
+    // Billed like any other request, failed or not, so it counts toward the
+    // conversation's totals. The last reply stays the answer the user read.
+    if(result.has_usage)
+    {
+        conversation.usage_reported             = true;
+        conversation.session_prompt_tokens     += result.prompt_tokens;
+        conversation.session_completion_tokens += result.completion_tokens;
+        ++conversation.session_rounds;
+    }
+
+    // The buttons are a convenience, so a failed request costs only them - never
+    // a line in the transcript or a notification.
+    if(!result.ok)
+    {
+        spdlog::warn("Assistant follow-up request failed: {}", result.error);
+        return;
+    }
+    spdlog::debug("Assistant follow-ups:\n{}", result.reply);
+    conversation.next_steps = ParseNextSteps(result.reply, MAX_NEXT_STEPS);
     if(!conversation.next_steps.empty() && m_transcript_at_bottom &&
        project_id == m_view_project_id)
     {

@@ -107,6 +107,7 @@ AssistantPanel::DestroyInstance()
 
 AssistantPanel::AssistantPanel()
 : m_visible(false)
+, m_focus_input(false)
 , m_dock_width(ASSISTANT_DEFAULT_WIDTH)
 , m_phase(Phase::kIdle)
 , m_composer_height(0.0f)

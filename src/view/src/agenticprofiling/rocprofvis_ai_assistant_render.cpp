@@ -1413,8 +1413,12 @@ AssistantPanel::RenderSuggestedActions()
 
     if(clicked >= 0)
     {
-        conversation.input = conversation.next_steps[static_cast<size_t>(clicked)];
+        // A question the user was part way through typing stays in the box.
+        const std::string draft = conversation.input;
+        conversation.input      = conversation.next_steps[static_cast<size_t>(clicked)];
         SendCurrentInput(false);
+        conversation.input = draft;
+        m_focus_input      = true;
     }
 
     ImGui::Spacing();
@@ -1614,10 +1618,24 @@ AssistantPanel::RenderComposer()
                      gap * ASSISTANT_COMPOSER_GAP_COUNT);
 
     ImGui::SetNextItemWidth(input_width);
+    // A focused text item suppresses hotkeys. The box is read-only while a turn
+    // is running or the trace cannot be asked about, so hold the request until
+    // it can take keys again. A turn can run for minutes, and by then the user
+    // may be typing in a search box or a dialog, so the caret goes back only
+    // while keyboard focus is still in this card, where the send left it.
+    if(m_focus_input && !Busy() && can_ask)
+    {
+        if(ImGui::IsWindowFocused())
+        {
+            ImGui::SetKeyboardFocusHere();
+        }
+        m_focus_input = false;
+    }
     InputTextStringWithHint("##assistant_input", hint.c_str(), conversation.input,
                             input_flags);
     const bool submitted = ImGui::IsItemFocused() &&
-                           ImGui::IsKeyPressed(ImGuiKey_Enter) &&
+                           (ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) &&
                            !ImGui::GetIO().KeyShift && !Busy() && can_ask;
 
     ImGui::SameLine(0.0f, gap);
@@ -1671,6 +1689,7 @@ AssistantPanel::RenderComposer()
     if(send || submitted)
     {
         SendCurrentInput(false);
+        m_focus_input = true;
     }
 }
 

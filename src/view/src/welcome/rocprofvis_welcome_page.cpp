@@ -184,7 +184,8 @@ constexpr WelcomeTip kWelcomeTips[] = {
       "With a time range selected, Edit > Save Trace Selection writes just that range to "
       "a smaller trace that opens faster." },
     { "Search",
-      "Search for several names at once by quoting each one, like \"gemm\"\"memcpy\"." },
+      "Quote each term to search for several at once, like \"hip\"\"kernel\". Events "
+      "must match all of them unless you choose OR under Advanced." },
     { "Tables",
       "Right-click a column header to hide columns or size them to fit." },
     { "Projects",

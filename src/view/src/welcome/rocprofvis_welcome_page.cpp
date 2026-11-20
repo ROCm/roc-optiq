@@ -213,8 +213,8 @@ constexpr WelcomeTip kWelcomeTips[] = {
       "Right-click a row in the Event Table or Top Events and choose Export To File to "
       "save it as CSV." },
     { "Tracks",
-      "Track Options applies to every selected track at once. Compact Mode fits tall "
-      "flame graphs into less space." },
+      "In Track Options, choose Selected Track(s) to change every selected track at "
+      "once. Compact Mode fits tall flame graphs into less space." },
     { "Counters",
       "Click the min or max value beside a counter track to set its scale, and the reset "
       "button to put it back." },

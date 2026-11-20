@@ -4,9 +4,18 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ## ROCm Optiq 1.3.0 (unreleased)
 
+### Added
+
+#### Features and improvements
+
+##### Timeline and navigation
+
+- Clicking a track's name in the topology sidebar now also scrolls the timeline to that track. **Ctrl**+click and **Shift**+click still only change the selection.
+
 ### Resolved issues
 
 - Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
+- Fixed sampled counter tracks sharing one label. ROCm Systems Profiler stores a sampled thread counter's category, such as `thread_hardware_counter` or `thread_cpu_time`, as its symbol, so all network counters, and each per-thread metric, showed the same name. Counters that share a symbol within an agent and process are now labeled by counter name.
 
 ## ROCm Optiq 1.2.0
 

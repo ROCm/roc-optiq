@@ -2963,6 +2963,85 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(still_missing);
     };
 
+    // AIPROFVIS-651: an event or sample spanning a chunk boundary comes back in both
+    // chunks, and only one copy may be kept. The sample trace fits in one 30 s chunk,
+    // so each track is refetched in many small chunks to put boundaries inside it.
+    t = IM_REGISTER_TEST(e, "app", "sys_track_chunk_boundary_dedup");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+
+        constexpr double kChunks = 64.0;
+        constexpr float  kWidth  = 100000.0f;
+
+        size_t event_tracks  = 0;
+        size_t sample_tracks = 0;
+        size_t duplicates    = 0;
+        for (TrackItem* track : TimelineViewTestPeer{*tlv}.DisplayedTracks())
+        {
+            const RawTrackData* before = tlm.GetTrackData(track->GetID());
+            if (before == nullptr || !track->AllDataReady() || track->HasPendingRequests())
+                continue;
+            const double   start_ts    = before->GetStartTs();
+            const double   end_ts      = before->GetEndTs();
+            const uint64_t prior_group = before->GetDataGroupID();
+            if (end_ts <= start_ts) continue;
+
+            TrackItemTestPeer peer{*track};
+            const uint64_t    orig_chunk = peer.ChunkDuration();
+            peer.SetChunkDuration(
+                std::max<uint64_t>(1, static_cast<uint64_t>((end_ts - start_ts) / kChunks)));
+            track->RequestData(start_ts, end_ts, kWidth);
+
+            const RawTrackData* after = nullptr;
+            for (int i = 0; i < 600; i++)
+            {
+                ctx->Yield();
+                after = tlm.GetTrackData(track->GetID());
+                if (after && after->GetDataGroupID() != prior_group &&
+                    !track->HasPendingRequests() && track->AllDataReady())
+                    break;
+                after = nullptr;
+            }
+            peer.SetChunkDuration(orig_chunk);
+            IM_CHECK(after != nullptr);
+            if (after == nullptr) break;
+
+            if (const RawTrackEventData* events = dynamic_cast<const RawTrackEventData*>(after))
+            {
+                std::unordered_set<uint64_t> ids;
+                for (const TraceEvent& event : events->GetData())
+                    if (!ids.insert(event.m_id.uuid).second) duplicates++;
+                if (!events->GetData().empty()) event_tracks++;
+            }
+            else if (const RawTrackSampleData* samples =
+                         dynamic_cast<const RawTrackSampleData*>(after))
+            {
+                std::unordered_set<double> timestamps;
+                for (const TraceCounter& sample : samples->GetData())
+                    if (!timestamps.insert(sample.m_start_ts).second) duplicates++;
+                if (!samples->GetData().empty()) sample_tracks++;
+            }
+
+            // Drop the small-chunk data so the timeline refetches it normally.
+            track->ReleaseData();
+        }
+        ctx->Yield(5);
+
+        ctx->LogInfo("Checked %zu event and %zu sample tracks, %zu duplicates",
+                     event_tracks, sample_tracks, duplicates);
+        IM_CHECK(event_tracks > 0);
+        IM_CHECK(duplicates == 0);
+    };
+
     // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
     // Presence/shape only -- the args come back asynchronously through the
     // controller, with no single table to build a value oracle from.

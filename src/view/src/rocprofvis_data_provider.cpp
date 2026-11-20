@@ -4487,7 +4487,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     std::vector<TraceCounter> buffer;
     buffer.reserve(count);
 
-    std::unordered_set              timepoint_set = raw_sample_data->GetWritableIdSet();
+    std::unordered_set<double>&     timepoint_set = raw_sample_data->GetWritableIdSet();
     rocprofvis_controller_sample_t* sample        = nullptr;
     for(uint64_t i = 0; i < count; i++)
     {
@@ -4612,7 +4612,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     std::vector<TraceEvent> buffer;
     buffer.reserve(count);
 
-    std::unordered_set event_set = raw_event_data->GetWritableIdSet();
+    std::unordered_set<uint64_t>& event_set = raw_event_data->GetWritableIdSet();
 
     size_t real_count = 0;
     for(uint64_t i = 0; i < count; i++)

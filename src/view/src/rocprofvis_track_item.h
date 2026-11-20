@@ -95,6 +95,7 @@ class TrackItem
     friend TrackOptions;
     friend CounterTrackOptions;
     friend QueueTrackOptions;
+    friend struct TrackItemTestPeer;
 
 public:
     TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,

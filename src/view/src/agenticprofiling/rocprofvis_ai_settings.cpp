@@ -195,10 +195,11 @@ SettingsPanel::RenderAssistantSettings()
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Base URL, e.g. https://api.openai.com/v1. "
-                         "/chat/completions is appended. Azure-style /azure "
-                         "and /openai paths also insert the model as the "
-                         "deployment id.");
+        SetTooltipStyled(
+            "Base URL, e.g. https://api.openai.com/v1. /chat/completions is "
+            "appended. Model is the deployment id when the path ends in "
+            "/azure, /azure/engines, /openai, or /openai/deployments. A path "
+            "that already contains /engines/ or /deployments/ keeps that one.");
     }
 
     ImGui::AlignTextToFramePadding();
@@ -212,9 +213,12 @@ SettingsPanel::RenderAssistantSettings()
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Model name sent to the endpoint. On Azure-style URLs "
-                         "this is the deployment id. Default is %s.",
-                         ASSISTANT_DEFAULT_MODEL);
+        SetTooltipStyled(
+            "Model name sent with an OpenAI-style request. When the URL path "
+            "ends in /azure, /azure/engines, /openai, or /openai/deployments, "
+            "this is the deployment id, and it is unused when that path "
+            "already names one. Default is %s.",
+            ASSISTANT_DEFAULT_MODEL);
     }
 
     ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y));

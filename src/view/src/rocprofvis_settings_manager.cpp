@@ -156,6 +156,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
+    IM_COL32(54, 114, 188, 255),   // Colors::kPcSamplingMetricBar
     IM_COL32(184, 183, 204, 255),  // Colors::kIsaInternal
     IM_COL32(188, 145, 235, 255),  // Colors::kIsaMatrix
     IM_COL32(108, 203, 173, 255),  // Colors::kIsaScalar
@@ -296,6 +297,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
+    IM_COL32(32, 102, 180, 255),   // Colors::kPcSamplingMetricBar
     IM_COL32(108, 105, 131, 255),  // Colors::kIsaInternal
     IM_COL32(126, 77, 170, 255),   // Colors::kIsaMatrix
     IM_COL32(25, 120, 92, 255),    // Colors::kIsaScalar
@@ -716,7 +718,8 @@ SettingsManager::SettingsManager()
         TrackSettings{ TrackDecoratorMode::kTrackType, TRACK_DECORATOR_WIDTH_DEFAULT },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
-        AssistantSettings{}, false })
+        AssistantSettings{}, false,
+        get_default_remote_cache_path() })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -899,67 +902,80 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 {
     jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
 
-    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
-    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
-    os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR]         = m_usersettings.linux_drag_repair;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES] = m_usersettings.log_viewer_max_entries;
-
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK]    = m_usersettings.log_viewer.level_mask;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL]   = m_usersettings.log_viewer.auto_scroll;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX]     = m_usersettings.log_viewer.use_regex;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME] = m_usersettings.log_viewer.relative_time;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE]       = m_usersettings.log_viewer.visible;
+    os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT] =
+        m_usersettings.dont_ask_before_exit;
+    os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE] =
+        m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR] = m_usersettings.linux_drag_repair;
+    os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH] = m_usersettings.remote_cache_path;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES] =
+        m_usersettings.log_viewer_max_entries;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK] =
+        m_usersettings.log_viewer.level_mask;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL] =
+        m_usersettings.log_viewer.auto_scroll;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX] =
+        m_usersettings.log_viewer.use_regex;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME] =
+        m_usersettings.log_viewer.relative_time;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE] = m_usersettings.log_viewer.visible;
 }
 
 void
 SettingsManager::DeserializeOtherSettings(jt::Json& json)
 {
     jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
-    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT].isBool())
     {
         m_usersettings.dont_ask_before_exit =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE].isBool())
     {
         m_usersettings.dont_ask_before_tab_closing =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR].isBool())
     {
         m_usersettings.linux_drag_repair =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].isLong())
+    if(os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH].isString())
     {
-        int value = static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].getLong());
+        m_usersettings.remote_cache_path =
+            os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH].getString();
+    }
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES].isLong())
+    {
+        int value = static_cast<int>(
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES].getLong());
         m_usersettings.log_viewer_max_entries =
             std::clamp(value, LOG_VIEWER_MAX_ENTRIES_MIN, LOG_VIEWER_MAX_ENTRIES_MAX);
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].isLong())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK].isLong())
     {
         m_usersettings.log_viewer.level_mask =
-            static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].getLong());
+            static_cast<int>(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK].getLong());
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL].isBool())
     {
         m_usersettings.log_viewer.auto_scroll =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX].isBool())
     {
         m_usersettings.log_viewer.use_regex =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME].isBool())
     {
         m_usersettings.log_viewer.relative_time =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE].isBool())
     {
         m_usersettings.log_viewer.visible =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE].getBool();
     }
 }
 

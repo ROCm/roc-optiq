@@ -15,10 +15,8 @@
 #include "rocprofvis_launch_shared_tabs.h"
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -29,6 +27,7 @@ namespace View
 class AppWindow;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 class RemoteUri;  // TEMPORARY (remote/SSH)
+class RemoteTraceOrchestrator;  // TEMPORARY (remote/SSH)
 #endif
 
 // View-layer orchestrator for a profiling run. Owns the local / remote profiler
@@ -55,22 +54,12 @@ public:
 
         bool                       is_remote       = false;
         bool                       auto_load_trace = true;
+        bool                       produces_trace  = true;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
         // Remote only: the connection/operation state for the SSH workflow.
         std::shared_ptr<RemoteUri> remote_uri;
 #endif
-
-        // Backend-specific check of the profiler's stdout for whether the run
-        // produced an output file at all. When false, trace resolution, the
-        // remote download and the remote cache directory are all skipped.
-        std::function<bool(std::string const&)> has_output_file;
-
-        // Backend-specific scraper that derives the produced trace path from the
-        // profiler's stdout. Used for the local trace resolution and forwarded
-        // to the remote session for its download target. Only consulted when
-        // has_output_file is true.
-        std::function<std::string(std::string const&)> parse_trace;
     };
 
     explicit ProfilerLaunchOrchestrator(AppWindow* app_window);
@@ -112,8 +101,8 @@ public:
     // to re-strip / recompose. Clears the dirty flag.
     bool ConsumeOutputDirty();
 
-    // Trace path resolved on successful completion (local: scraper -> filesystem
-    // scan fallback; remote: resolved + downloaded by the remote session).
+    // Trace path the controller scraped, once the run has finished (local: the
+    // path to open; remote: the trace's path on the remote host).
     std::string GetTracePath() const { return m_trace_path; }
 
     // Exit code of the most recent local run (valid after a failed local run).
@@ -132,7 +121,23 @@ public:
     // TEMPORARY (remote/SSH): remove these guards when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     SshSession* GetRemoteSshSession() const;
-    bool        IsRemoteDownloading() const;
+
+    /*
+     * The run's own copy of the launcher's RemoteUri: its connection and, once
+     * profiling completes, the remote trace path. Null before a remote launch.
+     */
+    std::shared_ptr<RemoteUri> GetRemoteUri() const { return m_remote_uri; }
+
+    /*
+     * The run's trace downloader, shared with the launcher's Open Trace. It
+     * takes over the run's connection once profiling is done, and runs the
+     * auto-open download. Its downloads are not part of the run's state. Null
+     * before a remote launch.
+     */
+    std::shared_ptr<RemoteTraceOrchestrator> GetDownloadOrchestrator() const
+    {
+        return m_download_orchestrator;
+    }
 
     // Fills the status badge for a remote run (label + level + phase detail).
     // Returns false when no remote run is active (caller maps local state).
@@ -146,7 +151,10 @@ private:
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     bool LaunchRemote(const LaunchRequest& request);
 #endif
-    void ResolveLocalTracePath();
+    // Reads the controller's trace path into m_trace_path. NotSupported means
+    // this run produces no trace file; anything else with an empty path means
+    // a file was expected and could not be read.
+    rocprofvis_result_t ResolveLocalTracePath();
 
     AppWindow*                              m_app_window;
     ProfilerSession                         m_profiler_session;
@@ -156,18 +164,20 @@ private:
     EventManager::SubscriptionToken         m_profiler_status_token;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // Orchestrator holds its own reference to the shared RemoteUri so the remote
-    // session (and its deferred SSH teardown) can outlive the dialog's copy.
+    // The run's own copy of the launcher's RemoteUri, so the connection and the
+    // parsed remote trace path stay with the run when the launcher's selection
+    // changes.
     std::shared_ptr<RemoteUri>              m_remote_uri;
+    // Remote trace download...
+    std::shared_ptr<RemoteTraceOrchestrator> m_download_orchestrator;
+    // Set once the auto-open download has been started for this run.
+    bool                                     m_download_started;
 #endif
 
     rocprofvis_profiler_state_t m_profiler_state;
     bool                        m_is_running;
     bool                        m_is_remote;
-    bool                        m_auto_load_trace;
-
-    std::function<bool(std::string const&)>        m_has_output_file;
-    std::function<std::string(std::string const&)> m_parse_trace;
+    bool                        m_download_trace;
 
     std::string m_raw_output;
     bool        m_output_dirty;

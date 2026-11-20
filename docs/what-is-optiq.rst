@@ -95,6 +95,7 @@ When ROCm Optiq starts without an open project, the Welcome page displays:
 - **Open File:** Open a trace (``.db``, ``.rpd``) or project (``.rpv``). You can also drag and drop a supported file into the window to open it.
 - **Recent files:** Quick access to recently opened files. 
 - **Documentation links:** For ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation.
+- **Tips & tricks:** A new tip about a feature or shortcut each time ROCm Optiq starts. Use the arrows to browse the rest. Shortcuts in the tips show the keys currently set in **Edit** > **Preferences**.
 
 .. image:: /images/welcome-page.png
    :width: 800

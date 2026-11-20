@@ -775,10 +775,21 @@ SqliteDatabase::CreateSQLTable(
                                 std::function<void(sqlite3_stmt* stmt, int index)> insert_func,
                                 uint32_t db_node_id)
 {
+    rocprofvis_dm_result_t result = kRocProfVisDmResultDbAccessFailed;
+    bool in_transaction = false;
     sqlite3* conn = GetConnection(db_node_id);
     sqlite3_mutex_enter(sqlite3_db_mutex(conn));
     while(true)
     {
+        // The drop, the create and the rows share one transaction, so a failed or
+        // interrupted write leaves no table behind rather than an empty or partial
+        // one that later opens would trust.
+        if(sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) != SQLITE_OK)
+        {
+            break;
+        }
+        in_transaction = true;
+
         std::string query = "DROP TABLE IF EXISTS ";
         query += table_name;
         query += ";";
@@ -807,13 +818,6 @@ SqliteDatabase::CreateSQLTable(
 
         if (insert_func && num_row)
         {
-
-            if (sqlite3_exec(conn, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr) !=
-                SQLITE_OK)
-            {
-                break;
-            }
-
             query = "INSERT INTO ";
             query += table_name;
             query += "(";
@@ -838,8 +842,11 @@ SqliteDatabase::CreateSQLTable(
             }
             query += ");";
 
-            sqlite3_stmt* stmt;
-            sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr);
+            sqlite3_stmt* stmt = nullptr;
+            if (sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+            {
+                break;
+            }
 
             for (int i = 0; i < num_row; i++)
             {
@@ -853,17 +860,25 @@ SqliteDatabase::CreateSQLTable(
             }
 
             sqlite3_finalize(stmt);
+        }
 
-            if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK)
-            {
-                break;
-            }
+        if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) == SQLITE_OK)
+        {
+            result = kRocProfVisDmResultSuccess;
         }
         break;
     }
+    if (result != kRocProfVisDmResultSuccess)
+    {
+        spdlog::error("Failed to create table {}: {}", table_name, sqlite3_errmsg(conn));
+        if (in_transaction)
+        {
+            sqlite3_exec(conn, "ROLLBACK;", nullptr, nullptr, nullptr);
+        }
+    }
     sqlite3_mutex_leave(sqlite3_db_mutex(conn));
     ReleaseConnection(conn,db_node_id);
-    return kRocProfVisDmResultSuccess;
+    return result;
 }
 
 

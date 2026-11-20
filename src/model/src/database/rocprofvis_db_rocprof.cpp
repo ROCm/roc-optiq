@@ -474,49 +474,53 @@ rocprofvis_dm_result_t RocprofDatabase::CreateAgentFriendlyMemoryAllocationTable
 
         if ((pos = sql.find(from)) != std::string::npos) {
             sql.replace(pos, from.length(), to);
-            result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), (std::string("DROP TABLE IF EXISTS ") + updated_m_alloc_table).c_str());
-            if (kRocProfVisDmResultSuccess != result) break;
-            result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), sql.c_str());
-            if (kRocProfVisDmResultSuccess != result) break;
-            query = std::string("INSERT INTO ")+updated_m_alloc_table+ " SELECT * FROM " + original_m_alloc_table + ";";
-            result = ExecuteSQLQuery(future, DbInstancePtrAt(guid_info.first.GuidIndex()), query.c_str());
-            if (kRocProfVisDmResultSuccess != result) break;
-            sqlite3_stmt* stmt = nullptr;
+            // The copy and its agent or track fix-ups share one transaction, so a
+            // failed or interrupted write never leaves a copied table without them.
+            std::string copy_statements = std::string("BEGIN; DROP TABLE IF EXISTS ") + updated_m_alloc_table + "; " +
+                sql + "; INSERT INTO " + updated_m_alloc_table + " SELECT * FROM " + original_m_alloc_table + ";";
             query = std::string("UPDATE ") + updated_m_alloc_table + (m_query_factory.IsVersionGreaterOrEqual("4") ? " SET track_id = ? WHERE id = ? ; " : " SET agent_id = ? WHERE id = ? ;");
             sqlite3* conn = GetServiceConnection(guid_info.first.FileIndex());
-            if (sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+            sqlite3_stmt* stmt = nullptr;
+            result = kRocProfVisDmResultDbAccessFailed;
+            if (sqlite3_exec(conn, copy_statements.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK &&
+                sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK)
+            {
+                auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
+
+                for (auto& m : mem_act_per_guid)
+                {
+                    if (m_query_factory.IsVersionGreaterOrEqual("4"))
+                    {
+                        sqlite3_bind_int(stmt, 1, m.track_id);
+                    }
+                    else
+                    {
+                        sqlite3_bind_int(stmt, 1, m.agent_id);
+                    }
+                    sqlite3_bind_int(stmt, 2, m.id);
+
+                    if (sqlite3_step(stmt) != SQLITE_DONE)
+                    {
+                        spdlog::error(sqlite3_errmsg(conn));
+                    }
+
+                    sqlite3_reset(stmt);
+                    sqlite3_clear_bindings(stmt);
+                }
+
+                sqlite3_finalize(stmt);
+
+                if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) == SQLITE_OK)
+                {
+                    result = kRocProfVisDmResultSuccess;
+                }
+            }
+            if (result != kRocProfVisDmResultSuccess)
             {
                 spdlog::error(sqlite3_errmsg(conn));
-                result = kRocProfVisDmResultDbAccessFailed;
+                sqlite3_exec(conn, "ROLLBACK;", nullptr, nullptr, nullptr);
                 break;
             }
-            sqlite3_exec(conn, "BEGIN;", nullptr, nullptr, nullptr);
-            auto& mem_act_per_guid = m_memalloc_activity[guid_info.first.GuidIndex()];
-
-            for (auto& m : mem_act_per_guid)
-            {
-                if (m_query_factory.IsVersionGreaterOrEqual("4"))
-                {
-                    sqlite3_bind_int(stmt, 1, m.track_id);
-                }
-                else
-                {
-                    sqlite3_bind_int(stmt, 1, m.agent_id);
-                }
-                sqlite3_bind_int(stmt, 2, m.id);
-
-                if (sqlite3_step(stmt) != SQLITE_DONE)
-                {
-                    spdlog::error(sqlite3_errmsg(conn));
-                }
-
-                sqlite3_reset(stmt); 
-                sqlite3_clear_bindings(stmt);
-            }
-
-            sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr);
-
-            sqlite3_finalize(stmt);
         }
     }
     return result;
@@ -922,6 +926,10 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Collect memory activity data", kRPVDbBusy, future);
 
         LoadMemoryActivityData(future);
+        // A cancelled stage stops early, so its results are partial. Stop before
+        // anything derived from them is saved into the trace, where later opens
+        // would trust it.
+        if (future->Interrupted()) break;
         CreateMemoryActivityTable(future);
         CreateAgentFriendlyMemoryAllocationTable(future);
 
@@ -1312,6 +1320,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableHipEventLevel), kRocProfVisDmOperationHipEvent}
         };
 
+        if (future->Interrupted()) break;
+
         ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
         guid_list_t calculate_level_for_guids;
         for (auto& guid_info : DbInstances())
@@ -1401,6 +1411,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 break;
             }
         }
+
+        if (future->Interrupted()) break;
 
         ShowProgress(5, "Save track information", kRPVDbBusy, future);
         SaveTrackProperties(future);

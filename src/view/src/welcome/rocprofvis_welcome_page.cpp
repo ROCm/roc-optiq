@@ -275,21 +275,25 @@ bool
 ExpandTip(const WelcomeTip& tip, std::string& out)
 {
     out.clear();
-    for(const char* c = tip.text; *c != '\0'; ++c)
+    const char* c = tip.text;
+    while(*c != '\0')
     {
         const char* close = *c == '{' ? std::strchr(c, '}') : nullptr;
         if(close == nullptr)
         {
             out += *c;
-            continue;
+            ++c;
         }
-        const std::string key = BoundKeyText(std::string(c + 1, close));
-        if(key.empty())
+        else
         {
-            return false;
+            const std::string key = BoundKeyText(std::string(c + 1, close));
+            if(key.empty())
+            {
+                return false;
+            }
+            out += key;
+            c = close + 1;
         }
-        out += key;
-        c = close;
     }
     return true;
 }

@@ -136,9 +136,10 @@ Wave(float radians, float sharpness)
     return std::pow(0.5f + 0.5f * std::sin(radians), sharpness);
 }
 
-// An integer hash, so every frame rebuilds the same pattern without storing it.
+// A 32-bit integer hash. The stage lays out its lanes and links from hashed
+// seeds, so every frame rebuilds the same pattern without storing it.
 uint32_t
-Mix(uint32_t x)
+Hash32(uint32_t x)
 {
     x ^= x >> 16;
     x *= 0x0be9c77du;
@@ -204,21 +205,21 @@ Glow(ImDrawList* draw, ImVec2 center, float radius, ImU32 accent, ImU32 bright,
 int
 BuildLanePattern(int lane, float period, LanePatternBlock* out)
 {
-    uint32_t h     = Mix(static_cast<uint32_t>(lane + 1) * 0x1252973bu);
+    uint32_t h     = Hash32(static_cast<uint32_t>(lane + 1) * 0x1252973bu);
     float    x     = Unit(h) * 18.0f;
     int      count = 0;
     while(count < ASSISTANT_LANE_BLOCKS)
     {
-        h             = Mix(h + 0x756c4116u);
-        const float w = 8.0f + 46.0f * Unit(h) * Unit(Mix(h ^ 0x45cc2e0au));
+        h             = Hash32(h + 0x756c4116u);
+        const float w = 8.0f + 46.0f * Unit(h) * Unit(Hash32(h ^ 0x45cc2e0au));
         if(x + w > period - 6.0f)
         {
             break;
         }
-        h                 = Mix(h + 0xb0d6b60au);
+        h                 = Hash32(h + 0xb0d6b60au);
         out[count].x      = x;
         out[count].width  = w;
-        out[count].weight = Unit(Mix(h ^ 0x878050edu));
+        out[count].weight = Unit(Hash32(h ^ 0x878050edu));
         out[count].id     = h;
         ++count;
         x += w + 5.0f + 24.0f * Unit(h);
@@ -671,11 +672,11 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
             const float    u     = cycle - std::floor(cycle);
             const uint32_t generation = static_cast<uint32_t>(std::floor(cycle));
             const uint32_t slot       = static_cast<uint32_t>(k);
-            const uint32_t h = Mix(generation * 0x230c44d1u + slot * 0xa29f24dfu + 1u);
+            const uint32_t h = Hash32(generation * 0x230c44d1u + slot * 0xa29f24dfu + 1u);
             const int      from_lane = static_cast<int>(h % ASSISTANT_LANES);
             const LaneBlock* from =
                 NearestBlock(live[from_lane], live_count[from_lane],
-                             port_x + lanes_w * (0.05f + 0.40f * Unit(Mix(h ^ 0x1u))),
+                             port_x + lanes_w * (0.05f + 0.40f * Unit(Hash32(h ^ 0x1u))),
                              -FLT_MAX);
             if(from == nullptr)
             {
@@ -698,7 +699,7 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
                            static_cast<int>((h >> 12) % (ASSISTANT_LANES - 1))) %
                           ASSISTANT_LANES;
                 const float floor_x = from->x1 + 26.0f;
-                const float want_x  = floor_x + lanes_w * 0.35f * Unit(Mix(h ^ 0x2u));
+                const float want_x  = floor_x + lanes_w * 0.35f * Unit(Hash32(h ^ 0x2u));
                 to = NearestBlock(live[to_lane], live_count[to_lane], want_x, floor_x);
                 if(to == nullptr)
                 {

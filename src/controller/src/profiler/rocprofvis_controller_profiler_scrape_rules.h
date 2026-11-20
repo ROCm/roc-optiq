@@ -43,8 +43,6 @@ namespace ProfilerScrapeRules
 inline constexpr char const* kKeyWorkloadDir = "workload_dir";
 inline constexpr char const* kKeyAnalysisDb  = "analysis_db";
 inline constexpr char const* kKeyTraceDb     = "trace_db";
-inline constexpr char const* kKeyRunIndex    = "run_index";
-inline constexpr char const* kKeyRunTotal    = "run_total";
 
 /*
  * Fills stage.scrape_rules for `stage` from its tool, operation, and version,

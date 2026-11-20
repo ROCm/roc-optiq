@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: MIT
 
 // The Ask Optiq panel's drawing half: the dock and its splitter, the
-// transcript and its cards, the composer, the activity strip, and the toolbar
-// button that opens it. Everything here reads panel state and emits ImGui; the
-// turn machinery that fills that state lives in rocprofvis_ai_assistant.cpp,
-// and the two only meet through AssistantPanel members.
+// transcript and its cards, the composer, the context pill, the activity
+// strip, and the toolbar button that opens it. Everything here reads panel
+// state and emits ImGui; the turn machinery that fills that state lives in
+// rocprofvis_ai_assistant.cpp, and the two only meet through AssistantPanel
+// members.
 
 #include "rocprofvis_ai_assistant.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -28,6 +30,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
 {
@@ -65,6 +68,150 @@ constexpr float    ASSISTANT_CHART_HEIGHT          = 52.0f;
 constexpr float    ASSISTANT_CHART_ROW_HEIGHT      = 12.0f;
 constexpr float    ASSISTANT_CHART_ROW_GAP         = 2.0f;
 constexpr float    ASSISTANT_CHART_MIN_ALPHA       = 0.12f;
+// The context pill under the title. Its ring turns to a warning, then an error,
+// as the history nears the point where older tool results are shortened.
+constexpr float ASSISTANT_CONTEXT_WARN_FILL   = 0.70f;
+constexpr float ASSISTANT_CONTEXT_HOT_FILL    = 0.90f;
+constexpr float ASSISTANT_CONTEXT_RING_STROKE = 2.0f;
+// Smallest arc drawn for a conversation that is not empty, so a short chat
+// still reads as started rather than as an empty ring.
+constexpr float ASSISTANT_CONTEXT_MIN_ARC    = 0.04f;
+constexpr float ASSISTANT_CONTEXT_CHIP_PAD_X = 8.0f;
+constexpr float ASSISTANT_CONTEXT_CHIP_PAD_Y = 2.0f;
+// Space reserved under the pill. The title's line height leaves room above its
+// glyphs that the pill's hard edge does not, so without this the header looks
+// heavier at the bottom than at the top.
+constexpr float ASSISTANT_CONTEXT_CHIP_BELOW    = 2.5f;
+constexpr float ASSISTANT_CONTEXT_CHIP_GAP      = 5.0f;
+constexpr float ASSISTANT_CONTEXT_DIVIDER_GAP   = 8.0f;
+constexpr float ASSISTANT_CONTEXT_TIP_WIDTH     = 300.0f;
+constexpr float ASSISTANT_CONTEXT_TIP_BAR_H     = 6.0f;
+constexpr float ASSISTANT_CONTEXT_TIP_NUM_WIDTH = 72.0f;
+// imgui.h does not publish IM_PI.
+constexpr float ASSISTANT_PI = 3.14159265f;
+
+// Groups digits so a token count can be read at a glance. 12481 -> "12,481".
+std::string
+FormatCount(size_t value)
+{
+    const std::string digits = std::to_string(value);
+    std::string       out;
+    out.reserve(digits.size() + digits.size() / 3);
+    for(size_t i = 0; i < digits.size(); ++i)
+    {
+        if(i > 0 && (digits.size() - i) % 3 == 0)
+        {
+            out += ',';
+        }
+        out += digits[i];
+    }
+    return out;
+}
+
+// Compact count for the pill: 386, 2.2k, 45.1k, 120k, 1.2M. Full counts stay in
+// the tooltip.
+std::string
+FormatTokensShort(size_t tokens)
+{
+    if(tokens < 1000)
+    {
+        return std::to_string(tokens);
+    }
+    const char* suffix = "k";
+    double      value  = static_cast<double>(tokens) / 1000.0;
+    if(tokens >= 999500)
+    {
+        suffix = "M";
+        value  = static_cast<double>(tokens) / 1000000.0;
+    }
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), value >= 100.0 ? "%.0f" : "%.1f", value);
+    std::string text = buf;
+    if(text.size() > 2 && text.compare(text.size() - 2, 2, ".0") == 0)
+    {
+        text.resize(text.size() - 2);
+    }
+    return text + suffix;
+}
+
+// How full the kept history is, from 0 to 1.
+float
+ContextFill(size_t used_chars, size_t budget_chars)
+{
+    if(budget_chars == 0)
+    {
+        return 0.0f;
+    }
+    return std::min(1.0f,
+                    static_cast<float>(used_chars) / static_cast<float>(budget_chars));
+}
+
+ImU32
+ContextFillColor(float fill)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    if(fill >= ASSISTANT_CONTEXT_HOT_FILL)
+    {
+        return settings.GetColor(Colors::kTextError);
+    }
+    if(fill >= ASSISTANT_CONTEXT_WARN_FILL)
+    {
+        return settings.GetColor(Colors::kTextWarning);
+    }
+    return settings.GetColor(Colors::kAccent);
+}
+
+// Percent of the history budget, never showing a started chat as 0%.
+std::string
+FormatFillPercent(float fill)
+{
+    if(fill <= 0.0f)
+    {
+        return "0%";
+    }
+    const long percent = std::lround(fill * 100.0f);
+    return percent < 1 ? std::string("<1%") : std::to_string(percent) + "%";
+}
+
+// Text that sits right-aligned in the space left on the current line or cell.
+void
+RightAlignedText(const std::string& text, ImU32 color)
+{
+    const float width = ImGui::CalcTextSize(text.c_str()).x;
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if(avail > width)
+    {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - width);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopStyleColor();
+}
+
+constexpr const char* ASSISTANT_LINK_POPUP = "##assistant_links";
+
+// Header buttons are compact so the title row is barely taller than the title,
+// and the lines under it sit close enough to read as its subtitle. An elided
+// header line shows in full in a tooltip this many glyphs wide.
+constexpr ImVec2 ASSISTANT_HEADER_BUTTON_PADDING = ImVec2(8.0f, 3.0f);
+constexpr float  ASSISTANT_HEADER_LINE_GAP       = 4.0f;
+constexpr float  ASSISTANT_HEADER_TOOLTIP_GLYPHS = 32.0f;
+
+// A dim header line starting at x, elided to the card's edge with its full
+// text in a tooltip. ElidedText draws into a child window with a fixed name,
+// so each line needs its own id.
+void
+HeaderContextLine(const char* id, const std::string& text, float x)
+{
+    ImGui::SetCursorPosX(x);
+    ImGui::PushID(id);
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          SettingsManager::GetInstance().GetColor(Colors::kTextDim));
+    ElidedText(text.c_str(), std::max(1.0f, ImGui::GetContentRegionAvail().x),
+               ImGui::GetFontSize() * ASSISTANT_HEADER_TOOLTIP_GLYPHS);
+    ImGui::PopStyleColor();
+    ImGui::PopID();
+}
 
 // Breaks a button label onto extra lines so a long follow-up still fits.
 std::string
@@ -133,12 +280,76 @@ SplitMessageLines(const std::string& text)
     return lines;
 }
 
+// A trace the link menu can offer: open, loaded, and read as one trace.
+bool
+CanLinkTrace(const AssistantToolContext& context)
+{
+    return context.data_provider != nullptr && !context.is_compute &&
+           !context.is_compare &&
+           context.data_provider->GetState() == ProviderState::kReady;
+}
+
+bool
+CanAskTrace(const AssistantToolContext& context)
+{
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    return context.data_provider != nullptr && !context.is_compare;
+#else
+    return context.data_provider != nullptr && !context.is_compute && !context.is_compare;
+#endif
+}
+
+TraceLinkMember
+LinkMemberFor(const AssistantToolContext& context)
+{
+    TraceLinkMember member;
+    member.path        = context.project_id;
+    member.label       = context.trace_name;
+    member.fingerprint = AssistantTraceFingerprint(context);
+    return member;
+}
+
+void
+LinkTraces(const AssistantToolContext& baseline, const AssistantToolContext& target)
+{
+    NotificationManager& notifications = NotificationManager::GetInstance();
+    switch(AssistantTraceLinks().Link(LinkMemberFor(baseline), LinkMemberFor(target)))
+    {
+        case TraceLinkResult::kLinked:
+        {
+            notifications.Show("Linked " + target.trace_name + " to its baseline " +
+                                   baseline.trace_name,
+                               NotificationLevel::Success);
+            break;
+        }
+        case TraceLinkResult::kLinkedNotSaved:
+        {
+            notifications.Show(
+                "Linked for this session only: the link could not be saved",
+                NotificationLevel::Warning);
+            break;
+        }
+        case TraceLinkResult::kAlreadyLinked:
+        {
+            notifications.Show("Those traces are already linked",
+                               NotificationLevel::Info);
+            break;
+        }
+        case TraceLinkResult::kInvalid:
+        {
+            notifications.Show("A trace cannot be linked to itself",
+                               NotificationLevel::Warning);
+            break;
+        }
+    }
+}
+
 }  // namespace
 
 void
-AssistantPanel::RenderActivityChart(uint64_t track_id)
+AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t track_id)
 {
-    const AssistantToolContext context = MakeToolContext();
+    const AssistantToolContext context = MakeAssistantToolContext(project_id);
     if(context.data_provider == nullptr)
     {
         return;
@@ -364,6 +575,10 @@ AssistantPanel::RenderDocked()
         return;
     }
 
+    // The tab bar has drawn by now, so this is the trace the user is looking at
+    // this frame rather than the one Update() saw.
+    m_view_project_id = CurrentProjectId();
+
     // A width persisted below the current minimum would otherwise stick until
     // the splitter was dragged.
     m_dock_width = std::max(m_dock_width, ASSISTANT_MIN_WIDTH);
@@ -376,9 +591,10 @@ AssistantPanel::RenderDocked()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ASSISTANT_WINDOW_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-    // Only the transcript scrolls; the header and composer are pinned.
+    // Only the transcript scrolls; the header and composer are pinned. ImGui
+    // drops WindowPadding on a borderless child unless asked to keep it.
     ImGui::BeginChild("##assistant_dock", ImVec2(DockWidth(), 0.0f),
-                      ImGuiChildFlags_None,
+                      ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     RenderHeaderCard();
@@ -398,35 +614,65 @@ AssistantPanel::RenderHeaderCard()
 
     BeginPanelCard("##assistant_header", PanelCardTone::kFrame, ASSISTANT_CARD_PADDING,
                    true, &settings);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        ImVec2(style.ItemSpacing.x, ASSISTANT_HEADER_LINE_GAP));
 
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
     const bool configured = provider != nullptr && !provider->endpoint_url.empty();
+    // An empty Model field sends the default, so name what is actually sent.
+    const std::string model = !configured ? std::string()
+                              : provider->model.empty()
+                                  ? std::string(ASSISTANT_DEFAULT_MODEL)
+                                  : provider->model;
 
-    const float close_width = ImGui::GetFrameHeight();
-    ImGui::BeginGroup();
+    const AssistantToolContext view     = MakeAssistantToolContext(m_view_project_id);
+    const bool                 can_link = CanLinkTrace(view);
+
+    // Top row: identity on the left, link and close at the right edge.
+    // Aligning to the frame padding centers the icon and title on the buttons.
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ASSISTANT_HEADER_BUTTON_PADDING);
+    ImGui::AlignTextToFramePadding();
     PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-    ImGui::BeginGroup();
+    const float title_x = ImGui::GetCursorPosX();
     ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
     ImGui::TextUnformatted("Ask Optiq");
     ImGui::PopFont();
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    if(!configured)
+    const bool title_hovered = ImGui::IsItemHovered();
+
+    const float link_width =
+        ImGui::CalcTextSize("Link runs").x + 2.0f * ASSISTANT_HEADER_BUTTON_PADDING.x;
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
+    const float close_width = ImGui::CalcTextSize(ICON_X_CIRCLED).x;
+    ImGui::PopFont();
+    ImGui::SameLine(0.0f, 0.0f);
+    const float leftover = ImGui::GetContentRegionAvail().x - link_width -
+                           style.ItemInnerSpacing.x - close_width;
+    if(leftover > 0.0f)
     {
-        ImGui::TextUnformatted("Not configured");
+        ImGui::Dummy(ImVec2(leftover, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
     }
-    else if(!provider->model.empty())
+    ImGui::BeginDisabled(!can_link);
+    if(ImGui::Button("Link runs", ImVec2(link_width, 0.0f)))
     {
-        ImGui::TextUnformatted(provider->model.c_str());
+        ImGui::OpenPopup(ASSISTANT_LINK_POPUP);
     }
-    else
+    ImGui::EndDisabled();
+    if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
     {
-        ImGui::TextUnformatted("Ready");
+        SetTooltipStyled(can_link ? "Link this trace to an earlier or later run"
+                                  : "Open a loaded system trace to link runs");
     }
-    ImGui::PopStyleColor();
-    ImGui::EndGroup();
-    ImGui::EndGroup();
-    if(ImGui::IsItemHovered())
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    if(XButton("##assistant_close", "Close the assistant", &settings))
+    {
+        m_visible = false;
+    }
+    ImGui::PopStyleVar();
+    RenderLinkMenu();
+
+    if(title_hovered)
     {
         if(!configured)
         {
@@ -434,24 +680,33 @@ AssistantPanel::RenderHeaderCard()
         }
         else
         {
-            SetTooltipStyled("%s\n%s",
-                             provider->model.empty() ? "(no model set)"
-                                                     : provider->model.c_str(),
-                             provider->endpoint_url.c_str());
+            SetTooltipStyled("%s\n%s", model.c_str(), provider->endpoint_url.c_str());
         }
     }
 
-    ImGui::SameLine(0.0f, 0.0f);
-    const float leftover = ImGui::GetContentRegionAvail().x - close_width;
-    if(leftover > 0.0f)
+    // The model and context use live in the pill; trace identity and links stay
+    // on their own lines because both are per-tab.
+    if(configured)
     {
-        ImGui::Dummy(ImVec2(leftover, 0.0f));
-        ImGui::SameLine(0.0f, 0.0f);
+        RenderContextChip(model, provider->endpoint_url);
     }
-    if(XButton("##assistant_close", "Close the assistant", &settings))
+    if(!view.trace_name.empty())
     {
-        m_visible = false;
+        HeaderContextLine("trace", view.trace_name, title_x);
     }
+
+    const std::vector<TraceLink> links = AssistantTraceLinks().LinksOf(m_view_project_id);
+    if(!links.empty())
+    {
+        std::string linked = "Linked: ";
+        for(size_t i = 0; i < links.size(); ++i)
+        {
+            linked += (i == 0 ? "" : ", ") + links[i].other.label + " (" +
+                      links[i].other.role + ")";
+        }
+        HeaderContextLine("linked", linked, title_x);
+    }
+    ImGui::PopStyleVar();
 
     if(!configured)
     {
@@ -464,11 +719,375 @@ AssistantPanel::RenderHeaderCard()
     EndPanelCard();
 }
 
+// Links the trace on screen to another open one as baseline and target, or
+// removes a link it already has.
+void
+AssistantPanel::RenderLinkMenu()
+{
+    PushContextMenuStyles();
+    if(ImGui::BeginPopup(ASSISTANT_LINK_POPUP))
+    {
+        const AssistantToolContext view = MakeAssistantToolContext(m_view_project_id);
+        if(!CanLinkTrace(view))
+        {
+            ImGui::TextDisabled("Open a system trace to link it to another run.");
+        }
+        else
+        {
+            TraceLinkStore&              store = AssistantTraceLinks();
+            const std::vector<TraceLink> links = store.LinksOf(m_view_project_id);
+            if(!links.empty())
+            {
+                ImGui::TextDisabled("Linked runs");
+                for(const TraceLink& link : links)
+                {
+                    const std::string label =
+                        "Unlink " + link.other.label + " (" + link.other.role + ")";
+                    ImGui::PushID(link.group_id.c_str());
+                    if(ImGui::MenuItem(label.c_str()))
+                    {
+                        const TraceUnlinkResult result = store.Unlink(link.group_id);
+                        if(result == TraceUnlinkResult::kUnlinkedNotSaved)
+                        {
+                            NotificationManager::GetInstance().Show(
+                                "Unlinked for this session only: the change could "
+                                "not be saved",
+                                NotificationLevel::Warning);
+                        }
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::Separator();
+            }
+
+            ImGui::TextDisabled("Link another open trace");
+            bool       offered = false;
+            AppWindow* app     = AppWindow::GetInstance();
+            if(app != nullptr && app->GetTabContainer())
+            {
+                for(const TabItem* tab : app->GetTabContainer()->GetTabs())
+                {
+                    if(tab == nullptr || tab->m_id == m_view_project_id)
+                    {
+                        continue;
+                    }
+                    const AssistantToolContext other =
+                        MakeAssistantToolContext(tab->m_id);
+                    if(!CanLinkTrace(other))
+                    {
+                        continue;
+                    }
+                    offered = true;
+                    ImGui::PushID(tab->m_id.c_str());
+                    if(ImGui::BeginMenu(other.trace_name.c_str()))
+                    {
+                        if(ImGui::MenuItem("It is the earlier run (baseline)"))
+                        {
+                            LinkTraces(other, view);
+                        }
+                        if(ImGui::MenuItem("It is the later run (target)"))
+                        {
+                            LinkTraces(view, other);
+                        }
+                        ImGui::EndMenu();
+                    }
+                    ImGui::PopID();
+                }
+            }
+            if(!offered)
+            {
+                ImGui::TextDisabled("No other system trace is open.");
+            }
+        }
+        ImGui::EndPopup();
+    }
+    PopContextMenuStyles();
+}
+
+/*
+ * The pill under the title: the model, a ring for how full the kept history is,
+ * the conversation's size against that budget, and - once the endpoint has
+ * reported any - the tokens this conversation has used.
+ */
+void
+AssistantPanel::RenderContextChip(const std::string& model, const std::string& endpoint)
+{
+    Conversation&     conversation = ViewConversation();
+    const ContextLoad load         = MeasureContext();
+    const float       fill = ContextFill(load.history_chars, load.history_budget_chars);
+
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImU32      main     = settings.GetColor(Colors::kTextMain);
+    const ImU32      dim      = settings.GetColor(Colors::kTextDim);
+
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float  avail  = ImGui::GetContentRegionAvail().x;
+
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    const float text_h   = ImGui::GetTextLineHeight();
+    const float chip_h   = text_h + ASSISTANT_CONTEXT_CHIP_PAD_Y * 2.0f;
+    const float ring_d   = std::max(8.0f, text_h - 3.0f);
+    const float word_gap = ImGui::CalcTextSize(" ").x * 2.0f;
+
+    const std::string used   = FormatTokensShort(load.history_tokens);
+    const std::string budget = " / " + FormatTokensShort(load.history_budget_tokens);
+    const std::string in_n =
+        FormatTokensShort(static_cast<size_t>(conversation.session_prompt_tokens));
+    const std::string out_n =
+        FormatTokensShort(static_cast<size_t>(conversation.session_completion_tokens));
+    const char* in_label  = " in";
+    const char* out_label = " out";
+
+    const float divider_w = ASSISTANT_CONTEXT_DIVIDER_GAP * 2.0f + 1.0f;
+    const float context_w =
+        ring_d + ASSISTANT_CONTEXT_CHIP_GAP + ImGui::CalcTextSize(used.c_str()).x;
+    const float budget_w = ImGui::CalcTextSize(budget.c_str()).x;
+    const float usage_w  = divider_w + ImGui::CalcTextSize(in_n.c_str()).x +
+                          ImGui::CalcTextSize(in_label).x + word_gap +
+                          ImGui::CalcTextSize(out_n.c_str()).x +
+                          ImGui::CalcTextSize(out_label).x;
+    const float pads = ASSISTANT_CONTEXT_CHIP_PAD_X * 2.0f;
+
+    // A narrow dock drops the usage first, then the budget, then shortens the
+    // model name. The ring and the conversation size always stay.
+    std::string label       = model;
+    bool        show_usage  = conversation.usage_reported;
+    bool        show_budget = true;
+    auto        total       = [&]() {
+        return pads + ImGui::CalcTextSize(label.c_str()).x + divider_w + context_w +
+               (show_budget ? budget_w : 0.0f) + (show_usage ? usage_w : 0.0f);
+    };
+    if(show_usage && total() > avail)
+    {
+        show_usage = false;
+    }
+    if(total() > avail)
+    {
+        show_budget = false;
+    }
+    if(total() > avail)
+    {
+        label = ElideWithEllipsis(model,
+                                  std::max(0.0f, avail - (pads + divider_w + context_w)));
+    }
+    const float width = total();
+
+    ImGui::InvisibleButton("##assistant_context_chip",
+                           ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool hovered = ImGui::IsItemHovered();
+
+    ImDrawList*  draw     = ImGui::GetWindowDrawList();
+    const float  center_y = origin.y + chip_h * 0.5f;
+    const ImVec2 chip_min(origin);
+    const ImVec2 chip_max(origin.x + width, origin.y + chip_h);
+    // Hover changes only the outline: the ring's track and the dividers share
+    // the fill's tone, so a tinted fill would hide them.
+    draw->AddRectFilled(chip_min, chip_max, settings.GetColor(Colors::kBgPanel),
+                        chip_h * 0.5f);
+    draw->AddRect(
+        chip_min, chip_max,
+        settings.GetColor(hovered ? Colors::kBorderColor : Colors::kPanelBorderSubtle),
+        chip_h * 0.5f);
+
+    const float text_y  = center_y - text_h * 0.5f;
+    const ImU32 divider = settings.GetColor(Colors::kBorderColor);
+    float       x       = origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X;
+    auto        run     = [&](const char* text, ImU32 color) {
+        draw->AddText(ImVec2(x, text_y), color, text);
+        x += ImGui::CalcTextSize(text).x;
+    };
+    auto rule = [&]() {
+        x += ASSISTANT_CONTEXT_DIVIDER_GAP;
+        draw->AddLine(ImVec2(x, center_y - text_h * 0.35f),
+                      ImVec2(x, center_y + text_h * 0.35f), divider);
+        x += 1.0f + ASSISTANT_CONTEXT_DIVIDER_GAP;
+    };
+
+    run(label.c_str(), main);
+    rule();
+
+    const ImVec2 ring_center(x + ring_d * 0.5f, center_y);
+    const float  ring_r = ring_d * 0.5f - ASSISTANT_CONTEXT_RING_STROKE * 0.5f;
+    draw->AddCircle(ring_center, ring_r, settings.GetColor(Colors::kBorderColor), 0,
+                    ASSISTANT_CONTEXT_RING_STROKE);
+    if(fill >= 0.995f)
+    {
+        draw->AddCircle(ring_center, ring_r, ContextFillColor(fill), 0,
+                        ASSISTANT_CONTEXT_RING_STROKE);
+    }
+    else if(load.history_chars > 0)
+    {
+        // Zero radians points right, so start at the top and sweep clockwise.
+        const float start = -ASSISTANT_PI * 0.5f;
+        const float sweep =
+            std::max(fill, ASSISTANT_CONTEXT_MIN_ARC) * ASSISTANT_PI * 2.0f;
+        draw->PathArcTo(ring_center, ring_r, start, start + sweep, 0);
+        draw->PathStroke(ContextFillColor(fill), ASSISTANT_CONTEXT_RING_STROKE);
+    }
+    x += ring_d + ASSISTANT_CONTEXT_CHIP_GAP;
+
+    run(used.c_str(), load.history_chars > 0 ? main : dim);
+    if(show_budget)
+    {
+        run(budget.c_str(), dim);
+    }
+    if(show_usage)
+    {
+        rule();
+        run(in_n.c_str(), main);
+        run(in_label, dim);
+        x += word_gap;
+        run(out_n.c_str(), main);
+        run(out_label, dim);
+    }
+    ImGui::PopFont();
+
+    if(hovered)
+    {
+        BeginTooltipStyled();
+        RenderContextTooltip(conversation, load, fill, model, endpoint);
+        EndTooltipStyled();
+    }
+}
+
+// The pill's hover card: which endpoint answers, the history against its
+// budget, what rides along on every request, and the reported token counts.
+void
+AssistantPanel::RenderContextTooltip(const Conversation& conversation,
+                                     const ContextLoad& load, float fill,
+                                     const std::string& model,
+                                     const std::string& endpoint) const
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImU32      main     = settings.GetColor(Colors::kTextMain);
+    const ImU32      dim      = settings.GetColor(Colors::kTextDim);
+    const float      width    = ASSISTANT_CONTEXT_TIP_WIDTH;
+    // A tooltip sizes itself to its content, so alignment is measured against
+    // this fixed width rather than against the space the window reports.
+    const float start_x = ImGui::GetCursorPosX();
+
+    ImGui::PushTextWrapPos(start_x + width);
+
+    ImGui::TextUnformatted(model.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("%s", endpoint.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    const std::string percent = FormatFillPercent(fill) + " used";
+    ImGui::TextUnformatted("Context");
+    ImGui::SameLine(start_x + width - ImGui::CalcTextSize(percent.c_str()).x);
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextUnformatted(percent.c_str());
+    ImGui::PopStyleColor();
+
+    ImDrawList*  draw   = ImGui::GetWindowDrawList();
+    const ImVec2 bar    = ImGui::GetCursorScreenPos();
+    const float  radius = ASSISTANT_CONTEXT_TIP_BAR_H * 0.5f;
+    draw->AddRectFilled(bar, ImVec2(bar.x + width, bar.y + ASSISTANT_CONTEXT_TIP_BAR_H),
+                        settings.GetColor(Colors::kBorderColor), radius);
+    if(load.history_chars > 0)
+    {
+        const float filled =
+            std::min(width, std::max(ASSISTANT_CONTEXT_TIP_BAR_H, width * fill));
+        draw->AddRectFilled(bar,
+                            ImVec2(bar.x + filled, bar.y + ASSISTANT_CONTEXT_TIP_BAR_H),
+                            ContextFillColor(fill), radius);
+    }
+    ImGui::Dummy(ImVec2(width, ASSISTANT_CONTEXT_TIP_BAR_H));
+
+    const std::string about =
+        FormatCount(load.history_tokens) + " of " +
+        FormatCount(load.history_budget_tokens) +
+        " tokens of conversation. Past that, Optiq shortens older tool results. The "
+        "prompt and tool list add about " +
+        FormatCount(load.overhead_tokens) + " to every request.";
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("%s", about.c_str());
+    ImGui::PopStyleColor();
+
+    // Stays in the context block. The usage table below is what the endpoint
+    // reported, and the disclaimer does not cover it.
+    ImGui::Spacing();
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("Context figures are estimates. Actual values may vary.");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextUnformatted("Token usage");
+    if(!conversation.usage_reported)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, dim);
+        ImGui::TextWrapped("%s", conversation.messages.empty()
+                                     ? "Counts appear after the first reply."
+                                     : "This endpoint did not report token counts.");
+        ImGui::PopStyleColor();
+        ImGui::PopTextWrapPos();
+        return;
+    }
+
+    if(ImGui::BeginTable("##assistant_usage", 3, ImGuiTableFlags_None,
+                         ImVec2(width, 0.0f)))
+    {
+        ImGui::TableSetupColumn("##what", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##in", ImGuiTableColumnFlags_WidthFixed,
+                                ASSISTANT_CONTEXT_TIP_NUM_WIDTH);
+        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed,
+                                ASSISTANT_CONTEXT_TIP_NUM_WIDTH);
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(1);
+        RightAlignedText("In", dim);
+        ImGui::TableSetColumnIndex(2);
+        RightAlignedText("Out", dim);
+
+        auto row = [&](const char* label, int in_tokens, int out_tokens) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::PushStyleColor(ImGuiCol_Text, dim);
+            ImGui::TextUnformatted(label);
+            ImGui::PopStyleColor();
+            ImGui::TableSetColumnIndex(1);
+            RightAlignedText(FormatCount(static_cast<size_t>(in_tokens)), main);
+            ImGui::TableSetColumnIndex(2);
+            RightAlignedText(FormatCount(static_cast<size_t>(out_tokens)), main);
+        };
+        row("Last reply", conversation.last_prompt_tokens,
+            conversation.last_completion_tokens);
+        row("This conversation", conversation.session_prompt_tokens,
+            conversation.session_completion_tokens);
+        ImGui::EndTable();
+    }
+
+    std::string note = "Over " + std::to_string(conversation.session_rounds) +
+                       (conversation.session_rounds == 1 ? " request" : " requests") +
+                       ". Input counts the whole history again on every request.";
+    if(conversation.last_cached_known && conversation.last_cached_tokens > 0)
+    {
+        note += " " + FormatCount(static_cast<size_t>(conversation.last_cached_tokens)) +
+                " of the last reply's input came from the endpoint's cache.";
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextWrapped("%s", note.c_str());
+    ImGui::PopStyleColor();
+
+    ImGui::PopTextWrapPos();
+}
+
 void
 AssistantPanel::RenderTranscript()
 {
-    SettingsManager&  settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style    = settings.GetDefaultStyle();
+    SettingsManager&  settings     = SettingsManager::GetInstance();
+    const ImGuiStyle& style        = settings.GetDefaultStyle();
+    Conversation&     conversation = ViewConversation();
 
     // Last frame's measured composer height; the estimate is only for frame one.
     const float composer_height =
@@ -485,7 +1104,7 @@ AssistantPanel::RenderTranscript()
     ImGui::BeginChild("assistant_history", ImVec2(0.0f, -composer_height),
                       ImGuiChildFlags_Borders);
 
-    if(m_lines.empty())
+    if(conversation.lines.empty())
     {
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
         ImGui::TextWrapped("Ask about this trace, or press Explain this view below.");
@@ -496,13 +1115,14 @@ AssistantPanel::RenderTranscript()
         ImGui::PopStyleColor();
     }
 
-    for(size_t i = 0; i < m_lines.size(); ++i)
+    for(size_t i = 0; i < conversation.lines.size(); ++i)
     {
-        RenderMessageCard(i, m_lines[i]);
+        RenderMessageCard(conversation, i, conversation.lines[i]);
     }
 
-    // Drawn from live state rather than stored, so it cannot outlive its turn.
-    if(Busy() && !m_status.empty())
+    // Drawn from live state rather than stored, so it cannot outlive its turn,
+    // and only under the conversation the turn is writing to.
+    if(Busy() && !m_status.empty() && m_turn_project_id == m_view_project_id)
     {
         RenderLoadingIndicatorDots(ASSISTANT_DOT_RADIUS, ASSISTANT_DOT_COUNT,
                                    ASSISTANT_DOT_SPACING,
@@ -512,10 +1132,10 @@ AssistantPanel::RenderTranscript()
         PanelFieldLabel(m_status.c_str(), false, &settings);
     }
 
-    if(m_scroll_to_bottom)
+    if(conversation.scroll_to_bottom)
     {
         ImGui::SetScrollHereY(1.0f);
-        m_scroll_to_bottom = false;
+        conversation.scroll_to_bottom = false;
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
@@ -523,7 +1143,8 @@ AssistantPanel::RenderTranscript()
 }
 
 void
-AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
+AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
+                                  const ChatLine& line)
 {
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = settings.GetDefaultStyle();
@@ -535,19 +1156,30 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         // A notice that outlived its turn, such as a failed request.
         PanelIcon(ICON_X_CIRCLED, Colors::kTextError, &settings);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        RenderSelectableMessage(index, line.text, Colors::kTextError);
+        RenderSelectableMessage(conversation, index, line.text, Colors::kTextError);
         ImGui::PopID();
         return;
     }
 
     if(line.speaker == Speaker::kChart)
     {
+        const std::string chart_project =
+            line.project_id.empty() ? m_view_project_id : line.project_id;
+        std::string title = "Timeline overview";
+        if(chart_project != m_view_project_id)
+        {
+            const AssistantToolContext source = MakeAssistantToolContext(chart_project);
+            if(!source.trace_name.empty())
+            {
+                title += " of " + source.trace_name;
+            }
+        }
         BeginPanelCard("##chart_card", PanelCardTone::kPanel, ASSISTANT_CARD_PADDING,
                        true, &settings);
         PanelIcon(ICON_CHART_BAR, Colors::kAccent, &settings);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        PanelFieldLabel("Timeline overview", false, &settings);
-        RenderActivityChart(line.track_id);
+        PanelFieldLabel(title.c_str(), false, &settings);
+        RenderActivityChart(chart_project, line.track_id);
         EndPanelCard();
         ImGui::PopID();
         return;
@@ -568,52 +1200,56 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
         PanelFieldLabel("Optiq", false, &settings);
     }
     ImGui::Spacing();
-    RenderSelectableMessage(index, line.text, Colors::kTextMain);
+    RenderSelectableMessage(conversation, index, line.text, Colors::kTextMain);
     EndPanelCard();
     ImGui::PopID();
 }
 
 TextSelect*
-AssistantPanel::MessageSelect(size_t index)
+AssistantPanel::MessageSelect(Conversation& conversation, size_t index)
 {
-    if(index >= m_lines.size())
+    if(index >= conversation.lines.size())
     {
         return nullptr;
     }
-    if(m_message_select.size() < m_lines.size())
+    if(conversation.message_select.size() < conversation.lines.size())
     {
-        m_message_select.resize(m_lines.size());
+        conversation.message_select.resize(conversation.lines.size());
     }
-    if(m_message_lines.size() < m_lines.size())
+    if(conversation.message_lines.size() < conversation.lines.size())
     {
-        m_message_lines.resize(m_lines.size());
+        conversation.message_lines.resize(conversation.lines.size());
     }
-    if(m_message_select[index] == nullptr)
+    if(conversation.message_select[index] == nullptr)
     {
-        m_message_select[index] = std::make_unique<TextSelect>(
-            [this, index](size_t line_index) {
-                if(index >= m_message_lines.size() ||
-                   line_index >= m_message_lines[index].size())
+        // The conversation is heap-held by the map, so its address is stable for
+        // as long as these callbacks, which it owns, can run.
+        Conversation* owner                = &conversation;
+        conversation.message_select[index] = std::make_unique<TextSelect>(
+            [owner, index](size_t line_index) {
+                if(index >= owner->message_lines.size() ||
+                   line_index >= owner->message_lines[index].size())
                 {
                     return std::string_view();
                 }
-                return std::string_view(m_message_lines[index][line_index]);
+                return std::string_view(owner->message_lines[index][line_index]);
             },
-            [this, index]() {
-                return index < m_message_lines.size() ? m_message_lines[index].size()
-                                                      : size_t{0};
+            [owner, index]() {
+                return index < owner->message_lines.size()
+                           ? owner->message_lines[index].size()
+                           : size_t{ 0 };
             },
             true);
     }
-    return m_message_select[index].get();
+    return conversation.message_select[index].get();
 }
 
 void
-AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
-                                        Colors text_color)
+AssistantPanel::RenderSelectableMessage(Conversation& conversation, size_t index,
+                                        const std::string& text, Colors text_color)
 {
     const ImU32 color  = SettingsManager::GetInstance().GetColor(text_color);
-    TextSelect* select = MessageSelect(index);
+    TextSelect* select = MessageSelect(conversation, index);
     if(select == nullptr)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, color);
@@ -621,9 +1257,9 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
         ImGui::PopStyleColor();
         return;
     }
-    if(m_message_lines[index].empty())
+    if(conversation.message_lines[index].empty())
     {
-        m_message_lines[index] = SplitMessageLines(text);
+        conversation.message_lines[index] = SplitMessageLines(text);
     }
 
     // TextSelect expects a text-only window whose first glyph is at its origin.
@@ -639,7 +1275,7 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
                           ImGuiWindowFlags_NoScrollWithMouse);
     // Scoped to the text so the copy menu below keeps the theme's text color.
     ImGui::PushStyleColor(ImGuiCol_Text, color);
-    for(const std::string& line : m_message_lines[index])
+    for(const std::string& line : conversation.message_lines[index])
     {
         ImGui::PushTextWrapPos(0.0f);
         ImGui::TextUnformatted(line.data(), line.data() + line.size());
@@ -656,7 +1292,7 @@ AssistantPanel::RenderSelectableMessage(size_t index, const std::string& text,
         ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
     {
         ImGui::SetWindowFocus();
-        for(const std::unique_ptr<TextSelect>& other : m_message_select)
+        for(const std::unique_ptr<TextSelect>& other : conversation.message_select)
         {
             if(other != nullptr && other.get() != select)
             {
@@ -711,16 +1347,20 @@ AssistantPanel::RenderSuggestedActions()
     const AssistantProvider* provider = settings.GetActiveAssistantProvider();
     const bool configured =
         provider != nullptr && !provider->endpoint_url.empty();
+    const AssistantToolContext view         = MakeAssistantToolContext(m_view_project_id);
+    const bool                 can_ask      = CanAskTrace(view);
+    Conversation&              conversation = ViewConversation();
 
-    const bool show_explain = m_lines.empty() && m_next_steps.empty() && !Busy();
-    if(!show_explain && m_next_steps.empty())
+    const bool show_explain =
+        conversation.lines.empty() && conversation.next_steps.empty() && !Busy();
+    if(!show_explain && conversation.next_steps.empty())
     {
         return;
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
-    ImGui::BeginDisabled(Busy() || !configured);
+    ImGui::BeginDisabled(Busy() || !configured || !can_ask);
 
     if(show_explain)
     {
@@ -732,10 +1372,22 @@ AssistantPanel::RenderSuggestedActions()
         ImGui::PopStyleVar(2);
         if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
-            SetTooltipStyled(
-                "Runs a self-directed investigation: timeline overview, summary, top "
-                "events, then drills into the worst offenders and moves the timeline "
-                "to what it found.");
+            if(view.is_compare)
+            {
+                SetTooltipStyled("Open the two traces on their own and link them; "
+                                 "Ask Optiq would add a compare tab's runs together.");
+            }
+            else if(view.is_compute && !can_ask)
+            {
+                SetTooltipStyled("Ask Optiq currently reads system traces.");
+            }
+            else
+            {
+                SetTooltipStyled(
+                    "Runs a self-directed investigation: timeline overview, summary, "
+                    "top events, then drills into the worst offenders and moves the "
+                    "timeline to what it found.");
+            }
         }
         ImGui::Spacing();
         return;
@@ -744,11 +1396,11 @@ AssistantPanel::RenderSuggestedActions()
     const float wrap_width = std::max(
         1.0f, ImGui::GetContentRegionAvail().x - ImGui::GetStyle().FramePadding.x * 2.0f);
     int clicked = -1;
-    for(size_t i = 0; i < m_next_steps.size(); ++i)
+    for(size_t i = 0; i < conversation.next_steps.size(); ++i)
     {
         ImGui::PushID(static_cast<int>(i));
-        const std::string label =
-            WrapButtonLabel(std::to_string(i + 1) + ". " + m_next_steps[i], wrap_width);
+        const std::string label = WrapButtonLabel(
+            std::to_string(i + 1) + ". " + conversation.next_steps[i], wrap_width);
         bool pressed = false;
         if(i == 0)
         {
@@ -774,7 +1426,7 @@ AssistantPanel::RenderSuggestedActions()
 
     if(clicked >= 0)
     {
-        m_input = m_next_steps[static_cast<size_t>(clicked)];
+        conversation.input = conversation.next_steps[static_cast<size_t>(clicked)];
         SendCurrentInput(false);
     }
 
@@ -782,10 +1434,15 @@ AssistantPanel::RenderSuggestedActions()
 }
 
 std::string
-AssistantPanel::BuildTranscriptText() const
+AssistantPanel::BuildTranscriptText(const Conversation& conversation,
+                                    const std::string&  trace_name) const
 {
     std::string out = "# Ask Optiq conversation\n\n";
-    for(const ChatLine& line : m_lines)
+    if(!trace_name.empty())
+    {
+        out += "Trace: " + trace_name + "\n\n";
+    }
+    for(const ChatLine& line : conversation.lines)
     {
         switch(line.speaker)
         {
@@ -825,11 +1482,13 @@ AssistantPanel::BuildTranscriptText() const
 void
 AssistantPanel::CopyTranscript()
 {
-    if(m_lines.empty())
+    const Conversation& conversation = ViewConversation();
+    if(conversation.lines.empty())
     {
         return;
     }
-    ImGui::SetClipboardText(BuildTranscriptText().c_str());
+    const std::string trace_name = MakeAssistantToolContext(m_view_project_id).trace_name;
+    ImGui::SetClipboardText(BuildTranscriptText(conversation, trace_name).c_str());
     NotificationManager::GetInstance().Show("Conversation copied to clipboard",
                                             NotificationLevel::Success);
 }
@@ -837,7 +1496,8 @@ AssistantPanel::CopyTranscript()
 void
 AssistantPanel::ExportTranscript()
 {
-    if(m_lines.empty())
+    const Conversation& conversation = ViewConversation();
+    if(conversation.lines.empty())
     {
         return;
     }
@@ -856,7 +1516,8 @@ AssistantPanel::ExportTranscript()
 
     // Captured by value: the save dialog is async and the conversation may
     // change before the user picks a path.
-    const std::string text = BuildTranscriptText();
+    const std::string text = BuildTranscriptText(
+        conversation, MakeAssistantToolContext(m_view_project_id).trace_name);
     app->ShowSaveFileDialog(
         "Export Conversation", { md_filter, txt_filter }, "ask-optiq-conversation.md",
         [text](std::string path) {
@@ -886,11 +1547,33 @@ AssistantPanel::ExportTranscript()
         });
 }
 
+// Clears the conversation on screen. A turn writing to it is stopped; one
+// running on another trace carries on.
+void
+AssistantPanel::ClearConversation()
+{
+    if(Busy() && m_turn_project_id == m_view_project_id)
+    {
+        ResetTurn();
+    }
+    Conversation& conversation = ViewConversation();
+    conversation.lines.clear();
+    conversation.message_select.clear();
+    conversation.message_lines.clear();
+    conversation.input.clear();
+    conversation.next_steps.clear();
+    ResetHistory(conversation);
+    ClearTokenUsage(conversation);
+}
+
 void
 AssistantPanel::RenderComposer()
 {
-    SettingsManager&  settings = SettingsManager::GetInstance();
-    const ImGuiStyle& style    = settings.GetDefaultStyle();
+    SettingsManager&           settings     = SettingsManager::GetInstance();
+    const ImGuiStyle&          style        = settings.GetDefaultStyle();
+    Conversation&              conversation = ViewConversation();
+    const AssistantToolContext view         = MakeAssistantToolContext(m_view_project_id);
+    const bool                 can_ask      = CanAskTrace(view);
 
     // Measured to the end of the card, so RenderTranscript can reserve exactly
     // this much on the next frame.
@@ -901,8 +1584,36 @@ AssistantPanel::RenderComposer()
 
     RenderSuggestedActions();
 
+    // One turn runs at a time, so a question on another trace waits for it,
+    // and the hint says which trace it is busy with.
+    const bool  busy_here      = Busy() && m_turn_project_id == m_view_project_id;
+    const bool  busy_elsewhere = Busy() && !busy_here;
+    std::string hint           = "Ask about this trace...";
+    if(busy_elsewhere)
+    {
+        const std::string turn_trace = MakeToolContext().trace_name;
+        hint                         = "Working on " +
+               (turn_trace.empty() ? std::string("another trace") : turn_trace) + "...";
+    }
+    else if(busy_here)
+    {
+        hint = "Working...";
+    }
+    else if(view.is_compare)
+    {
+        hint = "Link the two traces from their own tabs...";
+    }
+    else if(view.is_compute && !can_ask)
+    {
+        hint = "Ask Optiq currently reads system traces...";
+    }
+    else if(view.data_provider == nullptr)
+    {
+        hint = "Open a trace...";
+    }
+
     ImGuiInputTextFlags input_flags = ImGuiInputTextFlags_None;
-    if(Busy())
+    if(Busy() || !can_ask)
     {
         input_flags |= ImGuiInputTextFlags_ReadOnly;
     }
@@ -916,20 +1627,19 @@ AssistantPanel::RenderComposer()
                      gap * ASSISTANT_COMPOSER_GAP_COUNT);
 
     ImGui::SetNextItemWidth(input_width);
-    InputTextStringWithHint("##assistant_input",
-                            Busy() ? "Working..." : "Ask about this trace...", m_input,
+    InputTextStringWithHint("##assistant_input", hint.c_str(), conversation.input,
                             input_flags);
     const bool submitted = ImGui::IsItemFocused() &&
                            ImGui::IsKeyPressed(ImGuiKey_Enter) &&
-                           !ImGui::GetIO().KeyShift && !Busy();
+                           !ImGui::GetIO().KeyShift && !Busy() && can_ask;
 
     ImGui::SameLine(0.0f, gap);
-    ImGui::BeginDisabled(Busy() || m_input.empty());
+    ImGui::BeginDisabled(Busy() || !can_ask || conversation.input.empty());
     const bool send = AccentButton("Send", ImVec2(ASSISTANT_SEND_WIDTH, 0.0f), &settings);
     ImGui::EndDisabled();
 
     ImGui::SameLine(0.0f, gap);
-    ImGui::BeginDisabled(m_lines.empty());
+    ImGui::BeginDisabled(conversation.lines.empty());
     if(IconButton(ICON_COPY, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size), "Copy the conversation", false,
                   ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
@@ -953,29 +1663,23 @@ AssistantPanel::RenderComposer()
     ImGui::EndDisabled();
 
     ImGui::SameLine(0.0f, gap);
-    ImGui::BeginDisabled(m_lines.empty() && m_input.empty() && !Busy());
+    ImGui::BeginDisabled(conversation.lines.empty() && conversation.input.empty() &&
+                         !busy_here);
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size), "Clear the conversation", false,
                   ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),
                   settings.GetColor(Colors::kButtonActive)))
     {
-        ResetTurn();
-        m_lines.clear();
-        m_message_select.clear();
-        m_message_lines.clear();
-        m_input.clear();
-        m_conversation.clear();
-        m_next_steps.clear();
+        ClearConversation();
     }
     ImGui::EndDisabled();
 
     EndPanelCard();
 
-    // EndChild already advanced the cursor past one ItemSpacing, which the
-    // transcript's reservation has to include too.
-    m_composer_height = ImGui::GetCursorPosY() - start_y +
-                        settings.GetDefaultStyle().ItemSpacing.y;
+    // EndChild already advanced the cursor past one ItemSpacing, the same gap
+    // the transcript has to leave above the composer.
+    m_composer_height = ImGui::GetCursorPosY() - start_y;
 
     if(send || submitted)
     {

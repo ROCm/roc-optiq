@@ -128,8 +128,8 @@ To create and use a bookmark:
    
 Or:
 
-1.	Press **Ctrl** + any key from **0** - **9** to create a view bookmark. The bookmark saves to an index based on the number used and creates a shortcut.
-2.	Press any key from **0** - **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
+1. Press **Ctrl** + any key from **0** - **9** to create a view bookmark. The bookmark saves to an index based on the number used and creates a shortcut.
+2. Press any key from **0** - **9** to restore the view to a stored bookmark from that index number shortcut. For example, if you save a bookmark using **Ctrl** + **1**, pressing **1** restores that bookmark.
 
 Delete bookmarks
 ~~~~~~~~~~~~~~~~

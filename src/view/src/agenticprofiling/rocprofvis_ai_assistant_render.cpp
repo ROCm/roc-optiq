@@ -351,7 +351,9 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
     const AssistantToolContext context = MakeAssistantToolContext(project_id);
     if(context.data_provider == nullptr)
     {
-        ImGui::TextDisabled("No trace is open.");
+        // Closing a trace drops its own conversation, so a chart that has lost
+        // its trace was read from a linked one.
+        ImGui::TextDisabled("This chart's trace is no longer open.");
         return;
     }
 

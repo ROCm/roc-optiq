@@ -69,6 +69,9 @@ struct PcSampleState
     uint64_t total_count          = 0;
     std::optional<uint64_t> issue_count;
     std::optional<uint64_t> stall_count;
+    // Captured percentages; unset is distinct from a measured zero.
+    std::optional<double> wave_occupancy_percent;
+    std::optional<double> active_thread_percent;
 };
 
 struct PcSampleStallReason

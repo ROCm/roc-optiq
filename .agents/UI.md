@@ -2850,7 +2850,8 @@ point, and a wait holds everything dim. Under it sit the title, chips,
 and one sentence about the wait. The chips come from
 `DescribeToolScope` in `rocprofvis_ai_assistant.cpp`, which spells out
 the tracks and window a read will really use when the call leaves them
-out. Between reads they list the steps so far by
+out, on the linked trace when the call passes `trace`. Between reads
+they list the steps so far by
 `AssistantToolStepLabel`, the third column of the label list.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
   singleton like `LogViewer`. Owns the per-trace conversations, the

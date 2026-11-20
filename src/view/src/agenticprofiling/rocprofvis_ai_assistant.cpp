@@ -143,7 +143,8 @@ CountOf(size_t count, const char* one, const char* many)
  * track_samples read every track of their kind, top_events the selected tracks
  * or else all of them, and a window falls back to the selection or the whole
  * trace - except for search and event_instances, which always default to the
- * whole trace.
+ * whole trace. A read aimed at a linked run falls back to that trace's tracks,
+ * selection and span, so they are read from it and a chip names it.
  */
 std::vector<std::string>
 DescribeToolScope(const AssistantToolContext& context, const AssistantToolCall& call)
@@ -158,8 +159,26 @@ DescribeToolScope(const AssistantToolContext& context, const AssistantToolCall& 
     jt::Json&          args = parsed.second;
     const std::string& tool = call.name;
 
-    const bool system_ready = !context.is_compute && context.data_provider != nullptr &&
-                              context.data_provider->GetState() == ProviderState::kReady;
+    // The trace the dispatcher will hand the tool. A ref that does not resolve
+    // is refused there before anything parks, so its chips are never drawn.
+    AssistantToolContext target    = context;
+    const std::string    trace_ref = JsonUtils::GetString(args, "trace", "");
+    TraceLink            link;
+    std::string          link_error;
+    if(!trace_ref.empty() && ResolveAssistantLink(context, trace_ref, link, link_error))
+    {
+        target = MakeAssistantToolContext(link.other.path);
+        // A link saved without a label still has the open trace's name.
+        const std::string& linked_name =
+            link.other.label.empty() ? target.trace_name : link.other.label;
+        if(!linked_name.empty())
+        {
+            chips.push_back(ChipText(linked_name));
+        }
+    }
+
+    const bool system_ready = !target.is_compute && target.data_provider != nullptr &&
+                              target.data_provider->GetState() == ProviderState::kReady;
     const bool every_of_kind = tool == "track_events" || tool == "track_samples";
     const bool by_operation  = tool == "top_events";
     const bool selection_window =
@@ -178,8 +197,8 @@ DescribeToolScope(const AssistantToolContext& context, const AssistantToolCall& 
         {
             chips.push_back(CountOf(named, "track", "tracks"));
         }
-        else if(by_operation && context.timeline_selection != nullptr &&
-                context.timeline_selection->GetSelectedTracks(selected) &&
+        else if(by_operation && target.timeline_selection != nullptr &&
+                target.timeline_selection->GetSelectedTracks(selected) &&
                 !selected.empty())
         {
             chips.push_back("selected tracks");
@@ -205,17 +224,17 @@ DescribeToolScope(const AssistantToolContext& context, const AssistantToolCall& 
         {
             chips.push_back(FormatSpan(end - start) + " window");
         }
-        else if(selection_window && context.timeline_selection != nullptr &&
-                context.timeline_selection->HasValidTimeRangeSelection() &&
-                context.timeline_selection->GetSelectedTimeRange(selected_start,
-                                                                 selected_end))
+        else if(selection_window && target.timeline_selection != nullptr &&
+                target.timeline_selection->HasValidTimeRangeSelection() &&
+                target.timeline_selection->GetSelectedTimeRange(selected_start,
+                                                                selected_end))
         {
             chips.push_back("selection, " + FormatSpan(selected_end - selected_start));
         }
         else
         {
             const TimelineModel& timeline =
-                context.data_provider->DataModel().GetTimeline();
+                target.data_provider->DataModel().GetTimeline();
             chips.push_back("whole trace, " +
                             FormatSpan(timeline.GetEndTime() - timeline.GetStartTime()));
         }

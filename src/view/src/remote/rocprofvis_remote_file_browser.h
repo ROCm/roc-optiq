@@ -125,6 +125,7 @@ private:
     // Selection: "" = none, ".." = the parent row, otherwise the entry's name.
     std::string              m_selected_name;
     bool                     m_scroll_to_selected;
+    bool                     m_navigation_changed;
 };
 
 }  // namespace View

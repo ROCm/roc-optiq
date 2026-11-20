@@ -19,6 +19,8 @@
 #include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
+#include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -306,6 +308,65 @@ JsonString(jt::Json& node, const char* key)
     return node[key].getString();
 }
 
+// Reads a non-negative token count. Usage numbers arrive as ints from a stock
+// endpoint and as doubles from others, and a count a 32-bit int cannot hold is
+// rejected rather than wrapped.
+bool
+JsonCount(jt::Json& node, const char* key, int& out)
+{
+    if(!node.contains(key))
+    {
+        return false;
+    }
+    jt::Json& value = node[key];
+    double    raw   = 0.0;
+    if(value.isLong())
+    {
+        raw = static_cast<double>(value.getLong());
+    }
+    else if(value.isDouble())
+    {
+        raw = value.getDouble();
+    }
+    else
+    {
+        return false;
+    }
+    if(!std::isfinite(raw) || raw < 0.0 || raw > static_cast<double>(INT32_MAX))
+    {
+        return false;
+    }
+    out = static_cast<int>(raw);
+    return true;
+}
+
+// Copies the usage object when the endpoint sent one. Missing fields stay zero.
+// A body with no usage object leaves has_usage false, which is what a local
+// server that does not count tokens looks like.
+void
+ReadUsage(jt::Json& root, AssistantChatResult& result)
+{
+    if(!root.contains("usage") || !root["usage"].isObject())
+    {
+        return;
+    }
+    jt::Json&  usage      = root["usage"];
+    const bool has_prompt = JsonCount(usage, "prompt_tokens", result.prompt_tokens);
+    const bool has_completion =
+        JsonCount(usage, "completion_tokens", result.completion_tokens);
+    if(!has_prompt && !has_completion)
+    {
+        return;
+    }
+    result.has_usage = true;
+    if(usage.contains("prompt_tokens_details") &&
+       usage["prompt_tokens_details"].isObject())
+    {
+        result.has_cached_tokens = JsonCount(usage["prompt_tokens_details"],
+                                             "cached_tokens", result.cached_tokens);
+    }
+}
+
 // "content" is either a plain string or a list of {"text": "..."} parts.
 std::string
 JoinContent(jt::Json& content)
@@ -542,6 +603,9 @@ ParseChatCompletion(jt::Json& root, bool allow_tool_calls, AssistantChatResult& 
     {
         return;
     }
+    // Read before the choices checks. A length-limit body still carries usage,
+    // and that count is worth keeping even when the reply itself is unusable.
+    ReadUsage(root, result);
 
     if(!root.contains("choices") || !root["choices"].isArray() ||
        root["choices"].getArray().empty())
@@ -638,7 +702,9 @@ BuildRequestBody(const AssistantChatRequest& request, EndpointFlavour flavour)
     // user empty the field to match the endpoint.
     if(flavour == EndpointFlavour::kOpenAi)
     {
-        body["model"] = request.model;
+        // Same trim as the Azure path. A pasted model can end in a newline,
+        // and that would be sent as a different model name.
+        body["model"] = Core::String::trim_copy(request.model);
     }
     // Azure's API version predates max_completion_tokens and rejects it.
     if(flavour == EndpointFlavour::kAzure)
@@ -700,14 +766,27 @@ struct ResolvedEndpoint
     std::string     path;
 };
 
+// The key without the whitespace a paste tends to bring along: httplib refuses a
+// header value that ends in a space or newline, so every request would fail.
+std::string
+ApiToken(const AssistantChatRequest& request)
+{
+    return Core::String::trim_copy(request.api_token);
+}
+
 // Works out the address to post to and checks it is one we may use. Returns an
 // empty string on success, or the reason the request cannot go out.
 std::string
 ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_out)
 {
-    endpoint_out.flavour = FlavourFromUrl(request.endpoint_url);
-    endpoint_out.url =
-        ChatCompletionsUrl(request.endpoint_url, request.model, endpoint_out.flavour);
+    // A pasted URL can carry a trailing newline, which httplib refuses in the
+    // request line, or a space, which ends up in a host name that never resolves.
+    // The model is trimmed too: Azure concatenates it into the path, and a
+    // trailing space there is a deployment name that does not exist.
+    const std::string base_url = Core::String::trim_copy(request.endpoint_url);
+    const std::string model    = Core::String::trim_copy(request.model);
+    endpoint_out.flavour = FlavourFromUrl(base_url);
+    endpoint_out.url     = ChatCompletionsUrl(base_url, model, endpoint_out.flavour);
     if(endpoint_out.url.empty())
     {
         return ASSISTANT_MISSING_DEPLOYMENT_ERROR;
@@ -716,7 +795,7 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
     {
         return ASSISTANT_BAD_URL_ERROR;
     }
-    if(!request.api_token.empty() && !OriginMayCarryToken(endpoint_out.origin))
+    if(!ApiToken(request).empty() && !OriginMayCarryToken(endpoint_out.origin))
     {
         return ASSISTANT_INSECURE_URL_ERROR;
     }
@@ -727,19 +806,20 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
 httplib::Headers
 AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
 {
-    httplib::Headers headers;
-    if(request.api_token.empty())
+    httplib::Headers  headers;
+    const std::string token = ApiToken(request);
+    if(token.empty())
     {
         return headers;
     }
     if(flavour == EndpointFlavour::kAzure)
     {
-        headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, request.api_token);
+        headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, token);
     }
     else
     {
         headers.emplace(ASSISTANT_OPENAI_AUTH_HEADER,
-                        std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + request.api_token);
+                        std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + token);
     }
     return headers;
 }

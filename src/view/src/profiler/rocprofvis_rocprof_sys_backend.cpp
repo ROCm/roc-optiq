@@ -10,7 +10,6 @@
 #include "imgui.h"
 #include <sstream>
 #include <algorithm>
-#include <cctype>
 
 namespace RocProfVis
 {
@@ -981,128 +980,6 @@ void RocprofSysBackend::FlattenToExecution(
     {
         FlattenRunOrSample(config, argv_out);
     }
-}
-
-// ==================================================================================
-// ParseTraceOutputPath
-// ==================================================================================
-
-std::string RocprofSysBackend::ParseTraceOutputPath(rocprofvis_profiler_operation_t operation, std::string const& profiler_stdout) const
-{
-    (void)operation;
-    // rocprof-sys reports the rocpd database path it produced in a couple of
-    // places, e.g.:
-    //   [...]database.cpp:151 database][info] Database: /path/rocpd-<pid>-0.db
-    //   Output Summary box: "RocPD database" -> "File: /path/rocpd-<pid>-0.db"
-    // We can't predict the exact filename (timestamp folder + PID suffix), so
-    // we scrape the path the tool actually printed.
-    //
-    // Every candidate resolves to the LAST match in the stream, never the
-    // first. What we are handed is the whole child process tree's stdout and
-    // stderr, so the profiled application's own output is interleaved with the
-    // tool's and can name an unrelated database - profiling Optiq with Optiq
-    // logs "Opening file: <trace>.db" for whatever the user opens in the child.
-    // rocprof-sys reports its path during finalization, after the target has
-    // exited, so the tool's report is always the later one.
-    //
-    // Preference order, each resolved last-match: a path labelled "Database:",
-    // then one labelled "File:" (the Output Summary box), then any ".db" token
-    // for a tool that labels neither. The label has to appear before the path
-    // on the line, which is what keeps a lower-case "Opening file:" from
-    // passing itself off as the summary label.
-
-    struct DbToken
-    {
-        std::string text;
-        size_t      start = std::string::npos;
-    };
-
-    // Extracts the last whitespace/quote-delimited token ending in ".db" from a
-    // single line, or an empty token if none. Trims surrounding quotes and
-    // punctuation.
-    auto extract_db_token = [](std::string const& line) -> DbToken
-    {
-        const std::string ext = ".db";
-        DbToken best;
-        size_t pos = 0;
-        while ((pos = line.find(ext, pos)) != std::string::npos)
-        {
-            size_t end = pos + ext.size();
-            // The match must be a real extension: end of line or followed by a
-            // delimiter (not another path char like a letter, which would make
-            // it e.g. ".dbx").
-            if (end < line.size())
-            {
-                char next = line[end];
-                bool is_delim = std::isspace(static_cast<unsigned char>(next)) ||
-                                next == '\'' || next == '"' || next == ',' ||
-                                next == ')' || next == ']';
-                if (!is_delim)
-                {
-                    pos = end;
-                    continue;
-                }
-            }
-
-            // Walk backwards to the start of the token (first delimiter before
-            // the path).
-            size_t start = pos;
-            while (start > 0)
-            {
-                char c = line[start - 1];
-                if (std::isspace(static_cast<unsigned char>(c)) || c == '\'' ||
-                    c == '"' || c == '`' || c == '|')
-                {
-                    break;
-                }
-                --start;
-            }
-
-            best.text  = line.substr(start, end - start);
-            best.start = start;
-            pos = end;
-        }
-        return best;
-    };
-
-    std::string labelled_database;
-    std::string labelled_file;
-    std::string unlabelled;
-    std::istringstream stream(profiler_stdout);
-    std::string line;
-    while (std::getline(stream, line))
-    {
-        DbToken token = extract_db_token(line);
-        if (token.text.empty())
-        {
-            continue;
-        }
-
-        if (line.rfind("Database:", token.start) != std::string::npos)
-        {
-            labelled_database = token.text;
-        }
-        else if (line.rfind("File:", token.start) != std::string::npos)
-        {
-            labelled_file = token.text;
-        }
-        unlabelled = token.text;
-    }
-
-    std::string trace_path;
-    if (!labelled_database.empty())
-    {
-        trace_path = labelled_database;
-    }
-    else if (!labelled_file.empty())
-    {
-        trace_path = labelled_file;
-    }
-    else
-    {
-        trace_path = unlabelled;
-    }
-    return trace_path;
 }
 
 // ==================================================================================

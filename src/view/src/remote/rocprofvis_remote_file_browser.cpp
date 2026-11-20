@@ -134,6 +134,7 @@ RemoteFileBrowser::RemoteFileBrowser(std::shared_ptr<RemoteUri> uri)
 , m_accept_label()
 , m_selected_name()
 , m_scroll_to_selected(false)
+, m_navigation_changed(false)
 {
 }
 
@@ -214,6 +215,7 @@ RemoteFileBrowser::NavigateBrowserTo(const std::string& path, bool record_histor
     m_selected_name.clear();
     m_browser_error.clear();
     m_browser_busy      = true;
+    m_navigation_changed = true;
 
     m_uri->SetRemoteBrowsingPath(target.c_str());
     BrowseRemotePath();
@@ -959,6 +961,12 @@ void RemoteFileBrowser::Render()
                 ImGui::PopFont();
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
             };
+
+            if(m_navigation_changed)
+            {
+                ImGui::SetScrollY(0.0f);
+                m_navigation_changed = false;
+            }
 
             // Synthetic ".." parent row (not at the root).
             if (!is_posix_root_path(m_browser_dir))

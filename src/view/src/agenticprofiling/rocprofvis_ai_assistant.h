@@ -5,6 +5,7 @@
 
 #include "rocprofvis_ai_client.h"
 #include "rocprofvis_ai_tools.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_widget.h"
 
 #include <chrono>
@@ -13,6 +14,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class TextSelect;
@@ -46,10 +48,12 @@ public:
     void RenderDocked();
     void Render() override;
 
-    // Toolbar control shared by the system and compute toolbars.
+    // Toolbar control for the system trace toolbar.
     static void RenderToolbarButton();
 
 private:
+    friend struct AssistantPanelTestPeer;
+
     enum class Speaker
     {
         kUser,
@@ -71,6 +75,44 @@ private:
         Speaker     speaker;
         std::string text;
         uint64_t    track_id = 0;  // kChart only
+        // kChart only: the trace the chart draws, which a read of a linked
+        // trace makes different from the conversation's own.
+        std::string project_id;
+    };
+
+    /*
+     * One trace's chat. Each open trace keeps its own, so nothing said about
+     * one is ever sent with a question about another, and switching tabs swaps
+     * which one is shown instead of mixing them.
+     */
+    struct Conversation
+    {
+        std::vector<ChatLine> lines;
+        // Parallel to lines. Text rows create one; charts do not. Cleared with
+        // the transcript so a new conversation does not keep an old highlight.
+        std::vector<std::unique_ptr<TextSelect>> message_select;
+        std::vector<std::vector<std::string>>    message_lines;
+        std::vector<AssistantMessage>            messages;
+        // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
+        std::vector<std::string> next_steps;
+        std::string              input;
+        // Whether messages already carry this trace's briefing.
+        bool briefed = false;
+        // The linked-trace block the model was last given, so a change is
+        // announced on the next turn instead of leaving it an outdated list.
+        std::string links_announced;
+        bool        scroll_to_bottom = false;
+
+        // Token counts the endpoint reported for this trace's conversation.
+        // Kept across the end of a turn and cleared with the conversation.
+        bool usage_reported            = false;
+        int  last_prompt_tokens        = 0;
+        int  last_completion_tokens    = 0;
+        bool last_cached_known         = false;
+        int  last_cached_tokens        = 0;
+        int  session_prompt_tokens     = 0;
+        int  session_completion_tokens = 0;
+        int  session_rounds            = 0;
     };
 
     // One tool parked until the fetches behind it land.
@@ -80,6 +122,8 @@ private:
         // False when the tool piggybacked on a fetch already in flight: the rows
         // that land answer someone else's query, so the tool must run again.
         bool started_fetch = false;
+        // This turn started the request ids, so Clear/tab close may cancel them.
+        bool owns_requests = false;
         // The summary preload, which has no tool call to answer and resumes the
         // queued turn instead.
         bool                  warmup = false;
@@ -90,26 +134,56 @@ private:
         std::chrono::steady_clock::time_point started;
         // Zero takes the default fetch deadline. A tool waiting on the user
         // rather than on a query sets its own, much longer.
-        uint32_t              timeout_seconds = 0;
+        uint32_t timeout_seconds = 0;
+        // Set from SummaryEvent while parked on a summary. A failure stops this
+        // wait instead of asking the provider for the same summary again.
+        bool summary_settled   = false;
+        bool summary_succeeded = false;
+    };
+
+    // A cancelled HTTP call reaped from Update() instead of joined in the tab
+    // close / Clear event that cancelled it. std::future from std::async waits
+    // in its destructor, which would otherwise freeze the UI on a slow socket.
+    struct AbandonedRequest
+    {
+        std::shared_ptr<AssistantChatCall> call;
+        std::future<void>                  cancel;
+        std::future<AssistantChatResult>   result;
     };
 
     AssistantPanel();
     ~AssistantPanel() override;
 
+    // Created on first use, so a trace that is never asked about holds nothing.
+    Conversation& ConversationFor(const std::string& project_id);
+    // The conversation the turn writes to, and the one on screen.
+    Conversation& TurnConversation();
+    Conversation& ViewConversation();
+    // Forgets what the model was told, keeping the transcript on screen.
+    void ResetHistory(Conversation& conversation);
+    void HandleTabClosed(const std::string& project_id);
+    // A summary finished on some trace. Recorded only when this turn is parked
+    // on that trace's summary, whoever started the request.
+    void HandleSummaryEvent(const SummaryEvent& event);
+
     void AppendLine(Speaker speaker, const std::string& text);
-    void AppendChart(uint64_t track_id);
-    void RenderActivityChart(uint64_t track_id);
+    void        AppendChart(const std::string& project_id, uint64_t track_id);
+    void        RenderActivityChart(const std::string& project_id, uint64_t track_id);
     void        RenderHeaderCard();
+    void        RenderLinkMenu();
+    // The model, context, and token-usage pill under the title.
+    void        RenderContextChip(const std::string& model, const std::string& endpoint);
     void        RenderTranscript();
     // Pinned under the transcript while a turn runs: an animated stage for the
     // kind of wait, a title, chips for what the read covers or the steps so
     // far, and one sentence about the wait. Live state, so it cannot outlive
     // the turn.
     void        RenderActivityCard();
-    void        RenderMessageCard(size_t index, const ChatLine& line);
-    void        RenderSelectableMessage(size_t index, const std::string& text,
-                                        Colors text_color);
-    TextSelect* MessageSelect(size_t index);
+    void        RenderMessageCard(Conversation& conversation, size_t index,
+                                  const ChatLine& line);
+    void        RenderSelectableMessage(Conversation& conversation, size_t index,
+                                        const std::string& text, Colors text_color);
+    TextSelect* MessageSelect(Conversation& conversation, size_t index);
     void        RenderComposer();
     // Explain this view on an empty chat, or the model's offered follow-ups
     // after a turn.
@@ -118,12 +192,18 @@ private:
     // Transient progress text. The activity card shows it, and both disappear
     // when the turn ends.
     void SetStatus(const std::string& text);
-    // Serializes the transcript to a Markdown string, shared by copy and export.
-    std::string BuildTranscriptText() const;
+    // Serializes a transcript to a Markdown string, shared by copy and export.
+    std::string BuildTranscriptText(const Conversation& conversation,
+                                    const std::string&  trace_name) const;
     void        CopyTranscript();
     void        ExportTranscript();
+    void        ClearConversation();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
+    // Non-blocking cancellation for a UI action. The future is reaped later.
+    void AbandonPendingRequest();
+    void ReapAbandonedRequests();
+    // Blocking cancellation for final panel destruction only.
     void CancelPendingRequest();
     void StartHttpRequest();
     void PollToolFetch();
@@ -137,34 +217,50 @@ private:
     void BeginFetchWait(const AssistantToolStartResult& started,
                         const std::string& tool_name, bool warmup);
     void FinishCurrentTool(const std::string& content);
-    // Answers every call left in the round without running it, once the trace
-    // in front is no longer the one the round was written for.
-    void AbandonBatchForNewTrace(const std::string& reason);
     void AppendToolReply(const AssistantToolCall& call, const std::string& content);
     void ContinueAfterTools();
     void BeginQueuedTurn();
     bool TryStartSummaryWarmup(const std::string& question);
     bool AnyFetchPending(const AssistantToolContext& context) const;
-    // Makes the trace in front the one this turn is about. True when it is the
-    // other kind from the one pinned before, which means another tool set.
-    bool                 PinTurnTrace();
+    // Makes the trace on screen the one this turn is about, together with its
+    // kind, which picks the prompt body and the tool schema.
+    void PinTurnTrace();
+    // What the tools may touch on the trace the turn is pinned to.
     AssistantToolContext MakeToolContext() const;
     std::string          CurrentProjectId() const;
-    std::string          RestartHint(bool kind_changed) const;
-    std::string          BuildUserPrompt(const std::string& question,
-                                         bool               include_briefing) const;
+    std::string BuildUserPrompt(const std::string& question, bool include_briefing);
     bool                 NeedsBriefing();
     void                 TrimConversation();
     bool                 Busy() const;
+    // Records a usage object from a completed response. Ignored when the
+    // endpoint sent none.
+    void NoteTokenUsage(const AssistantChatResult& result);
+    void ClearTokenUsage(Conversation& conversation);
+
+    // The conversation as the history trimmer budgets it, plus the standing
+    // prompt and tool schema that ride along with every request. The pill
+    // draws the first against its budget and reports the overhead apart, so
+    // an empty chat reads as empty. Tokens are characters over four.
+    struct ContextLoad
+    {
+        size_t history_chars         = 0;
+        size_t history_budget_chars  = 0;
+        size_t history_tokens        = 0;
+        size_t history_budget_tokens = 0;
+        size_t overhead_tokens       = 0;
+    };
+    ContextLoad MeasureContext() const;
+    void        RenderContextTooltip(const Conversation& conversation,
+                                     const ContextLoad& load, float fill,
+                                     const std::string& model,
+                                     const std::string& endpoint) const;
 
     static AssistantPanel* s_instance;
 
     bool  m_visible;
-    bool  m_scroll_to_bottom;
     float m_dock_width;
     Phase m_phase;
 
-    std::string m_input;
     std::string m_status;
     // When the current model wait began. A tool wait times itself from
     // m_fetch_wait.started, which keeps counting across contention retries.
@@ -175,7 +271,7 @@ private:
     // Last measured height of the activity card, including the gap under it.
     // The transcript reads this while a turn is running and ignores it once
     // the turn is idle, so a finished card does not leave a hole.
-    float                 m_activity_height;
+    float m_activity_height;
     // Every tool this turn has run, in order, for the card's step chips.
     std::vector<std::string> m_turn_steps;
     // The call m_turn_steps recorded last, plus one, so the re-runs a busy or
@@ -187,40 +283,44 @@ private:
     // phase's own, so a change of phase glides instead of jumping.
     double m_stream_offset;
     float  m_stream_speed;
-    std::vector<ChatLine> m_lines;
-    // Parallel to m_lines. Text rows create one; charts do not. Cleared with
-    // the transcript so a new conversation does not keep an old highlight.
-    std::vector<std::unique_ptr<TextSelect>> m_message_select;
-    std::vector<std::vector<std::string>>     m_message_lines;
+
+    // Every open trace's conversation, keyed by Project::GetID(). Held by
+    // pointer so a TextSelect callback can keep its conversation's address.
+    std::unordered_map<std::string, std::unique_ptr<Conversation>> m_conversations;
+    // The trace whose conversation is on screen. Read while drawing, after the
+    // tab bar has applied a switch: during Update() the active tab can still be
+    // the one the user just left.
+    std::string m_view_project_id;
 
     std::string                    m_queued_question;
-    std::vector<AssistantMessage>  m_conversation;
     std::vector<AssistantToolCall> m_pending_calls;
     size_t                         m_next_call_index;
     uint32_t                       m_tool_round;
     // Set when the tool budget runs out: the next request goes out without
     // tools, so the model has to write up what it already gathered.
     bool     m_force_final;
+    // A trace switch ends this batch. Every remaining call still gets a tool
+    // reply, but none of its body runs against a tab that has not switched yet.
+    bool m_stop_tool_queue;
     // Keeps contention retries on the first wait's timeout deadline.
     uint32_t m_fetch_retries;
-    // The trace this turn is about, which is what catches the user switching
-    // tabs mid-investigation. Moves only through PinTurnTrace.
+    // The trace the turn belongs to. Its tools read this trace and its replies
+    // go to this trace's conversation, whichever tab is in front while it runs.
+    // Moves only through PinTurnTrace.
     std::string m_turn_project_id;
     // Which kind of trace that is, which picks the prompt body and the tool
-    // schema. Pinned with the project rather than read per round, so the tool
-    // set changes only at the point the model is told the trace changed, and
-    // the schema a round goes out with always matches the tools the dispatcher
-    // will run for it.
-    bool        m_turn_is_compute;
-    // The trace the briefing in the conversation describes. A follow-up about
-    // the same trace does not repeat it; a different one does.
-    std::string m_briefed_project_id;
-    FetchWait   m_fetch_wait;
-    // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
-    std::vector<std::string> m_next_steps;
+    // schema. Pinned with the project rather than read per round, so the schema
+    // a round goes out with always matches the tools the dispatcher will run
+    // for it.
+    bool      m_turn_is_compute;
+    FetchWait m_fetch_wait;
+
+    EventManager::SubscriptionToken m_tab_closed_token;
+    EventManager::SubscriptionToken m_summary_event_token;
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;
+    std::vector<AbandonedRequest>      m_abandoned;
 };
 
 }  // namespace View

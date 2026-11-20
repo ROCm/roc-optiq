@@ -218,7 +218,8 @@ std::string
 BuildAssistantFilterExpression(const jt::Json& args, std::string& error_out)
 {
     jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    if(!mutable_args.contains("filters"))
+    // Some models spell an optional argument they are not using as null.
+    if(!mutable_args.contains("filters") || mutable_args["filters"].isNull())
     {
         return std::string();
     }
@@ -256,6 +257,16 @@ BuildAssistantFilterExpression(const jt::Json& args, std::string& error_out)
         {
             error_out = "Unknown filter column \"" + column +
                         "\". Allowed columns: " + AssistantAllowedQueryColumnList();
+            return std::string();
+        }
+        // A uuid is wider than a double holds exactly and the filter compares
+        // through one, so any match would take in neighbouring events.
+        if(column == "__uuid")
+        {
+            error_out = "__uuid cannot be used in filters: ids this large are compared "
+                        "approximately and would match neighbouring events. Call "
+                        "event_details with the uuid, or filter on id, name, or start "
+                        "instead.";
             return std::string();
         }
 

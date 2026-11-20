@@ -55,6 +55,9 @@ namespace
 constexpr size_t ASSISTANT_COMPUTE_MAX_RESULT_CHARS = 20000;
 constexpr size_t ASSISTANT_COMPUTE_TOP_KERNELS      = 10;
 constexpr size_t ASSISTANT_COMPUTE_MAX_KERNELS      = 200;
+// Room kept back for one more kernel row plus the paging footer and the
+// shortened-names note, so a long listing ends on a whole row.
+constexpr size_t ASSISTANT_COMPUTE_KERNEL_ROW_RESERVE = 1024;
 // Catalogue rows one list_metrics call may name. Low on purpose: a search that
 // matches more than this is too broad to be useful, and the model is better
 // served by being told to narrow it than by a page of near-misses.
@@ -765,7 +768,12 @@ ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
                    "workload_id values to read that workload.\n";
             return DoneResult(TrimComputeResult(out.str()), "Listed the workloads");
         }
-        return DoneResult(error, "Unknown workload");
+        // A workload_id this trace does not have gets the list with the
+        // refusal, rather than being sent back here to ask for it.
+        return DoneResult(workloads.size() > 1
+                              ? error + "\n" + TrimComputeResult(out.str())
+                              : error,
+                          "Unknown workload");
     }
 
     out << "workload_id: " << workload->id << "\n";
@@ -931,16 +939,25 @@ ToolListKernels(const AssistantToolContext& context, const jt::Json& args,
             << " matching kernels)\n";
         return DoneResult(out.str(), "Listed kernels");
     }
-    const size_t end       = std::min(kernels.size(), offset + limit);
-    bool         shortened = false;
+    size_t end       = std::min(kernels.size(), offset + limit);
+    bool   shortened = false;
     for(size_t i = offset; i < end; ++i)
     {
+        // Stop on a whole row while the footer still fits. The first row always
+        // prints, so paging by the offset below cannot stall.
+        if(i > offset && static_cast<size_t>(out.tellp()) +
+                                 ASSISTANT_COMPUTE_KERNEL_ROW_RESERVE >
+                             ASSISTANT_COMPUTE_MAX_RESULT_CHARS)
+        {
+            end = i;
+            break;
+        }
         shortened = AppendKernelRow(out, *kernels[i]) || shortened;
     }
     if(end < kernels.size())
     {
-        out << "  ... " << (kernels.size() - end) << " more, raise limit or page with "
-                                                     "offset\n";
+        out << "  ... " << (kernels.size() - end) << " more, page with offset=" << end
+            << "\n";
     }
     if(shortened)
     {
@@ -1336,7 +1353,10 @@ StartComputeMetricsFetch(const AssistantToolContext& context,
                           "Fetch refused");
     }
 
+    // The slot is the assistant's own, so a stopped turn or a timed-out read
+    // may cancel it rather than leave the next metric read queued behind it.
     result.started_fetch     = true;
+    result.owns_requests     = true;
     result.fetch.workload_id = workload.id;
     result.fetch.kernel_id =
         kernel != nullptr ? kernel->id : ASSISTANT_COMPUTE_WORKLOAD_SCOPE;
@@ -1387,6 +1407,7 @@ ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
 
     AssistantToolStartResult result = StartComputeMetricsFetch(
         context, *workload, kernel, selectors, "Reading the triage panel...");
+    result.fetch.compute_triage = result.pending;
     // Without this, a table the panel lacks is simply not there, and the
     // defect it would have shown reads as one the kernel does not have.
     if(result.pending && !missing.empty())
@@ -2230,7 +2251,12 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
         }
     }
 
-    size_t printed = 0;
+    // The tables go to a stream of their own so the kernel_triage note about
+    // empty ones can sit above them, where a long panel's trim cannot cut it.
+    std::ostringstream       tables;
+    std::vector<std::string> printed_tables;
+    std::vector<std::string> empty_tables;
+    size_t                   printed = 0;
     for(const AvailableMetrics::Category* category : workload->available_metrics
                                                          .ordered_categories)
     {
@@ -2302,8 +2328,13 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
 
             if(table_has_rows)
             {
-                out << "  " << category->name << " / " << table->name << "\n";
-                out << table_out.str();
+                tables << "  " << category->name << " / " << table->name << "\n";
+                tables << table_out.str();
+            }
+            if(fetch.compute_triage)
+            {
+                (table_has_rows ? printed_tables : empty_tables)
+                    .push_back(Core::String::to_lower_copy(table->name));
             }
         }
     }
@@ -2317,6 +2348,31 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
                "than some traces carry.\n";
     }
 
+    // Matched by name, as CollectTriageSelectors does: two tables sharing a
+    // name count as read when either returned values.
+    bool any_empty = false;
+    for(const char* name : ASSISTANT_TRIAGE_TABLE_NAMES)
+    {
+        const std::string wanted = Core::String::to_lower_copy(name);
+        if(std::find(empty_tables.begin(), empty_tables.end(), wanted) ==
+               empty_tables.end() ||
+           std::find(printed_tables.begin(), printed_tables.end(), wanted) !=
+               printed_tables.end())
+        {
+            continue;
+        }
+        out << (any_empty ? ", \"" : "note: no values for this kernel in \"") << name
+            << "\"";
+        any_empty = true;
+    }
+    if(any_empty)
+    {
+        out << ". Those tables exist in this workload but returned nothing here - the "
+               "kernel may not use that hardware or the counters were not collected. "
+               "Not a measured zero and not a sign of health.\n";
+    }
+
+    out << tables.str();
     out << "metrics_returned: " << printed << "\n";
     return TrimComputeResult(out.str());
 }

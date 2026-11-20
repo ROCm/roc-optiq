@@ -62,6 +62,8 @@ uint64_t ResolveAssistantSortColumn(const TablesModel& tables, TableType type,
 // The same, for a tool whose own default is a column rather than a position:
 // tries the model's sort_by, then fallback_name, and only then fallback_index.
 // Naming the default keeps it correct if the table's column order changes.
+// The header it searches is the previous read's, so the result is a guess that
+// AssistantFetchNeedsRerun confirms once this read's header lands.
 uint64_t ResolveAssistantSortColumnNamed(const TablesModel& tables, TableType type,
                                          const std::string& name,
                                          const std::string& fallback_name,

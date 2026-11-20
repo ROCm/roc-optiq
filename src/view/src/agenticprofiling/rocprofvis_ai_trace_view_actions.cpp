@@ -118,8 +118,14 @@ TraceView::ProposeScript(const std::string& source)
     {
         return false;
     }
-    m_analysis_view->GetScriptEditor()->ProposeScript(source);
-    return true;
+    return m_analysis_view->GetScriptEditor()->ProposeScript(source);
+}
+
+bool
+TraceView::ScriptHasUnsavedDraft() const
+{
+    return m_analysis_view && m_analysis_view->GetScriptEditor() &&
+           m_analysis_view->GetScriptEditor()->HasUnsavedDraft();
 }
 
 ScriptApproval
@@ -138,6 +144,15 @@ TraceView::ClearScriptProposal()
     if(m_analysis_view && m_analysis_view->GetScriptEditor())
     {
         m_analysis_view->GetScriptEditor()->ClearProposal();
+    }
+}
+
+void
+TraceView::RejectScriptProposal()
+{
+    if(m_analysis_view && m_analysis_view->GetScriptEditor())
+    {
+        m_analysis_view->GetScriptEditor()->Reject();
     }
 }
 #endif
@@ -233,15 +248,6 @@ TraceView::ClearMeasurement()
     {
         m_measurement->ClearMeasurement();
         m_measurement->ExitMeasurementMode();
-    }
-}
-
-void
-TraceView::ZoomToRange(double start_ns, double end_ns)
-{
-    if(m_timeline_view && is_usable_time_range(start_ns, end_ns))
-    {
-        m_timeline_view->SetViewableRangeNS(start_ns, end_ns);
     }
 }
 

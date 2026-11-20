@@ -93,13 +93,15 @@ StripPanelFiller(const std::string& key)
 OptiqPanel
 PanelFromKey(const std::string& key)
 {
-    if(key == "minimap" || key == "map" || key == "overview" ||
-       key == "birdseye" || key == "thumbnail")
+    if(key == "minimap" || key == "map" || key == "birdseye" || key == "thumbnail")
     {
         return OptiqPanel::kMinimap;
     }
-    if(key == "histogram" || key == "activity" || key == "activitybar" ||
-       key == "activitygraph" || key == "activitychart" || key == "density")
+    // The View menu calls this strip "Timeline Overview", so "overview" means
+    // the histogram and not the minimap.
+    if(key == "histogram" || key == "overview" || key == "timelineoverview" ||
+       key == "activity" || key == "activitybar" || key == "activitygraph" ||
+       key == "activitychart" || key == "density")
     {
         return OptiqPanel::kHistogram;
     }
@@ -197,7 +199,7 @@ OptiqActions::PanelName(OptiqPanel panel)
 std::string
 OptiqActions::PanelNameList()
 {
-    return "minimap (map, overview), histogram (activity), topology (sidebar, "
+    return "minimap (map), histogram (timeline overview, activity), topology (sidebar, "
            "navbar, tree, tracks, left panel), details (analysis, tables, event "
            "table, bottom), summary (stats), log (console, output), toolbar (top "
            "bar), annotations (notes, sticky notes). Whatever the user called it "
@@ -248,6 +250,12 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
         }
         case OptiqPanel::kSummary:
         {
+            // Compare projects have no summary, so opening it there would
+            // report a panel that cannot appear.
+            if(visible && m_trace_view != nullptr && !m_trace_view->SummarySupported())
+            {
+                return false;
+            }
             app_settings.show_summary = visible;
             return true;
         }
@@ -407,6 +415,12 @@ OptiqActions::ProposeScript(const std::string& source)
     return true;
 }
 
+bool
+OptiqActions::ScriptHasUnsavedDraft() const
+{
+    return m_trace_view != nullptr && m_trace_view->ScriptHasUnsavedDraft();
+}
+
 ScriptApproval
 OptiqActions::ScriptProposalState() const
 {
@@ -420,6 +434,15 @@ OptiqActions::ClearScriptProposal()
     if(m_trace_view != nullptr)
     {
         m_trace_view->ClearScriptProposal();
+    }
+}
+
+void
+OptiqActions::RejectScriptProposal()
+{
+    if(m_trace_view != nullptr)
+    {
+        m_trace_view->RejectScriptProposal();
     }
 }
 #endif
@@ -503,17 +526,6 @@ OptiqActions::ClearMeasurement()
 }
 
 bool
-OptiqActions::ZoomToRange(double start_ns, double end_ns)
-{
-    if(m_trace_view == nullptr || !is_usable_time_range(start_ns, end_ns))
-    {
-        return false;
-    }
-    m_trace_view->ZoomToRange(start_ns, end_ns);
-    return true;
-}
-
-bool
 OptiqActions::AddNote(double time_ns, const std::string& title, const std::string& text,
                       double v_min, double v_max, uint64_t track_id)
 {
@@ -533,6 +545,10 @@ OptiqActions::SelectRange(double start_ns, double end_ns)
         return false;
     }
     m_timeline_selection->SelectTimeRange(start_ns, end_ns);
+    // The timeline applies this when the selection event is dispatched next
+    // frame. Applied now, a statistics read later in the same batch is not
+    // voided mid-flight by the range it was asked under.
+    m_data_provider->DataModel().GetAnalysis().SetAnalysisRange(start_ns, end_ns);
     return true;
 }
 

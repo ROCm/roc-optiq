@@ -7,6 +7,7 @@
 // one method, not as wiring inside a tool here.
 #include "rocprofvis_ai_tools_internal.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <iomanip>
@@ -36,8 +37,16 @@ namespace
 constexpr size_t ASSISTANT_MAX_HIGHLIGHTS      = 12;
 constexpr size_t ASSISTANT_MAX_NEXT_STEPS      = 3;
 constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
+// Notes are saved with the project, so what one turn can leave is bounded.
+constexpr size_t ASSISTANT_MAX_NOTE_TITLE_CHARS = 120;
+constexpr size_t ASSISTANT_MAX_NOTE_TEXT_CHARS  = 2000;
+constexpr size_t ASSISTANT_MAX_NOTES_PER_TURN   = 5;
 constexpr uint64_t ASSISTANT_TAB_REF_OFFSET      = 14695981039346656037ULL;
 constexpr uint64_t ASSISTANT_TAB_REF_PRIME       = 1099511628211ULL;
+
+// A per-turn limit that holds even when text in the trace talks the model out
+// of its prompt. BeginAssistantUiTurn resets it.
+size_t g_notes_pinned = 0;
 
 // Stable for one project id without sending its full path to the model. The
 // mapping is recomputed from the open tabs, so closing another tab cannot
@@ -62,6 +71,57 @@ Actions(const AssistantToolContext& context)
 {
     return OptiqActions(context.data_provider, context.timeline_selection,
                         context.trace_view);
+}
+
+// The result of an action carried out exactly as asked (see settled). A
+// refusal, a listing, or an action that missed stays a plain DoneResult.
+AssistantToolStartResult
+SettledResult(const std::string& content, const std::string& status)
+{
+    AssistantToolStartResult result = DoneResult(content, status);
+    result.settled                  = true;
+    return result;
+}
+
+// Cuts a note or a next step to max_chars and marks the cut. A note is saved
+// into the project file, and a next step is sent as a message.
+std::string
+TrimNoteText(std::string text, size_t max_chars)
+{
+    return TrimAssistantText(std::move(text), max_chars, "...");
+}
+
+// Holds a window to the trace. False when none of it lies inside.
+bool
+ClampToTrace(const TimelineModel& timeline, double& start_ns, double& end_ns)
+{
+    const double trace_start = timeline.GetStartTime();
+    const double trace_end   = timeline.GetEndTime();
+    if(trace_end > trace_start)
+    {
+        start_ns = std::max(start_ns, trace_start);
+        end_ns   = std::min(end_ns, trace_end);
+    }
+    return end_ns > start_ns;
+}
+
+// A next step as its button shows it, which a click sends as the user's own
+// words. ImGui hides what follows "##", so that and control characters go.
+std::string
+PrintableStep(const std::string& text)
+{
+    std::string step;
+    step.reserve(text.size());
+    for(const char c : text)
+    {
+        if(c == '#' && !step.empty() && step.back() == '#')
+        {
+            continue;
+        }
+        const bool control = static_cast<unsigned char>(c) < 0x20 || c == 0x7F;
+        step += control ? ' ' : c;
+    }
+    return TrimNoteText(Core::String::trim_copy(step), ASSISTANT_MAX_NEXT_STEP_CHARS);
 }
 
 // Reads the stacked follow-up buttons out of offer_next_steps arguments.
@@ -91,14 +151,10 @@ OfferNextStepsResult(const jt::Json& args)
         {
             continue;
         }
-        std::string step = Core::String::trim_copy(entry.getString());
+        const std::string step = PrintableStep(entry.getString());
         if(step.empty())
         {
             continue;
-        }
-        if(step.size() > ASSISTANT_MAX_NEXT_STEP_CHARS)
-        {
-            step.resize(ASSISTANT_MAX_NEXT_STEP_CHARS);
         }
         result.next_steps.push_back(step);
         if(result.next_steps.size() >= ASSISTANT_MAX_NEXT_STEPS)
@@ -143,9 +199,9 @@ ToolShowPanel(const AssistantToolContext& context, const jt::Json& args,
                               OptiqActions::PanelName(panel) + " panel here.",
                           "Panel unavailable");
     }
-    return DoneResult(std::string(visible ? "Opened the " : "Closed the ") +
-                          OptiqActions::PanelName(panel) + " panel.",
-                      visible ? "Opened a panel" : "Closed a panel");
+    return SettledResult(std::string(visible ? "Opened the " : "Closed the ") +
+                             OptiqActions::PanelName(panel) + " panel.",
+                         visible ? "Opened a panel" : "Closed a panel");
 }
 
 AssistantToolStartResult
@@ -156,7 +212,7 @@ ToolResetView(const AssistantToolContext& context, const jt::Json&, const std::s
         return DoneResult("Reset view is only available on a system trace.",
                           "Not available");
     }
-    return DoneResult("Zoomed back out to the whole trace.", "Reset the view");
+    return SettledResult("Zoomed back out to the whole trace.", "Reset the view");
 }
 
 AssistantToolStartResult
@@ -167,7 +223,7 @@ ToolMeasure(const AssistantToolContext& context, const jt::Json& args,
     if(JsonUtils::GetBool(args, "clear", false))
     {
         actions.ClearMeasurement();
-        return DoneResult("Cleared the measurement.", "Cleared measurement");
+        return SettledResult("Cleared the measurement.", "Cleared measurement");
     }
 
     const double start_ns = JsonUtils::GetDouble(args, "start_ns", -1.0);
@@ -184,7 +240,7 @@ ToolMeasure(const AssistantToolContext& context, const jt::Json& args,
 
     SettingsManager& settings    = SettingsManager::GetInstance();
     const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
-    return DoneResult(
+    return SettledResult(
         "Measured " +
             nanosecond_to_formatted_str(end_ns - start_ns, time_format, true) +
             " on the timeline.",
@@ -228,9 +284,9 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
         {
             return DoneResult("Could not save that bookmark.", "Bookmark failed");
         }
-        return DoneResult("Saved the current view to bookmark " +
-                              std::to_string(slot) + ".",
-                          "Saved a bookmark");
+        return SettledResult("Saved the current view to bookmark " +
+                                 std::to_string(slot) + ".",
+                             "Saved a bookmark");
     }
     if(action == "goto")
     {
@@ -240,8 +296,8 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
                                   " is empty.\n" + saved.str(),
                               "No such bookmark");
         }
-        return DoneResult("Jumped to bookmark " + std::to_string(slot) + ".",
-                          "Used a bookmark");
+        return SettledResult("Jumped to bookmark " + std::to_string(slot) + ".",
+                             "Used a bookmark");
     }
     if(action == "remove")
     {
@@ -250,8 +306,8 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
             return DoneResult("Bookmark " + std::to_string(slot) + " is empty.",
                               "No such bookmark");
         }
-        return DoneResult("Removed bookmark " + std::to_string(slot) + ".",
-                          "Removed a bookmark");
+        return SettledResult("Removed bookmark " + std::to_string(slot) + ".",
+                             "Removed a bookmark");
     }
     return DoneResult("Unknown action. Use save, goto, remove, or list.",
                       "Bad action");
@@ -262,12 +318,21 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
              const std::string&)
 {
     const double      time_ns = JsonUtils::GetDouble(args, "time_ns", -1.0);
-    const std::string title   = JsonUtils::GetString(args, "title", "");
+    const std::string title   = TrimNoteText(JsonUtils::GetString(args, "title", ""),
+                                             ASSISTANT_MAX_NOTE_TITLE_CHARS);
     const std::string text    = JsonUtils::GetString(args, "text", "");
     if(time_ns < 0.0 || title.empty() || text.empty())
     {
         return DoneResult("annotate needs time_ns, title, and text.",
                           "Missing arguments");
+    }
+    if(g_notes_pinned >= ASSISTANT_MAX_NOTES_PER_TURN)
+    {
+        return DoneResult("This turn has already pinned " +
+                              std::to_string(ASSISTANT_MAX_NOTES_PER_TURN) +
+                              " notes, which is the most one turn may leave. Put "
+                              "the rest in your answer instead.",
+                          "Too many notes");
     }
 
     SettingsManager& settings    = SettingsManager::GetInstance();
@@ -295,18 +360,27 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
     double view_start = 0.0;
     double view_end   = 0.0;
     SelectedOrFullTimeRange(context, view_start, view_end);
-    if(!Actions(context).AddNote(time_ns, title, text, view_start, view_end,
+    if(!Actions(context).AddNote(time_ns, title,
+                                 TrimNoteText(text, ASSISTANT_MAX_NOTE_TEXT_CHARS),
+                                 view_start, view_end,
                                  JsonU64(args, "track_id", INVALID_UINT64_INDEX)))
     {
         return DoneResult("Could not pin a note on this trace.", "Note failed");
     }
+    ++g_notes_pinned;
 
     std::ostringstream out;
     out << "Pinned a note titled \"" << title << "\" at "
         << nanosecond_to_formatted_str(time_ns, time_format, true) << ".";
+    if(text.size() > ASSISTANT_MAX_NOTE_TEXT_CHARS)
+    {
+        out << " Its text was too long for a note and was cut at "
+            << ASSISTANT_MAX_NOTE_TEXT_CHARS << " characters.";
+    }
     const bool selected = context.timeline_selection != nullptr &&
                           context.timeline_selection->HasValidTimeRangeSelection();
-    if(selected && (time_ns < view_start || time_ns > view_end))
+    const bool outside  = selected && (time_ns < view_start || time_ns > view_end);
+    if(outside)
     {
         // The user moved on, or the model reused a timestamp from an earlier
         // window. Either way the note is not where the conversation is.
@@ -316,7 +390,10 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
             << "), so say where the note went rather than calling it the "
                "selected interval, or call goto first and annotate again.";
     }
-    return DoneResult(out.str(), "Left a note");
+    AssistantToolStartResult result = DoneResult(out.str(), "Left a note");
+    // A note that missed the selection may be redone after a goto.
+    result.settled = !outside;
+    return result;
 }
 
 AssistantToolStartResult
@@ -357,11 +434,12 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     std::string selected;
     if(actions.SelectAnalysisTab(name, selected))
     {
-        return DoneResult("Opened the " + selected + " tab in the details panel.",
-                          "Switched tabs");
+        return SettledResult("Opened the " + selected + " tab in the details panel.",
+                             "Switched tabs");
     }
     // A ref is unambiguous even when two paths have the same basename. The
     // labels remain accepted when they name exactly one tab.
+    std::string       target     = name;
     const std::string ref_prefix = "tab_";
     if(name.compare(0, ref_prefix.size(), ref_prefix) == 0)
     {
@@ -381,25 +459,26 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
         }
         if(matched_id != nullptr)
         {
-            name = *matched_id;
+            // A file path, so it is kept apart from the name the reply quotes.
+            target = *matched_id;
         }
     }
     std::string selected_id;
-    if(actions.SelectTab(name, selected_id, selected))
+    if(actions.SelectTab(target, selected_id, selected))
     {
         if(selected_id == context.project_id)
         {
-            return DoneResult("Trace " + selected + " is already in front.",
-                              "Switched tabs");
+            return SettledResult("Trace " + selected + " is already in front.",
+                                 "Switched tabs");
         }
         // The turn stays with its own trace, so say where the user went rather
         // than let the model think it can now read the other one.
         AssistantToolStartResult result =
-            DoneResult("Switched the user to trace " + selected +
-                           ". This conversation stays with " + context.trace_name +
-                           ", so read and change nothing more here; questions about " +
-                           selected + " continue in its own conversation.",
-                       "Switched tabs");
+            SettledResult("Switched the user to trace " + selected +
+                              ". This conversation stays with " + context.trace_name +
+                              ", so read and change nothing more here; questions about " +
+                              selected + " continue in its own conversation.",
+                          "Switched tabs");
         result.stop_tool_queue = true;
         return result;
     }
@@ -431,13 +510,16 @@ ToolFlowArrows(const AssistantToolContext& context, const jt::Json& args,
     {
         message += " Style set to " + style + ".";
     }
-    if(visible)
+    // With nothing selected there is nothing for them to draw from yet, which
+    // the model can still put right, so that reply is not a settled one.
+    if(visible && (context.timeline_selection == nullptr ||
+                   !context.timeline_selection->HasSelectedEvents()))
     {
-        message +=
-            " They only draw for a selected event, so call goto with an "
-            "event_uuid and track_id to see them.";
+        return DoneResult(message + " They only draw for a selected event, so call "
+                                    "goto with an event_uuid and track_id to see them.",
+                          "Flow arrows on");
     }
-    return DoneResult(message, visible ? "Flow arrows on" : "Flow arrows off");
+    return SettledResult(message, visible ? "Flow arrows on" : "Flow arrows off");
 }
 
 AssistantToolStartResult
@@ -451,10 +533,12 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     double end_ns =
         JsonUtils::GetDouble(args, "end_ns", JsonUtils::GetDouble(args, "end", -1.0));
     const uint64_t track_id =
-        JsonU64(args, "track_id", TimelineSelection::INVALID_SELECTION_ID);
-    const uint64_t event_uuid =
-        JsonU64(args, "event_uuid",
-                JsonU64(args, "event_id", TimelineSelection::INVALID_SELECTION_ID));
+        JsonU64(args, "track_id",
+                JsonU64(args, "__trackId", TimelineSelection::INVALID_SELECTION_ID));
+    const uint64_t event_uuid = JsonU64(
+        args, "event_uuid",
+        JsonU64(args, "__uuid",
+                JsonU64(args, "event_id", TimelineSelection::INVALID_SELECTION_ID)));
     if(context.timeline_selection == nullptr)
     {
         return DoneResult("Timeline selection is not available.", "goto failed");
@@ -493,7 +577,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
                                 TimelineSelection::INVALID_SELECTION_ID));
             if(entry_uuid != TimelineSelection::INVALID_SELECTION_ID)
             {
-                targets.emplace_back(JsonU64(entry, "track_id", track_id), entry_uuid);
+                targets.emplace_back(
+                    JsonU64(entry, "track_id", JsonU64(entry, "__trackId", track_id)),
+                    entry_uuid);
             }
         }
     }
@@ -528,25 +614,58 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     // without it a NaN bound would be accepted as a valid range.
     bool has_range = std::isfinite(start_ns) && std::isfinite(end_ns) &&
                      start_ns >= 0.0 && end_ns > start_ns;
+    // The start and end of an event with no duration, as its row prints them.
+    // Zero for both is how an argument left out tends to be spelled instead.
+    bool pointlike = std::isfinite(start_ns) && start_ns > 0.0 && end_ns == start_ns;
 
-    // Naming the culprit event but no window is the obvious way to call this,
-    // so derive the window from the events rather than refusing. Only works for
-    // events the view has already loaded; when it does not, the selection below
-    // still happens and only the framing is skipped.
+    // goto is the one writer of the selection the data tools default to, so a
+    // window outside the trace must not be stored: every later read would come
+    // back empty. The trace's window is reported in raw nanoseconds so the
+    // model can pass it straight back.
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    const std::string    trace_window =
+        "window_ns is " + nanosecond_to_str(timeline.GetStartTime()) + " .. " +
+        nanosecond_to_str(timeline.GetEndTime());
+    bool range_dropped = false;
+    if(has_range && !ClampToTrace(timeline, start_ns, end_ns))
+    {
+        if(targets.empty())
+        {
+            return DoneResult("That range is outside this trace, whose " + trace_window +
+                                  ". Re-read the range from the data rather than "
+                                  "reusing one from an earlier trace or turn.",
+                              "goto failed");
+        }
+        // The named events supply the window instead.
+        has_range     = false;
+        range_dropped = true;
+    }
+
+    // An event named with no window is framed by its own span, from a row read
+    // or its loaded details. With neither, the click below still happens.
     if(!has_range && !targets.empty())
     {
-        std::vector<uint64_t> ids;
-        ids.reserve(targets.size());
-        for(const std::pair<uint64_t, uint64_t>& target : targets)
-        {
-            ids.push_back(target.second);
-        }
         double found_start = 0.0;
         double found_end   = 0.0;
-        if(context.data_provider->DataModel().GetEvents().GetEventTimeRange(
-               ids, found_start, found_end) &&
-           std::isfinite(found_start) && std::isfinite(found_end) &&
-           found_start >= 0.0 && found_end > found_start)
+        bool   found       = false;
+        for(const std::pair<uint64_t, uint64_t>& target : targets)
+        {
+            const AssistantEventSighting sighting =
+                FindAssistantEvent(context, target.second);
+            if(!sighting.has_span)
+            {
+                pointlike = pointlike || (sighting.seen && sighting.start_ns > 0.0 &&
+                                          sighting.end_ns == sighting.start_ns);
+                continue;
+            }
+            found_start = found ? std::min(found_start, sighting.start_ns)
+                                : sighting.start_ns;
+            found_end   = found ? std::max(found_end, sighting.end_ns) : sighting.end_ns;
+            found       = true;
+        }
+        if(found && std::isfinite(found_start) && std::isfinite(found_end) &&
+           found_start >= 0.0 && found_end > found_start &&
+           ClampToTrace(timeline, found_start, found_end))
         {
             start_ns  = found_start;
             end_ns    = found_end;
@@ -565,14 +684,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     }
 
     OptiqActions actions = Actions(context);
-    const bool   zoom    = JsonUtils::GetBool(args, "zoom", false);
     if(has_range)
     {
         actions.SelectRange(start_ns, end_ns);
-        if(zoom)
-        {
-            actions.ZoomToRange(start_ns, end_ns);
-        }
     }
 
     // The first event that takes becomes the focal point: it is clicked, which
@@ -635,23 +749,52 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         out << "Moved the timeline to "
             << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
             << nanosecond_to_formatted_str(end_ns, time_format, true);
-        if(zoom)
+        if(range_dropped)
         {
-            out << ", zoomed in";
+            out << ", the named events' own window, because the range you gave is "
+                   "outside this trace, whose "
+                << trace_window;
         }
+    }
+    else if(range_dropped)
+    {
+        out << "Left the timeline where it was, because the range you gave is outside "
+               "this trace, whose "
+            << trace_window
+            << ", and the event's own start and end are not in the rows read last - "
+               "pass them from its row";
+    }
+    else if(pointlike)
+    {
+        out << "Left the timeline where it was, because there is no span to frame: an "
+               "event with no duration needs start_ns and end_ns a little either side "
+               "of it";
     }
     else
     {
-        out << "Left the timeline where it was, because no window was given and "
-               "that event is not loaded in the view yet";
+        out << "Left the timeline where it was, because no window was given and the "
+               "event's own start and end are not in the rows read last - pass them "
+               "as start_ns and end_ns from its row";
     }
     if(have_focus)
     {
-        out << " and selected one event as the focal point, so its details, flow "
-               "arrows and call stack are loaded";
+        out << (has_range ? " and selected" : ". Selected") << " the event with __uuid \""
+            << focus.second << "\" as the focal point";
         if(marked > 1)
         {
             out << ", with " << (marked - 1) << " more highlighted around it";
+        }
+        // Selecting takes any uuid. Only a row read or loaded details can
+        // vouch for one, so without either nothing is promised.
+        if(FindAssistantEvent(context, focus.second).seen)
+        {
+            out << ". Its details, flow arrows and call stack load in the details "
+                   "panel";
+        }
+        else
+        {
+            out << ". Its details, flow arrows and call stack load from that __uuid, "
+                   "so they stay empty if it is not an event of this trace";
         }
     }
     else if(!targets.empty())
@@ -663,7 +806,11 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
                "__trackId came from a table read on this trace";
     }
     out << ".";
-    return DoneResult(out.str(), "Moved the view");
+    AssistantToolStartResult result = DoneResult(out.str(), "Moved the view");
+    // Settled only when the view went where it was sent and every event named
+    // was marked. Anything short of that the model may want to correct.
+    result.settled = has_range && !range_dropped && marked == targets.size();
+    return result;
 }
 
 const AssistantToolEntry k_ui_tool_handlers[] = {
@@ -697,6 +844,13 @@ const AssistantToolEntry k_shared_ui_tool_handlers[] = {
 };
 
 }  // namespace
+
+// Starts a turn's allowance for the tools above.
+void
+BeginAssistantUiTurn()
+{
+    g_notes_pinned = 0;
+}
 
 // The UI half of the tool set, for StartAssistantTool to search.
 AssistantToolTable

@@ -878,7 +878,14 @@ Ask Optiq offers a script through `OptiqActions::ProposeScript`, which
 fills this tab and selects it; nothing runs until the user presses Run
 or Reject. `ScriptApproval` is that state machine, and
 `ScriptExecuteCompleteEvent` is filtered by trace source id because
-every editor hears every one of them.
+every editor hears every one of them. The source is read-only while an
+offer waits, and Run is disabled for `SCRIPT_OFFER_MIN_READ_SECONDS`
+after the offer first draws: it lands under a Run button that was
+already there, so a click aimed at the user's own script must not run
+the new one. A press that began before the offer drew is ignored for the
+same reason, however long it was held. Save writes the text as it was
+when Save was pressed, so an offer that lands while the dialog is open
+is not saved under the name the user picked for their own script.
 
 ## 8. Track Item Hierarchy
 
@@ -2735,7 +2742,9 @@ Layered, transport at the bottom and the panel at the top:
   would). Every summary list is trimmed to the busiest names plus
   "Others", so the tools point at `top_events` for a full ranking.
   `AssistantSummaryLoaded` is the one "is the summary there" check,
-  shared with the panel's summary warmup. `BuildAssistantBriefing`
+  shared with the panel's summary warmup. A summary that loaded with
+  nothing in it (`AssistantSummaryCurrent`) is reported as empty by the
+  briefing and by `get_summary`, not fetched again. `BuildAssistantBriefing`
   lives here too and hands a compute trace straight to
   `BuildAssistantComputeBriefing`, so nothing system-shaped describes a
   workload.
@@ -2839,7 +2848,7 @@ Integration points:
   main view, and renders it with `RenderDocked()`. The View menu binds
   `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
 - `TraceView` and `AnalysisView` expose the plain accessors
-  `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
+  `OptiqActions` needs (`ResetView`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into
   their members.
 
@@ -2857,7 +2866,17 @@ Rules that are easy to get wrong here:
 - **Tool rounds and the answer are separate HTTP calls.** When the
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
-  user reads.
+  user reads. The draft round is skipped when a batch offered next steps
+  and everything else in it was a UI action carried out as asked
+  (`AssistantToolStartResult::settled`): nothing in those replies calls
+  for another tool, so `ContinueAfterTools` goes straight to the
+  tools-off round. A batch that read data, or in which an action
+  missed, still gets its round. A UI tool sets `settled` only on the
+  path where it did exactly what was asked.
+- **The summary preload waits ten seconds, not for the summary.** Past
+  `ASSISTANT_WARMUP_TIMEOUT_SECONDS` the question goes out, the briefing
+  says the summary is still loading instead of printing zero totals,
+  and `get_summary` parks on the request already in flight.
 - **The prompt is a shared base plus one body per trace kind.**
   `AssistantSystemPrompt(is_compute)` concatenates
   `ASSISTANT_SHARED_OPENING`, then either
@@ -2987,7 +3006,10 @@ Rules that are easy to get wrong here:
   against the original timeout deadline. It returns a timeout rather
   than treating the other query's rows as its own.
 - **HTTP runs on a worker via `std::async`, and must stay cancellable.**
-  `AssistantChatCall::Cancel()` closes the socket. Clear and tab close move
+  `AssistantChatCall::Cancel()` closes the socket. One that lands before
+  httplib has a request in flight finds no socket to close, so `Send`
+  also passes an upload-progress callback that stops the body write
+  once `Cancel()` has been called. Clear and tab close move
   the cancelled future to `m_abandoned`, which `Update()` reaps when ready,
   rather than destroy a `std::async` future and block the UI; final panel
   destruction cancels and joins every remaining worker.
@@ -3014,7 +3036,25 @@ Rules that are easy to get wrong here:
   clients cannot enter the reserved band below it.
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
-  `UserSettings::assistant`, and holds only name, URL, and model.
+  `UserSettings::assistant`, and holds only name, URL, and model. A key
+  pasted into the URL is kept out too: `AssistantStorableUrl` drops
+  userinfo, a fragment, and every query parameter but an API version,
+  when the file is read, when OK is pressed, and when it is written, and
+  the hover cards show the URL without its query. A key saved before
+  keys were bound to an origin is bound to the URL's origin at its first
+  read, and `GetAssistantToken` does not hand it out while the store
+  refuses that write: left unbound, it would follow an edited URL.
+- **Nothing the model reads, and nothing it sends back, may carry the
+  key.** `AssistantRedactKey` blanks the turn's key in the question
+  before it is shown or kept (`SendCurrentInput`), in every tool reply
+  before it is logged or kept (`AppendToolReply`), in every message as
+  the client serializes it, and in the reply, error text and tool calls
+  an endpoint returns. A new path that puts text in front of the model
+  or on screen has to pass one of those points.
+- **A next step is shown as it is sent.** A click sends the step as the
+  user's own message, which is what unlocks notes, bookmarks and tab
+  switches, so `PrintableStep` removes the `##` that would hide part of
+  a button label.
 
 ## 13. Remote / SSH and Profiler Launch UI
 

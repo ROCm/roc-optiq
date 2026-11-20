@@ -49,6 +49,9 @@ constexpr float  SCRIPT_DOT_RADIUS            = 2.0f;
 constexpr int    SCRIPT_DOT_COUNT             = 3;
 constexpr float  SCRIPT_DOT_SPACING           = 3.0f;
 constexpr float  SCRIPT_DOT_SPEED             = 5.0f;
+// How long an offered script is on screen before Run takes a click: too short
+// to read one, long enough that a click aimed at what it replaced cannot land.
+constexpr double SCRIPT_OFFER_MIN_READ_SECONDS = 1.0;
 
 // Even-spacing sample from SCRIPTING.md so the first Run does something
 // visible against a loaded system trace.
@@ -83,6 +86,7 @@ ScriptEditor::ScriptEditor(DataProvider&                      data_provider,
 , m_result_ratio(SCRIPT_DEFAULT_RESULT_RATIO)
 , m_progress_percent(0)
 , m_source(DEFAULT_SCRIPT)
+, m_saved_source(DEFAULT_SCRIPT)
 , m_output_is_error(false)
 , m_status("Ready")
 , m_approval(ScriptApproval::kNone)
@@ -156,17 +160,30 @@ ScriptEditor::~ScriptEditor()
         static_cast<int>(RocEvents::kRequestProgressUpdate), m_progress_token);
 }
 
-void
+bool
 ScriptEditor::ProposeScript(const std::string& source)
 {
-    m_source = source;
+    if(HasUnsavedDraft())
+    {
+        return false;
+    }
+    m_source       = source;
+    m_saved_source = source;
     m_file_path.clear();
     m_output.clear();
     m_output_is_error  = false;
     m_progress_percent = 0;
     m_running          = false;
     m_approval         = ScriptApproval::kPending;
+    m_offer_shown_time = -1.0;
     m_status           = "Waiting for you";
+    return true;
+}
+
+bool
+ScriptEditor::HasUnsavedDraft() const
+{
+    return !m_source.empty() && m_source != m_saved_source;
 }
 
 ScriptApproval
@@ -291,7 +308,7 @@ ScriptEditor::SubtitleText() const
     switch(m_approval)
     {
     case ScriptApproval::kPending: return "Written by Ask Optiq";
-    case ScriptApproval::kRejected: return "Declined - not run";
+    case ScriptApproval::kRejected: return "Declined or stopped";
     case ScriptApproval::kRunning:
     case ScriptApproval::kFinished: return "Ran from Ask Optiq";
     case ScriptApproval::kFailedToStart: return "Could not be started";
@@ -312,6 +329,20 @@ ScriptEditor::RenderHeaderCard()
                    &settings);
 
     const bool awaiting_decision = m_approval == ScriptApproval::kPending;
+    // An offer lands under a Run button that was already there, so a click
+    // aimed at the user's own script must not run it: Run stays off for a moment.
+    if(awaiting_decision && m_offer_shown_time < 0.0)
+    {
+        m_offer_shown_time = ImGui::GetTime();
+    }
+    const bool just_offered =
+        awaiting_decision &&
+        ImGui::GetTime() - m_offer_shown_time < SCRIPT_OFFER_MIN_READ_SECONDS;
+    // A press begun before the offer was drawn and held past that moment was
+    // aimed at what the offer replaced, wherever it is let go.
+    const bool stale_press =
+        awaiting_decision && ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+        ImGui::GetIO().MouseClickedTime[ImGuiMouseButton_Left] < m_offer_shown_time;
     const float gap              = style.ItemInnerSpacing.x;
     const float header_icon_size =
         ImGui::GetFontSize() * SCRIPT_HEADER_ICON_SCALE;
@@ -350,12 +381,12 @@ ScriptEditor::RenderHeaderCard()
         ImGui::SameLine(0.0f, 0.0f);
     }
 
-    const bool can_run = CanRun();
+    const bool can_run = CanRun() && !just_offered;
     if(!can_run)
     {
         ImGui::BeginDisabled();
     }
-    if(AccentButton("Run", ImVec2(run_width, button_height), &settings))
+    if(AccentButton("Run", ImVec2(run_width, button_height), &settings) && !stale_press)
     {
         Run();
     }
@@ -371,7 +402,8 @@ ScriptEditor::RenderHeaderCard()
         }
         else if(awaiting_decision)
         {
-            SetTooltipStyled("Run the script Ask Optiq wrote, against this trace");
+            SetTooltipStyled("Run the script Ask Optiq wrote. It runs inside Optiq "
+                             "with your user permissions, so read it first");
         }
         else
         {
@@ -456,7 +488,11 @@ ScriptEditor::RenderProposalBanner()
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::AlignTextToFramePadding();
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
-    ImGui::TextUnformatted("Ask Optiq wrote this - Run or Reject.");
+    // Says what approving means, since the script is not confined to the
+    // trace. Wrapped so a narrow panel does not clip it.
+    ImGui::TextWrapped("%s", "Ask Optiq wrote this script. It runs inside Optiq with "
+                             "your user permissions, so read it before you press "
+                             "Run, or Reject it.");
     ImGui::PopStyleColor();
     EndPanelCard();
 }
@@ -478,7 +514,9 @@ ScriptEditor::RenderSource(const ImVec2& size)
     PanelFieldLabel("Source", false, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x * 2.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-    ImGui::TextUnformatted("Python");
+    // An offer is locked while it waits, so Run executes the text that was read.
+    const bool locked = m_approval == ScriptApproval::kPending;
+    ImGui::TextUnformatted(locked ? "Python, locked until you Run or Reject" : "Python");
     ImGui::PopStyleColor();
 
     const float editor_height = std::max(1.0f, ImGui::GetContentRegionAvail().y);
@@ -491,7 +529,9 @@ ScriptEditor::RenderSource(const ImVec2& size)
     // Negative x fills the card; the inset well is the code surface.
     InputTextMultilineString("##script_source", m_source,
                              ImVec2(-FLT_MIN, editor_height),
-                             ImGuiInputTextFlags_AllowTabInput);
+                             locked ? ImGuiInputTextFlags_AllowTabInput |
+                                          ImGuiInputTextFlags_ReadOnly
+                                    : ImGuiInputTextFlags_AllowTabInput);
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
     ImGui::PopFont();
@@ -645,6 +685,13 @@ ScriptEditor::Run()
 void
 ScriptEditor::Cancel()
 {
+    // Stopping a run Ask Optiq waits on withdraws the approval. Answered now:
+    // a cancel with nothing left to stop gets no completion event, and the
+    // assistant must not be told to fix a script the user chose to stop.
+    if(m_approval == ScriptApproval::kRunning)
+    {
+        m_approval = ScriptApproval::kRejected;
+    }
     if(!m_data_provider.CancelScript())
     {
         // Nothing left to cancel, so no completion event is coming and the
@@ -683,8 +730,12 @@ ScriptEditor::SaveToFile()
     FileFilter py_filter;
     py_filter.m_name       = "Python";
     py_filter.m_extensions = { "py" };
+    // Taken now: an offer can land while the dialog is open, and must not be
+    // written out under the name the user picked for this script.
     app->ShowSaveFileDialog("Save Script", { py_filter }, m_file_path,
-                            [this](std::string path) { WriteFile(path); });
+                            [this, source = m_source](std::string path) {
+                                WriteFile(path, source);
+                            });
 }
 
 void
@@ -702,14 +753,21 @@ ScriptEditor::ReadFile(const std::string& path)
                                                 NotificationLevel::Error);
         return;
     }
+    // Loading over an offer Ask Optiq waits on declines it. Left pending, Run
+    // would execute this file as the script it wrote.
+    if(m_approval == ScriptApproval::kPending)
+    {
+        Reject();
+    }
     m_source.assign((std::istreambuf_iterator<char>(file)),
                     std::istreambuf_iterator<char>());
-    m_file_path = path;
-    m_status    = "Loaded";
+    m_saved_source = m_source;
+    m_file_path    = path;
+    m_status       = "Loaded";
 }
 
 void
-ScriptEditor::WriteFile(const std::string& path)
+ScriptEditor::WriteFile(const std::string& path, const std::string& source)
 {
     if(path.empty())
     {
@@ -723,7 +781,7 @@ ScriptEditor::WriteFile(const std::string& path)
                                                 NotificationLevel::Error);
         return;
     }
-    file.write(m_source.data(), static_cast<std::streamsize>(m_source.size()));
+    file.write(source.data(), static_cast<std::streamsize>(source.size()));
     // Close explicitly and check: a buffered write can fail on flush (e.g. a
     // full disk), which is_open() cannot catch, so do not report "Saved" blindly.
     file.close();
@@ -734,8 +792,14 @@ ScriptEditor::WriteFile(const std::string& path)
                                                 NotificationLevel::Error);
         return;
     }
-    m_file_path = path;
-    m_status    = "Saved";
+    // An offer that replaced the text meanwhile is not what the file holds.
+    if(m_source != source)
+    {
+        return;
+    }
+    m_saved_source = m_source;
+    m_file_path    = path;
+    m_status       = "Saved";
 }
 
 }  // namespace View

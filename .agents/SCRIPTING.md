@@ -460,21 +460,26 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
   chain as every other UI action, so nothing in `agenticprofiling/`
   keeps a pointer to a view that a closing tab could take away.
 - **The wait is on a person, so it gets its own deadline.**
-  `AssistantToolStartResult::timeout_seconds` overrides the 45s a fetch
-  runs under; the script tool asks for 300. The panel also routes a
-  timed-out `kScript` fetch back through
+  `AssistantToolStartResult::timeout_seconds` overrides the 350s a fetch
+  runs under; the script tool asks for 300. Pressing Run starts that
+  deadline again (`AssistantScriptRunning`), so a run approved late in
+  the reading time is not reported unfinished seconds after it began.
+  The panel also routes a timed-out `kScript` fetch back through
   `FinishAssistantScriptFetch` rather than reporting a generic timeout,
   because only that side knows whether the user never answered or the
   run was abandoned, and it has an outstanding offer to clear.
 - **`ScriptApproval` is the whole state machine.** `kPending` ->
-  `kRunning` -> `kFinished` on approval, `kRejected` on refusal, and
-  `kFailedToStart` when an approved run could not begin - which exists
+  `kRunning` -> `kFinished` on approval, `kRejected` on refusal or when
+  the user stops the approved run (so the model hears it was their
+  decision and is not asked to fix a failure), and `kFailedToStart`
+  when an approved run could not begin - which exists
   so a script that never started still answers the assistant instead of
   waiting out the full five minutes. `AssistantScriptFetchPending` is
   true for `kPending` and `kRunning` only.
-- **An offer is pinned to its trace.** `Run` refuses when the tab in
-  front is not the trace the script was written against, the same
-  mistake `m_turn_project_id` guards elsewhere.
+- **An offer is pinned to its trace.** There is one editor per trace
+  and the tool offers into the turn's own, refusing when that trace is
+  not in front, so `Run` can only start the script on the trace it was
+  written against.
 - **Events are filtered by source id.** Every editor hears every
   `ScriptExecuteCompleteEvent`, and there is one editor per trace, so
   each answers only events carrying the trace it started a run on.
@@ -778,11 +783,10 @@ reasoning moved to the section it belongs to.
   `m_running_source_id` set and the request in flight. The old run's
   completion event still matches that id, so it overwrites the new
   offer's output while approval stays `kPending` and Ask Optiq waits
-  out its deadline. It also discards an unsaved draft without asking.
-  Cancel or refuse the propose while a run is live, and clear
-  `m_running_source_id` on every path that leaves Running.
+  out its deadline. Cancel or refuse the propose while a run is live,
+  and clear `m_running_source_id` on every path that leaves Running.
 - **File dialogs capture raw `this`.** `LoadFromFile` / `SaveToFile`
-  hand `[this](std::string path)` to `AppWindow::ShowOpenFileDialog` /
+  hand callbacks that capture `this` to `AppWindow::ShowOpenFileDialog` /
   `ShowSaveFileDialog`, which hold the callback until the user
   confirms. Closing the trace tab destroys the `ScriptEditor` first,
   and `UpdateNativeFileDialog` can then call into freed memory; tab
@@ -790,13 +794,6 @@ reasoning moved to the section it belongs to.
   a generation token, or cancelling pending dialogs on teardown. It is
   the same shape §3's run generation solves on the binding side: a
   callback outliving the thing it points at.
-- **A cancelled run is reported to the model as a failure.**
-  `GetLastScriptResult` returns false for "never ran", "failed" and
-  "cancelled" alike, and `FinishAssistantScriptFetch` turns that into
-  *"The script failed:"*, so the assistant may try to fix and re-offer
-  a script the user deliberately stopped. It handles `kRejected`,
-  `kFailedToStart`, `kPending` and `kRunning` separately already;
-  cancel needs the same treatment.
 
 ### Sandbox
 

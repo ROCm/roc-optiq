@@ -19,12 +19,22 @@
 #include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
+#include <algorithm>
+#include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
+
+#ifndef _WIN32
+#include <csignal>
+#include <ctime>
+#include <sys/socket.h>
+#endif
 
 namespace RocProfVis
 {
@@ -35,10 +45,16 @@ namespace
 {
 
 constexpr int  ASSISTANT_CONNECT_TIMEOUT_SECONDS   = 15;
-constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 120;
+// The reply is not streamed, so no byte arrives until the whole completion,
+// reasoning included, is done. The read timeout has to cover all of that.
+constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 300;
 constexpr int  ASSISTANT_FIRST_REDIRECT_STATUS     = 300;
 constexpr int  ASSISTANT_FIRST_ERROR_STATUS        = 400;
 constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
+constexpr int  ASSISTANT_HTTP_TOO_MANY_REQUESTS    = 429;
+constexpr int  ASSISTANT_HTTP_BAD_GATEWAY          = 502;
+constexpr int  ASSISTANT_HTTP_SERVICE_UNAVAILABLE  = 503;
+constexpr int  ASSISTANT_HTTP_GATEWAY_TIMEOUT      = 504;
 constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
 constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 
@@ -46,6 +62,15 @@ constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 // actually needs, and a ceiling on how much work a single malformed or hostile
 // response can start. The inline "harmony" path below has its own, smaller cap.
 constexpr size_t ASSISTANT_MAX_TOOL_CALLS_PER_ROUND = 16;
+
+// A transient failure gets one more try, after a short wait the endpoint can
+// lengthen with Retry-After, up to the cap.
+constexpr int ASSISTANT_RETRY_WAIT_SECONDS      = 2;
+constexpr int ASSISTANT_RETRY_WAIT_MAX_SECONDS  = 10;
+constexpr int ASSISTANT_RETRY_POLL_MILLISECONDS = 100;
+// A connection that failed later than this most likely timed out, or the
+// endpoint was already working: retrying would double the wait and the bill.
+constexpr int ASSISTANT_RETRY_FAST_FAILURE_SECONDS = 10;
 
 // Stock OpenAI: the key is a bearer token and the model is named in the body.
 constexpr char ASSISTANT_OPENAI_AUTH_HEADER[] = "Authorization";
@@ -69,6 +94,16 @@ constexpr int ASSISTANT_MAX_OUTPUT_TOKENS = 4096;
 // A malformed reply could otherwise name an unbounded number of tools.
 constexpr size_t ASSISTANT_MAX_HARMONY_CALLS = 4;
 
+// The provider's error text goes into the transcript, a toast and any export.
+constexpr size_t ASSISTANT_MAX_ERROR_TEXT_BYTES = 400;
+// Blanking a shorter key could mangle ordinary words in the message.
+constexpr size_t ASSISTANT_MIN_REDACTED_KEY_BYTES = 8;
+constexpr char   ASSISTANT_REDACTED_KEY[]         = "[key]";
+constexpr char   ASSISTANT_TRUNCATION_MARK[]      = "...";
+// What trimming takes off either end of a pasted key: the characters
+// std::isspace matches in the C locale.
+constexpr char ASSISTANT_KEY_BLANKS[] = " \t\n\v\f\r";
+
 constexpr char ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
 constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
@@ -76,8 +111,11 @@ constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
     "the Model field.";
 constexpr char ASSISTANT_INSECURE_URL_ERROR[] =
     "The assistant URL is plain http, which would put the API key on the wire "
-    "in clear text. Use https, or clear the key to talk to this endpoint "
-    "without one.";
+    "in clear text. Use an https URL for this endpoint.";
+// Deliberately does not repeat the URL, which is where the secret is.
+constexpr char ASSISTANT_URL_CREDENTIALS_ERROR[] =
+    "The assistant URL must not contain credentials. Put the key in the API "
+    "key field.";
 constexpr char ASSISTANT_REDIRECT_ERROR[] =
     "The endpoint answered with a redirect, which is not followed because the "
     "API key must not be handed to another host. Point the URL at the address "
@@ -93,13 +131,18 @@ enum class EndpointFlavour
 };
 
 // Azure-style bases name the deployment in the path, which is what the /azure,
-// /engines/ and /openai/deployments segments below identify.
+// /engines/ and /openai/deployments segments below identify. Only the path is
+// searched: a host such as azure-llm.example or a query value is not a marker.
 EndpointFlavour
 FlavourFromUrl(const std::string& url)
 {
-    const bool azure = url.find("/azure") != std::string::npos ||
-                       url.find("/engines/") != std::string::npos ||
-                       url.find("/openai/deployments") != std::string::npos;
+    std::string  path   = url.substr(0, url.find_first_of("?#"));
+    const size_t scheme = path.find("://");
+    // erase() clamps, so a URL with no path leaves nothing to search.
+    path.erase(0, path.find('/', scheme == std::string::npos ? 0 : scheme + 3));
+    const bool azure = path.find("/azure") != std::string::npos ||
+                       path.find("/engines/") != std::string::npos ||
+                       path.find("/openai/deployments") != std::string::npos;
     return azure ? EndpointFlavour::kAzure : EndpointFlavour::kOpenAi;
 }
 
@@ -280,12 +323,14 @@ HostFromOrigin(const std::string& origin)
 
 // True when the request never leaves this machine, which is what makes a plain
 // http endpoint - a local Ollama or llama.cpp server - safe to send a key to.
+// Only a literal 127.x.y.z counts: a name starting "127." resolves anywhere.
 bool
 OriginIsLoopback(const std::string& origin)
 {
     const std::string host = Core::String::to_lower_copy(HostFromOrigin(origin));
     return host == "localhost" || host == "::1" ||
-           host.compare(0, 4, "127.") == 0;
+           (host.compare(0, 4, "127.") == 0 &&
+            host.find_first_not_of("0123456789.") == std::string::npos);
 }
 
 // Whether the API key may be sent to this origin. TLS always qualifies; plain
@@ -296,6 +341,30 @@ OriginMayCarryToken(const std::string& origin)
 {
     return Core::String::to_lower_copy(origin).compare(0, 8, "https://") == 0 ||
            OriginIsLoopback(origin);
+}
+
+// Whether cpp-httplib will read this origin the way the checks above did. An
+// origin its parser rejects quietly becomes a plain-http client on port 80.
+bool
+OriginIsWellFormed(const std::string& origin)
+{
+    if(HostFromOrigin(origin).empty())
+    {
+        return false;
+    }
+    for(const char c : origin)
+    {
+        // Spaces and control characters, including DEL.
+        if(static_cast<unsigned char>(c) <= 0x20 || c == 0x7F)
+        {
+            return false;
+        }
+    }
+    // Only a port may follow a bracketed IPv6 literal. HostFromOrigin stops at
+    // the bracket, so "[::1].example" would otherwise pass as loopback.
+    const size_t close = origin.find(']');
+    return close == std::string::npos || close + 1 == origin.size() ||
+           origin[close + 1] == ':';
 }
 
 std::string
@@ -470,6 +539,16 @@ ParseHarmonyToolCalls(const std::string& content, std::vector<AssistantToolCall>
             return;
         }
 
+        // "to=" inside a longer word, flag or URL query ("--to=json", "goto=x",
+        // "?to=abc") is the model's prose, not a call.
+        const char before = (marker_pos > 0) ? content[marker_pos - 1] : ' ';
+        if(std::isalnum(static_cast<unsigned char>(before)) != 0 || before == '_' ||
+           before == '-' || before == '?' || before == '&')
+        {
+            search = marker_pos + marker.size();
+            continue;
+        }
+
         size_t start = marker_pos + marker.size();
         if(content.compare(start, functions_prefix.size(), functions_prefix) == 0)
         {
@@ -560,7 +639,8 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
         }
 
         call.arguments = "{}";
-        if(function.contains("arguments"))
+        // A null stands for "no arguments" and keeps the empty object.
+        if(function.contains("arguments") && !function["arguments"].isNull())
         {
             jt::Json& arguments = function["arguments"];
             call.arguments =
@@ -574,7 +654,8 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
 std::string
 ErrorText(jt::Json& root)
 {
-    if(root.contains("error"))
+    // Some gateways send "error": null beside a perfectly good reply.
+    if(root.contains("error") && !root["error"].isNull())
     {
         jt::Json& error = root["error"];
         if(error.isString())
@@ -659,13 +740,22 @@ ParseChatCompletion(jt::Json& root, bool allow_tool_calls, AssistantChatResult& 
     }
 }
 
+// A copy of text with the key blanked. Nothing the model reads may carry it,
+// whether a script printed it, a trace recorded it, or the user typed it.
+std::string
+WithoutKey(const std::string& api_token, std::string text)
+{
+    AssistantRedactKey(api_token, text);
+    return text;
+}
+
 // Serializes one conversation message the way the chat API expects it.
 jt::Json
-MessageToJson(const AssistantMessage& message)
+MessageToJson(const AssistantMessage& message, const std::string& api_token)
 {
     jt::Json json;
     json["role"]    = message.role;
-    json["content"] = message.content;
+    json["content"] = WithoutKey(api_token, message.content);
 
     if(message.role == "tool")
     {
@@ -684,7 +774,8 @@ MessageToJson(const AssistantMessage& message)
         json["tool_calls"][i]["type"]                  = "function";
         json["tool_calls"][i]["function"]["name"]      = call.name;
         json["tool_calls"][i]["function"]["arguments"] =
-            call.arguments.empty() ? "{}" : call.arguments;
+            call.arguments.empty() ? std::string("{}")
+                                   : WithoutKey(api_token, call.arguments);
     }
     return json;
 }
@@ -718,7 +809,7 @@ BuildRequestBody(const AssistantChatRequest& request, EndpointFlavour flavour)
 
     for(size_t i = 0; i < request.messages.size(); ++i)
     {
-        body["messages"][i] = MessageToJson(request.messages[i]);
+        body["messages"][i] = MessageToJson(request.messages[i], request.api_token);
     }
     if(request.enable_tools)
     {
@@ -743,6 +834,98 @@ ResponseError(int status, const std::string& body)
     return "The endpoint did not return JSON. Check the URL.";
 }
 
+// Seconds to wait before trying a request that started at "started" once more,
+// or 0 when the outcome would only repeat. A throttle or a gateway failure
+// waits as long as a numeric Retry-After asks, up to the cap. Of the transport
+// failures only a connection that broke straight away is retried: a timeout, a
+// refused connection, a DNS or a TLS failure would fail the same way again.
+int
+RetryWaitSeconds(const httplib::Result&                       response,
+                 const std::chrono::steady_clock::time_point& started)
+{
+    if(!response)
+    {
+        const httplib::Error error = response.error();
+        const bool           reset = error == httplib::Error::Read ||
+                                     error == httplib::Error::Write ||
+                                     error == httplib::Error::ConnectionClosed ||
+                                     error == httplib::Error::Unknown;
+        const bool fast = std::chrono::steady_clock::now() - started <
+                          std::chrono::seconds(ASSISTANT_RETRY_FAST_FAILURE_SECONDS);
+        return (reset && fast) ? ASSISTANT_RETRY_WAIT_SECONDS : 0;
+    }
+    if(response->status != ASSISTANT_HTTP_TOO_MANY_REQUESTS &&
+       response->status != ASSISTANT_HTTP_BAD_GATEWAY &&
+       response->status != ASSISTANT_HTTP_SERVICE_UNAVAILABLE &&
+       response->status != ASSISTANT_HTTP_GATEWAY_TIMEOUT)
+    {
+        return 0;
+    }
+
+    // The header may also be an HTTP date or garbage, so the digits are read by
+    // hand. Stopping at the cap keeps a long run of them from overflowing.
+    int seconds = 0;
+    for(const char c : response->get_header_value("Retry-After"))
+    {
+        if(std::isdigit(static_cast<unsigned char>(c)) == 0 ||
+           seconds >= ASSISTANT_RETRY_WAIT_MAX_SECONDS)
+        {
+            break;
+        }
+        seconds = seconds * 10 + (c - '0');
+    }
+    return (seconds == 0) ? ASSISTANT_RETRY_WAIT_SECONDS
+                          : std::min(seconds, ASSISTANT_RETRY_WAIT_MAX_SECONDS);
+}
+
+// A write into a connection the peer has reset raises SIGPIPE, whose default
+// action ends the app, and cpp-httplib's client leaves the signal to its
+// caller. macOS turns it off per socket. Linux cannot, so there the request's
+// thread blocks it and drops any it raised. Either way the write just fails.
+#ifdef SO_NOSIGPIPE
+void
+SuppressSigpipe(socket_t sock)
+{
+    const int on = 1;
+    setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+}
+#endif
+
+#ifdef __linux__
+class ScopedSigpipeBlock
+{
+public:
+    ScopedSigpipeBlock()
+    {
+        sigemptyset(&m_sigpipe);
+        sigaddset(&m_sigpipe, SIGPIPE);
+        // When the thread already blocked SIGPIPE, a pending one is not ours to drop.
+        m_blocked = pthread_sigmask(SIG_BLOCK, &m_sigpipe, &m_previous) == 0 &&
+                    sigismember(&m_previous, SIGPIPE) == 0;
+    }
+
+    ~ScopedSigpipeBlock()
+    {
+        if(!m_blocked)
+        {
+            return;
+        }
+        // One raised meanwhile is pending on this thread, and would be
+        // delivered the moment the mask is restored.
+        const timespec no_wait = {};
+        while(sigtimedwait(&m_sigpipe, nullptr, &no_wait) == SIGPIPE)
+        {
+        }
+        pthread_sigmask(SIG_SETMASK, &m_previous, nullptr);
+    }
+
+private:
+    sigset_t m_sigpipe;
+    sigset_t m_previous;
+    bool     m_blocked;
+};
+#endif
+
 // The URL with any query string elided. A user who pastes a key into the URL
 // would otherwise see it copied into the log and into error text.
 std::string
@@ -756,6 +939,27 @@ LoggableUrl(const std::string& url)
     return url.substr(0, query_start) + "?...";
 }
 
+// Makes the endpoint's error text safe to show and export: some gateways echo
+// the key they were given, so every copy of it is blanked, and the text is cut
+// to a bounded length.
+void
+ScrubErrorText(const std::string& api_token, std::string& error)
+{
+    AssistantRedactKey(api_token, error);
+
+    if(error.size() > ASSISTANT_MAX_ERROR_TEXT_BYTES)
+    {
+        // Back up to the start of a UTF-8 sequence so no code point is halved.
+        size_t cut = ASSISTANT_MAX_ERROR_TEXT_BYTES;
+        while(cut > 0 && (static_cast<unsigned char>(error[cut]) & 0xC0) == 0x80)
+        {
+            --cut;
+        }
+        error.resize(cut);
+        error += ASSISTANT_TRUNCATION_MARK;
+    }
+}
+
 // Where a request is going, once the configured base URL has been turned into
 // a concrete origin and path.
 struct ResolvedEndpoint
@@ -766,12 +970,12 @@ struct ResolvedEndpoint
     std::string     path;
 };
 
-// The key without the whitespace a paste tends to bring along: httplib refuses a
-// header value that ends in a space or newline, so every request would fail.
-std::string
-ApiToken(const AssistantChatRequest& request)
+// Whether the request carries a key at all, asked without copying it.
+bool
+HasApiToken(const AssistantChatRequest& request)
 {
-    return Core::String::trim_copy(request.api_token);
+    return request.api_token.find_first_not_of(ASSISTANT_KEY_BLANKS) !=
+           std::string::npos;
 }
 
 // Works out the address to post to and checks it is one we may use. Returns an
@@ -795,7 +999,30 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
     {
         return ASSISTANT_BAD_URL_ERROR;
     }
-    if(!ApiToken(request).empty() && !OriginMayCarryToken(endpoint_out.origin))
+
+    // cpp-httplib only recognises a lower-case scheme, while the key check
+    // below is case-blind. Normalising keeps the two in step.
+    const size_t      scheme_size = endpoint_out.origin.find("://");
+    const std::string scheme =
+        Core::String::to_lower_copy(endpoint_out.origin.substr(0, scheme_size));
+    if(scheme != "http" && scheme != "https")
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+    endpoint_out.origin.replace(0, scheme_size, scheme);
+    endpoint_out.url.replace(0, scheme_size, scheme);
+
+    // An @ in the origin is userinfo. cpp-httplib could not connect with it,
+    // and refusing it here keeps a pasted key out of the log and error text.
+    if(endpoint_out.origin.find('@') != std::string::npos)
+    {
+        return ASSISTANT_URL_CREDENTIALS_ERROR;
+    }
+    if(!OriginIsWellFormed(endpoint_out.origin))
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+    if(HasApiToken(request) && !OriginMayCarryToken(endpoint_out.origin))
     {
         return ASSISTANT_INSECURE_URL_ERROR;
     }
@@ -806,28 +1033,41 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
 httplib::Headers
 AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
 {
-    httplib::Headers  headers;
-    const std::string token = ApiToken(request);
-    if(token.empty())
+    httplib::Headers headers;
+    // Without the whitespace a paste brings along: httplib refuses a header
+    // value that ends in a space or newline, so every request would fail.
+    std::string token = Core::String::trim_copy(request.api_token);
+    if(!token.empty())
     {
-        return headers;
+        if(flavour == EndpointFlavour::kAzure)
+        {
+            headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, token);
+        }
+        else
+        {
+            headers.emplace(ASSISTANT_OPENAI_AUTH_HEADER,
+                            std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + token);
+        }
     }
-    if(flavour == EndpointFlavour::kAzure)
-    {
-        headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, token);
-    }
-    else
-    {
-        headers.emplace(ASSISTANT_OPENAI_AUTH_HEADER,
-                        std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + token);
-    }
+    AssistantWipeSecret(token);
     return headers;
+}
+
+// The auth header is this client's own copy of the key, so it is wiped once
+// the request is over. httplib keeps copies of its own that it does not wipe.
+void
+WipeAuthHeaders(httplib::Headers& headers)
+{
+    for(httplib::Headers::value_type& header : headers)
+    {
+        AssistantWipeSecret(header.second);
+    }
 }
 
 // Turns a response that did arrive into a reply or an error.
 void
-InterpretResponse(const httplib::Response& response, const std::string& url,
-                  bool allow_tool_calls, AssistantChatResult& result)
+InterpretResponse(const httplib::Response& response, bool allow_tool_calls,
+                  AssistantChatResult& result)
 {
     if(response.status >= ASSISTANT_FIRST_REDIRECT_STATUS &&
        response.status < ASSISTANT_FIRST_ERROR_STATUS)
@@ -846,19 +1086,100 @@ InterpretResponse(const httplib::Response& response, const std::string& url,
     else
     {
         ParseChatCompletion(parsed.second, allow_tool_calls, result);
-    }
-
-    // A 404 is nearly always the URL being shaped wrong, so name what we asked
-    // for. The query comes off first in case a key was pasted into it.
-    if(!result.error.empty() && response.status == ASSISTANT_HTTP_NOT_FOUND)
-    {
-        result.error.append(" Requested ");
-        result.error.append(LoggableUrl(url));
-        result.error.append(".");
+        // Lead with the status so a throttle, a bad key and a wrong URL do not
+        // read alike, then the provider's own words if it sent any.
+        if(!result.error.empty() && response.status >= ASSISTANT_FIRST_ERROR_STATUS)
+        {
+            const std::string detail = ErrorText(parsed.second);
+            result.error = "The endpoint returned HTTP " +
+                           std::to_string(response.status) +
+                           (detail.empty() ? std::string(".") : ": " + detail);
+        }
     }
 }
 
 }  // namespace
+
+std::string
+AssistantUrlOrigin(const std::string& url)
+{
+    std::string origin;
+    std::string path;
+    // Trimmed the way ResolveEndpoint trims it, so this names the host that is
+    // contacted. A base with no path can still carry a query, which is not
+    // part of it.
+    const std::string trimmed = Core::String::trim_copy(url);
+    if(!SplitUrl(trimmed.substr(0, trimmed.find_first_of("?#")), origin, path))
+    {
+        return std::string();
+    }
+    // Userinfo is dropped, up to the last @, so a key pasted into the URL is
+    // not carried into whatever the caller stores or compares.
+    const size_t authority = origin.find("://") + 3;
+    const size_t at        = origin.rfind('@');
+    if(at != std::string::npos && at >= authority)
+    {
+        origin.erase(authority, at + 1 - authority);
+    }
+    origin = Core::String::to_lower_copy(origin);
+    // A default port names the same destination as no port at all.
+    if(origin.compare(0, 8, "https://") == 0 && EndsWith(origin, ":443"))
+    {
+        origin.resize(origin.size() - 4);
+    }
+    else if(origin.compare(0, 7, "http://") == 0 && EndsWith(origin, ":80"))
+    {
+        origin.resize(origin.size() - 3);
+    }
+    return origin;
+}
+
+// The rule OriginMayCarryToken applies to the key, asked for the conversation:
+// with no key set such an endpoint is still used.
+bool
+AssistantUrlIsCleartext(const std::string& url)
+{
+    const std::string origin = AssistantUrlOrigin(url);
+    return origin.compare(0, 7, "http://") == 0 && !OriginIsLoopback(origin);
+}
+
+void
+AssistantWipeSecret(std::string& text)
+{
+    // Out to the capacity, so what an earlier and longer value left behind goes
+    // too. Volatile keeps the compiler from dropping the writes as dead stores.
+    text.resize(text.capacity());
+    volatile char* bytes = text.data();
+    for(size_t i = 0; i < text.size(); i++)
+    {
+        bytes[i] = '\0';
+    }
+    text.clear();
+}
+
+void
+AssistantRedactKey(const std::string& api_token, std::string& text)
+{
+    // Trimmed in place by offsets, so the search makes no further copy of it.
+    const size_t first = api_token.find_first_not_of(ASSISTANT_KEY_BLANKS);
+    if(first == std::string::npos)
+    {
+        return;
+    }
+    const size_t length = api_token.find_last_not_of(ASSISTANT_KEY_BLANKS) + 1 - first;
+    // Blanking a shorter key could mangle ordinary words in the text.
+    if(length < ASSISTANT_MIN_REDACTED_KEY_BYTES)
+    {
+        return;
+    }
+    const char* const key   = api_token.data() + first;
+    size_t            found = text.find(key, 0, length);
+    while(found != std::string::npos)
+    {
+        text.replace(found, length, ASSISTANT_REDACTED_KEY);
+        found = text.find(key, found + std::strlen(ASSISTANT_REDACTED_KEY), length);
+    }
+}
 
 AssistantChatResult
 AssistantChatCall::Send(const AssistantChatRequest& request)
@@ -883,6 +1204,10 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
+#ifdef __linux__
+    // Before the client, whose destructor can write a TLS close_notify.
+    const ScopedSigpipeBlock sigpipe_block;
+#endif
     httplib::Client client(endpoint.origin);
     if(!client.is_valid())
     {
@@ -898,28 +1223,59 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     // to whatever host the redirect names. A chat endpoint has no reason to
     // redirect, so refusing costs nothing and InterpretResponse says why.
     client.set_follow_location(false);
+#ifdef SO_NOSIGPIPE
+    client.set_socket_options(SuppressSigpipe);
+#endif
 
-    const httplib::Headers headers = AuthHeaders(request, endpoint.flavour);
-    const std::string      body =
+    httplib::Headers  headers = AuthHeaders(request, endpoint.flavour);
+    const std::string body =
         BuildRequestBody(request, endpoint.flavour).toString();
     const std::string loggable = LoggableUrl(endpoint.url);
     spdlog::info("Assistant POST {}", loggable);
 
     if(!Adopt(&client))
     {
-        result.cancelled = true;
+        WipeAuthHeaders(headers);
         return result;
     }
-    const httplib::Result response =
-        client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+    const std::chrono::steady_clock::time_point started =
+        std::chrono::steady_clock::now();
+    // A cancel that lands before the request is under way finds no socket to
+    // close, so the body write checks for one and gives up.
+    const httplib::UploadProgress unless_cancelled = [this](size_t, size_t) {
+        return !Cancelled();
+    };
+    httplib::Result response = client.Post(endpoint.path, headers, body,
+                                           ASSISTANT_JSON_CONTENT_TYPE, unless_cancelled);
+    // The client stays adopted across the retry so Cancel() can stop that too.
+    const int wait_seconds = RetryWaitSeconds(response, started);
+    if(wait_seconds > 0 && !Cancelled())
+    {
+        spdlog::warn("Assistant request to {} failed transiently, retrying in {} s",
+                     loggable, wait_seconds);
+        // Wait in short slices: Cancel() must be noticed promptly, because the
+        // panel's destructor waits on this thread at quit.
+        const std::chrono::steady_clock::time_point wake =
+            std::chrono::steady_clock::now() + std::chrono::seconds(wait_seconds);
+        while(!Cancelled() && std::chrono::steady_clock::now() < wake)
+        {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(ASSISTANT_RETRY_POLL_MILLISECONDS));
+        }
+        if(!Cancelled())
+        {
+            response = client.Post(endpoint.path, headers, body,
+                                   ASSISTANT_JSON_CONTENT_TYPE, unless_cancelled);
+        }
+    }
     Release();
+    WipeAuthHeaders(headers);
 
     if(!response)
     {
         // Cancel() closed this socket on purpose, so the failure is expected.
         if(Cancelled())
         {
-            result.cancelled = true;
             return result;
         }
         result.error =
@@ -929,7 +1285,31 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
-    InterpretResponse(*response, endpoint.url, request.enable_tools, result);
+    // A cancel during the retry wait leaves the first, failed response in hand.
+    if(Cancelled())
+    {
+        return result;
+    }
+
+    InterpretResponse(*response, request.enable_tools, result);
+    // An endpoint that echoes the key would otherwise put it in the transcript,
+    // a toast, the log, and any export, or hand it to a tool as an argument.
+    ScrubErrorText(request.api_token, result.error);
+    AssistantRedactKey(request.api_token, result.reply);
+    for(AssistantToolCall& call : result.tool_calls)
+    {
+        AssistantRedactKey(request.api_token, call.id);
+        AssistantRedactKey(request.api_token, call.name);
+        AssistantRedactKey(request.api_token, call.arguments);
+    }
+    // A 404 is nearly always the URL being shaped wrong, so name what we asked
+    // for. Added after the scrub so a long provider message cannot cut it off.
+    if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)
+    {
+        result.error.append(" Requested ");
+        result.error.append(loggable);
+        result.error.append(".");
+    }
     result.ok = result.error.empty();
     return result;
 }

@@ -52,19 +52,28 @@ public:
     // Offers a script the assistant wrote. Nothing runs until the user presses
     // Run. Selecting the tab is the caller's job, through OptiqActions, so that
     // every UI change the assistant makes goes through one place.
-    void ProposeScript(const std::string& source);
+    // Returns false, changing nothing, when HasUnsavedDraft: an offer replaces
+    // the source.
+    bool ProposeScript(const std::string& source);
+
+    // True when the source was typed into since it was last offered, loaded or
+    // saved.
+    bool HasUnsavedDraft() const;
 
     ScriptApproval ProposalState() const;
     void           ClearProposal();
+    // The Reject button. Also called for an offer the user never answered, so
+    // an unapproved script does not read as their own.
+    void           Reject();
 
 private:
     void        Run();
     void        Cancel();
-    void        Reject();
     void        LoadFromFile();
     void        SaveToFile();
     void        ReadFile(const std::string& path);
-    void        WriteFile(const std::string& path);
+    // Writes source, the text as it was when Save was pressed.
+    void        WriteFile(const std::string& path, const std::string& source);
     void        RenderHeaderCard();
     void        RenderProposalBanner();
     void        RenderSource(const ImVec2& size);
@@ -83,6 +92,9 @@ private:
     float       m_result_ratio;
     uint64_t    m_progress_percent;
     std::string m_source;
+    // m_source as last set by something other than typing: the sample, an
+    // offer, a load or a save.
+    std::string m_saved_source;
     std::string m_output;
     bool        m_output_is_error;
     std::string m_status;
@@ -93,6 +105,9 @@ private:
     // wipe its output. Empty when nothing is running here.
     std::string    m_running_source_id;
     ScriptApproval m_approval;
+    // ImGui time at which the pending offer was first drawn, negative until it
+    // has been. Run stays off for a moment after that: see RenderHeaderCard.
+    double m_offer_shown_time = -1.0;
 
     EventManager::SubscriptionToken m_complete_token;
     EventManager::SubscriptionToken m_progress_token;

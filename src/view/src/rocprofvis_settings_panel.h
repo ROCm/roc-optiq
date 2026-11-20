@@ -57,6 +57,8 @@ private:
     void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
+    // True once the edited URL has left the origin the stored key was saved for.
+    bool AssistantOriginChanged() const;
 #endif
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
@@ -90,6 +92,10 @@ private:
     std::vector<std::string> m_assistant_orphaned_providers;
     bool                     m_assistant_show_token  = false;
     bool                     m_assistant_clear_token = false;
+    // Credential-store answers, asked once per dialog open rather than per
+    // frame because asking is a blocking OS call; -1 = not asked yet.
+    int  m_assistant_token_stored    = -1;
+    bool m_assistant_store_available = false;
 #endif
 };
 

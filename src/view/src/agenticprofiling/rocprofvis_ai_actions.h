@@ -92,10 +92,14 @@ public:
     // --- Scripts ----------------------------------------------------------
 
     // Puts a script in the Script tab and brings the user to it. Nothing runs:
-    // they press Run or Reject, and ScriptProposalState reports which.
+    // they press Run or Reject, and ScriptProposalState reports which. Fails,
+    // changing nothing, when ScriptHasUnsavedDraft.
     bool           ProposeScript(const std::string& source);
+    bool           ScriptHasUnsavedDraft() const;
     ScriptApproval ScriptProposalState() const;
     void           ClearScriptProposal();
+    // Declines an offer on the user's behalf, for one they never answered.
+    void           RejectScriptProposal();
 #endif
 
     // --- Timeline options -------------------------------------------------
@@ -104,9 +108,6 @@ public:
     // selected event or chain through the sequence.
     bool SetFlowArrowsVisible(bool visible);
     bool SetFlowRenderChained(bool chained);
-
-    // Zoom the visible window, rather than only selecting a range.
-    bool ZoomToRange(double start_ns, double end_ns);
 
     // --- Leaving something behind ------------------------------------------
 

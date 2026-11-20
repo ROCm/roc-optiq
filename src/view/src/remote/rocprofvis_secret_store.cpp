@@ -83,6 +83,9 @@ bool SecretStore::Get(const std::string& key, std::string& out_secret)
     {
         out_secret.assign(reinterpret_cast<const char*>(cred->CredentialBlob),
                           cred->CredentialBlobSize);
+        // CredFree releases the buffer as it is, which would leave the secret
+        // in freed memory.
+        SecureZeroMemory(cred->CredentialBlob, cred->CredentialBlobSize);
     }
     CredFree(cred);
     return true;

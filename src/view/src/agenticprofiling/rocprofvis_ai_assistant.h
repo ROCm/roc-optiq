@@ -78,6 +78,11 @@ private:
         // kChart only: the trace the chart draws, which a read of a linked
         // trace makes different from the conversation's own.
         std::string project_id;
+        // kChart only: the strip as last cut. The minimap is built once per
+        // load, so it is cut again only for another bin count or a closed tab.
+        size_t                            chart_bin_count = 0;
+        std::vector<double>               chart_bins;
+        std::vector<AssistantActivityRow> chart_rows;
     };
 
     /*
@@ -122,7 +127,11 @@ private:
         // False when the tool piggybacked on a fetch already in flight: the rows
         // that land answer someone else's query, so the tool must run again.
         bool started_fetch = false;
-        // This turn started the request ids, so Clear/tab close may cancel them.
+        // A track_statistics read that was voided while it waited, so the
+        // numbers in the shared slot are not this tool's.
+        bool stats_dropped = false;
+        // This turn started the request ids, so it may cancel them when it
+        // ends, or when a read that holds a slot outlives its deadline.
         bool owns_requests = false;
         // The summary preload, which has no tool call to answer and resumes the
         // queued turn instead.
@@ -131,6 +140,9 @@ private:
         AssistantFetchState   fetch;
         std::string           tool_name;
         std::string           prefix;
+        // What the slow-wait counter is appended to: the tool's own status
+        // line when it gave one.
+        std::string           status;
         std::chrono::steady_clock::time_point started;
         // Zero takes the default fetch deadline. A tool waiting on the user
         // rather than on a query sets its own, much longer.
@@ -139,6 +151,9 @@ private:
         // wait instead of asking the provider for the same summary again.
         bool summary_settled   = false;
         bool summary_succeeded = false;
+        // The user pressed Run on the script this waits on, which restarted
+        // the clock: reading it and running it are two waits.
+        bool script_running = false;
     };
 
     // A cancelled HTTP call reaped from Update() instead of joined in the tab
@@ -168,14 +183,14 @@ private:
 
     void AppendLine(Speaker speaker, const std::string& text);
     void        AppendChart(const std::string& project_id, uint64_t track_id);
-    void        RenderActivityChart(const std::string& project_id, uint64_t track_id);
+    void        RenderActivityChart(const std::string& project_id, ChatLine& line);
     void        RenderHeaderCard();
     void        RenderLinkMenu();
     // The model, context, and token-usage pill under the title.
     void        RenderContextChip(const std::string& model, const std::string& endpoint);
     void        RenderTranscript();
     void        RenderMessageCard(Conversation& conversation, size_t index,
-                                  const ChatLine& line);
+                                  ChatLine& line);
     void        RenderSelectableMessage(Conversation& conversation, size_t index,
                                         const std::string& text, Colors text_color);
     TextSelect* MessageSelect(Conversation& conversation, size_t index);
@@ -195,6 +210,13 @@ private:
     void        ClearConversation();
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
+    // The Stop button: ends the running turn and keeps the conversation.
+    void StopTurn();
+    // Declines a script still waiting on Run or Reject for a turn that is over,
+    // and lets go of one the user already answered.
+    void WithdrawScriptOffer();
+    // Cancels the requests the parked tool started itself.
+    void CancelOwnedFetch();
     // Non-blocking cancellation for a UI action. The future is reaped later.
     void AbandonPendingRequest();
     void ReapAbandonedRequests();
@@ -273,12 +295,16 @@ private:
     std::vector<AssistantToolCall> m_pending_calls;
     size_t                         m_next_call_index;
     uint32_t                       m_tool_round;
-    // Set when the tool budget runs out: the next request goes out without
-    // tools, so the model has to write up what it already gathered.
+    // Set for the write-up round, which goes out without tools so the model
+    // writes up what it gathered. A spent tool budget forces the same round.
     bool     m_force_final;
     // A trace switch ends this batch. Every remaining call still gets a tool
     // reply, but none of its body runs against a tab that has not switched yet.
     bool m_stop_tool_queue;
+    // Whether the batch offered next steps, and whether everything else in it
+    // was an action carried out as asked. Both true: the write-up comes next.
+    bool m_batch_offered_steps;
+    bool m_batch_settled;
     // Keeps contention retries on the first wait's timeout deadline.
     uint32_t m_fetch_retries;
     // The trace the turn belongs to. Its tools read this trace and its replies
@@ -289,8 +315,14 @@ private:
     // schema. Pinned with the project rather than read per round, so the schema
     // a round goes out with always matches the tools the dispatcher will run
     // for it.
-    bool      m_turn_is_compute;
-    FetchWait m_fetch_wait;
+    bool m_turn_is_compute;
+    // Where this turn's requests go and the key they carry, copied from the
+    // settings when the turn starts, so a URL edited in Preferences mid-answer
+    // never receives the key. Empty between turns.
+    std::string m_turn_endpoint_url;
+    std::string m_turn_model;
+    std::string m_turn_token;
+    FetchWait   m_fetch_wait;
 
     EventManager::SubscriptionToken m_tab_closed_token;
     EventManager::SubscriptionToken m_summary_event_token;

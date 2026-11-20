@@ -289,7 +289,14 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
     {
         return default_value;
     }
-    jt::Json& value = mutable_json[key];
+    return JsonU64Value(mutable_json[key], default_value);
+}
+
+// The same for one value, so id array entries are read by the same rules.
+uint64_t
+JsonU64Value(const jt::Json& json_value, uint64_t default_value)
+{
+    jt::Json& value = const_cast<jt::Json&>(json_value);
     if(value.isLong())
     {
         const long long raw = value.getLong();
@@ -339,7 +346,13 @@ TrimAssistantText(std::string text, size_t max_chars, const char* truncation_not
 {
     if(text.size() > max_chars)
     {
-        text.resize(max_chars);
+        // Back to the start of a UTF-8 character, so none is cut in half.
+        size_t cut = max_chars;
+        while(cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+        {
+            --cut;
+        }
+        text.resize(cut);
         text += truncation_note;
     }
     return text;

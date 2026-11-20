@@ -49,6 +49,12 @@ constexpr uint32_t ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS = 300;
 // its working out instead of its result.
 constexpr size_t ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS = 8000;
 
+// Set once an offer went unanswered or was declined, until the turn ends. A
+// model steered by text in the trace may ignore being told not to offer again,
+// and a second offer landing in the editor the user is still reading is how an
+// unreviewed script gets run.
+bool g_script_offers_closed = false;
+
 AssistantToolStartResult
 ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                       const std::string&)
@@ -67,6 +73,14 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                               " characters.",
                           "Script too long");
     }
+    if(g_script_offers_closed)
+    {
+        return DoneResult("A script was already offered this turn and the user did "
+                          "not run it, so another cannot be offered until they ask "
+                          "for one. Answer with what you have, or read the data "
+                          "with the other tools.",
+                          "Script not offered");
+    }
 
     // One script at a time per trace, and the user's own run owns the slot just
     // as much as this one does.
@@ -83,6 +97,17 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
     // owns the trace and the selection the run needs.
     OptiqActions actions(context.data_provider, context.timeline_selection,
                          context.trace_view);
+    // Offering replaces what is in the editor, so it must not land on a script
+    // the user is partway through writing.
+    if(actions.ScriptHasUnsavedDraft())
+    {
+        return DoneResult("The Script tab holds the user's own unsaved work, so "
+                          "the script was not offered over it. Tell the user to "
+                          "save or clear the Script tab if they want a script "
+                          "from you, and read the data with the other tools "
+                          "meanwhile.",
+                          "Script tab in use");
+    }
     if(!actions.ProposeScript(source))
     {
         return DoneResult("There is no script editor on this trace, so the "
@@ -129,6 +154,14 @@ AssistantScriptFetchPending(const AssistantToolContext& context)
     return state == ScriptApproval::kPending || state == ScriptApproval::kRunning;
 }
 
+bool
+AssistantScriptRunning(const AssistantToolContext& context)
+{
+    const OptiqActions actions(context.data_provider, context.timeline_selection,
+                               context.trace_view);
+    return actions.ScriptProposalState() == ScriptApproval::kRunning;
+}
+
 // Reads back what the user decided, and what the script produced if they ran it.
 std::string
 FinishAssistantScriptFetch(const AssistantToolContext& context)
@@ -136,15 +169,26 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
     OptiqActions actions(context.data_provider, context.timeline_selection,
                          context.trace_view);
     const ScriptApproval state = actions.ScriptProposalState();
-    actions.ClearScriptProposal();
+    if(state == ScriptApproval::kPending)
+    {
+        // Nobody answered. Declined rather than cleared: the text stays in the
+        // editor and must not go on to read as the user's own.
+        actions.RejectScriptProposal();
+        g_script_offers_closed = true;
+    }
+    else
+    {
+        actions.ClearScriptProposal();
+    }
 
     if(state == ScriptApproval::kRejected)
     {
         // Their call, and not a failure. Said plainly so the model moves on
         // rather than offering the same script again.
-        return "The user read the script and chose not to run it. Do not offer "
-               "it again unless they ask. Answer with what you have, or read "
-               "the data with the other tools.";
+        g_script_offers_closed = true;
+        return "The user chose not to run the script, or stopped it before it "
+               "finished. Do not offer it again unless they ask. Answer with "
+               "what you have, or read the data with the other tools.";
     }
     if(state == ScriptApproval::kFailedToStart)
     {
@@ -153,8 +197,8 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
     }
     if(state == ScriptApproval::kPending)
     {
-        return "The user did not answer, so the script was not run. Carry on "
-               "without it.";
+        return "The user did not answer, so the script was not run. Do not offer "
+               "a script again this turn unless they ask. Carry on without it.";
     }
     if(state == ScriptApproval::kRunning)
     {
@@ -188,6 +232,12 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
         "\n... truncated. Have the script report totals rather than rows ...");
 }
 
+void
+ResetAssistantScriptOffers()
+{
+    g_script_offers_closed = false;
+}
+
 #else
 
 // Scripting is not built in, so the tool never reaches the model. The
@@ -205,11 +255,21 @@ AssistantScriptFetchPending(const AssistantToolContext&)
     return false;
 }
 
+bool
+AssistantScriptRunning(const AssistantToolContext&)
+{
+    return false;
+}
+
 std::string
 FinishAssistantScriptFetch(const AssistantToolContext&)
 {
     return "This build has no script support.";
 }
+
+void
+ResetAssistantScriptOffers()
+{}
 
 #endif  // ROCPROFVIS_ENABLE_SCRIPTING
 

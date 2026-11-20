@@ -207,8 +207,8 @@ constexpr WelcomeTip kWelcomeTips[] = {
       "Right-click the timeline and choose Add Annotation to leave a note on a track for "
       "whoever opens the project next." },
     { "Metrics",
-      "In Table View, right-click a metric and choose Send metric to kernel details to "
-      "compare it across every kernel." },
+      "In Table View, right-click a metric's value and choose Send metric to kernel "
+      "details to compare it across every kernel." },
     { "Exporting",
       "Right-click a row in the Event Table or Top Events and choose Export To File to "
       "save it as CSV." },

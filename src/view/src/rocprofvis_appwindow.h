@@ -19,7 +19,7 @@
 // TEMPORARY (remote/SSH): the SSH test dialog backs File > Open Remote.
 // Remove this guard when the remote feature graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-#include "remote/rocprofvis_ssh_test_dialog.h"
+#include "remote/rocprofvis_ssh_file_dialog.h"
 #endif
 
 #include <atomic>
@@ -121,6 +121,13 @@ public:
 
     void SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref);
 
+    // Workaround for showing a file dialog inside another model...
+    // 1. Host modal claims management of dialog via SetFileDialogSelfManaged(true)
+    // 2. Host modal draws the file dialog itself via RenderFileDialog() (both native and imgui)
+    // 3. Host modal unclaims management of dialog via SetFileDialogSelfManaged(false)
+    void SetFileDialogSelfManaged(bool self_managed);
+    void RenderFileDialog();
+
     friend struct AppWindowTestPeer;
 
 private:
@@ -148,8 +155,12 @@ private:
     void RenderViewMenu(Project* project);
     void RenderHelpMenu();
 
-    void RenderFileDialog();
     void RenderAboutDialog();
+    // Fills the right-click menu of a project tab with its copy actions.
+    void RenderTabContextMenu(const TabItem& tab);
+    // Tagged sources (A, B, ...) of the compare project behind a tab, or nullptr
+    // when the tab is not a compare project.
+    const std::vector<CompareSourceInfo>* GetTabCompareSources(const TabItem& tab);
     void RenderStatusBar();
     void UpdateStatusBar();
 
@@ -237,6 +248,7 @@ private:
 #endif
 
     std::function<void(std::string)>    m_file_dialog_callback;
+    bool                                m_file_dialog_self_managed;
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
@@ -256,7 +268,7 @@ private:
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
+    std::unique_ptr<SshFileDialog>   m_ssh_file_dialog;
 #endif
 
     std::string m_status_message;

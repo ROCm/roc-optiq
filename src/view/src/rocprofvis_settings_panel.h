@@ -27,22 +27,26 @@ private:
     enum Category
     {
         Display,
+        Tracks,
         Units,
-        Other,
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         Assistant,
 #endif
-        Hotkeys
+        Hotkeys,
+        Other,
     };
 
     void RenderDisplayOptions();
+    void RenderTrackOptions();
     void RenderUnitOptions();
     void RenderOtherSettings();
     void RenderHotkeySettings();
 
     void ResetDisplayOptions();
+    void ResetTrackOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+    void ResetOtherSettings();
     // The Assistant page. Defined in
     // agenticprofiling/rocprofvis_ai_settings.cpp.
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING

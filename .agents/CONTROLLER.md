@@ -977,6 +977,11 @@ the kernel-owned `PcSampling` handle, and calls the corresponding synchronous
 stage helper. The helper creates model DB futures through `ExecuteQuery`, adds
 them as dependent controller futures, waits for their result on the worker,
 copies the temporary model table into `QueryDataStore`, and deletes that table.
+The job's result goes through `PcSamplingJobResult`: the model answers
+`kRocProfVisDmResultNotSupported` for a compute schema older than 2.2, and
+that comes back as `kRocProfVisResultNotSupported` rather than
+`kRocProfVisResultUnknownError`, so the View can tell a trace that cannot hold
+PC samples from a read that failed.
 
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
@@ -1103,7 +1108,10 @@ caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
   expression for each filter.
 
 It pivots metric values into a `kernel x metric` matrix and exposes
-the result like any other table.
+the result like any other table. A filter the model can't apply
+returns Success with every column and no rows, and its message is
+copied to `kRPVControllerFutureLastErrorMessage`. `Fetch` deletes the
+DM table after reading it, so the same query runs (and reports) again.
 
 ### 6.7 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
 

@@ -155,8 +155,8 @@ namespace DataModel
         ComputeQueryFactory m_query_factory;
         std::string m_db_version;
         // True when the compute_workload table has the optional
-        // memory_chart_extdata column (detected once at metadata load).
-        bool m_has_memory_chart_extdata = false;
+        // memory_chart_layout_extdata column (detected once at metadata load).
+        bool m_has_memory_chart_layout_extdata = false;
         bool                                      m_has_pc_wave_occupancy_percent = false;
         bool                                      m_has_pc_active_thread_percent  = false;
         std::unordered_map<uint32_t, KernelStats> m_kernel_stats;
@@ -183,7 +183,7 @@ namespace DataModel
         static int CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         rocprofvis_dm_result_t ComputeWorkloadTopKernelsMeanAndMedian(rocprofvis_dm_table_t table);
-        rocprofvis_dm_result_t BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json & plan);
+        rocprofvis_dm_result_t BuildKernelMetricsMatrix(Future* future, rocprofvis_dm_table_t table, jt::Json & plan);
         rocprofvis_dm_result_t CreateIndexes();
 
         inline static const rocprofvis_null_data_exceptions_skip

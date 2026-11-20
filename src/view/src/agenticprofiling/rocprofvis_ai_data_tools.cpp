@@ -27,6 +27,7 @@
 #include "model/rocprofvis_topology_model.h"
 #include "rocprofvis_ai_tool_query.h"
 #include "rocprofvis_ai_tool_schema.h"
+#include "rocprofvis_ai_trace_compare.h"
 #include "rocprofvis_c_interface_types.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_core_string_utils.h"
@@ -95,6 +96,15 @@ constexpr uint64_t ASSISTANT_THREAD_INSTANCE_DURATION_COLUMN  = 10;
 // Furthest a tool may page into a result set. limit is clamped too, but without
 // a ceiling here the model could ask the database to skip billions of rows.
 constexpr uint64_t ASSISTANT_MAX_OFFSET = 1000000;
+
+// The summary's remainder row, which totals every name past its top list and
+// is not an event of its own.
+constexpr const char* ASSISTANT_SUMMARY_REMAINDER_NAME = "Others";
+
+// Names compare_traces lists per event family when not told otherwise, and the
+// most it will list. Every row is two runs' figures, so a page costs double.
+constexpr int32_t ASSISTANT_COMPARE_DEFAULT_ROWS = 10;
+constexpr int32_t ASSISTANT_COMPARE_MAX_ROWS     = 50;
 
 // The categories top_events accepts. The model slot and request id are not
 // per-category: the assistant waits on one table at a time, so its five
@@ -373,7 +383,7 @@ SummaryScopeLabel(const SummaryInfo::AggregateMetrics& metrics)
         {
             if(metrics.info.process)
             {
-                label = "process " + std::to_string(metrics.info.process->GetId()) +
+                label = "process " + std::to_string(metrics.info.process->pid) +
                         ": " + metrics.info.process->command;
             }
             break;
@@ -1466,6 +1476,7 @@ PendingResult(const std::vector<uint64_t>& request_ids, const AssistantFetchStat
     AssistantToolStartResult result;
     result.pending       = true;
     result.started_fetch = started_fetch;
+    result.owns_requests = started_fetch;
     result.request_ids   = request_ids;
     result.fetch         = fetch;
     result.status_line   = status;
@@ -1507,6 +1518,13 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     if(context.data_provider == nullptr)
     {
         return "No trace is open. Open a .db / .rpd file first.";
+    }
+    // A compute workload shares none of the vocabulary below - no topology, no
+    // timeline selection, no GPU summary - so it is described next to the tools
+    // that read it rather than here.
+    if(context.is_compute)
+    {
+        return BuildAssistantComputeBriefing(context);
     }
 
     std::ostringstream out;
@@ -1590,6 +1608,17 @@ AssistantSummaryLoaded(const AssistantToolContext& context)
                 0 ||
             SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryThread) >
                 0);
+}
+
+// True after a successful summary request even when the trace had no activity
+// to put in it. That empty result must not be fetched again in a loop.
+static bool
+AssistantSummaryCurrent(const AssistantToolContext& context)
+{
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    return model.GetRevision() != 0 &&
+           context.data_provider->DataModel().GetTopology().GetRevision() ==
+               model.GetRevision();
 }
 
 // Returns one track's activity, or the whole trace's, normalized to its peak.
@@ -2068,7 +2097,7 @@ ToolSummaryEventMetrics(const AssistantToolContext& context, const jt::Json& arg
                 for(const SummaryInfo::TopOpEvents::Event& event : events->top)
                 {
                     // "Others" is the summary's remainder bucket, not an event.
-                    if(event.name != "Others")
+                    if(event.name != ASSISTANT_SUMMARY_REMAINDER_NAME)
                     {
                         const std::string lowered = Core::String::to_lower_copy(event.name);
                         if(name.empty() || lowered.find(needle) != std::string::npos)
@@ -2315,21 +2344,16 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
             "Missing event_uuid");
     }
 
+    // Event fetches are keyed by event, so these are this event's ids. A fetch the
+    // event panel already has in flight for it is reused, not duplicated.
     const std::vector<uint64_t> request_ids = {
-        DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID,
-        DataProvider::EVENT_FLOW_DATA_REQUEST_ID,
-        DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventExtendedData),
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventFlowDetails),
+        RequestIdBuilder::MakeEventDataRequestId(event_uuid,
+                                                 RequestType::kFetchEventCallStack)
     };
-    // These request ids are shared with the event panel, and re-issuing one
-    // that is already in flight would drop its future on the floor.
-    for(uint64_t request_id : request_ids)
-    {
-        if(context.data_provider->IsRequestPending(request_id))
-        {
-            return DoneResult("Event details are already loading. Try again.",
-                              "Busy");
-        }
-    }
 
     const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
     // FetchEvent seeds name/duration from loaded track data and chains the
@@ -2505,6 +2529,182 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
+// One run's figures for compare_traces: an event family's summary list, with
+// the "Others" remainder turned into the truncated flag it stands for.
+RunCategoryFigures
+RunCategoryFromSummary(const AssistantToolContext&            context,
+                       rocprofvis_analysis_summary_category_t category)
+{
+    RunCategoryFigures  figures;
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    const SummaryInfo::TopOpEvents* events =
+        model.TopOpEvents(model.GetSummaryData(), category);
+    if(events == nullptr)
+    {
+        return figures;
+    }
+    figures.total_ns =
+        events->metrics[kRPVAnalysisSummaryTopEventsMetricDurationSum].numeric.uint;
+    figures.calls =
+        events->metrics[kRPVAnalysisSummaryTopEventsMetricInvocations].numeric.uint;
+    for(const SummaryInfo::TopOpEvents::Event& event : events->top)
+    {
+        if(event.name == ASSISTANT_SUMMARY_REMAINDER_NAME)
+        {
+            figures.truncated = true;
+            continue;
+        }
+        RunEventFigures entry;
+        entry.name = event.name;
+        entry.total_ns =
+            event.metrics[kRPVAnalysisSummaryTopEventMetricDurationSum].numeric.uint;
+        entry.calls =
+            event.metrics[kRPVAnalysisSummaryTopEventMetricInvocations].numeric.uint;
+        figures.events.push_back(entry);
+    }
+    return figures;
+}
+
+// Wall-clock span of a loaded trace, in whole nanoseconds.
+uint64_t
+TraceSpanNs(const AssistantToolContext& context)
+{
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    const double         span     = timeline.GetEndTime() - timeline.GetStartTime();
+    return span > 0.0 ? static_cast<uint64_t>(span) : 0;
+}
+
+AssistantToolStartResult
+ToolCompareTraces(const AssistantToolContext& context, const jt::Json& args,
+                  const std::string& tool_name)
+{
+    TraceLink   link;
+    std::string error;
+    if(!ResolveAssistantLink(context, JsonUtils::GetString(args, "with", ""), link,
+                             error))
+    {
+        return DoneResult(error, "Unknown link");
+    }
+    const AssistantToolContext linked  = MakeAssistantToolContext(link.other.path);
+    const std::string          problem = LinkedTraceProblem(linked, link);
+    if(!problem.empty())
+    {
+        return DoneResult(problem, "Linked trace unavailable");
+    }
+
+    const std::string category_name = JsonUtils::GetString(args, "category", "");
+    rocprofvis_analysis_summary_category_t only = __kRPVAnalysisSummaryCategoryLast;
+    if(!category_name.empty())
+    {
+        only = SummaryCategoryFromName(category_name);
+        if(only == __kRPVAnalysisSummaryCategoryLast)
+        {
+            return DoneResult(
+                "Unknown category '" + category_name +
+                    "'. Use kernel, memory or thread, or omit it to compare "
+                    "all three.",
+                "Bad category");
+        }
+    }
+    const int32_t requested =
+        JsonUtils::GetInt(args, "limit", ASSISTANT_COMPARE_DEFAULT_ROWS);
+    const size_t limit = static_cast<size_t>(
+        requested <= 0 ? ASSISTANT_COMPARE_DEFAULT_ROWS
+                       : std::min(requested, ASSISTANT_COMPARE_MAX_ROWS));
+
+    // The roles come from the link, not from which tab the question was asked on.
+    const bool self_is_baseline          = link.self.role == TRACE_LINK_ROLE_BASELINE;
+    const AssistantToolContext& baseline = self_is_baseline ? context : linked;
+    const AssistantToolContext& target   = self_is_baseline ? linked : context;
+
+    // Each summary loads on its own provider and the panel parks on one wait at
+    // a time, so wait for whichever is missing and run again once it lands.
+    const AssistantToolContext* const sides[] = { &baseline, &target };
+    for(const AssistantToolContext* side : sides)
+    {
+        if(AssistantSummaryLoaded(*side))
+        {
+            continue;
+        }
+        AssistantFetchState fetch;
+        fetch.kind             = AssistantFetchKind::kCompareTraces;
+        fetch.project_id       = side->project_id;
+        DataProvider* provider = side->data_provider;
+        if(AssistantSummaryCurrent(*side))
+        {
+            return DoneResult("The summary of " + side->trace_name +
+                                  " loaded but contained no kernel, memory, or thread "
+                                  "activity, so the runs cannot be compared through the "
+                                  "summary. Use top_events on each trace instead.",
+                              "Summary empty");
+        }
+        if(provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
+        {
+            return PendingResult(DataProvider::SUMMARY_REQUEST_ID, fetch,
+                                 AssistantToolStatusLabel(tool_name), false);
+        }
+        const bool queued = provider->FetchSummary();
+        if(queued || provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
+        {
+            AssistantToolStartResult waiting =
+                PendingResult(DataProvider::SUMMARY_REQUEST_ID, fetch,
+                              AssistantToolStatusLabel(tool_name), false);
+            waiting.owns_requests = queued;
+            return waiting;
+        }
+        return DoneResult("The summary of " + side->trace_name +
+                              " could not be loaded, so the runs cannot be compared. Use "
+                              "top_events on each trace instead.",
+                          "Summary unavailable");
+    }
+
+    const std::string  linked_name = " (" + link.group_id + ")";
+    std::ostringstream out;
+    out << "baseline: " << baseline.trace_name
+        << (self_is_baseline ? std::string(" (this trace)") : linked_name) << "\n";
+    out << "target: " << target.trace_name
+        << (self_is_baseline ? linked_name : std::string(" (this trace)")) << "\n";
+    if(!link.self.fingerprint.Matches(AssistantTraceFingerprint(context)))
+    {
+        out << "note: this trace changed since it was linked, so it may not be the "
+               "capture the user linked.\n";
+    }
+    if(!link.other.fingerprint.Matches(AssistantTraceFingerprint(linked)))
+    {
+        out << "note: " << link.other.label
+            << " changed since it was linked, so it may not be the capture the user "
+               "linked.\n";
+    }
+    out << "span_ns: " << FormatRunChange(TraceSpanNs(baseline), TraceSpanNs(target))
+        << "\n";
+
+    struct CompareFamily
+    {
+        rocprofvis_analysis_summary_category_t category;
+        const char*                            label;
+    };
+    const CompareFamily families[] = {
+        { kRPVAnalysisSummaryCategoryKernel, "kernels" },
+        { kRPVAnalysisSummaryCategoryMemory, "memory_ops" },
+        { kRPVAnalysisSummaryCategoryThread, "thread_ops" }
+    };
+    for(const CompareFamily& family : families)
+    {
+        if(only != __kRPVAnalysisSummaryCategoryLast && family.category != only)
+        {
+            continue;
+        }
+        out << FormatRunCategory(family.label,
+                                 RunCategoryFromSummary(baseline, family.category),
+                                 RunCategoryFromSummary(target, family.category), limit);
+    }
+    out << "note: these are trace-wide summary totals from one capture of each run, so a "
+           "change of a few percent can be run-to-run noise. Each summary keeps only its "
+           "busiest names; for a full ranking call top_events on each trace (trace="
+        << link.group_id << " reads the linked one).\n";
+    return DoneResult(TrimResult(out.str()), "Compared runs");
+}
+
 const AssistantToolEntry k_data_tool_handlers[] = {
     { "trace_overview", ToolTraceOverview },
     { "get_summary", ToolGetSummary },
@@ -2518,6 +2718,7 @@ const AssistantToolEntry k_data_tool_handlers[] = {
     { "event_details", ToolEventDetails },
     { "track_statistics", ToolTrackStatistics },
     { "search_events", ToolSearchEvents },
+    { "compare_traces", ToolCompareTraces },
 };
 
 }  // namespace
@@ -2581,9 +2782,21 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         return FormatTrackStatistics(context, fetch.track_id);
     }
+    if(fetch.kind == AssistantFetchKind::kComputeMetrics)
+    {
+        return FinishAssistantComputeFetch(context, fetch);
+    }
     if(fetch.kind == AssistantFetchKind::kScript)
     {
         return FinishAssistantScriptFetch(context);
+    }
+    // kernel_pc_samples answers by running again once each layer lands, so a
+    // layer only gets here if a read set started_fetch.
+    if(fetch.kind == AssistantFetchKind::kPcSampling)
+    {
+        ROCPROFVIS_ASSERT_MSG(false, "A PC sampling layer reached FinishAssistantFetch.");
+        return "The PC samples were read but not formatted. Call kernel_pc_samples "
+               "again to read them.";
     }
     return "Fetch finished with nothing to report.";
 }

@@ -2,13 +2,19 @@
 
 Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
 
+## ROCm Optiq 1.3.0 (unreleased)
+
+### Resolved issues
+
+- Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
+
 ## ROCm Optiq 1.2.0
 
 ### Added
 
 #### Features and improvements
 
-##### Systems Trace Summary
+##### Systems trace Summary
 
 - The **Summary** view now covers kernel executions, memory operations, and thread operations, each with a top-by-execution-time chart. Top entries also report percent of total duration and mean duration.
 - Each category has a **Details** tab with a fuller breakdown of that category. 
@@ -17,14 +23,14 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 ##### Compute profiling
 
 - Roofline comparison: compare a kernel against a baseline kernel, including a kernel from another workload, and choose whether hardware peaks come from the baseline or the compared workload.
-- Roofline option menus open outside the plot by default.
-- Roofline now has Toggleable labels for Hardware peaks.
-- **Profile Details** (formerly **Workload Details**) includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
+- Roofline option menus now open outside the plot by default.
+- Roofline now has toggleable labels for hardware peaks.
+- **Profile Details** (formerly **Workload Details**) now includes an **Analysis Tool** panel with the ROCm Compute Profiler version, Git revision, and database schema version.
 
 ##### Memory chart
 
 - Architecture-specific memory-chart layouts: gfx950, gfx94x (including gfx940), and gfx115x (RDNA 3.5).
-- The chart can be panned with the scroll wheel or a trackpad.
+- The chart can now be panned with the scroll wheel or a trackpad.
 
 ##### Tables
 
@@ -51,15 +57,15 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 These features are in progress and available for preview only (build from source). Enable them at build time with the noted build flags. The described behavior and UI are subject to change.
 
-- **Ask Optiq**: Message text is selectable, and a message or selection can be copied. The conversation can be copied or exported as Markdown. Tool output prints whole-nanosecond timestamps, so a value passed back to navigation still lands on a short kernel. `trace_overview` reports each track's record count, leaves HIP stream tracks out of the total (they repeat the queue's kernels and copies), and marks the activity profile as a histogram estimate. Build flags: `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, `ROCPROFVIS_ENABLE_SCRIPTING`.
-- **Python analysis**: `optiq.table().fetch()` returns numeric cells as numbers (empty cells as `None`, and a bad numeric cell raises `ValueError`). Scripting builds vendor CPython and package that runtime in the Windows installer. Build flag: `ROCPROFVIS_ENABLE_SCRIPTING`.
+- **Ask Optiq**: Message text is selectable, and a message or selection can be copied. The conversation can be copied or exported as Markdown. Tool output prints whole-nanosecond timestamps, so a value passed back to navigation still lands on a short kernel. `trace_overview` reports each track's record count, leaves HIP stream tracks out of the total (they repeat the queue's kernels and copies), and marks the activity profile as a histogram estimate. Each open trace keeps its own conversation, and an answer in progress stays with the trace it was asked about when you switch tabs. Two open system traces can be linked as baseline and target runs with the **Link runs** button in the panel header; the assistant can then read the linked trace and compare the two runs' summaries. Compare tabs are not supported. Build flags: `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (plus `ROCPROFVIS_ENABLE_AGENTIC_COMPUTE`, on by default, for compute traces) and `ROCPROFVIS_ENABLE_SCRIPTING`.
+- **Python analysis**: `optiq.table().fetch()` returns numeric cells as numbers (empty cells as `None`, and a bad numeric cell raises `ValueError`). When scripting is enabled, the build vendors CPython and packages that runtime in the Windows installer. Build flag: `ROCPROFVIS_ENABLE_SCRIPTING`.
 - **Profiler launch**: **Launch Profiler** and **Advanced Options** use the same frameless, draggable dialogs as the rest of the app. Command-line arguments and environment variables are on the main page. Closing the launcher hides it and keeps a running or finished capture, including **View Last Run**. **File > Open Remote...** opens a trace from a remote host, and SSH downloads are compressed. Build flags: `ROCPROFVIS_ENABLE_PROFILER` (plus `ROCPROFVIS_ENABLE_REMOTE` for the SSH workflow).
 
 ### Resolved issues
 
 - Fixed kernel dispatch durations wrapping above about 4.29 seconds in the **Top Kernels** table and its bar chart, pie chart, and tooltips. Durations are stored as 64-bit nanosecond counts.
 - Fixed incorrect averages when a grouped query was merged across threads. Per-thread averages are now weighted, and MAX no longer starts at the smallest positive double.
-- Fixed table CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, a full disk).
+- Fixed table CSV export reporting success when the path was unwritable, the filter was bad, the export was cancelled, or the final write failed (for example, due to a full disk).
 - Fixed tables restoring another table's column layout from the ImGui settings file.
 - Fixed **Top Events** tables displaying incorrectly when they had no results.
 - Fixed **Track Details** showing PID 0 for counter tracks.
@@ -67,6 +73,18 @@ These features are in progress and available for preview only (build from source
 - Fixed a crash when a table filter could not be parsed.
 - Fixed a macOS hang in the job system: a worker could signal a job after that job had already been freed.
 - Fixed a leaked row-count query when a table had nothing to count.
+- Fixed invalid table filter feedback. Improved error notifications when table filters are invalid.
+- Fixed the kernel selection table disappearing when a filter matches no rows.
+- Fixed the Linux tarball extracting into `/opt/rocm/...`. It is now flat (`bin/`, `lib/`, `share/` at the root) and extracts into the current directory, matching other ROCm extras such as RVS. The .deb and .rpm still install under the prefix.
+- Fixed missing dependencies in Debian packages.
+- Fixed commit hash missing from Linux builds.
+- Fixed process ID not read correctly in some trace files.
+- Fixed event details, flows, and call stacks not loading when a second event was selected while another event's details were still loading.
+- Fixed histogram counts being incorrect when a query was split.
+- Fixed HIP events were not trimmed by time and were lost when saving a trimmed trace.
+- Fixed saving a trimmed trace over the open trace was possible. It is now refused, and the destination is replaced only after the trim succeeds.
+- Fixed the table not refreshing when a filter box was cleared with its X or when Reset Filter was used.
+- Fixed app icon not present in desktop app menus or taskbar in Linux environments (DEB/RPM packages).
 
 ## ROCm Optiq 1.1.0
 

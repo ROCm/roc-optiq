@@ -162,6 +162,7 @@ typedef enum rocprofvis_controller_process_properties_t : uint32_t
     kRPVControllerProcessStreamIndexed,
     kRPVControllerProcessNumCounters,
     kRPVControllerProcessCounterIndexed,
+    kRPVControllerProcessPid,
     __kRPVControllerProcessPropertiesLast,
 } rocprofvis_controller_process_properties_t;
 

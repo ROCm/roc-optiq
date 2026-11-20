@@ -101,8 +101,8 @@ public:
                  double v_min, double v_max, uint64_t track_id);
     // The details panel's tab strip (Event Table, Top Events, Annotations, ...).
     std::vector<std::string> ListAnalysisTabs();
-    bool                     SelectAnalysisTab(const std::string& name);
-    std::string              ActiveAnalysisTab();
+    bool        SelectAnalysisTab(const std::string& name, std::string& selected_label);
+    std::string ActiveAnalysisTab();
 
 #    ifdef ROCPROFVIS_ENABLE_SCRIPTING
     // The Script tab, reached the same way as the rest of the details panel so

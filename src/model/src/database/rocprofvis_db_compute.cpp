@@ -43,7 +43,7 @@ namespace DataModel
 		{"workload_sub_name", kRPVComputeColumnWorkloadSubName},
 		{"sys_info_extdata", kRPVComputeColumnWorkloadSysInfo},
 		{"profiling_config_extdata", kRPVComputeColumnWorkloadProfileConfig},
-		{"memory_chart_extdata", kRPVComputeColumnWorkloadMemoryChart},
+		{"memory_chart_layout_extdata", kRPVComputeColumnWorkloadMemoryChart},
 		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
 		{"kernel_uuid", kRPVComputeColumnKernelUUID},
 		{"kernel_name", kRPVComputeColumnKernelName},
@@ -159,9 +159,9 @@ namespace DataModel
 			query_out += "sub_name as workload_sub_name, ";
 			query_out += "sys_info_extdata, ";
 			query_out += "profiling_config_extdata ";
-      if (m_db != nullptr && m_db->m_has_memory_chart_extdata)
+      if (m_db != nullptr && m_db->m_has_memory_chart_layout_extdata)
 		  {
-			  query_out += ", memory_chart_extdata ";
+			  query_out += ", memory_chart_layout_extdata ";
 		  }
 			query_out += "FROM ";
 			query_out += "compute_workload";
@@ -1170,9 +1170,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		{			
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
 			m_query_factory.SetVersion(m_db_version.c_str());
-			// Best-effort detection of the optional memory_chart_extdata column so
+			// Best-effort detection of the optional memory_chart_layout_extdata column so
 			// the workload query includes it only when present.
-			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_extdata';", &CallbackDetectMemoryChartColumn);
+			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_layout_extdata';", &CallbackDetectMemoryChartColumn);
             m_has_pc_wave_occupancy_percent = false;
             m_has_pc_active_thread_percent  = false;
             ExecuteSQLQuery(
@@ -1467,7 +1467,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				}
 				if (kRocProfVisDmResultSuccess == result)
 				{
-					result = BuildKernelMetricsMatrix(table, kernel_metrics_matrix_plan);
+					result = BuildKernelMetricsMatrix(future, table, kernel_metrics_matrix_plan);
 				}
 				break;
 			}
@@ -1532,7 +1532,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
 		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
 		// A returned row means the column exists in compute_workload.
-		db->m_has_memory_chart_extdata = true;
+		db->m_has_memory_chart_layout_extdata = true;
 		callback_params->future->CountThisRow();
 		return 0;
 	}
@@ -1851,15 +1851,19 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	 *  - Populate the destination data model table @p table with the resulting
 	 *    kernel metric rows and column metadata.
 	 *
-	 * @param table Destination data model table that will be populated with the
-	 *              kernel metrics matrix (columns and rows).
-	 * @param plan  JSON description of the query plan, including workload_id,
-	 *              column descriptions and optional filter specifications.
+	 * @param future Future that receives the message for a filter that could not
+	 *               be applied.
+	 * @param table  Destination data model table that will be populated with the
+	 *               kernel metrics matrix (columns and rows).
+	 * @param plan   JSON description of the query plan, including workload_id,
+	 *               column descriptions and optional filter specifications.
 	 *
-	 * @return kRocProfVisDmResultSuccess on success, or an appropriate error
-	 *         code if the plan is invalid or if table population fails.
+	 * @return kRocProfVisDmResultSuccess on success, including when a filter
+	 *         cannot be applied: the table then has all its columns and no rows,
+	 *         and @p future holds the message. Otherwise an appropriate error code
+	 *         if table population fails.
 	 */
-	rocprofvis_dm_result_t ComputeDatabase::BuildKernelMetricsMatrix(rocprofvis_dm_table_t table, jt::Json& plan)
+	rocprofvis_dm_result_t ComputeDatabase::BuildKernelMetricsMatrix(Future* future, rocprofvis_dm_table_t table, jt::Json& plan)
 	{
 		rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
 		std::vector<MetricSelector> selectors;
@@ -1897,6 +1901,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			}
 		}
 
+		// A filter that can't be applied matches no kernels. The columns are still
+		// added so the view keeps them, and the future reports the filter.
+		std::string filter_error;
 		if (plan.contains("filters"))
 		{
 			auto& obj = plan["filters"].getObject();
@@ -1911,8 +1918,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			}
 			catch (const std::exception& e)
 			{
-				spdlog::error("Error: {} ", e.what());
-				return kRocProfVisDmResultInvalidParameter;
+				filter_error = e.what();
 			}
 		}
 
@@ -1971,6 +1977,11 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		metrics_rows.reserve(matrix.size());
 		for (auto& [uuid, mrow] : matrix)
 		{
+			if (!filter_error.empty())
+			{
+				break;
+			}
+
 			uint32_t column_index = 0;
 			columns[column_index++].eval_value = (double)mrow.kernel_uuid;
 			columns[column_index++].eval_value = mrow.stats.name;
@@ -1999,13 +2010,19 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			}
 			catch (const std::exception& e)
 			{
-				spdlog::error("Error: {} ", e.what());
-				return kRocProfVisDmResultInvalidParameter;
+				filter_error = e.what();
+				break;
 			}
 			if (passed_evaluation)
 			{
 				metrics_rows.push_back(std::move(mrow));
 			}
+		}
+		if (!filter_error.empty())
+		{
+			spdlog::error("Error: {} ", filter_error);
+			future->SetErrorMessage("Could not apply filter: " + filter_error);
+			metrics_rows.clear();
 		}
 
 		int sort_column_index = 0;

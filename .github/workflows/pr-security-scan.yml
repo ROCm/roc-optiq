@@ -36,6 +36,7 @@ jobs:
     with:
       report_formats: human
       bandit_config_path: .github/scan_tools_configs/bandit.yml
+      codeql_config_path: .github/codeql/codeql-config.yml
       gitleaks_config_path: .github/scan_tools_configs/gitleaks.toml
       trivy_config_path: .github/scan_tools_configs/trivy.yml
       zizmor_config_path: .github/scan_tools_configs/zizmor.yml

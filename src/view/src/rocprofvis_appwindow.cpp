@@ -2297,6 +2297,12 @@ AppWindow::ShowProfilerLauncher()
 }
 #endif  // ROCPROFVIS_ENABLE_PROFILER
 
+void
+AppWindow::ShowSettings(SettingsPanel::Category category)
+{
+    m_settings_panel->ShowAtCategory(category);
+}
+
 }  // namespace View
 }  // namespace RocProfVis
 

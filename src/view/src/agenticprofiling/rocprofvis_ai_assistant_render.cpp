@@ -27,6 +27,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_settings_panel.h"
 #include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -677,6 +678,10 @@ AssistantPanel::RenderHeaderCard()
     {
         RenderContextChip(model, provider->endpoint_url);
     }
+    else
+    {
+        RenderSetupChip();
+    }
     if(!view.trace_name.empty())
     {
         HeaderContextLine("trace", view.trace_name, title_x);
@@ -791,10 +796,64 @@ AssistantPanel::RenderLinkMenu()
     PopContextMenuStyles();
 }
 
+// Where the model name in the header leads, set up or not.
+void
+OpenAssistantSettings()
+{
+    AppWindow* app = AppWindow::GetInstance();
+    if(app != nullptr)
+    {
+        app->ShowSettings(SettingsPanel::Assistant);
+    }
+}
+
+// Stands in for the context pill until an endpoint is set, so the place the
+// model name will appear is also the way to set one.
+void
+AssistantPanel::RenderSetupChip()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const char*      label    = "Not configured";
+
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float chip_h = ImGui::GetTextLineHeight() + ASSISTANT_CONTEXT_CHIP_PAD_Y * 2.0f;
+    const float width =
+        ImGui::CalcTextSize(label).x + ASSISTANT_CONTEXT_CHIP_PAD_X * 2.0f;
+
+    const bool pressed = ImGui::InvisibleButton(
+        "##assistant_setup_chip", ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool hovered = ImGui::IsItemHovered();
+
+    ImDrawList*  draw = ImGui::GetWindowDrawList();
+    const ImVec2 chip_max(origin.x + width, origin.y + chip_h);
+    draw->AddRectFilled(origin, chip_max, settings.GetColor(Colors::kBgPanel),
+                        chip_h * 0.5f);
+    draw->AddRect(
+        origin, chip_max,
+        settings.GetColor(hovered ? Colors::kBorderColor : Colors::kPanelBorderSubtle),
+        chip_h * 0.5f);
+    draw->AddText(ImVec2(origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X,
+                         origin.y + ASSISTANT_CONTEXT_CHIP_PAD_Y),
+                  settings.GetColor(Colors::kTextDim), label);
+    ImGui::PopFont();
+
+    if(hovered)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        SetTooltipStyled("Open the Assistant settings to set the URL, model, and key.");
+    }
+    if(pressed)
+    {
+        OpenAssistantSettings();
+    }
+}
+
 /*
  * The pill under the title: the model, a ring for how full the kept history is,
  * the conversation's size against that budget, and - once the endpoint has
- * reported any - the tokens this conversation has used.
+ * reported any - the tokens this conversation has used. The model name opens
+ * its settings.
  */
 void
 AssistantPanel::RenderContextChip(const std::string& model, const std::string& endpoint)
@@ -859,9 +918,23 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     }
     const float width = total();
 
-    ImGui::InvisibleButton("##assistant_context_chip",
-                           ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool pressed = ImGui::InvisibleButton(
+        "##assistant_context_chip", ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
     const bool hovered = ImGui::IsItemHovered();
+    // Only the name is a link; the rest of the pill reports and has its own
+    // hover card.
+    const float model_edge = origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X +
+                             ImGui::CalcTextSize(label.c_str()).x +
+                             ASSISTANT_CONTEXT_DIVIDER_GAP;
+    const bool over_model = hovered && ImGui::GetIO().MousePos.x < model_edge;
+    if(over_model)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if(pressed)
+        {
+            OpenAssistantSettings();
+        }
+    }
 
     ImDrawList*  draw     = ImGui::GetWindowDrawList();
     const float  center_y = origin.y + chip_h * 0.5f;
@@ -958,6 +1031,7 @@ AssistantPanel::RenderContextTooltip(const Conversation& conversation,
     ImGui::TextUnformatted(model.c_str());
     ImGui::PushStyleColor(ImGuiCol_Text, dim);
     ImGui::TextWrapped("%s", endpoint.c_str());
+    ImGui::TextUnformatted("Click the model name to change these.");
     ImGui::PopStyleColor();
 
     ImGui::Spacing();

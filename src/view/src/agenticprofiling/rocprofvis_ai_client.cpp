@@ -880,6 +880,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     result.error = ResolveEndpoint(request, endpoint);
     if(!result.error.empty())
     {
+        spdlog::warn("Assistant request not sent: {}", result.error);
         return result;
     }
 
@@ -922,8 +923,10 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
             result.cancelled = true;
             return result;
         }
-        result.error =
-            "HTTPS request failed (" + httplib::to_string(response.error()) + ").";
+        // Not "HTTPS": a local server on plain http fails here too, and so does a
+        // request httplib refused to write.
+        result.error = "The assistant request failed (" +
+                       httplib::to_string(response.error()) + ").";
         spdlog::warn("Assistant request to {} failed: {}", loggable,
                      httplib::to_string(response.error()));
         return result;
@@ -931,6 +934,12 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
 
     InterpretResponse(*response, endpoint.url, request.enable_tools, result);
     result.ok = result.error.empty();
+    if(!result.ok)
+    {
+        // The status only: a provider's error text can quote part of the key.
+        spdlog::warn("Assistant request to {} returned an error (HTTP {})", loggable,
+                     response->status);
+    }
     return result;
 }
 

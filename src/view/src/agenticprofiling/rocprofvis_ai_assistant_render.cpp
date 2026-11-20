@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
@@ -1091,6 +1092,25 @@ AssistantPanel::RenderTranscript()
     ImGui::BeginChild("assistant_history", ImVec2(0.0f, -composer_height),
                       ImGuiChildFlags_Borders);
 
+    // The reader went looking at something earlier. Stop following, or the next
+    // frame pulls them back to our target. Messages are child windows, so the
+    // wheel has to count over them too. The scrollbar is tested unclipped: it
+    // lies outside the clip rectangle this child gives its contents.
+    const ImRect scrollbar =
+        ImGui::GetWindowScrollbarRect(ImGui::GetCurrentWindow(), ImGuiAxis_Y);
+    const bool scrollbar_clicked =
+        scrollbar.GetWidth() > 0.0f &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        ImGui::IsMouseHoveringRect(scrollbar.Min, scrollbar.Max, false);
+    if((ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        ImGui::GetIO().MouseWheel > 0.0f) ||
+       scrollbar_clicked)
+    {
+        conversation.scroll_to_bottom     = false;
+        conversation.scroll_to_answer     = false;
+        conversation.scroll_settle_frames = 0;
+    }
+
     if(conversation.lines.empty())
     {
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
@@ -1105,6 +1125,10 @@ AssistantPanel::RenderTranscript()
     for(size_t i = 0; i < conversation.lines.size(); ++i)
     {
         RenderMessageCard(conversation, i, conversation.lines[i]);
+        if(conversation.scroll_to_answer && i == conversation.scroll_target_line)
+        {
+            ImGui::SetScrollHereY(0.0f);
+        }
     }
 
     // Drawn from live state rather than stored, so it cannot outlive its turn,
@@ -1119,10 +1143,24 @@ AssistantPanel::RenderTranscript()
         PanelFieldLabel(m_status.c_str(), false, &settings);
     }
 
+    // Kept up for several frames. The request is only applied the next time this
+    // child begins, and the app draws on demand, so without another frame asked
+    // for the view never moves. A message's height is also not final on the
+    // frame it first appears.
+    const bool following = conversation.scroll_to_bottom || conversation.scroll_to_answer;
     if(conversation.scroll_to_bottom)
     {
         ImGui::SetScrollHereY(1.0f);
+    }
+    if(following && conversation.scroll_settle_frames > 0)
+    {
+        --conversation.scroll_settle_frames;
+        RenderScheduler::GetInstance().RequestRender();
+    }
+    else if(following)
+    {
         conversation.scroll_to_bottom = false;
+        conversation.scroll_to_answer = false;
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);

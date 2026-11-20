@@ -101,7 +101,16 @@ private:
         // The linked-trace block the model was last given, so a change is
         // announced on the next turn instead of leaving it an outdated list.
         std::string links_announced;
-        bool        scroll_to_bottom = false;
+        // Where the transcript is headed when it is next drawn: the bottom, for
+        // activity that is not an answer, or the first line of an answer. Kept
+        // here because a turn can write to a trace that is not on screen.
+        bool scroll_to_bottom = false;
+        bool scroll_to_answer = false;
+        // Frames still to spend pinning the transcript. ImGui applies a scroll
+        // request on the next frame, and a new message's height is not final until
+        // then, so the pin has to outlast the frame that asked for it.
+        uint32_t scroll_settle_frames = 0;
+        size_t   scroll_target_line   = 0;
 
         // Token counts the endpoint reported for this trace's conversation.
         // Kept across the end of a turn and cleared with the conversation.
@@ -167,6 +176,12 @@ private:
     void HandleSummaryEvent(const SummaryEvent& event);
 
     void AppendLine(Speaker speaker, const std::string& text);
+    // Pins a transcript to its newest activity, for long enough that the view
+    // actually moves. One frame never does.
+    void FollowTranscript(Conversation& conversation);
+    // Puts the first line of a complete assistant answer at the top instead of
+    // skipping the reader to its conclusion.
+    void ShowAnswerStart(Conversation& conversation, size_t line_index);
     void        AppendChart(const std::string& project_id, uint64_t track_id);
     void        RenderActivityChart(const std::string& project_id, uint64_t track_id);
     void        RenderHeaderCard();

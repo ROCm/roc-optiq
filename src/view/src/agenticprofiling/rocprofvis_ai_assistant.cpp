@@ -83,6 +83,11 @@ constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 350;
 // ordinary query never shows a timer, short enough that a slow one is visibly
 // working rather than stuck.
 constexpr int64_t  ASSISTANT_SLOW_FETCH_NOTICE_SECONDS = 5;
+// Frames to keep pinning the transcript after something new lands. The scroll
+// request is applied the frame after it is made, and a message's real height
+// arrives a frame after it is first drawn, so fewer than this leaves the view
+// where it was.
+constexpr uint32_t ASSISTANT_SCROLL_SETTLE_FRAMES = 4;
 
 }  // namespace
 
@@ -248,7 +253,31 @@ AssistantPanel::AppendLine(Speaker speaker, const std::string& text)
     line.speaker = speaker;
     line.text    = text;
     conversation.lines.push_back(line);
-    conversation.scroll_to_bottom = true;
+    if(speaker == Speaker::kAssistant)
+    {
+        ShowAnswerStart(conversation, conversation.lines.size() - 1);
+    }
+    else
+    {
+        FollowTranscript(conversation);
+    }
+}
+
+void
+AssistantPanel::FollowTranscript(Conversation& conversation)
+{
+    conversation.scroll_to_bottom     = true;
+    conversation.scroll_to_answer     = false;
+    conversation.scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
+}
+
+void
+AssistantPanel::ShowAnswerStart(Conversation& conversation, size_t line_index)
+{
+    conversation.scroll_to_bottom     = false;
+    conversation.scroll_to_answer     = true;
+    conversation.scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
+    conversation.scroll_target_line   = line_index;
 }
 
 // Adds an activity strip for one track, or a whole trace when track_id is
@@ -272,14 +301,33 @@ AssistantPanel::AppendChart(const std::string& project_id, uint64_t track_id)
     line.track_id   = track_id;
     line.project_id = project_id;
     conversation.lines.push_back(line);
-    conversation.scroll_to_bottom = true;
+    FollowTranscript(conversation);
 }
 
 void
 AssistantPanel::SetStatus(const std::string& text)
 {
-    m_status                            = text;
-    TurnConversation().scroll_to_bottom = true;
+    // The slow-fetch timer rewrites this every frame. Restarting the pin each
+    // time would drag the reader back down the moment they scrolled up, so a
+    // repeat changes nothing, and a new line only extends a pin that is already
+    // on. The answer itself still pins, through AppendLine.
+    if(text == m_status)
+    {
+        return;
+    }
+    m_status                   = text;
+    Conversation& conversation = TurnConversation();
+    if(m_turn_project_id != m_view_project_id)
+    {
+        // Another trace's transcript is on screen, so there is no reader here
+        // to drag, and the scroll area the two share will be wherever that one
+        // left it. Come back on the status line instead.
+        FollowTranscript(conversation);
+    }
+    else if(conversation.scroll_to_bottom)
+    {
+        conversation.scroll_settle_frames = ASSISTANT_SCROLL_SETTLE_FRAMES;
+    }
 }
 
 AssistantToolContext
@@ -1062,7 +1110,11 @@ AssistantPanel::RunNextTool()
     }
     if(started.set_next_steps)
     {
-        TurnConversation().next_steps = started.next_steps;
+        // The buttons take their height out of the transcript, which would
+        // leave the working status under the composer until the answer lands.
+        Conversation& conversation = TurnConversation();
+        conversation.next_steps    = started.next_steps;
+        FollowTranscript(conversation);
     }
     if(started.stop_tool_queue)
     {

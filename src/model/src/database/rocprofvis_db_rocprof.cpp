@@ -201,12 +201,12 @@ void RocprofDatabase::FindPmcIdsWithSharedSymbol()
     m_pmc_ids_with_shared_symbol.clear();
     for (auto& guid_info : DbInstances())
     {
-        TableCache* pmc_table = (TableCache*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle("PMC");
+        CatalogTable* pmc_table = (CatalogTable*)CachedTables(guid_info.first.GuidIndex())->GetTableHandle("PMC");
         std::map<std::string, std::vector<uint64_t>> pmc_ids_by_symbol;
         for (size_t row = 0; row < pmc_table->NumRows(); row++)
         {
-            std::string key = std::string(pmc_table->GetCellByIndex(row, "agent_id")) + '\0' + pmc_table->GetCellByIndex(row, "pid") + '\0' + pmc_table->GetCellByIndex(row, "symbol");
-            pmc_ids_by_symbol[key].push_back(std::strtoull(pmc_table->GetCellByIndex(row, "id"), nullptr, 10));
+            std::string key = std::string(pmc_table->CellTextByIndex(row, "agent_id")) + '\0' + pmc_table->CellTextByIndex(row, "pid") + '\0' + pmc_table->CellTextByIndex(row, "symbol");
+            pmc_ids_by_symbol[key].push_back(std::strtoull(pmc_table->CellTextByIndex(row, "id"), nullptr, 10));
         }
         for (auto& entry : pmc_ids_by_symbol)
         {

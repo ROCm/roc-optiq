@@ -520,7 +520,7 @@ LogViewer::RenderOptionsPopup()
             m_entries.Clear();
             MarkDataDirty();
         }
-        if(IconMenuItem(ICON_OPEN, "Open log file"))
+        if(IconMenuItem(ICON_OPEN_FILE, "Open log file"))
         {
             OpenLogFile();
         }

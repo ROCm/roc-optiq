@@ -637,13 +637,15 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // layers toggle independently (checklist: "Layers independent").
         const bool counters_before = MinimapTestPeer{*mm}.ShowCounters();
 
-        // The ICON_COMPASS toolbar button and the ##events checkbox are both real
+        // The minimap toolbar button and the ##events checkbox are both real
         // ImGui widgets nested under unknown layout child-windows. The "**/"
         // wildcard ref locates them past those intermediates by trailing label.
+        // The button is matched by its "###minimap_toggle" ID rather than its
+        // glyph, so the ref survives an icon change.
         // The Minimap is a plain Begin("Minimap") window, not a popup, so ref it
         // by title rather than $FOCUSED (which the window does not reliably own).
         ctx->Yield(3);
-        ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
+        ctx->ItemClick("//Main Window/**/###minimap_toggle");
         ctx->Yield(3);
 
         ctx->SetRef("//Minimap");
@@ -660,7 +662,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == true);
 
         // Close the Minimap popup so it doesn't cover later tests' widgets.
-        ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
+        ctx->ItemClick("//Main Window/**/###minimap_toggle");
         ctx->Yield(2);
     };
 

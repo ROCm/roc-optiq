@@ -325,7 +325,7 @@ PresetBrowser::Render()
             float manage_width =
                 ImGui::CalcTextSize(ICON_OPEN).x + ImGui::CalcTextSize(ICON_ARCHIVE).x +
                 ImGui::CalcTextSize(ICON_TRASH_CAN).x + 2.0f * style.ItemSpacing.x;
-            float edit_width = ImGui::CalcTextSize(ICON_ADD_NOTE).x +
+            float edit_width = ImGui::CalcTextSize(ICON_PLUS).x +
                                ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x +
                                4.0f * style.FramePadding.x + style.ItemSpacing.x;
             ImGui::PopFont();
@@ -461,7 +461,7 @@ PresetBrowser::Render()
             ImGui::SameLine();
             ImGui::BeginDisabled(m_text_input.empty());
             if(IconButton(
-                   ICON_ADD_NOTE, icons, ImVec2(0.0f, 0.0f),
+                   ICON_PLUS, icons, ImVec2(0.0f, 0.0f),
                    "Create preset of current customizations", false, style.FramePadding,
                    ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_Button)),
                    ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered)),

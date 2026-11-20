@@ -678,7 +678,7 @@ ProfilerLauncherDialog::RenderConfigureOptions()
     // Where to run first: pick the machine before the paths. Rendered in builds
     // without remote support too, since the tool locations apply locally.
     BeginLaunchCard("card_connection");
-    LaunchCardHeader(ICON_CHAIN, "Where to run");
+    LaunchCardHeader(ICON_PLUGS_CONNECTED, "Where to run");
     ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("Environment").x -
                     2.0f * m_settings.GetDefaultStyle().FramePadding.x);
     ImGui::BeginDisabled(IsSshMode() && !HasRemoteConnection());
@@ -696,7 +696,7 @@ ProfilerLauncherDialog::RenderConfigureOptions()
     EndLaunchCard();
 
     BeginLaunchCard("card_target");
-    LaunchCardHeader(ICON_OPEN, "Target",
+    LaunchCardHeader(ICON_TERMINAL, "Target",
                      "The program to profile and where its results go");
     m_execution_cache_dirty |=
         m_backends[m_backend_index]->RenderTargetSection(m_config, MakeBrowseFn());

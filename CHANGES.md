@@ -4,6 +4,14 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ## ROCm Optiq 1.3.0 (unreleased)
 
+### Added
+
+#### Features and improvements
+
+##### Welcome page
+
+- A **Tips & tricks** card under **Start** and **Recent** shows a new tip about a feature or shortcut each time ROCm Optiq starts. Use the arrows to browse the rest. Shortcuts in the tips show the keys currently set in **Edit** > **Preferences**.
+
 ### Resolved issues
 
 - Updated third-party libraries for security fixes: mbedTLS 3.6.7, SQLite 3.54.1, and libssh2 and zlib to upstream commits past their latest releases (1.11.1 and 1.3.2), which do not yet include the fixes.
@@ -39,10 +47,6 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 ##### Trace formats
 
 - rocpd schema 3.0.4 (`rocpd_hip_event`): HIP events appear on the timeline, in search, in the topology tree, and in data flow from region events.
-
-##### Welcome page
-
-- A **Tips & tricks** card under **Start** and **Recent** shows a new tip about a feature or shortcut each time ROCm Optiq starts. Use the arrows to browse the rest. Shortcuts in the tips show the keys currently set in **Edit** > **Preferences**.
 
 ##### Timeline and navigation
 

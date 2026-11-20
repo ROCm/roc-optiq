@@ -25,10 +25,24 @@ struct AssistantToolLabel
     const char* step;
 };
 
+// A row that leaves a column out still compiles, and its missing label is a
+// null pointer the first time that tool runs. Checked at build time instead.
+constexpr bool
+EveryLabelFilled(const AssistantToolLabel* labels, size_t count)
+{
+    bool filled = true;
+    for(size_t i = 0; i < count; ++i)
+    {
+        filled = filled && labels[i].name != nullptr && labels[i].status != nullptr &&
+                 labels[i].step != nullptr;
+    }
+    return filled;
+}
+
 // Every system-trace tool the model can call, with the line the panel shows
 // while it runs. One list keeps the status text and the "unknown tool" reply in
 // step with what BuildAssistantToolsJson registers.
-const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
+constexpr AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "trace_overview", "Reading the timeline overview...", "Timeline overview" },
     { "get_summary", "Loading summary...", "Summary" },
     { "top_events", "Querying top events...", "Top events" },
@@ -55,12 +69,16 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "run_analysis_script", "Running an analysis script...", "Script" },
 #endif
 };
+static_assert(EveryLabelFilled(ASSISTANT_TOOL_LABELS,
+                               sizeof(ASSISTANT_TOOL_LABELS) /
+                                   sizeof(ASSISTANT_TOOL_LABELS[0])),
+              "every system tool needs a status line and a step label");
 
 // The compute-trace set. Only the two UI tools that mean the same thing on
 // either kind of trace are repeated from the list above; everything else here
 // reads a workload rather than a timeline. Scripting is absent on purpose -
 // optiq.table requires a system trace, so the tool would always fail.
-const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
+constexpr AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
     { "compute_overview", "Reading the workload overview...", "Workload overview" },
     { "list_kernels", "Listing kernels...", "Kernel list" },
     { "kernel_summary", "Reading the kernel summary...", "Kernel summary" },
@@ -72,6 +90,10 @@ const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
     { "switch_tab", "Switching tabs...", "Switched tabs" },
     { "offer_next_steps", "Offering next steps...", "Next steps" },
 };
+static_assert(EveryLabelFilled(ASSISTANT_COMPUTE_TOOL_LABELS,
+                               sizeof(ASSISTANT_COMPUTE_TOOL_LABELS) /
+                                   sizeof(ASSISTANT_COMPUTE_TOOL_LABELS[0])),
+              "every compute tool needs a status line and a step label");
 
 // Builds a JSON string array, for the enum of a tool parameter.
 jt::Json

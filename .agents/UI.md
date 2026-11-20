@@ -2503,6 +2503,20 @@ Use these instead of writing your own.
 - `is_remote_display_session()` - detects SSH/X-forwarding for the
   file-dialog auto-selection logic.
 
+### `GfxUtils` (`rocprofvis_gfx_utils.{h,cpp}`) - interpolation and colour maths
+
+General drawing maths that Dear ImGui does not already provide. Reach
+for ImGui's own first: `ImLerp` for `ImVec2` and `ImVec4`, `ImSaturate`,
+and `ImBezierCubicCalc` are in `imgui_internal.h`.
+
+- `GfxUtils::SmoothStep(t)` - the ease-in-out curve `3t^2 - 2t^3` on a
+  clamped `t`, for fades and for easing an animation's progress.
+- `GfxUtils::LerpColor(a, b, t)` - blends two `ImU32` colours channel
+  by channel, alpha included.
+
+A new easing curve or colour helper goes here, not beside the widget
+that first needs it.
+
 ### Icons (`src/view/src/icons/`)
 
 - `rocprovfis_icon_defines.h` (note the typo - kept for stability)
@@ -2824,7 +2838,21 @@ in that same file's own handler table. A body without a schema entry is
 unreachable; a schema entry without a body comes back to the model as an
 unknown tool. The label list at the top of the schema file has to grow
 with it, since that is what `AssistantToolNameList` reports and what the
-panel shows as a status line.
+activity card titles while that tool runs. The card stays pinned under
+the transcript for the whole turn, and only in the conversation of the
+trace the turn is pinned to. Its stage follows the theme and
+draws only in the theme's accent family (`MakeStagePalette`): a white
+panel with the pressed accent for lit things on light, a panel below
+the background with the hover accent lifted toward white on dark. On it,
+trace lanes feed a compute die over a bus. A read scrolls the lanes into the die,
+thinking draws flow links between events, writing gathers them into one
+point, and a wait holds everything dim. Under it sit the title, chips,
+and one sentence about the wait. The chips come from
+`DescribeToolScope` in `rocprofvis_ai_assistant.cpp`, which spells out
+the tracks and window a read will really use when the call leaves them
+out, on the linked trace when the call passes `trace`. Between reads
+they list the steps so far by
+`AssistantToolStepLabel`, the third column of the label list.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
   singleton like `LogViewer`. Owns the per-trace conversations, the
   docked column, and the turn loop. The composer shows **Explain this
@@ -3641,6 +3669,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Render a heading                              | `SectionTitle(text, large, settings)`                                                          |
 | Render a vertical separator                   | `VerticalSeparator(settings)`                                                                  |
 | Get a themed color                            | `settings.GetColor(Colors::kSomething)` / `ThemeColor(settings, Colors::..., alpha)`           |
+| Blend two colors or ease a 0..1 ramp          | `GfxUtils::LerpColor` / `GfxUtils::SmoothStep`; `ImLerp` and `ImBezierCubicCalc` for points    |
 | Add a copyable text cell                      | `CopyableTextUnformatted(text, unique_id, COPY_DATA_NOTIFICATION)`                             |
 | Add consistent table cell/row copy menus      | `CellMenuTarget` + `RenderRowHitbox` + `BeginCellContextMenu` helpers                          |
 | Bind an ImGui input to `std::string`          | `InputTextString` / `InputTextStringWithHint`                                                  |
@@ -4154,6 +4183,8 @@ All under `agenticprofiling/`, compiled only with
   `compact_number_format`, `get_application_config_path`,
   `open_url`, `get_executable_name`, `is_remote_display_session` ->
   `rocprofvis_utils.h`.
+- `GfxUtils` (`SmoothStep`, `LerpColor`) -> `rocprofvis_gfx_utils.h` ->
+  Interpolation and colour maths ImGui lacks.
 - Icon constants and `icon_ranges[]` ->
   `icons/rocprovfis_icon_defines.h`, `icons/rocprofvis_icon_data.h`.
 

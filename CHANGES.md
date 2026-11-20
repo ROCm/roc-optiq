@@ -10,7 +10,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ##### Welcome page
 
-- A **Tips & tricks** card under **Start** and **Recent** shows a new tip about a feature or shortcut each time ROCm Optiq starts. Use the arrows to browse the rest. Shortcuts in the tips show the keys currently set in **Edit** > **Preferences**.
+- A **Tips & tricks** card under **Recent** shows a new tip about a feature or shortcut each time ROCm Optiq starts. Use the arrows to browse the tips. Keyboard shortcuts shown in the tips correspond to the **Hotkeys** in **Settings**, which are shown by **Edit** > **Preferences** in the main menu.
 
 ### Resolved issues
 

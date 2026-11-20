@@ -15,15 +15,35 @@ namespace Controller
 class Sample : public Handle
 {
 public:
-    Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp);
+    Sample(uint64_t id, double timestamp);
 
     Sample& operator=(Sample&& other);
 
-    virtual ~Sample();
+    virtual ~Sample() {}
 
-    rocprofvis_controller_object_type_t GetType(void) override;
+    rocprofvis_controller_object_type_t GetType(void) override
+    {
+        return kRPVControllerObjectTypeSample;
+    }
 
-    // Handlers for getters.
+    uint64_t GetId() const noexcept { return static_cast<uint64_t>(m_timestamp); }
+    rocprofvis_controller_primitive_type_t GetValueType() const noexcept
+    {
+        return kRPVControllerPrimitiveTypeDouble;
+    }
+    double                               GetTimestamp() const noexcept { return m_timestamp; }
+    virtual double                       GetEndTimestamp() const noexcept { return m_end_timestamp; }
+    double                               GetValue() const noexcept { return m_data; }
+    virtual uint64_t                     GetNumberOfChildren() const noexcept { return 0; }
+    [[nodiscard]] virtual rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value) const;
+
+    void SetValue(double value) noexcept { m_data = value; }
+    void SetEndTimestamp(double timestamp) noexcept { m_end_timestamp = timestamp; }
+
+private:
+    // SampleLOD's C ABI overrides delegate base properties to these handlers.
+    friend class SampleLOD;
+
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index,
                                   uint64_t* value) override;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index,

@@ -126,7 +126,8 @@ typedef struct UserSettings
     // dragged, at the cost of a brief flicker on each drag-release. Set with
     // --drag-repair and ignored on other platforms. See
     // raise_dragged_viewport_after_release() in rocprofvis_platform_helpers.cpp.
-    bool              linux_drag_repair;
+    bool        linux_drag_repair;
+    std::string remote_cache_path;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -294,7 +295,7 @@ enum class Colors
     kLogError,
     kLogCritical,
 
-    // PC-sampling stall-reason palette
+    // PC-sampling stall reasons and measured percentages
     kPcSamplingInstructionFetch,
     kPcSamplingAluDependency,
     kPcSamplingWaitcnt,
@@ -304,6 +305,7 @@ enum class Colors
     kPcSamplingPipelineStall,
     kPcSamplingOtherWait,
     kPcSamplingSleeping,
+    kPcSamplingMetricBar,
 
     // ISA mnemonic palette; operands retain the normal text colour.
     kIsaInternal,
@@ -342,11 +344,15 @@ constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES     = "recent_file
 constexpr const char* JSON_KEY_SETTINGS_INTERNAL_NEXT_WELCOME_TIP = "next_welcome_tip";
 constexpr size_t      MAX_RECENT_FILES                            = 5;
 
-constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
-constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
-constexpr const char* JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR         = "linux_drag_repair";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT =
+    "dont_ask_before_exit";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE =
+    "dont_ask_before_tab_close";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR = "linux_drag_repair";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH = "remote_cache_path";
 
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES = "log_viewer_max_entries";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES =
+    "log_viewer_max_entries";
 // Bounds for the log viewer's in-memory cache size. Older lines fall off the
 // ring buffer once the cap is reached; the full history lives in the log file.
 constexpr int LOG_VIEWER_MAX_ENTRIES_DEFAULT   = 512;
@@ -355,11 +361,15 @@ constexpr int LOG_VIEWER_MAX_ENTRIES_MAX       = 100000;
 constexpr int LOG_VIEWER_MAX_ENTRIES_STEP      = 64;
 constexpr int LOG_VIEWER_MAX_ENTRIES_STEP_FAST = 512;
 
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK    = "log_viewer_level_mask";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL   = "log_viewer_auto_scroll";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX     = "log_viewer_use_regex";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME = "log_viewer_relative_time";
-constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_visible";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK =
+    "log_viewer_level_mask";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL =
+    "log_viewer_auto_scroll";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX =
+    "log_viewer_use_regex";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME =
+    "log_viewer_relative_time";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE = "log_viewer_visible";
 // All six severity levels enabled (bits 0..5).
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 

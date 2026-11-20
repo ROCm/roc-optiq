@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "textselect.hpp"
 
 #include "icons/rocprovfis_icon_defines.h"
@@ -29,6 +30,7 @@
 #include "rocprofvis_ai_tool_schema.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_gfx_utils.h"
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
@@ -127,13 +129,6 @@ struct LaneBlock
     float x1;
 };
 
-float
-Smooth01(float x)
-{
-    const float c = std::clamp(x, 0.0f, 1.0f);
-    return c * c * (3.0f - 2.0f * c);
-}
-
 // One peak per cycle. A higher sharpness makes the peak narrower.
 float
 Wave(float radians, float sharpness)
@@ -159,34 +154,6 @@ Unit(uint32_t h)
     return static_cast<float>(h >> 8) * (1.0f / 16777216.0f);
 }
 
-ImVec2
-Lerp2(ImVec2 a, ImVec2 b, float u)
-{
-    return ImVec2(a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u);
-}
-
-ImVec2
-Bezier(ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, float u)
-{
-    const float v = 1.0f - u;
-    const float a = v * v * v;
-    const float b = 3.0f * v * v * u;
-    const float c = 3.0f * v * u * u;
-    const float d = u * u * u;
-    return ImVec2(a * p0.x + b * p1.x + c * p2.x + d * p3.x,
-                  a * p0.y + b * p1.y + c * p2.y + d * p3.y);
-}
-
-ImU32
-MixColor(ImU32 a, ImU32 b, float u)
-{
-    const ImVec4 x = ImGui::ColorConvertU32ToFloat4(a);
-    const ImVec4 y = ImGui::ColorConvertU32ToFloat4(b);
-    return ImGui::ColorConvertFloat4ToU32(
-        ImVec4(x.x + (y.x - x.x) * u, x.y + (y.y - x.y) * u, x.z + (y.z - x.z) * u,
-               x.w + (y.w - x.w) * u));
-}
-
 // The stage's colours. What is lit has to stand out from what is idle in either
 // theme, which means a deeper accent on light and a lighter one on dark: a light
 // theme gets a white panel with its pressed accent for lit things, a dark theme
@@ -207,11 +174,11 @@ MakeStagePalette(SettingsManager& settings)
     palette.accent = settings.GetColor(Colors::kAccent);
     if(settings.GetUserSettings().display_settings.use_dark_mode)
     {
-        palette.stage =
-            MixColor(settings.GetColor(Colors::kBgMain), IM_COL32(0, 0, 0, 255), 0.25f);
-        palette.edge = ApplyAlpha(palette.accent, 0.40f);
-        palette.hot  = MixColor(settings.GetColor(Colors::kAccentHover),
-                                IM_COL32(255, 255, 255, 255), 0.35f);
+        palette.stage = GfxUtils::LerpColor(settings.GetColor(Colors::kBgMain),
+                                            IM_COL32(0, 0, 0, 255), 0.25f);
+        palette.edge  = ApplyAlpha(palette.accent, 0.40f);
+        palette.hot   = GfxUtils::LerpColor(settings.GetColor(Colors::kAccentHover),
+                                            IM_COL32(255, 255, 255, 255), 0.35f);
     }
     else
     {
@@ -283,7 +250,7 @@ AlongPath(const ImVec2* points, int count, float d)
         const float len = std::sqrt(dx * dx + dy * dy);
         if(len > 0.0f && d <= len)
         {
-            return Lerp2(points[i], points[i + 1], d / len);
+            return ImLerp(points[i], points[i + 1], d / len);
         }
         d -= len;
     }
@@ -343,7 +310,7 @@ DrawFlowLink(ImDrawList* draw, ImVec2 from, ImVec2 to, float lift, float draw_u,
     {
         const float u = draw_u * static_cast<float>(i) /
                         static_cast<float>(ASSISTANT_FLOW_SAMPLES - 1);
-        points[i] = Bezier(from, c1, c2, to, u);
+        points[i] = ImBezierCubicCalc(from, c1, c2, to, u);
     }
     draw->AddPolyline(points, ASSISTANT_FLOW_SAMPLES, ApplyAlpha(accent, 0.18f * alpha),
                       ImDrawFlags_None, 6.0f);
@@ -375,7 +342,8 @@ DrawFlowLink(ImDrawList* draw, ImVec2 from, ImVec2 to, float lift, float draw_u,
     }
     if(travel_u >= 0.0f && travel_u <= 1.0f)
     {
-        Glow(draw, Bezier(from, c1, c2, to, travel_u), 2.2f, accent, bright, alpha);
+        Glow(draw, ImBezierCubicCalc(from, c1, c2, to, travel_u), 2.2f, accent, bright,
+             alpha);
     }
 }
 
@@ -463,7 +431,7 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
             continue;
         }
         const bool  major = k % ASSISTANT_RULER_MAJOR == 0;
-        const float fade  = Smooth01((lanes_x1 - x) / ASSISTANT_EDGE_FADE);
+        const float fade  = GfxUtils::SmoothStep((lanes_x1 - x) / ASSISTANT_EDGE_FADE);
         draw->AddLine(ImVec2(x, ruler_y), ImVec2(x, ruler_y + (major ? 5.0f : 2.5f)),
                       ApplyAlpha(bright, (major ? 0.45f : 0.22f) * fade * dim), 1.0f);
     }
@@ -509,8 +477,8 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
                 }
                 const float x0 = port_x + c;
                 const float x1 = x0 + pattern[b].width;
-                const float fade =
-                    Smooth01((lanes_x1 - (x0 + x1) * 0.5f) / ASSISTANT_EDGE_FADE);
+                const float fade = GfxUtils::SmoothStep((lanes_x1 - (x0 + x1) * 0.5f) /
+                                                        ASSISTANT_EDGE_FADE);
                 float alpha = (0.30f + 0.42f * pattern[b].weight) * fade;
                 ImU32 color = accent;
                 if(reading && c <= 0.0f)
@@ -521,9 +489,10 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
                 }
                 else if(reading)
                 {
-                    const float near = Smooth01(1.0f - c / ASSISTANT_HEAD_CAST);
+                    const float near =
+                        GfxUtils::SmoothStep(1.0f - c / ASSISTANT_HEAD_CAST);
                     alpha = std::min(1.0f, alpha * (1.0f + 0.8f * near));
-                    color = MixColor(accent, bright, 0.6f * near);
+                    color = GfxUtils::LerpColor(accent, bright, 0.6f * near);
                 }
                 else
                 {
@@ -682,7 +651,7 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
                                     ImVec2(b.x + 2.0f, b.y + 2.0f),
                                     ApplyAlpha(accent, (lit - 0.5f) * 0.7f), 3.0f);
             }
-            const ImU32 unit = MixColor(accent, bright, lit * lit);
+            const ImU32 unit = GfxUtils::LerpColor(accent, bright, lit * lit);
             draw->AddRectFilled(a, b, ApplyAlpha(unit, lit), 1.5f);
         }
     }
@@ -737,9 +706,10 @@ RenderActivityStage(AssistantMotion motion, float width, double scroll,
                 }
                 end = ImVec2(to->x0, lane_y[to_lane]);
             }
-            const float draw_u = Smooth01(u / 0.42f);
+            const float draw_u = GfxUtils::SmoothStep(u / 0.42f);
             const float alpha  = u < 0.8f ? 1.0f : 1.0f - (u - 0.8f) / 0.2f;
-            const float travel = u < 0.42f ? -1.0f : Smooth01((u - 0.42f) / 0.38f);
+            const float travel =
+                u < 0.42f ? -1.0f : GfxUtils::SmoothStep((u - 0.42f) / 0.38f);
             LightBlock(draw, *from, lane_y[from_lane], accent, bright, alpha);
             if(to != nullptr && draw_u >= 1.0f)
             {
@@ -788,13 +758,12 @@ RenderShimmerText(const std::string& text, ImU32 base, ImU32 glint)
         {
             ++next;
         }
-        const float  x0 = font->CalcTextSizeA(fsize, FLT_MAX, 0.0f, begin, glyph).x;
-        const float  x1 = font->CalcTextSizeA(fsize, FLT_MAX, 0.0f, begin, next).x;
-        const float  k  = Smooth01(1.0f - std::fabs((x0 + x1) * 0.5f - sweep) / band);
-        const ImVec4 mix(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k,
-                         from.z + (to.z - from.z) * k, from.w + (to.w - from.w) * k);
+        const float x0 = font->CalcTextSizeA(fsize, FLT_MAX, 0.0f, begin, glyph).x;
+        const float x1 = font->CalcTextSizeA(fsize, FLT_MAX, 0.0f, begin, next).x;
+        const float k =
+            GfxUtils::SmoothStep(1.0f - std::fabs((x0 + x1) * 0.5f - sweep) / band);
         draw->AddText(font, fsize, ImVec2(pos.x + x0, pos.y),
-                      ImGui::ColorConvertFloat4ToU32(mix), glyph, next);
+                      ImGui::ColorConvertFloat4ToU32(ImLerp(from, to, k)), glyph, next);
         glyph = next;
     }
 }

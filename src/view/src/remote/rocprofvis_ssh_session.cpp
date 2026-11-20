@@ -197,7 +197,7 @@ namespace View
                 return std::make_shared<RemoteStatusEvent>(
                     *id_holder, static_cast<uint32_t>(status), m_last_result);
             },
-            [this](uint64_t status) -> bool { return IsTerminalStatus(status); },
+            [](uint64_t status) -> bool { return IsTerminalStatus(status); },
             [connection]() { rocprofvis_controller_remote_cancel_prompt(connection); },
             future,
             [future, teardown_fn]()

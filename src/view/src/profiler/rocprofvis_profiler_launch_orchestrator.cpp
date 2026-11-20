@@ -28,7 +28,6 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 , m_remote_uri(nullptr)
 , m_download_orchestrator(nullptr)
-, m_download_started(false)
 #endif
 , m_profiler_state(kRPVProfilerStateIdle)
 , m_is_running(false)
@@ -85,7 +84,6 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_download_orchestrator.reset();
     m_remote_session.reset();
-    m_download_started = false;
 #endif
     m_raw_output.clear();
     m_output_dirty   = false;
@@ -243,17 +241,35 @@ void ProfilerLaunchOrchestrator::Update()
 
             if(remote_state == kRPVProfilerStateCompleted)
             {
-                m_profiler_state = kRPVProfilerStateCompleted;
-                m_trace_path     = m_remote_uri ? m_remote_uri->GetRemoteResultPathString()
-                                                : std::string();
-
-                // With auto-open, the trace is downloaded once the run has
-                // produced a file.
-                if(m_download_trace && !m_download_started && m_download_orchestrator &&
-                   !m_trace_path.empty())
+                // Decided once, on the transition: the run's trace path is final
+                // by then.
+                if(m_profiler_state != kRPVProfilerStateCompleted)
                 {
-                    m_download_started = true;
-                    m_download_orchestrator->DownloadPath();
+                    m_profiler_state = kRPVProfilerStateCompleted;
+                    m_trace_path     = m_remote_uri ? m_remote_uri->GetRemoteResultPathString()
+                                                    : std::string();
+                    if(!m_trace_path.empty())
+                    {
+                        // With auto-open, the trace is downloaded once the run
+                        // has produced a file.
+                        if(m_download_trace && m_download_orchestrator)
+                        {
+                            m_download_orchestrator->DownloadPath();
+                        }
+                    }
+                    else if(m_download_trace && m_remote_session->GetTracePathResult() !=
+                                                    kRocProfVisResultNotSupported)
+                    {
+                        // As for a local run: no guessing, tell the user where to
+                        // look.
+                        spdlog::warn("ProfilerLaunchOrchestrator: could not determine remote "
+                                     "trace path from profiler output");
+                        NotificationManager::GetInstance().Show(
+                            "Profiling finished, but the trace file could not be located "
+                            "automatically. Open it from the remote output directory with "
+                            "File > Open Remote....",
+                            NotificationLevel::Warning);
+                    }
                 }
             }
             else if(remote_state == kRPVProfilerStateCancelled)

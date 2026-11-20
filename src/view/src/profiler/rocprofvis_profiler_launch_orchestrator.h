@@ -170,8 +170,6 @@ private:
     std::shared_ptr<RemoteUri>              m_remote_uri;
     // Remote trace download...
     std::shared_ptr<RemoteTraceOrchestrator> m_download_orchestrator;
-    // Set once the auto-open download has been started for this run.
-    bool                                     m_download_started;
 #endif
 
     rocprofvis_profiler_state_t m_profiler_state;

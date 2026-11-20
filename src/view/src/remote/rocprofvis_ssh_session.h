@@ -112,7 +112,7 @@ namespace View
         uint64_t Poll();
 
         // True for a remote status that ends a phase.
-        bool IsTerminalStatus(uint64_t status);
+        static bool IsTerminalStatus(uint64_t status);
 
         // Common registration: allocates a future, calls start_fn, and on
         // success registers a MonitorOperation. Returns the operation id or 0.

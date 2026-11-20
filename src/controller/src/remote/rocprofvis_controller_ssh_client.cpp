@@ -1298,7 +1298,9 @@ namespace Controller
         FILE* file = FDOPEN(fd, "wb");
         if (!file)
         {
-            CLOSEFD(fd); 
+            CLOSEFD(fd);
+            std::filesystem::remove(local_path, ec);
+            std::filesystem::remove(meta_path, ec);
             err = "fdopen failed: " + local_path;
             spdlog::error("[ssh] {}", err);
             connection->GetSshBridge()->SaveError(err);
@@ -1342,6 +1344,8 @@ namespace Controller
                     connection->GetSshBridge()->SaveError(err);
 
                     fclose(file);
+                    std::filesystem::remove(local_path, ec);
+                    std::filesystem::remove(meta_path, ec);
                     libssh2_channel_free(channel);
                     return Result::WriteError;
                 }
@@ -1364,6 +1368,8 @@ namespace Controller
                 connection->GetSshBridge()->SaveError(err);
 
                 fclose(file);
+                std::filesystem::remove(local_path, ec);
+                std::filesystem::remove(meta_path, ec);
                 libssh2_channel_free(channel);
                 return Result::ReadError;
 
@@ -1378,12 +1384,16 @@ namespace Controller
         // Persist the freshness sidecar ONLY for a fully-received file. Writing it
         // after a cancel/partial transfer would cache a truncated file as
         // up-to-date, so the next download would skip and open a corrupt trace.
-        // With no .meta, the next attempt re-downloads (the freshness check needs
-        // both the file and its .meta).
+        // A cancelled or partial file is removed along with any stale .meta.
         if (!cancelled && complete)
         {
             std::ofstream m(meta_path, std::ios::trunc);
             if (m) m << fileinfo.st_size << ' ' << fileinfo.st_mtime << '\n';
+        }
+        else
+        {
+            std::filesystem::remove(local_path, ec);
+            std::filesystem::remove(meta_path, ec);
         }
 
         libssh2_channel_send_eof(channel);

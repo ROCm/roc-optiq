@@ -256,10 +256,16 @@ namespace Controller
             future.Set(JobSystem::Get().IssueJob([&connection, src_path, dst_path, direction](Future* future) -> rocprofvis_result_t {
             if (direction == 0)
             {
-                if (SshClient::Result::Success == s_ssh_client.DownloadFile(&connection, src_path, dst_path, future))
+                SshClient::Result download_result = s_ssh_client.DownloadFile(&connection, src_path, dst_path, future);
+                if (SshClient::Result::Success == download_result)
                 {
                     connection.GetSshBridge()->SetStatus(kRPVControllerSshCompleted);
                     return kRocProfVisResultSuccess;
+                }
+                else if (SshClient::Result::Cancelled == download_result)
+                {
+                    connection.GetSshBridge()->SetStatus(kRPVControllerSshCancelled);
+                    return kRocProfVisResultCancelled;
                 }
                 else
                 {

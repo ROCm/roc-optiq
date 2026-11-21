@@ -18,18 +18,23 @@
 
 struct SummaryFailureFixture
 {
-    RocProfVis::Controller::Test::TemporaryDatabase database;
-    std::string           broken_table;
-    std::unique_ptr<rocprofvis_controller_t, decltype(&rocprofvis_controller_free)>
+    // Persistent fixtures run a const test body. These stay mutable so one
+    // Initialize() can be reused by every section of a test case.
+    mutable RocProfVis::Controller::Test::TemporaryDatabase database;
+    mutable std::string                                     broken_table;
+    mutable std::unique_ptr<rocprofvis_controller_t,
+                            decltype(&rocprofvis_controller_free)>
         controller{ nullptr, &rocprofvis_controller_free };
-    std::unique_ptr<rocprofvis_controller_arguments_t,
-                    decltype(&rocprofvis_controller_arguments_free)>
+    mutable std::unique_ptr<rocprofvis_controller_arguments_t,
+                            decltype(&rocprofvis_controller_arguments_free)>
         args{ nullptr, &rocprofvis_controller_arguments_free };
-    std::unique_ptr<rocprofvis_controller_summary_metrics_t,
-                    decltype(&rocprofvis_controller_summary_metric_free)>
-           metrics{ nullptr, &rocprofvis_controller_summary_metric_free };
-    double start = 0;
-    double end   = 0;
+    mutable std::unique_ptr<rocprofvis_controller_summary_metrics_t,
+                            decltype(&rocprofvis_controller_summary_metric_free)>
+                   metrics{ nullptr, &rocprofvis_controller_summary_metric_free };
+    mutable double start          = 0;
+    mutable double end            = 0;
+    mutable double timeline_start = 0;
+    mutable double timeline_end   = 0;
 
     ~SummaryFailureFixture()
     {
@@ -38,9 +43,9 @@ struct SummaryFailureFixture
         controller.reset();
     }
 
-    void Execute(const std::string& sql) { database.Execute(sql); }
+    void Execute(const std::string& sql) const { database.Execute(sql); }
 
-    void DropTable(const std::string& prefix)
+    void DropTable(const std::string& prefix) const
     {
         sqlite3*  raw_db = nullptr;
         const int opened = sqlite3_open(database.Path().string().c_str(), &raw_db);
@@ -64,7 +69,7 @@ struct SummaryFailureFixture
         broken_table = table;
     }
 
-    uint64_t Get(rocprofvis_handle_t* handle, rocprofvis_property_t property)
+    uint64_t Get(rocprofvis_handle_t* handle, rocprofvis_property_t property) const
     {
         uint64_t value = 0;
         REQUIRE(rocprofvis_controller_get_uint64(handle, property, 0, &value) ==
@@ -73,7 +78,7 @@ struct SummaryFailureFixture
     }
 
     std::string GetString(rocprofvis_handle_t* handle, rocprofvis_property_t property,
-                          uint64_t index)
+                          uint64_t index) const
     {
         uint32_t length = 0;
         if(rocprofvis_controller_get_string(handle, property, index, nullptr, &length) !=
@@ -92,7 +97,7 @@ struct SummaryFailureFixture
         return value;
     }
 
-    std::string DescribeMemoryEvents(uint64_t count)
+    std::string DescribeMemoryEvents(uint64_t count) const
     {
         std::ostringstream text;
         text.precision(17);
@@ -110,15 +115,15 @@ struct SummaryFailureFixture
                 kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventDurationSumIndexed, i,
                 &duration);
             text << " | "
-                 << GetString(metrics.get(),
-                              kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventNameIndexed,
-                              i)
+                 << GetString(
+                        metrics.get(),
+                        kRPVAnalysisSummaryTraceNodePropertyTopMemoryEventNameIndexed, i)
                  << " invocations=" << invocations << " duration_sum=" << duration;
         }
         return text.str();
     }
 
-    void Initialize()
+    void Initialize() const
     {
         database.Copy(std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
                           "rocpd-transpose.db",
@@ -148,17 +153,28 @@ struct SummaryFailureFixture
         REQUIRE(rocprofvis_controller_get_double(timeline,
                                                  kRPVControllerTimelineMaxTimestamp, 0,
                                                  &end) == kRocProfVisResultSuccess);
+        timeline_start = start;
+        timeline_end   = end;
         args.reset(rocprofvis_controller_arguments_alloc());
         metrics.reset(rocprofvis_controller_summary_metrics_alloc());
         REQUIRE(args);
         REQUIRE(metrics);
-        // A failed async fetch must leave this caller-owned output unchanged.
+        ArmUnchangedOutput();
+    }
+
+    // A failed fetch must leave this caller-owned output unchanged. Earlier
+    // sections share this object and a successful fetch replaces it, so each
+    // failure section starts from the same node sentinel Initialize() used.
+    void ArmUnchangedOutput() const
+    {
+        metrics.reset(rocprofvis_controller_summary_metrics_alloc());
+        REQUIRE(metrics);
         REQUIRE(rocprofvis_controller_set_uint64(
                     metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel, 0,
                     kRPVAnalysisSummaryAggregationLevelNode) == kRocProfVisResultSuccess);
     }
 
-    rocprofvis_result_t Fetch()
+    rocprofvis_result_t Fetch() const
     {
         REQUIRE(rocprofvis_controller_set_double(args.get(),
                                                  kRPVAnalysisSummaryArgsStartTimestamp, 0,
@@ -180,7 +196,7 @@ struct SummaryFailureFixture
             Get(future.get(), kRPVControllerFutureResult));
     }
 
-    void CheckOutputUnchanged()
+    void CheckOutputUnchanged() const
     {
         CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel) ==
               kRPVAnalysisSummaryAggregationLevelNode);
@@ -188,71 +204,100 @@ struct SummaryFailureFixture
     }
 };
 
-TEST_CASE_METHOD(SummaryFailureFixture, "Summary reports top-event query failures",
-                 "[summary][failure]")
+TEST_CASE_PERSISTENT_FIXTURE(SummaryFailureFixture, "Summary reports",
+                             "[summary][failure]")
 {
-    Initialize();
-    // Metadata has already loaded. Removing a backing table now fails the actual SQL
-    // query without preventing trace initialization or changing its topology.
-    SECTION("Memory query fails") { DropTable("rocpd_memory_copy"); }
-    SECTION("Thread launch query fails") { DropTable("rocpd_region"); }
-    INFO("Dropped table: " << broken_table);
-    CHECK(Fetch() == kRocProfVisResultUnknownError);
-    CheckOutputUnchanged();
-}
+    if(controller == nullptr) Initialize();
 
-TEST_CASE_METHOD(SummaryFailureFixture, "Summary reports counter-statistics failures",
-                 "[summary][failure]")
-{
-    Initialize();
-    const uint64_t num_tracks = Get(controller.get(), kRPVControllerSystemNumTracks);
-    bool           injected   = false;
-    for(uint64_t i = 0; i < num_tracks; i++)
-    {
-        rocprofvis_handle_t* handle = nullptr;
-        REQUIRE(rocprofvis_controller_get_object(controller.get(),
-                                                 kRPVControllerSystemTrackIndexed, i,
-                                                 &handle) == kRocProfVisResultSuccess);
-        RocProfVis::Controller::Track* track =
-            reinterpret_cast<RocProfVis::Controller::Track*>(handle);
-        if(track->GetCounter() && track->GetNumberOfEntries() > 0)
-        {
-            // Break the track's counter association so statistics fetching
-            // returns InvalidArgument, before it starts a database read.
-            track->SetCounter(nullptr);
-            injected = true;
-            break;
-        }
-    }
-    REQUIRE(injected);
-    CHECK(Fetch() == kRocProfVisResultInvalidArgument);
-    CheckOutputUnchanged();
-}
-
-TEST_CASE_METHOD(SummaryFailureFixture, "Summary accepts populated and empty time ranges",
-                 "[summary]")
-{
-    Initialize();
-    bool empty = false;
-    SECTION("Populated range") {}
+    // Read-only checks first. These need a clean database, so they must run
+    // before any section that drops a table or clears a counter.
     SECTION("Empty range")
     {
-        start = end + 1;
+        start = timeline_end + 1;
         end   = start + 1;
-        empty = true;
-    }
-    CHECK(Fetch() == kRocProfVisResultSuccess);
-    CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel) ==
-          kRPVAnalysisSummaryAggregationLevelTrace);
-    const uint64_t memory_events =
-        Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
-    INFO(DescribeMemoryEvents(memory_events));
-    if(empty)
-    {
+        CHECK(Fetch() == kRocProfVisResultSuccess);
+        CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel) ==
+              kRPVAnalysisSummaryAggregationLevelTrace);
+        const uint64_t memory_events =
+            Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
+        INFO(DescribeMemoryEvents(memory_events));
         CHECK(memory_events == 0);
     }
-    else
+    SECTION("Populated range")
     {
+        start = timeline_start;
+        end   = timeline_end;
+        CHECK(Fetch() == kRocProfVisResultSuccess);
+        CHECK(Get(metrics.get(), kRPVAnalysisSummaryMetricPropertyAggregationLevel) ==
+              kRPVAnalysisSummaryAggregationLevelTrace);
+        const uint64_t memory_events =
+            Get(metrics.get(), kRPVAnalysisSummaryTraceNodePropertyNumTopMemoryEvents);
+        INFO(DescribeMemoryEvents(memory_events));
         CHECK(memory_events > 0);
+    }
+
+    // Counter-statistics needs the backing tables present to reach the counter
+    // code path, so it runs before the drop-table sections. The cleared
+    // counter is restored afterward so later sections are not contaminated.
+    SECTION("Counter-statistics failures")
+    {
+        const uint64_t num_tracks = Get(controller.get(), kRPVControllerSystemNumTracks);
+        bool           injected   = false;
+        RocProfVis::Controller::Counter* saved_counter = nullptr;
+        for(uint64_t i = 0; i < num_tracks; i++)
+        {
+            rocprofvis_handle_t* handle = nullptr;
+            REQUIRE(rocprofvis_controller_get_object(
+                        controller.get(), kRPVControllerSystemTrackIndexed, i, &handle) ==
+                    kRocProfVisResultSuccess);
+            RocProfVis::Controller::Track* track =
+                reinterpret_cast<RocProfVis::Controller::Track*>(handle);
+            if(track->GetCounter() && track->GetNumberOfEntries() > 0)
+            {
+                // Break the track's counter association so statistics fetching
+                // returns InvalidArgument, before it starts a database read.
+                saved_counter = track->GetCounter();
+                track->SetCounter(nullptr);
+                injected = true;
+                break;
+            }
+        }
+        REQUIRE(injected);
+        ArmUnchangedOutput();
+        CHECK(Fetch() == kRocProfVisResultInvalidArgument);
+        CheckOutputUnchanged();
+        // Restore so the drop-table sections fail on SQL, not on the counter.
+        for(uint64_t i = 0; i < num_tracks; i++)
+        {
+            rocprofvis_handle_t* handle = nullptr;
+            rocprofvis_controller_get_object(
+                controller.get(), kRPVControllerSystemTrackIndexed, i, &handle);
+            RocProfVis::Controller::Track* track =
+                reinterpret_cast<RocProfVis::Controller::Track*>(handle);
+            if(track->GetCounter() == nullptr && track->GetNumberOfEntries() > 0)
+            {
+                track->SetCounter(saved_counter);
+                break;
+            }
+        }
+    }
+
+    // Irreversible: these drop backing tables from the open database. They
+    // must run last because the damage persists on the persistent fixture.
+    SECTION("Memory query fails")
+    {
+        DropTable("rocpd_memory_copy");
+        INFO("Dropped table: " << broken_table);
+        ArmUnchangedOutput();
+        CHECK(Fetch() == kRocProfVisResultUnknownError);
+        CheckOutputUnchanged();
+    }
+    SECTION("Thread launch query fails")
+    {
+        DropTable("rocpd_region");
+        INFO("Dropped table: " << broken_table);
+        ArmUnchangedOutput();
+        CHECK(Fetch() == kRocProfVisResultUnknownError);
+        CheckOutputUnchanged();
     }
 }

@@ -37,6 +37,7 @@ namespace View
     , m_active_operation_id(0)
     , m_last_result(kRocProfVisResultSuccess)
     , m_auth_request_built(false)
+    , m_authenticated(false)
     {
         s_active_sessions.push_back(this);
         if (m_uri)
@@ -112,10 +113,15 @@ namespace View
 
         if (IsTerminalStatus(remote_status))
         {
-            // Flush buffered stdout once an execute phase finishes, mirroring the
-            // old blocking path's post-loop FinalizeExecution().
-            if (m_active_operation == SshOperation::Execute)
+            if (m_active_operation == SshOperation::Authenticate &&
+                remote_status == kRPVControllerSshCompleted)
             {
+                m_authenticated = true;
+            }
+            else if (m_active_operation == SshOperation::Execute)
+            {
+                // Flush buffered stdout once an execute phase finishes, mirroring
+                // the old blocking path's post-loop FinalizeExecution().
                 FinalizeExecution();
             }
             // The monitor will remove this op (it waits on then frees the

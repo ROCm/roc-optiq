@@ -142,9 +142,9 @@ bool
 RemoteTraceOrchestrator::SetSession(std::unique_ptr<SshSession> session)
 {
     bool adopted = false;
-    if(!m_running && session)
+    if(!m_running && session && session->IsAuthenticated())
     {
-        m_authenticated = session->IsConnected();
+        m_authenticated = true;
         m_session       = std::move(session);
         m_phase         = Phase::Idle;
         adopted         = true;

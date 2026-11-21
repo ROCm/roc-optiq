@@ -334,7 +334,7 @@ rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
 
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
 {
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
     if(GetStartTimestamp() <= end && GetEndTimestamp() >= start)
     {
         if(GetSegments()->GetSegmentDuration() == 0)
@@ -451,9 +451,9 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         }
 
         // Walking the segments after a failed or cancelled fetch would report
-        // success (or kRocProfVisResultOutOfRange) for a range with missing data.
-        // The failure has to survive so callers don't cache or display partial
-        // data, and the view re-requests it when the track comes back into view.
+        // success for a range with missing data. The failure has to survive so
+        // callers don't cache or display partial data, and the view re-requests
+        // it when the track comes back into view.
         if(fetch_result == kRocProfVisResultSuccess)
         {
             result = GetSegments()->FetchSegments(start, end, user_ptr, future, func);
@@ -619,8 +619,9 @@ Track::WaitForAndProcessTraceReadRequests(
     const std::vector<trace_read_request_t>& requests,
     Future* future)
 {
+    // Every fetch schedules at least one request, so none means scheduling failed.
     rocprofvis_result_t result =
-        requests.empty() ? kRocProfVisResultOutOfRange : kRocProfVisResultSuccess;
+        requests.empty() ? kRocProfVisResultUnknownError : kRocProfVisResultSuccess;
 
     for(const trace_read_request_t& request : requests)
     {
@@ -767,6 +768,7 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
                     "Track::FetchFromDataModel: Skipping Event "
                     "id {} on track id {}, event is out of range",
                     event_id, GetId());
+                result = kRocProfVisResultSuccess;
             }
             else
             {

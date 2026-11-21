@@ -272,8 +272,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                     future, kRPVControllerFutureResult, 0, &future_result);
                 spdlog::info("Get future result: {0}", future_result);
                 REQUIRE(result == kRocProfVisResultSuccess);
-                REQUIRE((future_result == kRocProfVisResultSuccess ||
-                         future_result == kRocProfVisResultOutOfRange));
+                REQUIRE(future_result == kRocProfVisResultSuccess);
 
                 uint64_t num_results = 0;
                 result               = rocprofvis_controller_get_uint64(
@@ -546,6 +545,104 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(entry);
             }
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+    }
+
+    // Fetches a range after the end of every track and graph. An empty area of a
+    // track is not an error: the fetch succeeds and returns no entries.
+    // Fixture Reads: m_controller
+    SECTION("Empty Track Range")
+    {
+        auto fetch_and_check_empty = [](rocprofvis_controller_future_t* future,
+                                        rocprofvis_controller_array_t*  array) {
+            rocprofvis_result_t result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t future_result = 0;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult,
+                                                      0, &future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result == kRocProfVisResultSuccess);
+
+            uint64_t num_results = 0;
+            result = rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries,
+                                                      0, &num_results);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(num_results == 0);
+        };
+
+        uint64_t            num_tracks = 0;
+        rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
+            m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_tracks > 0);
+
+        for(uint64_t track_idx = 0; track_idx < num_tracks; track_idx++)
+        {
+            rocprofvis_handle_t* track_handle = nullptr;
+            result = rocprofvis_controller_get_object(
+                m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(track_handle);
+
+            double max_time = 0;
+            result          = rocprofvis_controller_get_double(
+                track_handle, kRPVControllerTrackMaxTimestamp, 0, &max_time);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(array != nullptr);
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_track_fetch_async(
+                m_controller, (rocprofvis_controller_track_t*) track_handle,
+                max_time + 1e9, max_time + 2e9, future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            fetch_and_check_empty(future, array);
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+
+        rocprofvis_handle_t* timeline_handle = nullptr;
+        result = rocprofvis_controller_get_object(m_controller, kRPVControllerSystemTimeline,
+                                                  0, &timeline_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(timeline_handle);
+
+        uint64_t num_graphs = 0;
+        result              = rocprofvis_controller_get_uint64(
+            timeline_handle, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_graphs > 0);
+
+        for(uint64_t graph_idx = 0; graph_idx < num_graphs; graph_idx++)
+        {
+            rocprofvis_handle_t* graph_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                timeline_handle, kRPVControllerTimelineGraphIndexed, graph_idx, &graph_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(graph_handle);
+
+            double graph_end_ts = 0;
+            result              = rocprofvis_controller_get_double(
+                graph_handle, kRPVControllerGraphEndTimestamp, 0, &graph_end_ts);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(array != nullptr);
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_graph_fetch_async(
+                m_controller, graph_handle, graph_end_ts + 1e9, graph_end_ts + 2e9, 1000,
+                future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            fetch_and_check_empty(future, array);
 
             rocprofvis_controller_array_free(array);
             rocprofvis_controller_future_free(future);
@@ -1357,8 +1454,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                         future, kRPVControllerFutureResult, 0, &future_result);
                     spdlog::trace("Get future result: {0}", future_result);
                     REQUIRE(result == kRocProfVisResultSuccess);
-                    REQUIRE((future_result == kRocProfVisResultSuccess ||
-                             future_result == kRocProfVisResultOutOfRange));
+                    REQUIRE(future_result == kRocProfVisResultSuccess);
 
                     uint64_t num_results = 0;
                     result               = rocprofvis_controller_get_uint64(

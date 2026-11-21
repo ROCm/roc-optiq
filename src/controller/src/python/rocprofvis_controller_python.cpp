@@ -976,8 +976,7 @@ track_events(TrackObject* self, PyObject* args, PyObject* kwargs)
     uint64_t future_result = kRocProfVisResultUnknownError;
     rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
                                      &future_result);
-    if(future_result != kRocProfVisResultSuccess &&
-       future_result != kRocProfVisResultOutOfRange)
+    if(future_result != kRocProfVisResultSuccess)
     {
         rocprofvis_controller_array_free(array);
         rocprofvis_controller_future_free(future);

@@ -36,7 +36,7 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 , m_raw_output()
 , m_output_dirty(false)
 , m_trace_path()
-, m_launch_error()
+, m_outcome()
 {
     // Listen for profiler state transitions surfaced by the AppMonitor. Filter
     // to events belonging to this orchestrator's LOCAL session by operation id
@@ -88,7 +88,7 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
     m_raw_output.clear();
     m_output_dirty   = false;
     m_trace_path.clear();
-    m_launch_error.clear();
+    m_outcome        = RunOutcome();
     m_profiler_state = kRPVProfilerStateIdle;
     m_is_running     = false;
 
@@ -112,7 +112,7 @@ bool ProfilerLaunchOrchestrator::LaunchLocal(const LaunchRequest& request)
 
     if(!success)
     {
-        m_launch_error   = "Failed to launch profiler";
+        m_outcome        = { ConsoleStatusLevel::kError, "Failed to launch profiler" };
         m_profiler_state = kRPVProfilerStateFailed;
         return false;
     }
@@ -127,7 +127,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 {
     if(!request.remote_uri)
     {
-        m_launch_error   = "No SSH connection configured.";
+        m_outcome        = { ConsoleStatusLevel::kError, "No SSH connection configured." };
         m_profiler_state = kRPVProfilerStateFailed;
         return false;
     }
@@ -150,8 +150,10 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 
     if(!success)
     {
-        m_launch_error = "Failed to start remote profiler: " +
-                         (m_remote_session ? m_remote_session->GetStatusMessage() : std::string());
+        m_outcome = { ConsoleStatusLevel::kError,
+                      "Failed to start remote profiler: " +
+                          (m_remote_session ? m_remote_session->GetStatusMessage()
+                                            : std::string()) };
         m_profiler_state = kRPVProfilerStateFailed;
         m_remote_session.reset();
         m_download_orchestrator.reset();
@@ -164,7 +166,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 
-void ProfilerLaunchOrchestrator::Cancel()
+bool ProfilerLaunchOrchestrator::Cancel()
 {
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
@@ -174,7 +176,7 @@ void ProfilerLaunchOrchestrator::Cancel()
         m_remote_session.reset();
         m_profiler_state = kRPVProfilerStateCancelled;
         m_is_running     = false;
-        return;
+        return true;
     }
 #endif
 
@@ -184,14 +186,11 @@ void ProfilerLaunchOrchestrator::Cancel()
         m_profiler_state = kRPVProfilerStateCancelled;
         m_is_running     = false;
     }
-    else if(cancelled != kRocProfVisResultNotSupported)
-    {
-        m_launch_error = "Failed to cancel profiler";
-    }
     // NotSupported: the run finished between the click and the call, so there
     // was nothing to stop. Reporting a failure there would be wrong, and
     // forcing the state to Cancelled would overwrite the real outcome; Update()
     // reports it on the next poll.
+    return cancelled == kRocProfVisResultSuccess || cancelled == kRocProfVisResultNotSupported;
 }
 
 void ProfilerLaunchOrchestrator::Close()
@@ -246,6 +245,7 @@ void ProfilerLaunchOrchestrator::Update()
                 if(m_profiler_state != kRPVProfilerStateCompleted)
                 {
                     m_profiler_state = kRPVProfilerStateCompleted;
+                    m_outcome        = { ConsoleStatusLevel::kSuccess, std::string() };
                     m_trace_path     = m_remote_uri ? m_remote_uri->GetRemoteResultPathString()
                                                     : std::string();
                     if(!m_trace_path.empty())
@@ -276,9 +276,13 @@ void ProfilerLaunchOrchestrator::Update()
             {
                 m_profiler_state = kRPVProfilerStateCancelled;
             }
-            else
+            else if(m_profiler_state != kRPVProfilerStateFailed)
             {
                 m_profiler_state = kRPVProfilerStateFailed;
+                // The session's reason, e.g. "SSH authentication failed."
+                std::string const reason = m_remote_session->GetStatusMessage();
+                m_outcome = { ConsoleStatusLevel::kError,
+                              reason.empty() ? std::string("Remote profiler failed.") : reason };
             }
         }
         return;
@@ -325,6 +329,7 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
     if(new_state == kRPVProfilerStateCompleted)
     {
         m_is_running = false;
+        m_outcome    = { ConsoleStatusLevel::kSuccess, std::string() };
         rocprofvis_result_t const trace = ResolveLocalTracePath();
         if(!m_trace_path.empty() && m_download_trace && m_app_window)
         {
@@ -346,11 +351,22 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
     else if(new_state == kRPVProfilerStateFailed)
     {
         m_is_running = false;
+        m_outcome    = { ConsoleStatusLevel::kError, LocalFailureMessage() };
     }
     else if(new_state == kRPVProfilerStateCancelled)
     {
         m_is_running = false;
     }
+}
+
+std::string ProfilerLaunchOrchestrator::LocalFailureMessage() const
+{
+    int32_t const exit_code = m_profiler_session.GetExitCode();
+    if(exit_code == 127)
+    {
+        return "Profiler executable not found or could not be started (exit code 127)";
+    }
+    return "Profiler execution failed (exit code " + std::to_string(exit_code) + ")";
 }
 
 rocprofvis_result_t ProfilerLaunchOrchestrator::ResolveLocalTracePath()
@@ -382,18 +398,6 @@ rocprofvis_result_t ProfilerLaunchOrchestrator::ResolveLocalTracePath()
 int32_t ProfilerLaunchOrchestrator::GetExitCode() const
 {
     return m_profiler_session.GetExitCode();
-}
-
-std::string ProfilerLaunchOrchestrator::GetRemoteStatusMessage() const
-{
-    std::string message;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(m_remote_session)
-    {
-        message = m_remote_session->GetStatusMessage();
-    }
-#endif
-    return message;
 }
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE

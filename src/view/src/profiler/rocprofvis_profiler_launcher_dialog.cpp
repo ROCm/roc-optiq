@@ -210,14 +210,15 @@ void ProfilerLauncherDialog::Render()
                         : WINDOW_FLAGS | ImGuiWindowFlags_NoBringToFrontOnFocus))
     {
         const ImGuiStyle& style         = m_settings.GetDefaultStyle();
-        const size_t      message_lines = m_messages.size() + (m_error_message.empty() ? 0 : 1);
+        const bool        has_error     = !LastRunError().empty();
+        const size_t      message_lines = m_messages.size() + (has_error ? 1 : 0);
         float             message_height = 0.0f;
         if(!m_show_run_view && message_lines > 0)
         {
             message_height =
                 ImGui::GetTextLineHeight() * static_cast<float>(message_lines) +
                 static_cast<float>(1 + (m_messages.empty() ? 0 : 1) +
-                                   (m_error_message.empty() ? 0 : 1)) *
+                                   (has_error ? 1 : 0)) *
                     2.0f * style.WindowPadding.y +
                 static_cast<float>(message_lines - 1) * style.ItemSpacing.y;
         }
@@ -775,13 +776,14 @@ ProfilerLauncherDialog::RenderMessages()
         }
         EndLaunchCard();
     }
-    if(m_error_message.size())
+    std::string const last_run_error = LastRunError();
+    if(!last_run_error.empty())
     {
         BeginLaunchCard("last_run");
         ImGui::PushStyleColor(
             ImGuiCol_Text,
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextError)));
-        ImGui::TextWrapped("Last run: %s", m_error_message.c_str());
+        ImGui::TextWrapped("Last run: %s", last_run_error.c_str());
         ImGui::PopStyleColor();
         EndLaunchCard();
     }
@@ -1537,17 +1539,29 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         AddRecentPath(backend->GetRecentTargets(m_config.tool, m_config.operation),
                       target.path);
     }
-    else
-    {
-        m_error_message = m_profile_orchestrator.GetLaunchError();
-    }
+    // On failure the run's outcome carries the reason, shown by LastRunError().
 }
 
 void ProfilerLauncherDialog::OnCancelClicked()
 {
     // Cancelling sets the orchestrator state to Cancelled; the epilogue line is
-    // appended on the next Update() transition (HandleStateTransition).
-    m_profile_orchestrator.Cancel();
+    // appended on the next Update() transition (HandleStateTransition). A
+    // failed cancel is not an outcome: the run keeps going and settles later.
+    if (!m_profile_orchestrator.Cancel())
+    {
+        NotificationManager::GetInstance().Show("Failed to cancel profiler",
+                                                NotificationLevel::Error);
+    }
+}
+
+std::string ProfilerLauncherDialog::LastRunError() const
+{
+    if (!m_error_message.empty())
+    {
+        return m_error_message;
+    }
+    ProfilerLaunchOrchestrator::RunOutcome const& outcome = m_profile_orchestrator.GetOutcome();
+    return outcome.level == ConsoleStatusLevel::kError ? outcome.message : std::string();
 }
 
 void ProfilerLauncherDialog::Hide()
@@ -1595,37 +1609,20 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
     }
     else if (new_state == kRPVProfilerStateFailed)
     {
+        // The reason itself is the run's outcome, shown by LastRunError().
         if (is_remote)
         {
-            // Surface the specific remote failure reason (SSH connect/auth
-            // failure, "could not determine remote trace path", etc.) instead of
-            // a generic line with no cause.
-            std::string remote_msg = m_profile_orchestrator.GetRemoteStatusMessage();
             m_output_epilogue += "\nRemote profiler failed.\n";
-            m_error_message = remote_msg.empty() ? std::string("Remote profiler failed.")
-                                                 : remote_msg;
-            RebuildComposedOutput();
         }
         else
         {
-            int32_t exit_code = m_profile_orchestrator.GetExitCode();
             char exit_msg[128];
             std::snprintf(exit_msg, sizeof(exit_msg),
-                          "\nProfiler failed (exit code %d).\n", exit_code);
+                          "\nProfiler failed (exit code %d).\n",
+                          m_profile_orchestrator.GetExitCode());
             m_output_epilogue += exit_msg;
-            RebuildComposedOutput();
-            if (exit_code == 127)
-            {
-                m_error_message = "Profiler executable not found or could not be started "
-                                  "(exit code 127)";
-            }
-            else
-            {
-                std::snprintf(exit_msg, sizeof(exit_msg),
-                              "Profiler execution failed (exit code %d)", exit_code);
-                m_error_message = exit_msg;
-            }
         }
+        RebuildComposedOutput();
     }
     else if (new_state == kRPVProfilerStateCancelled)
     {
@@ -1648,9 +1645,9 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
         }
         else if (new_state == kRPVProfilerStateFailed)
         {
+            std::string const& reason = m_profile_orchestrator.GetOutcome().message;
             NotificationManager::GetInstance().Show(
-                m_error_message.empty() ? "Profiler failed" : m_error_message,
-                NotificationLevel::Error);
+                reason.empty() ? "Profiler failed" : reason, NotificationLevel::Error);
         }
         else if (new_state == kRPVProfilerStateCancelled)
         {
@@ -1703,7 +1700,7 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
         case kRPVProfilerStateFailed:
             out_label  = "Failed";
             out_level  = ConsoleStatusLevel::kError;
-            out_detail = m_error_message;
+            out_detail = m_profile_orchestrator.GetOutcome().message;
             break;
         case kRPVProfilerStateCancelled:
             out_label = "Cancelled";

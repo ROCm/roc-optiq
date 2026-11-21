@@ -68,13 +68,23 @@ public:
     ProfilerLaunchOrchestrator(const ProfilerLaunchOrchestrator&)            = delete;
     ProfilerLaunchOrchestrator& operator=(const ProfilerLaunchOrchestrator&) = delete;
 
+    // How a run ended, set once when it settles or fails to start. level is
+    // kIdle until then and for a cancelled run; message is empty for a clean
+    // success or a cancel.
+    struct RunOutcome
+    {
+        ConsoleStatusLevel level = ConsoleStatusLevel::kIdle;
+        std::string        message;
+    };
+
     // Starts a run. Returns false on immediate failure (validation, allocation,
-    // or could-not-start); GetLaunchError() then carries the reason.
+    // or could-not-start); GetOutcome() then carries the reason.
     bool Launch(const LaunchRequest& request);
 
     // Cancels the in-flight run (local process or remote workflow). No-op when
-    // nothing is running.
-    void Cancel();
+    // nothing is running. Returns false when the cancel request failed, in
+    // which case the run keeps going.
+    bool Cancel();
 
     // Tears down all run state (sessions, futures) and resets to Idle. The
     // orchestrator is reusable afterward. Hiding the launcher does not call
@@ -108,14 +118,8 @@ public:
     // Exit code of the most recent local run (valid after a failed local run).
     int32_t GetExitCode() const;
 
-    // Human-readable reason for an immediate launch failure (empty otherwise).
-    const std::string& GetLaunchError() const { return m_launch_error; }
-
-    // Human-readable status/error message from the remote workflow (e.g. "SSH
-    // authentication failed."). Empty for local runs or when no remote session
-    // exists. Always compiled so the dialog can surface remote failures without
-    // remote-specific guards.
-    std::string GetRemoteStatusMessage() const;
+    // The current run's outcome; see RunOutcome.
+    const RunOutcome& GetOutcome() const { return m_outcome; }
 
     // --- Remote-specific accessors for the download popup / auth modal ------
     // TEMPORARY (remote/SSH): remove these guards when remote graduates.
@@ -155,6 +159,9 @@ private:
     // this run produces no trace file; anything else with an empty path means
     // a file was expected and could not be read.
     rocprofvis_result_t ResolveLocalTracePath();
+    // The error outcome message for a local run that failed with exit code
+    // m_profiler_session.GetExitCode().
+    std::string LocalFailureMessage() const;
 
     AppWindow*                              m_app_window;
     ProfilerSession                         m_profiler_session;
@@ -180,7 +187,7 @@ private:
     std::string m_raw_output;
     bool        m_output_dirty;
     std::string m_trace_path;
-    std::string m_launch_error;
+    RunOutcome  m_outcome;
 };
 
 }  // namespace View

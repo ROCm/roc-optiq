@@ -40,7 +40,13 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
         return db_type;
 #endif
-    return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    rocprofvis_db_type_t db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
+    if (db_type != rocprofvis_db_type_t::kAutodetect)
+        return db_type;
+    else
+#endif
+        return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
 }
 
 /****************************************************************************************************

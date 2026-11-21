@@ -151,7 +151,7 @@ typedef struct {
     rocprofvis_dm_timestamp_t events_count[kRocProfVisDmNumOperation];  // events count per operation
     uint64_t                  histogram_bucket_size;
     uint64_t                  histogram_bucket_count;
-    bool                      histogram_aligned = true;                  // track histograms share the trace time base
+    bool                      histogram_aligned;                  // track histograms share the trace time base
     uint32_t                  num_db_instances;
     bool                      metadata_loaded;                           // status of metadata being fully loaded
     bool                      tracks_info_restored;

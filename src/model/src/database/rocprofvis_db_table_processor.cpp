@@ -91,11 +91,14 @@ namespace DataModel
         {
             for (const std::pair<const std::string, rocprofvis_db_compound_query_info>& compound_query : track.second)
             {
-                rocprofvis_db_duration_summary_query_t request;
-                request.db_instance = m_db->DbInstancePtrAt(compound_query.second.guid_id);
-                request.track_id = track.first;
-                request.query = compound_query.first;
-                requests.push_back(std::move(request));
+                for (uint32_t guid_id : compound_query.second.guid_ids)
+                {
+                    rocprofvis_db_duration_summary_query_t request;
+                    request.db_instance = m_db->DbInstancePtrAt(guid_id);
+                    request.track_id = track.first;
+                    request.query = compound_query.first;
+                    requests.push_back(std::move(request));
+                }
             }
         }
 
@@ -252,9 +255,12 @@ namespace DataModel
                 {
                     for (const std::pair<const std::string, rocprofvis_db_compound_query_info>& compound_query : track.second)
                     {
-                        m_tables.push_back(std::make_unique<PackedTable>());
-                        DbInstance* db_instance = m_db->DbInstancePtrAt(compound_query.second.guid_id);
-                        new_queries.push_back({ db_instance, compound_query.first });
+                        for (uint32_t guid_id : compound_query.second.guid_ids)
+                        {
+                            m_tables.push_back(std::make_unique<PackedTable>());
+                            DbInstance* db_instance = m_db->DbInstancePtrAt(guid_id);
+                            new_queries.push_back({ db_instance, compound_query.first });
+                        }
                     }
                     
                 }
@@ -495,7 +501,16 @@ namespace DataModel
                                 uint32_t track = static_cast<uint32_t>(std::atol(s_track.c_str()));
                                 uint32_t guid_id = static_cast<uint32_t>(std::atoll(s_guid_id.c_str()));
                                 tracks.insert(track);
-                                queries[track][stmt] = { track, guid_id };
+                                // The same operation filter is emitted once per guid, so the
+                                // statement text matches. Each guid stays with that statement.
+                                // The nid in the filter belongs to one trace, and that trace
+                                // has to be the one queried.
+                                rocprofvis_db_compound_query_info& info = queries[track][stmt];
+                                info.track = track;
+                                if (std::find(info.guid_ids.begin(), info.guid_ids.end(), guid_id) == info.guid_ids.end())
+                                {
+                                    info.guid_ids.push_back(guid_id);
+                                }
                             }
                            
                         }
@@ -807,9 +822,14 @@ namespace DataModel
                                     PackedTable::ConvertSqlStringReference(m_db, columns[column_index].m_schema_index[op], val.data.u64, db_instance->GuidIndex(), numeric_string);
                                 if (str != nullptr)
                                 {
-                                    if (numeric_string)
+                                    // A column marked numeric can still be empty, when this
+                                    // row has no catalog entry for it. Keep that as text.
+                                    // std::stod rejects it and would fail the whole filter.
+                                    char* end = nullptr;
+                                    const double number = std::strtod(str, &end);
+                                    if (numeric_string && end != str && *end == '\0')
                                     {
-                                        map[columns[column_index].m_name] = std::stod(str);
+                                        map[columns[column_index].m_name] = number;
                                     }
                                     else
                                     {

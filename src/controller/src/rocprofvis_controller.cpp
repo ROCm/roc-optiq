@@ -179,12 +179,19 @@ rocprofvis_result_t rocprofvis_controller_cleanup_trace_database(rocprofvis_hand
 rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path)
 {
     rocprofvis_controller_t* controller = nullptr;
-    if(filename)
+    if(filename == nullptr)
+    {
+        spdlog::info("rocprofvis_controller_alloc: filename is null");
+    }
+    else
     {
         try
         {
             RocProfVis::Controller::Trace* trace = nullptr;
-            switch(rocprofvis_db_identify_type(filename))
+            const rocprofvis_db_type_t db_type = rocprofvis_db_identify_type(filename);
+            spdlog::info("rocprofvis_controller_alloc '{}' identify_type={}", filename,
+                         static_cast<int>(db_type));
+            switch(db_type)
             {
                 case kRocpdSqlite:
                 case kRocprofSqlite:
@@ -192,30 +199,47 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
                 case kChromeTrace:
                 case kPerfettoTrace:
                 case kGoogleSqlite:
+                case kProfilerHub:
                 {
                     trace = new RocProfVis::Controller::SystemTrace(filename, config_path!=nullptr?config_path:"");
                     break;
                 }
                 case kComputeSqlite:
                 {
-                    trace = new RocProfVis::Controller::ComputeTrace(filename);                  
+                    trace = new RocProfVis::Controller::ComputeTrace(filename);
+                    break;
+                }
+                default:
+                {
+                    spdlog::info("rocprofvis_controller_alloc '{}' unhandled identify_type={}",
+                                 filename, static_cast<int>(db_type));
                     break;
                 }
             }
-            if(trace && trace->Init() == kRocProfVisResultSuccess)
+            if(trace != nullptr)
             {
-                controller = (rocprofvis_controller_t*) trace;
-            }
-            else
-            {
-                delete trace;
+                const rocprofvis_result_t init_result = trace->Init();
+                spdlog::info("rocprofvis_controller_alloc '{}' init_result={}", filename,
+                             static_cast<int>(init_result));
+                if(init_result == kRocProfVisResultSuccess)
+                {
+                    controller = (rocprofvis_controller_t*) trace;
+                }
+                else
+                {
+                    delete trace;
+                }
             }
         }
         catch(const std::exception& e)
         {
             spdlog::error("Failed to allocate controller: {}", e.what());
         }
-    }    
+        if(controller == nullptr)
+        {
+            spdlog::info("rocprofvis_controller_alloc '{}' returned null", filename);
+        }
+    }
     return controller;
 }
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE

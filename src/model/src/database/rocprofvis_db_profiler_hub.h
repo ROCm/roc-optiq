@@ -175,6 +175,7 @@ private:
 
     rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(
         uint32_t stream_track_index, uint32_t db_instance);
+    rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
 
     rocprofvis_dm_track_category_t GetRegionTrackCategory() override
     {
@@ -238,6 +239,29 @@ private:
     // A track published from the hub source stored in an event's node field.
     // Correlation, call stack, and details use it to open that file.
     uint32_t TrackOnSource(uint32_t source_index);
+
+    // Node, agent, process, and thread ids are catalog row ids local to one
+    // trace. The event tables store the same row ids in their nid, pid, and tid
+    // columns, so a filter id belongs to a trace only if that trace has it.
+    enum class trace_identifier_t { node, agent, process, thread };
+    struct source_filter_ids
+    {
+        bool     has_node    = false;
+        bool     has_agent   = false;
+        bool     has_process = false;
+        bool     has_thread  = false;
+        uint64_t node        = 0;
+        uint64_t agent       = 0;
+        uint64_t process_id  = 0;
+        uint64_t thread_id   = 0;
+    };
+    bool IdentifierOnSource(DbInstance* instance, trace_identifier_t kind, uint64_t id);
+    const char* CatalogTextAnywhere(const char* table, uint64_t row_id, const char* column);
+    void RemapFilterIds(DbInstance* instance, source_filter_ids& filter);
+    // Rewrite ids to this trace. A node that belongs to another trace is left
+    // out so its rows stay with that trace's own summary.
+    std::vector<source_filter_ids> FiltersForSource(DbInstance*              instance,
+                                                    const source_filter_ids& filter);
 };
 
 }  // namespace DataModel

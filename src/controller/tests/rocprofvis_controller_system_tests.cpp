@@ -1087,6 +1087,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 future, kRPVControllerFutureLastErrorMessage, 0, nullptr, &error_length);
             REQUIRE(result == kRocProfVisResultSuccess);
             std::string error(error_length, '\0');
+            std::string filter = filter_case.filter;
             if(error_length > 0)
             {
                 result = rocprofvis_controller_get_string(

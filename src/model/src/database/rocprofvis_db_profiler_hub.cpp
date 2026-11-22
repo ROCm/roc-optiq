@@ -1348,7 +1348,7 @@ ProfilerHub::BuildTableQuery(
             query += ";";
 
             DbInstance* props_db_instance =
-                (DbInstance*) TrackPropertiesAt(tracks[0])->track_indentifiers.db_instance;
+                (DbInstance*) TrackPropertiesAt(tracks[i])->track_indentifiers.db_instance;
             query += std::to_string(props_db_instance->GuidIndex());
             query += "\n";
         }

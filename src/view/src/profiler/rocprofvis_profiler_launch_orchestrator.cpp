@@ -3,7 +3,6 @@
 
 #include "rocprofvis_profiler_launch_orchestrator.h"
 #include "rocprofvis_appwindow.h"
-#include "widgets/rocprofvis_notification_manager.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #    include "remote/rocprofvis_remote_trace_orchestrator.h"
@@ -264,11 +263,10 @@ void ProfilerLaunchOrchestrator::Update()
                         // look.
                         spdlog::warn("ProfilerLaunchOrchestrator: could not determine remote "
                                      "trace path from profiler output");
-                        NotificationManager::GetInstance().Show(
-                            "Profiling finished, but the trace file could not be located "
-                            "automatically. Open it from the remote output directory with "
-                            "File > Open Remote....",
-                            NotificationLevel::Warning);
+                        m_outcome = { ConsoleStatusLevel::kWarning,
+                                      "The trace file could not be located in the profiler "
+                                      "output. Open it from the remote output directory with "
+                                      "File > Open Remote." };
                     }
                 }
             }
@@ -342,10 +340,9 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
             // stale/unrelated trace). Fail safe and tell the user where to look.
             spdlog::warn("ProfilerLaunchOrchestrator: could not determine trace path from "
                          "profiler output");
-            NotificationManager::GetInstance().Show(
-                "Profiling finished, but the trace file could not be located automatically. "
-                "Open it manually from the output directory.",
-                NotificationLevel::Warning);
+            m_outcome = { ConsoleStatusLevel::kWarning,
+                          "The trace file could not be located in the profiler output. "
+                          "Open it manually from the output directory." };
         }
     }
     else if(new_state == kRPVProfilerStateFailed)
@@ -426,7 +423,7 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
 
     // The badge reflects the workflow phase, not just the profiler state, so the
     // user sees connect/auth/profile progress. The label says it all
-    // for those phases; only a failure carries a detail (its reason).
+    // for those phases; only a failure or a warning carries a detail.
     out_detail.clear();
     switch(m_remote_session->GetPhase())
     {
@@ -445,6 +442,11 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
         case RemoteProfilerSession::Phase::Done:
             out_label = "Completed";
             out_level = ConsoleStatusLevel::kSuccess;
+            if(m_outcome.level == ConsoleStatusLevel::kWarning)
+            {
+                out_level  = ConsoleStatusLevel::kWarning;
+                out_detail = m_outcome.message;
+            }
             break;
         case RemoteProfilerSession::Phase::Failed:
             out_label  = "Failed";

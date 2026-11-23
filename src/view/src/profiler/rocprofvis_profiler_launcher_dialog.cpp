@@ -299,6 +299,7 @@ ProfilerLauncherDialog::RenderContent()
             case ConsoleStatusLevel::kSuccess:
                 pill_color_id = Colors::kTextSuccess;
                 break;
+            case ConsoleStatusLevel::kWarning: pill_color_id = Colors::kTextWarning; break;
             case ConsoleStatusLevel::kError: pill_color_id = Colors::kTextError; break;
             case ConsoleStatusLevel::kRunning: pill_color_id = Colors::kAccent; break;
             default: pill_color_id = Colors::kTextDim; break;
@@ -1600,12 +1601,21 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
             m_output_epilogue += "\nProfiler completed successfully.\n";
         }
 
+        ProfilerLaunchOrchestrator::RunOutcome const& outcome =
+            m_profile_orchestrator.GetOutcome();
         std::string trace_path = m_profile_orchestrator.GetTracePath();
         if (!trace_path.empty())
         {
             m_output_epilogue += "Trace file: " + trace_path + "\n";
         }
         RebuildComposedOutput();
+
+        // Shown any warning that occurred during profiling.
+        if(outcome.level == ConsoleStatusLevel::kWarning)
+        {
+            NotificationManager::GetInstance().Show(outcome.message,
+                                                    NotificationLevel::Warning);
+        }
     }
     else if (new_state == kRPVProfilerStateFailed)
     {
@@ -1635,7 +1645,9 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
     // user it settled, because they are not looking at the console.
     if (!m_show_window)
     {
-        if (new_state == kRPVProfilerStateCompleted)
+        // A warning outcome was already notified above.
+        if (new_state == kRPVProfilerStateCompleted &&
+            m_profile_orchestrator.GetOutcome().level == ConsoleStatusLevel::kSuccess)
         {
             std::string trace_path = m_profile_orchestrator.GetTracePath();
             NotificationManager::GetInstance().Show(
@@ -1696,6 +1708,11 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
         case kRPVProfilerStateCompleted:
             out_label = "Completed";
             out_level = ConsoleStatusLevel::kSuccess;
+            if (m_profile_orchestrator.GetOutcome().level == ConsoleStatusLevel::kWarning)
+            {
+                out_level  = ConsoleStatusLevel::kWarning;
+                out_detail = m_profile_orchestrator.GetOutcome().message;
+            }
             break;
         case kRPVProfilerStateFailed:
             out_label  = "Failed";

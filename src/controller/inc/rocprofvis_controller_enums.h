@@ -731,6 +731,7 @@ typedef enum rocprofvis_controller_remote_status_t : uint32_t
     kRPVControllerSshDownloadStarted,
     kRPVControllerSshDownloadProgress,
     kRPVControllerSshBrowsingProgress,
+    kRPVControllerSshCancelled,
     kRPVControllerSshFailed,
     kRPVControllerSshCompleted
 } rocprofvis_controller_remote_status_t;
@@ -1029,6 +1030,7 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingInstructionLineInstructionTypeUuid,
     kRPVControllerPCSamplingInstructionLineCodeObjectOffset,
     kRPVControllerPCSamplingInstructionLineInstruction,
+    kRPVControllerPCSamplingInstructionLineInstructionType,
 
     // Stalls layer
     kRPVControllerPCSamplingNumPcSampleStates = kRPVPCSamplingStallsGroup,

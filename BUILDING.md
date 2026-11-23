@@ -242,6 +242,20 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
+## Experimental features
+
+In-development features (in-app profiler launch, remote/SSH, Ask Optiq,
+scripting, trace comparison, multi-window) are each behind their own
+`ROCPROFVIS_ENABLE_*` option and are off by default. To build all of them at
+once, configure with `-DROCPROFVIS_ENABLE_EXPERIMENTAL=ON`; an explicit
+`-DROCPROFVIS_ENABLE_<X>=OFF` still turns a single feature back off. CI
+experimental builds use this switch.
+
+The Profiler Hub trace backend (`ROCPROFVIS_ENABLE_PROFILER_HUB`) is not part
+of the umbrella while it is unstable. Enable it explicitly with
+`-DROCPROFVIS_ENABLE_PROFILER_HUB=ON`; it clones `rocm-systems` at configure
+time, so that needs git and network access.
+
 ## Systems trace comparison
 
 Systems-trace comparison (File > Compare, combined A/B timeline) is opt-in
@@ -263,13 +277,21 @@ the option off, none of the three is compiled and the panel, its toolbar
 buttons, its View-menu entry, and its settings page are all absent. Sources
 live under `src/view/src/agenticprofiling/`.
 
+Reading compute traces is a separate, in-development part of the assistant with
+its own switch, `ROCPROFVIS_ENABLE_AGENTIC_COMPUTE`. It defaults ON whenever
+`ROCPROFVIS_ENABLE_AGENTIC_PROFILING` is on and is forced OFF without it.
+Configure with `-DROCPROFVIS_ENABLE_AGENTIC_COMPUTE=OFF` to build the assistant
+for system traces only: the compute tools are compiled out, and on a compute tab
+the assistant answers that this build reads system traces only. System traces
+behave the same either way.
+
 `cpp-httplib` and `ImGuiTextSelect` are submodules. `ImGuiTextSelect` is pinned
 to v1.3.2 and compiled as `textselect.cpp`; its own CMakeLists is an example
 app and is not added. The default backend also needs the `mbedtls` submodule;
 `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL and does not build mbedTLS. A
 non-recursive clone must initialize the ones it will use before configuring
 with this option on:
-`git submodule update --init thirdparty/cpp-httplib thirdparty/ImGuiTextSelect thirdparty/mbedtls`.
+`git submodule update --init --recursive thirdparty/cpp-httplib thirdparty/ImGuiTextSelect thirdparty/mbedtls`.
 Configure fails with an explicit message if `thirdparty/cpp-httplib` or
 `thirdparty/ImGuiTextSelect` is still empty.
 

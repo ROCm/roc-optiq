@@ -46,34 +46,10 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
-      enable_remote:
-        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
-        type: boolean
-        default: false
-      enable_profiler:
-        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
-        type: boolean
-        default: false
-      enable_agentic_profiling:
-        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
-        type: boolean
-        default: false
-      enable_scripting:
-        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
-        type: boolean
-        default: false
-      enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
-        type: boolean
-        default: false
-      enable_trace_compare:
-        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
-        type: boolean
-        default: false
-      enable_multi_window:
-        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
-        type: boolean
-        default: false
+      cmake_args:
+        description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
+        type: string
+        default: ''
       enable_ui_tests:
         description: 'Build + run the Dear ImGui UI tests?'
         type: boolean
@@ -92,34 +68,10 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
-      enable_remote:
-        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
-        type: boolean
-        default: false
-      enable_profiler:
-        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
-        type: boolean
-        default: false
-      enable_agentic_profiling:
-        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
-        type: boolean
-        default: false
-      enable_scripting:
-        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
-        type: boolean
-        default: false
-      enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
-        type: boolean
-        default: false
-      enable_trace_compare:
-        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
-        type: boolean
-        default: false
-      enable_multi_window:
-        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
-        type: boolean
-        default: false
+      cmake_args:
+        description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
+        type: string
+        default: ''
       enable_ui_tests:
         description: 'Build + run the Dear ImGui UI tests?'
         type: boolean
@@ -162,13 +114,7 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
-  ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
-  ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
-  VENDOR_PYTHON: ${{ (inputs.enable_vendor_python == true || inputs.enable_vendor_python == 'true') && 'ON' || 'OFF' }}
-  ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
-  ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
+  CMAKE_ARGS: ${{ inputs.cmake_args }}
   ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
   CTEST_PREFIX: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'xvfb-run -a' || '' }}
   BUILD_TARGETS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'all package' || 'package' }}
@@ -193,10 +139,11 @@ jobs:
         os-version: ${{ fromJson(inputs.os_version) }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-          submodules: true
+          submodules: recursive
+          persist-credentials: false
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
@@ -205,27 +152,24 @@ jobs:
           apt-get install -y libssl-dev
 
       - name: Install Python development files
-        if: env.ENABLE_SCRIPTING == 'ON' && env.VENDOR_PYTHON == 'OFF'
+        if: contains(inputs.cmake_args, 'ENABLE_VENDOR_PYTHON=OFF')
         run: |
           apt-get update
           apt-get install -y python3-dev
           python3 --version
 
       - name: Build, Make, and Verify Installation
+        env:
+          INPUTS_CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
+          INPUTS_CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
           source /opt/vulkan/**/setup-env.sh
           cmake -B ${{ env.BUILD_DIR }} \
-            --preset ${{ inputs.cmake_config_preset }} \
+            --preset ${INPUTS_CMAKE_CONFIG_PRESET} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
-            -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
-            -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
-            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
-            -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
-            -DROCPROFVIS_ENABLE_VENDOR_PYTHON=${{ env.VENDOR_PYTHON }} \
-            -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
-            -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
+            ${CMAKE_ARGS} \
             -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} \
-            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
+            -DCRYPTO_BACKEND=${INPUTS_CRYPTO_BACKEND}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target ${{ env.BUILD_TARGETS }}
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"
@@ -266,7 +210,7 @@ jobs:
 
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-logs-ubuntu-${{ matrix.os-version }}${{ inputs.artifact_suffix }}
           path: |
@@ -283,7 +227,7 @@ jobs:
       
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roc-optiq-ubuntu-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
           path: |
@@ -292,7 +236,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
@@ -313,6 +257,8 @@ jobs:
 
       - name: Upload Build to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
+        env:
+          MATRIX_OS_VERSION: ${{ matrix.os-version }}
         run: |
           if [ -z "${{ env.RELEASE_VERSION }}" ]; then
             echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
@@ -321,7 +267,7 @@ jobs:
             echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
             S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
           fi
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/ubuntu/${{ matrix.os-version }}/ \
+          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/ubuntu/${MATRIX_OS_VERSION}/ \
             --no-progress
 
       - name: Announce Test Failure

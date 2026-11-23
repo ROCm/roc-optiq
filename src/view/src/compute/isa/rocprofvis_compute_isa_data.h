@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -26,6 +27,36 @@ public:
         kMissing,
         kInvalid,
         kValid
+    };
+
+    enum class InstructionKind : uint32_t
+    {
+        kInternal,
+        kMatrix,
+        kScalar,
+        kBranch,
+        kValu,
+        kFlat,
+        kLds,
+        kBarrier,
+        kUnknown
+    };
+
+    struct InstructionTypeInfo
+    {
+        InstructionKind kind;
+        const char*     name;
+    };
+
+    inline static constexpr InstructionTypeInfo INSTRUCTION_TYPES[] = {
+        { InstructionKind::kInternal, "INTERNAL" },
+        { InstructionKind::kMatrix, "MATRIX" },
+        { InstructionKind::kScalar, "SCALAR" },
+        { InstructionKind::kBranch, "BRANCH" },
+        { InstructionKind::kValu, "VALU" },
+        { InstructionKind::kFlat, "FLAT" },
+        { InstructionKind::kLds, "LDS" },
+        { InstructionKind::kBarrier, "BARRIER" }
     };
 
     enum class StallReasonKind : uint32_t
@@ -87,6 +118,27 @@ public:
         bool invalid_counts = false;
     };
 
+    struct PercentageSummary
+    {
+        SamplingAvailability availability = SamplingAvailability::kMissing;
+        double               percent      = 0.0;
+    };
+
+    struct SamplePercentage
+    {
+        // Retain unrounded numerators and weights through source-line grouping.
+        double   weighted_sum = 0.0;
+        uint64_t sample_count = 0;
+        bool     missing      = false;
+        bool     invalid      = false;
+    };
+
+    struct SampleMetrics
+    {
+        SamplePercentage wave_occupancy;
+        SamplePercentage active_threads;
+    };
+
     struct StallReasonCounts
     {
         std::unordered_map<uint64_t, uint64_t> by_lookup;
@@ -99,6 +151,7 @@ public:
     struct PreparedSamplingData
     {
         std::unordered_map<uint64_t, SampleCounts> counts_by_instruction;
+        std::unordered_map<uint64_t, SampleMetrics> metrics_by_instruction;
         GroupedStallReasonCounts                   reasons_by_instruction;
         std::unordered_map<uint64_t, std::string>  reason_text;
     };
@@ -108,6 +161,8 @@ public:
         uint64_t                 id = 0;
         SampleCounts             sample_counts;
         SamplingSummary          sampling;
+        PercentageSummary        wave_occupancy;
+        PercentageSummary        active_threads;
         uint64_t                 unclassified_stall_count = 0;
         std::string              unclassified_stall_count_text;
         uint64_t                 stall_reason_sample_count    = 0;
@@ -117,7 +172,12 @@ public:
 
     struct IsaRow : SamplingRow
     {
-        std::string instruction;
+        std::string     instruction;
+        std::string     instruction_type_name;
+        InstructionKind instruction_kind = InstructionKind::kUnknown;
+        // Byte offsets remain valid when rows and their owning strings move.
+        size_t      mnemonic_begin     = 0;
+        size_t      mnemonic_end       = 0;
         uint64_t    code_object_offset = 0;
         uint64_t    source_line_id     = 0;
         uint64_t    source_file_id     = 0;
@@ -148,10 +208,15 @@ public:
     [[nodiscard]] static SamplingSummary SummarizeSampling(const SampleCounts& counts);
     [[nodiscard]] static StallReasonKind ResolveStallReasonKind(std::string_view text);
     [[nodiscard]] static const char*     GetStallReasonName(StallReasonKind kind);
+    [[nodiscard]] static const char*     GetInstructionTypeName(InstructionKind kind);
     [[nodiscard]] static double      CalculatePercentage(uint64_t value, uint64_t total);
     [[nodiscard]] static std::string FormatSampleCount(uint64_t value);
+    [[nodiscard]] static std::string     FormatSamplePercentage(
+            const PercentageSummary& value);
 
 private:
+    static constexpr double MAX_PERCENTAGE = 100.0;
+
     // Temporary lookup tables used by the corresponding layer update.
     struct SourceLocation
     {
@@ -162,18 +227,27 @@ private:
     struct SampleAggregation
     {
         std::unordered_map<uint64_t, SampleCounts>         counts_by_instruction;
+        std::unordered_map<uint64_t, SampleMetrics>        metrics_by_instruction;
         std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
     };
 
     static bool AddSampleCount(uint64_t& total, uint64_t count);
+    static InstructionKind ResolveInstructionKind(std::string_view text);
     static void AccumulateSampleCounts(SampleCounts& total, const SampleCounts& counts);
+    static SamplePercentage MakeSamplePercentage(uint64_t sample_count,
+                                                 const std::optional<double>& percent);
+    static void             AccumulateSamplePercentage(SamplePercentage&       total,
+                                                       const SamplePercentage& value);
+    static void AccumulateSampleMetrics(SampleMetrics& total, const SampleMetrics& value);
+    static PercentageSummary SummarizePercentage(const SamplePercentage& value);
     static void AddStallReasonCount(StallReasonCounts& counts, uint64_t lookup_uuid,
                                     uint64_t count);
     static void MergeStallReasonCounts(StallReasonCounts&       total,
                                        const StallReasonCounts& counts);
 
     static void UpdateSamplingRow(
-        SamplingRow& row, const SampleCounts& counts, const StallReasonCounts& reasons,
+        SamplingRow& row, const SampleCounts& counts, const SampleMetrics& metrics,
+        const StallReasonCounts&                         reasons,
         const std::unordered_map<uint64_t, std::string>& reason_text);
 
     static const CodeObjectStore* FindCodeObject(const PcSamplingData& data,

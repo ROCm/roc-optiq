@@ -429,8 +429,13 @@ fetch), not a parallel-only event channel.
   selection or the full trace.
 - **Compute traces have no Script tab.** They have no `AnalysisView`,
   and `Track.events()` / `optiq.table()` are system-oriented anyway -
-  `run_analysis_script` already refuses a compute trace. Give
-  `ComputeView` its own tab when the compute bindings land, not before.
+  `optiq.table` tests positively for a system controller and refuses
+  anything else. Ask Optiq now reads compute traces, but
+  `run_analysis_script` is registered only in its system tool set and
+  the scripting paragraph is appended only to the system prompt, so a
+  compute turn is never told the tool exists rather than being allowed
+  to call it and fail. Give `ComputeView` its own tab when the compute
+  bindings land, not before.
 - Phase 2: page a script-owned table handle with `InfiniteScrollTable`
   using a **unique** request id (not `EVENT_TABLE_REQUEST_ID`).
 
@@ -701,9 +706,10 @@ and a release build does not require a system Python.
   `ShowGeneratedScript`.
 - ~~Vendor embeddable CPython into the package; CI builds against it.~~
   In tree as `ROCPROFVIS_ENABLE_VENDOR_PYTHON` (§7). The MSI and the Windows
-  CI artifact carry it. In CI the per-platform workflows take an `enable_vendor_python`
-  input (default off); the controller's experimental jobs turn it on.
-  With scripting on and `enable_vendor_python` off, each workflow installs
+  CI artifact carry it. It follows the `ROCPROFVIS_ENABLE_EXPERIMENTAL`
+  umbrella (on with scripting), so the controller's experimental jobs build
+  with it. The per-platform workflows take a free-form `cmake_args` input;
+  with `-DROCPROFVIS_ENABLE_VENDOR_PYTHON=OFF` in it, each workflow installs
   the build machine's Python development files instead.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
 - ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and

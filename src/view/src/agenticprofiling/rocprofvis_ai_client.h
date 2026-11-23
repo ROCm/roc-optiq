@@ -45,6 +45,9 @@ struct AssistantChatRequest
     // False on the round that writes the answer, which goes out without the
     // tool schema.
     bool enable_tools = true;
+    // Which of the two disjoint tool sets to send. Carried here so the client
+    // chooses a schema without knowing anything about traces.
+    bool compute_tools = false;
 };
 
 // What came back, or why nothing did.
@@ -56,6 +59,13 @@ struct AssistantChatResult
     std::string                    error;
     std::string                    finish_reason;
     std::vector<AssistantToolCall> tool_calls;
+    // Set when the body carried a usage object. Endpoints that omit it leave
+    // this false, and the panel shows only its own estimate of the context.
+    bool has_usage         = false;
+    int  prompt_tokens     = 0;
+    int  completion_tokens = 0;
+    bool has_cached_tokens = false;
+    int  cached_tokens     = 0;
 };
 
 /**

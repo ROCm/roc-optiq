@@ -156,6 +156,15 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
+    IM_COL32(54, 114, 188, 255),   // Colors::kPcSamplingMetricBar
+    IM_COL32(184, 183, 204, 255),  // Colors::kIsaInternal
+    IM_COL32(188, 145, 235, 255),  // Colors::kIsaMatrix
+    IM_COL32(108, 203, 173, 255),  // Colors::kIsaScalar
+    IM_COL32(222, 199, 115, 255),  // Colors::kIsaBranch
+    IM_COL32(114, 163, 240, 255),  // Colors::kIsaValu
+    IM_COL32(220, 153, 120, 255),  // Colors::kIsaFlat
+    IM_COL32(99, 196, 215, 255),   // Colors::kIsaLds
+    IM_COL32(231, 166, 193, 255),  // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
 
@@ -288,8 +297,20 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
+    IM_COL32(32, 102, 180, 255),   // Colors::kPcSamplingMetricBar
+    IM_COL32(108, 105, 131, 255),  // Colors::kIsaInternal
+    IM_COL32(126, 77, 170, 255),   // Colors::kIsaMatrix
+    IM_COL32(25, 120, 92, 255),    // Colors::kIsaScalar
+    IM_COL32(139, 110, 18, 255),   // Colors::kIsaBranch
+    IM_COL32(40, 95, 178, 255),    // Colors::kIsaValu
+    IM_COL32(163, 78, 43, 255),    // Colors::kIsaFlat
+    IM_COL32(21, 111, 132, 255),   // Colors::kIsaLds
+    IM_COL32(160, 65, 105, 255),   // Colors::kIsaBarrier
     // This must follow the ordering of Colors enum.
 };
+static_assert(DARK_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));
+static_assert(LIGHT_THEME_COLORS.size() == static_cast<size_t>(Colors::__kLastColor));
+
 // Same hue order as origin/main, desaturated for the redesign.
 const std::vector<ImU32> DARK_FLAME_COLORS = {
     IM_COL32(82, 154, 210, 220),  IM_COL32(72, 174, 156, 220),
@@ -324,6 +345,8 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
+// Joins the parts of a recent-targets key; profiler ids contain no ':'.
+inline constexpr const char* RECENT_TARGETS_KEY_SEPARATOR = ":";
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
 inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
 inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
@@ -513,6 +536,39 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
 }
 
 void
+SettingsManager::SerializeTrackSettings(jt::Json& json)
+{
+    jt::Json& ts = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_TRACKS];
+    ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR] =
+        static_cast<int>(m_usersettings.track_settings.decorator);
+    ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH] = m_usersettings.track_settings.decorator_width;
+}
+
+void
+SettingsManager::DeserializeTrackSettings(jt::Json& json)
+{
+    if(json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_TRACKS].isObject())
+    {
+        jt::Json& ts = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_TRACKS];
+        if(ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR].isLong())
+        {
+            const int64_t mode = ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR].getLong();
+            if(mode >= 0 && mode < static_cast<int64_t>(TrackDecoratorMode::kCount))
+            {
+                m_usersettings.track_settings.decorator =
+                    static_cast<TrackDecoratorMode>(mode);
+            }
+        }
+        if(ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH].isLong())
+        {
+            m_usersettings.track_settings.decorator_width = static_cast<int>(std::clamp<int64_t>(
+                ts[JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH].getLong(),
+                TRACK_DECORATOR_WIDTH_MIN, TRACK_DECORATOR_WIDTH_MAX));
+        }
+    }
+}
+
+void
 SettingsManager::SaveSettingsJson()
 {
     jt::Json settings_json;
@@ -521,6 +577,7 @@ SettingsManager::SaveSettingsJson()
     SerializeInternalSettings(settings_json);
     SerializeDisplaySettings(settings_json);
     SerializeUnitSettings(settings_json);
+    SerializeTrackSettings(settings_json);
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
     SerializeProfilerSettings(settings_json);
@@ -553,6 +610,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeInternalSettings(result.second);
         DeserializeDisplaySettings(result.second);
         DeserializeUnitSettings(result.second);
+        DeserializeTrackSettings(result.second);
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
@@ -657,9 +715,11 @@ SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
       { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
+        TrackSettings{ TrackDecoratorMode::kTrackType, TRACK_DECORATOR_WIDTH_DEFAULT },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
-        AssistantSettings{}, false })
+        AssistantSettings{}, false,
+        get_default_remote_cache_path() })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -842,67 +902,80 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 {
     jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
 
-    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
-    os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
-    os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR]         = m_usersettings.linux_drag_repair;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES] = m_usersettings.log_viewer_max_entries;
-
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK]    = m_usersettings.log_viewer.level_mask;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL]   = m_usersettings.log_viewer.auto_scroll;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX]     = m_usersettings.log_viewer.use_regex;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME] = m_usersettings.log_viewer.relative_time;
-    os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE]       = m_usersettings.log_viewer.visible;
+    os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT] =
+        m_usersettings.dont_ask_before_exit;
+    os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE] =
+        m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR] = m_usersettings.linux_drag_repair;
+    os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH] = m_usersettings.remote_cache_path;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES] =
+        m_usersettings.log_viewer_max_entries;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK] =
+        m_usersettings.log_viewer.level_mask;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL] =
+        m_usersettings.log_viewer.auto_scroll;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX] =
+        m_usersettings.log_viewer.use_regex;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME] =
+        m_usersettings.log_viewer.relative_time;
+    os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE] = m_usersettings.log_viewer.visible;
 }
 
 void
 SettingsManager::DeserializeOtherSettings(jt::Json& json)
 {
     jt::Json& os = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_OTHER];
-    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT].isBool())
     {
         m_usersettings.dont_ask_before_exit =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE].isBool())
     {
         m_usersettings.dont_ask_before_tab_closing =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR].isBool())
     {
         m_usersettings.linux_drag_repair =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].isLong())
+    if(os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH].isString())
     {
-        int value = static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].getLong());
+        m_usersettings.remote_cache_path =
+            os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH].getString();
+    }
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES].isLong())
+    {
+        int value = static_cast<int>(
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES].getLong());
         m_usersettings.log_viewer_max_entries =
             std::clamp(value, LOG_VIEWER_MAX_ENTRIES_MIN, LOG_VIEWER_MAX_ENTRIES_MAX);
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].isLong())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK].isLong())
     {
         m_usersettings.log_viewer.level_mask =
-            static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].getLong());
+            static_cast<int>(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_LEVEL_MASK].getLong());
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL].isBool())
     {
         m_usersettings.log_viewer.auto_scroll =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_AUTO_SCROLL].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX].isBool())
     {
         m_usersettings.log_viewer.use_regex =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME].isBool())
     {
         m_usersettings.log_viewer.relative_time =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME].getBool();
     }
-    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].isBool())
+    if(os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE].isBool())
     {
         m_usersettings.log_viewer.visible =
-            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].getBool());
+            os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE].getBool();
     }
 }
 
@@ -1018,20 +1091,49 @@ SettingsManager::GetProfilerSettings()
     return m_profilersettings;
 }
 
+std::vector<std::string>&
+SettingsManager::GetRecentTargets(std::string const&                             profiler_id,
+                                  std::optional<rocprofvis_profiler_tool_t>      tool,
+                                  std::optional<rocprofvis_profiler_operation_t> operation)
+{
+    std::string key = profiler_id;
+    if(tool.has_value())
+    {
+        key += RECENT_TARGETS_KEY_SEPARATOR + std::to_string(static_cast<int>(tool.value()));
+    }
+    if(operation.has_value())
+    {
+        key += RECENT_TARGETS_KEY_SEPARATOR +
+               std::to_string(static_cast<int>(operation.value()));
+    }
+    return m_profilersettings.recent_targets[key];
+}
+
 void
 SettingsManager::SerializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
-    ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
-    ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
-    ps["last_preset_name"] = m_profilersettings.last_preset_name;
+    jt::Json& presets = ps["last_preset_names"];
+    presets.setObject();
+    for(std::pair<std::string const, std::string> const& entry :
+        m_profilersettings.last_preset_names)
+    {
+        presets[entry.first] = entry.second;
+    }
     ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
     ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
 
-    int rt_idx = 0;
-    for (auto const& t : m_profilersettings.recent_targets)
+    jt::Json& recent = ps["recent_targets"];
+    recent.setObject();
+    for(std::pair<std::string const, std::vector<std::string>> const& entry :
+        m_profilersettings.recent_targets)
     {
-        ps["recent_targets"][rt_idx++] = t;
+        jt::Json& list = recent[entry.first];
+        list.setArray();
+        for(std::string const& target : entry.second)
+        {
+            list.getArray().push_back(target);
+        }
     }
 }
 
@@ -1039,17 +1141,16 @@ void
 SettingsManager::DeserializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
-    if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
+    if(ps["last_preset_names"].isObject())
     {
-        m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();
-    }
-    if(ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].isBool())
-    {
-        m_profilersettings.auto_load_trace = ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].getBool();
-    }
-    if(ps["last_preset_name"].isString())
-    {
-        m_profilersettings.last_preset_name = ps["last_preset_name"].getString();
+        m_profilersettings.last_preset_names.clear();
+        for(std::pair<std::string const, jt::Json>& entry : ps["last_preset_names"].getObject())
+        {
+            if(entry.second.isString())
+            {
+                m_profilersettings.last_preset_names[entry.first] = entry.second.getString();
+            }
+        }
     }
     if(ps["last_profiler_id"].isString())
     {
@@ -1059,15 +1160,13 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     {
         m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
     }
-    if(ps["recent_targets"].isArray())
+    if(ps["recent_targets"].isObject())
     {
         m_profilersettings.recent_targets.clear();
-        for (jt::Json& item : ps["recent_targets"].getArray())
+        for(std::pair<std::string const, jt::Json>& entry : ps["recent_targets"].getObject())
         {
-            if (item.isString())
-            {
-                m_profilersettings.recent_targets.push_back(item.getString());
-            }
+            m_profilersettings.recent_targets[entry.first] =
+                JsonUtils::GetStringArray(ps["recent_targets"], entry.first);
         }
     }
 }

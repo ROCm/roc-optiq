@@ -32,6 +32,11 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#    include "agenticprofiling/rocprofvis_ai_tools.h"
+#    include "agenticprofiling/rocprofvis_ai_trace_links.h"
+#endif
 using namespace RocProfVis::View;
 
 namespace
@@ -331,6 +336,63 @@ struct TabStateGuard
         if(ctx) ctx->Yield(3);
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+// Points the trace link store at a scratch file for one test and restores the
+// user's own afterwards, so a test never writes their links.
+struct ScratchTraceLinks
+{
+    std::string saved_path;
+    explicit ScratchTraceLinks(const std::string& scratch_path)
+    : saved_path(TraceLinkStoreTestPeer{ AssistantTraceLinks() }.Path())
+    {
+        std::error_code ec;
+        std::filesystem::remove(scratch_path, ec);
+        TraceLinkStoreTestPeer{ AssistantTraceLinks() }.UsePath(scratch_path);
+    }
+    ~ScratchTraceLinks()
+    {
+        TraceLinkStoreTestPeer{ AssistantTraceLinks() }.UsePath(saved_path);
+    }
+};
+
+// Opens the Ask Optiq panel for one test, so it draws and picks the
+// conversation for the tab in front, and puts it back as it was.
+struct AssistantPanelOpen
+{
+    bool was_visible;
+    AssistantPanelOpen()
+    : was_visible(*AssistantPanel::GetInstance()->VisiblePtr())
+    {
+        *AssistantPanel::GetInstance()->VisiblePtr() = true;
+    }
+    ~AssistantPanelOpen() { *AssistantPanel::GetInstance()->VisiblePtr() = was_visible; }
+};
+
+bool
+AssistantTraceReady(const std::string& project_id)
+{
+    const AssistantToolContext context = MakeAssistantToolContext(project_id);
+    return context.data_provider != nullptr &&
+           context.data_provider->GetState() == ProviderState::kReady;
+}
+
+// Copies through shared-read streams, which works while SQLite still holds the
+// source open; a plain copy_file can hit a sharing violation on Windows.
+bool
+CopyFileShared(const std::filesystem::path& from, const std::filesystem::path& to)
+{
+    std::ifstream in(from, std::ios::binary);
+    std::ofstream out(to, std::ios::binary | std::ios::trunc);
+    if(!in || !out)
+    {
+        return false;
+    }
+    out << in.rdbuf();
+    out.close();
+    return !out.fail();
+}
+#endif
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -2901,6 +2963,85 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(still_missing);
     };
 
+    // AIPROFVIS-651: an event or sample spanning a chunk boundary comes back in both
+    // chunks, and only one copy may be kept. The sample trace fits in one 30 s chunk,
+    // so each track is refetched in many small chunks to put boundaries inside it.
+    t = IM_REGISTER_TEST(e, "app", "sys_track_chunk_boundary_dedup");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+
+        constexpr double kChunks = 64.0;
+        constexpr float  kWidth  = 100000.0f;
+
+        size_t event_tracks  = 0;
+        size_t sample_tracks = 0;
+        size_t duplicates    = 0;
+        for (TrackItem* track : TimelineViewTestPeer{*tlv}.DisplayedTracks())
+        {
+            const RawTrackData* before = tlm.GetTrackData(track->GetID());
+            if (before == nullptr || !track->AllDataReady() || track->HasPendingRequests())
+                continue;
+            const double   start_ts    = before->GetStartTs();
+            const double   end_ts      = before->GetEndTs();
+            const uint64_t prior_group = before->GetDataGroupID();
+            if (end_ts <= start_ts) continue;
+
+            TrackItemTestPeer peer{*track};
+            const uint64_t    orig_chunk = peer.ChunkDuration();
+            peer.SetChunkDuration(
+                std::max<uint64_t>(1, static_cast<uint64_t>((end_ts - start_ts) / kChunks)));
+            track->RequestData(start_ts, end_ts, kWidth);
+
+            const RawTrackData* after = nullptr;
+            for (int i = 0; i < 600; i++)
+            {
+                ctx->Yield();
+                after = tlm.GetTrackData(track->GetID());
+                if (after && after->GetDataGroupID() != prior_group &&
+                    !track->HasPendingRequests() && track->AllDataReady())
+                    break;
+                after = nullptr;
+            }
+            peer.SetChunkDuration(orig_chunk);
+            IM_CHECK(after != nullptr);
+            if (after == nullptr) break;
+
+            if (const RawTrackEventData* events = dynamic_cast<const RawTrackEventData*>(after))
+            {
+                std::unordered_set<uint64_t> ids;
+                for (const TraceEvent& event : events->GetData())
+                    if (!ids.insert(event.m_id.uuid).second) duplicates++;
+                if (!events->GetData().empty()) event_tracks++;
+            }
+            else if (const RawTrackSampleData* samples =
+                         dynamic_cast<const RawTrackSampleData*>(after))
+            {
+                std::unordered_set<double> timestamps;
+                for (const TraceCounter& sample : samples->GetData())
+                    if (!timestamps.insert(sample.m_start_ts).second) duplicates++;
+                if (!samples->GetData().empty()) sample_tracks++;
+            }
+
+            // Drop the small-chunk data so the timeline refetches it normally.
+            track->ReleaseData();
+        }
+        ctx->Yield(5);
+
+        ctx->LogInfo("Checked %zu event and %zu sample tracks, %zu duplicates",
+                     event_tracks, sample_tracks, duplicates);
+        IM_CHECK(event_tracks > 0);
+        IM_CHECK(duplicates == 0);
+    };
+
     // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
     // Presence/shape only -- the args come back asynchronously through the
     // controller, with no single table to build a value oracle from.
@@ -3021,4 +3162,201 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(arg_count > 0);
         IM_CHECK(have_named_arg);
     };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Each open trace keeps its own Ask Optiq conversation, a link lets one
+    // trace's read tools reach the other, and closing a trace takes its
+    // conversation with it. Drives the tools directly, so no endpoint is needed.
+    t           = IM_REGISTER_TEST(e, "app", "sys_assistant_linked_traces");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        namespace fs   = std::filesystem;
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if(app == nullptr)
+        {
+            return;
+        }
+        TabContainer* tc = AppWindowTestPeer{ *app }.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if(tc == nullptr)
+        {
+            return;
+        }
+        TabStateGuard tab_guard(ctx, tc);
+
+        const fs::path sample("sample/rocpd-transpose.db");
+        if(!fs::exists(sample))
+        {
+            ctx->LogWarning("SKIP: sample/rocpd-transpose.db not found");
+            return;
+        }
+
+        // A second system trace at its own path: the sample copied with its
+        // write-ahead log, so the copy holds the same capture.
+        std::error_code ec;
+        const fs::path  dir = fs::temp_directory_path() / "rocprofvis_assistant_links";
+        fs::create_directories(dir, ec);
+        const fs::path copy = dir / "run2" / sample.filename();
+        fs::create_directories(copy.parent_path(), ec);
+        if(!CopyFileShared(sample, copy))
+        {
+            ctx->LogWarning("SKIP: could not copy the sample db");
+            return;
+        }
+        fs::path sample_wal = sample;
+        sample_wal += "-wal";
+        fs::path copy_wal = copy;
+        copy_wal += "-wal";
+        fs::remove(copy_wal, ec);
+        if(fs::exists(sample_wal))
+        {
+            CopyFileShared(sample_wal, copy_wal);
+        }
+
+        const std::string id_a = fs::weakly_canonical(sample).string();
+        const std::string id_b = fs::weakly_canonical(copy).string();
+        if(app->GetProject(id_a) == nullptr)
+        {
+            ctx->LogWarning("SKIP: start the UI tests with rocpd-transpose.db");
+            return;
+        }
+
+        ScratchTraceLinks      scratch_links((dir / "trace_links.json").string());
+        AssistantPanelOpen     panel_open;
+        AssistantPanelTestPeer peer{ *AssistantPanel::GetInstance() };
+
+        app->OpenFile(id_b);
+        for(int i = 0;
+            i < 3000 && !(AssistantTraceReady(id_a) && AssistantTraceReady(id_b)); i++)
+        {
+            ctx->Yield();
+        }
+        IM_CHECK(AssistantTraceReady(id_a));
+        IM_CHECK(AssistantTraceReady(id_b));
+
+        // The conversation on screen follows the tab, and each keeps its own lines.
+        tc->SetActiveTab(id_b);
+        ctx->Yield(3);
+        IM_CHECK(peer.ViewProjectId() == id_b);
+        peer.AddUserLine(id_a, "about run 1");
+        IM_CHECK(peer.LineCount(id_a) == 1);
+        IM_CHECK(peer.LineCount(id_b) == 0);
+        tc->SetActiveTab(id_a);
+        ctx->Yield(3);
+        IM_CHECK(peer.ViewProjectId() == id_a);
+        IM_CHECK(peer.LineCount(id_a) == 1);
+        peer.DropConversation(id_a);
+
+        // Duplicate visible names are ambiguous, but the listed tab ref picks
+        // one without exposing its full path to the model.
+        AssistantToolStartResult result =
+            StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab",
+                               "{\"name\":\"rocpd-transpose.db\"}");
+        IM_CHECK(result.content.find("Nothing matches") != std::string::npos);
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab", "{}");
+        const size_t first_ref      = result.content.find("ref=");
+        const size_t second_ref     = first_ref == std::string::npos
+                                          ? std::string::npos
+                                          : result.content.find("ref=", first_ref + 4);
+        const size_t second_ref_end = second_ref == std::string::npos
+                                          ? std::string::npos
+                                          : result.content.find(' ', second_ref + 4);
+        IM_CHECK(second_ref != std::string::npos);
+        IM_CHECK(second_ref_end != std::string::npos);
+        if(second_ref == std::string::npos || second_ref_end == std::string::npos)
+        {
+            return;
+        }
+        const std::string target_ref =
+            result.content.substr(second_ref + 4, second_ref_end - second_ref - 4);
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab",
+                                    "{\"name\":\"" + target_ref + "\"}");
+        IM_CHECK(result.stop_tool_queue);
+        ctx->Yield(3);
+        IM_CHECK(app->GetCurrentProject() != nullptr);
+        IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
+
+        // Extra JSON fields are accepted by the endpoint parser. A stale trace
+        // link must not redirect a compute handler into a system data model.
+        AssistantToolContext compute_context;
+        compute_context.is_compute = true;
+#    ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+        result = StartAssistantTool(compute_context, "compute_overview",
+                                    "{\"trace\":\"stale-link\"}");
+        IM_CHECK(result.content.find(
+                     "Linked-trace reads are available only for system traces") !=
+                 std::string::npos);
+#    else
+        result = StartAssistantTool(compute_context, "compute_overview", "{}");
+        IM_CHECK(result.content.find(
+                     "this build of Ask Optiq reads system traces only") !=
+                 std::string::npos);
+#    endif
+
+        // Link the sample as the baseline of its copy.
+        TraceLinkMember baseline;
+        baseline.path  = id_a;
+        baseline.label = "run1";
+        TraceLinkMember target;
+        target.path  = id_b;
+        target.label = "run2";
+        IM_CHECK(AssistantTraceLinks().Link(baseline, target) ==
+                 TraceLinkResult::kLinked);
+        const std::vector<TraceLink> links = AssistantTraceLinks().LinksOf(id_b);
+        IM_CHECK(links.size() == 1);
+        if(links.size() != 1)
+        {
+            return;
+        }
+        const std::string ref = links[0].group_id;
+        IM_CHECK(
+            BuildAssistantLinkBlock(MakeAssistantToolContext(id_b)).find("ref=" + ref) !=
+            std::string::npos);
+
+        // The copy reads the sample's tracks through the link, labelled as such.
+        result = StartAssistantTool(MakeAssistantToolContext(id_b), "list_tracks",
+                                    "{\"trace\":\"" + ref + "\"}");
+        IM_CHECK(!result.pending);
+        IM_CHECK(result.fetch.project_id == id_a);
+        IM_CHECK(result.content.find("[read from linked trace " + ref) !=
+                 std::string::npos);
+        IM_CHECK(result.content.find("track_id=") != std::string::npos);
+
+        // UI tools stay on their own trace, and an unknown ref names what is linked.
+        result =
+            StartAssistantTool(MakeAssistantToolContext(id_b), "goto",
+                               "{\"trace\":\"" + ref + "\",\"start_ns\":0,\"end_ns\":1}");
+        IM_CHECK(result.content.find("only applies to the tools that read data") !=
+                 std::string::npos);
+        result = StartAssistantTool(MakeAssistantToolContext(id_b), "list_tracks",
+                                    "{\"trace\":\"link-none\"}");
+        IM_CHECK(result.content.find("No linked trace matches") != std::string::npos);
+
+        // Two copies of one capture compare as unchanged once both summaries load.
+        result =
+            StartAssistantTool(MakeAssistantToolContext(id_b), "compare_traces", "{}");
+        for(int i = 0; i < 3000 && result.pending; i++)
+        {
+            ctx->Yield();
+            result = StartAssistantTool(MakeAssistantToolContext(id_b), "compare_traces",
+                                        "{}");
+        }
+        IM_CHECK(!result.pending);
+        IM_CHECK(result.content.find("baseline: ") != std::string::npos);
+        IM_CHECK(result.content.find("span_ns: ") != std::string::npos);
+        IM_CHECK(result.content.find("(0, 0.0%)") != std::string::npos);
+        IM_CHECK(result.content.find("new in target") == std::string::npos);
+        IM_CHECK(result.content.find("gone from target") == std::string::npos);
+
+        // Closing the copy drops its conversation; the link stays and reports
+        // the trace as closed.
+        IM_CHECK(peer.HasConversation(id_b));
+        tc->RemoveTab(id_b);
+        ctx->Yield(3);
+        IM_CHECK(!peer.HasConversation(id_b));
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
+                                    "{\"trace\":\"" + ref + "\"}");
+        IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+#endif
 }

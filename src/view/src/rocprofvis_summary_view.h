@@ -58,6 +58,7 @@ private:
 
     EventManager::SubscriptionToken m_time_format_changed_token;
     EventManager::SubscriptionToken m_progress_token;
+    EventManager::SubscriptionToken m_summary_event_token;
 };
 
 class SummaryOverview : public RocWidget

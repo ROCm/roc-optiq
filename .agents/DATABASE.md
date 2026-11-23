@@ -153,7 +153,8 @@ rocprofvis_dm_charptr_t  rocprofvis_db_future_get_error_message(future);
 
 `rocprofvis_db_future_get_error_message` returns a message the last
 operation left for the user (set with `Future::SetErrorMessage`, e.g. a
-table filter the table processor could not apply), or an empty string.
+table filter the table processor or the compute pivot could not apply),
+or an empty string.
 
 The progress callback `rocprofvis_db_progress_callback_t` receives:
 
@@ -617,17 +618,26 @@ databases:
   resolved through `ColumnNameToEnum`, and the resulting model `Table` stores
   each column's `rocprofvis_db_compute_column_enum_t` plus raw string cells.
   The controller later converts that temporary table into typed `PcSampling`
-  vectors. The PC-sample-state projection preserves SQL NULL for `issue_count`
-  and `stall_count`; the generic callback represents NULL as an empty cell, so
-  the controller can distinguish host-trap's unavailable progress data from a
-  stochastic sample's measured zero. `total_count` remains coalesced to zero.
+  vectors. The PC-sample-state projection preserves SQL NULL for `issue_count`,
+  `stall_count`, `wave_occupancy_percent`, and `active_thread_percent`. The generic
+  callback represents NULL as an empty cell, so the controller can distinguish
+  unavailable measurements from measured zero. `total_count` remains coalesced
+  to zero.
+  Metadata loading probes the two percentage columns independently with
+  `pragma_table_info`. The query substitutes `NULL` under the existing column alias
+  for a physically absent percentage column, preserving sample counts and the
+  other available metric. These flags reset before every metadata probe and default
+  to unavailable if the probe returns no column. No schema migration is required.
 - `CallbackParseMetadata` reads only `schema_version` from
   `compute_metadata` to select the query dialect. The full row
   (`compute_version`, `git_version`, `schema_version`) is served to the
   controller by the `kRPVComputeFetchMetadata` use case through
   `CallbackGetComputeGeneric`; it is valid for every schema version.
-- Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
-  the kernel x metric pivot table from a JSON plan (`jt::Json`).
+- Pivot construction: `BuildKernelMetricsMatrix(future, table, plan)`
+  builds the kernel x metric pivot table from a JSON plan (`jt::Json`).
+  A column filter it can't parse or evaluate still succeeds, with every
+  column and no rows, and leaves "Could not apply filter: ..." on the
+  future.
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
   kernels to stamp mean / median into the table.
 
@@ -1242,7 +1252,13 @@ instruction-to-symbol, symbol-to-kernel, symbol-to-code-object,
 state-to-instruction, and stall-reason-to-state joins.
 
 `GetComputeKernelInstructionLines` selects the fields needed for the
-initial ISA display (formerly "Code View").
+initial ISA display (formerly "Code View"), including the resolved instruction
+type text from `compute_instruction_type_lookup`. The lookup is left-joined so
+an instruction without type metadata remains in the result. Its
+`instruction_type_uuid` stays NULL rather than being reported as zero, and the
+joined type text is empty. The controller keeps that UUID optional and builds
+the UUID-to-text map from present ids only, so lookup id 0 stays distinct from
+a missing type.
 
 `GetComputeWorkloadTopKernels` also returns `has_isa_lines`. For schema
 2.2 and newer it derives the value from kernel-symbol/instruction-line
@@ -1541,7 +1557,11 @@ There are two distinct flows:
   containing only the time range `[start, end]`. Tables marked
   `kRocOptiqTableCopyWhenTrimmed` are copied; those marked
   `kRocOptiqTableDisposeWhenTrimmed` are dropped from the new file
-  and rebuilt on next open.
+  and rebuilt on next open. `SaveTrimmedDataAsync` refuses a destination
+  that is one of the trace's own files (`IsSourceFile`), trims into a
+  temporary file beside the destination, and renames it over the
+  destination only on success. The per-subclass `SaveTrimmedData`
+  returns its result; the async wrapper sets the promise.
 
 ## 11. CFFI / Python Bindings
 
@@ -1729,9 +1749,11 @@ Two Catch2 binaries live in `src/model/src/tests/` (built when
   compute metadata, top kernels, kernel + metric matrix, roofline
   ceilings, metric values, and the pivot table flow.
 
-The compute model test currently does not cover the schema-2.2 PC-sampling
-query use cases. Changes to those queries should add a matching fixture and
-exercise both query construction and generic-table results.
+The compute model test covers the PC-sample-state query for schema 2.2 and 2.3.
+CTE fixtures exercise the real query factory, kernel filtering, and generic-table
+results without modifying the input database. They distinguish NULL percentages,
+measured zero, independent metric availability, and populated hotspot values.
+Other PC-sampling query use cases still need matching fixtures when changed.
 
 Both accept `--input_file <path>` (Catch2 + Clara). When you add a
 new public ABI surface or a new database adapter, add a matching

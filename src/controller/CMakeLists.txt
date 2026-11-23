@@ -138,7 +138,10 @@ endif()
 if(BUILD_TESTING)
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)
 	set(COMPUTE_TEST_NAME ${PROJECT_NAME}-compute-tests)
-    add_executable(${SYSTEM_TEST_NAME} tests/rocprofvis_controller_system_tests.cpp)
+    add_executable(${SYSTEM_TEST_NAME}
+        tests/rocprofvis_controller_system_tests.cpp
+        tests/rocprofvis_controller_summary_tests.cpp)
+    target_compile_definitions(${SYSTEM_TEST_NAME} PRIVATE ROCPROFVIS_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     target_include_directories(${SYSTEM_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(${SYSTEM_TEST_NAME} PRIVATE ${PROJECT_NAME})
     target_link_libraries(${SYSTEM_TEST_NAME} PRIVATE Catch2::Catch2WithMain)

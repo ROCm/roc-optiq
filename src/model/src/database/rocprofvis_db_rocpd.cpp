@@ -552,11 +552,11 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
         result = rpDb.ExecuteSQLQuery(future, DbInstancePtrAt(0), "DETACH oldDb;");
 
         ShowProgress(100, "Trace trimmed successfully!", kRPVDbSuccess, future);
-        return future->SetPromise(result);
+        return result;
     }
 
     ShowProgress(0, "Failed to trim track!", kRPVDbError, future);
-    return future->SetPromise(result);
+    return result;
 }
 
 rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num_string_table_filters_t num_string_table_filters,

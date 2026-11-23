@@ -387,9 +387,7 @@ ComputeTrace::AsyncFetchPcSamplingIsaData(Arguments& args, Future& future,
             const rocprofvis_dm_result_t dm_result =
                 FetchPcSamplingIsaData(db, future, kernel_id, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
+            return PcSamplingJobResult(dm_result);
         },
         &future));
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
@@ -421,9 +419,7 @@ ComputeTrace::AsyncFetchPcSamplingSource(Arguments& args, Future& future,
             const rocprofvis_dm_result_t dm_result = FetchPcSamplingSourceData(
                 db, future, kernel_id, source_file_uuid, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
+            return PcSamplingJobResult(dm_result);
         },
         &future));
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
@@ -454,9 +450,7 @@ ComputeTrace::AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
             const rocprofvis_dm_result_t dm_result = FetchPcSamplingStallData(
                 db, future, kernel_id, include_instruction_samples != 0, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
+            return PcSamplingJobResult(dm_result);
         },
         &future));
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
@@ -470,17 +464,26 @@ ComputeTrace::FetchPcSamplingIsaData(rocprofvis_dm_database_t db, Future* future
     if(!output.m_code_object_store_loaded)
     {
         result = FetchCodeObjects(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_code_object_store_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_code_object_store_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && !output.m_kernel_symbols_loaded)
     {
         result = FetchKernelSymbols(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_kernel_symbols_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_kernel_symbols_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
     {
         result = FetchInstructionLines(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_instruction_lines_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_instruction_lines_loaded = true;
+        }
     }
     return result;
 }
@@ -494,14 +497,19 @@ ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* fut
     if(!output.m_source_files_loaded)
     {
         result = FetchSourceFiles(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_source_files_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_source_files_loaded = true;
+        }
     }
     if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
     if(result == kRocProfVisDmResultSuccess && !output.m_instruction_source_lines_loaded)
     {
         result = FetchInstructionSourceLines(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
+        {
             output.m_instruction_source_lines_loaded = true;
+        }
     }
     if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
 
@@ -527,19 +535,27 @@ ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* futu
     if(!output.m_pc_sample_states_loaded)
     {
         result = FetchPcSampleStates(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_pc_sample_states_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_pc_sample_states_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && !output.m_stalls_loaded)
     {
         result = FetchStalls(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess) output.m_stalls_loaded = true;
+        if(result == kRocProfVisDmResultSuccess)
+        {
+            output.m_stalls_loaded = true;
+        }
     }
     if(result == kRocProfVisDmResultSuccess && include_instruction_samples &&
        !output.m_instruction_samples_loaded)
     {
         result = FetchInstructionSamples(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
+        {
             output.m_instruction_samples_loaded = true;
+        }
     }
     return result;
 }
@@ -600,6 +616,7 @@ ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
             { kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid, std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset,    std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionLineInstruction,         std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineInstructionType,     std::nullopt },
         }, {}
     };
     rocprofvis_dm_result_t result = ExecuteQuery(
@@ -607,6 +624,7 @@ ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
         query_args, query_out,
         [this, &output](const QueryDataStore& data_store){
             StorePcSamplingRows(output, kRPVControllerPCSamplingNumInstructionLines, data_store);
+            StoreInstructionTypeLookupMap(output, data_store);
         });
     return result;
 }
@@ -868,6 +886,33 @@ ComputeTrace::StorePcSamplingRows(PcSampling& output,
                                   property, row,
                                   data_store.rows[row][column.second.value()], type);
             }
+        }
+    }
+}
+
+void
+ComputeTrace::StoreInstructionTypeLookupMap(PcSampling& output,
+                                            const QueryDataStore& data_store)
+{
+    output.m_instruction_type_lookup_map.clear();
+
+    const auto uuid_column = data_store.columns.find(
+        kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid);
+    const auto text_column = data_store.columns.find(
+        kRPVComputeColumnPcSamplingInstructionLineInstructionType);
+    if(uuid_column == data_store.columns.end() || !uuid_column->second ||
+       text_column == data_store.columns.end() || !text_column->second)
+    {
+        return;
+    }
+
+    for(const std::vector<const char*>& row : data_store.rows)
+    {
+        uint64_t instruction_type_uuid = 0;
+        if(ParseUInt64(row[uuid_column->second.value()], instruction_type_uuid))
+        {
+            output.m_instruction_type_lookup_map.try_emplace(
+                instruction_type_uuid, row[text_column->second.value()]);
         }
     }
 }
@@ -1463,6 +1508,20 @@ rocprofvis_result_t ComputeTrace::SetObjectProperty(rocprofvis_handle_t*        
                 break;
             }
         }
+    }
+    return result;
+}
+
+rocprofvis_result_t ComputeTrace::PcSamplingJobResult(rocprofvis_dm_result_t dm_result)
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        result = kRocProfVisResultSuccess;
+    }
+    else if(dm_result == kRocProfVisDmResultNotSupported)
+    {
+        result = kRocProfVisResultNotSupported;
     }
     return result;
 }

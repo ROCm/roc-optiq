@@ -10,7 +10,7 @@ project(${TARGET_NAME})
 set(PROJECT_VERSION_MAJOR 1)
 set(PROJECT_VERSION_MINOR 2)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 0)
+set(PROJECT_VERSION_BUILD 2)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -34,21 +34,37 @@ option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
-# TEMPORARY: gate the in-development profiler-launch and remote/SSH features
-# until they ship. Both default OFF so release builds exclude the UI, the
-# dependent sources, and (for remote) the libssh2/mbedtls stack and its
-# submodules. Remove these options and unwrap their guards when the features
-# graduate.
-option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
-option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
-option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
-option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
+# Umbrella switch for every in-development feature below. It only changes their
+# defaults, so an explicit -DROCPROFVIS_ENABLE_<X>=OFF still wins. The CI
+# experimental builds set it, so adding or removing a feature here needs no
+# workflow change.
+option(ROCPROFVIS_ENABLE_EXPERIMENTAL "Default every in-development feature to ON" OFF)
+if(ROCPROFVIS_ENABLE_EXPERIMENTAL)
+    set(ROCPROFVIS_EXPERIMENTAL_DEFAULT ON)
+else()
+    set(ROCPROFVIS_EXPERIMENTAL_DEFAULT OFF)
+endif()
+
+# TEMPORARY: in-development features. Each defaults to the umbrella above, so
+# release builds exclude their UI and dependent sources (for remote, also the
+# libssh2/mbedtls stack and its submodules). Remove an option and unwrap its
+# guards when the feature graduates.
+option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 # Only meaningful with scripting: downloads a pinned CPython and ships it with
 # the app. OFF builds against this machine's Python, which then only runs here.
 include(CMakeDependentOption)
 cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
     "Vendor a pinned CPython for embedded Python analysis scripts" ON
     "ROCPROFVIS_ENABLE_SCRIPTING" OFF)
+# Only meaningful with Ask Optiq: lets it read compute traces as well as system
+# traces. OFF compiles the compute tools out, and Ask Optiq turns a compute tab
+# away.
+cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+    "Let the Ask Optiq assistant read compute traces (in development)" ON
+    "ROCPROFVIS_ENABLE_AGENTIC_PROFILING" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -56,12 +72,15 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_VENDOR_PYTHON
 # remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
 # built when BOTH are enabled.
 
-# TEMPORARY: gate the in-development trace-compare and multi-window features
-# until they ship. Both default OFF so release builds exclude their UI and
-# dependent sources. Remove these options and unwrap their guards when the
-# features graduate.
-option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
-option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+
+# Deliberately NOT under the umbrella: the Hub is unstable (its system tests
+# abort with std::future_error and a filter error when it is on), and it clones
+# rocm-systems at configure time. Default OFF until it is stable; pass
+# -DROCPROFVIS_ENABLE_PROFILER_HUB=ON to build it, then move it under the
+# umbrella by defaulting it to ${ROCPROFVIS_EXPERIMENTAL_DEFAULT}.
+option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" OFF)
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
@@ -75,6 +94,9 @@ endif(ROCPROFVIS_ENABLE_REMOTE)
 if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING")
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_COMPUTE")
+endif(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE)
 if(ROCPROFVIS_ENABLE_SCRIPTING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
 endif(ROCPROFVIS_ENABLE_SCRIPTING)
@@ -269,6 +291,8 @@ list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_profiler_backend.h
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
     src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_compute_backend.h
     src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
     src/view/src/profiler/rocprofvis_launch_preset_manager.h
     src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
@@ -292,8 +316,8 @@ list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_remote_trace_orchestrator.h
     src/view/src/remote/rocprofvis_ssh_settings_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
-    src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
-    src/view/src/remote/rocprofvis_ssh_test_dialog.h
+    src/view/src/remote/rocprofvis_ssh_file_dialog.cpp
+    src/view/src/remote/rocprofvis_ssh_file_dialog.h
     src/view/src/remote/rocprofvis_remote_file_browser.cpp
     src/view/src/remote/rocprofvis_remote_file_browser.h
 )
@@ -310,6 +334,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_compute_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_prompts.h
@@ -322,6 +347,10 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tools.h
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_links.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
     # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
@@ -507,6 +536,20 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
+
+    # The trace link store and run diff behind compare_traces need no GPU,
+    # trace, UI, endpoint, or feature define, so every test build covers them.
+    set(ASSISTANT_TEST_NAME ${TARGET_NAME}-assistant-tests)
+    add_executable(${ASSISTANT_TEST_NAME}
+        src/view/test/rocprofvis_ai_assistant_tests.cpp
+        src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
+        src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+        src/view/src/rocprofvis_json_utils.cpp)
+    target_include_directories(${ASSISTANT_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${ASSISTANT_TEST_NAME} PRIVATE json spdlog
+                          Catch2::Catch2WithMain)
+    add_test(NAME ${ASSISTANT_TEST_NAME} COMMAND ${ASSISTANT_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
@@ -892,8 +935,13 @@ include(GNUInstallDirs)
 
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix.")
 # Archive generators wrap the prefix in <package>-<version>-<system>/. DEB and
-# RPM do not. Leave it off so the tarball extracts onto / at the install prefix.
+# RPM do not. Leave it off so the tarball has no wrapper directory.
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+# The tarball drops the install prefix too, so it extracts flat into the current
+# directory like the other ROCm extras (RVS, MIGraphX). DEB and RPM keep it.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rocprofvis_cpack_config.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake" @ONLY)
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/rocprofvis_cpack_config.cmake")
 
 set(CPACK_GENERATOR "TGZ" CACHE STRING "package types to be produced")
 # Detect Linux distro for additional package types
@@ -961,6 +1009,48 @@ endif()
 
 # Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
 set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
+
+# Linux desktop entry and hicolor icons, so desktop shells list the app in
+# search and show its icon. Shells only scan XDG_DATA_DIRS (/usr/share by
+# default), not the /opt prefix, hence the absolute destinations.
+# EXCLUDE_FROM_ALL keeps them to the per-component DEB/RPM installs: the TGZ
+# archive and a plain `cmake --install` cannot stage absolute paths and would
+# write to the build machine's /usr/share instead.
+if(UNIX AND NOT APPLE)
+    set(LINUX_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop.in"
+        "${LINUX_DESKTOP_FILE}"
+        @ONLY)
+    install(FILES "${LINUX_DESKTOP_FILE}"
+            DESTINATION /usr/share/applications
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+            DESTINATION /usr/share/icons
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+
+    # These directories belong to the filesystem and hicolor-icon-theme packages.
+    # CPack's RPM claims every parent directory it does not exclude, and its
+    # default exclusions stop at /usr/share.
+    list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+         /usr/share/applications /usr/share/icons /usr/share/icons/hicolor)
+    file(GLOB LINUX_ICON_SIZES LIST_DIRECTORIES true
+         RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+         "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor/*")
+    foreach(ICON_SIZE ${LINUX_ICON_SIZES})
+        list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+             /usr/share/icons/hicolor/${ICON_SIZE}
+             /usr/share/icons/hicolor/${ICON_SIZE}/apps)
+    endforeach()
+
+    find_program(DESKTOP_FILE_VALIDATE desktop-file-validate)
+    if(BUILD_TESTING AND DESKTOP_FILE_VALIDATE)
+        add_test(NAME ${TARGET_NAME}-desktop-entry
+                 COMMAND ${DESKTOP_FILE_VALIDATE} "${LINUX_DESKTOP_FILE}")
+    endif()
+endif()
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)

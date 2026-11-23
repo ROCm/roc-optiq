@@ -43,7 +43,10 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, rocpro
 			it->second == kRPVControllerCounterId ||
 			it->second == kRPVControllerProcessorId ||
 			it->second == kRPVControllerStreamId ||
-			it->second == kRPVControllerThreadId;
+			it->second == kRPVControllerThreadId ||
+			it->second == kRPVControllerProcessId ||
+			it->second == kRPVControllerQueueProcess ||
+			it->second == kRPVControllerCounterProcess;
 		switch (type)
 		{
 		case kRPVTopologyDataTypeInt:
@@ -459,10 +462,11 @@ bool TopologyNodeProcess::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_ident
 	if (result)
 	{
 		result =
-			track_identifiers->category == kRocProfVisDmRegionSampleTrack ||
+			(track_identifiers->category == kRocProfVisDmRegionSampleTrack ||
 			track_identifiers->category == kRocProfVisDmRegionMainTrack ||
 			track_identifiers->category == kRocProfVisDmRegionTrack ||
-			track_identifiers->category == kRocProfVisDmStreamTrack;
+			track_identifiers->category == kRocProfVisDmStreamTrack) && 
+			m_db_instance == track_identifiers->db_instance;
 	}
 	return result;
 }
@@ -478,7 +482,7 @@ std::string TopologyNodeProcess::GetNodeName() {
 	if (it != m_properties.end())
 	{
 		name += "(";
-		name += std::to_string(std::get<std::uint64_t>(it->second));
+		name += std::to_string(std::get<std::uint64_t>(it->second) & TOPOLOGY_ID_MASK);
 		name += ")";
 	}
 	return name;

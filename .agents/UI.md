@@ -112,6 +112,13 @@ Output executable:
 
 CMake options worth knowing:
 
+- `ROCPROFVIS_ENABLE_EXPERIMENTAL` - umbrella that flips the default of
+  every in-development option below (profiler, remote, Ask Optiq,
+  scripting, trace compare, multi-window) to on; an explicit
+  `-DROCPROFVIS_ENABLE_<X>=OFF` still wins. CI experimental builds set only
+  this, so new in-development options need no workflow change. Add new ones
+  with `${ROCPROFVIS_EXPERIMENTAL_DEFAULT}` as the default.
+  `ROCPROFVIS_ENABLE_PROFILER_HUB` is intentionally excluded while unstable.
 - `ROCPROFVIS_ENABLE_INTERNAL_BANNER` - draws a watermark on internal builds.
 - `ROCPROFVIS_DEVELOPER_MODE` - enables extra menus, the Debug Window, and
   `ComputeTester`. Guarded with `#ifdef ROCPROFVIS_DEVELOPER_MODE` in code.

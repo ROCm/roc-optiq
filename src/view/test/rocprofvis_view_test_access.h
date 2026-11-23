@@ -540,6 +540,7 @@ struct AssistantPanelTestPeer
     // Asks for the caret the way a send does, without sending anything.
     void RequestInputFocus() { v.m_focus_input = true; }
     bool InputFocusRequested() const { return v.m_focus_input; }
+    void ClearConversation() { v.ClearConversation(); }
 };
 
 struct TraceLinkStoreTestPeer

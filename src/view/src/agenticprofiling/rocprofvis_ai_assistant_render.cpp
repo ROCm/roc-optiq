@@ -1353,7 +1353,14 @@ AssistantPanel::RenderSuggestedActions()
     {
         if(AccentButton("Explain this view", ImVec2(-FLT_MIN, 0.0f), &settings))
         {
+            // The button sends its own prompt. A question the user was part way
+            // through typing stays in the box, the same as a follow-up click,
+            // and the caret comes back once the box can be typed in again.
+            const std::string draft = conversation.input;
+            conversation.input.clear();
             SendCurrentInput(true);
+            conversation.input = draft;
+            m_focus_input      = true;
         }
         ImGui::EndDisabled();
         ImGui::PopStyleVar(2);
@@ -1543,6 +1550,10 @@ AssistantPanel::ExportTranscript()
 void
 AssistantPanel::ClearConversation()
 {
+    // The trash button sits in the composer, so that click leaves the card
+    // focused. Dropping a caret request here keeps Clear from activating the
+    // input once the turn it cancelled goes idle.
+    m_focus_input = false;
     if(Busy() && m_turn_project_id == m_view_project_id)
     {
         ResetTurn();
@@ -1633,9 +1644,11 @@ AssistantPanel::RenderComposer()
     }
     InputTextStringWithHint("##assistant_input", hint.c_str(), conversation.input,
                             input_flags);
+    // Repeat is off. Enter hands the caret back, and a held key would submit
+    // again on a turn that never leaves idle, such as a missing assistant URL.
     const bool submitted = ImGui::IsItemFocused() &&
-                           (ImGui::IsKeyPressed(ImGuiKey_Enter) ||
-                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) &&
+                           (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) &&
                            !ImGui::GetIO().KeyShift && !Busy() && can_ask;
 
     ImGui::SameLine(0.0f, gap);

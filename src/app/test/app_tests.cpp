@@ -3332,6 +3332,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
         const bool handed_back = ctx->UiContext->ActiveId == input.ID;
 
+        // Clear cancels a caret request the trash button would otherwise
+        // satisfy, because that button lives in the composer.
+        peer.RequestInputFocus();
+        peer.ClearConversation();
+        const bool cleared = !peer.InputFocusRequested();
+
         // Restore before asserting: a caret left in the box would hold back the
         // hotkeys of whichever test runs next.
         ctx->KeyPress(ImGuiKey_Escape);
@@ -3340,6 +3346,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(left_alone);
         IM_CHECK(lapsed);
         IM_CHECK(handed_back);
+        IM_CHECK(cleared);
     };
 #endif
 }

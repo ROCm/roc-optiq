@@ -531,7 +531,18 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
     std::vector<trace_read_request_t> requests =
         ScheduleTraceReadRequests(db, fetch_range, num_threads, future);
 
+    // Requests that did start must still be waited for, so their slices are
+    // deleted and their futures freed, even if the others failed to start.
     result = WaitForAndProcessTraceReadRequests(trace, dm_track_type, requests, future);
+
+    if(result == kRocProfVisResultSuccess &&
+       requests.size() < static_cast<size_t>(num_threads) && !future->IsCancelled())
+    {
+        spdlog::error("Track {}: only {} of {} read requests started for ({}-{})",
+                      GetId(), requests.size(), num_threads, fetch_range.start,
+                      fetch_range.end);
+        result = kRocProfVisResultUnknownError;
+    }
 
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
@@ -619,9 +630,7 @@ Track::WaitForAndProcessTraceReadRequests(
     const std::vector<trace_read_request_t>& requests,
     Future* future)
 {
-    // Every fetch schedules at least one request, so none means scheduling failed.
-    rocprofvis_result_t result =
-        requests.empty() ? kRocProfVisResultUnknownError : kRocProfVisResultSuccess;
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
 
     for(const trace_read_request_t& request : requests)
     {

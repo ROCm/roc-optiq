@@ -10,6 +10,9 @@ set(PROFILER_HUB_REPO    "https://github.com/ROCm/rocm-systems.git" CACHE STRING
     "Git URL for rocm-systems (override with an SSH URL if preferred)")
 set(PROFILER_HUB_TAG     "develop-optiq")
 set(PROFILER_HUB_SUBDIR  "profilers/profiler-hub")
+# The hub generates its RocPD schema headers from this directory of the same checkout.
+# Without it the hub falls back to its own schema clone, which can go stale.
+set(PROFILER_HUB_SCHEMA_SUBDIR "projects/rocprofiler-sdk/source/share/rocprofiler-sdk-rocpd")
 
 find_package(Git REQUIRED)
 
@@ -49,6 +52,7 @@ if(_needs_fetch)
 
     execute_process(
         COMMAND ${GIT_EXECUTABLE} sparse-checkout set ${PROFILER_HUB_SUBDIR}
+                ${PROFILER_HUB_SCHEMA_SUBDIR}
         WORKING_DIRECTORY ${PROFILER_HUB_DOWNLOAD_DIR}
     )
 
@@ -109,6 +113,20 @@ else()
             message(FATAL_ERROR "Failed to check out updated ${PROFILER_HUB_TAG}")
         endif()
         message(STATUS "profiler-hub updated")
+    endif()
+endif()
+
+# Checkouts made before the schema directory was added only have the hub directory.
+if(NOT EXISTS "${PROFILER_HUB_DOWNLOAD_DIR}/${PROFILER_HUB_SCHEMA_SUBDIR}/versions.yml")
+    message(STATUS "Adding ${PROFILER_HUB_SCHEMA_SUBDIR} to the profiler-hub checkout...")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} sparse-checkout add ${PROFILER_HUB_SCHEMA_SUBDIR}
+        WORKING_DIRECTORY ${PROFILER_HUB_DOWNLOAD_DIR}
+        RESULT_VARIABLE GIT_RESULT
+    )
+    if(NOT GIT_RESULT EQUAL 0 OR
+       NOT EXISTS "${PROFILER_HUB_DOWNLOAD_DIR}/${PROFILER_HUB_SCHEMA_SUBDIR}/versions.yml")
+        message(FATAL_ERROR "Failed to check out ${PROFILER_HUB_SCHEMA_SUBDIR}")
     endif()
 endif()
 

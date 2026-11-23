@@ -515,7 +515,7 @@ rocprofvis_result_t
 Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future,
                    uint64_t array_id)
 {
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(lod_to_generate > 0)
     {
         double min_ts = start;
@@ -551,6 +551,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
 
             it->second.AddActiveArray(array_id);
 
+            result = kRocProfVisResultSuccess;
             start = std::max(start, min_ts);
             end   = std::min(end, max_ts);
             if (end > start)
@@ -595,7 +596,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                     }
                 }
 
-                result = kRocProfVisResultSuccess;
                 if(fetch_ranges.size())
                 {
                     for(auto& range : fetch_ranges)

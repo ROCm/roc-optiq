@@ -4341,12 +4341,8 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
                       track_params->m_track_id, item_count, min_ts, max_ts);
     }
     else
-    { 
-        // Silence out of range warnings as they are shown for empty areas of the track.
-        if(req.response_code != kRocProfVisResultOutOfRange)
-        {
-            spdlog::warn("Graph request failed with code {}", req.response_code);
-        }
+    {
+        spdlog::warn("Graph request failed with code {}", req.response_code);
     }
 
     // use the track type to determine what type of data is present in the graph array
@@ -4413,11 +4409,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     }
     else
     {
-        // Silence out of range warnings as they are shown for empty areas of the track.         
-        if(req.response_code != kRocProfVisResultOutOfRange)
-        {
-            spdlog::warn("Sample track data request failed with code {}", req.response_code);
-        }
+        spdlog::warn("Sample track data request failed with code {}", req.response_code);
         count = 0;
     }
 
@@ -4538,11 +4530,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     }
     else
     {
-        // Silence out of range warnings as they are shown for empty areas of the track.         
-        if(req.response_code != kRocProfVisResultOutOfRange)
-        {
-            spdlog::warn("Event track data request failed with code {}", req.response_code);
-        }
+        spdlog::warn("Event track data request failed with code {}", req.response_code);
         count = 0;
     }
 

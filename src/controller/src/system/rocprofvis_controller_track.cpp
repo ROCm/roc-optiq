@@ -334,7 +334,7 @@ rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
 
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
 {
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
     if(GetStartTimestamp() <= end && GetEndTimestamp() >= start)
     {
         if(GetSegments()->GetSegmentDuration() == 0)
@@ -451,9 +451,9 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         }
 
         // Walking the segments after a failed or cancelled fetch would report
-        // success (or kRocProfVisResultOutOfRange) for a range with missing data.
-        // The failure has to survive so callers don't cache or display partial
-        // data, and the view re-requests it when the track comes back into view.
+        // success for a range with missing data. The failure has to survive so
+        // callers don't cache or display partial data, and the view re-requests
+        // it when the track comes back into view.
         if(fetch_result == kRocProfVisResultSuccess)
         {
             result = GetSegments()->FetchSegments(start, end, user_ptr, future, func);
@@ -531,7 +531,18 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
     std::vector<trace_read_request_t> requests =
         ScheduleTraceReadRequests(db, fetch_range, num_threads, future);
 
+    // Requests that did start must still be waited for, so their slices are
+    // deleted and their futures freed, even if the others failed to start.
     result = WaitForAndProcessTraceReadRequests(trace, dm_track_type, requests, future);
+
+    if(result == kRocProfVisResultSuccess &&
+       requests.size() < static_cast<size_t>(num_threads) && !future->IsCancelled())
+    {
+        spdlog::error("Track {}: only {} of {} read requests started for ({}-{})",
+                      GetId(), requests.size(), num_threads, fetch_range.start,
+                      fetch_range.end);
+        result = kRocProfVisResultUnknownError;
+    }
 
     return future->IsCancelled() ? kRocProfVisResultCancelled : result;
 }
@@ -619,8 +630,7 @@ Track::WaitForAndProcessTraceReadRequests(
     const std::vector<trace_read_request_t>& requests,
     Future* future)
 {
-    rocprofvis_result_t result =
-        requests.empty() ? kRocProfVisResultOutOfRange : kRocProfVisResultSuccess;
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
 
     for(const trace_read_request_t& request : requests)
     {
@@ -767,6 +777,7 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
                     "Track::FetchFromDataModel: Skipping Event "
                     "id {} on track id {}, event is out of range",
                     event_id, GetId());
+                result = kRocProfVisResultSuccess;
             }
             else
             {

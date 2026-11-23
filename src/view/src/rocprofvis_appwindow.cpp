@@ -785,11 +785,16 @@ AppWindow::SaveProjectGroup(const std::string& project_id, const std::string& sa
 
 std::string
 AppWindow::OpenItemFromSettings(const jt::Json&              settings,
-                                const std::filesystem::path& base_dir)
+                                const std::filesystem::path& base_dir,
+                                bool*                        is_duplicate)
 {
     std::unique_ptr<ProjectItem> new_item = std::make_unique<ProjectItem>();
     std::string                  out_id;
     ProjectItem::OpenResult open_result   = new_item->OpenFromSettingsJson(settings, base_dir, out_id);
+    if(is_duplicate)
+    {
+        *is_duplicate = open_result == ProjectItem::OpenResult::Duplicate;
+    }
     if(open_result == ProjectItem::OpenResult::Success)
     {
         TabItem tab{ new_item->GetName(), new_item->GetID(), new_item->GetView(), true };
@@ -952,8 +957,20 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
     {
         // Old single-item .rpv: the whole file is one item's settings; open it as the
         // project's single tab (settings restored).
-        std::string opened_id = OpenItemFromSettings(root, dir);
-        if(!opened_id.empty())
+        bool        is_duplicate = false;
+        std::string opened_id    = OpenItemFromSettings(root, dir, &is_duplicate);
+        if(is_duplicate)
+        {
+            // Same as opening the trace itself: focus the existing tab and leave its
+            // grouping alone, so the empty group is dropped below.
+            ProjectItem* existing = GetItem(opened_id);
+            ShowMessageDialog("Trace Already Open",
+                              "This trace is already open in \"" +
+                                  (existing ? existing->GetName() : opened_id) +
+                                  "\".\n\nSwitched to the existing tab.");
+            m_tab_container->SetActiveTab(opened_id);
+        }
+        else if(!opened_id.empty())
         {
             Project* group = GetProjectById(project_id);
             if(group)

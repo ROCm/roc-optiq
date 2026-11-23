@@ -253,9 +253,14 @@ TabContainer::RenderTabStrip()
         // Body hitbox (excludes the close-button region so they do not overlap).
         float body_w = tab.m_can_close ? (w - close_w) : w;
         ImGui::SetCursorScreenPos(ImVec2(x0, y0));
+        // The button is keyed by the visible label under the tab id, as ImGui's own
+        // tab bar does, so UI tests can address a tab by its label.
+        ImGui::PushID(("##tab_" + tab.m_id).c_str());
         ImGui::BeginDisabled(!tab.m_enabled);
-        ImGui::InvisibleButton(("##tab_" + tab.m_id).c_str(), ImVec2(body_w, tab_h));
+        ImGui::InvisibleButton(tab.m_label.empty() ? "##tab" : tab.m_label.c_str(),
+                               ImVec2(body_w, tab_h));
         ImGui::EndDisabled();
+        ImGui::PopID();
         bool hovered = tab.m_enabled && ImGui::IsItemHovered();
         if(tab.m_enabled && ImGui::IsItemActivated())
         {

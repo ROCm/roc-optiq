@@ -188,9 +188,11 @@ private:
     void     SaveProjectGroup(const std::string& project_id, const std::string& save_path);
     void     OpenProjectGroupFile(const std::string& file_path);
     // Opens one tab from its embedded settings JSON (paths relative to base_dir);
-    // returns the opened/duplicate item id, or "" on failure. Shared by the project
+    // returns the opened/duplicate item id, or "" on failure. is_duplicate, when
+    // given, reports whether the item was already open. Shared by the project
     // loader and session restore.
-    std::string OpenItemFromSettings(const jt::Json& settings, const std::filesystem::path& base_dir);
+    std::string OpenItemFromSettings(const jt::Json& settings, const std::filesystem::path& base_dir,
+                                     bool* is_duplicate = nullptr);
     // Snapshots the whole workspace to the session file; run during BeginAppShutdown.
     void        SaveSession();
     void     AssignItemToProject(const std::string& item_id, const std::string& project_id);

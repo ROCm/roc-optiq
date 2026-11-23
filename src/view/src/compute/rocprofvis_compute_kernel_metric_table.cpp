@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_common_defs.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -173,9 +174,14 @@ KernelMetricTable::StartFetchCycle()
     {
         for(MetricInfo& metric : m_metrics_info)
         {
-            if(const AvailableMetrics::Entry* entry = ComputeDataModel::GetMetricInfo(
-                   *workload, metric.entry.category_id, metric.entry.table_id,
-                   metric.entry.id))
+            const AvailableMetrics::Entry* entry =
+                metric.entry.name.empty()
+                    ? ComputeDataModel::GetMetricInfo(*workload, metric.entry.category_id,
+                                                      metric.entry.table_id, metric.entry.id)
+                    : MatchMetricEntry(FindMetricTable(workload, metric.entry.category_id,
+                                                       metric.entry.table_id),
+                                       metric.entry);
+            if(entry)
             {
                 metric.entry = *entry;
             }
@@ -190,8 +196,9 @@ KernelMetricTable::StartFetchCycle()
             m_fetch_workloads.push_back(candidate->id);
         }
     }
-    m_fetch_index    = 0;
+    m_fetch_index       = 0;
     m_fetch_failures    = 0;
+    m_fetch_successes   = 0;
     m_fetch_error_shown = false;
     m_fetch_next        = false;
     m_pending_header.clear();
@@ -200,40 +207,121 @@ KernelMetricTable::StartFetchCycle()
     m_cycle_active = !m_fetch_workloads.empty();
     if(m_cycle_active)
     {
-        RequestWorkloadRows(m_fetch_workloads.front());
+        RequestWorkloadRows();
     }
 }
 
-void
-KernelMetricTable::RequestWorkloadRows(uint32_t workload_id)
+bool
+KernelMetricTable::BuildWorkloadQuery(const WorkloadInfo&                        workload,
+                                      std::vector<std::string>&                  metrics,
+                                      std::unordered_map<uint64_t, std::string>& filters,
+                                      int&                                       sort_column)
 {
-    // Build filter map from vector - only include active filters
-    std::unordered_map<uint64_t, std::string> filter_map;
-    for(size_t i = 0; i < m_column_filters.size(); i++)
+    ROCPROFVIS_ASSERT(m_metrics_params.size() == m_metrics_info.size());
+    m_fetch_metric_present.assign(m_metrics_info.size(), false);
+    // The column each picked metric takes in this workload's response; -1 if none.
+    std::vector<int> response_column(m_metrics_info.size(), -1);
+    for(size_t i = 0; i < m_metrics_info.size(); ++i)
     {
-        const ColumnFilter& filter = m_column_filters[i];
-        if(filter.IsSet())
+        const MetricInfo& info = m_metrics_info[i];
+        // A metric typed in without a known entry can only be queried by its id.
+        if(info.entry.name.empty())
         {
-            filter_map[i] = filter.filter_text;
+            response_column[i] = PERMANENT_COLUMN_COUNT + static_cast<int>(metrics.size());
+            metrics.push_back(m_metrics_params[i]);
+            m_fetch_metric_present[i] = true;
+            continue;
         }
+        const AvailableMetrics::Table* table =
+            FindMetricTable(&workload, info.entry.category_id, info.entry.table_id);
+        const AvailableMetrics::Entry* entry = MatchMetricEntry(table, info.entry);
+        const bool has_value =
+            entry && (info.value_name.empty() || table->value_names.empty() ||
+                      std::find(table->value_names.begin(), table->value_names.end(),
+                                info.value_name) != table->value_names.end());
+        if(!has_value)
+        {
+            continue;
+        }
+        response_column[i] = PERMANENT_COLUMN_COUNT + static_cast<int>(metrics.size());
+        const MetricId id{ entry->category_id, entry->table_id, entry->id };
+        metrics.push_back(id == MetricId{ info.entry.category_id, info.entry.table_id,
+                                          info.entry.id }
+                              ? m_metrics_params[i]
+                              : id.ToString() +
+                                    (info.value_name.empty() ? "" : ":" + info.value_name));
+        m_fetch_metric_present[i] = true;
     }
 
-    ComputeTableRequestParams params(
-        workload_id, m_metrics_params, m_sort_column_index,
-        static_cast<rocprofvis_controller_sort_order_t>(m_sort_order), filter_map);
-    spdlog::debug("Requesting kernel selection table for workload {}: column {}, order {}, "
-                  "filters {}",
-                  workload_id, m_sort_column_index,
-                  m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC",
-                  filter_map.size());
-    if(m_data_provider.FetchMetricPivotTable(params))
+    for(size_t i = 0; i < m_column_filters.size(); ++i)
     {
-        m_response_outstanding = true;
+        if(!m_column_filters[i].IsSet())
+        {
+            continue;
+        }
+        int column = static_cast<int>(i);
+        if(column >= PERMANENT_COLUMN_COUNT)
+        {
+            const size_t metric = static_cast<size_t>(column - PERMANENT_COLUMN_COUNT);
+            column = metric < response_column.size() ? response_column[metric] : -1;
+            if(column < 0)
+            {
+                return false;
+            }
+        }
+        filters[static_cast<uint64_t>(column)] = m_column_filters[i].filter_text;
     }
-    else
+
+    sort_column = m_sort_column_index;
+    if(sort_column >= PERMANENT_COLUMN_COUNT)
     {
-        m_cycle_active = false;
+        const size_t metric = static_cast<size_t>(sort_column - PERMANENT_COLUMN_COUNT);
+        sort_column = metric < response_column.size() ? response_column[metric] : -1;
+        // FinishFetchCycle orders every workload's rows together; this workload's
+        // only need some order.
+        if(sort_column < 0)
+        {
+            sort_column = DURATION_COLUMN_INDEX;
+        }
     }
+    return true;
+}
+
+void
+KernelMetricTable::RequestWorkloadRows()
+{
+    for(; m_fetch_index < m_fetch_workloads.size(); ++m_fetch_index)
+    {
+        const uint32_t      workload_id = m_fetch_workloads[m_fetch_index];
+        const WorkloadInfo* workload =
+            m_data_provider.ComputeModel().GetWorkload(workload_id);
+        std::vector<std::string>                  metrics;
+        std::unordered_map<uint64_t, std::string> filters;
+        int                                       sort_column = DURATION_COLUMN_INDEX;
+        if(!workload || !BuildWorkloadQuery(*workload, metrics, filters, sort_column))
+        {
+            continue;
+        }
+
+        ComputeTableRequestParams params(
+            workload_id, metrics, static_cast<uint64_t>(sort_column),
+            static_cast<rocprofvis_controller_sort_order_t>(m_sort_order), filters);
+        spdlog::debug("Requesting kernel selection table for workload {}: column {}, "
+                      "order {}, filters {}",
+                      workload_id, sort_column,
+                      m_sort_order == kRPVControllerSortOrderAscending ? "ASC" : "DESC",
+                      filters.size());
+        if(m_data_provider.FetchMetricPivotTable(params))
+        {
+            m_response_outstanding = true;
+        }
+        else
+        {
+            m_cycle_active = false;
+        }
+        return;
+    }
+    EndFetchCycle();
 }
 
 void
@@ -258,11 +346,30 @@ KernelMetricTable::HandleNewData(bool success, const std::string& error_message)
     }
     else
     {
+        ++m_fetch_successes;
+        // Back to a column per picked metric, empty for those left out.
+        const std::vector<bool>& present = m_fetch_metric_present;
+        auto with_every_metric = [&present](const std::vector<std::string>& cells) {
+            std::vector<std::string> full(cells.begin(),
+                                          cells.begin() + std::min(cells.size(),
+                                                                   static_cast<size_t>(
+                                                                       PERMANENT_COLUMN_COUNT)));
+            size_t next = full.size();
+            for(bool queried : present)
+            {
+                full.push_back(queried && next < cells.size() ? cells[next++] : std::string());
+            }
+            return full;
+        };
         ComputeKernelSelectionTable& table =
             m_data_provider.ComputeModel().GetKernelSelectionTable();
         const std::vector<std::vector<std::string>>& rows = table.GetTableData();
-        m_pending_header = table.GetTableHeader();
-        m_pending_rows.insert(m_pending_rows.end(), rows.begin(), rows.end());
+        m_pending_header = with_every_metric(table.GetTableHeader());
+        m_pending_rows.reserve(m_pending_rows.size() + rows.size());
+        for(const std::vector<std::string>& row : rows)
+        {
+            m_pending_rows.push_back(with_every_metric(row));
+        }
         m_pending_row_workloads.insert(m_pending_row_workloads.end(), rows.size(),
                                        m_fetch_workloads[m_fetch_index]);
     }
@@ -271,7 +378,18 @@ KernelMetricTable::HandleNewData(bool success, const std::string& error_message)
     {
         m_fetch_next = true;
     }
-    else if(m_fetch_failures == m_fetch_workloads.size())
+    else
+    {
+        EndFetchCycle();
+    }
+}
+
+void
+KernelMetricTable::EndFetchCycle()
+{
+    // Every workload asked failed: keep the rows shown. Workloads skipped by
+    // the filters add none.
+    if(m_fetch_failures > 0 && m_fetch_successes == 0)
     {
         m_cycle_active = false;
         m_pending_header.clear();
@@ -349,6 +467,11 @@ KernelMetricTable::FinishFetchCycle()
         m_header = std::move(m_pending_header);
         m_pending_header.clear();
     }
+    else if(!m_header.empty())
+    {
+        // The filters skipped every workload; the columns still follow the picks.
+        m_header.resize(PERMANENT_COLUMN_COUNT + m_metrics_info.size());
+    }
 
     // Metric columns are those after the permanent ones.
     m_metrics_column_names.clear();
@@ -388,9 +511,9 @@ KernelMetricTable::Update()
     else if(!request_pending && !m_fetch_requested && m_fetch_next)
     {
         m_fetch_next = false;
-        if(m_cycle_active && m_fetch_index < m_fetch_workloads.size())
+        if(m_cycle_active)
         {
-            RequestWorkloadRows(m_fetch_workloads[m_fetch_index]);
+            RequestWorkloadRows();
         }
     }
 

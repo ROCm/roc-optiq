@@ -485,6 +485,49 @@ struct KernelMetricTableTestPeer
     bool Fetching() const { return v.m_cycle_active || v.m_fetch_requested; }
     // Whether the latest query reported an error (e.g. an invalid filter).
     bool ShowedFetchError() const { return v.m_fetch_error_shown; }
+    // The query the table would send `workload` were its picks `picks` (each an
+    // entry and value name) with a filter on pick `filter_pick` (-1 for none);
+    // `present` gets which picks it queries. The table is left as it was.
+    bool WorkloadQuery(const WorkloadInfo&                                                 workload,
+                       const std::vector<std::pair<AvailableMetrics::Entry, std::string>>& picks,
+                       int filter_pick, std::vector<std::string>& metrics,
+                       std::vector<bool>& present)
+    {
+        const std::vector<KernelMetricTable::MetricInfo>   saved_info    = v.m_metrics_info;
+        const std::vector<std::string>                     saved_params  = v.m_metrics_params;
+        const std::vector<KernelMetricTable::ColumnFilter> saved_filters = v.m_column_filters;
+        const std::vector<bool> saved_present = v.m_fetch_metric_present;
+
+        const size_t permanent = v.m_permanent_column_names.size();
+        v.m_metrics_info.clear();
+        v.m_metrics_params.clear();
+        for(const std::pair<AvailableMetrics::Entry, std::string>& pick : picks)
+        {
+            v.m_metrics_info.push_back({ pick.first, pick.second });
+            v.m_metrics_params.push_back(
+                MetricId{ pick.first.category_id, pick.first.table_id, pick.first.id }
+                    .ToString() +
+                ":" + pick.second);
+        }
+        v.m_column_filters.assign(permanent + picks.size(), KernelMetricTable::ColumnFilter());
+        if(filter_pick >= 0)
+        {
+            KernelMetricTable::ColumnFilter& filter =
+                v.m_column_filters[permanent + static_cast<size_t>(filter_pick)];
+            std::snprintf(filter.filter_text, sizeof(filter.filter_text), "%s", "> 0");
+            filter.is_active = true;
+        }
+        std::unordered_map<uint64_t, std::string> filters;
+        int                                       sort_column = 0;
+        const bool built = v.BuildWorkloadQuery(workload, metrics, filters, sort_column);
+        present          = v.m_fetch_metric_present;
+
+        v.m_metrics_info         = saved_info;
+        v.m_metrics_params       = saved_params;
+        v.m_column_filters       = saved_filters;
+        v.m_fetch_metric_present = saved_present;
+        return built;
+    }
 };
 
 // EventSearch's state lives in its protected base InfiniteScrollTable, so this

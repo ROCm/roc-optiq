@@ -59,7 +59,17 @@ private:
     // Rows come per workload (the pivot query takes one): each response is
     // collected, and the last one merges and sorts them all.
     void StartFetchCycle();
-    void RequestWorkloadRows(uint32_t workload_id);
+    // Requests the rows of the cycle's workload at m_fetch_index, skipping those
+    // no row of which could pass the filters; ends the cycle after the last.
+    void RequestWorkloadRows();
+    // The query for `workload`. Picked metrics are matched by name, as ids
+    // differ between GPU architectures, and ones it lacks are left out (see
+    // m_fetch_metric_present); the filter and sort columns follow. Returns
+    // false when a filter is on a metric it lacks, so none of its kernels match.
+    bool BuildWorkloadQuery(const WorkloadInfo& workload, std::vector<std::string>& metrics,
+                            std::unordered_map<uint64_t, std::string>& filters,
+                            int& sort_column);
+    void EndFetchCycle();
     void FinishFetchCycle();
     // A Workload column (in place of the hidden id) when there are several.
     bool ShowsWorkloadColumn() const;
@@ -124,8 +134,12 @@ private:
     std::vector<uint32_t>                 m_row_workloads;
     // The fetch cycle in progress.
     std::vector<uint32_t>                 m_fetch_workloads;
-    size_t                                m_fetch_index    = 0;
-    size_t                                m_fetch_failures = 0;
+    size_t                                m_fetch_index     = 0;
+    size_t                                m_fetch_failures  = 0;
+    size_t                                m_fetch_successes = 0;
+    // Per picked metric, whether the request in flight queries it; its rows
+    // lack the others' columns, which are filled in empty (N/A).
+    std::vector<bool>                     m_fetch_metric_present;
     bool                                  m_fetch_error_shown = false;
     bool                                  m_cycle_active   = false;
     bool                                  m_fetch_next   = false;

@@ -58,6 +58,12 @@ struct MetricCompareOptions
 const AvailableMetrics::Table*
 FindMetricTable(const WorkloadInfo* workload, uint32_t category_id, uint32_t table_id);
 
+// `table`'s counterpart of another workload's `entry`: the same id with the same
+// name, else the same name (ids can shift between GPU architectures); null when
+// there is none.
+const AvailableMetrics::Entry*
+MatchMetricEntry(const AvailableMetrics::Table* table, const AvailableMetrics::Entry& entry);
+
 // The key a compare pin takes once A (`a_workload`) and B (`b_workload`) trade
 // places, so it keeps naming the same metric: A's metric becomes its match in B
 // (else B's only), and a metric only B had becomes A's.

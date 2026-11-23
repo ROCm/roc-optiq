@@ -1753,10 +1753,14 @@ new blocks.
 The interactive kernel list with sortable, filterable, optionally
 bar-chart columns. It lists every workload's kernels: the pivot query takes one
 workload, so a fetch cycle (`StartFetchCycle` / `RequestWorkloadRows`) asks for
-each in turn with the same query, sort and filters, `HandleNewData(success)`
-collects each response (a failed one is skipped) and `FinishFetchCycle` merges
-and sorts them into `m_rows` / `m_row_workloads`, which it renders (the model's
-table holds only the last response). With several workloads the hidden id
+each in turn, `HandleNewData(success)` collects each response (a failed one is
+skipped) and `FinishFetchCycle` merges and sorts them into `m_rows` /
+`m_row_workloads`, which it renders (the model's table holds only the last
+response). Metric ids differ between GPU architectures, so `BuildWorkloadQuery`
+matches each picked metric by name in that workload (`MatchMetricEntry`) and
+queries its ids; a metric it lacks is left out and its column filled empty
+(N/A), a filter on one skips the workload, and a sort on one falls back to
+duration there (the merge orders the rows). With several workloads the hidden id
 column shows each row's workload (sorted client side, no filter), frozen with
 the name; clicking a row calls `ComputeSelection::Select(workload, kernel)`.
 The rail's List does not follow the table's sort or filters.

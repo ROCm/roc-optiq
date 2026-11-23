@@ -127,23 +127,20 @@ MetricValueOf(const MetricValue* metric, const std::string& value_name)
     return it != metric->values.end() ? &it->second : nullptr;
 }
 
-// B's counterpart of A's `entry`: the same id with the same name, else the same
-// name (ids can shift between GPU architectures).
-static const AvailableMetrics::Entry*
-MatchCompareEntry(const AvailableMetrics::Table* b_table,
-                  const AvailableMetrics::Entry& entry)
+const AvailableMetrics::Entry*
+MatchMetricEntry(const AvailableMetrics::Table* table, const AvailableMetrics::Entry& entry)
 {
-    if(!b_table)
+    if(!table)
     {
         return nullptr;
     }
     std::unordered_map<uint32_t, AvailableMetrics::Entry&>::const_iterator it =
-        b_table->entries.find(entry.id);
-    if(it != b_table->entries.end() && it->second.name == entry.name)
+        table->entries.find(entry.id);
+    if(it != table->entries.end() && it->second.name == entry.name)
     {
         return &it->second;
     }
-    for(const AvailableMetrics::Entry* candidate : b_table->ordered_entries)
+    for(const AvailableMetrics::Entry* candidate : table->ordered_entries)
     {
         if(candidate->name == entry.name)
         {
@@ -169,7 +166,7 @@ SwappedComparePinKey(const MetricId& key, const WorkloadInfo* a_workload,
     {
         return key;
     }
-    const AvailableMetrics::Entry* b_entry = MatchCompareEntry(
+    const AvailableMetrics::Entry* b_entry = MatchMetricEntry(
         FindMetricTable(b_workload, metric_id.category_id, metric_id.table_id), *a_entry);
     return b_entry ? MetricId{ b_entry->category_id, b_entry->table_id, b_entry->id }
                    : BOnlyRowKey(metric_id);
@@ -907,7 +904,7 @@ MetricTable::PopulateComparison(uint32_t category_id, const AvailableMetrics::Ta
     {
         for(const AvailableMetrics::Entry* entry : a_table->ordered_entries)
         {
-            const AvailableMetrics::Entry* b_entry = MatchCompareEntry(b_table, *entry);
+            const AvailableMetrics::Entry* b_entry = MatchMetricEntry(b_table, *entry);
             if(!b_entry && !options.show_unmatched)
             {
                 continue;
@@ -1125,7 +1122,7 @@ PinnedMetricTable::FillCompareRow(const MetricId&                  key,
         b_only ? nullptr : FindMetricEntry(a_table, metric_id.entry_id);
     const AvailableMetrics::Entry* b_entry =
         b_only ? FindMetricEntry(b_table, metric_id.entry_id)
-               : (a_entry ? MatchCompareEntry(b_table, *a_entry) : nullptr);
+               : (a_entry ? MatchMetricEntry(b_table, *a_entry) : nullptr);
     if(!a_entry && !b_entry)
     {
         FillUnavailableRow(key, rows);

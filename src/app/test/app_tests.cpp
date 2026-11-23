@@ -2020,6 +2020,56 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(peer.IsDisplayPie());
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_matches_metrics_by_name");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
+        KernelMetricTable* kmt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK(kmt != nullptr);
+        if (kmt == nullptr) return;
+
+        // Another architecture's workload: "VALU FLOPs" has id 7 there, and id 3
+        // is a different metric.
+        WorkloadInfo workload;
+        AvailableMetrics& metrics = workload.available_metrics;
+        metrics.list = { { 0, 2, 1, 7, "VALU FLOPs", "", "" },
+                         { 1, 2, 1, 3, "LDS Bandwidth", "", "" } };
+        AvailableMetrics::Table table;
+        table.id          = 1;
+        table.value_names = { "Avg" };
+        for (AvailableMetrics::Entry& entry : metrics.list)
+        {
+            table.entries.emplace(entry.id, entry);
+            table.ordered_entries.push_back(&entry);
+        }
+        AvailableMetrics::Category category;
+        category.id = 2;
+        category.tables.emplace(table.id, std::move(table));
+        metrics.tree.emplace(category.id, std::move(category));
+
+        // Picked elsewhere: VALU FLOPs as id 3, a metric this workload lacks, and
+        // LDS Bandwidth, whose id matches.
+        const std::vector<std::pair<AvailableMetrics::Entry, std::string>> picks = {
+            { { 0, 2, 1, 3, "VALU FLOPs", "", "" }, "Avg" },
+            { { 0, 2, 1, 9, "Missing Metric", "", "" }, "Avg" },
+            { { 0, 2, 1, 3, "LDS Bandwidth", "", "" }, "Avg" },
+        };
+        KernelMetricTableTestPeer peer{*kmt};
+        std::vector<std::string> query;
+        std::vector<bool>        present;
+        IM_CHECK(peer.WorkloadQuery(workload, picks, -1, query, present));
+        IM_CHECK(query == std::vector<std::string>({ "2.1.7:Avg", "2.1.3:Avg" }));
+        IM_CHECK(present == std::vector<bool>({ true, false, true }));
+
+        // A filter on the metric it lacks: none of its kernels can match.
+        query.clear();
+        IM_CHECK(!peer.WorkloadQuery(workload, picks, 1, query, present));
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

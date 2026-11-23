@@ -3084,8 +3084,17 @@ so a worker never sees a freed connection.
 
 Downloaded traces are cached under
 `{config}/remote_cache/<connection-and-path-hash>/<filename>`.
+`<filename>` is not the remote name as is: the server chooses that name
+(a directory listing, or a path scraped from profiler output), and on
+Windows `\`, `:` and a drive prefix in it are path syntax. `CacheFileName`
+in `rocprofvis_ssh_uri.cpp` replaces those and control characters, and
+`RemoteUri::GetLocalResultPathString()` is the only place a remote name
+becomes a local path. Do not join a remote name onto a local folder
+anywhere else.
 Permanent host-key trust uses the platform user's standard
-`.ssh/known_hosts`.
+`.ssh/known_hosts`. The controller files a key under `host` for port 22
+and `[host]:port` otherwise, as OpenSSH does, and appends that one entry
+without rewriting the file.
 
 ### 13.2 Profiler launch stack (`src/view/src/profiler/`)
 

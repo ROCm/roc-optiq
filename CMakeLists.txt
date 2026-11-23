@@ -218,6 +218,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_time_to_pixel.cpp
     src/view/src/rocprofvis_minimap.cpp
     src/view/src/rocprofvis_presets.cpp
+    src/view/src/rocprofvis_gfx_utils.cpp
+    src/view/src/rocprofvis_gfx_utils.h
     src/view/src/rocprofvis_json_utils.cpp
     src/view/src/rocprofvis_json_utils.h
     src/view/src/rocprofvis_profiles_document.cpp

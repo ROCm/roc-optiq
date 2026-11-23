@@ -114,13 +114,13 @@ public:
     // auto-grouped into a new project (Chrome-style tab group).
     void OpenFiles(const std::vector<std::string>& file_paths);
 
-#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
-    // Opens two trace files as a single compare project (combined timeline, A/B tags).
-    void OpenCompare(const std::string& first_file, const std::string& second_file);
-
     // Reopens the workspace (tab groups + tabs, with per-item settings) saved on the
     // last shutdown. Called on a plain launch; a no-op when no session was saved.
     void RestoreSession();
+
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    // Opens two trace files as a single compare project (combined timeline, A/B tags).
+    void OpenCompare(const std::string& first_file, const std::string& second_file);
 
     // Stable, file-derived project id/key for a compare of the given source files.
     // Used as the tab id and the m_items key for both fresh and reopened compares.

@@ -887,7 +887,11 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
                 }
                 if(files.size() >= 2)
                 {
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
                     OpenCompare(files[0], files[1]);
+#else
+                    continue;
+#endif
                 }
                 else
                 {
@@ -1255,6 +1259,12 @@ AppWindow::ReopenClosedItem(const std::string& project_id, size_t closed_index)
         return;
     }
     Project::ClosedItem closed = project->GetClosedItems()[closed_index];
+#ifndef ROCPROFVIS_ENABLE_TRACE_COMPARE
+    if(closed.files.size() >= 2)
+    {
+        return;
+    }
+#endif
     project->RemoveClosedItemAt(closed_index);
     if(closed.files.empty())
     {
@@ -1267,11 +1277,13 @@ AppWindow::ReopenClosedItem(const std::string& project_id, size_t closed_index)
     {
         before.insert(kv.first);
     }
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     if(closed.files.size() >= 2)
     {
         OpenCompare(closed.files[0], closed.files[1]);
     }
     else
+#endif
     {
         OpenFile(closed.files[0]);
     }

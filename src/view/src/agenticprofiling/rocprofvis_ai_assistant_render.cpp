@@ -349,9 +349,22 @@ LinkTraces(const AssistantToolContext& baseline, const AssistantToolContext& tar
 void
 AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t track_id)
 {
+    // The card's frame and title are already drawn, so an empty chart says why
+    // rather than leaving a blank box.
     const AssistantToolContext context = MakeAssistantToolContext(project_id);
     if(context.data_provider == nullptr)
     {
+        // Closing a trace drops its own conversation, so a chart that has lost
+        // its trace was read from a linked one.
+        ImGui::TextDisabled("This chart's trace is no longer open.");
+        return;
+    }
+
+    // A linked trace that was closed and opened again has no minimap until it
+    // has loaded, which is not the same as having no activity.
+    if(context.data_provider->GetState() == ProviderState::kLoading)
+    {
+        ImGui::TextDisabled("This chart's trace is still loading.");
         return;
     }
 
@@ -367,6 +380,11 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
         GetAssistantActivityBins(context, track_id, bin_count);
     if(bins.empty())
     {
+        // Empty means the trace has no minimap, or this track has no row in it.
+        // Only the overview chart is the whole trace.
+        ImGui::TextDisabled(track_id == INVALID_UINT64_INDEX
+                                ? "No activity to show for this trace."
+                                : "No activity to show for this track.");
         return;
     }
 
@@ -509,8 +527,15 @@ AssistantPanel::RenderToolbarButton()
     ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Open the assistant. Configure the URL and key in "
-                         "Edit > Preferences > Assistant.");
+        if(GetInstance()->m_visible)
+        {
+            SetTooltipStyled("Close the assistant.");
+        }
+        else
+        {
+            SetTooltipStyled("Open the assistant. Configure the URL and key in "
+                             "Edit > Preferences > Assistant.");
+        }
     }
 }
 
@@ -1665,9 +1690,13 @@ AssistantPanel::RenderComposer()
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(conversation.lines.empty() && conversation.input.empty() &&
                          !busy_here);
+    // Clearing is the panel's only way to stop a turn, so the tooltip says so
+    // while one runs here. A turn on another trace is left running.
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
-                  ImVec2(icon_size, icon_size), "Clear the conversation", false,
-                  ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
+                  ImVec2(icon_size, icon_size),
+                  busy_here ? "Stop this answer and clear the conversation"
+                            : "Clear the conversation",
+                  false, ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),
                   settings.GetColor(Colors::kButtonActive)))
     {

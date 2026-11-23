@@ -60,6 +60,10 @@ float ToggleSwitchWidth();
 
 void HelpTip(const char* tooltip);
 
+// A dimmed "(?)" marker whose tooltip body is drawn by `render_tooltip`,
+// wrapped at the shared launcher tooltip width.
+void HelpMarker(const std::function<void()>& render_tooltip);
+
 void HelpMarker(char const* env_var, char const* desc);
 
 // Result of interacting with an EditablePill.

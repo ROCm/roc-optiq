@@ -193,6 +193,16 @@ RocprofComputeBackend::GetExtraArguments(rocprofvis_profiler_operation_t operati
                                                      : m_settings.profile_extra_arguments;
 }
 
+float
+RocprofComputeBackend::MinWidth() const
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    return 2.0f * (style.FramePadding.x + ImGui::GetTextLineHeight()) +
+           5.0f * style.ItemSpacing.x + style.IndentSpacing + ToggleSwitchWidth() +
+           ImGui::CalcTextSize("OverwritePC samplingStochastic").x +
+           ImGui::GetFrameHeight();
+}
+
 bool
 RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
                                            TargetBrowseFn const& on_browse)

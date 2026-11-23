@@ -36,18 +36,6 @@ constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 // Minimum height for the run-output console child.
 constexpr float kMinOutputConsoleHeight = 60.0f;
 
-// Wrapped tooltip shared by every launcher "(?)", attached to the last item.
-void LaunchHelpTooltip(const char* text)
-{
-    if (ImGui::BeginItemTooltip())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-        ImGui::TextUnformatted(text);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-}
-
 // Linear blend between two packed colors (t in [0,1]).
 ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 {
@@ -130,18 +118,12 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
 void
 HelpTip(const char* tooltip)
 {
-    ImGui::SameLine();
-    ImGui::PushFont(
-        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon));
-    ImGui::TextDisabled(ICON_QUESTION_MARK);
-    ImGui::PopFont();
-    LaunchHelpTooltip(tooltip);
+    HelpMarker([tooltip]() { ImGui::TextUnformatted(tooltip); });
 }
 
 void
-HelpMarker(char const* env_var, char const* desc)
+HelpMarker(const std::function<void()>& render_tooltip)
 {
-    // Frame-align so the "(?)" sits level with the field/toggle/label it follows.
     ImGui::SameLine();
     ImGui::PushFont(
         SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon));
@@ -150,12 +132,20 @@ HelpMarker(char const* env_var, char const* desc)
     if(ImGui::BeginItemTooltip())
     {
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-        ImGui::TextUnformatted(env_var);
-        ImGui::Separator();
-        ImGui::TextUnformatted(desc);
+        render_tooltip();
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+void
+HelpMarker(char const* env_var, char const* desc)
+{
+    HelpMarker([env_var, desc]() {
+        ImGui::TextUnformatted(env_var);
+        ImGui::Separator();
+        ImGui::TextUnformatted(desc);
+    });
 }
 
 PillAction

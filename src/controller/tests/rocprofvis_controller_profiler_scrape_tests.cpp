@@ -626,6 +626,29 @@ TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
     CHECK(value == "/run/rocpd-1234-0.db");
 }
 
+TEST_CASE("The shipped rocprofv3 rules read the result file line", "[profiler][rules]")
+{
+    ProfilerStageSpec stage;
+    stage.tool = kRPVProfilerToolRocprofV3;
+    std::string artifact_key;
+    ProfilerScrapeRules::Apply(stage, artifact_key);
+    REQUIRE(artifact_key == ProfilerScrapeRules::kKeyTraceDb);
+
+    ProfilerScrapeEngine engine;
+    REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+    engine.BeginStage(0);
+    engine.Feed("W1123 13:30:32.393310  451739 generateRocpd.cpp:1051] writing SQL database "
+                "for process 451739 on node 548457899\n");
+    engine.Feed("E1123 13:30:32.393997  451739 generateRocpd.cpp:1075] Opened result file: "
+                "/home/rocm/Dev/traces/rocm/451739_results.db "
+                "(UUID=00005be0-3087-7087-940f-9ebf290e1faf)\n");
+    engine.EndStage("");
+
+    std::string value;
+    REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
+    CHECK(value == "/home/rocm/Dev/traces/rocm/451739_results.db");
+}
+
 TEST_CASE("Runtime instrumentation reads the rocprof-sys trace", "[profiler][rules]")
 {
     ProfilerStageSpec stage;

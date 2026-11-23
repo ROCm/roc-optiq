@@ -589,6 +589,12 @@ RocprofSysBackend::GetRecentTargets(rocprofvis_profiler_tool_t tool, rocprofvis_
     return SettingsManager::Get().GetRecentTargets(Id());
 }
 
+float
+RocprofSysBackend::MinWidth() const
+{
+    return ImGui::CalcTextSize("Open the trace automatically when profiling finishes").x;
+}
+
 bool
 RocprofSysBackend::RenderTargetSection(LaunchConfig const& config, TargetBrowseFn const& on_browse)
 {

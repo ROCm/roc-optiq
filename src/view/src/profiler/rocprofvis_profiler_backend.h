@@ -131,6 +131,14 @@ public:
     }
 
     /**
+     * The narrowest content width, inside a launch card, at which this backend's
+     * Target and Profiling Options cards render without clipping: the greater of
+     * the two, across every tool and operation it offers. The launcher floors
+     * its configuration pane at the widest of these across all backends.
+     */
+    virtual float MinWidth() const = 0;
+
+    /**
      * The recent target list for the given tool and operation, from
      * SettingsManager::GetRecentTargets. A backend chooses how finely its lists
      * are split - one for all its tools, or one per tool and operation - and the

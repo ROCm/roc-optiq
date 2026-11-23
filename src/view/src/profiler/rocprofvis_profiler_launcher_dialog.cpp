@@ -9,6 +9,7 @@
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_rocprof_compute_backend.h"
 #include "rocprofvis_rocprof_sys_backend.h"
+#include "rocprofvis_rocprofv3_backend.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_auth_modal.h"
@@ -97,6 +98,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
 {
     m_backends.push_back(std::make_unique<RocprofSysBackend>());
     m_backends.push_back(std::make_unique<RocprofComputeBackend>());
+    m_backends.push_back(std::make_unique<RocprofV3Backend>());
 
     SyncToolWithBackend();
     for(std::unique_ptr<IProfilerBackend>& backend : m_backends)
@@ -233,12 +235,13 @@ void ProfilerLauncherDialog::Render()
         m_container->GetMutableAt(CONTAINER_MESSAGE_ITEM_IDX)->m_visible = message_height;
         m_container->GetMutableAt(CONTAINER_STATUSBAR_ITEM_IDX)->m_height =
             (ImGui::GetContentRegionAvail().y - body_height) / 2.0f;
+        float backend_min_width = 0.0f;
+        for(std::unique_ptr<IProfilerBackend>& backend : m_backends)
+        {
+            backend_min_width = std::max(backend_min_width, backend->MinWidth());
+        }
         m_configure_container->SetMinLeftWidth(
-            2.0f * (style.FramePadding.x + ImGui::GetTextLineHeight()) +
-            4.0f * (style.WindowPadding.x + style.ItemSpacing.x) + style.ItemSpacing.x +
-            style.IndentSpacing + ToggleSwitchWidth() +
-            ImGui::CalcTextSize("OverwritePC samplingStochastic").x +
-            ImGui::GetFrameHeight());
+            4.0f * style.WindowPadding.x + backend_min_width);
         m_configure_container->SetMinRightWidth(
             2.0f * style.ItemSpacing.x + 2.0f * style.FramePadding.x +
             ImGui::CalcTextSize("Command PreviewCopy").x + 4.0f * style.WindowPadding.x);
@@ -593,12 +596,6 @@ void ProfilerLauncherDialog::RenderToolbar()
                     SwitchBackend(static_cast<int>(i));
                 }
             }
-            // Placeholders for the profilers this launcher is designed to grow into.
-            // Disabled until their backends land; listed so the intended scope
-            // (rocprof-sys, rocprof-compute, rocprofv3) is visible.
-            ImGui::BeginDisabled();
-            ImGui::Selectable("rocprofv3 (coming soon)", false);
-            ImGui::EndDisabled();
             ImGui::EndCombo();
         }
         ImGui::PopItemWidth();

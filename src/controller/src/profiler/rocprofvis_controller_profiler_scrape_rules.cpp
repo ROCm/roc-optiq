@@ -62,6 +62,13 @@ constexpr RuleRow kRocprofSysTrace[] = {
     {kKeyTraceDb, R"(([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
 };
 
+// rocprofv3. rocpd output (the default format) is written per process and
+// named with "Opened result file:" as each database is created. The path is
+// followed by a "(UUID=...)" suffix on the same line.
+constexpr RuleRow kRocprofV3[] = {
+    {kKeyTraceDb, R"(Opened result file:\s*(\S.*?\.db)(?:\s|$))", 1, ScrapePolicy::kLastMatch},
+};
+
 struct RuleSet
 {
     rocprofvis_profiler_tool_t      tool;
@@ -96,8 +103,10 @@ constexpr RuleSet kRuleSets[] = {
     // is the one that knows not to expect it.
     {kRPVProfilerToolRocprofSysInstrument, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
      kRocprofSysTrace, std::size(kRocprofSysTrace)},
-    // rocprof-sys-avail is a probe and rocprofv3 is not wired up. Both run for
-    // their exit code and are absent on purpose.
+    {kRPVProfilerToolRocprofV3, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
+     kRocprofV3, std::size(kRocprofV3)},
+    // rocprof-sys-avail is a probe. It runs for its exit code and is absent on
+    // purpose.
 };
 
 bool version_at_least(RuleSet const& set, uint32_t major, uint32_t minor, uint32_t patch)

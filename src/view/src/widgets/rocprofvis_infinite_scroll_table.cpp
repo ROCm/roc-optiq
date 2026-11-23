@@ -29,6 +29,7 @@ constexpr const char* END_TS_COLUMN_NAME         = "end";
 constexpr const char* DURATION_COLUMN_NAME       = "duration";
 constexpr const char* FILTER_INPUT_PLACEHOLDER = "Filter";
 constexpr const char* FILTER_OPERATORS         = "> < = >= <= !=";
+constexpr const char* NO_MATCHING_ROWS_TEXT    = "No rows match the current filter.";
 
 constexpr float MIN_COLUMN_WIDTH_EM     = 6.0f;
 constexpr float MAX_COLUMN_FIT_WIDTH_EM = 40.0f;
@@ -703,7 +704,9 @@ InfiniteScrollTable::Render()
                 clipper.End();
 
                 float bottom_spacer_height =
-                    (float) (total_row_count - (end_row + 1)) * row_height;
+                    total_row_count > end_row + 1
+                        ? (float) (total_row_count - (end_row + 1)) * row_height
+                        : 0.0f;
                 if(bottom_spacer_height > 0.0f)
                 {
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, bottom_spacer_height);
@@ -786,6 +789,25 @@ InfiniteScrollTable::Render()
                     }
                 }
                 ImGui::EndTable();  // End BeginTable
+
+                if(total_row_count == 0 && table_data.empty() && !show_loading_indicator)
+                {
+                    const bool  filtered = table_params && !table_params->m_filter.empty();
+                    const char* message  = filtered ? NO_MATCHING_ROWS_TEXT
+                                                    : m_no_data_text.c_str();
+                    if(*message)
+                    {
+                        ImVec2 table_min = ImGui::GetItemRectMin();
+                        ImVec2 table_max = ImGui::GetItemRectMax();
+                        ImVec2 text_size = ImGui::CalcTextSize(message);
+                        ImVec2 text_pos(
+                            std::max(table_min.x,
+                                     (table_min.x + table_max.x - text_size.x) * 0.5f),
+                            (table_min.y + table_max.y - text_size.y) * 0.5f);
+                        ImGui::GetWindowDrawList()->AddText(
+                            text_pos, ImGui::GetColorU32(ImGuiCol_TextDisabled), message);
+                    }
+                }
             }
             ImGui::PopStyleVar();
             RenderContextMenu();

@@ -610,6 +610,7 @@ bool RenderOutputConsole(
     switch (state_level)
     {
         case ConsoleStatusLevel::kSuccess: color_id = Colors::kTextSuccess; break;
+        case ConsoleStatusLevel::kWarning: color_id = Colors::kTextWarning; break;
         case ConsoleStatusLevel::kError:   color_id = Colors::kTextError;   break;
         case ConsoleStatusLevel::kIdle:
         case ConsoleStatusLevel::kRunning:

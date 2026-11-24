@@ -3310,9 +3310,11 @@ normalizer. It owns a local `ProfilerSession` and, for SSH, a
 deferred teardown outlives the dialog's copy. `GetState()` reports a
 normalized `rocprofvis_profiler_state_t`; `GetRawOutput()` /
 `ConsumeOutputDirty()` expose stdout; `GetTracePath()` resolves the
-produced trace; `GetRemotePhaseBadge(...)` / `GetRemoteStatusMessage()`
-surface remote progress. `Update()` runs every frame to pump normalized
-state and output.
+produced trace; `GetRemotePhaseBadge(...)` surfaces remote progress.
+`GetOutcome()` returns the run's single `RunOutcome` (a
+`ConsoleStatusLevel` plus message): success, a warning, or an error with
+its reason, set when the run settles or fails to start.
+`Update()` runs every frame to pump normalized state and output.
 
 Local:
 
@@ -3368,10 +3370,16 @@ Key remote rules:
   The path is only requested when `LaunchRequest::auto_load_trace` is
   set, which the dialog clears when `IProfilerBackend::ProducesTrace` is
   false. NotSupported (no trace file for this tool) skips the
-  open/download. NotAvailable -> warning notification, manual open.
+  open/download. A path that does not resolve (NotAvailable) is a
+  warning, not a failure: the run still ends Completed (remote: phase
+  `Done`, reason in `GetTracePathResult()`) with a
+  `ConsoleStatusLevel::kWarning` outcome. The badge turns amber with
+  the reason, the console adds a `Warning:` line, the dialog shows a
+  warning notification.
 - Auto-open differs by path: local fires from the orchestrator's
-  terminal-state handler; remote fires from the download-complete
-  callback inside `RemoteProfilerSession`.
+  terminal-state handler; remote calls `DownloadPath()` on the run's
+  `RemoteTraceOrchestrator` once the run completes, and opens the file
+  from that downloader's `on_open_file` callback.
 
 ### 13.4 Async teardown for sessions
 

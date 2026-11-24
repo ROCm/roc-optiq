@@ -142,9 +142,9 @@ bool
 RemoteTraceOrchestrator::SetSession(std::unique_ptr<SshSession> session)
 {
     bool adopted = false;
-    if(!m_running && session)
+    if(!m_running && session && session->IsAuthenticated())
     {
-        m_authenticated = session->IsConnected();
+        m_authenticated = true;
         m_session       = std::move(session);
         m_phase         = Phase::Idle;
         adopted         = true;
@@ -211,6 +211,17 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
                 break;
             default: Fail("SSH operation failed."); break;
         }
+        return;
+    }
+
+    // Cancel() stops this operation's events before they arrive, so this is a
+    // cancel from an external source, such as the connection's bridge. It ends
+    // the workflow like Cancel() does.
+    if(status == kRPVControllerSshCancelled)
+    {
+        m_phase          = Phase::Idle;
+        m_running        = false;
+        m_status_message = "Cancelled.";
         return;
     }
 

@@ -640,7 +640,16 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
                  "Concurrent PC sampling layers retain all completed query groups",
                  "[pc-sampling][concurrency]")
 {
-    Initialize();
+    Initialize("", R"sql(
+        CREATE TABLE compute_instruction_sample(instruction_sample_uuid INTEGER,
+            pc_sample_state_uuid INTEGER, instruction_sample_lookup_uuid INTEGER,
+            count INTEGER);
+        CREATE TABLE compute_instruction_sample_lookup(
+            instruction_sample_lookup_uuid INTEGER, text TEXT);
+        INSERT INTO compute_instruction_sample_lookup VALUES(1, 'NO_INST'), (2, 'BARRIER');
+        INSERT INTO compute_instruction_sample VALUES(1, 1, 1, 70), (2, 1, 2, 30);
+    )sql",
+               true);
     AddIsaTables();
     Execute(R"sql(
         CREATE TABLE compute_source_file(source_file_uuid INTEGER,
@@ -704,6 +713,10 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
     fetch_all_layers();
     CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
     CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    REQUIRE(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount, 0) == 70);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount, 1) == 30);
 
     // With every table removed, retries succeed only if every completion bit survived.
     Execute(R"sql(
@@ -717,10 +730,16 @@ TEST_CASE_METHOD(PcSamplingFailureFixture,
         DROP TABLE compute_pc_sample_state;
         DROP TABLE compute_pc_sample_stall_reason;
         DROP TABLE compute_pc_sample_stall_reason_lookup;
+        DROP TABLE compute_instruction_sample;
+        DROP TABLE compute_instruction_sample_lookup;
     )sql");
     fetch_all_layers();
     CHECK(Get(kRPVControllerPCSamplingSampleStatesLoaded) == 1);
     CHECK(Get(kRPVControllerPCSamplingStallDetailsLoaded) == 1);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSamplesLoaded) == 1);
+    REQUIRE(Get(kRPVControllerPCSamplingNumInstructionSamples) == 2);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount, 0) == 70);
+    CHECK(Get(kRPVControllerPCSamplingInstructionSampleCount, 1) == 30);
     CHECK(Get(kRPVControllerPCSamplingNumCodeObjects) == 1);
     CHECK(Get(kRPVControllerPCSamplingNumKernelSymbols) == 1);
     CHECK(Get(kRPVControllerPCSamplingNumInstructionLines) == 1);

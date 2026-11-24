@@ -2129,7 +2129,8 @@ AssistantPanel::RenderTranscript()
         ImGui::PopStyleColor();
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
         ImGui::TextWrapped(
-            "I read the timeline overview first, then dig into whatever looks worst.");
+            "Review the timeline overview first, then drill down into the most "
+            "significant bottlenecks.");
         ImGui::PopStyleColor();
     }
 

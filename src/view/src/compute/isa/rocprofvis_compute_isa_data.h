@@ -174,18 +174,22 @@ public:
     {
         IssueStateKind kind;
         const char*    name;
-        // Display labels default to the canonical SDK name.
-        const char* label = name;
+        const char*    label;
+
+        [[nodiscard]] constexpr const char* GetLabel() const
+        {
+            return label != nullptr ? label : name;
+        }
     };
 
     // Shared SDK names and display labels for parsing, rows, sizing, and legends.
     inline static constexpr IssueStateInfo ISSUE_STATES[] = {
-        { IssueStateKind::kNoInstruction, "NO_INST" },
-        { IssueStateKind::kValu, "VALU" },
-        { IssueStateKind::kScalar, "SCALAR" },
-        { IssueStateKind::kFlat, "FLAT" },
-        { IssueStateKind::kLds, "LDS" },
-        { IssueStateKind::kBarrier, "BARRIER" },
+        { IssueStateKind::kNoInstruction, "NO_INST", nullptr },
+        { IssueStateKind::kValu, "VALU", nullptr },
+        { IssueStateKind::kScalar, "SCALAR", nullptr },
+        { IssueStateKind::kFlat, "FLAT", nullptr },
+        { IssueStateKind::kLds, "LDS", nullptr },
+        { IssueStateKind::kBarrier, "BARRIER", nullptr },
         { IssueStateKind::kBranchTaken, "BRANCH_TAKEN", "TAKEN" },
         { IssueStateKind::kBranchNotTaken, "BRANCH_NOT_TAKEN", "NOT_TAKEN" }
     };

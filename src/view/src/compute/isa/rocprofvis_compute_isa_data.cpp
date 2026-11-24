@@ -503,7 +503,7 @@ IsaDataBuilder::SummarizeIssueStates(
             const IssueState& dominant   = summary.states.front();
             const size_t      kind_index = static_cast<size_t>(dominant.kind);
             const char*       label      = kind_index < std::size(ISSUE_STATES)
-                                               ? ISSUE_STATES[kind_index].label
+                                               ? ISSUE_STATES[kind_index].GetLabel()
                                                : dominant.text.c_str();
             std::string percent = FormatSamplePercentage(
                 { SamplingAvailability::kValid, dominant.percent });

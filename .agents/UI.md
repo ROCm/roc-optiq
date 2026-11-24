@@ -1791,8 +1791,10 @@ The ISA implementation is organized as follows:
   summary also caches `bar_order` indices sorted by category, label and UUID,
   plus a `dominant_label` with a compact percentage and readable branch outcome.
   `ISSUE_STATES` is the shared catalog of canonical SDK names and display labels.
-  Labels default to the SDK name; branch overrides are defined only in that catalog.
-  Row labels, the header legend, and column sizing all consume its display labels.
+  `IssueStateInfo::GetLabel()` falls back to the SDK name; branch overrides are
+  defined only in that catalog. Entries explicitly initialize every field so the
+  nested `constexpr` table compiles in C++17 across GCC, Clang, and MSVC.
+  Row labels, the header legend, and column sizing all consume `GetLabel()`.
   Parsing uses canonical SDK names, while tooltip rows retain captured lookup text.
   A rounded dominant share below 100% uses `>99.9%` rather than implying no other
   state was recorded. Each entry also caches an `IssueStateKind` from its captured label, independently of

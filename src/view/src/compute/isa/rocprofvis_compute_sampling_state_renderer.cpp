@@ -36,7 +36,7 @@ get_issue_state_label_width()
     float width = 0.0f;
     for(const IsaDataBuilder::IssueStateInfo& state : IsaDataBuilder::ISSUE_STATES)
     {
-        width = std::max(width, ImGui::CalcTextSize(state.label).x);
+        width = std::max(width, ImGui::CalcTextSize(state.GetLabel()).x);
     }
     return width + ImGui::CalcTextSize(" >99.9%").x;
 }
@@ -196,7 +196,7 @@ render_issue_state_color_legend()
     std::array<ColorLegendEntry, std::size(ISSUE_STATE_PRESENTATIONS) + 1> entries;
     for(size_t i = 0; i < std::size(ISSUE_STATE_PRESENTATIONS); ++i)
     {
-        entries[i] = { IsaDataBuilder::ISSUE_STATES[i].label,
+        entries[i] = { IsaDataBuilder::ISSUE_STATES[i].GetLabel(),
                        ISSUE_STATE_PRESENTATIONS[i].color };
     }
     entries.back() = { "Other / unknown", Colors::kTextDim };

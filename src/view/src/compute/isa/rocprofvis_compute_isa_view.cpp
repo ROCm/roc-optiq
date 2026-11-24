@@ -365,13 +365,6 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         return;
     }
 
-    if(layer == PcSamplingLayer::kStalls &&
-       (!kernel_info->pc_sampling_data.sample_states_loaded ||
-        !kernel_info->pc_sampling_data.stall_details_loaded ||
-        !kernel_info->pc_sampling_data.instruction_samples_loaded))
-    {
-        state.status = CodeLoadState::kFailed;
-    }
     if(layer == PcSamplingLayer::kSource)
     {
         m_source.selected_uuid = source_file_uuid;
@@ -382,6 +375,11 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         }
     }
     RefreshCodeWidgets(layer);
+    if(layer == PcSamplingLayer::kStalls &&
+       !m_sampling_status.IsComplete(PcSamplingData::INSTRUCTION_SAMPLES_ENABLED))
+    {
+        state.status = CodeLoadState::kFailed;
+    }
     UpdateWidgetLoadStates();
     if(state.status == CodeLoadState::kFailed)
     {
@@ -412,7 +410,8 @@ ComputeIsaView::NotifyLoadFailure(PcSamplingLayer layer)
             else
             {
                 level = NotificationLevel::Warning;
-                if(!m_sampling_status.stall_details_loaded &&
+                if(PcSamplingData::INSTRUCTION_SAMPLES_ENABLED &&
+                   !m_sampling_status.stall_details_loaded &&
                    !m_sampling_status.instruction_samples_loaded)
                 {
                     message = "Stall details and issue-state counts could not be loaded. "
@@ -424,7 +423,8 @@ ComputeIsaView::NotifyLoadFailure(PcSamplingLayer layer)
                         "Stall details could not be loaded. Showing total samples only. "
                         "Use Refetch sampling data in the column menu.";
                 }
-                else if(!m_sampling_status.instruction_samples_loaded)
+                else if(PcSamplingData::INSTRUCTION_SAMPLES_ENABLED &&
+                        !m_sampling_status.instruction_samples_loaded)
                 {
                     message = "Issue-state counts could not be loaded. "
                               "Use Refetch sampling data in the column menu.";
@@ -578,7 +578,8 @@ ComputeIsaView::UpdateWidgetLoadStates()
 
     const SamplingLoadStates states =
         m_sampling_status.Resolve(m_stalls.status == CodeLoadState::kLoading,
-                                  m_stalls.status == CodeLoadState::kFailed);
+                                  m_stalls.status == CodeLoadState::kFailed,
+                                  PcSamplingData::INSTRUCTION_SAMPLES_ENABLED);
     m_isa.widget->SetSamplingLoadStates(states);
     m_source.widget->SetSamplingLoadStates(states);
 }

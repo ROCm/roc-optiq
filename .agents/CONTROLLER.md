@@ -1025,9 +1025,10 @@ UUID so ISA View can switch files for cross-pane navigation. Source file ID 0
 selects the first available source file. The stall fetch independently loads
 PC sample states and stall-reason counts. It also loads instruction-sample
 metadata by default for compatibility, unless the caller sets
-`kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
-the default full fetch and copies completed instruction-sample records and
-lookup text into its view model. Interpretation and rendering remain View-layer
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View sets
+this argument from its developer-mode policy: developer builds request and copy
+completed instruction-sample records and lookup text into the view model; other
+builds skip that group. Interpretation and rendering remain View-layer
 responsibilities. Per-table flags on
 `PcSampling` prevent repeated queries while `m_source_line_cache` stores source
 lines separately by file UUID.

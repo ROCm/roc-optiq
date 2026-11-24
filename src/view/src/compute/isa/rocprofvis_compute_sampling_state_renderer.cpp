@@ -1196,6 +1196,13 @@ SamplingStateRenderer::SetupColumns()
     ImGui::GetCurrentTable()->DisableDefaultContextMenu = true;
     for(const Metric metric : SAMPLING_COLUMN_METRICS)
     {
+        if(metric == Metric::kIssueStateCounts &&
+           !PcSamplingData::INSTRUCTION_SAMPLES_ENABLED)
+        {
+            // Keep saved column indices stable across developer and normal builds.
+            ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_Disabled);
+            continue;
+        }
         const char* label = get_sampling_column_label(metric);
         float       width =
             std::max(ImGui::CalcTextSize(label).x, ImGui::CalcTextSize("100.0%").x);

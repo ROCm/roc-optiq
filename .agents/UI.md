@@ -1680,15 +1680,18 @@ The ISA implementation is organized as follows:
   `SetupColumns`, `RenderHeaders`, and `RenderCells` share that contiguous column
   order. Compile-time assertions check the metric array against the enum, both
   widgets' sampling-column positions, and their total column counts. Sampling State
-  is visible by default; Execution State and both percentage columns use
-  `DefaultHide` and can be enabled independently through the native header menu.
+  is visible by default; both percentage columns use `DefaultHide` and can be
+  enabled independently through the native header menu. Execution State is available
+  only with `ROCPROFVIS_DEVELOPER_MODE`, where it also uses `DefaultHide`. Other
+  builds master-disable its column with `ImGuiTableColumnFlags_Disabled`, removing
+  its header, cells, and menu entry while preserving saved column indices.
   Each bar cell builds a stack-local `BarPresentation` and uses one `DrawBar` path,
   without reaggregation. The presentation carries the fill percentage, color,
   availability, and a `show_value` option. A stacked stall bar borrows its row
   through `breakdown`; an issue-state bar borrows its summary through
   `issue_breakdown`, only for drawing. No per-row segment allocation or retained
   row pointer is needed.
-  Line numbers use `NoReorder` and stay first. All four sampling columns are
+  Line numbers use `NoReorder` and stay first. Available sampling columns are
   resizable, hideable, and reorderable. Their normal table headers retain context
   menus during loading/failure and share the existing header-tooltip content
   through `RenderHeaderWithTooltip`. Sampling State restores its color legend.
@@ -1728,8 +1731,10 @@ The ISA implementation is organized as follows:
   completed sample-state, stall-detail, and instruction-sample groups into
   separate `SamplingLoadStates::sampling` and `issue_states` states. Completed
   groups stay ready during another group's failure or retry; empty completed
-  issue results stay ready with unavailable row values. The shared native menu
-  offers Refetch sampling data when either group failed. The request-level
+  issue results stay ready with unavailable row values. `IsComplete` and `Resolve`
+  accept whether instruction samples were requested; skipped samples do not cause
+  failure, warnings, or retry prompts. The shared native menu offers Refetch
+  sampling data when a requested group failed. The request-level
   `CodeLoadState` still owns submission, cancellation, and retry; it does not
   determine whether a completed distribution is usable.
   Percentage cells and the Sampling State tooltip share `RenderMetricValue` and
@@ -1868,7 +1873,11 @@ independent layers:
   the first available file.
 - `kStalls` runs automatically whenever the view selects a kernel, independently
   of column visibility. The View asks the controller for PC sample states,
-  stall-reason rows and lookups, and instruction-sample metadata. The projection
+  stall-reason rows and lookups. `PcSamplingData::INSTRUCTION_SAMPLES_ENABLED`
+  derives from `ROCPROFVIS_DEVELOPER_MODE` and controls both column availability
+  and `kRPVControllerPcSamplingArgsIncludeInstructionSamples`: developer builds
+  request instruction-sample metadata, while other builds explicitly skip it.
+  The projection
   currently uses each state's UUID, instruction
   UUID and total count, plus nullable issued/stall counts and wave-occupancy /
   active-thread percentages, together with the stall-reason rows and lookup text.
@@ -2112,7 +2121,8 @@ shared `SamplingStateRenderer` metric cells and headers.
 and `LoadPcSamplingInstructionSampleLookups` copy completed controller results
 into these vectors. Counts remain optional, preserving unrecorded values and
 measured zero. Fresh rows replace previous records on every load. Prepared issue-state
-data feeds the optional Execution State column in ISA and source sampling rows.
+data feeds the optional Execution State column in ISA and source sampling rows
+in developer builds. Other builds skip its controller reads and vector copies.
 Dispatch UUID remains available only on the controller handle.
 Instruction samples are optional: absent sample/lookup tables or empty results
 must not downgrade the existing sampling columns. Missing instruction-sample
@@ -2168,7 +2178,7 @@ samples, with independent completion flags. `DataProvider` reads the controller'
 even after a failed sampling request, except cancellation or a superseded request.
 It copies only completed query groups into `PcSamplingData`; reasons and instruction
 samples are each published together with their corresponding lookups. An incomplete
-instruction-sample group clears both view-model vectors and leaves
+or unrequested instruction-sample group clears both view-model vectors and leaves
 `instruction_samples_loaded` false, even if the controller has partial records.
 Successful empty results set the completion flag with empty vectors. The view
 prepares any retained sample counts for both panes.

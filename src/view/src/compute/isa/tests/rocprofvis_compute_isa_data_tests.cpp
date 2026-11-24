@@ -67,6 +67,34 @@ TEST_CASE("Sampling groups retain independent states across failure and retry",
     CHECK_FALSE(states.CanRetry());
 }
 
+TEST_CASE("Skipped instruction samples do not fail sampling or hide real failures",
+          "[isa][issue-states][loading]")
+{
+    SamplingLoadStatus status{ true, true, false };
+    CHECK_FALSE(status.IsComplete());
+    CHECK(status.IsComplete(false));
+    SamplingLoadStates states = status.Resolve(false, true, false);
+    CHECK(states.sampling == SamplingLoadState::kReady);
+    CHECK(states.issue_states == SamplingLoadState::kReady);
+    CHECK_FALSE(states.CanRetry());
+
+    status.stall_details_loaded = false;
+    CHECK_FALSE(status.IsComplete(false));
+    states = status.Resolve(true, false, false);
+    CHECK(states.sampling == SamplingLoadState::kLoadingDetails);
+    CHECK_FALSE(states.CanRetry());
+    states = status.Resolve(false, true, false);
+    CHECK(states.sampling == SamplingLoadState::kTotalsOnly);
+    CHECK(states.issue_states == SamplingLoadState::kReady);
+    CHECK(states.CanRetry());
+
+    status = {};
+    states = status.Resolve(false, true, false);
+    CHECK(states.sampling == SamplingLoadState::kFailed);
+    CHECK(states.issue_states == SamplingLoadState::kReady);
+    CHECK(states.CanRetry());
+}
+
 TEST_CASE("Empty optional issue data is ready and unavailable without a retry error",
           "[isa][issue-states][loading]")
 {

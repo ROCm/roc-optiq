@@ -159,6 +159,12 @@ enum class PcSamplingLayerState : uint32_t
 
 struct PcSamplingData
 {
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    inline static constexpr bool INSTRUCTION_SAMPLES_ENABLED = true;
+#else
+    inline static constexpr bool INSTRUCTION_SAMPLES_ENABLED = false;
+#endif
+
     std::vector<CodeObjectStore>            code_objects;
     std::unordered_map<uint64_t, std::string> instruction_type_lookup_map;
     std::vector<SourceFile>                 source_files;

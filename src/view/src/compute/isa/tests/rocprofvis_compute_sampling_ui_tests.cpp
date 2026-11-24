@@ -52,9 +52,10 @@ struct SamplingWidgetTestVars
     std::unique_ptr<IsaCodeWidget>    isa;
     std::unique_ptr<SourceCodeWidget> source;
     SamplingLoadStatus                status{ true, true, true };
-    bool                              failed        = false;
-    bool                              source_pane   = false;
-    bool                              issue_visible = false;
+    bool                              failed         = false;
+    bool                              source_pane    = false;
+    bool                              issue_visible  = false;
+    bool                              issue_disabled = false;
     ImVec2                            header_point;
     ImVec2                            issue_point;
     ImVec2                            stall_point;
@@ -127,7 +128,8 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
         ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(1000.0f, 500.0f), ImGuiCond_Always);
         ImGui::Begin("ISA sampling test", nullptr, ImGuiWindowFlags_NoSavedSettings);
-        const SamplingLoadStates states = vars.status.Resolve(false, vars.failed);
+        const SamplingLoadStates states = vars.status.Resolve(
+            false, vars.failed, PcSamplingData::INSTRUCTION_SAMPLES_ENABLED);
         vars.isa->SetSamplingLoadStates(states);
         vars.source->SetSamplingLoadStates(states);
         // Capture rendered text, including hover tooltips, without changing the
@@ -149,6 +151,8 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
         if(table && table->ColumnsCount > 4)
         {
             vars.issue_visible = table->Columns[4].IsEnabled;
+            vars.issue_disabled =
+                (table->Columns[4].Flags & ImGuiTableColumnFlags_Disabled) != 0;
             vars.issue_cell_width =
                 table->Columns[4].WorkMaxX - table->Columns[4].WorkMinX;
             const float row_y  = table->RowPosY1 - ImGui::GetTextLineHeight() * 0.5f;
@@ -201,6 +205,7 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
             ctx->PopupCloseAll();
             ctx->Yield(3);
             IM_CHECK(vars.issue_visible);
+            IM_CHECK(!vars.issue_disabled);
             IM_CHECK(vars.text.find("NO_INST 86.7%") != std::string::npos);
             IM_CHECK(vars.text.find("NOT_TAKEN 92%") != std::string::npos);
             IM_CHECK(vars.text.find("NO_INST: 1,649") == std::string::npos);
@@ -305,4 +310,36 @@ RegisterIsaSamplingTests(ImGuiTestEngine* engine)
         IM_CHECK(vars.no_instruction_width == 0.0f);
         IM_CHECK(vars.barrier_width == 0.0f);
     };
+    if constexpr(!PcSamplingData::INSTRUCTION_SAMPLES_ENABLED)
+    {
+        test->TestFunc = [](ImGuiTestContext* ctx) {
+            SamplingWidgetTestVars& vars = ctx->GetVars<SamplingWidgetTestVars>();
+            for(bool source_pane : { false, true })
+            {
+                vars.source_pane = source_pane;
+                vars.status      = { true, true, false };
+                vars.failed      = false;
+                ctx->Yield(3);
+                ctx->SetRef("ISA sampling test");
+                IM_CHECK(vars.issue_disabled);
+                IM_CHECK(!vars.issue_visible);
+                IM_CHECK(vars.text.find("Execution State") == std::string::npos);
+                ctx->MouseMoveToPos(vars.header_point);
+                ctx->MouseClick(ImGuiMouseButton_Right);
+                ctx->Yield(2);
+                IM_CHECK(!GImGui->OpenPopupStack.empty());
+                ImGuiWindow* popup = GImGui->OpenPopupStack.back().Window;
+                IM_CHECK(popup != nullptr);
+                ctx->SetRef(ImGuiTestRef(popup->ID));
+                IM_CHECK(!ctx->ItemExists("Execution State"));
+                IM_CHECK(!ctx->ItemExists("Refetch sampling data"));
+                ctx->PopupCloseAll();
+                ctx->SetRef("ISA sampling test");
+                ctx->MouseMoveToPos(vars.stall_point);
+                ctx->Yield(3);
+                IM_CHECK(vars.text.find("BARRIER_WAIT") != std::string::npos);
+                IM_CHECK(vars.text.find("load failed") == std::string::npos);
+            }
+        };
+    }
 }

@@ -5233,6 +5233,9 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
                 m_trace_controller, args, future, pc_handle);
             break;
         case PcSamplingLayer::kStalls:
+            rocprofvis_controller_set_uint64(
+                args, kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0,
+                PcSamplingData::INSTRUCTION_SAMPLES_ENABLED ? 1 : 0);
             result = rocprofvis_controller_pc_sampling_fetch_stalls_async(
                 m_trace_controller, args, future, pc_handle);
             break;
@@ -6419,9 +6422,10 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                             &details_loaded) == kRocProfVisResultSuccess &&
                         details_loaded != 0;
                     data.instruction_samples_loaded =
+                        PcSamplingData::INSTRUCTION_SAMPLES_ENABLED &&
                         rocprofvis_controller_get_uint64(
-                            pc_handle, kRPVControllerPCSamplingInstructionSamplesLoaded, 0,
-                            &instruction_samples_loaded) == kRocProfVisResultSuccess &&
+                            pc_handle, kRPVControllerPCSamplingInstructionSamplesLoaded,
+                            0, &instruction_samples_loaded) == kRocProfVisResultSuccess &&
                         instruction_samples_loaded != 0;
                     if(data.sample_states_loaded)
                     {

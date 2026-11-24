@@ -39,7 +39,14 @@ struct SamplingLoadStatus
     bool stall_details_loaded       = false;
     bool instruction_samples_loaded = false;
 
-    [[nodiscard]] SamplingLoadStates Resolve(bool loading, bool failed) const
+    [[nodiscard]] bool IsComplete(bool include_instruction_samples = true) const
+    {
+        return sample_states_loaded && stall_details_loaded &&
+               (!include_instruction_samples || instruction_samples_loaded);
+    }
+
+    [[nodiscard]] SamplingLoadStates Resolve(
+        bool loading, bool failed, bool include_instruction_samples = true) const
     {
         SamplingLoadStates states;
         if(sample_states_loaded && stall_details_loaded)
@@ -55,7 +62,8 @@ struct SamplingLoadStatus
         {
             states.sampling = SamplingLoadState::kFailed;
         }
-        if(sample_states_loaded && instruction_samples_loaded)
+        if(!include_instruction_samples ||
+           (sample_states_loaded && instruction_samples_loaded))
         {
             states.issue_states = SamplingLoadState::kReady;
         }

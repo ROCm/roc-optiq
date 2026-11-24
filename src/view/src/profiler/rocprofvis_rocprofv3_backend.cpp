@@ -7,6 +7,7 @@
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
+#include <array>
 
 namespace RocProfVis
 {
@@ -105,11 +106,25 @@ RocprofV3Settings::FromJson(jt::Json const& json)
         s.collection_tracing[i] = JsonUtils::GetBool(j, TRACING_PROPS[i].json_key,
                                                      TRACING_PROPS[i].default_value);
     }
+    // A Runtime or System trace stands alone, as the Trace combo shows it.
+    if(s.collection_tracing[kAggregateRuntimeTrace])
+    {
+        s.collection_tracing.reset();
+        s.collection_tracing.set(kAggregateRuntimeTrace);
+    }
+    else if(s.collection_tracing[kAggregateSysTrace])
+    {
+        s.collection_tracing.reset();
+        s.collection_tracing.set(kAggregateSysTrace);
+    }
     s.collection_counters = JsonUtils::GetString(j, "collection_counters", "");
 
-    s.window_delay    = JsonUtils::GetInt(j, "window_delay", 0);
-    s.window_duration = JsonUtils::GetInt(j, "window_duration", 0);
-    s.window_repeat   = JsonUtils::GetInt(j, "window_repeat", 1);
+    s.window_delay =
+        static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_delay", 0), 0));
+    s.window_duration =
+        static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_duration", 0), 0));
+    s.window_repeat =
+        static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_repeat", 1), 0));
 
     if(j.contains("target"))
     {
@@ -243,7 +258,7 @@ RocprofV3Backend::RenderTargetSection(LaunchConfig const&   config,
                                       TargetBrowseFn const& on_browse)
 {
     const bool                is_remote = (config.connection == ConnectionType::kSsh);
-    std::vector<std::string>& recents   = GetRecentTargets(config.tool, config.operation);
+    std::vector<std::string>& recents   = GetProfilerRecentTargets(config);
 
     bool        modified = false;
     const float label_w  = TargetLabelColumnWidth("Output folder");
@@ -265,20 +280,20 @@ RocprofV3Backend::RenderTargetSection(LaunchConfig const&   config,
     output.browse_title = "Choose Output Directory";
     output.kind         = Directory;
 
-    modified |= RenderTargetPathRow(program, m_settings.target.path, config.connection,
-                                    on_browse, label_w);
+    modified |= RenderTargetPathRow(program, m_settings.target.path, on_browse, label_w);
     modified |= RenderTargetArgumentsRow(m_settings.target.arguments, label_w);
-    modified |= RenderTargetPathRow(output, m_settings.target.output_directory,
-                                    config.connection, on_browse, label_w);
+    modified |= RenderTargetPathRow(output, m_settings.target.output_directory, on_browse,
+                                    label_w);
     modified |= RenderTargetAutoLoadRow(m_settings.target.auto_load_trace);
     return modified;
 }
 
 std::vector<std::string>&
-RocprofV3Backend::GetRecentTargets(rocprofvis_profiler_tool_t      tool,
-                                   rocprofvis_profiler_operation_t operation)
+RocprofV3Backend::GetProfilerRecentTargets(LaunchConfig const& config)
 {
-    return SettingsManager::Get().GetRecentTargets(Id(), tool, operation);
+    return SettingsManager::Get().GetProfilerRecentTargets(
+        config.connection, config.ssh_connection_ref, Id(), config.tool,
+        config.operation);
 }
 
 void
@@ -305,7 +320,7 @@ RocprofV3Backend::GetWarnings(LaunchConfig const& config) const
        m_settings.extra_arguments.argv.empty())
     {
         warnings.push_back(
-            { WarningMessage::kWarning, "No trace option or counter selected." });
+            { WarningMessage::kWarning, "No trace options or counters selected." });
     }
     return warnings;
 }
@@ -372,12 +387,14 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
     ImGui::TextUnformatted("Trace");
     ImGui::SameLine();
     const bool custom =
+        m_settings.collection_tracing.any() &&
         !(m_settings.collection_tracing[RocprofV3Settings::kAggregateRuntimeTrace] ||
           m_settings.collection_tracing[RocprofV3Settings::kAggregateSysTrace]);
     ImGui::SetNextItemWidth(trace_width);
     if(ImGui::BeginCombo(
            "##collection_tracing",
-           m_settings.collection_tracing[RocprofV3Settings::kAggregateRuntimeTrace]
+           m_settings.collection_tracing.none() ? "None"
+           : m_settings.collection_tracing[RocprofV3Settings::kAggregateRuntimeTrace]
                ? TRACING_PROPS[RocprofV3Settings::kAggregateRuntimeTrace].display_name
            : m_settings.collection_tracing[RocprofV3Settings::kAggregateSysTrace]
                ? TRACING_PROPS[RocprofV3Settings::kAggregateSysTrace].display_name
@@ -401,6 +418,11 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
         {
             m_settings.collection_tracing.reset();
             m_settings.collection_tracing.set(RocprofV3Settings::kAggregateSysTrace);
+            changed = true;
+        }
+        if(ImGui::Selectable("None", m_settings.collection_tracing.none()))
+        {
+            m_settings.collection_tracing.reset();
             changed = true;
         }
         ImGui::PopStyleVar();
@@ -428,13 +450,20 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
         ImGui::EndCombo();
     }
     HelpMarker([this]() {
-        for(size_t i = 0; i < RocprofV3Settings::_kTracingLast; i++)
+        if(m_settings.collection_tracing.none())
         {
-            if(m_settings.collection_tracing[i])
+            ImGui::TextUnformatted("None selected.");
+        }
+        else
+        {
+            for(size_t i = 0; i < RocprofV3Settings::_kTracingLast; i++)
             {
-                ImGui::TextUnformatted(TRACING_PROPS[i].argv);
-                ImGui::Separator();
-                ImGui::TextUnformatted(TRACING_PROPS[i].tooltip);
+                if(m_settings.collection_tracing[i])
+                {
+                    ImGui::TextUnformatted(TRACING_PROPS[i].argv);
+                    ImGui::Separator();
+                    ImGui::TextUnformatted(TRACING_PROPS[i].tooltip);
+                }
             }
         }
     });

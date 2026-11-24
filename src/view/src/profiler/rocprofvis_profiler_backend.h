@@ -139,13 +139,13 @@ public:
     virtual float MinWidth() const = 0;
 
     /**
-     * The recent target list for the given tool and operation, from
-     * SettingsManager::GetRecentTargets. A backend chooses how finely its lists
-     * are split - one for all its tools, or one per tool and operation - and the
-     * Target card and the launch both read through this, so they always agree.
+     * The recent target list for the config's run destination, tool and
+     * operation, from SettingsManager::GetProfilerRecentTargets. Every destination has
+     * its own lists; a backend chooses how finely they are split beyond that -
+     * one for all its tools, or one per tool and operation - and the Target card
+     * and the launch both read through this, so they always agree.
      */
-    virtual std::vector<std::string>& GetRecentTargets(
-        rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation) = 0;
+    virtual std::vector<std::string>& GetProfilerRecentTargets(LaunchConfig const& config) = 0;
 
     /**
      * Convert the curated settings into the env vars and the complete argument

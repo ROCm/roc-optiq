@@ -4,6 +4,7 @@
 #include "rocprofvis_profiles_document.h"
 #include "rocprofvis_json_utils.h"
 #include "rocprofvis_utils.h"
+#include "profiler/rocprofvis_launch_config.h"
 
 #include <filesystem>
 #include <map>
@@ -17,6 +18,10 @@ namespace View
 namespace
 {
     constexpr int kProfilesVersion = 1;
+
+    // Id of this machine's entry in "launch_environments". An SSH connection's
+    // entry uses the connection's id.
+    const constexpr char* LOCAL_LAUNCH_ENVIRONMENT_ID = "local";
 
     // Writes a launch_environments entry, which carries its own id like an
     // ssh_connections entry.
@@ -148,11 +153,15 @@ jt::Json& ProfilesDocument::LaunchEnvironments()
 }
 
 LaunchEnvironment
-ProfilesDocument::GetLaunchEnvironment(const std::string& id)
+ProfilesDocument::GetLaunchEnvironment(ConnectionType     connection_type,
+                                       const std::string& ssh_connection_id)
 {
     LaunchEnvironment environment;
     jt::Json&         environments = LaunchEnvironments();
-    if(environments.contains(id) && environments[id].isObject())
+    const std::string id           = connection_type == ConnectionType::kLocal
+                                         ? std::string(LOCAL_LAUNCH_ENVIRONMENT_ID)
+                                         : ssh_connection_id;
+    if(!id.empty() && environments.contains(id) && environments[id].isObject())
     {
         environment.tool_directory =
             JsonUtils::GetString(environments[id], "tool_directory", "");
@@ -163,27 +172,37 @@ ProfilesDocument::GetLaunchEnvironment(const std::string& id)
 }
 
 bool
-ProfilesDocument::SetLaunchEnvironment(const std::string&       id,
+ProfilesDocument::SetLaunchEnvironment(ConnectionType           connection_type,
+                                       const std::string&       ssh_connection_id,
                                        const LaunchEnvironment& environment)
 {
-    WriteLaunchEnvironment(LaunchEnvironments()[id], id, environment);
-    return Persist();
+    bool              result = false;
+    const std::string id     = connection_type == ConnectionType::kLocal
+                                   ? std::string(LOCAL_LAUNCH_ENVIRONMENT_ID)
+                                   : ssh_connection_id;
+    if(!id.empty())
+    {
+        WriteLaunchEnvironment(LaunchEnvironments()[id], id, environment);
+        result = Persist();
+    }
+    return result;
 }
 
 void
-ProfilesDocument::AddLaunchEnvironment(const std::string& id)
+ProfilesDocument::AddLaunchEnvironment(const std::string& ssh_connection_id)
 {
     jt::Json& environments = LaunchEnvironments();
-    if(!environments.contains(id) || !environments[id].isObject())
+    if(!environments.contains(ssh_connection_id) || !environments[ssh_connection_id].isObject())
     {
-        WriteLaunchEnvironment(environments[id], id, LaunchEnvironment());
+        WriteLaunchEnvironment(environments[ssh_connection_id], ssh_connection_id,
+                               LaunchEnvironment());
     }
 }
 
 void
-ProfilesDocument::RemoveLaunchEnvironment(const std::string& id)
+ProfilesDocument::RemoveLaunchEnvironment(const std::string& ssh_connection_id)
 {
-    LaunchEnvironments().getObject().erase(id);
+    LaunchEnvironments().getObject().erase(ssh_connection_id);
 }
 
 }  // namespace View

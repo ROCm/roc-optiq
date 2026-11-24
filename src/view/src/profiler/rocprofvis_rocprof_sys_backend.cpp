@@ -582,11 +582,10 @@ ExtraArguments& RocprofSysBackend::GetExtraArguments(rocprofvis_profiler_operati
 
 // One list shared by every rocprof-sys tool: they all profile a program.
 std::vector<std::string>&
-RocprofSysBackend::GetRecentTargets(rocprofvis_profiler_tool_t tool, rocprofvis_profiler_operation_t operation)
+RocprofSysBackend::GetProfilerRecentTargets(LaunchConfig const& config)
 {
-    (void)tool;
-    (void)operation;
-    return SettingsManager::Get().GetRecentTargets(Id());
+    return SettingsManager::Get().GetProfilerRecentTargets(config.connection,
+                                                           config.ssh_connection_ref, Id());
 }
 
 float
@@ -607,7 +606,7 @@ RocprofSysBackend::RenderTargetSection(LaunchConfig const& config, TargetBrowseF
     program.hint            = is_remote ? "/remote/path/to/app" : "/path/to/app  (or a name on $PATH)";
     program.browse_title    = "Choose Program";
     program.kind            = File;
-    program.recents         = &GetRecentTargets(config.tool, config.operation);
+    program.recents         = &GetProfilerRecentTargets(config);
     program.recents_tooltip = "Recent programs";
 
     TargetPathRow output;
@@ -618,11 +617,10 @@ RocprofSysBackend::RenderTargetSection(LaunchConfig const& config, TargetBrowseF
     output.kind         = Directory;
 
     bool modified = false;
-    modified |= RenderTargetPathRow(program, m_settings.target.path, config.connection, on_browse,
-                                    label_w);
+    modified |= RenderTargetPathRow(program, m_settings.target.path, on_browse, label_w);
     modified |= RenderTargetArgumentsRow(m_settings.target.arguments, label_w);
-    modified |= RenderTargetPathRow(output, m_settings.target.output_directory, config.connection,
-                                    on_browse, label_w);
+    modified |= RenderTargetPathRow(output, m_settings.target.output_directory, on_browse,
+                                    label_w);
     modified |= RenderTargetAutoLoadRow(m_settings.target.auto_load_trace);
     return modified;
 }

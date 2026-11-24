@@ -209,7 +209,7 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
 {
     const bool                is_remote      = (config.connection == ConnectionType::kSsh);
     const bool                produces_trace = ProducesTrace(config);
-    std::vector<std::string>& recents        = GetRecentTargets(config.tool, config.operation);
+    std::vector<std::string>& recents        = GetProfilerRecentTargets(config);
 
     bool modified = false;
     if(config.operation == kRPVProfilerOperationAnalyze)
@@ -226,8 +226,7 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         workload.recents         = &recents;
         workload.recents_tooltip = "Recent workloads";
 
-        modified |= RenderTargetPathRow(workload, m_settings.analyze_target.path,
-                                        config.connection, on_browse,
+        modified |= RenderTargetPathRow(workload, m_settings.analyze_target.path, on_browse,
                                         TargetLabelColumnWidth("Workload"));
         modified |= RenderTargetAutoLoadRow(
             m_settings.analyze_target.auto_load_trace, produces_trace,
@@ -254,13 +253,13 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         output.browse_title = "Choose Output Directory";
         output.kind         = Directory;
 
-        modified |= RenderTargetPathRow(program, m_settings.profile_target.path,
-                                        config.connection, on_browse, label_w);
+        modified |=
+            RenderTargetPathRow(program, m_settings.profile_target.path, on_browse, label_w);
         modified |=
             RenderTargetArgumentsRow(m_settings.profile_target.arguments, label_w);
         modified |=
-            RenderTargetPathRow(output, m_settings.profile_target.output_directory,
-                                config.connection, on_browse, label_w);
+            RenderTargetPathRow(output, m_settings.profile_target.output_directory, on_browse,
+                                label_w);
         modified |= RenderTargetAutoLoadRow(
             m_settings.profile_target.auto_load_trace, produces_trace,
             "Profile writes a workload folder. Run Analyze with \"ROCpd database\" "
@@ -271,10 +270,11 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
 
 // Profile (programs) and Analyze (workload folders) keep separate lists.
 std::vector<std::string>&
-RocprofComputeBackend::GetRecentTargets(rocprofvis_profiler_tool_t      tool,
-                                        rocprofvis_profiler_operation_t operation)
+RocprofComputeBackend::GetProfilerRecentTargets(LaunchConfig const& config)
 {
-    return SettingsManager::Get().GetRecentTargets(Id(), tool, operation);
+    return SettingsManager::Get().GetProfilerRecentTargets(
+        config.connection, config.ssh_connection_ref, Id(), kRPVProfilerToolNone,
+        config.operation);
 }
 
 void

@@ -22,6 +22,7 @@ namespace View
 {
 
 enum class TimeFormat;
+enum class ConnectionType;
 
 // What the color strip on a track's left edge encodes. Persisted as an int, so
 // append new modes before kCount.
@@ -140,10 +141,16 @@ typedef struct InternalSettings
 // in a non-standard location is handled by LaunchConfig::tool_directory, which
 // names a directory rather than an executable and belongs to the launch profile
 // because a remote profile needs a directory on the remote host.
+typedef std::unordered_map<rocprofvis_profiler_operation_t, std::vector<std::string>>
+    ProfilerTargetsByOperation;
+typedef std::unordered_map<rocprofvis_profiler_tool_t, ProfilerTargetsByOperation>
+    ProfilerTargetsByTool;
+typedef std::unordered_map<std::string, ProfilerTargetsByTool> ProfilerTargetsByProfiler;
+
 typedef struct ProfilerSettings
 {
-    // Most recent first, keyed as described at SettingsManager::GetRecentTargets.
-    std::unordered_map<std::string, std::vector<std::string>> recent_targets;
+    // Most recent first, keyed by connection, profiler id, tool, then operation.
+    std::unordered_map<std::string, ProfilerTargetsByProfiler> recent_targets;
     // Each profiler's last selected launch profile, keyed by profiler id.
     std::unordered_map<std::string, std::string> last_preset_names;
     std::string last_profiler_id;
@@ -385,7 +392,9 @@ constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_NAME         = "name";
 constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
-constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
+
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER       = "profiler";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_RECENT_TARGETS = "recent_targets";
 
 class SettingsManager
 {
@@ -438,18 +447,27 @@ public:
     void SaveHotkeySettings();
     // Profiler settings
     ProfilerSettings& GetProfilerSettings();
-    void SaveProfilerSettings();
+    void              SaveProfilerSettings();
+
     /*
-     * The recent target list for a profiler, optionally narrowed to one tool and
-     * one operation; created empty on first use. The list is keyed by the
-     * profiler id followed by each supplied enum value, so a caller that passes
-     * only the profiler id gets one list shared by all of its tools. The
-     * reference stays valid as other lists are added.
+     * The recent target list for a profiler on one run destination, tool and
+     * operation; created empty on first use. A caller that leaves tool or
+     * operation at its default gets one list shared across them. The reference
+     * stays valid as other lists are added.
+     * @param connection_type: whether the destination is this machine or SSH.
+     * @param ssh_connection_id: the SSH connection's id. Ignored for this machine.
      */
-    std::vector<std::string>& GetRecentTargets(
-        std::string const&                             profiler_id,
-        std::optional<rocprofvis_profiler_tool_t>      tool      = std::nullopt,
-        std::optional<rocprofvis_profiler_operation_t> operation = std::nullopt);
+    std::vector<std::string>& GetProfilerRecentTargets(
+        ConnectionType connection_type, std::string const& ssh_connection_id,
+        std::string const&              profiler_id,
+        rocprofvis_profiler_tool_t      tool      = kRPVProfilerToolNone,
+        rocprofvis_profiler_operation_t operation = kRPVProfilerOperationDefault);
+    /*
+     * Drops every recent target list of a connection, across all profilers,
+     * tools and operations. Does not persist.
+     * @param connection_id: the SSH connection's id.
+     */
+    void RemoveProfilerRecentTargets(std::string const& connection_id);
 
     // The route the assistant should use, or nullptr when none is configured.
     const AssistantProvider* GetActiveAssistantProvider() const;
@@ -512,6 +530,8 @@ private:
     void DeserializeHotkeySettings(jt::Json& json);
     void SerializeProfilerSettings(jt::Json& json);
     void DeserializeProfilerSettings(jt::Json& json);
+    void DeserializeProfilerRecentTargets(std::string const& connection_id,
+                                          std::string const& profiler_id, jt::Json& json);
     void SerializeAssistantSettings(jt::Json& json);
     void DeserializeAssistantSettings(jt::Json& json);
     // The endpoint name is the credential-store key, so it has to be unique.

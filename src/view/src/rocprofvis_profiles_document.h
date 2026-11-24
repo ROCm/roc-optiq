@@ -12,6 +12,8 @@ namespace RocProfVis
 namespace View
 {
 
+enum class ConnectionType;
+
 // Where the profiler tools and their Python environment live on one run
 // destination: this machine, or one SSH connection.
 struct LaunchEnvironment
@@ -19,10 +21,6 @@ struct LaunchEnvironment
     std::string tool_directory;
     std::string python_environment;
 };
-
-// Id of this machine's entry in "launch_environments". An SSH connection's
-// entry uses the connection's id.
-inline constexpr const char* LOCAL_LAUNCH_ENVIRONMENT_ID = "local";
 
 // Single on-disk document ({config}/profiles.json) holding SSH connection
 // profiles, profiler launch profiles and per-destination launch environments:
@@ -61,27 +59,30 @@ public:
 
     /*
      * Returns the launch environment of a run destination, or empty values when
-     * it has no entry.
-     * @param id: LOCAL_LAUNCH_ENVIRONMENT_ID, or an SSH connection's id.
+     * it has no entry or is an SSH destination with no connection.
+     * @param connection_type: whether the destination is this machine or SSH.
+     * @param ssh_connection_id: the SSH connection's id. Ignored for this machine.
      */
-    LaunchEnvironment GetLaunchEnvironment(const std::string& id);
+    LaunchEnvironment GetLaunchEnvironment(ConnectionType     connection_type,
+                                           const std::string& ssh_connection_id);
     /*
      * Writes the launch environment of a run destination and persists the
-     * document. Returns false on I/O failure.
-     * @param id: LOCAL_LAUNCH_ENVIRONMENT_ID, or an SSH connection's id.
+     * document. Returns false on I/O failure or for an SSH destination with no
+     * connection.
+     * @param connection_type: whether the destination is this machine or SSH.
+     * @param ssh_connection_id: the SSH connection's id. Ignored for this machine.
      */
-    bool SetLaunchEnvironment(const std::string& id, const LaunchEnvironment& environment);
+    bool SetLaunchEnvironment(ConnectionType connection_type, const std::string& ssh_connection_id,
+                              const LaunchEnvironment& environment);
     /*
-     * Adds an empty launch environment for a run destination that has none.
+     * Adds an empty launch environment for an SSH connection that has none.
      * Does not persist.
-     * @param id: an SSH connection's id.
      */
-    void AddLaunchEnvironment(const std::string& id);
+    void AddLaunchEnvironment(const std::string& ssh_connection_id);
     /*
-     * Removes a run destination's launch environment. Does not persist.
-     * @param id: an SSH connection's id.
+     * Removes an SSH connection's launch environment. Does not persist.
      */
-    void RemoveLaunchEnvironment(const std::string& id);
+    void RemoveLaunchEnvironment(const std::string& ssh_connection_id);
 
 private:
     ProfilesDocument();

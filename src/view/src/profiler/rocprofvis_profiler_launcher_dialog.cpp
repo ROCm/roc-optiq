@@ -184,6 +184,10 @@ void ProfilerLauncherDialog::Render()
         return;
     }
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    ValidateSelectedConnection();
+#endif
+
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSizeConstraints(ImVec2(24.0f, 10.0f) * ImGui::GetFrameHeight(),
@@ -889,11 +893,13 @@ ProfilerLauncherDialog::RenderToolLocationsWindow()
                 m_config.tool_directory     = m_environment_edit.tool_directory;
                 m_config.python_environment = m_environment_edit.python_environment;
                 m_execution_cache_dirty     = true;
-                const std::string id        = ActiveLaunchEnvironmentId();
-                if(!id.empty())
-                {
-                    ProfilesDocument::Get().SetLaunchEnvironment(id, m_environment_edit);
-                }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+                ProfilesDocument::Get().SetLaunchEnvironment(
+                    m_config.connection, m_selected_connection_id, m_environment_edit);
+#else
+                ProfilesDocument::Get().SetLaunchEnvironment(ConnectionType::kLocal,
+                                                             std::string(), m_environment_edit);
+#endif
                 open = false;
             }
         }
@@ -1215,6 +1221,8 @@ void ProfilerLauncherDialog::RenderRemoteSection()
         if (ImGui::Button((host_chip + "##profiler_connection").c_str(),
                          ImVec2(-FLT_MIN, 0.0f)))
         {
+            // Pick up connections added or deleted from other dialogs' stores.
+            m_connection_store.Load();
             m_ssh_settings_dialog = std::make_unique<SshSettingsDialog>(
                 m_connection_store, m_selected_connection_id,
                 [this](const std::string& id)
@@ -1534,8 +1542,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         m_run_end_time         = 0.0;
 
         SaveToSettings();
-        AddRecentPath(backend->GetRecentTargets(m_config.tool, m_config.operation),
-                      target.path);
+        AddRecentPath(backend->GetProfilerRecentTargets(m_config), target.path);
     }
     // On failure the run's outcome carries the reason, shown by LastRunError().
 }
@@ -1956,28 +1963,16 @@ void ProfilerLauncherDialog::LoadFromSettings()
     }
 }
 
-std::string
-ProfilerLauncherDialog::ActiveLaunchEnvironmentId() const
-{
-    std::string id = LOCAL_LAUNCH_ENVIRONMENT_ID;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(IsSshMode())
-    {
-        id = m_selected_connection_id;
-    }
-#endif
-    return id;
-}
-
 void
 ProfilerLauncherDialog::ApplyLaunchEnvironment()
 {
-    LaunchEnvironment environment;
-    const std::string id = ActiveLaunchEnvironmentId();
-    if(!id.empty())
-    {
-        environment = ProfilesDocument::Get().GetLaunchEnvironment(id);
-    }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    const LaunchEnvironment environment = ProfilesDocument::Get().GetLaunchEnvironment(
+        m_config.connection, m_selected_connection_id);
+#else
+    const LaunchEnvironment environment =
+        ProfilesDocument::Get().GetLaunchEnvironment(ConnectionType::kLocal, std::string());
+#endif
     m_config.tool_directory      = environment.tool_directory;
     m_config.python_environment  = environment.python_environment;
     m_execution_cache_dirty      = true;
@@ -2006,6 +2001,21 @@ void ProfilerLauncherDialog::ApplySelectedConnection()
     else
     {
         m_remote_uri->SetConnection(SshConnectionConfig());
+    }
+}
+
+void ProfilerLauncherDialog::ValidateSelectedConnection()
+{
+    // The open settings dialog holds a reference to the store, so wait for it to close.
+    if(!m_ssh_settings_dialog && !m_selected_connection_id.empty() &&
+       !ProfilesDocument::Get().SshConnections().contains(m_selected_connection_id))
+    {
+        m_connection_store.Load();
+        m_selected_connection_id = m_connection_store.Empty()
+                                       ? std::string()
+                                       : m_connection_store.List().front().id;
+        ApplySelectedConnection();
+        ApplyLaunchEnvironment();
     }
 }
 

@@ -69,11 +69,9 @@ public:
 
     TargetSpec const& GetTarget(rocprofvis_profiler_operation_t operation) const override;
     ExtraArguments& GetExtraArguments(rocprofvis_profiler_operation_t operation) override;
-    std::vector<std::string>& GetRecentTargets(
-        rocprofvis_profiler_tool_t      tool,
-        rocprofvis_profiler_operation_t operation) override;
-    bool RenderTargetSection(LaunchConfig const&   config,
-                             TargetBrowseFn const& on_browse) override;
+    std::vector<std::string>& GetProfilerRecentTargets(LaunchConfig const& config) override;
+    bool  RenderTargetSection(LaunchConfig const&   config,
+                              TargetBrowseFn const& on_browse) override;
     float MinWidth() const override;
 
     void FlattenToExecution(LaunchConfig const&                               config,

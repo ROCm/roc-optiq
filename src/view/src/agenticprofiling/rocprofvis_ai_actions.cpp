@@ -303,6 +303,25 @@ OptiqActions::ListTabs() const
     return names;
 }
 
+std::vector<std::string>
+OptiqActions::ListTabIds() const
+{
+    std::vector<std::string> ids;
+    AppWindow*               app = AppWindow::GetInstance();
+    if(app == nullptr || !app->GetTabContainer())
+    {
+        return ids;
+    }
+    for(const TabItem* tab : app->GetTabContainer()->GetTabs())
+    {
+        if(tab != nullptr)
+        {
+            ids.push_back(tab->m_id);
+        }
+    }
+    return ids;
+}
+
 std::string
 OptiqActions::ActiveTab() const
 {
@@ -329,7 +348,19 @@ OptiqActions::SelectTab(const std::string& name, std::string& selected_id,
     // container that owns the tabs; the details panel resolves its inner tabs
     // through the same call.
     std::shared_ptr<TabContainer> container = app->GetTabContainer();
-    const TabItem*                match    = container->FindTabByLabel(name);
+    const TabItem*                match     = nullptr;
+    for(const TabItem* tab : container->GetTabs())
+    {
+        if(tab != nullptr && tab->m_id == name)
+        {
+            match = tab;
+            break;
+        }
+    }
+    if(match == nullptr)
+    {
+        match = container->FindTabByLabel(name);
+    }
     if(match == nullptr)
     {
         return false;

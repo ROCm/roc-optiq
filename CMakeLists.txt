@@ -34,15 +34,25 @@ option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
-# TEMPORARY: gate the in-development profiler-launch and remote/SSH features
-# until they ship. Both default OFF so release builds exclude the UI, the
-# dependent sources, and (for remote) the libssh2/mbedtls stack and its
-# submodules. Remove these options and unwrap their guards when the features
-# graduate.
-option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
-option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
-option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
-option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
+# Umbrella switch for every in-development feature below. It only changes their
+# defaults, so an explicit -DROCPROFVIS_ENABLE_<X>=OFF still wins. The CI
+# experimental builds set it, so adding or removing a feature here needs no
+# workflow change.
+option(ROCPROFVIS_ENABLE_EXPERIMENTAL "Default every in-development feature to ON" OFF)
+if(ROCPROFVIS_ENABLE_EXPERIMENTAL)
+    set(ROCPROFVIS_EXPERIMENTAL_DEFAULT ON)
+else()
+    set(ROCPROFVIS_EXPERIMENTAL_DEFAULT OFF)
+endif()
+
+# TEMPORARY: in-development features. Each defaults to the umbrella above, so
+# release builds exclude their UI and dependent sources (for remote, also the
+# libssh2/mbedtls stack and its submodules). Remove an option and unwrap its
+# guards when the feature graduates.
+option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 # Only meaningful with scripting: downloads a pinned CPython and ships it with
 # the app. OFF builds against this machine's Python, which then only runs here.
 include(CMakeDependentOption)
@@ -62,12 +72,15 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 # remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
 # built when BOTH are enabled.
 
-# TEMPORARY: gate the in-development trace-compare and multi-window features
-# until they ship. Both default OFF so release builds exclude their UI and
-# dependent sources. Remove these options and unwrap their guards when the
-# features graduate.
-option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
-option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
+
+# Deliberately NOT under the umbrella: the Hub is unstable (its system tests
+# abort with std::future_error and a filter error when it is on), and it clones
+# rocm-systems at configure time. Default OFF until it is stable; pass
+# -DROCPROFVIS_ENABLE_PROFILER_HUB=ON to build it, then move it under the
+# umbrella by defaulting it to ${ROCPROFVIS_EXPERIMENTAL_DEFAULT}.
+option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" OFF)
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
@@ -303,8 +316,8 @@ list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_remote_trace_orchestrator.h
     src/view/src/remote/rocprofvis_ssh_settings_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
-    src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
-    src/view/src/remote/rocprofvis_ssh_test_dialog.h
+    src/view/src/remote/rocprofvis_ssh_file_dialog.cpp
+    src/view/src/remote/rocprofvis_ssh_file_dialog.h
     src/view/src/remote/rocprofvis_remote_file_browser.cpp
     src/view/src/remote/rocprofvis_remote_file_browser.h
 )
@@ -334,6 +347,10 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tools.h
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_links.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
     # ImGuiTextSelect (MIT) submodule, used only by Ask Optiq message cards.
@@ -519,6 +536,20 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
+
+    # The trace link store and run diff behind compare_traces need no GPU,
+    # trace, UI, endpoint, or feature define, so every test build covers them.
+    set(ASSISTANT_TEST_NAME ${TARGET_NAME}-assistant-tests)
+    add_executable(${ASSISTANT_TEST_NAME}
+        src/view/test/rocprofvis_ai_assistant_tests.cpp
+        src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
+        src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+        src/view/src/rocprofvis_json_utils.cpp)
+    target_include_directories(${ASSISTANT_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${ASSISTANT_TEST_NAME} PRIVATE json spdlog
+                          Catch2::Catch2WithMain)
+    add_test(NAME ${ASSISTANT_TEST_NAME} COMMAND ${ASSISTANT_TEST_NAME})
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)

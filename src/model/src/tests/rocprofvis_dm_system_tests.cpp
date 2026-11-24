@@ -628,6 +628,29 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         std::filesystem::remove(target);
     }
 
+    // A trim to a path whose database can't be opened fails instead of waiting
+    // forever for a connection.
+    // Fixture Reads:  m_db, m_start_time, m_end_time
+    SECTION("Trim Trace To Unopenable Path")
+    {
+        PrintHeader("Trim trace to a path that can't be opened");
+        const std::filesystem::path missing_dir = "sample/missing_trim_directory";
+        const std::string           target      = (missing_dir / "trimmed.db").string();
+        REQUIRE_FALSE(std::filesystem::exists(missing_dir));
+
+        rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);
+        REQUIRE(nullptr != object2wait);
+        rocprofvis_dm_result_t result = rocprofvis_db_trim_save_async(
+            m_db, m_start_time, m_start_time + ((m_end_time - m_start_time) / 2),
+            target.c_str(), object2wait);
+        REQUIRE(result == kRocProfVisDmResultSuccess);
+        REQUIRE(rocprofvis_db_future_wait(object2wait, UINT64_MAX) !=
+                kRocProfVisDmResultSuccess);
+        rocprofvis_db_future_free(object2wait);
+
+        REQUIRE_FALSE(std::filesystem::exists(missing_dir));
+    }
+
     // Reads each selected track's full time range one at a time, measuring read
     // times and row counts per track and in total.
     // Fixture Reads:  m_trace, m_db, m_start_time, m_end_time, m_num_tracks

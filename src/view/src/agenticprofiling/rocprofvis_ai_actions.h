@@ -77,6 +77,7 @@ public:
     // selected trace forward when it next draws, so ActiveTab() names the old one
     // until then; SelectTab reports the tab it picked instead.
     std::vector<std::string> ListTabs() const;
+    std::vector<std::string> ListTabIds() const;
     std::string              ActiveTab() const;
     bool                     SelectTab(const std::string& name, std::string& selected_id,
                                        std::string& selected_label);

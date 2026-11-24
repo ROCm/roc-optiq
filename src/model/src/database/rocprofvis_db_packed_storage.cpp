@@ -237,7 +237,7 @@ namespace DataModel
         }else
         if (column_index == Builder::SCHEMA_INDEX_LEVEL)
         {
-            return Builder::IntToTypeEnum(static_cast<int>(value),Builder::mem_alloc_types);
+            return Builder::IntToTypeEnum(static_cast<int>(value),Builder::mem_alloc_levels);
         }
         return nullptr;
     }

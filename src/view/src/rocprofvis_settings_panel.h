@@ -6,6 +6,7 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,9 @@ private:
     std::vector<std::string> m_assistant_orphaned_providers;
     bool                     m_assistant_show_token  = false;
     bool                     m_assistant_clear_token = false;
+    // Whether the endpoint has a stored key, read once per dialog: each read is a
+    // credential-store lookup that copies the key into memory.
+    std::optional<bool> m_assistant_token_stored;
 #endif
 };
 

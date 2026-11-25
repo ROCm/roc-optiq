@@ -57,16 +57,17 @@ constexpr RuleRow kComputeAnalyze[] = {
 // into one alternation would let a later summary line outrank the database
 // line.
 constexpr RuleRow kRocprofSysTrace[] = {
-    {kKeyTraceDb, R"(Database:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
-    {kKeyTraceDb, R"(File:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
-    {kKeyTraceDb, R"(([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(Database:\s*'?(\S.*?\.[dD][bB])'?\s*$)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(File:\s*'?(\S.*?\.[dD][bB])'?\s*$)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(([^\s'"]+\.[dD][bB])\b)", 1, ScrapePolicy::kLastMatch},
 };
 
 // rocprofv3. rocpd output (the default format) is written per process and
 // named with "Opened result file:" as each database is created. The path is
 // followed by a "(UUID=...)" suffix on the same line.
 constexpr RuleRow kRocprofV3[] = {
-    {kKeyTraceDb, R"(Opened result file:\s*(\S.*?\.db)(?:\s|$))", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(Opened result file:\s*(\S.*?\.[dD][bB])(?:\s+\(UUID=[^)]*\))?\s*$)", 1,
+     ScrapePolicy::kLastMatch},
 };
 
 struct RuleSet

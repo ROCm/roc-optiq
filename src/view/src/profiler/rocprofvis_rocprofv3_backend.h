@@ -14,7 +14,7 @@ namespace View
 
 struct RocprofV3Settings
 {
-    enum Tracing
+    enum Tracing : uint32_t
     {
         kAggregateRuntimeTrace,
         kAggregateSysTrace,

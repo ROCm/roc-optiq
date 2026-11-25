@@ -461,7 +461,7 @@ AppWindow (singleton, RocWidget)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
-+-- m_settings_panel        : SettingsPanel (modal, opened via menu)
++-- m_settings_panel        : SettingsPanel (modal, opened via menu or AppWindow::ShowSettings(category))
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
 +-- ProfilerLauncherDialog   : optional profiler UI
@@ -2434,6 +2434,11 @@ The modal Settings UI. Categories: `Display`, `Units`, `Other`,
 `Reset*Options()` pair. Reuse this rather than building per-feature
 preferences UI.
 
+`Show()` opens it on `Display`; `ShowAtCategory(category)` opens it on
+any page. Other widgets reach it through
+`AppWindow::ShowSettings(category)` rather than adding an opener per
+feature.
+
 ### `PresetManager` and `PresetComponent` (`rocprofvis_presets.{h,cpp}`)
 
 Save/load named layouts per trace project. Used by Compute views
@@ -2845,6 +2850,10 @@ Integration points:
   `Update()` once a frame, reserves `DockedWidth()` on the right of the
   main view, and renders it with `RenderDocked()`. The View menu binds
   `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
+- The model name in the header pill opens Preferences on the Assistant
+  page (`AppWindow::ShowSettings(SettingsPanel::Assistant)`). With no
+  endpoint set, a `Not configured` pill takes its place and does the
+  same.
 - `TraceView` and `AnalysisView` expose the plain accessors
   `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into

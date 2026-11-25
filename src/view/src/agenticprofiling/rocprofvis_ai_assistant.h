@@ -173,6 +173,7 @@ private:
     void        RenderLinkMenu();
     // The model, context, and token-usage pill under the title.
     void        RenderContextChip(const std::string& model, const std::string& endpoint);
+    void        RenderSetupChip();
     void        RenderTranscript();
     void        RenderMessageCard(Conversation& conversation, size_t index,
                                   const ChatLine& line);

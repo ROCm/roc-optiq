@@ -369,6 +369,34 @@ struct AssistantPanelOpen
     ~AssistantPanelOpen() { *AssistantPanel::GetInstance()->VisiblePtr() = was_visible; }
 };
 
+// Keeps a test's in-memory edits to the assistant settings from outliving it.
+struct AssistantSettingsRestore
+{
+    AssistantSettings saved;
+    AssistantSettingsRestore()
+    : saved(SettingsManager::GetInstance().GetUserSettings().assistant)
+    {}
+    ~AssistantSettingsRestore()
+    {
+        SettingsManager::GetInstance().GetUserSettings().assistant = saved;
+    }
+};
+
+// Whether Preferences is open on the Assistant page, the only page that draws
+// the URL field. Cancels the dialog if it is open at all.
+bool
+CancelAssistantSettings(ImGuiTestContext* ctx)
+{
+    ctx->SetRef("//Settings");
+    const bool on_assistant_page = ctx->ItemExists("**/##assistant_url");
+    if(ctx->ItemExists("**/Cancel"))
+    {
+        ctx->ItemClick("**/Cancel");
+    }
+    ctx->SetRef("Main Window");
+    return on_assistant_page;
+}
+
 bool
 AssistantTraceReady(const std::string& project_id)
 {
@@ -3357,6 +3385,53 @@ void RegisterAppTests(ImGuiTestEngine* e)
         result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
                                     "{\"trace\":\"" + ref + "\"}");
         IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+
+    // The model name in the Ask Optiq header, and the pill that stands in for it
+    // before an endpoint is set, open Preferences on the Assistant page.
+    t           = IM_REGISTER_TEST(e, "app", "common_assistant_header_opens_settings");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        AssistantPanelOpen       panel_open;
+        AssistantSettingsRestore settings_restore;
+        ctx->Yield(3);
+        ctx->SetRef("Main Window");
+
+        // A placeholder URL draws the model name. Cancel does not save, and
+        // AssistantSettingsRestore puts the previous endpoint back.
+        AssistantSettings& assistant =
+            SettingsManager::GetInstance().GetUserSettings().assistant;
+        if(assistant.active >= assistant.providers.size())
+        {
+            assistant.providers.push_back(MakeDefaultAssistantProvider());
+            assistant.active = assistant.providers.size() - 1;
+        }
+        assistant.providers[assistant.active].endpoint_url = "http://127.0.0.1:1";
+        ctx->Yield(3);
+
+        // The right end shows the context size, or token counts once the
+        // endpoint has reported them. Neither is a link.
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeR);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
+
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeL);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
+        ctx->Yield(3);
+
+        // With no endpoint, a pill in the same place leads to the same page.
+        for(AssistantProvider& provider : assistant.providers)
+        {
+            provider.endpoint_url.clear();
+        }
+        ctx->Yield(3);
+        IM_CHECK(!ctx->ItemExists("**/##assistant_context_chip"));
+        IM_CHECK(ctx->ItemExists("**/##assistant_setup_chip"));
+        ctx->ItemClick("**/##assistant_setup_chip");
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
     };
 #endif
 }

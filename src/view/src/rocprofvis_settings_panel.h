@@ -18,14 +18,8 @@ namespace View
 class SettingsPanel
 {
 public:
-    SettingsPanel(SettingsManager& settings);
-    ~SettingsPanel();
-
-    void Show();
-    void Render();
-
-private:
-    enum Category
+    // The pages of the dialog, in the order its list shows them.
+    enum Category : int
     {
         Display,
         Tracks,
@@ -37,6 +31,15 @@ private:
         Other,
     };
 
+    SettingsPanel(SettingsManager& settings);
+    ~SettingsPanel();
+
+    void Show();
+    // Opens the dialog on the given page.
+    void ShowAtCategory(Category category);
+    void Render();
+
+private:
     void RenderDisplayOptions();
     void RenderTrackOptions();
     void RenderUnitOptions();

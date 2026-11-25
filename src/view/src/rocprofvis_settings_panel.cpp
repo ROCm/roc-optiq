@@ -53,8 +53,14 @@ SettingsPanel::~SettingsPanel() {}
 void
 SettingsPanel::Show()
 {
+    ShowAtCategory(Display);
+}
+
+void
+SettingsPanel::ShowAtCategory(Category category)
+{
     m_should_open             = true;
-    m_category                = Display;
+    m_category                = category;
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;

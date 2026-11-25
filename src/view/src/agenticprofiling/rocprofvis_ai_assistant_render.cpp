@@ -1105,6 +1105,27 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
                     endpoint);
 }
 
+float
+AssistantPanel::ModelNameWidth()
+{
+    ModelWidthCache& cache     = m_model_width_cache;
+    ImFont* const    font      = ImGui::GetFont();
+    const float      font_size = ImGui::GetFontSize();
+    if(cache.revision != m_model_catalog.Revision() || cache.font != font ||
+       cache.font_size != font_size)
+    {
+        cache.width = 0.0f;
+        for(const std::string& name : m_model_catalog.Models())
+        {
+            cache.width = std::max(cache.width, ImGui::CalcTextSize(name.c_str()).x);
+        }
+        cache.revision  = m_model_catalog.Revision();
+        cache.font      = font;
+        cache.font_size = font_size;
+    }
+    return cache.width;
+}
+
 // The model list under the pill, with the model in use checked. A pick is
 // saved like any setting, and the next request goes to it.
 void
@@ -1119,15 +1140,12 @@ AssistantPanel::RenderModelMenu(const ImVec2& anchor, const std::string& model,
     const float       max_h =
         ImGui::GetTextLineHeightWithSpacing() * ASSISTANT_MODEL_MENU_ROWS +
         style.WindowPadding.y * 2.0f;
-    float row_w = 0.0f;
-    for(const std::string& name : m_model_catalog.Models())
-    {
-        row_w = std::max(row_w, ImGui::CalcTextSize(name.c_str()).x);
-    }
+    const float text_w = ModelNameWidth();
     const float max_w =
         ImGui::GetMainViewport()->WorkSize.x * ASSISTANT_MODEL_MENU_MAX_SCREEN;
-    const float popup_w = std::min(max_w, std::max(ASSISTANT_MODEL_MENU_MIN_WIDTH,
-                                                   row_w + style.WindowPadding.x * 2.0f));
+    const float popup_w =
+        std::min(max_w, std::max(ASSISTANT_MODEL_MENU_MIN_WIDTH,
+                                 text_w + style.WindowPadding.x * 2.0f));
     ImGui::SetNextWindowPos(anchor, ImGuiCond_Appearing);
     ImGui::SetNextWindowSizeConstraints(ImVec2(popup_w, 0.0f), ImVec2(popup_w, max_h));
     PushContextMenuStyles();
@@ -1137,6 +1155,10 @@ AssistantPanel::RenderModelMenu(const ImVec2& anchor, const std::string& model,
         {
             ImGui::CloseCurrentPopup();
         }
+        // The names are drawn over the rows, not as their labels, so the row
+        // width alone sets how far the menu scrolls: the menu's full width, or
+        // the widest name when that is wider.
+        const float row_w = std::max(text_w, ImGui::GetContentRegionAvail().x);
         for(size_t i = 0;
             m_model_catalog.Url() == endpoint && i < m_model_catalog.Models().size(); ++i)
         {

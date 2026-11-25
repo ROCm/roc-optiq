@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -146,6 +147,10 @@ public:
     const std::vector<std::string>& Models() const;
     const std::string&              Url() const;
 
+    // Changes whenever Models() or Url() does, so a caller can keep what it
+    // derives from the list until then.
+    uint64_t Revision() const;
+
 private:
     std::shared_ptr<assistant_model_catalog_request_t> m_request;
     std::future<std::vector<std::string>>              m_lookup;
@@ -160,6 +165,7 @@ private:
 
     std::vector<std::string> m_models;
     std::string              m_url;
+    uint64_t                 m_revision = 0;
 };
 
 // True when two endpoint URLs send credentials to the same scheme, host, and

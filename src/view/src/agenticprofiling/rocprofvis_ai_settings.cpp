@@ -259,11 +259,7 @@ SettingsPanel::RenderAssistantSettings()
         const float field_x = ImGui::GetItemRectMin().x;
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
         const float list_w = ImGui::GetCursorScreenPos().x + arrow_w - field_x;
-        float       widest = 0.0f;
-        for(const std::string& name : models)
-        {
-            widest = std::max(widest, ImGui::CalcTextSize(name.c_str()).x);
-        }
+        const float widest = AssistantPanel::GetInstance()->ModelNameWidth();
         const float max_w =
             ImGui::GetMainViewport()->WorkSize.x * ASSISTANT_MODEL_LIST_MAX_SCREEN;
         const float popup_w =

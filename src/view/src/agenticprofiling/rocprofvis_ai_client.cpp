@@ -1423,6 +1423,7 @@ AssistantModelCatalog::Request(const std::string& endpoint_url,
     // even when the URL and key are unchanged.
     m_models.clear();
     m_url.clear();
+    ++m_revision;
 
     m_lookup_url      = endpoint_url;
     m_lookup_key_hash = key_hash;
@@ -1477,6 +1478,7 @@ AssistantModelCatalog::Poll()
     }
     m_models = m_lookup.get();
     m_url    = m_lookup_url;
+    ++m_revision;
     return false;
 }
 
@@ -1490,6 +1492,12 @@ const std::string&
 AssistantModelCatalog::Url() const
 {
     return m_url;
+}
+
+uint64_t
+AssistantModelCatalog::Revision() const
+{
+    return m_revision;
 }
 
 }  // namespace View

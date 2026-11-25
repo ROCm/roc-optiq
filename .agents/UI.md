@@ -3049,7 +3049,10 @@ Rules that are easy to get wrong here:
   when this URL listed models; the arrow on the header pill opens the
   same list, saved through `SettingsManager::SetActiveAssistantModel`,
   and is dimmed mid-turn so one answer stays on one model. The model
-  name itself still opens Preferences. A turn pins its endpoint,
+  name itself still opens Preferences. Both lists take their width from
+  `AssistantPanel::ModelNameWidth()`, which measures the names again only
+  when the catalog's `Revision()`, the font face, or the size changes, so
+  neither picker measures the list every frame. A turn pins its endpoint,
   model, and key before any summary warmup, so Preferences edits cannot
   move later rounds of that answer to another host.
 

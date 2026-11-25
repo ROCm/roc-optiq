@@ -54,6 +54,9 @@ public:
     // The models the active endpoint lists. The settings dialog and the model
     // picker in the header share it, so both offer the same names.
     AssistantModelCatalog& ModelCatalog();
+    // The widest listed name in the current face and size, for sizing either
+    // picker. Measured again only when the list, the face, or the size changes.
+    float ModelNameWidth();
 
 private:
     friend struct AssistantPanelTestPeer;
@@ -153,6 +156,16 @@ private:
         std::shared_ptr<AssistantChatCall> call;
         std::future<void>                  cancel;
         std::future<AssistantChatResult>   result;
+    };
+
+    // ModelNameWidth()'s last measurement, with the list revision, face, and
+    // size it was measured for.
+    struct ModelWidthCache
+    {
+        uint64_t revision  = 0;
+        ImFont*  font      = nullptr;
+        float    font_size = 0.0f;
+        float    width     = 0.0f;
     };
 
     AssistantPanel();
@@ -319,7 +332,8 @@ private:
     // Set once the open panel has asked for the saved endpoint's models, and
     // cleared when it closes. The settings dialog asks again whenever the
     // endpoint or key changes.
-    bool m_models_requested;
+    bool            m_models_requested;
+    ModelWidthCache m_model_width_cache;
 };
 
 }  // namespace View

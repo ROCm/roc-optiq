@@ -360,14 +360,27 @@ jobs:
           # Use the renamed file so repodata <location href> matches the S3 key
           mkdir -p rpm-repo
           cp "${RPM_SRC}" "rpm-repo/${RPM_NAME}"
-          createrepo_c rpm-repo/
+          # Match ROCm core: no sqlite DBs and unhashed metadata filenames, so
+          # each run overwrites the previous metadata instead of leaving a
+          # stale <sha256>-* set behind (the CI role cannot delete from S3).
+          MD_OPTS="--no-database --simple-md-filenames"
+          createrepo_c ${MD_OPTS} rpm-repo/
 
+          # Publish only the current build's metadata, like the DEB repo.
+          # Nightly packages are re-indexed when they are signed, so the
+          # published repo keeps the history.
           aws s3 cp \
             "rpm-repo/${RPM_NAME}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
             --no-progress
+          # Upload repomd.xml last so it never points at metadata that has
+          # not been uploaded yet.
           aws s3 cp --recursive rpm-repo/repodata \
             "${S3_RPM_PREFIX}/repodata/" \
+            --exclude "repomd.xml" \
+            --no-progress
+          aws s3 cp rpm-repo/repodata/repomd.xml \
+            "${S3_RPM_PREFIX}/repodata/repomd.xml" \
             --no-progress
 
       - name: Upload Tarball to S3

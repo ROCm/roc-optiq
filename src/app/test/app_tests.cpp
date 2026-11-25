@@ -3358,5 +3358,38 @@ void RegisterAppTests(ImGuiTestEngine* e)
                                     "{\"trace\":\"" + ref + "\"}");
         IM_CHECK(result.content.find("not open") != std::string::npos);
     };
+
+    // A scroll target belongs to one conversation and lasts until its transcript
+    // has been drawn: the one on screen is spent within a few frames, and one
+    // for a trace that is not in front keeps waiting. Checked on the panel's
+    // state, so it needs no endpoint and no particular trace.
+    t           = IM_REGISTER_TEST(e, "app", "common_assistant_scroll_target");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        // More frames than the panel spends on one target.
+        constexpr int SETTLE_FRAMES = 10;
+
+        AssistantPanelOpen     panel_open;
+        AssistantPanelTestPeer peer{ *AssistantPanel::GetInstance() };
+        ctx->Yield(3);
+        const std::string on_screen  = peer.ViewProjectId();
+        const std::string off_screen = on_screen + "#not-open";
+
+        peer.AddAnswer(off_screen, "An answer nobody is looking at.");
+        peer.AddAnswer(on_screen, "An answer on screen.");
+        const bool armed =
+            peer.ScrollPending(on_screen) && peer.ScrollPending(off_screen);
+        ctx->Yield(SETTLE_FRAMES);
+        const bool spent = !peer.ScrollPending(on_screen);
+        const bool kept  = peer.ScrollPending(off_screen);
+
+        // Dropped before the checks, so a failure leaves no lines behind for
+        // whichever test runs next.
+        peer.DropConversation(on_screen);
+        peer.DropConversation(off_screen);
+
+        IM_CHECK(armed);
+        IM_CHECK(spent);
+        IM_CHECK(kept);
+    };
 #endif
 }

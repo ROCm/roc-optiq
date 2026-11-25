@@ -625,7 +625,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     if(provider == nullptr || provider->endpoint_url.empty())
     {
         AppendLine(Speaker::kStatus,
-                   "Set the assistant URL in Edit > Preferences > Assistant.");
+                   "Set the assistant URL from the header pill, or in "
+                   "Edit > Preferences > Assistant.");
         NotificationManager::GetInstance().Show(
             "Assistant URL is not set", NotificationLevel::Warning);
         return;

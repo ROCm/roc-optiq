@@ -342,6 +342,17 @@ LinkTraces(const AssistantToolContext& baseline, const AssistantToolContext& tar
     }
 }
 
+// Where the model name in the header leads, set up or not.
+void
+OpenAssistantSettings()
+{
+    AppWindow* app = AppWindow::GetInstance();
+    if(app != nullptr)
+    {
+        app->ShowSettings(SettingsPanel::Assistant);
+    }
+}
+
 }  // namespace
 
 void
@@ -664,7 +675,8 @@ AssistantPanel::RenderHeaderCard()
     {
         if(!configured)
         {
-            SetTooltipStyled("Not configured. Edit > Preferences > Assistant.");
+            SetTooltipStyled("Not configured. Click the Not configured pill, or open "
+                             "Edit > Preferences > Assistant.");
         }
         else
         {
@@ -704,7 +716,8 @@ AssistantPanel::RenderHeaderCard()
     {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
-        ImGui::TextWrapped("Set the URL, model, and key in Edit > Preferences > Assistant.");
+        ImGui::TextWrapped("Set the URL, model, and key from the Not configured pill, "
+                           "or in Edit > Preferences > Assistant.");
         ImGui::PopStyleColor();
     }
 
@@ -794,17 +807,6 @@ AssistantPanel::RenderLinkMenu()
         ImGui::EndPopup();
     }
     PopContextMenuStyles();
-}
-
-// Where the model name in the header leads, set up or not.
-void
-OpenAssistantSettings()
-{
-    AppWindow* app = AppWindow::GetInstance();
-    if(app != nullptr)
-    {
-        app->ShowSettings(SettingsPanel::Assistant);
-    }
 }
 
 // Stands in for the context pill until an endpoint is set, so the place the
@@ -930,10 +932,12 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     if(over_model)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if(pressed)
-        {
-            OpenAssistantSettings();
-        }
+    }
+    // Enter or Space on the focused pill has no pointer over the name, but
+    // it is still an activation. A mouse click only counts on the name.
+    if(pressed && (over_model || !ImGui::IsMouseReleased(ImGuiMouseButton_Left)))
+    {
+        OpenAssistantSettings();
     }
 
     ImDrawList*  draw     = ImGui::GetWindowDrawList();

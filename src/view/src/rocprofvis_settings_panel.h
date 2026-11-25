@@ -18,7 +18,7 @@ class SettingsPanel
 {
 public:
     // The pages of the dialog, in the order its list shows them.
-    enum Category
+    enum Category : int
     {
         Display,
         Tracks,

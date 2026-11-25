@@ -3317,25 +3317,32 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
         ctx->SetRef("Main Window");
 
-        // A machine with an endpoint saved draws the model in the pill.
-        if(ctx->ItemExists("**/##assistant_context_chip"))
-        {
-            // The usage figures at its right end report; they are not a link.
-            ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeR);
-            ctx->MouseClick();
-            ctx->Yield(3);
-            IM_CHECK(!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
-
-            ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeL);
-            ctx->MouseClick();
-            ctx->Yield(3);
-            IM_CHECK(CancelAssistantSettings(ctx));
-            ctx->Yield(3);
-        }
-
-        // With no endpoint, a pill in the same place leads to the same page.
+        // A placeholder URL draws the model name. Cancel does not save, and
+        // AssistantSettingsRestore puts the previous endpoint back.
         AssistantSettings& assistant =
             SettingsManager::GetInstance().GetUserSettings().assistant;
+        if(assistant.active >= assistant.providers.size())
+        {
+            assistant.providers.push_back(MakeDefaultAssistantProvider());
+            assistant.active = assistant.providers.size() - 1;
+        }
+        assistant.providers[assistant.active].endpoint_url = "http://127.0.0.1:1";
+        ctx->Yield(3);
+
+        // The right end shows the context size, or token counts once the
+        // endpoint has reported them. Neither is a link.
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeR);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
+
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeL);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
+        ctx->Yield(3);
+
+        // With no endpoint, a pill in the same place leads to the same page.
         for(AssistantProvider& provider : assistant.providers)
         {
             provider.endpoint_url.clear();

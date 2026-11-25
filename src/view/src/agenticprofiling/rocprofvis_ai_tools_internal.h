@@ -66,9 +66,9 @@ AssistantToolTable GetAssistantScriptToolHandlers();
 // tab away before searching it.
 AssistantToolTable GetAssistantComputeToolHandlers();
 
-// The handful of UI tools that mean the same thing on either kind of trace, so
-// a compute turn is not left unable to answer "switch to my other trace". Kept
-// apart from the full UI table because most of that table drives a timeline.
+// The UI tools that mean the same thing on either kind of trace, so a compute
+// turn is not left unable to answer "switch to my other trace". Kept apart from
+// the full UI table because most of that table drives a timeline.
 AssistantToolTable GetAssistantSharedUiToolHandlers();
 
 // Formats a finished script run, or the decision that stopped it. Reached

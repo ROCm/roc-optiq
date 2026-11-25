@@ -50,10 +50,6 @@ namespace
 // silently reading the first few of a million.
 constexpr size_t ASSISTANT_MAX_ARRAY_ENTRIES = 256;
 
-// The one tool that runs without a trace, since it only puts buttons under the
-// chat.
-constexpr const char* ASSISTANT_NEXT_STEPS_TOOL = "offer_next_steps";
-
 // The read tool that names its second trace with its own "with" argument, so a
 // trace argument on it would be ambiguous.
 constexpr const char* ASSISTANT_COMPARE_TRACES_TOOL = "compare_traces";
@@ -581,7 +577,7 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
     // Reject a compute turn before looking up its tools. Their schema names are
     // still compiled in, but their handlers are stubs in this build, so lookup
     // first would misleadingly call them unknown while listing them as available.
-    if(context.is_compute && tool_name != ASSISTANT_NEXT_STEPS_TOOL)
+    if(context.is_compute)
     {
         return DoneResult(
             "This is a compute trace, and this build of Ask Optiq reads system "
@@ -597,13 +593,6 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         return DoneResult("Unknown tool \"" + tool_name + "\". Available tools: " +
                               AssistantToolNameList(context.is_compute) + ".",
                           "Unknown tool");
-    }
-
-    // Next-step buttons are a UI side-effect, so they are the one tool that
-    // does not need an open trace.
-    if(tool_name == ASSISTANT_NEXT_STEPS_TOOL)
-    {
-        return entry->handler(context, args, tool_name);
     }
 
     const std::string trace_ref = JsonUtils::GetString(args, "trace", "");

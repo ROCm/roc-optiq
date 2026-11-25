@@ -4,6 +4,7 @@
 #include "rocprofvis_db_version.h"
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_db_rocpd.h"
+#include <charconv>
 #include <sstream>
 
 namespace RocProfVis
@@ -227,14 +228,14 @@ namespace DataModel
                 result = m_db->ExecuteSQLQuery(future, &db_instance, query.c_str(), s_metadata_cache_table_name, (rocprofvis_dm_handle_t)&metadata_table, &m_db->CallbackCacheTable);
                 if (result == kRocProfVisDmResultSuccess)
                 {
-                    TableCache* table = (TableCache*)metadata_table.GetTableHandle(s_metadata_cache_table_name);
+                    CatalogTable* table = (CatalogTable*)metadata_table.GetTableHandle(s_metadata_cache_table_name);
                     uint32_t dependency_mask = 0;
                     for (int i = 0; i < table->NumRows(); i++)
                     {
-                        uint32_t id = std::atol(table->GetCellByIndex(i, "id"));
-                        std::string base_name = table->GetCellByIndex(i, "name");
-                        uint64_t hash = std::atoll(table->GetCellByIndex(i, "hash"));
-                        uint32_t version = std::atol(table->GetCellByIndex(i, "version"));
+                        uint32_t id = std::atol(table->CellTextByIndex(i, "id"));
+                        std::string base_name = table->CellTextByIndex(i, "name");
+                        uint64_t hash = std::atoll(table->CellTextByIndex(i, "hash"));
+                        uint32_t version = std::atol(table->CellTextByIndex(i, "version"));
                         roc_optiq_metadata_t& data = m_roc_optiq_table_properties[id];
 
                         if (data.type == kRocOptiqTablePerGuid)
@@ -311,26 +312,44 @@ namespace DataModel
         return result;
 	}
 
-    void DatabaseVersion::SetVersion(const char* version) {
-        m_db_version = ConvertVersionStringToInt(version);
+    bool DatabaseVersion::SetVersion(const char* version) {
+        std::vector<uint32_t> version_array;
+        bool                  result = ConvertVersionStringToInt(version, version_array);
+        m_db_version = result ? std::move(version_array) : std::vector<uint32_t>();
+        return result;
     }
 
-    std::vector<uint32_t>
-        DatabaseVersion::ConvertVersionStringToInt(const char* version)
+    bool
+        DatabaseVersion::ConvertVersionStringToInt(const char* version, std::vector<uint32_t>& version_array)
     {
-        std::vector<uint32_t> version_array;
-        std::stringstream ss(version);
-        std::string       token;
-        while(std::getline(ss, token, '.'))
+        version_array.clear();
+        bool result = version != nullptr;
+        if (result)
         {
-            version_array.push_back(std::stoi(token));
+            std::stringstream ss(version);
+            std::string       token;
+            while(result && std::getline(ss, token, '.'))
+            {
+                uint32_t               value  = 0;
+                std::from_chars_result parsed =
+                    std::from_chars(token.data(), token.data() + token.size(), value);
+                result = parsed.ec == std::errc();
+                if (result)
+                {
+                    version_array.push_back(value);
+                }
+            }
         }
-        return version_array;
+        return result;
     }
 
     bool DatabaseVersion::IsVersionEqual(const char* version)
     {
-        std::vector<uint32_t> db_version = ConvertVersionStringToInt(version);
+        std::vector<uint32_t> db_version;
+        if (!ConvertVersionStringToInt(version, db_version))
+        {
+            return false;
+        }
 
         for (int i = 0; i < db_version.size(); i++)
         {
@@ -345,7 +364,11 @@ namespace DataModel
 
     bool DatabaseVersion::IsVersionGreaterOrEqual(const char* version) 
     {
-        std::vector<uint32_t> db_version = ConvertVersionStringToInt(version);
+        std::vector<uint32_t> db_version;
+        if (!ConvertVersionStringToInt(version, db_version))
+        {
+            return false;
+        }
 
         for(int i = 0; i < db_version.size(); i++)
         {

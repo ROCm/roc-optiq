@@ -61,10 +61,12 @@ void FittedDimText(std::string const& text, float width)
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
-    , m_orchestrator(app_window)
+    , m_profile_orchestrator(app_window)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     , m_remote_uri(std::make_shared<RemoteUri>())
     , m_ssh_settings_dialog(nullptr)
+, m_download_orchestrator(nullptr)
+    , m_download_failure_reported(false)
     , m_remote_show_progress_popup(false)
     , m_remote_last_progress()
 #endif
@@ -145,7 +147,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
         std::make_shared<RocCustomWidget>([this]() { RenderStatusBar(); });
     m_container = std::make_unique<VFixedContainer>(items);
     // Run orchestration (sessions, profiler-state events, teardown) is owned by
-    // m_orchestrator; the dialog only authors config and renders.
+    // m_profile_orchestrator; the dialog only authors config and renders.
 }
 
 ProfilerLauncherDialog::~ProfilerLauncherDialog() = default;
@@ -208,14 +210,15 @@ void ProfilerLauncherDialog::Render()
                         : WINDOW_FLAGS | ImGuiWindowFlags_NoBringToFrontOnFocus))
     {
         const ImGuiStyle& style         = m_settings.GetDefaultStyle();
-        const size_t      message_lines = m_messages.size() + (m_error_message.empty() ? 0 : 1);
+        const bool        has_error     = !LastRunError().empty();
+        const size_t      message_lines = m_messages.size() + (has_error ? 1 : 0);
         float             message_height = 0.0f;
         if(!m_show_run_view && message_lines > 0)
         {
             message_height =
                 ImGui::GetTextLineHeight() * static_cast<float>(message_lines) +
                 static_cast<float>(1 + (m_messages.empty() ? 0 : 1) +
-                                   (m_error_message.empty() ? 0 : 1)) *
+                                   (has_error ? 1 : 0)) *
                     2.0f * style.WindowPadding.y +
                 static_cast<float>(message_lines - 1) * style.ItemSpacing.y;
         }
@@ -231,10 +234,11 @@ void ProfilerLauncherDialog::Render()
         m_container->GetMutableAt(CONTAINER_STATUSBAR_ITEM_IDX)->m_height =
             (ImGui::GetContentRegionAvail().y - body_height) / 2.0f;
         m_configure_container->SetMinLeftWidth(
-            ImGui::GetFrameHeightWithSpacing() +
-            ImGui::CalcTextSize("Open the trace automatically when profiling finishes")
-                .x +
-            4.0f * style.WindowPadding.x);
+            2.0f * (style.FramePadding.x + ImGui::GetTextLineHeight()) +
+            4.0f * (style.WindowPadding.x + style.ItemSpacing.x) + style.ItemSpacing.x +
+            style.IndentSpacing + ToggleSwitchWidth() +
+            ImGui::CalcTextSize("OverwritePC samplingStochastic").x +
+            ImGui::GetFrameHeight());
         m_configure_container->SetMinRightWidth(
             2.0f * style.ItemSpacing.x + 2.0f * style.FramePadding.x +
             ImGui::CalcTextSize("Command PreviewCopy").x + 4.0f * style.WindowPadding.x);
@@ -255,7 +259,7 @@ void ProfilerLauncherDialog::Render()
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // SSH settings dialog, auth prompts and download progress (rendered outside
-    // the main window scope, mirroring SshTestDialog).
+    // the main window scope, mirroring SshFileDialog).
     RenderRemotePopups();
 #endif
 
@@ -295,6 +299,7 @@ ProfilerLauncherDialog::RenderContent()
             case ConsoleStatusLevel::kSuccess:
                 pill_color_id = Colors::kTextSuccess;
                 break;
+            case ConsoleStatusLevel::kWarning: pill_color_id = Colors::kTextWarning; break;
             case ConsoleStatusLevel::kError: pill_color_id = Colors::kTextError; break;
             case ConsoleStatusLevel::kRunning: pill_color_id = Colors::kAccent; break;
             default: pill_color_id = Colors::kTextDim; break;
@@ -379,10 +384,15 @@ ProfilerLauncherDialog::RenderStatusBar()
                         m_settings.GetDefaultStyle().ItemSpacing);
     ImGui::BeginChild("status", ImVec2(0.0f, 0.0f),
                       ImGuiChildFlags_AlwaysUseWindowPadding);
-    bool                        is_running = m_orchestrator.IsRunning();
-    rocprofvis_profiler_state_t state      = m_orchestrator.GetState();
+    bool                        is_running = m_profile_orchestrator.IsRunning();
+    bool download_busy = false;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    download_busy = m_download_orchestrator && (m_download_orchestrator->IsRunning() ||
+                                                !m_download_orchestrator->IsSessionIdle());
+#endif
+    rocprofvis_profiler_state_t state      = m_profile_orchestrator.GetState();
     bool                        state_ready =
-        !is_running &&
+        !is_running && !download_busy &&
         (state == kRPVProfilerStateIdle || state == kRPVProfilerStateCompleted ||
          state == kRPVProfilerStateFailed || state == kRPVProfilerStateCancelled);
 
@@ -402,20 +412,16 @@ ProfilerLauncherDialog::RenderStatusBar()
                                       state == kRPVProfilerStateFailed ||
                                       state == kRPVProfilerStateCancelled;
     const bool        show_view_run = has_run_view && !m_output_text.empty();
-    const std::string trace_path    = m_orchestrator.GetTracePath();
-    // A completed local run can be opened by hand; remote runs load the
-    // downloaded trace through the orchestrator.
-    const bool can_open_trace = !is_running && !trace_path.empty() &&
-                                m_orchestrator.GetState() == kRPVProfilerStateCompleted &&
-                                !m_orchestrator.IsRemote();
+    const std::string trace_path    = m_profile_orchestrator.GetTracePath();
     if(!m_show_run_view)
     {
-        StatusPill(is_running   ? "Profiling"
-                   : can_launch ? "Ready to launch"
-                                : "Configuration error",
-                   m_settings.GetColor(is_running   ? Colors::kAccent
-                                       : can_launch ? Colors::kTextSuccess
-                                                    : Colors::kTextError));
+        StatusPill(is_running      ? "Profiling"
+                   : download_busy ? "Downloading"
+                   : can_launch    ? "Ready to launch"
+                                   : "Configuration error",
+                   m_settings.GetColor(is_running || download_busy ? Colors::kAccent
+                                       : can_launch                ? Colors::kTextSuccess
+                                                                   : Colors::kTextError));
     }
 
     ImGui::SameLine(
@@ -425,26 +431,45 @@ ProfilerLauncherDialog::RenderStatusBar()
         2.0f * m_settings.GetDefaultStyle().ItemSpacing.x);
     if(m_show_run_view)
     {
-        if(!can_open_trace)
-        {
-            ImGui::Dummy(ImVec2(ImGui::CalcTextSize("Open Trace").x +
-                                    2.0f * m_settings.GetDefaultStyle().FramePadding.x,
-                                ImGui::GetFrameHeight()));
-            ImGui::SameLine();
-        }
         if(ImGui::Button("Back to Configuration"))
         {
             m_show_run_view = false;
         }
         ImGui::SameLine();
-        if(can_open_trace)
+        bool can_open_trace =
+            !is_running && !download_busy &&
+            m_profile_orchestrator.GetState() == kRPVProfilerStateCompleted &&
+            !trace_path.empty();
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        if(m_profile_orchestrator.IsRemote())
         {
-            if(ImGui::Button("Open Trace"))
+            std::shared_ptr<RemoteUri> run_uri = m_profile_orchestrator.GetRemoteUri();
+            can_open_trace =
+                !is_running && !download_busy && m_download_orchestrator &&
+                m_profile_orchestrator.GetState() == kRPVProfilerStateCompleted &&
+                run_uri && !run_uri->GetRemoteResultPathString().empty();
+        }
+#endif
+        ImGui::BeginDisabled(!can_open_trace);
+        if(ImGui::Button("Open Trace"))
+        {
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+            if(m_profile_orchestrator.IsRemote())
+            {
+                if(m_download_orchestrator)
+                {
+                    m_download_orchestrator->DownloadPath();
+                }                
+            }
+            else
+#endif
             {
                 m_app_window->OpenFile(trace_path);
             }
-            ImGui::SameLine();
         }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!is_running && download_busy);
         if(AccentButton(is_running ? "Cancel" : "Run Again",
                         ImVec2(ImGui::CalcTextSize("Launch Profiler").x +
                                    2.0f * m_settings.GetDefaultStyle().FramePadding.x,
@@ -459,6 +484,7 @@ ProfilerLauncherDialog::RenderStatusBar()
                 OnLaunchClicked();
             }
         }
+        ImGui::EndDisabled();
     }
     else
     {
@@ -751,13 +777,14 @@ ProfilerLauncherDialog::RenderMessages()
         }
         EndLaunchCard();
     }
-    if(m_error_message.size())
+    std::string const last_run_error = LastRunError();
+    if(!last_run_error.empty())
     {
         BeginLaunchCard("last_run");
         ImGui::PushStyleColor(
             ImGuiCol_Text,
             ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kTextError)));
-        ImGui::TextWrapped("Last run: %s", m_error_message.c_str());
+        ImGui::TextWrapped("Last run: %s", last_run_error.c_str());
         ImGui::PopStyleColor();
         EndLaunchCard();
     }
@@ -1227,14 +1254,15 @@ void ProfilerLauncherDialog::RenderRemotePopups()
 
     // Auth prompts / host-key requests are rendered centrally for every live
     // session by AppWindow (RenderSshAuthModals); this dialog only owns the
-    // download-progress popup below.
-    SshSession* ssh_session = m_orchestrator.GetRemoteSshSession();
-
+    // download-progress popup below, for the run's shared trace downloader (the
+    // auto-open download and Open Trace's).
     // Open the download-progress popup once the workflow enters the download
     // phase. Whether/when individual FileStat progress snapshots arrive is
     // unreliable for small/fast transfers, so the popup is driven by the
     // session's phase, not by the progress reaching downloaded==size.
-    bool downloading = m_orchestrator.IsRemoteDownloading();
+    bool const downloading = m_download_orchestrator && m_download_orchestrator->IsDownloading();
+    SshSession* ssh_session = downloading ? m_download_orchestrator->GetSession()
+                                          : m_profile_orchestrator.GetRemoteSshSession();
     if (downloading && !m_remote_show_progress_popup)
     {
         m_remote_show_progress_popup = true;
@@ -1253,9 +1281,13 @@ void ProfilerLauncherDialog::RenderRemotePopups()
 
     // Closing on the download phase ending (rather than on downloaded == size)
     // avoids hanging open when the final progress snapshot never arrives.
-    RenderRemoteDownloadPopup("Remote Trace Download", m_remote_last_progress.name.c_str(),
+    if(RenderRemoteDownloadPopup("Remote Trace Download", m_remote_last_progress.name.c_str(),
                               m_remote_last_progress.downloaded, m_remote_last_progress.size,
-                              !downloading, m_remote_show_progress_popup);
+                              !downloading, m_remote_show_progress_popup) &&
+       m_download_orchestrator)
+    {
+        m_download_orchestrator->Cancel();
+    }
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 
@@ -1295,19 +1327,32 @@ ProfilerLauncherDialog::Update()
     }
 
     // Pump the run engine, then reflect its normalized state into the console.
-    m_orchestrator.Update();
+    m_profile_orchestrator.Update();
+
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // The run itself completed; only its trace download failed (auto-open or
+    // Open Trace). Reported once per failure.
+    bool const download_failed = m_download_orchestrator && m_download_orchestrator->HasFailed();
+    if(download_failed && !m_download_failure_reported)
+    {
+        NotificationManager::GetInstance().Show(
+            "Trace download failed: " + m_download_orchestrator->GetStatusMessage(),
+            NotificationLevel::Error);
+    }
+    m_download_failure_reported = download_failed;
+#endif
 
     // Re-strip / recompose only when new profiler output arrived.
-    if (m_orchestrator.ConsumeOutputDirty())
+    if(m_profile_orchestrator.ConsumeOutputDirty())
     {
-        m_process_output_raw = m_orchestrator.GetRawOutput();
+        m_process_output_raw      = m_profile_orchestrator.GetRawOutput();
         m_process_output_stripped = strip_ansi_for_display(m_process_output_raw);
         RebuildComposedOutput();
     }
 
     // Append epilogue text once per run-state transition (the orchestrator owns
     // the state; the dialog owns the user-facing log composition).
-    rocprofvis_profiler_state_t state = m_orchestrator.GetState();
+    rocprofvis_profiler_state_t state = m_profile_orchestrator.GetState();
     if (state != m_last_seen_state)
     {
         HandleStateTransition(state);
@@ -1442,40 +1487,34 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     }
 
     // Assemble the run request from the config / execution cache, then hand off
-    // to the orchestrator. The backend scraper resolves the produced trace path
-    // from the profiler's stdout (local and remote).
+    // to the orchestrator. The controller scrapes the produced trace path from
+    // the profiler's stdout; the operation on the spec selects those rules.
     TargetSpec const& target = backend->GetTarget(m_config.operation);
 
     ProfilerLaunchOrchestrator::LaunchRequest request;
     BuildLaunchSpec(m_execution_cache, request.spec);
-    request.is_remote              = is_remote;
-    request.auto_load_trace         = target.auto_load_trace;
+    request.is_remote       = is_remote;
+    // A run that writes no trace is not asked to open (or, remotely, download)
+    // one, so it is not reported missing either.
+    request.produces_trace  = backend->ProducesTrace(m_config);
+    request.auto_load_trace = target.auto_load_trace && request.produces_trace;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    request.remote_uri        = is_remote ? m_remote_uri : nullptr;
+    request.remote_uri = is_remote ? m_remote_uri : nullptr;
 #endif
-    // The operation, working directory and connection are captured at launch so
-    // that editing the config while the run is in flight cannot change how its
-    // output is read. A relative path is one the profiler wrote relative to its
-    // own working directory, so it is resolved against that directory.
-    request.has_output_file = [backend, operation = m_config.operation](
-                                  const std::string& profiler_stdout) -> bool {
-        return backend ? backend->HasOutputFile(operation, profiler_stdout) : false;
-    };
-    request.parse_trace = [backend, operation = m_config.operation,
-                           working_directory = target.working_directory, is_remote](
-                              const std::string& profiler_stdout) -> std::string {
-        return backend ? ResolveOutputPath(
-                             backend->ParseTraceOutputPath(operation, profiler_stdout),
-                             working_directory, is_remote)
-                       : std::string();
-    };
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_remote_show_progress_popup = false;
+    // Bound to the previous run's URI and connection.
+    m_download_orchestrator.reset();
+    m_download_failure_reported = false;
 #endif
     m_last_seen_state            = kRPVProfilerStateIdle;
 
-    bool success = m_orchestrator.Launch(request);
+    bool success = m_profile_orchestrator.Launch(request);
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // The new run's trace downloader (null for local runs and failed launches).
+    m_download_orchestrator = m_profile_orchestrator.GetDownloadOrchestrator();
+#endif
     if (success)
     {
         // Build the command-preview preamble for the console.
@@ -1501,17 +1540,29 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         AddRecentPath(backend->GetRecentTargets(m_config.tool, m_config.operation),
                       target.path);
     }
-    else
-    {
-        m_error_message = m_orchestrator.GetLaunchError();
-    }
+    // On failure the run's outcome carries the reason, shown by LastRunError().
 }
 
 void ProfilerLauncherDialog::OnCancelClicked()
 {
     // Cancelling sets the orchestrator state to Cancelled; the epilogue line is
-    // appended on the next Update() transition (HandleStateTransition).
-    m_orchestrator.Cancel();
+    // appended on the next Update() transition (HandleStateTransition). A
+    // failed cancel is not an outcome: the run keeps going and settles later.
+    if (!m_profile_orchestrator.Cancel())
+    {
+        NotificationManager::GetInstance().Show("Failed to cancel profiler",
+                                                NotificationLevel::Error);
+    }
+}
+
+std::string ProfilerLauncherDialog::LastRunError() const
+{
+    if (!m_error_message.empty())
+    {
+        return m_error_message;
+    }
+    ProfilerLaunchOrchestrator::RunOutcome const& outcome = m_profile_orchestrator.GetOutcome();
+    return outcome.level == ConsoleStatusLevel::kError ? outcome.message : std::string();
 }
 
 void ProfilerLauncherDialog::Hide()
@@ -1527,7 +1578,7 @@ void ProfilerLauncherDialog::Hide()
 
 void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t new_state)
 {
-    const bool is_remote = m_orchestrator.IsRemote();
+    const bool is_remote = m_profile_orchestrator.IsRemote();
 
     // Freeze the elapsed-time readout when the run reaches a terminal state.
     if (new_state == kRPVProfilerStateCompleted ||
@@ -1550,46 +1601,38 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
             m_output_epilogue += "\nProfiler completed successfully.\n";
         }
 
-        std::string trace_path = m_orchestrator.GetTracePath();
+        ProfilerLaunchOrchestrator::RunOutcome const& outcome =
+            m_profile_orchestrator.GetOutcome();
+        std::string trace_path = m_profile_orchestrator.GetTracePath();
         if (!trace_path.empty())
         {
             m_output_epilogue += "Trace file: " + trace_path + "\n";
         }
         RebuildComposedOutput();
+
+        // Shown any warning that occurred during profiling.
+        if(outcome.level == ConsoleStatusLevel::kWarning)
+        {
+            NotificationManager::GetInstance().Show(outcome.message,
+                                                    NotificationLevel::Warning);
+        }
     }
     else if (new_state == kRPVProfilerStateFailed)
     {
+        // The reason itself is the run's outcome, shown by LastRunError().
         if (is_remote)
         {
-            // Surface the specific remote failure reason (SSH connect/auth
-            // failure, "could not determine remote trace path", etc.) instead of
-            // a generic line with no cause.
-            std::string remote_msg = m_orchestrator.GetRemoteStatusMessage();
             m_output_epilogue += "\nRemote profiler failed.\n";
-            m_error_message = remote_msg.empty() ? std::string("Remote profiler failed.")
-                                                 : remote_msg;
-            RebuildComposedOutput();
         }
         else
         {
-            int32_t exit_code = m_orchestrator.GetExitCode();
             char exit_msg[128];
             std::snprintf(exit_msg, sizeof(exit_msg),
-                          "\nProfiler failed (exit code %d).\n", exit_code);
+                          "\nProfiler failed (exit code %d).\n",
+                          m_profile_orchestrator.GetExitCode());
             m_output_epilogue += exit_msg;
-            RebuildComposedOutput();
-            if (exit_code == 127)
-            {
-                m_error_message = "Profiler executable not found or could not be started "
-                                  "(exit code 127)";
-            }
-            else
-            {
-                std::snprintf(exit_msg, sizeof(exit_msg),
-                              "Profiler execution failed (exit code %d)", exit_code);
-                m_error_message = exit_msg;
-            }
         }
+        RebuildComposedOutput();
     }
     else if (new_state == kRPVProfilerStateCancelled)
     {
@@ -1602,9 +1645,11 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
     // user it settled, because they are not looking at the console.
     if (!m_show_window)
     {
-        if (new_state == kRPVProfilerStateCompleted)
+        // A warning outcome was already notified above.
+        if (new_state == kRPVProfilerStateCompleted &&
+            m_profile_orchestrator.GetOutcome().level == ConsoleStatusLevel::kSuccess)
         {
-            std::string trace_path = m_orchestrator.GetTracePath();
+            std::string trace_path = m_profile_orchestrator.GetTracePath();
             NotificationManager::GetInstance().Show(
                 trace_path.empty() ? "Profiler finished"
                                    : ("Profiler finished: " + trace_path),
@@ -1612,9 +1657,9 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
         }
         else if (new_state == kRPVProfilerStateFailed)
         {
+            std::string const& reason = m_profile_orchestrator.GetOutcome().message;
             NotificationManager::GetInstance().Show(
-                m_error_message.empty() ? "Profiler failed" : m_error_message,
-                NotificationLevel::Error);
+                reason.empty() ? "Profiler failed" : reason, NotificationLevel::Error);
         }
         else if (new_state == kRPVProfilerStateCancelled)
         {
@@ -1640,14 +1685,21 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote: the badge reflects the workflow phase (connect/auth/profile/
     // download), provided by the orchestrator. Returns false when not remote.
-    if (m_orchestrator.GetRemotePhaseBadge(out_label, out_level, out_detail))
+    if(m_profile_orchestrator.GetRemotePhaseBadge(out_label, out_level, out_detail))
     {
+        // The trace download (auto-open or Open Trace) follows a completed run.
+        if(m_download_orchestrator && m_download_orchestrator->IsDownloading())
+        {
+            out_label = "Downloading";
+            out_level = ConsoleStatusLevel::kRunning;
+            out_detail.clear();
+        }
         return;
     }
 #endif
 
     // Local: map the profiler process state directly.
-    switch (m_orchestrator.GetState())
+    switch(m_profile_orchestrator.GetState())
     {
         case kRPVProfilerStateRunning:
             out_label = "Running";
@@ -1656,11 +1708,16 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
         case kRPVProfilerStateCompleted:
             out_label = "Completed";
             out_level = ConsoleStatusLevel::kSuccess;
+            if (m_profile_orchestrator.GetOutcome().level == ConsoleStatusLevel::kWarning)
+            {
+                out_level  = ConsoleStatusLevel::kWarning;
+                out_detail = m_profile_orchestrator.GetOutcome().message;
+            }
             break;
         case kRPVProfilerStateFailed:
             out_label  = "Failed";
             out_level  = ConsoleStatusLevel::kError;
-            out_detail = m_error_message;
+            out_detail = m_profile_orchestrator.GetOutcome().message;
             break;
         case kRPVProfilerStateCancelled:
             out_label = "Cancelled";
@@ -1779,6 +1836,7 @@ ProfilerLauncherDialog::BuildLaunchSpec(ExecutionCache const& cache,
     TargetSpec const& target =
         m_backends[m_backend_index]->GetTarget(m_config.operation);
     spec.tool               = cache.tool;
+    spec.operation          = m_config.operation;
     spec.tool_directory     = m_config.tool_directory;
     spec.python_environment = m_config.python_environment;
     spec.output_directory   = target.output_directory;

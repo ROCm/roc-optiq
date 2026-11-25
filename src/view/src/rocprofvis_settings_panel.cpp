@@ -4,6 +4,7 @@
 #include "rocprofvis_settings_panel.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -72,13 +73,17 @@ SettingsPanel::Render()
         m_should_open = false;
     }
 
-    if(ImGui::IsPopupOpen("Settings"))
+    bool const is_open = ImGui::IsPopupOpen("Settings");
+    AppWindow::GetInstance()->SetFileDialogSelfManaged(is_open);
+
+    if(is_open)
     {
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
 
+        bool should_close = false;
         if(ImGui::BeginPopupModal("Settings", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize |
                                       ImGuiWindowFlags_NoSavedSettings))
@@ -98,10 +103,6 @@ SettingsPanel::Render()
             {
                 m_category = Units;
             }
-            if(ImGui::Selectable("Other", m_category == Other))
-            {
-                m_category = Other;
-            }
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
             if(ImGui::Selectable("Assistant", m_category == Assistant))
             {
@@ -111,6 +112,10 @@ SettingsPanel::Render()
             if(ImGui::Selectable("Hotkeys", m_category == Hotkeys))
             {
                 m_category = Hotkeys;
+            }
+            if(ImGui::Selectable("Other", m_category == Other))
+            {
+                m_category = Other;
             }
             ImGui::EndChild();
 
@@ -182,7 +187,6 @@ SettingsPanel::Render()
                         ResetUnitOptions();
                         break;
                     }
-                    case Other: break;
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                     case Assistant:
                     {
@@ -193,6 +197,11 @@ SettingsPanel::Render()
                     case Hotkeys:
                     {
                         ResetHotkeySettings();
+                        break;
+                    }
+                    case Other:
+                    {
+                        ResetOtherSettings();
                         break;
                     }
                 }
@@ -210,7 +219,7 @@ SettingsPanel::Render()
 
                 m_settings_changed   = true;
                 m_settings_confirmed = true;
-                m_should_open        = false;
+                should_close         = true;
                 if(m_hotkeys_changed)
                 {
                     m_settings.SaveHotkeySettings();
@@ -233,7 +242,12 @@ SettingsPanel::Render()
                     m_hotkeys_changed = false;
                 }
                 m_settings_changed = true;
-                m_should_open      = false;
+                should_close       = true;
+            }
+            AppWindow::GetInstance()->RenderFileDialog();
+            if(should_close)
+            {
+                m_should_open = false;
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                 DiscardAssistantTokenEdits();
 #endif
@@ -445,6 +459,30 @@ SettingsPanel::RenderUnitOptions()
 void
 SettingsPanel::RenderOtherSettings()
 {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::TextUnformatted("Storage");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Remote trace location");
+    ImGui::SameLine();
+    if(InputTextWithClear(
+           "remote_cache_path", m_usersettings_default.remote_cache_path.c_str(),
+           m_usersettings.remote_cache_path,
+           m_settings.GetFontManager().GetFont(FontType::kIcon),
+           m_settings.GetColor(Colors::kBgMain), style,
+           ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize("Browse").x -
+               2.0f * style.FramePadding.x - style.ItemSpacing.x)
+           .second)
+    {
+        m_usersettings.remote_cache_path.clear();
+    }
+    ImGui::SameLine();
+    if(ImGui::Button("Browse"))
+    {
+        AppWindow::GetInstance()->ShowPathPickerDialog(
+            "Choose Directory", m_usersettings.remote_cache_path,
+            [this](std::string path) { m_usersettings.remote_cache_path = path; });
+    }
     ImGui::TextUnformatted("Closing options");
     ImGui::Separator();
     ImGui::AlignTextToFramePadding();
@@ -474,7 +512,6 @@ SettingsPanel::RenderOtherSettings()
             std::clamp(m_usersettings.log_viewer_max_entries, LOG_VIEWER_MAX_ENTRIES_MIN,
                        LOG_VIEWER_MAX_ENTRIES_MAX);
     }
-
     m_settings_changed = true;
 }
 
@@ -761,6 +798,17 @@ SettingsPanel::ResetHotkeySettings()
 {
     HotkeyManager::GetInstance().ResetAllBindings();
     m_hotkeys_changed = true;
+}
+
+void
+SettingsPanel::ResetOtherSettings()
+{
+    m_usersettings.remote_cache_path    = m_usersettings_default.remote_cache_path;
+    m_usersettings.dont_ask_before_exit = m_usersettings_default.dont_ask_before_exit;
+    m_usersettings.dont_ask_before_tab_closing =
+        m_usersettings_default.dont_ask_before_tab_closing;
+    m_usersettings.log_viewer_max_entries = m_usersettings_default.log_viewer_max_entries;
+    m_settings_changed                    = true;
 }
 
 void

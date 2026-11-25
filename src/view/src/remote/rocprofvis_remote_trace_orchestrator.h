@@ -56,6 +56,16 @@ public:
     // BrowsePath(); without one it runs the full Start() pipeline.
     bool DownloadPath();
 
+    void Cancel();
+
+    /*
+     * Takes over a session that has already authenticated on m_uri's connection,
+     * so the next DownloadPath() or BrowsePath() reuses it instead of connecting
+     * again. Returns false, and keeps nothing, while a phase is running or when
+     * session is null or has not authenticated.
+     * @param session: an idle, authenticated session for m_uri.
+     */
+    bool SetSession(std::unique_ptr<SshSession> session);
     // Replaces on_open_file, e.g. once a session has been taken over from the
     // remote file browser.
     void SetOnOpenFile(std::function<void(const std::string&)> on_open_file)
@@ -65,6 +75,9 @@ public:
 
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
+    // True only while the file transfer itself runs (not while connecting or
+    // authenticating for it).
+    bool IsDownloading() const { return m_phase == Phase::Downloading; }
 
     // True once the workflow ended in failure; GetStatusMessage() says why.
     bool HasFailed() const { return m_phase == Phase::Failed; }
@@ -121,6 +134,9 @@ private:
     // any failure other than a directory listing.
     bool                                     m_authenticated;
     std::string                              m_status_message;
+    // Where the current download writes, fixed when it starts so a change to
+    // the remote trace location setting mid-download does not move it.
+    std::string                              m_local_path;
 };
 
 }  // namespace View

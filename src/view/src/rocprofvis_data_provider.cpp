@@ -362,7 +362,7 @@ DataProvider::SetTrackDataReadyCallback(
 }
 
 void
-DataProvider::SetSummaryDataReadyCallback(const std::function<void()>& callback)
+DataProvider::SetSummaryDataReadyCallback(const std::function<void(bool)>& callback)
 {
     m_summary_data_ready_callback = callback;
 }
@@ -3424,6 +3424,7 @@ DataProvider::ProcessCleanupDatabaseRequest(RequestInfo& req)
 void
 DataProvider::ProcessSummaryRequest(RequestInfo& req)
 {
+    const bool succeeded = req.response_code == kRocProfVisResultSuccess;
     if(req.request_args)
     {
         rocprofvis_controller_arguments_free(req.request_args);
@@ -3432,13 +3433,17 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     if(req.request_obj_handle)
     {
         rocprofvis_controller_summary_metrics_t* metrics_handle = req.request_obj_handle;
-        if(req.response_code == kRocProfVisResultSuccess)
+        if(succeeded)
         {
             m_model.GetSummary().Clear();
             m_model.GetSummary().SetRevision(m_model.GetTopology().GetRevision());
             std::vector<size_t> scratch;
             CreateSummaryData(metrics_handle, scratch);
             m_model.GetSummary().UpdateValueStrings();
+        }
+        else if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Summary request cancelled");
         }
         else
         {
@@ -3449,7 +3454,7 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
     }
     if(m_summary_data_ready_callback)
     {
-        m_summary_data_ready_callback();
+        m_summary_data_ready_callback(succeeded);
     }
 }
 
@@ -4482,7 +4487,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     std::vector<TraceCounter> buffer;
     buffer.reserve(count);
 
-    std::unordered_set              timepoint_set = raw_sample_data->GetWritableIdSet();
+    std::unordered_set<double>&     timepoint_set = raw_sample_data->GetWritableIdSet();
     rocprofvis_controller_sample_t* sample        = nullptr;
     for(uint64_t i = 0; i < count; i++)
     {
@@ -4607,7 +4612,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     std::vector<TraceEvent> buffer;
     buffer.reserve(count);
 
-    std::unordered_set event_set = raw_event_data->GetWritableIdSet();
+    std::unordered_set<uint64_t>& event_set = raw_event_data->GetWritableIdSet();
 
     size_t real_count = 0;
     for(uint64_t i = 0; i < count; i++)
@@ -5690,6 +5695,8 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
             &state.total_count);
         state.issue_count.reset();
         state.stall_count.reset();
+        state.wave_occupancy_percent.reset();
+        state.active_thread_percent.reset();
         uint64_t count = 0;
         if(rocprofvis_controller_get_uint64(
                pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
@@ -5702,6 +5709,19 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
                &count) == kRocProfVisResultSuccess)
         {
             state.stall_count = count;
+        }
+        double percent = 0.0;
+        if(rocprofvis_controller_get_double(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent, i,
+               &percent) == kRocProfVisResultSuccess)
+        {
+            state.wave_occupancy_percent = percent;
+        }
+        if(rocprofvis_controller_get_double(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateActiveThreadPercent, i,
+               &percent) == kRocProfVisResultSuccess)
+        {
+            state.active_thread_percent = percent;
         }
     }
 }

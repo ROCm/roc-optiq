@@ -58,6 +58,12 @@ SettingsPanel::Show()
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
+    m_hotkeys_changed         = false;
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+    {
+        m_hotkeys_initial[i] =
+            HotkeyManager::GetInstance().GetBinding(static_cast<HotkeyActionId>(i));
+    }
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     DiscardAssistantTokenEdits();
     m_assistant_show_token = false;
@@ -238,7 +244,11 @@ SettingsPanel::Render()
                 m_settings.ApplyUserSettings(temp_currentsettings, false);
                 if(m_hotkeys_changed)
                 {
-                    HotkeyManager::GetInstance().ResetAllBindings();
+                    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+                    {
+                        HotkeyManager::GetInstance().SetBinding(
+                            static_cast<HotkeyActionId>(i), m_hotkeys_initial[i]);
+                    }
                     m_hotkeys_changed = false;
                 }
                 m_settings_changed = true;

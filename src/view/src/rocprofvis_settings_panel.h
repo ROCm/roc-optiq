@@ -6,6 +6,7 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -80,6 +81,9 @@ private:
     HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
     bool           m_rebinding_primary = true;
     bool           m_hotkeys_changed   = false;
+
+    // Bindings in effect when the panel opened, restored on Cancel.
+    std::array<HotkeyBinding, kHotkeyActionCount> m_hotkeys_initial;
 
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     // Key edits are held here and applied on OK, like every other page. The

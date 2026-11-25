@@ -557,6 +557,11 @@ struct AssistantPanelTestPeer
         v.m_conversations.erase(project_id);
     }
     const std::string& ViewProjectId() const { return v.m_view_project_id; }
+    bool               TurnRunning() const { return v.Busy(); }
+    // Asks for the caret the way a send does, without sending anything.
+    void RequestInputFocus() { v.m_focus_input = true; }
+    bool InputFocusRequested() const { return v.m_focus_input; }
+    void ClearConversation() { v.ClearConversation(); }
 };
 
 struct TraceLinkStoreTestPeer

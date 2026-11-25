@@ -30,6 +30,7 @@
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
@@ -3357,6 +3358,74 @@ void RegisterAppTests(ImGuiTestEngine* e)
         result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
                                     "{\"trace\":\"" + ref + "\"}");
         IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+
+    // A send asks for the caret back, and the composer hands it over only while
+    // keyboard focus is still in it. A real send needs an endpoint, so the
+    // request it leaves behind is placed directly.
+    t           = IM_REGISTER_TEST(e, "app", "sys_assistant_composer_focus");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if(tv == nullptr)
+        {
+            return;
+        }
+        AppWindow*                 app = AppWindow::GetInstance();
+        const AssistantToolContext view =
+            MakeAssistantToolContext(app->GetCurrentProject()->GetID());
+        AssistantPanelTestPeer peer{ *AssistantPanel::GetInstance() };
+        // The box is read-only on a trace Ask Optiq cannot read and while a turn
+        // runs, and a read-only box keeps the request waiting.
+        if(view.data_provider == nullptr || view.is_compute || view.is_compare ||
+           peer.TurnRunning())
+        {
+            ctx->LogWarning("SKIP: the Ask Optiq composer is read-only here");
+            return;
+        }
+
+        AssistantPanelOpen panel_open;
+        // Toasts stack over the composer's corner and would take the click.
+        NotificationManager::GetInstance().ClearAll();
+        ctx->Yield(3);
+        ctx->SetRef("Main Window");
+        const ImGuiTestItemInfo input = ctx->ItemInfo("**/##assistant_input");
+        IM_CHECK(input.ID != 0);
+
+        // Escape drops the caret and leaves keyboard focus in the composer, which
+        // is where Enter and the Send button leave it.
+        ctx->ItemClick("**/##assistant_input");
+        ctx->KeyPress(ImGuiKey_Escape);
+        const bool released = ctx->UiContext->ActiveId != input.ID;
+
+        // Focus has gone to another window by the time the request is settled.
+        peer.RequestInputFocus();
+        ctx->WindowFocus("//Main Window");
+        ctx->Yield(3);
+        const bool left_alone = ctx->UiContext->ActiveId != input.ID;
+        const bool lapsed     = !peer.InputFocusRequested();
+
+        // Focus is still in the composer.
+        ctx->ItemClick("**/##assistant_input");
+        ctx->KeyPress(ImGuiKey_Escape);
+        peer.RequestInputFocus();
+        ctx->Yield(3);
+        const bool handed_back = ctx->UiContext->ActiveId == input.ID;
+
+        // Clear cancels a caret request the trash button would otherwise
+        // satisfy, because that button lives in the composer.
+        peer.RequestInputFocus();
+        peer.ClearConversation();
+        const bool cleared = !peer.InputFocusRequested();
+
+        // Restore before asserting: a caret left in the box would hold back the
+        // hotkeys of whichever test runs next.
+        ctx->KeyPress(ImGuiKey_Escape);
+
+        IM_CHECK(released);
+        IM_CHECK(left_alone);
+        IM_CHECK(lapsed);
+        IM_CHECK(handed_back);
+        IM_CHECK(cleared);
     };
 #endif
 }

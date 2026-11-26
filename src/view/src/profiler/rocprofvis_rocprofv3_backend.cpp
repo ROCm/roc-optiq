@@ -349,7 +349,7 @@ RocprofV3Backend::FlattenToExecution(
         argv_out.push_back("--pmc");
         argv_out.push_back(m_settings.collection_counters);
     }
-    if(m_settings.window_delay || m_settings.window_duration)
+    if(m_settings.window_duration)
     {
         argv_out.push_back("--collection-period");
         argv_out.push_back(std::to_string(m_settings.window_delay) + ":" +

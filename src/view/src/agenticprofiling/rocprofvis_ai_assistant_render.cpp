@@ -1964,8 +1964,8 @@ AssistantPanel::RenderComposer()
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(conversation.lines.empty() && conversation.input.empty() &&
                          !busy_here);
-    // Clearing is the panel's only way to stop a turn, so the tooltip says so
-    // while one runs here. A turn on another trace is left running.
+    // Clearing also stops a turn running here, so the tooltip says so while one
+    // runs. A turn on another trace is left running.
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size),
                   busy_here ? "Stop this answer and clear the conversation"

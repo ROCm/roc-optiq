@@ -119,8 +119,8 @@ public:
     AssistantChatResult Send(const AssistantChatRequest& request);
 
     // Aborts the request in flight, if any. Safe to call from another thread.
-    // Waits out a connect in progress, up to its timeout, so do not call it
-    // from a thread that must not stall.
+    // Can block until a connect in progress gives up - DNS, the TCP connect and
+    // the TLS handshake - so do not call it from a thread that must not stall.
     void Cancel();
 
 private:

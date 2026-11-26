@@ -900,8 +900,8 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
             break;
         }
     }
-    // Every named track lacked the operation. Returned empty with no error, the
-    // caller reports that no track in the trace carries it.
+    // Every named track lacked the operation. Reported as an error, because an
+    // empty list reads to the caller as no track in the trace carrying it.
     if(tracks.empty())
     {
         error_out = "None of those track_ids carry that kind of event. list_tracks "

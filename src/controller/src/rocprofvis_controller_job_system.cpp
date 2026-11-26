@@ -7,35 +7,25 @@
 
 #include <cfloat>
 #include <algorithm>
-#include <exception>
-#include <new>
 
 namespace RocProfVis
 {
 namespace Controller
 {
 
-rocprofvis_result_t CallCatchingExceptions(const std::function<rocprofvis_result_t()>& function)
+void LogOutOfMemoryException()
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    try
-    {
-        result = function();
-    }
-    catch(const std::bad_alloc&)
-    {
-        spdlog::error("Operation failed: out of memory");
-        result = kRocProfVisResultMemoryAllocError;
-    }
-    catch(const std::exception& e)
-    {
-        spdlog::error("Operation failed: {}", e.what());
-    }
-    catch(...)
-    {
-        spdlog::error("Operation failed with an unknown exception");
-    }
-    return result;
+    spdlog::error("Operation failed: out of memory");
+}
+
+void LogStandardException(const char* what)
+{
+    spdlog::error("Operation failed: {}", what);
+}
+
+void LogUnknownException()
+{
+    spdlog::error("Operation failed with an unknown exception");
 }
 
 Job::Job(JobFunction function, Future* future)

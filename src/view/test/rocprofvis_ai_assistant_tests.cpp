@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 // Ask Optiq logic that needs no trace, UI, or endpoint: how the link store
-// survives its file, and the run diff behind compare_traces.
+// survives its file, the run diff behind compare_traces, and what of an
+// endpoint URL may be saved.
 
 #include "agenticprofiling/rocprofvis_ai_trace_compare.h"
 #include "agenticprofiling/rocprofvis_ai_trace_links.h"
+#include "rocprofvis_assistant_url.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -396,4 +398,34 @@ TEST_CASE("A family neither run has says so", "[assistant][compare]")
     RunCategoryFigures empty;
     CHECK(FormatRunCategory("memory_ops", empty, empty, 10) ==
           "memory_ops: none in either run\n");
+}
+
+TEST_CASE("A saved endpoint URL drops userinfo and a fragment", "[assistant][url]")
+{
+    CHECK(AssistantStorableUrl("https://api.openai.com/v1") ==
+          "https://api.openai.com/v1");
+    // Up to the last @, since a pasted key can hold one itself.
+    CHECK(AssistantStorableUrl("https://user:sk-a@b@host.example/v1") ==
+          "https://host.example/v1");
+    CHECK(AssistantStorableUrl("https://host.example/v1#sk-key") ==
+          "https://host.example/v1");
+    // An @ in the path is not userinfo.
+    CHECK(AssistantStorableUrl("https://host.example/models/@latest") ==
+          "https://host.example/models/@latest");
+}
+
+TEST_CASE("A saved endpoint URL keeps only a plausible API version from its query",
+          "[assistant][url]")
+{
+    const std::string base = "https://host.example/openai";
+    CHECK(AssistantStorableUrl(base + "?api-version=2024-09-01-preview&key=sk-123") ==
+          base + "?api-version=2024-09-01-preview");
+    // Either spelling, in any case, wherever it sits in the query.
+    CHECK(AssistantStorableUrl(base + "?key=sk-123&ApiVersion=2024-09-01") ==
+          base + "?ApiVersion=2024-09-01");
+    // A value too long, or with characters no version has, may be a key.
+    CHECK(AssistantStorableUrl(base + "?api-version=sk-0123456789abcdef0123456789") ==
+          base);
+    CHECK(AssistantStorableUrl(base + "?api-version=a%2Fb") == base);
+    CHECK(AssistantStorableUrl(base + "?subscription-key=0123456789abcdef") == base);
 }

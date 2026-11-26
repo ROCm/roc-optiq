@@ -5,6 +5,7 @@
 
 #include "imgui.h"
 #include "json.h"
+#include "rocprofvis_assistant_url.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_font_manager.h"
 #include <array>
@@ -104,10 +105,6 @@ MakeDefaultAssistantProvider()
     ApplyAssistantEndpointDefaults(provider);
     return provider;
 }
-
-// The endpoint URL as it may be saved and shown: without userinfo, a fragment,
-// or any query parameter but an API version, any of which may be a pasted key.
-std::string AssistantStorableUrl(const std::string& url);
 
 typedef struct AssistantSettings
 {

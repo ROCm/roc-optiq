@@ -56,9 +56,11 @@ public:
     // ClearCompareTarget().
     void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
     void ClearCompareTarget();
-    // Call before A and B trade places (the selection becomes B and B the old
-    // selection), so each pin keeps naming the same metric.
-    void SwapComparePins();
+    // Call when A (`a_workload_id`'s kernel) and B trade places, so each pin
+    // keeps naming the same metric.
+    void SwapComparePins(uint32_t a_workload_id, uint32_t b_workload_id);
+    // False when the database has no metrics to show.
+    bool HasAvailableMetrics() const { return m_has_available_metrics; }
 
 private:
     enum class HeaderRequest : uint8_t
@@ -163,13 +165,14 @@ public:
                             std::shared_ptr<ComputeTableView> table_view);
 
     const char* Title() const override;
+    bool        IsAvailable() const override;
     void        RenderBody(bool maximized) override;
     ImVec2      MinSize() const override;
     void        Update() override;
     void        OnWorkloadSelected(uint32_t workload_id) override;
     void        OnKernelSelected(uint32_t kernel_id) override;
     void        OnMetricsFetched(uint64_t client_id) override;
-    void        OnCompareSwapping() override;
+    void        OnCompareSwapping(uint32_t a_workload_id, uint32_t b_workload_id) override;
     void        ApplyCompare(bool target_changed) override;
 
     friend struct ComputeKernelDetailsViewTestPeer;
@@ -188,6 +191,7 @@ public:
                              std::shared_ptr<ComputeTableView> table_view);
 
     const char* Title() const override;
+    bool        IsAvailable() const override;
     void        RenderBody(bool maximized) override;
     void        SetShown(bool shown) override;
 

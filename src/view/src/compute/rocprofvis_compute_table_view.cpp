@@ -167,16 +167,15 @@ ComputeTableView::ClearCompareTarget()
 }
 
 void
-ComputeTableView::SwapComparePins()
+ComputeTableView::SwapComparePins(uint32_t a_workload_id, uint32_t b_workload_id)
 {
     if(!m_compare_active)
     {
         return;
     }
-    ComputeDataModel&   model = m_data_provider.ComputeModel();
-    const WorkloadInfo* a_workload =
-        model.GetWorkload(m_compute_selection->GetSelectedWorkload());
-    const WorkloadInfo* b_workload = model.GetWorkload(m_compare_workload_id);
+    ComputeDataModel&   model      = m_data_provider.ComputeModel();
+    const WorkloadInfo* a_workload = model.GetWorkload(a_workload_id);
+    const WorkloadInfo* b_workload = model.GetWorkload(b_workload_id);
     std::set<MetricId>  swapped;
     for(const MetricId& key : m_pinned_metrics)
     {
@@ -786,28 +785,25 @@ ComputeTableView::Preset::Preset(ComputeTableView& widget)
 bool
 ComputeTableView::Preset::ToJson(jt::Json& json)
 {
-    if(!m_widget.m_pinned_metrics.empty())
+    // Saved even when empty: a missing list would leave the current one on load.
+    jt::Json& pins = json[JSON_KEY_PINNED_METRICS];
+    pins.setArray();
+    int pin_index = 0;
+    for(const MetricId& id : m_widget.m_pinned_metrics)
     {
-        jt::Json& pins = json[JSON_KEY_PINNED_METRICS];
-        int       i    = 0;
-        for(const MetricId& id : m_widget.m_pinned_metrics)
-        {
-            pins[i][JSON_KEY_PINNED_METRICS_ID][0] = id.category_id;
-            pins[i][JSON_KEY_PINNED_METRICS_ID][1] = id.table_id;
-            pins[i][JSON_KEY_PINNED_METRICS_ID][2] = id.entry_id;
-            i++;
-        }
+        pins[pin_index][JSON_KEY_PINNED_METRICS_ID][0] = id.category_id;
+        pins[pin_index][JSON_KEY_PINNED_METRICS_ID][1] = id.table_id;
+        pins[pin_index][JSON_KEY_PINNED_METRICS_ID][2] = id.entry_id;
+        pin_index++;
     }
-    if(!m_widget.m_enabled_tables.empty())
+    jt::Json& tables = json[JSON_KEY_SHOWN_TABLES];
+    tables.setArray();
+    int table_index = 0;
+    for(uint64_t key : m_widget.m_enabled_tables)
     {
-        jt::Json& tables = json[JSON_KEY_SHOWN_TABLES];
-        int       i      = 0;
-        for(uint64_t key : m_widget.m_enabled_tables)
-        {
-            tables[i][0] = MetricId::ExtractCategoryId(key);
-            tables[i][1] = MetricId::ExtractTableId(key);
-            i++;
-        }
+        tables[table_index][0] = MetricId::ExtractCategoryId(key);
+        tables[table_index][1] = MetricId::ExtractTableId(key);
+        table_index++;
     }
     const MetricCompareOptions& compare = m_widget.m_compare_options;
     jt::Json&                   columns = json[JSON_KEY_COMPARE_COLUMNS];
@@ -940,6 +936,12 @@ ComputeMetricTablesPane::Title() const
     return "Metric Tables";
 }
 
+bool
+ComputeMetricTablesPane::IsAvailable() const
+{
+    return m_table_view->HasAvailableMetrics();
+}
+
 void
 ComputeMetricTablesPane::RenderBody(bool)
 {
@@ -980,9 +982,9 @@ ComputeMetricTablesPane::OnMetricsFetched(uint64_t client_id)
 }
 
 void
-ComputeMetricTablesPane::OnCompareSwapping()
+ComputeMetricTablesPane::OnCompareSwapping(uint32_t a_workload_id, uint32_t b_workload_id)
 {
-    m_table_view->SwapComparePins();
+    m_table_view->SwapComparePins(a_workload_id, b_workload_id);
 }
 
 void
@@ -1009,6 +1011,12 @@ const char*
 ComputePinnedMetricsPane::Title() const
 {
     return "Pinned Metrics";
+}
+
+bool
+ComputePinnedMetricsPane::IsAvailable() const
+{
+    return m_table_view->HasAvailableMetrics();
 }
 
 void

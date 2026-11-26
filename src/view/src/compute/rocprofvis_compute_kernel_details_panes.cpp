@@ -69,7 +69,7 @@ ComputeKernelDetailsPane::OnCompareStarted()
 {}
 
 void
-ComputeKernelDetailsPane::OnCompareSwapping()
+ComputeKernelDetailsPane::OnCompareSwapping(uint32_t, uint32_t)
 {}
 
 void

@@ -204,6 +204,10 @@ private:
 
     // Metric resolution (by id or name) against the fetched table.
     const MetricValue* ResolveMetric(const MemChartMetricRef& ref) const;
+    // This chart's value of another chart's `metric` (its value of `ref`),
+    // matched by name as ids can shift between workloads; null when it has none.
+    const MetricValue* ResolveCounterpart(const MemChartMetricRef& ref,
+                                          const MetricValue&       metric) const;
     // Definition for a valid dotted id, or nullptr when that id is not in the
     // open workload. Does not consult fetched values.
     const AvailableMetrics::Entry*
@@ -323,9 +327,11 @@ class ComputeMemoryChartPane : public ComputeSidedPane
 {
 public:
     ComputeMemoryChartPane(const IKernelCompare& compare, DataProvider& data_provider,
-                           std::shared_ptr<ComputeSelection> compute_selection);
+                           std::shared_ptr<ComputeSelection> compute_selection,
+                           bool                              has_available_metrics);
 
     const char* Title() const override;
+    bool        IsAvailable() const override;
     int32_t     HeaderButtons(HeaderButton* buttons) const override;
     void        OnHeaderButton(int32_t id) override;
     void        RenderBody(bool maximized) override;
@@ -350,6 +356,8 @@ private:
     const ComputeMemoryChartView& DisplayedChart() const;
     ComputeMemoryChartView&       DisplayedChart();
 
+    // Without metrics every value would be N/A.
+    bool                   m_has_available_metrics;
     ComputeMemoryChartView m_chart;
     // The compare target's chart; its own layout, so B of another GPU
     // architecture draws its own hierarchy.

@@ -84,9 +84,9 @@ public:
     virtual void OnMetricsFetched(uint64_t client_id);
     // Comparing has started; ApplyCompare follows.
     virtual void OnCompareStarted();
-    // A and B are about to trade places (the selection still is the old A);
+    // A (a kernel of `a_workload_id`) and B (of `b_workload_id`) trade places;
     // ApplyCompare follows.
-    virtual void OnCompareSwapping();
+    virtual void OnCompareSwapping(uint32_t a_workload_id, uint32_t b_workload_id);
     // Shows the comparison as it stands; `target_changed` refetches B.
     virtual void ApplyCompare(bool target_changed);
 

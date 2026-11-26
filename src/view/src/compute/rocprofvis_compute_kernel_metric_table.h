@@ -75,12 +75,33 @@ private:
     bool ShowsWorkloadColumn() const;
     // Empty for an unknown workload.
     const std::string& WorkloadName(uint32_t workload_id) const;
+    void RenderToolbar();
+    // The table card's body: the table, or why there is none.
+    void RenderTable();
+    void SetupTableColumns(int column_count, float outer_width);
+    // Returns the metric whose remove button was clicked, -1 for none.
+    int  RenderHeaderRow(int column_count);
+    void RenderFilterRow(int column_count);
+    // Takes a sort clicked in the header; a change refetches.
+    void UpdateSortFromTable();
+    // Returns whether a cell was right-clicked (see m_cell_menu).
+    bool RenderRows(bool request_pending, float line_height);
+    void RenderRowSelectable(int row, const std::string& cell, bool is_selected,
+                             bool is_marked);
+    void RenderValueCell(int col, const std::string& cell);
+    void RenderCellContextMenu();
+    void RemoveMetricColumn(int remove_index);
     void RenderColumnFilter(int column_index);
     void ApplyFilters();
     void ComputeColumnMaxValues(const std::vector<std::vector<std::string>>& data);
     void RenderBarChartContextMenu(int col);
+    // Ignores (with a warning) a metric already in the table.
     void AppendMetricQuery(const std::string& query, const AvailableMetrics::Entry& entry,
                            const std::string& value_name);
+    // Whether the metric is a column already. Ids differ between GPU
+    // architectures, so a known entry matches by name; one typed in by its query.
+    bool HasMetric(const std::string& query, const AvailableMetrics::Entry& entry,
+                   const std::string& value_name) const;
 
     class Preset : public PresetComponent
     {

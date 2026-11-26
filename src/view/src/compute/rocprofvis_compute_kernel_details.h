@@ -213,6 +213,11 @@ private:
     // `can_compare` is CanCompare().
     void RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id, bool selected,
                          bool can_compare, float total_duration);
+    // The tab's body and marker column buttons, at the cursor: selects, sets or
+    // stops B, and the context menu.
+    void HandleKernelTabInput(const KernelInfo& kernel, uint32_t workload_id, bool selected,
+                              bool is_b, bool can_be_b, ImVec2 body_size, ImVec2 slot_size,
+                              bool& body_hovered, bool& slot_hovered);
     void RefreshKernelList();
 
     // Comparison.

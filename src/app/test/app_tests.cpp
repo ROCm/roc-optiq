@@ -2068,6 +2068,22 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // A filter on the metric it lacks: none of its kernels can match.
         query.clear();
         IM_CHECK(!peer.WorkloadQuery(workload, picks, 1, query, present));
+
+        // Added on another workload, then matched to this one's: the stored query
+        // still has the other's id, which here is a different metric.
+        const std::vector<std::pair<AvailableMetrics::Entry, std::string>> remapped = {
+            { { 0, 2, 1, 7, "VALU FLOPs", "", "" }, "Avg" },
+        };
+        const std::vector<std::string> stored = { "2.1.3:Avg" };
+        query.clear();
+        IM_CHECK(peer.WorkloadQuery(workload, remapped, -1, query, present, &stored));
+        IM_CHECK(query == std::vector<std::string>({ "2.1.7:Avg" }));
+
+        // The same metric sent from a workload where it has another id is a
+        // duplicate; another value of it is not.
+        IM_CHECK(peer.HasMetric(remapped, { 0, 2, 1, 3, "VALU FLOPs", "", "" }, "Avg"));
+        IM_CHECK(!peer.HasMetric(remapped, { 0, 2, 1, 3, "VALU FLOPs", "", "" }, "Max"));
+        IM_CHECK(!peer.HasMetric(remapped, { 0, 2, 1, 7, "LDS Bandwidth", "", "" }, "Avg"));
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");

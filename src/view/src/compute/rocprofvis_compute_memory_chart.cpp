@@ -12,6 +12,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "widgets/rocprofvis_compute_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 #include "spdlog/spdlog.h"
@@ -1159,6 +1160,36 @@ ComputeMemoryChartView::ResolveMetric(const MemChartMetricRef& ref) const
     return it != m_ptr_by_metric_id.end() ? it->second : nullptr;
 }
 
+const MetricValue*
+ComputeMemoryChartView::ResolveCounterpart(const MemChartMetricRef& ref,
+                                           const MetricValue&       metric) const
+{
+    if(!metric.entry)
+    {
+        return nullptr;
+    }
+    // Usually the same id names the same metric; drawn every frame, so that is
+    // tried before the name.
+    const MetricValue* same_id = ResolveMetric(ref);
+    if(same_id && same_id->entry && same_id->entry->name == metric.entry->name)
+    {
+        return same_id;
+    }
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(SourceWorkload());
+    const AvailableMetrics::Entry* entry = MatchMetricEntry(
+        FindMetricTable(workload, metric.entry->category_id, metric.entry->table_id),
+        *metric.entry);
+    if(!entry)
+    {
+        return nullptr;
+    }
+    std::unordered_map<std::string, const MetricValue*>::const_iterator it =
+        m_ptr_by_metric_id.find(MetricId{ entry->category_id, entry->table_id, entry->id }
+                                    .ToString());
+    return it != m_ptr_by_metric_id.end() ? it->second : nullptr;
+}
+
 const AvailableMetrics::Entry*
 ComputeMemoryChartView::FindMetricDefinition(const MemChartMetricRef& ref) const
 {
@@ -1191,7 +1222,8 @@ ComputeMemoryChartView::DeltaValues(const MemChartMetricRef& ref, double& a, dou
         return false;
     }
     const MetricValue* metric_a = ResolveMetric(ref);
-    const MetricValue* metric_b = m_delta_target->ResolveMetric(ref);
+    const MetricValue* metric_b =
+        metric_a ? m_delta_target->ResolveCounterpart(ref, *metric_a) : nullptr;
     if(!metric_a || metric_a->values.empty() || !metric_b || metric_b->values.empty())
     {
         return false;
@@ -2944,8 +2976,9 @@ ComputeMemoryChartView::DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos,
 
 ComputeMemoryChartPane::ComputeMemoryChartPane(
     const IKernelCompare& compare, DataProvider& data_provider,
-    std::shared_ptr<ComputeSelection> compute_selection)
+    std::shared_ptr<ComputeSelection> compute_selection, bool has_available_metrics)
 : ComputeSidedPane(compare)
+, m_has_available_metrics(has_available_metrics)
 , m_chart(data_provider, compute_selection)
 , m_chart_b(data_provider, compute_selection)
 , m_chart_b_workload(ComputeSelection::INVALID_SELECTION_ID)
@@ -2959,6 +2992,12 @@ const char*
 ComputeMemoryChartPane::Title() const
 {
     return "Memory Chart";
+}
+
+bool
+ComputeMemoryChartPane::IsAvailable() const
+{
+    return m_has_available_metrics;
 }
 
 int32_t

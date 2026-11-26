@@ -45,6 +45,10 @@ constexpr float FROZEN_NAME_MAX_SHARE     = 0.5f;
 constexpr float COL_DEFAULT_CHAR_LIMIT    = 30.0f;
 constexpr float COL_INVOCATION_CHAR_LIMIT = COL_FILTER_CHAR_LIMIT;
 
+// Rows a fixed-height (not fill-parent) table is sized for.
+constexpr int TABLE_MIN_FIXED_ROWS = 5;
+constexpr int TABLE_MAX_FIXED_ROWS = 10;
+
 constexpr float kTooltipMaxWidth = 600.0f;
 // Templated kernel names run to thousands of characters; a tooltip shows this many.
 constexpr size_t TOOLTIP_MAX_CHARS = 400;
@@ -71,6 +75,27 @@ ParseKernelId(const std::string& cell)
     const unsigned long value     = std::strtoul(cell.c_str(), &parse_end, 10);
     return parse_end != cell.c_str() ? static_cast<uint32_t>(value)
                                      : ComputeSelection::INVALID_SELECTION_ID;
+}
+
+// A tooltip wrapped at kTooltipMaxWidth.
+static void
+WrappedTooltip(const std::string& text)
+{
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(kTooltipMaxWidth, FLT_MAX));
+    BeginTooltipStyled();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopTextWrapPos();
+    EndTooltipStyled();
+}
+
+// The pivot query's name for `entry`'s value `value_name`, "category.table.entry"
+// then ":value" when there is one.
+static std::string
+MetricQuery(const AvailableMetrics::Entry& entry, const std::string& value_name)
+{
+    return MetricId{ entry.category_id, entry.table_id, entry.id }.ToString() +
+           (value_name.empty() ? "" : ":" + value_name);
 }
 
 void
@@ -172,8 +197,10 @@ KernelMetricTable::StartFetchCycle()
     const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(m_workload_id);
     if(workload)
     {
-        for(MetricInfo& metric : m_metrics_info)
+        ROCPROFVIS_ASSERT(m_metrics_params.size() == m_metrics_info.size());
+        for(size_t i = 0; i < m_metrics_info.size(); ++i)
         {
+            MetricInfo&                    metric = m_metrics_info[i];
             const AvailableMetrics::Entry* entry =
                 metric.entry.name.empty()
                     ? ComputeDataModel::GetMetricInfo(*workload, metric.entry.category_id,
@@ -183,7 +210,8 @@ KernelMetricTable::StartFetchCycle()
                                        metric.entry);
             if(entry)
             {
-                metric.entry = *entry;
+                metric.entry        = *entry;
+                m_metrics_params[i] = MetricQuery(*entry, metric.value_name);
             }
         }
     }
@@ -244,12 +272,7 @@ KernelMetricTable::BuildWorkloadQuery(const WorkloadInfo&                       
             continue;
         }
         response_column[i] = PERMANENT_COLUMN_COUNT + static_cast<int>(metrics.size());
-        const MetricId id{ entry->category_id, entry->table_id, entry->id };
-        metrics.push_back(id == MetricId{ info.entry.category_id, info.entry.table_id,
-                                          info.entry.id }
-                              ? m_metrics_params[i]
-                              : id.ToString() +
-                                    (info.value_name.empty() ? "" : ":" + info.value_name));
+        metrics.push_back(MetricQuery(*entry, info.value_name));
         m_fetch_metric_present[i] = true;
     }
 
@@ -561,14 +584,7 @@ KernelMetricTable::Update()
 void
 KernelMetricTable::Render()
 {
-    int remove_index = -1;
-
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImFont*           icon_font    = settings.GetFontManager().GetFont(FontType::kIcon);
-    const ImGuiStyle &style = settings.GetDefaultStyle();
-    const float      cell_padding = style.CellPadding.x * 2.0f;
-    const float      char_width = ImGui::CalcTextSize("M").x;
-
+    SettingsManager& settings = SettingsManager::GetInstance();
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           settings.GetColor(m_chromeless ? Colors::kTransparent
                                                          : Colors::kBgPanel));
@@ -589,12 +605,26 @@ KernelMetricTable::Render()
         SectionTitle("Kernel Selection Table");
     }
 
-    // The merged rows of every workload, replaced only once a fetch cycle is done.
-    const std::vector<std::string>&              header = m_header;
-    const std::vector<std::vector<std::string>>& data   = m_rows;
-    const bool                                   workload_column = ShowsWorkloadColumn();
+    RenderToolbar();
+    if(m_show_kernel_table)
+    {
+        RenderTable();
+    }
 
-    // Toolbar row.
+    ImGui::EndChild();  // kernel_metric_table_card
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(2);
+
+    m_query_builder.Render();
+}
+
+void
+KernelMetricTable::RenderToolbar()
+{
+    SettingsManager&  settings  = SettingsManager::GetInstance();
+    ImFont*           icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
+    const ImGuiStyle& style     = settings.GetDefaultStyle();
+
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::BeginChild("toolbar", ImVec2(-1, 0),
@@ -618,9 +648,9 @@ KernelMetricTable::Render()
                              icon_size.y + style.FramePadding.y * 2.0f),
                       m_show_kernel_table ? "Hide Table" : "Show Table", false,
                       style.FramePadding,
-                      SettingsManager::GetInstance().GetColor(Colors::kTransparent),
-                      SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
-                      SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
+                      settings.GetColor(Colors::kTransparent),
+                      settings.GetColor(Colors::kButtonHovered),
+                      settings.GetColor(Colors::kTransparent)))
         {
             m_show_kernel_table = !m_show_kernel_table;
         }
@@ -637,11 +667,11 @@ KernelMetricTable::Render()
                          m_workload_id == ComputeSelection::INVALID_SELECTION_ID);
     if(ImGui::Button("Add Metric"))
     {
-        m_query_builder.Show([this](const std::string& query) { 
+        m_query_builder.Show([this](const std::string& query) {
             this->SetQuery(query);
         });
     }
-    
+
     ImGui::SameLine(0.0f, style.ItemSpacing.x);
 
     // Filter control buttons
@@ -659,13 +689,15 @@ KernelMetricTable::Render()
     {
         if(m_bar_chart_columns.empty())
         {
-            int col_count = static_cast<int>(header.size());
+            int col_count = static_cast<int>(m_header.size());
             for(int c = 0; c < col_count; c++)
             {
                 if(c != ID_COLUMN_INDEX && c != NAME_COLUMN_INDEX)
+                {
                     m_bar_chart_columns.insert(c);
+                }
             }
-            ComputeColumnMaxValues(data);
+            ComputeColumnMaxValues(m_rows);
         }
         else
         {
@@ -688,30 +720,37 @@ KernelMetricTable::Render()
     ImGui::EndChild();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
+}
 
-    bool request_pending =
+void
+KernelMetricTable::RenderTable()
+{
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+    const bool        request_pending =
         m_data_provider.IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID);
 
-    float       row_padding_v = style.CellPadding.y * 2.0f;
-    float       line_height   = ImGui::GetTextLineHeight() + row_padding_v;
+    const float row_padding_v = style.CellPadding.y * 2.0f;
+    const float line_height   = ImGui::GetTextLineHeight() + row_padding_v;
 
     // Filter row height (InputText widgets are taller than text)
-    float filter_row_height = ImGui::GetFrameHeight() + row_padding_v;
+    const float filter_row_height = ImGui::GetFrameHeight() + row_padding_v;
 
-    int data_row_count = static_cast<int>(data.size());
-    int rows_to_render = std::max(std::min(10, data_row_count), 5);
+    const int data_row_count = static_cast<int>(m_rows.size());
+    const int rows_to_render =
+        std::max(std::min(TABLE_MAX_FIXED_ROWS, data_row_count), TABLE_MIN_FIXED_ROWS);
 
     // Calculate total table height: header + filter row + data rows
-    float total_table_height = line_height + filter_row_height + (rows_to_render * line_height);
+    const float total_table_height =
+        line_height + filter_row_height + (rows_to_render * line_height);
 
-    if(m_show_kernel_table)
-    {
+    int remove_index = -1;
     // Fixed height from the row count, or the rest of the pane in fill mode.
     if(ImGui::BeginChild("kernel_metric_table_cont",
                          ImVec2(0, m_fill_parent ? 0.0f : total_table_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
-        if(!header.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
+        if(!m_header.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
         {
             // Stays sortable while a fetch runs: dropping the flag would make ImGui
             // rebuild the sort specs, losing the chosen sort.
@@ -721,207 +760,29 @@ KernelMetricTable::Render()
                 ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings |
                 ImGuiTableFlags_Sortable;
 
-            int column_count = static_cast<int>(header.size());
-            ImVec2 outer_size = ImVec2(ImGui::GetContentRegionAvail());
+            const int    column_count = static_cast<int>(m_header.size());
+            const ImVec2 outer_size   = ImGui::GetContentRegionAvail();
 
             if(ImGui::BeginTable("kernel_selection_table", column_count, table_flags,
                                  outer_size))
             {
                 // Freeze the name (and workload) columns and the header + filter rows.
-                ImGui::TableSetupScrollFreeze(workload_column ? 2 : 1, 2);
+                ImGui::TableSetupScrollFreeze(ShowsWorkloadColumn() ? 2 : 1, 2);
+                SetupTableColumns(column_count, outer_size.x);
+                remove_index = RenderHeaderRow(column_count);
+                RenderFilterRow(column_count);
 
-                // Calculate minimum column widths based on character counts. The
-                // frozen name leaves at least half the table for the columns that
-                // scroll past it.
-                float name_min_width = std::min(char_width * COL_NAME_CHAR_LIMIT,
-                                                std::max(outer_size.x * FROZEN_NAME_MAX_SHARE,
-                                                         char_width * COL_NAME_MIN_CHARS));
-                float default_min_width = char_width * COL_DEFAULT_CHAR_LIMIT;
-                float invocation_min_width = char_width * COL_INVOCATION_CHAR_LIMIT;
-
-                for(int col = 0; col < column_count; col++)
-                {
-                    ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_WidthFixed;
-                    // ImGui rebuilds the sort specs whenever the columns change (a
-                    // metric added or removed), so the current sort is the default.
-                    if(col == m_sort_column_index)
-                    {
-                        col_flags |= ImGuiTableColumnFlags_DefaultSort |
-                                     (m_sort_order == kRPVControllerSortOrderAscending
-                                          ? ImGuiTableColumnFlags_PreferSortAscending
-                                          : ImGuiTableColumnFlags_PreferSortDescending);
-                    }
-                    else
-                    {
-                        col_flags |= ImGuiTableColumnFlags_PreferSortDescending;
-                    }
-                    if(col < PERMANENT_COLUMN_COUNT)
-                    {
-                        // The id column shows each row's workload when there are several.
-                        const bool shows_workload = col == ID_COLUMN_INDEX && workload_column;
-                        if(!shows_workload && !header[col].empty() && header[col][0] == '_')
-                        {
-                            col_flags |= ImGuiTableColumnFlags_DefaultHide |
-                                        ImGuiTableColumnFlags_Disabled;
-                        }
-
-                        // Set minimum width based on column type
-                        float min_width = default_min_width;
-                        if(shows_workload)
-                        {
-                            // Frozen with the name, so only as wide as its longest
-                            // workload name.
-                            min_width = ImGui::CalcTextSize("Workload").x;
-                            for(const WorkloadInfo* workload :
-                                m_data_provider.ComputeModel().GetWorkloadList())
-                            {
-                                if(workload)
-                                {
-                                    min_width = std::max(
-                                        min_width, ImGui::CalcTextSize(workload->name.c_str()).x);
-                                }
-                            }
-                            min_width += cell_padding + char_width;
-                        }
-                        else if(col == NAME_COLUMN_INDEX)
-                        {
-                            min_width = name_min_width;
-                        }
-                        else if(col == INVOCATION_COLUMN_INDEX)
-                        {
-                            min_width = invocation_min_width;
-                        }
-
-                        ImGui::TableSetupColumn(shows_workload
-                                                    ? "Workload"
-                                                    : m_permanent_column_names[col].c_str(),
-                                                col_flags, min_width);
-                    }
-                    else
-                    {
-                        int index = col - PERMANENT_COLUMN_COUNT;
-                        
-                        // Since render reads directly from the data model, the
-                        // m_metrics_column_names may not be synced for a few frames
-                        if(index < static_cast<int>(m_metrics_column_names.size()))
-                        {
-                            // Calculate width based on name + padding for close button
-                            float column_size = static_cast<float>(
-                                ImGui::CalcTextSize(m_metrics_column_names[index].c_str()).x +
-                                cell_padding + char_width * 2.0);
-
-                            column_size = std::max(column_size, default_min_width);
-
-                            ImGui::TableSetupColumn(m_metrics_column_names[index].c_str(),
-                                                    col_flags, column_size);
-                        }
-                        else
-                        {
-                            ImGui::TableSetupColumn(
-                                ("Metric " + std::to_string(index + 1)).c_str(), col_flags,
-                                default_min_width);
-                        }
-                    }
-                }
-
-                // Custom header row with hover detection and X button
-                ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-                for(int col = 0; col < column_count; col++)
-                {
-                    ImGui::TableSetColumnIndex(col);
-
-                    // Headers are keyed by column as in ImGui::TableHeadersRow, so
-                    // columns of one name stay apart.
-                    // Skip X for non-removable columns (like ID, Name)
-                    if(col < PERMANENT_COLUMN_COUNT)
-                    {
-                        ImGui::PushID(col);
-                        ImGui::TableHeader(ImGui::TableGetColumnName(col));
-                        ImGui::PopID();
-                        RenderBarChartContextMenu(col);
-                        continue;
-                    }
-
-                    // Sortable header with X button
-                    const char* name = ImGui::TableGetColumnName(col);
-                    ImGui::PushID(col);
-                    ImGui::TableHeader(name);
-                    ImGui::PopID();
-                    bool header_hovered = ImGui::IsItemHovered();
-                    RenderBarChartContextMenu(col);
-                    ImVec2 text_size = ImGui::CalcTextSize(name);
-                    if(header_hovered)
-                    {
-                        int index = col - PERMANENT_COLUMN_COUNT;
-                        if(index < static_cast<int>(m_metrics_info.size()))
-                        {
-                            const std::string &desc = m_metrics_info[index].entry.description;
-                            if(!desc.empty())
-                            {
-                                ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                                                    ImVec2(kTooltipMaxWidth, FLT_MAX));
-                                BeginTooltipStyled();
-                                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
-                                ImGui::TextUnformatted(desc.c_str());
-                                ImGui::PopTextWrapPos();
-                                EndTooltipStyled();                                
-                            }
-                        }
-                    }
-                    ImGui::SameLine(text_size.x, style.ItemInnerSpacing.x);
-
-                    ImGui::PushID(col);
-                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-                    if(XButton(nullptr, "Remove Metric", &settings))
-                    {
-                        remove_index = col - PERMANENT_COLUMN_COUNT;
-                    }
-                    ImGui::PopStyleVar();
-                    ImGui::PopID();
-                }
-
-                // Filter row. The workload column has no filter: its data is the id.
-                ImGui::TableNextRow();
-                for(int col = 0; col < column_count; col++)
-                {
-                    if(!ImGui::TableSetColumnIndex(col) ||
-                       (col == ID_COLUMN_INDEX && workload_column))
-                        continue;
-                    RenderColumnFilter(col);
-                }
-
-                if(data.empty())
+                if(m_rows.empty())
                 {
                     // The ID column is hidden, so the note goes under Name.
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(NAME_COLUMN_INDEX);
-                    ImGui::TextDisabled(active_count > 0 ? "No kernels match the applied filters"
-                                                         : "None");
+                    ImGui::TextDisabled(GetActiveFilterCount() > 0
+                                            ? "No kernels match the applied filters"
+                                            : "None");
                 }
 
-                // Get sort specs
-                ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs();
-                if(sort_specs && sort_specs->SpecsDirty)
-                {
-                    int                                sort_column_index = -1;
-                    rocprofvis_controller_sort_order_t sort_order =
-                        kRPVControllerSortOrderDescending;
-                    sort_column_index = sort_specs->Specs->ColumnIndex;
-                    sort_order =
-                        (sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending)
-                            ? kRPVControllerSortOrderAscending
-                            : kRPVControllerSortOrderDescending;
-
-                    sort_specs->SpecsDirty = false;
-
-                    if(m_sort_column_index != sort_column_index ||
-                       m_sort_order != sort_order)
-                    {
-                        m_sort_column_index = sort_column_index;
-                        m_sort_order        = sort_order;
-                        m_fetch_requested   = true;
-                    }
-                }
+                UpdateSortFromTable();
 
                 ImGui::PushStyleColor(ImGuiCol_Header,
                                       settings.GetColor(Colors::kSelection));
@@ -929,260 +790,11 @@ KernelMetricTable::Render()
                                       settings.GetColor(Colors::kHighlightChart));
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                                       settings.GetColor(Colors::kHighlightChart));
-
-                if(request_pending)
-                {
-                    ImGui::BeginDisabled();
-                }
-
-                bool open_menu = false;
-
-                ImGuiListClipper clipper;
-                clipper.Begin(static_cast<int>(data.size()));
-                // The selection's row is submitted even when clipped, to scroll to it.
-                const bool scroll_to_selected =
-                    m_scroll_to_selected && !m_update_table_selection && m_selected_row >= 0 &&
-                    m_selected_row < static_cast<int>(data.size());
-                if(scroll_to_selected)
-                {
-                    clipper.IncludeItemByIndex(m_selected_row);
-                }
-                const std::string marked_kernel_id = std::to_string(m_marked_kernel_id);
-                while(clipper.Step())
-                {
-                    for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
-                    {
-                        ImGui::TableNextRow();
-                        ImGui::PushID(row);  // Push row ID for unique identification
-
-                        bool is_selected       = (m_selected_row == row);
-                        bool selectable_placed = false;
-                        const uint32_t row_workload = m_row_workloads[row];
-                        if(is_selected && scroll_to_selected)
-                        {
-                            ImGui::SetScrollHereY(0.5f);
-                            m_scroll_to_selected = false;
-                        }
-                        // The compare target's row is tinted by the same selectable
-                        // that draws the selection, so both highlights match.
-                        const bool is_marked = !is_selected &&
-                                               row_workload == m_marked_workload_id &&
-                                               data[row][ID_COLUMN_INDEX] == marked_kernel_id;
-                        const std::string* workload_label =
-                            workload_column ? &WorkloadName(row_workload) : nullptr;
-
-                        for(int col = 0; col < data[row].size(); col++)
-                        {
-                            const std::string& cell =
-                                (workload_label && col == ID_COLUMN_INDEX) ? *workload_label
-                                                                           : data[row][col];
-                            ImGui::TableNextColumn();
-
-                            // Track hover using the current table cell bounds instead of
-                            // item hover state because the first selectable spans all columns.
-                            ImVec2 cell_min = ImGui::GetCursorScreenPos();
-                            float  cell_width = ImGui::GetContentRegionAvail().x;
-                            float  cell_height = line_height;
-                            ImVec2 cell_max(cell_min.x + cell_width, cell_min.y + cell_height);
-
-                            // Check if this is the first visible column
-                            ImGuiTableColumnFlags flags = ImGui::TableGetColumnFlags(col);
-                            bool is_visible = (flags & ImGuiTableColumnFlags_IsVisible) != 0;
-                            bool is_enabled = (flags & ImGuiTableColumnFlags_IsEnabled) != 0;
-                            bool need_tooltip = false;
-                            if(col == NAME_COLUMN_INDEX)
-                            {
-                                // Measure text and if larger than the cell, use a tooltip
-                                ImVec2 text_size = ImGui::CalcTextSize(cell.c_str());
-                                float available_width = ImGui::GetContentRegionAvail().x;
-                                if(text_size.x > available_width)
-                                {
-                                    need_tooltip = true;
-                                }
-                            }
-
-                            if(!selectable_placed && is_visible && is_enabled)
-                            {
-                                if(is_marked)
-                                {
-                                    ImGui::PushStyleColor(
-                                        ImGuiCol_Header,
-                                        ApplyAlpha(settings.GetColor(Colors::kComparisonTarget),
-                                                   MARKED_ROW_ALPHA));
-                                }
-                                const bool clicked =
-                                    ImGui::Selectable(cell.c_str(), is_selected || is_marked,
-                                                      ImGuiSelectableFlags_SpanAllColumns);
-                                if(is_marked)
-                                {
-                                    ImGui::PopStyleColor();
-                                }
-                                if(clicked)
-                                {
-                                    if(is_selected)
-                                    {
-                                        if(m_allow_deselect)
-                                        {
-                                            m_selected_row = -1;  // Deselect if already selected
-                                            m_compute_selection->SelectKernel(
-                                                ComputeSelection::INVALID_SELECTION_ID);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        m_selected_row               = row;
-                                        m_selected_kernel_id_local   = ParseKernelId(data[row][0]);
-                                        m_selected_workload_id_local = row_workload;
-
-                                        m_compute_selection->Select(row_workload,
-                                                                    m_selected_kernel_id_local);
-                                    }
-                                }
-                                selectable_placed = true;
-                            }
-                            else
-                            {
-                                if(cell.empty())
-                                {
-                                    ImGui::TextDisabled("N/A");
-                                }
-                                else
-                                {
-                                    if(m_bar_chart_columns.count(col) > 0 && !cell.empty())
-                                    {
-                                        auto it = m_column_max_values.find(col);
-                                        if(it != m_column_max_values.end() && it->second > 0.0)
-                                        {
-                                            char*  end = nullptr;
-                                            double val = std::strtod(cell.c_str(), &end);
-                                            if(end != cell.c_str())
-                                            {
-                                                float ratio = static_cast<float>(
-                                                    std::abs(val) / it->second);
-                                                ratio = std::min(ratio, 1.0f);
-
-                                                ImVec2     pos       = ImGui::GetCursorScreenPos();
-                                                float      w         = ImGui::GetContentRegionAvail().x;
-                                                float      h         = ImGui::GetTextLineHeightWithSpacing();
-                                                ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                                                // Intersect with the current clip rect so the bar is
-                                                // correctly hidden behind frozen rows/columns when the
-                                                // table is scrolled vertically.
-                                                draw_list->PushClipRect(
-                                                    pos, ImVec2(pos.x + w, pos.y + h), true);
-                                                draw_list->AddRectFilled(
-                                                    pos,
-                                                    ImVec2(pos.x + w * ratio, pos.y + h),
-                                                    SettingsManager::GetInstance().GetColor(
-                                                        Colors::kHighlightChart));
-                                                draw_list->PopClipRect();
-                                            }
-                                        }
-                                    }
-                                    ImGui::TextUnformatted(cell.c_str());
-                                }
-                            }
-                            bool cell_hovered =
-                                ImGui::IsWindowHovered() &&
-                                ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
-                            if(need_tooltip && cell_hovered)
-                            {
-                                ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                                                    ImVec2(kTooltipMaxWidth, FLT_MAX));
-                                BeginTooltipStyled();
-                                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
-                                if(cell.size() > TOOLTIP_MAX_CHARS)
-                                {
-                                    const std::string capped =
-                                        cell.substr(0, TOOLTIP_MAX_CHARS) + TEXT_ELLIPSIS;
-                                    ImGui::TextUnformatted(capped.c_str());
-                                }
-                                else
-                                {
-                                    ImGui::TextUnformatted(cell.c_str());
-                                }
-                                ImGui::PopTextWrapPos();
-                                EndTooltipStyled();
-                            }
-
-                            // Resolve the column from the cell rect; the row-spanning
-                            // selectable and frozen column make item hover unreliable.
-                            if(cell_hovered &&
-                               ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-                            {
-                                m_cell_menu.row    = row;
-                                m_cell_menu.column = col;
-                                open_menu          = true;
-                            }
-                        }
-                        ImGui::PopID();  // Pop row ID
-                    }
-                }
-
-                if(request_pending)
-                {
-                    ImGui::EndDisabled();
-                }
-
-                if(open_menu)
+                if(RenderRows(request_pending, line_height))
                 {
                     ImGui::OpenPopup(CELL_CONTEXT_MENU_ID);
                 }
-                if(BeginCellContextMenu(CELL_CONTEXT_MENU_ID))
-                {
-                    if(m_cell_menu.row >= 0 &&
-                       m_cell_menu.row < static_cast<int>(data.size()))
-                    {
-                        const std::vector<std::string>& menu_row = data[m_cell_menu.row];
-                        std::vector<std::string>        row_cells;
-                        row_cells.reserve(header.size());
-                        // Hidden columns have a header name starting with '_'. Remap
-                        // the data-column index to its visible-list position. The id
-                        // column is shown as the row's workload when there are several.
-                        int cell_index = 0;
-                        for(int col = 0; col < static_cast<int>(header.size()) &&
-                                         col < static_cast<int>(menu_row.size());
-                            col++)
-                        {
-                            const bool shows_workload =
-                                col == ID_COLUMN_INDEX && workload_column;
-                            if(!shows_workload && !header[col].empty() &&
-                               header[col][0] == '_')
-                            {
-                                continue;
-                            }
-                            if(col == m_cell_menu.column)
-                            {
-                                cell_index = static_cast<int>(row_cells.size());
-                            }
-                            const std::string& cell =
-                                shows_workload ? WorkloadName(m_row_workloads[m_cell_menu.row])
-                                               : menu_row[col];
-                            row_cells.push_back(cell.empty() ? "N/A" : cell);
-                        }
-                        AddCopyRowCellMenuItems(row_cells.data(),
-                                                static_cast<int>(row_cells.size()),
-                                                cell_index);
-                        if(m_compare_callback)
-                        {
-                            const uint32_t kernel_id   = ParseKernelId(menu_row[0]);
-                            const uint32_t workload_id = m_row_workloads[m_cell_menu.row];
-                            const bool     is_a =
-                                workload_id == m_compute_selection->GetSelectedWorkload() &&
-                                kernel_id == m_compute_selection->GetSelectedKernel();
-                            ImGui::Separator();
-                            if(ImGui::MenuItem(
-                                   "Compare with this kernel (B)", nullptr, false,
-                                   kernel_id != ComputeSelection::INVALID_SELECTION_ID &&
-                                       !is_a))
-                            {
-                                m_compare_callback(workload_id, kernel_id);
-                            }
-                        }
-                    }
-                    EndCellContextMenu();
-                }
-
+                RenderCellContextMenu();
                 ImGui::PopStyleColor(3);
                 ImGui::EndTable();
             }
@@ -1208,73 +820,495 @@ KernelMetricTable::Render()
 
         if(request_pending)
         {
-            RenderLoadingIndicator(
-                SettingsManager::GetInstance().GetColor(Colors::kTextMain),
-                "kernel_metric_table_loading");
+            RenderLoadingIndicator(settings.GetColor(Colors::kTextMain),
+                                   "kernel_metric_table_loading");
         }
     }
     ImGui::EndChild();
 
-    if(remove_index >= 0 && remove_index < static_cast<int>(m_metrics_params.size()))
+    if(remove_index >= 0)
     {
-        ROCPROFVIS_ASSERT(m_metrics_params.size() == m_metrics_info.size());
-
-        m_metrics_params.erase(m_metrics_params.begin() + remove_index);
-        m_metrics_info.erase(m_metrics_info.begin() + remove_index);
-
-        // Remove corresponding filter for the removed metric column
-        size_t filter_index = PERMANENT_COLUMN_COUNT + remove_index;
-        if(filter_index < m_column_filters.size())
-        {
-            m_column_filters.erase(m_column_filters.begin() + filter_index);
-            m_pending_column_filters.erase(m_pending_column_filters.begin() + filter_index);
-        }
-
-        int removed_col = PERMANENT_COLUMN_COUNT + remove_index;
-        m_bar_chart_columns.erase(removed_col);
-        std::set<int> adjusted;
-        for(int c : m_bar_chart_columns)
-            adjusted.insert(c > removed_col ? c - 1 : c);
-        m_bar_chart_columns = adjusted;
-
-        // The sort follows its column; sorting by the removed one falls back to
-        // the default.
-        if(m_sort_column_index == removed_col)
-        {
-            m_sort_column_index = DURATION_COLUMN_INDEX;
-            m_sort_order        = kRPVControllerSortOrderDescending;
-        }
-        else if(m_sort_column_index > removed_col)
-        {
-            m_sort_column_index--;
-        }
-
-        m_fetch_requested = true;
-        spdlog::debug("Removed metric column at index {}", remove_index);
+        RemoveMetricColumn(remove_index);
     }
+}
+
+void
+KernelMetricTable::SetupTableColumns(int column_count, float outer_width)
+{
+    const ImGuiStyle& style           = SettingsManager::GetInstance().GetDefaultStyle();
+    const float       cell_padding    = style.CellPadding.x * 2.0f;
+    const float       char_width      = ImGui::CalcTextSize("M").x;
+    const bool        workload_column = ShowsWorkloadColumn();
+
+    // Calculate minimum column widths based on character counts. The frozen name
+    // leaves at least half the table for the columns that scroll past it.
+    float name_min_width = std::min(char_width * COL_NAME_CHAR_LIMIT,
+                                    std::max(outer_width * FROZEN_NAME_MAX_SHARE,
+                                             char_width * COL_NAME_MIN_CHARS));
+    float default_min_width    = char_width * COL_DEFAULT_CHAR_LIMIT;
+    float invocation_min_width = char_width * COL_INVOCATION_CHAR_LIMIT;
+
+    for(int col = 0; col < column_count; col++)
+    {
+        ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_WidthFixed;
+        // ImGui rebuilds the sort specs whenever the columns change (a metric added
+        // or removed), so the current sort is the default.
+        if(col == m_sort_column_index)
+        {
+            col_flags |= ImGuiTableColumnFlags_DefaultSort |
+                         (m_sort_order == kRPVControllerSortOrderAscending
+                              ? ImGuiTableColumnFlags_PreferSortAscending
+                              : ImGuiTableColumnFlags_PreferSortDescending);
+        }
+        else
+        {
+            col_flags |= ImGuiTableColumnFlags_PreferSortDescending;
+        }
+        if(col < PERMANENT_COLUMN_COUNT)
+        {
+            // The id column shows each row's workload when there are several.
+            const bool shows_workload = col == ID_COLUMN_INDEX && workload_column;
+            if(!shows_workload && !m_header[col].empty() && m_header[col][0] == '_')
+            {
+                col_flags |= ImGuiTableColumnFlags_DefaultHide |
+                             ImGuiTableColumnFlags_Disabled;
+            }
+
+            // Set minimum width based on column type
+            float min_width = default_min_width;
+            if(shows_workload)
+            {
+                // Frozen with the name, so only as wide as its longest workload
+                // name.
+                min_width = ImGui::CalcTextSize("Workload").x;
+                for(const WorkloadInfo* workload :
+                    m_data_provider.ComputeModel().GetWorkloadList())
+                {
+                    if(workload)
+                    {
+                        min_width = std::max(min_width,
+                                             ImGui::CalcTextSize(workload->name.c_str()).x);
+                    }
+                }
+                min_width += cell_padding + char_width;
+            }
+            else if(col == NAME_COLUMN_INDEX)
+            {
+                min_width = name_min_width;
+            }
+            else if(col == INVOCATION_COLUMN_INDEX)
+            {
+                min_width = invocation_min_width;
+            }
+
+            ImGui::TableSetupColumn(shows_workload ? "Workload"
+                                                   : m_permanent_column_names[col].c_str(),
+                                    col_flags, min_width);
+        }
+        else
+        {
+            int index = col - PERMANENT_COLUMN_COUNT;
+
+            // Since render reads directly from the data model, the
+            // m_metrics_column_names may not be synced for a few frames
+            if(index < static_cast<int>(m_metrics_column_names.size()))
+            {
+                // Calculate width based on name + padding for close button
+                float column_size = static_cast<float>(
+                    ImGui::CalcTextSize(m_metrics_column_names[index].c_str()).x +
+                    cell_padding + char_width * 2.0);
+
+                column_size = std::max(column_size, default_min_width);
+
+                ImGui::TableSetupColumn(m_metrics_column_names[index].c_str(), col_flags,
+                                        column_size);
+            }
+            else
+            {
+                ImGui::TableSetupColumn(("Metric " + std::to_string(index + 1)).c_str(),
+                                        col_flags, default_min_width);
+            }
+        }
+    }
+}
+
+int
+KernelMetricTable::RenderHeaderRow(int column_count)
+{
+    SettingsManager&  settings     = SettingsManager::GetInstance();
+    const ImGuiStyle& style        = settings.GetDefaultStyle();
+    int               remove_index = -1;
+
+    // Custom header row with hover detection and X button
+    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+    for(int col = 0; col < column_count; col++)
+    {
+        ImGui::TableSetColumnIndex(col);
+
+        // Headers are keyed by column as in ImGui::TableHeadersRow, so columns of
+        // one name stay apart.
+        // Skip X for non-removable columns (like ID, Name)
+        if(col < PERMANENT_COLUMN_COUNT)
+        {
+            ImGui::PushID(col);
+            ImGui::TableHeader(ImGui::TableGetColumnName(col));
+            ImGui::PopID();
+            RenderBarChartContextMenu(col);
+            continue;
+        }
+
+        // Sortable header with X button
+        const char* name = ImGui::TableGetColumnName(col);
+        ImGui::PushID(col);
+        ImGui::TableHeader(name);
+        ImGui::PopID();
+        bool header_hovered = ImGui::IsItemHovered();
+        RenderBarChartContextMenu(col);
+        ImVec2 text_size = ImGui::CalcTextSize(name);
+        if(header_hovered)
+        {
+            int index = col - PERMANENT_COLUMN_COUNT;
+            if(index < static_cast<int>(m_metrics_info.size()))
+            {
+                const std::string& desc = m_metrics_info[index].entry.description;
+                if(!desc.empty())
+                {
+                    WrappedTooltip(desc);
+                }
+            }
+        }
+        ImGui::SameLine(text_size.x, style.ItemInnerSpacing.x);
+
+        ImGui::PushID(col);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+        if(XButton(nullptr, "Remove Metric", &settings))
+        {
+            remove_index = col - PERMANENT_COLUMN_COUNT;
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopID();
+    }
+    return remove_index;
+}
+
+void
+KernelMetricTable::RenderFilterRow(int column_count)
+{
+    // The workload column has no filter: its data is the id.
+    const bool workload_column = ShowsWorkloadColumn();
+    ImGui::TableNextRow();
+    for(int col = 0; col < column_count; col++)
+    {
+        if(ImGui::TableSetColumnIndex(col) && !(col == ID_COLUMN_INDEX && workload_column))
+        {
+            RenderColumnFilter(col);
+        }
+    }
+}
+
+void
+KernelMetricTable::UpdateSortFromTable()
+{
+    ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs();
+    if(!sort_specs || !sort_specs->SpecsDirty)
+    {
+        return;
+    }
+    const int                                sort_column_index = sort_specs->Specs->ColumnIndex;
+    const rocprofvis_controller_sort_order_t sort_order =
+        (sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending)
+            ? kRPVControllerSortOrderAscending
+            : kRPVControllerSortOrderDescending;
+
+    sort_specs->SpecsDirty = false;
+
+    if(m_sort_column_index != sort_column_index || m_sort_order != sort_order)
+    {
+        m_sort_column_index = sort_column_index;
+        m_sort_order        = sort_order;
+        m_fetch_requested   = true;
+    }
+}
+
+bool
+KernelMetricTable::RenderRows(bool request_pending, float line_height)
+{
+    if(request_pending)
+    {
+        ImGui::BeginDisabled();
     }
 
-    ImGui::EndChild();  // kernel_metric_table_card
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
+    const bool workload_column = ShowsWorkloadColumn();
+    bool       open_menu       = false;
 
-    m_query_builder.Render();
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(m_rows.size()));
+    // The selection's row is submitted even when clipped, to scroll to it.
+    const bool scroll_to_selected =
+        m_scroll_to_selected && !m_update_table_selection && m_selected_row >= 0 &&
+        m_selected_row < static_cast<int>(m_rows.size());
+    if(scroll_to_selected)
+    {
+        clipper.IncludeItemByIndex(m_selected_row);
+    }
+    const std::string marked_kernel_id = std::to_string(m_marked_kernel_id);
+    while(clipper.Step())
+    {
+        for(int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++)
+        {
+            ImGui::TableNextRow();
+            ImGui::PushID(row);  // Push row ID for unique identification
+
+            const std::vector<std::string>& cells             = m_rows[row];
+            const bool                      is_selected       = (m_selected_row == row);
+            bool                            selectable_placed = false;
+            const uint32_t                  row_workload      = m_row_workloads[row];
+            if(is_selected && scroll_to_selected)
+            {
+                ImGui::SetScrollHereY(0.5f);
+                m_scroll_to_selected = false;
+            }
+            // The compare target's row is tinted by the same selectable that draws
+            // the selection, so both highlights match.
+            const bool is_marked = !is_selected && row_workload == m_marked_workload_id &&
+                                   cells[ID_COLUMN_INDEX] == marked_kernel_id;
+            const std::string* workload_label =
+                workload_column ? &WorkloadName(row_workload) : nullptr;
+
+            for(int col = 0; col < static_cast<int>(cells.size()); col++)
+            {
+                const std::string& cell =
+                    (workload_label && col == ID_COLUMN_INDEX) ? *workload_label : cells[col];
+                ImGui::TableNextColumn();
+
+                // Track hover using the current table cell bounds instead of item
+                // hover state because the first selectable spans all columns.
+                const ImVec2 cell_min = ImGui::GetCursorScreenPos();
+                const ImVec2 cell_max(cell_min.x + ImGui::GetContentRegionAvail().x,
+                                      cell_min.y + line_height);
+
+                // A name wider than its cell gets a tooltip.
+                const bool need_tooltip =
+                    col == NAME_COLUMN_INDEX &&
+                    ImGui::CalcTextSize(cell.c_str()).x > ImGui::GetContentRegionAvail().x;
+
+                // The first visible column holds the row's selectable.
+                const ImGuiTableColumnFlags flags = ImGui::TableGetColumnFlags(col);
+                if(!selectable_placed && (flags & ImGuiTableColumnFlags_IsVisible) != 0 &&
+                   (flags & ImGuiTableColumnFlags_IsEnabled) != 0)
+                {
+                    RenderRowSelectable(row, cell, is_selected, is_marked);
+                    selectable_placed = true;
+                }
+                else
+                {
+                    RenderValueCell(col, cell);
+                }
+                const bool cell_hovered = ImGui::IsWindowHovered() &&
+                                          ImGui::IsMouseHoveringRect(cell_min, cell_max, true);
+                if(need_tooltip && cell_hovered)
+                {
+                    WrappedTooltip(cell.size() > TOOLTIP_MAX_CHARS
+                                       ? cell.substr(0, TOOLTIP_MAX_CHARS) + TEXT_ELLIPSIS
+                                       : cell);
+                }
+
+                // Resolve the column from the cell rect; the row-spanning selectable
+                // and frozen column make item hover unreliable.
+                if(cell_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                {
+                    m_cell_menu.row    = row;
+                    m_cell_menu.column = col;
+                    open_menu          = true;
+                }
+            }
+            ImGui::PopID();  // Pop row ID
+        }
+    }
+
+    if(request_pending)
+    {
+        ImGui::EndDisabled();
+    }
+    return open_menu;
+}
+
+void
+KernelMetricTable::RenderRowSelectable(int row, const std::string& cell, bool is_selected,
+                                       bool is_marked)
+{
+    if(is_marked)
+    {
+        ImGui::PushStyleColor(
+            ImGuiCol_Header,
+            ApplyAlpha(SettingsManager::GetInstance().GetColor(Colors::kComparisonTarget),
+                       MARKED_ROW_ALPHA));
+    }
+    const bool clicked = ImGui::Selectable(cell.c_str(), is_selected || is_marked,
+                                           ImGuiSelectableFlags_SpanAllColumns);
+    if(is_marked)
+    {
+        ImGui::PopStyleColor();
+    }
+    if(!clicked)
+    {
+        return;
+    }
+    if(is_selected)
+    {
+        if(m_allow_deselect)
+        {
+            m_selected_row = -1;  // Deselect if already selected
+            m_compute_selection->SelectKernel(ComputeSelection::INVALID_SELECTION_ID);
+        }
+        return;
+    }
+    m_selected_row               = row;
+    m_selected_kernel_id_local   = ParseKernelId(m_rows[row][ID_COLUMN_INDEX]);
+    m_selected_workload_id_local = m_row_workloads[row];
+    m_compute_selection->Select(m_selected_workload_id_local, m_selected_kernel_id_local);
+}
+
+void
+KernelMetricTable::RenderValueCell(int col, const std::string& cell)
+{
+    if(cell.empty())
+    {
+        ImGui::TextDisabled("N/A");
+        return;
+    }
+    if(m_bar_chart_columns.count(col) > 0)
+    {
+        auto it = m_column_max_values.find(col);
+        if(it != m_column_max_values.end() && it->second > 0.0)
+        {
+            char*  end = nullptr;
+            double val = std::strtod(cell.c_str(), &end);
+            if(end != cell.c_str())
+            {
+                float ratio = static_cast<float>(std::abs(val) / it->second);
+                ratio       = std::min(ratio, 1.0f);
+
+                ImVec2      pos       = ImGui::GetCursorScreenPos();
+                float       w         = ImGui::GetContentRegionAvail().x;
+                float       h         = ImGui::GetTextLineHeightWithSpacing();
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                // Intersect with the current clip rect so the bar is correctly
+                // hidden behind frozen rows/columns when the table is scrolled
+                // vertically.
+                draw_list->PushClipRect(pos, ImVec2(pos.x + w, pos.y + h), true);
+                draw_list->AddRectFilled(
+                    pos, ImVec2(pos.x + w * ratio, pos.y + h),
+                    SettingsManager::GetInstance().GetColor(Colors::kHighlightChart));
+                draw_list->PopClipRect();
+            }
+        }
+    }
+    ImGui::TextUnformatted(cell.c_str());
+}
+
+void
+KernelMetricTable::RenderCellContextMenu()
+{
+    if(!BeginCellContextMenu(CELL_CONTEXT_MENU_ID))
+    {
+        return;
+    }
+    if(m_cell_menu.row >= 0 && m_cell_menu.row < static_cast<int>(m_rows.size()))
+    {
+        const bool                      workload_column = ShowsWorkloadColumn();
+        const std::vector<std::string>& menu_row        = m_rows[m_cell_menu.row];
+        std::vector<std::string>        row_cells;
+        row_cells.reserve(m_header.size());
+        // Hidden columns have a header name starting with '_'. Remap the
+        // data-column index to its visible-list position. The id column is shown
+        // as the row's workload when there are several.
+        int cell_index = 0;
+        for(int col = 0; col < static_cast<int>(m_header.size()) &&
+                         col < static_cast<int>(menu_row.size());
+            col++)
+        {
+            const bool shows_workload = col == ID_COLUMN_INDEX && workload_column;
+            if(!shows_workload && !m_header[col].empty() && m_header[col][0] == '_')
+            {
+                continue;
+            }
+            if(col == m_cell_menu.column)
+            {
+                cell_index = static_cast<int>(row_cells.size());
+            }
+            const std::string& cell = shows_workload
+                                          ? WorkloadName(m_row_workloads[m_cell_menu.row])
+                                          : menu_row[col];
+            row_cells.push_back(cell.empty() ? "N/A" : cell);
+        }
+        AddCopyRowCellMenuItems(row_cells.data(), static_cast<int>(row_cells.size()),
+                                cell_index);
+        if(m_compare_callback)
+        {
+            const uint32_t kernel_id   = ParseKernelId(menu_row[ID_COLUMN_INDEX]);
+            const uint32_t workload_id = m_row_workloads[m_cell_menu.row];
+            const bool     is_a = workload_id == m_compute_selection->GetSelectedWorkload() &&
+                              kernel_id == m_compute_selection->GetSelectedKernel();
+            ImGui::Separator();
+            if(ImGui::MenuItem("Compare with this kernel (B)", nullptr, false,
+                               kernel_id != ComputeSelection::INVALID_SELECTION_ID && !is_a))
+            {
+                m_compare_callback(workload_id, kernel_id);
+            }
+        }
+    }
+    EndCellContextMenu();
+}
+
+void
+KernelMetricTable::RemoveMetricColumn(int remove_index)
+{
+    if(remove_index < 0 || remove_index >= static_cast<int>(m_metrics_params.size()))
+    {
+        return;
+    }
+    ROCPROFVIS_ASSERT(m_metrics_params.size() == m_metrics_info.size());
+
+    m_metrics_params.erase(m_metrics_params.begin() + remove_index);
+    m_metrics_info.erase(m_metrics_info.begin() + remove_index);
+
+    // Remove corresponding filter for the removed metric column
+    size_t filter_index = PERMANENT_COLUMN_COUNT + remove_index;
+    if(filter_index < m_column_filters.size())
+    {
+        m_column_filters.erase(m_column_filters.begin() + filter_index);
+        m_pending_column_filters.erase(m_pending_column_filters.begin() + filter_index);
+    }
+
+    int removed_col = PERMANENT_COLUMN_COUNT + remove_index;
+    m_bar_chart_columns.erase(removed_col);
+    std::set<int> adjusted;
+    for(int c : m_bar_chart_columns)
+    {
+        adjusted.insert(c > removed_col ? c - 1 : c);
+    }
+    m_bar_chart_columns = adjusted;
+
+    // The sort follows its column; sorting by the removed one falls back to the
+    // default.
+    if(m_sort_column_index == removed_col)
+    {
+        m_sort_column_index = DURATION_COLUMN_INDEX;
+        m_sort_order        = kRPVControllerSortOrderDescending;
+    }
+    else if(m_sort_column_index > removed_col)
+    {
+        m_sort_column_index--;
+    }
+
+    m_fetch_requested = true;
+    spdlog::debug("Removed metric column at index {}", remove_index);
 }
 
 void
 KernelMetricTable::SetQuery(const std::string& query)
 {
-    // only add metric if not already added
-    if(std::find(m_metrics_params.begin(), m_metrics_params.end(), query) !=
-       m_metrics_params.end())
-    {
-        // show notification that metric is already added
-        NotificationManager::GetInstance().Show("The metric '" + query +
-                                                    "' is already in the table.",
-                                                NotificationLevel::Warning);
-        return;
-    }
-  
     const AvailableMetrics::Entry* entry = m_query_builder.GetSelectedMetricInfo();
     AppendMetricQuery(query, entry ? *entry : AvailableMetrics::Entry(),
                       m_query_builder.GetValueName());
@@ -1283,28 +1317,43 @@ KernelMetricTable::SetQuery(const std::string& query)
 void
 KernelMetricTable::SetExternalQuery(MetricId metric_id, const std::string& value_name)
 {
-    auto query = metric_id.ToString() + ":" + value_name;
-    auto workload = m_data_provider.ComputeModel().GetWorkload(m_workload_id);
+    const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(m_workload_id);
     if(!workload)
-        return;
-
-    // only add metric if not already added
-    if(std::find(m_metrics_params.begin(), m_metrics_params.end(), query) !=
-       m_metrics_params.end())
     {
-        // show notification that metric is already added
-        NotificationManager::GetInstance().Show("The metric '" + query +
-                                                    "' is already in the table.",
-                                                NotificationLevel::Warning);
         return;
     }
-
-    auto entry = ComputeDataModel::GetMetricInfo(*workload, metric_id.category_id,
-                                                 metric_id.table_id, metric_id.entry_id);
+    const AvailableMetrics::Entry* entry = ComputeDataModel::GetMetricInfo(
+        *workload, metric_id.category_id, metric_id.table_id, metric_id.entry_id);
     if(!entry)
+    {
         return;
+    }
+    AppendMetricQuery(MetricQuery(*entry, value_name), *entry, value_name);
+}
 
-    AppendMetricQuery(query, *entry, value_name);
+bool
+KernelMetricTable::HasMetric(const std::string& query, const AvailableMetrics::Entry& entry,
+                             const std::string& value_name) const
+{
+    ROCPROFVIS_ASSERT(m_metrics_params.size() == m_metrics_info.size());
+    for(size_t i = 0; i < m_metrics_info.size(); ++i)
+    {
+        const MetricInfo& info = m_metrics_info[i];
+        if(entry.name.empty() || info.entry.name.empty())
+        {
+            if(m_metrics_params[i] == query)
+            {
+                return true;
+            }
+        }
+        else if(info.entry.category_id == entry.category_id &&
+                info.entry.table_id == entry.table_id && info.entry.name == entry.name &&
+                info.value_name == value_name)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void
@@ -1312,6 +1361,16 @@ KernelMetricTable::AppendMetricQuery(const std::string& query,
                                      const AvailableMetrics::Entry& entry,
                                      const std::string& value_name)
 {
+    if(HasMetric(query, entry, value_name))
+    {
+        const std::string name =
+            entry.name.empty() ? query
+                               : entry.name + (value_name.empty() ? "" : " " + value_name);
+        NotificationManager::GetInstance().Show("The metric '" + name +
+                                                    "' is already in the table.",
+                                                NotificationLevel::Warning);
+        return;
+    }
     m_metrics_params.push_back(query);
     m_metrics_info.emplace_back(MetricInfo{ entry, value_name });
 
@@ -1529,10 +1588,8 @@ KernelMetricTable::Preset::FromJson(jt::Json& json)
                             entry.id          = id;
                             entry.name        = name;
                         }
-                        m_widget.AppendMetricQuery(
-                            std::to_string(category_id) + "." + std::to_string(table_id) +
-                                "." + std::to_string(id) + ":" + value_name,
-                            std::move(entry), value_name);
+                        m_widget.AppendMetricQuery(MetricQuery(entry, value_name), entry,
+                                                   value_name);
                     }
                 }
             }

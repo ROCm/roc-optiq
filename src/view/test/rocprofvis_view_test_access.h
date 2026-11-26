@@ -487,11 +487,13 @@ struct KernelMetricTableTestPeer
     bool ShowedFetchError() const { return v.m_fetch_error_shown; }
     // The query the table would send `workload` were its picks `picks` (each an
     // entry and value name) with a filter on pick `filter_pick` (-1 for none);
-    // `present` gets which picks it queries. The table is left as it was.
+    // `present` gets which picks it queries. `stored` replaces the picks' stored
+    // queries (by default each entry's own). The table is left as it was.
     bool WorkloadQuery(const WorkloadInfo&                                                 workload,
                        const std::vector<std::pair<AvailableMetrics::Entry, std::string>>& picks,
                        int filter_pick, std::vector<std::string>& metrics,
-                       std::vector<bool>& present)
+                       std::vector<bool>& present,
+                       const std::vector<std::string>* stored = nullptr)
     {
         const std::vector<KernelMetricTable::MetricInfo>   saved_info    = v.m_metrics_info;
         const std::vector<std::string>                     saved_params  = v.m_metrics_params;
@@ -499,15 +501,10 @@ struct KernelMetricTableTestPeer
         const std::vector<bool> saved_present = v.m_fetch_metric_present;
 
         const size_t permanent = v.m_permanent_column_names.size();
-        v.m_metrics_info.clear();
-        v.m_metrics_params.clear();
-        for(const std::pair<AvailableMetrics::Entry, std::string>& pick : picks)
+        SetPicks(picks);
+        if(stored)
         {
-            v.m_metrics_info.push_back({ pick.first, pick.second });
-            v.m_metrics_params.push_back(
-                MetricId{ pick.first.category_id, pick.first.table_id, pick.first.id }
-                    .ToString() +
-                ":" + pick.second);
+            v.m_metrics_params = *stored;
         }
         v.m_column_filters.assign(permanent + picks.size(), KernelMetricTable::ColumnFilter());
         if(filter_pick >= 0)
@@ -527,6 +524,37 @@ struct KernelMetricTableTestPeer
         v.m_column_filters       = saved_filters;
         v.m_fetch_metric_present = saved_present;
         return built;
+    }
+    // Whether the table would take `entry`'s `value_name` for a duplicate were
+    // its picks `picks`. The table is left as it was.
+    bool HasMetric(const std::vector<std::pair<AvailableMetrics::Entry, std::string>>& picks,
+                   const AvailableMetrics::Entry& entry, const std::string& value_name)
+    {
+        const std::vector<KernelMetricTable::MetricInfo> saved_info   = v.m_metrics_info;
+        const std::vector<std::string>                   saved_params = v.m_metrics_params;
+        SetPicks(picks);
+        const std::string query =
+            MetricId{ entry.category_id, entry.table_id, entry.id }.ToString() + ":" +
+            value_name;
+        const bool found   = v.HasMetric(query, entry, value_name);
+        v.m_metrics_info   = saved_info;
+        v.m_metrics_params = saved_params;
+        return found;
+    }
+
+private:
+    void SetPicks(const std::vector<std::pair<AvailableMetrics::Entry, std::string>>& picks)
+    {
+        v.m_metrics_info.clear();
+        v.m_metrics_params.clear();
+        for(const std::pair<AvailableMetrics::Entry, std::string>& pick : picks)
+        {
+            v.m_metrics_info.push_back({ pick.first, pick.second });
+            v.m_metrics_params.push_back(
+                MetricId{ pick.first.category_id, pick.first.table_id, pick.first.id }
+                    .ToString() +
+                ":" + pick.second);
+        }
     }
 };
 

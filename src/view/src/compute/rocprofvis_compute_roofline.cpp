@@ -2157,8 +2157,29 @@ ComputeRooflinePane::ComputeRooflinePane(const IKernelCompare& compare,
                                          DataProvider&         data_provider)
 : ComputeKernelDetailsPane(compare)
 , m_roofline(std::make_shared<Roofline>(data_provider, Roofline::SingleKernel))
+, m_has_data(false)
 {
     m_roofline->SetChromeless(true);
+    for(const WorkloadInfo* workload : data_provider.ComputeModel().GetWorkloadList())
+    {
+        if(!workload)
+        {
+            continue;
+        }
+        m_has_data = m_has_data || !workload->roofline.ceiling_bandwidth.empty() ||
+                     !workload->roofline.ceiling_compute.empty() ||
+                     std::any_of(workload->ordered_kernels.begin(),
+                                 workload->ordered_kernels.end(),
+                                 [](const KernelInfo* kernel) {
+                                     return !kernel->roofline.intensities.empty();
+                                 });
+    }
+}
+
+bool
+ComputeRooflinePane::IsAvailable() const
+{
+    return m_has_data;
 }
 
 const char*

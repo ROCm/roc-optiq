@@ -236,6 +236,7 @@ public:
     ComputeRooflinePane(const IKernelCompare& compare, DataProvider& data_provider);
 
     const char* Title() const override;
+    bool        IsAvailable() const override;
     void        RenderBody(bool maximized) override;
     ImVec2      MinSize() const override;
     void        Update() override;
@@ -247,6 +248,8 @@ public:
 
 private:
     std::shared_ptr<Roofline> m_roofline;
+    // Whether any workload has ceilings or any kernel a point.
+    bool                      m_has_data;
 };
 
 }  // namespace View

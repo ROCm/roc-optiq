@@ -1499,7 +1499,10 @@ in `rocprofvis_compute_workload_view`).
 `ComputePane` (`m_panes`, all created, available or not), draws its card and
 header (title drag handle, panel picker, maximize / restore, hide) and asks it
 for everything panel-specific:
-- `Title()`, `IsAvailable()` (ISA without ISA lines is not).
+- `Title()`, `IsAvailable()` - false when the database lacks the panel's
+  data (ISA without ISA lines, Roofline without ceilings or kernel points,
+  Memory Chart, Metric Tables and Pinned Metrics without metrics); the picker
+  and layouts leave it out.
 - `HeaderButtons()` - its own buttons (`HeaderButton`: icon or label,
   tooltip, active, `id`), drawn before maximize and hide;
   `OnHeaderButton(id)` handles a click. At most `MAX_HEADER_BUTTONS`.
@@ -1511,8 +1514,9 @@ for everything panel-specific:
   the wrapped widgets do not subscribe to these events themselves, they
   expose calls the panel makes, e.g. `ComputeIsaView::SetSelectedKernel`,
   `ComputeTableView::OnKernelSelected`),
-  `OnCompareStarted()`, `OnCompareSwapping()` (before A and B trade places;
-  the metric tables remap their pins) and `ApplyCompare(target_changed)`.
+  `OnCompareStarted()`, `OnCompareSwapping(a_workload, b_workload)` (A and B
+  trade places, by Swap or by selecting B; the metric tables remap their pins)
+  and `ApplyCompare(target_changed)`.
 - `SaveLayout` / `LoadLayout` / `ResetLayout` - its own settings as keys of
   the layout preset's JSON object.
 
@@ -1627,8 +1631,8 @@ of the list). Rules:
   `baseline_*`): selecting B as A swaps them; otherwise with
   `follow_by_name` (default on, saved in presets) and B in another workload,
   B moves to A's namesake there. `SwapCompare()` presets `baseline_*` so its
-  own selection events do not re-run the follow rule, and calls every panel's
-  `OnCompareSwapping()` before it changes the selection.
+  own selection events do not re-run the follow rule. Both swaps call every
+  panel's `OnCompareSwapping()` with the old A's and B's workloads.
 - `EnableCompare()` calls every panel's `OnCompareStarted()` (sides back to
   A; the memory chart opens on B - A when available).
 - `ApplyCompare(target_changed)` marks B in the kernel table and calls every
@@ -1636,7 +1640,8 @@ of the list). Rules:
   `ComputeTableView::SetCompareTarget`, `m_chart_b` layout / source / fetch,
   and the A / B / delta sides.
 - B - A in the memory chart needs the same layout, so `DeltaAvailable()` is
-  "same workload or same `WorkloadArch`"; otherwise the chart header offers
+  "same workload or the same known `WorkloadArch`" (an empty arch never
+  matches); otherwise the chart header offers
   A and B only and the bar shows the architectures in warning colour.
 - `SetCompareTarget()` ignores A itself.
 
@@ -1741,8 +1746,9 @@ Each frame `Render()`:
    other)` makes every value read `other` - this (B - A, block rows adding
    the change as a % of A), coloured by direction (`kComparisonGreater` /
    `kComparisonLesser`), with A, B and B - A in the tooltips and a legend
-   note. It resolves `other`'s metrics by the same ids, so both charts must
-   share a layout (same `WorkloadArch`).
+   note. It finds `other`'s value of each metric by name
+   (`ResolveCounterpart`, as ids can shift between workloads), and draws on
+   this chart's layout, so both workloads must share one (same `WorkloadArch`).
 
 To change the chart: edit the per-arch JSON under `resources/memory_chart/`
 (or the DB blob). C++ only needs to change for new routing behavior, not
@@ -1760,8 +1766,11 @@ response). Metric ids differ between GPU architectures, so `BuildWorkloadQuery`
 matches each picked metric by name in that workload (`MatchMetricEntry`) and
 queries its ids; a metric it lacks is left out and its column filled empty
 (N/A), a filter on one skips the workload, and a sort on one falls back to
-duration there (the merge orders the rows). With several workloads the hidden id
-column shows each row's workload (sorted client side, no filter), frozen with
+duration there (the merge orders the rows). Each query is built from the
+matched entry, never from the stored `m_metrics_params` (rewritten to the
+selection's ids at the start of a cycle), and `HasMetric` spots a duplicate
+by name, so a metric sent from another workload is not added twice. With
+several workloads the hidden id column shows each row's workload (sorted client side, no filter), frozen with
 the name; clicking a row calls `ComputeSelection::Select(workload, kernel)`.
 The rail's List does not follow the table's sort or filters.
 The current sort column carries `DefaultSort` every frame and the table stays
@@ -1807,7 +1816,8 @@ workload has no available metric tables, `FetchAllMetrics()`
 leaves the view empty without submitting an invalid zero-selector request;
 when the whole database has none, the pane shows `NO_METRICS_MESSAGE`.
 Persistent via nested `Preset` (pins, shown tables under `"tables"`, and the
-compare options).
+compare options). Pins and tables are saved even when empty, so a preset with
+none restores none.
 
 Comparing (`SetCompareTarget` / `ClearCompareTarget`, driven by Kernel
 Details): B's metrics are fetched under `m_compare_client_id`
@@ -1823,10 +1833,10 @@ hidden with "Metrics only one side has" off). B-only rows are keyed with
 `COMPARE_B_ONLY_ENTRY_BIT` and `MetricTableBase::RowOrder` lists them by id
 among A's (after A's row of the same id); pinning one pins that key, so it
 stays apart from A's metric of the same id, and the pins show it as B's metric
-with an empty A while comparing (unavailable otherwise). Swap calls
-`SwapComparePins()` first (through the Metric Tables panel's
-`OnCompareSwapping()`), so every pin keeps naming the same metric once A and
-B trade places (`SwappedComparePinKey`: A's metric becomes its match in the new
+with an empty A while comparing (unavailable otherwise). Swap, and selecting
+B as A, call `SwapComparePins(a_workload, b_workload)` (through the Metric
+Tables panel's `OnCompareSwapping()`), so every pin keeps naming the same
+metric once A and B trade places (`SwappedComparePinKey`: A's metric becomes its match in the new
 A, else B-only; a B-only metric becomes A's).
 Changed values are shaded from `highlight_pct` up with an alpha that grows with
 the change: A and B cells in `kComparisonBase` / `kComparisonTarget`, delta

@@ -438,7 +438,8 @@ ComputeKernelDetailsView::CreatePanes(DataProvider& data_provider,
     const IKernelCompare&                    compare   = *this;
     const std::shared_ptr<ComputeSelection>& selection = m_compute_selection;
     m_panes[static_cast<size_t>(ComputePane::kMemoryChart)] =
-        std::make_unique<ComputeMemoryChartPane>(compare, data_provider, selection);
+        std::make_unique<ComputeMemoryChartPane>(compare, data_provider, selection,
+                                                 has_available_metrics);
     m_panes[static_cast<size_t>(ComputePane::kRoofline)] =
         std::make_unique<ComputeRooflinePane>(compare, data_provider);
     std::shared_ptr<ComputeTableView> table_view =
@@ -1515,6 +1516,77 @@ ComputeKernelDetailsView::ListedKernels() const
     return listed;
 }
 
+// A kernel tab's marker column, its badge's top-left at `badge_min`. `offer_b`
+// shows the B button.
+static void
+DrawCompareMarker(ImDrawList* draw_list, ImVec2 badge_min, bool is_a, bool is_b, bool offer_b,
+                  bool slot_hovered)
+{
+    // A and B as badges; elsewhere a faint B on hover.
+    if(is_a || is_b)
+    {
+        DrawBadge(draw_list, badge_min, is_a ? "A" : "B",
+                  is_a ? Colors::kComparisonBase : Colors::kComparisonTarget);
+        return;
+    }
+    if(!offer_b)
+    {
+        return;
+    }
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    const ImU32      target     = settings.GetColor(Colors::kComparisonTarget);
+    const ImVec2     badge_size = BadgeSize("B");
+    const ImVec2     badge_max(badge_min.x + badge_size.x, badge_min.y + badge_size.y);
+    if(slot_hovered)
+    {
+        draw_list->AddRectFilled(badge_min, badge_max,
+                                 ApplyAlpha(target, COMPARE_BADGE_HOVER_ALPHA),
+                                 COMPARE_BADGE_ROUNDING);
+    }
+    draw_list->AddRect(badge_min, badge_max, target, COMPARE_BADGE_ROUNDING);
+    draw_list->AddText(ImVec2(badge_min.x + COMPARE_BADGE_PAD_X, badge_min.y),
+                       settings.GetColor(slot_hovered ? Colors::kTextMain : Colors::kTextDim),
+                       "B");
+}
+
+// A kernel tab's name, stats and share bar from `pos`, `width` wide; returns the
+// name as drawn (maybe elided).
+static std::string
+DrawKernelTabText(ImDrawList* draw_list, const KernelInfo& kernel, ImVec2 pos, float width,
+                  float total_duration)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const float      line_h   = ImGui::GetTextLineHeight();
+    const double     duration =
+        static_cast<double>(kernel.dispatch_metrics[KernelInfo::DurationTotal]);
+    const float share =
+        total_duration > 0.0f ? static_cast<float>(duration / total_duration) : 0.0f;
+    const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
+    char             stats[KERNEL_TAB_STATS_SIZE];
+    std::snprintf(stats, sizeof(stats), "%.1f%%   %s   %llu calls", share * 100.0f,
+                  nanosecond_to_formatted_str(duration, time_format, true).c_str(),
+                  static_cast<unsigned long long>(
+                      kernel.dispatch_metrics[KernelInfo::InvocationCount]));
+
+    const std::string name = ElideWithEllipsis(kernel.name, width, KERNEL_NAME_MAX_CHARS);
+    float             y    = pos.y;
+    draw_list->AddText(pos, settings.GetColor(Colors::kTextMain), name.c_str());
+    y += line_h + KERNEL_TAB_LINE_GAP;
+    draw_list->AddText(ImVec2(pos.x, y), settings.GetColor(Colors::kTextDim), stats);
+    y += line_h + KERNEL_TAB_LINE_GAP;
+
+    // Share of the workload's total kernel time.
+    draw_list->AddRectFilled(
+        ImVec2(pos.x, y), ImVec2(pos.x + width, y + KERNEL_TAB_BAR_HEIGHT),
+        ApplyAlpha(settings.GetColor(Colors::kBorderColor), KERNEL_TAB_TRACK_ALPHA),
+        KERNEL_TAB_BAR_HEIGHT * 0.5f);
+    draw_list->AddRectFilled(ImVec2(pos.x, y),
+                             ImVec2(pos.x + width * share, y + KERNEL_TAB_BAR_HEIGHT),
+                             settings.GetColor(Colors::kAccent),
+                             KERNEL_TAB_BAR_HEIGHT * 0.5f);
+    return name;
+}
+
 void
 ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id,
                                           bool selected, bool can_compare,
@@ -1539,44 +1611,11 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
 
     const ImVec2 min = ImGui::GetCursorScreenPos();
     const ImVec2 max(min.x + width, min.y + height);
-    ImGui::PushID(static_cast<int>(kernel.id));
-    const bool clicked      = ImGui::InvisibleButton("##kernel_tab", ImVec2(body_w, height));
-    const bool body_hovered = ImGui::IsItemHovered();
-    if(ImGui::BeginPopupContextItem("kernel_tab_menu"))
-    {
-        if(is_b)
-        {
-            if(ImGui::MenuItem("Stop comparing"))
-            {
-                DisableCompare();
-            }
-        }
-        else if(ImGui::MenuItem("Compare with this kernel (B)", nullptr, false, can_be_b))
-        {
-            SetCompareTarget(workload_id, kernel.id);
-        }
-        ImGui::EndPopup();
-    }
-    ImGui::SameLine(0.0f, 0.0f);
-    const bool slot_clicked = ImGui::InvisibleButton("##kernel_b_slot", ImVec2(slot_w, height));
-    const bool slot_hovered = ImGui::IsItemHovered();
-    ImGui::PopID();
-
-    if(slot_clicked)
-    {
-        if(is_b)
-        {
-            DisableCompare();
-        }
-        else if(can_be_b)
-        {
-            SetCompareTarget(workload_id, kernel.id);
-        }
-    }
-    if(clicked && !selected)
-    {
-        m_compute_selection->Select(workload_id, kernel.id);
-    }
+    bool         body_hovered = false;
+    bool         slot_hovered = false;
+    HandleKernelTabInput(kernel, workload_id, selected, is_b, can_be_b,
+                         ImVec2(body_w, height), ImVec2(slot_w, height), body_hovered,
+                         slot_hovered);
     // The rest only draws, so a tab scrolled out of view stops here.
     if(!ImGui::IsRectVisible(
            ImVec2(min.x - KERNEL_TAB_CULL_MARGIN, min.y - KERNEL_TAB_CULL_MARGIN),
@@ -1602,60 +1641,15 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
                                  KERNEL_TAB_ROUNDING, ImDrawFlags_RoundCornersLeft);
     }
 
-    const double duration =
-        static_cast<double>(kernel.dispatch_metrics[KernelInfo::DurationTotal]);
-    const float share =
-        total_duration > 0.0f ? static_cast<float>(duration / total_duration) : 0.0f;
-    const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
-    char             stats[KERNEL_TAB_STATS_SIZE];
-    std::snprintf(stats, sizeof(stats), "%.1f%%   %s   %llu calls", share * 100.0f,
-                  nanosecond_to_formatted_str(duration, time_format, true).c_str(),
-                  static_cast<unsigned long long>(
-                      kernel.dispatch_metrics[KernelInfo::InvocationCount]));
+    const ImVec2 badge_min(min.x + body_w + (slot_w - badge_size.x) * 0.5f,
+                           min.y + KERNEL_TAB_PAD);
+    DrawCompareMarker(draw_list, badge_min, is_a, is_b, hovered && can_be_b, slot_hovered);
 
     const float       text_x = min.x + KERNEL_TAB_ACCENT_WIDTH + KERNEL_TAB_PAD;
     const float       text_w = std::max(0.0f, min.x + body_w - text_x);
-    float             y      = min.y + KERNEL_TAB_PAD;
-
-    // The marker column: A and B as badges; elsewhere a faint B on hover.
-    const ImVec2 badge_min(min.x + body_w + (slot_w - badge_size.x) * 0.5f, y);
-    if(is_a || is_b)
-    {
-        DrawBadge(draw_list, badge_min, is_a ? "A" : "B",
-                  is_a ? Colors::kComparisonBase : Colors::kComparisonTarget);
-    }
-    else if(hovered && can_be_b)
-    {
-        const ImU32 target = settings.GetColor(Colors::kComparisonTarget);
-        const ImVec2 badge_max(badge_min.x + badge_size.x, badge_min.y + badge_size.y);
-        if(slot_hovered)
-        {
-            draw_list->AddRectFilled(badge_min, badge_max,
-                                     ApplyAlpha(target, COMPARE_BADGE_HOVER_ALPHA),
-                                     COMPARE_BADGE_ROUNDING);
-        }
-        draw_list->AddRect(badge_min, badge_max, target, COMPARE_BADGE_ROUNDING);
-        draw_list->AddText(ImVec2(badge_min.x + COMPARE_BADGE_PAD_X, badge_min.y),
-                           settings.GetColor(slot_hovered ? Colors::kTextMain
-                                                          : Colors::kTextDim),
-                           "B");
-    }
-    const std::string name = ElideWithEllipsis(kernel.name, text_w, KERNEL_NAME_MAX_CHARS);
-    const ImVec2      name_pos(text_x, y);
-    draw_list->AddText(name_pos, settings.GetColor(Colors::kTextMain), name.c_str());
-    y += line_h + KERNEL_TAB_LINE_GAP;
-    draw_list->AddText(ImVec2(text_x, y), settings.GetColor(Colors::kTextDim), stats);
-    y += line_h + KERNEL_TAB_LINE_GAP;
-
-    // Share of the workload's total kernel time.
-    draw_list->AddRectFilled(
-        ImVec2(text_x, y), ImVec2(text_x + text_w, y + KERNEL_TAB_BAR_HEIGHT),
-        ApplyAlpha(settings.GetColor(Colors::kBorderColor), KERNEL_TAB_TRACK_ALPHA),
-        KERNEL_TAB_BAR_HEIGHT * 0.5f);
-    draw_list->AddRectFilled(ImVec2(text_x, y),
-                             ImVec2(text_x + text_w * share, y + KERNEL_TAB_BAR_HEIGHT),
-                             settings.GetColor(Colors::kAccent),
-                             KERNEL_TAB_BAR_HEIGHT * 0.5f);
+    const ImVec2      name_pos(text_x, min.y + KERNEL_TAB_PAD);
+    const std::string name =
+        DrawKernelTabText(draw_list, kernel, name_pos, text_w, total_duration);
 
     if(body_hovered && IsEllipsisHovered(name, kernel.name, name_pos, line_h))
     {
@@ -1666,6 +1660,52 @@ ComputeKernelDetailsView::RenderKernelTab(const KernelInfo& kernel, uint32_t wor
         SetTooltipStyled("%s", is_a   ? "A: the selected kernel"
                                : is_b ? "B: compared with A. Click to stop comparing."
                                       : "Compare with this kernel (B)");
+    }
+}
+
+void
+ComputeKernelDetailsView::HandleKernelTabInput(const KernelInfo& kernel, uint32_t workload_id,
+                                               bool selected, bool is_b, bool can_be_b,
+                                               ImVec2 body_size, ImVec2 slot_size,
+                                               bool& body_hovered, bool& slot_hovered)
+{
+    ImGui::PushID(static_cast<int>(kernel.id));
+    const bool clicked = ImGui::InvisibleButton("##kernel_tab", body_size);
+    body_hovered       = ImGui::IsItemHovered();
+    if(ImGui::BeginPopupContextItem("kernel_tab_menu"))
+    {
+        if(is_b)
+        {
+            if(ImGui::MenuItem("Stop comparing"))
+            {
+                DisableCompare();
+            }
+        }
+        else if(ImGui::MenuItem("Compare with this kernel (B)", nullptr, false, can_be_b))
+        {
+            SetCompareTarget(workload_id, kernel.id);
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::SameLine(0.0f, 0.0f);
+    const bool slot_clicked = ImGui::InvisibleButton("##kernel_b_slot", slot_size);
+    slot_hovered            = ImGui::IsItemHovered();
+    ImGui::PopID();
+
+    if(slot_clicked)
+    {
+        if(is_b)
+        {
+            DisableCompare();
+        }
+        else if(can_be_b)
+        {
+            SetCompareTarget(workload_id, kernel.id);
+        }
+    }
+    if(clicked && !selected)
+    {
+        m_compute_selection->Select(workload_id, kernel.id);
     }
 }
 
@@ -1736,10 +1776,14 @@ ComputeKernelDetailsView::DeltaAvailable() const
     {
         return true;
     }
-    // B - A reads B's values through A's chart, so both need the same layout.
+    // B - A draws on A's chart, so both need the same layout; an unknown
+    // architecture can not show that.
     const ComputeDataModel& model = m_data_provider.ComputeModel();
-    return ComputeMemoryChartView::WorkloadArch(model.GetWorkload(a_workload)) ==
-           ComputeMemoryChartView::WorkloadArch(model.GetWorkload(m_compare.workload_id));
+    const std::string       a_arch =
+        ComputeMemoryChartView::WorkloadArch(model.GetWorkload(a_workload));
+    return !a_arch.empty() &&
+           a_arch ==
+               ComputeMemoryChartView::WorkloadArch(model.GetWorkload(m_compare.workload_id));
 }
 
 void
@@ -1816,7 +1860,7 @@ ComputeKernelDetailsView::SwapCompare()
     m_compare.baseline_kernel_id   = b_kernel;
     for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
     {
-        pane->OnCompareSwapping();
+        pane->OnCompareSwapping(a_workload, b_workload);
     }
     m_compute_selection->Select(b_workload, b_kernel);
     ApplyCompare(true);
@@ -1850,6 +1894,10 @@ ComputeKernelDetailsView::OnBaselineChanged()
             m_compare.workload_id = previous_workload;
             m_compare.kernel_id   = previous_kernel;
             target_changed        = true;
+            for(const std::unique_ptr<ComputeKernelDetailsPane>& pane : m_panes)
+            {
+                pane->OnCompareSwapping(previous_workload, a_workload);
+            }
         }
     }
     else if(m_compare.follow_by_name && a_workload != m_compare.workload_id)

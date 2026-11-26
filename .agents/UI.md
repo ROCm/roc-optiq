@@ -2696,7 +2696,10 @@ Layered, transport at the bottom and the panel at the top:
   operator whitelists rather than escaping, quoted string literals, and
   escaped `LIKE` wildcards paired with an explicit `ESCAPE` clause. Its
   columns must be names the returned rows carry (`node`, not the SQL
-  `nodeId`), since a filter on any other name matches nothing.
+  `nodeId`), since a filter on any other name matches nothing. `__uuid`
+  is refused for filters and `group_by` before the list is checked: the
+  table compares and groups through a `double`, which cannot hold a uuid
+  exactly, so neighbouring events would match or merge.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
   `StartAssistantTool`, which parses the arguments, refuses everything
   but `offer_next_steps` when no trace is ready, parks while a trace is

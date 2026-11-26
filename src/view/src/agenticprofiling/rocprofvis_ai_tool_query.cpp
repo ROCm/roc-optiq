@@ -24,7 +24,7 @@ namespace
 // pattern is escaped to match. See EscapeLikeWildcards.
 constexpr char ASSISTANT_LIKE_ESCAPE_CHAR = '\\';
 
-// Columns a tool argument may filter, group, and sort on. Filters reach the
+// Columns a tool argument may filter and group on. Filters reach the
 // table as an expression over these names, so only names on this list are
 // accepted and the values beside them are quoted by QuoteSqlLiteral. Each must
 // be a column of the rows a table returns, not of the SQL behind them: a filter
@@ -32,7 +32,7 @@ constexpr char ASSISTANT_LIKE_ESCAPE_CHAR = '\\';
 // can query, so treat it as an interface change.
 const char* const ASSISTANT_QUERY_COLUMNS[] = {
     "name",       "category",  "duration",   "start",      "end",
-    "id",         "__uuid",    "PID",        "TID",        "queue",
+    "id",         "PID",       "TID",        "queue",
     "stream",     "node",      "size",       "address",
     "SrcAddr",    "value",     "counter",    "arguments",  "GridSizeX",
     "GridSizeY",  "GridSizeZ", "WGSizeX",    "WGSizeY",    "WGSizeZ",
@@ -41,6 +41,10 @@ const char* const ASSISTANT_QUERY_COLUMNS[] = {
     "SrcAgentAbsoluteIndex", "SrcAgentType", "SrcAgentTypeIndex",
     "SrcAgentName", "__trackId", "__streamTrackId",
 };
+
+// Refused for filters and group_by before the list is checked: the table
+// compares and groups through a double, which cannot hold a uuid exactly.
+constexpr char ASSISTANT_UUID_COLUMN[] = "__uuid";
 
 enum class QueryWildcard
 {
@@ -253,20 +257,18 @@ BuildAssistantFilterExpression(const jt::Json& args, std::string& error_out)
         }
 
         const std::string column = JsonUtils::GetString(entry, "column", "");
-        if(!IsAllowedQueryColumn(column))
-        {
-            error_out = "Unknown filter column \"" + column +
-                        "\". Allowed columns: " + AssistantAllowedQueryColumnList();
-            return std::string();
-        }
-        // A uuid is wider than a double holds exactly and the filter compares
-        // through one, so any match would take in neighbouring events.
-        if(column == "__uuid")
+        if(column == ASSISTANT_UUID_COLUMN)
         {
             error_out = "__uuid cannot be used in filters: ids this large are compared "
                         "approximately and would match neighbouring events. Call "
                         "event_details with the uuid, or filter on id, name, or start "
                         "instead.";
+            return std::string();
+        }
+        if(!IsAllowedQueryColumn(column))
+        {
+            error_out = "Unknown filter column \"" + column +
+                        "\". Allowed columns: " + AssistantAllowedQueryColumnList();
             return std::string();
         }
 
@@ -332,6 +334,14 @@ AssistantGroupByFromArgs(const jt::Json& args, std::string& error_out)
     const std::string group = JsonUtils::GetString(args, "group_by", "");
     if(group.empty() || !error_out.empty())
     {
+        return std::string();
+    }
+    if(group == ASSISTANT_UUID_COLUMN)
+    {
+        error_out = "__uuid cannot be used for group_by: every event has its own, and "
+                    "ids this large are grouped approximately, so neighbouring events "
+                    "would merge into one row. Group by name, category, or another "
+                    "column instead.";
         return std::string();
     }
     if(!IsAllowedQueryColumn(group))

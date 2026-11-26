@@ -62,7 +62,7 @@ public:
      * Takes over a session that has already authenticated on m_uri's connection,
      * so the next DownloadPath() or BrowsePath() reuses it instead of connecting
      * again. Returns false, and keeps nothing, while a phase is running or when
-     * session is null.
+     * session is null or has not authenticated.
      * @param session: an idle, authenticated session for m_uri.
      */
     bool SetSession(std::unique_ptr<SshSession> session);

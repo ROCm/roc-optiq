@@ -3,7 +3,6 @@
 
 #include "rocprofvis_profiler_launch_orchestrator.h"
 #include "rocprofvis_appwindow.h"
-#include "widgets/rocprofvis_notification_manager.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #    include "remote/rocprofvis_remote_trace_orchestrator.h"
@@ -28,7 +27,6 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 , m_remote_uri(nullptr)
 , m_download_orchestrator(nullptr)
-, m_download_started(false)
 #endif
 , m_profiler_state(kRPVProfilerStateIdle)
 , m_is_running(false)
@@ -37,7 +35,7 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
 , m_raw_output()
 , m_output_dirty(false)
 , m_trace_path()
-, m_launch_error()
+, m_outcome()
 {
     // Listen for profiler state transitions surfaced by the AppMonitor. Filter
     // to events belonging to this orchestrator's LOCAL session by operation id
@@ -85,12 +83,11 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     m_download_orchestrator.reset();
     m_remote_session.reset();
-    m_download_started = false;
 #endif
     m_raw_output.clear();
     m_output_dirty   = false;
     m_trace_path.clear();
-    m_launch_error.clear();
+    m_outcome        = RunOutcome();
     m_profiler_state = kRPVProfilerStateIdle;
     m_is_running     = false;
 
@@ -114,7 +111,7 @@ bool ProfilerLaunchOrchestrator::LaunchLocal(const LaunchRequest& request)
 
     if(!success)
     {
-        m_launch_error   = "Failed to launch profiler";
+        m_outcome        = { ConsoleStatusLevel::kError, "Failed to launch profiler" };
         m_profiler_state = kRPVProfilerStateFailed;
         return false;
     }
@@ -129,7 +126,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 {
     if(!request.remote_uri)
     {
-        m_launch_error   = "No SSH connection configured.";
+        m_outcome        = { ConsoleStatusLevel::kError, "No SSH connection configured." };
         m_profiler_state = kRPVProfilerStateFailed;
         return false;
     }
@@ -152,8 +149,10 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 
     if(!success)
     {
-        m_launch_error = "Failed to start remote profiler: " +
-                         (m_remote_session ? m_remote_session->GetStatusMessage() : std::string());
+        m_outcome = { ConsoleStatusLevel::kError,
+                      "Failed to start remote profiler: " +
+                          (m_remote_session ? m_remote_session->GetStatusMessage()
+                                            : std::string()) };
         m_profiler_state = kRPVProfilerStateFailed;
         m_remote_session.reset();
         m_download_orchestrator.reset();
@@ -166,7 +165,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 
-void ProfilerLaunchOrchestrator::Cancel()
+bool ProfilerLaunchOrchestrator::Cancel()
 {
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_remote_session)
@@ -176,7 +175,7 @@ void ProfilerLaunchOrchestrator::Cancel()
         m_remote_session.reset();
         m_profiler_state = kRPVProfilerStateCancelled;
         m_is_running     = false;
-        return;
+        return true;
     }
 #endif
 
@@ -186,14 +185,11 @@ void ProfilerLaunchOrchestrator::Cancel()
         m_profiler_state = kRPVProfilerStateCancelled;
         m_is_running     = false;
     }
-    else if(cancelled != kRocProfVisResultNotSupported)
-    {
-        m_launch_error = "Failed to cancel profiler";
-    }
     // NotSupported: the run finished between the click and the call, so there
     // was nothing to stop. Reporting a failure there would be wrong, and
     // forcing the state to Cancelled would overwrite the real outcome; Update()
     // reports it on the next poll.
+    return cancelled == kRocProfVisResultSuccess || cancelled == kRocProfVisResultNotSupported;
 }
 
 void ProfilerLaunchOrchestrator::Close()
@@ -243,26 +239,48 @@ void ProfilerLaunchOrchestrator::Update()
 
             if(remote_state == kRPVProfilerStateCompleted)
             {
-                m_profiler_state = kRPVProfilerStateCompleted;
-                m_trace_path     = m_remote_uri ? m_remote_uri->GetRemoteResultPathString()
-                                                : std::string();
-
-                // With auto-open, the trace is downloaded once the run has
-                // produced a file.
-                if(m_download_trace && !m_download_started && m_download_orchestrator &&
-                   !m_trace_path.empty())
+                // Decided once, on the transition: the run's trace path is final
+                // by then.
+                if(m_profiler_state != kRPVProfilerStateCompleted)
                 {
-                    m_download_started = true;
-                    m_download_orchestrator->DownloadPath();
+                    m_profiler_state = kRPVProfilerStateCompleted;
+                    m_outcome        = { ConsoleStatusLevel::kSuccess, std::string() };
+                    m_trace_path     = m_remote_uri ? m_remote_uri->GetRemoteResultPathString()
+                                                    : std::string();
+                    if(!m_trace_path.empty())
+                    {
+                        // With auto-open, the trace is downloaded once the run
+                        // has produced a file.
+                        if(m_download_trace && m_download_orchestrator)
+                        {
+                            m_download_orchestrator->DownloadPath();
+                        }
+                    }
+                    else if(m_download_trace && m_remote_session->GetTracePathResult() !=
+                                                    kRocProfVisResultNotSupported)
+                    {
+                        // As for a local run: no guessing, tell the user where to
+                        // look.
+                        spdlog::warn("ProfilerLaunchOrchestrator: could not determine remote "
+                                     "trace path from profiler output");
+                        m_outcome = { ConsoleStatusLevel::kWarning,
+                                      "The trace file could not be located in the profiler "
+                                      "output. Open it from the remote output directory with "
+                                      "File > Open Remote." };
+                    }
                 }
             }
             else if(remote_state == kRPVProfilerStateCancelled)
             {
                 m_profiler_state = kRPVProfilerStateCancelled;
             }
-            else
+            else if(m_profiler_state != kRPVProfilerStateFailed)
             {
                 m_profiler_state = kRPVProfilerStateFailed;
+                // The session's reason, e.g. "SSH authentication failed."
+                std::string const reason = m_remote_session->GetStatusMessage();
+                m_outcome = { ConsoleStatusLevel::kError,
+                              reason.empty() ? std::string("Remote profiler failed.") : reason };
             }
         }
         return;
@@ -309,6 +327,7 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
     if(new_state == kRPVProfilerStateCompleted)
     {
         m_is_running = false;
+        m_outcome    = { ConsoleStatusLevel::kSuccess, std::string() };
         rocprofvis_result_t const trace = ResolveLocalTracePath();
         if(!m_trace_path.empty() && m_download_trace && m_app_window)
         {
@@ -321,20 +340,30 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
             // stale/unrelated trace). Fail safe and tell the user where to look.
             spdlog::warn("ProfilerLaunchOrchestrator: could not determine trace path from "
                          "profiler output");
-            NotificationManager::GetInstance().Show(
-                "Profiling finished, but the trace file could not be located automatically. "
-                "Open it manually from the output directory.",
-                NotificationLevel::Warning);
+            m_outcome = { ConsoleStatusLevel::kWarning,
+                          "The trace file could not be located in the profiler output. "
+                          "Open it manually from the output directory." };
         }
     }
     else if(new_state == kRPVProfilerStateFailed)
     {
         m_is_running = false;
+        m_outcome    = { ConsoleStatusLevel::kError, LocalFailureMessage() };
     }
     else if(new_state == kRPVProfilerStateCancelled)
     {
         m_is_running = false;
     }
+}
+
+std::string ProfilerLaunchOrchestrator::LocalFailureMessage() const
+{
+    int32_t const exit_code = m_profiler_session.GetExitCode();
+    if(exit_code == 127)
+    {
+        return "Profiler executable not found or could not be started (exit code 127)";
+    }
+    return "Profiler execution failed (exit code " + std::to_string(exit_code) + ")";
 }
 
 rocprofvis_result_t ProfilerLaunchOrchestrator::ResolveLocalTracePath()
@@ -368,18 +397,6 @@ int32_t ProfilerLaunchOrchestrator::GetExitCode() const
     return m_profiler_session.GetExitCode();
 }
 
-std::string ProfilerLaunchOrchestrator::GetRemoteStatusMessage() const
-{
-    std::string message;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(m_remote_session)
-    {
-        message = m_remote_session->GetStatusMessage();
-    }
-#endif
-    return message;
-}
-
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 SshSession* ProfilerLaunchOrchestrator::GetRemoteSshSession() const
 {
@@ -406,7 +423,7 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
 
     // The badge reflects the workflow phase, not just the profiler state, so the
     // user sees connect/auth/profile progress. The label says it all
-    // for those phases; only a failure carries a detail (its reason).
+    // for those phases; only a failure or a warning carries a detail.
     out_detail.clear();
     switch(m_remote_session->GetPhase())
     {
@@ -425,6 +442,11 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
         case RemoteProfilerSession::Phase::Done:
             out_label = "Completed";
             out_level = ConsoleStatusLevel::kSuccess;
+            if(m_outcome.level == ConsoleStatusLevel::kWarning)
+            {
+                out_level  = ConsoleStatusLevel::kWarning;
+                out_detail = m_outcome.message;
+            }
             break;
         case RemoteProfilerSession::Phase::Failed:
             out_label  = "Failed";

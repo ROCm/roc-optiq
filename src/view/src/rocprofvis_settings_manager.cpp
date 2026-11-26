@@ -156,6 +156,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(225, 145, 75, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(235, 82, 98, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(65, 195, 205, 255),   // Colors::kPcSamplingSleeping
+    IM_COL32(54, 114, 188, 255),   // Colors::kPcSamplingMetricBar
     IM_COL32(184, 183, 204, 255),  // Colors::kIsaInternal
     IM_COL32(188, 145, 235, 255),  // Colors::kIsaMatrix
     IM_COL32(108, 203, 173, 255),  // Colors::kIsaScalar
@@ -296,6 +297,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(190, 100, 35, 255),   // Colors::kPcSamplingPipelineStall
     IM_COL32(204, 55, 70, 255),    // Colors::kPcSamplingOtherWait
     IM_COL32(0, 132, 155, 255),    // Colors::kPcSamplingSleeping
+    IM_COL32(32, 102, 180, 255),   // Colors::kPcSamplingMetricBar
     IM_COL32(108, 105, 131, 255),  // Colors::kIsaInternal
     IM_COL32(126, 77, 170, 255),   // Colors::kIsaMatrix
     IM_COL32(25, 120, 92, 255),    // Colors::kIsaScalar
@@ -1020,6 +1022,24 @@ SettingsManager::GetEventLevelSpacing() const
     return EVENT_LEVEL_SPACING;
 }
 
+// Parses a saved binding, leaving it unbound when the string is malformed or
+// does not suit the action: press actions need a key, hold actions are
+// modifiers only.
+static ImGuiKeyChord
+parse_hotkey_chord(const HotkeyActionInfo& info, const std::string& str)
+{
+    ImGuiKeyChord chord       = HotkeyManager::StringToKeyChord(str);
+    bool          has_key     = (chord & ~ImGuiMod_Mask_) != ImGuiKey_None;
+    bool          fits_action = info.type == ActionType::kPress ? has_key : !has_key;
+    bool          unparsed    = chord == ImGuiKey_None && !str.empty() && str != "None";
+    if(unparsed || (chord != ImGuiKey_None && !fits_action))
+    {
+        spdlog::warn("Ignoring invalid hotkey \"{}\" for {}", str, info.key);
+        chord = ImGuiKey_None;
+    }
+    return chord;
+}
+
 void
 SettingsManager::SerializeHotkeySettings(jt::Json& json)
 {
@@ -1064,13 +1084,11 @@ SettingsManager::DeserializeHotkeySettings(jt::Json& json)
         HotkeyBinding binding = info.default_binding;
         if(value["primary"].isString())
         {
-            binding.primary = HotkeyManager::StringToKeyChord(
-                value["primary"].getString());
+            binding.primary = parse_hotkey_chord(info, value["primary"].getString());
         }
         if(value["alternate"].isString())
         {
-            binding.alternate = HotkeyManager::StringToKeyChord(
-                value["alternate"].getString());
+            binding.alternate = parse_hotkey_chord(info, value["alternate"].getString());
         }
 
         hk_mgr.SetBinding(action_id, binding);
@@ -1413,6 +1431,18 @@ SettingsManager::GetActiveAssistantProvider() const
         return nullptr;
     }
     return &providers[m_usersettings.assistant.active];
+}
+
+void
+SettingsManager::SetActiveAssistantModel(const std::string& model)
+{
+    std::vector<AssistantProvider>& providers = m_usersettings.assistant.providers;
+    if(model.empty() || m_usersettings.assistant.active >= providers.size())
+    {
+        return;
+    }
+    providers[m_usersettings.assistant.active].model = model;
+    SaveSettingsJson();
 }
 
 void

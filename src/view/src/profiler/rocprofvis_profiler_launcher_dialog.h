@@ -86,12 +86,16 @@ private:
 
     void OnLaunchClicked();
     void OnCancelClicked();
+    // The form error from the last Launch click, else the run's error outcome
+    // message; empty when there is neither.
+    std::string LastRunError() const;
     // Hides the window without tearing down an in-flight or finished run, so
     // "View Last Run" still works on reopen. The session is replaced only by a
     // new Launch, or destroyed with the dialog.
     void Hide();
     // Reacts to run-state edges reported by the orchestrator: appends the
-    // completion/failure/cancel epilogue lines and sets m_error_message.
+    // completion/failure/cancel epilogue lines and, while the window is
+    // hidden, the settle notification.
     void HandleStateTransition(rocprofvis_profiler_state_t new_state);
     void RebuildComposedOutput();
     void RefreshExecutionCache();
@@ -268,6 +272,8 @@ private:
     std::string m_run_summary;
     std::string m_process_output_raw;
     std::string m_process_output_stripped;
+    // Why the last Launch click was rejected before a run started. Run
+    // failures are the orchestrator's outcome instead.
     std::string m_error_message;
 
     std::vector<WarningMessage> m_messages;

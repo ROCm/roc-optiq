@@ -26,6 +26,7 @@ RemoteProfilerSession::RemoteProfilerSession(
 , m_running(false)
 , m_status_message()
 , m_profiler_state(kRPVProfilerStateIdle)
+, m_trace_path_result(kRocProfVisResultPending)
 {
     m_remote_status_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kRemoteStatusChanged),
@@ -96,6 +97,8 @@ RemoteProfilerSession::Launch(const ProfilerLaunchSpec& spec)
     {
         return false;
     }
+
+    m_trace_path_result = kRocProfVisResultPending;
 
     // Build the profiler config (same fields as local) and tag it as an SSH
     // launch so the controller selects the SshProfilerExecutor.
@@ -294,26 +297,24 @@ RemoteProfilerSession::FinishProfiling()
 
     // The controller scraped the remote path as the profiler printed it. It is
     // read even when the trace is not auto-opened, so Open Trace can download it
-    // later. A run not meant to write a trace has none to find. A failed read
-    // must clear any path already on the URI: it outlives a run, and the next
-    // download must not fetch the previous run's file.
-    std::string               path;
-    rocprofvis_result_t const result =
+    // later. A run not meant to write a trace has none to find. A path that
+    // cannot be read leaves a completed run completed, as for a local run: the
+    // trace is opened by hand. The URI outlives a run, so a missing path must
+    // clear it, or the next download would fetch the previous run's file.
+    std::string path;
+    m_trace_path_result =
         m_produces_trace ? GetTraceFilePath(path) : kRocProfVisResultNotSupported;
-    if(result == kRocProfVisResultNotSupported)
+    if(m_trace_path_result == kRocProfVisResultSuccess && !path.empty())
     {
-        // Nothing was produced, so there is nothing to download.
-        m_uri->GetRemoteResultPath().clear();
-    }
-    else if(result != kRocProfVisResultSuccess || path.empty())
-    {
-        m_uri->GetRemoteResultPath().clear();
-        Fail("Could not determine remote trace path from profiler output.");
-        return;
+        m_uri->GetRemoteResultPath() = std::move(path);
     }
     else
     {
-        m_uri->GetRemoteResultPath() = std::move(path);
+        m_uri->GetRemoteResultPath().clear();
+        if(m_trace_path_result == kRocProfVisResultSuccess)
+        {
+            m_trace_path_result = kRocProfVisResultNotAvailable;
+        }
     }
     m_phase          = Phase::Done;
     m_running        = false;
@@ -339,7 +340,9 @@ RemoteProfilerSession::Fail(const std::string& message)
         Cancel();
     }
 
-    if(m_profiler_state == kRPVProfilerStateRunning || m_profiler_state == kRPVProfilerStateIdle)
+    // A failure after the profiler reported Completed must not be reported as
+    // completed; only a cancel keeps its own state.
+    if(m_profiler_state != kRPVProfilerStateCancelled)
     {
         m_profiler_state = kRPVProfilerStateFailed;
     }

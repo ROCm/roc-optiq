@@ -3,13 +3,16 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_core.h"
+#include "rocprofvis_db_compute.h"
+#include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <set>
 #include <string.h>
 #include <vector>
@@ -263,6 +266,63 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
             rocprofvis_db_future_wait(object2wait, UINT64_MAX);
         REQUIRE(kRocProfVisDmResultSuccess == wait_result);
         rocprofvis_db_future_free(object2wait);
+    }
+
+    SECTION("PC sampling percentages preserve NULL and measured zero")
+    {
+        // CTE fixtures exercise the real versioned query and generic table callback
+        // without changing the input database or requiring a schema-2.2 capture.
+        const char* fixture = R"sql(
+            WITH compute_pc_sample_state(pc_sample_state_uuid, instruction_uuid,
+                total_count, issue_count, stall_count, active_thread_percent,
+                wave_occupancy_percent, dispatch_uuid) AS (VALUES
+                (1, 10, 100, NULL, NULL, NULL, NULL, 0),
+                (2, 10, 100, 100, 0, 0, 0, 0),
+                (3, 10, 9538, 2012, 7526, 100, 49.4, 0),
+                (4, 10, 100, 50, 50, 100, NULL, 0),
+                (5, 10, 1901, 252, 1649, NULL, 24.7, 0),
+                (6, 20, 100, 100, 0, 100, 100, 0)),
+            compute_instruction_line(instruction_uuid, kernel_symbol_uuid)
+                AS (VALUES (10, 1), (20, 2)),
+            compute_kernel_symbol(kernel_symbol_uuid, kernel_uuid)
+                AS (VALUES (1, 42), (2, 43))
+        )sql";
+        for(const char* version : { "2.2.0", "2.3.0" })
+        {
+            CAPTURE(version);
+            RocProfVis::DataModel::ComputeQueryFactory factory(nullptr);
+            factory.SetVersion(version);
+            rocprofvis_db_compute_param_t kernel = { kRPVComputeParamKernelId, "42" };
+            std::string                   query;
+            REQUIRE(factory.GetComputeKernelPcSampleStates(1, &kernel, query) ==
+                    kRocProfVisDmResultSuccess);
+            query.insert(0, fixture);
+            std::unique_ptr<void, decltype(&rocprofvis_db_future_free)> future(
+                rocprofvis_db_future_alloc(db_progress), &rocprofvis_db_future_free);
+            REQUIRE(future);
+            rocprofvis_dm_table_id_t table_id = 0;
+            REQUIRE(rocprofvis_db_execute_compute_query_async(
+                        m_db, kRPVComputeFetchKernelPcSampleStates, query.c_str(),
+                        future.get(), &table_id) == kRocProfVisDmResultSuccess);
+            REQUIRE(rocprofvis_db_future_wait(future.get(), 30) ==
+                    kRocProfVisDmResultSuccess);
+            const ComputeQueryResult result = ParseComputeQueryResult(m_trace, table_id);
+            REQUIRE(result.rows.size() == 5);
+            const int occupancy =
+                result.columns.at(kRPVComputeColumnPcSampleStateWaveOccupancyPercent);
+            const int active_threads =
+                result.columns.at(kRPVComputeColumnPcSampleStateActiveThreadPercent);
+            CHECK(result.rows[0][occupancy].empty());
+            CHECK(result.rows[0][active_threads].empty());
+            CHECK(std::stod(result.rows[1][occupancy]) == 0.0);
+            CHECK(std::stod(result.rows[1][active_threads]) == 0.0);
+            CHECK(std::stod(result.rows[2][occupancy]) == Catch::Approx(49.4));
+            CHECK(std::stod(result.rows[2][active_threads]) == 100.0);
+            CHECK(result.rows[3][occupancy].empty());
+            CHECK(std::stod(result.rows[3][active_threads]) == 100.0);
+            CHECK(std::stod(result.rows[4][occupancy]) == Catch::Approx(24.7));
+            CHECK(result.rows[4][active_threads].empty());
+        }
     }
 
     // Queries all available workloads and stores their id/name in the fixture.

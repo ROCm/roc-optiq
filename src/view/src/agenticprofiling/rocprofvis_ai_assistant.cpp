@@ -142,6 +142,7 @@ AssistantPanel::AssistantPanel()
 , m_turn_is_compute(false)
 , m_tab_closed_token(EventManager::InvalidSubscriptionToken)
 , m_summary_event_token(EventManager::InvalidSubscriptionToken)
+, m_models_requested(false)
 {
     m_widget_name = GenUniqueName("AssistantPanel");
 
@@ -176,7 +177,7 @@ AssistantPanel::AssistantPanel()
 AssistantPanel::~AssistantPanel()
 {
     CancelPendingRequest();
-    AssistantWipeSecret(m_turn_token);
+    AssistantWipeSecret(m_turn_api_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabClosed),
                                              m_tab_closed_token);
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kSummaryComplete),
@@ -199,6 +200,12 @@ bool
 AssistantPanel::Busy() const
 {
     return m_phase != Phase::kIdle || m_pending.valid();
+}
+
+AssistantModelCatalog&
+AssistantPanel::ModelCatalog()
+{
+    return m_model_catalog;
 }
 
 AssistantPanel::Conversation&
@@ -509,7 +516,7 @@ AssistantPanel::ResetTurn()
     // A request still unwinding reads its own copy of these, never the members.
     m_turn_endpoint_url.clear();
     m_turn_model.clear();
-    AssistantWipeSecret(m_turn_token);
+    AssistantWipeSecret(m_turn_api_token);
     // Left in, the write-up nudge tells every later turn not to call tools.
     if(m_force_final)
     {
@@ -621,9 +628,6 @@ AssistantPanel::CancelPendingRequest()
 void
 AssistantPanel::StartHttpRequest()
 {
-    // Every round goes to the endpoint SendCurrentInput copied, never to the
-    // live settings, which Preferences edits in place: a later round would
-    // otherwise post the key to a half-typed URL.
     if(m_turn_endpoint_url.empty())
     {
         ResetTurn();
@@ -635,7 +639,7 @@ AssistantPanel::StartHttpRequest()
     AssistantChatRequest request;
     request.endpoint_url  = m_turn_endpoint_url;
     request.model         = m_turn_model;
-    request.api_token     = m_turn_token;
+    request.api_token     = m_turn_api_token;
     request.enable_tools  = !m_force_final;
     request.compute_tools = m_turn_is_compute;
 
@@ -753,7 +757,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     if(provider == nullptr || provider->endpoint_url.empty())
     {
         AppendLine(Speaker::kStatus,
-                   "Set the assistant URL in Edit > Preferences > Assistant.");
+                   "Set the assistant URL from the header pill, or in "
+                   "Edit > Preferences > Assistant.");
         NotificationManager::GetInstance().Show(
             "Assistant URL is not set", NotificationLevel::Warning);
         return;
@@ -765,16 +770,18 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
-    // Fixes where this turn's requests go and with which key, warmup included.
-    // Nothing below returns without starting the turn, so ResetTurn wipes it.
+    // Preferences edits apply live so their preview can redraw, but this turn
+    // must not switch host, model, or key between tool rounds. Pin all three
+    // before a summary warmup can defer the first request. Nothing below returns
+    // without starting the turn, so ResetTurn wipes the key copy.
     AssistantProvider endpoint = *provider;
     ApplyAssistantEndpointDefaults(endpoint);
     m_turn_endpoint_url = endpoint.endpoint_url;
     m_turn_model        = endpoint.model;
-    settings.GetAssistantToken(endpoint.name, m_turn_token);
+    settings.GetAssistantToken(endpoint.name, m_turn_api_token);
     // A key pasted into the question would sit in the transcript, and from
     // there go into an export or onto the clipboard.
-    AssistantRedactKey(m_turn_token, question);
+    AssistantRedactKey(m_turn_api_token, question);
 
     conversation.next_steps.clear();
 
@@ -1186,8 +1193,8 @@ AssistantPanel::RunNextTool()
     }
 
     const AssistantToolCall& call = m_pending_calls[m_next_call_index];
-    // A re-run is the same call still waiting, so only the first run is logged
-    // and scrolls the transcript down to the status.
+    // A tool kept waiting on a busy shared request re-runs every frame, so only
+    // its first run is logged and scrolls the transcript down to the status.
     m_status = AssistantToolStatusLabel(call.name);
     if(m_fetch_retries == 0)
     {
@@ -1303,7 +1310,7 @@ AssistantPanel::AppendToolReply(const AssistantToolCall& call, const std::string
     tool_message.content      = content.empty() ? "(empty)" : content;
     // An approved script can print the key and a trace can have recorded it,
     // so it is blanked before the reply is logged or kept.
-    AssistantRedactKey(m_turn_token, tool_message.content);
+    AssistantRedactKey(m_turn_api_token, tool_message.content);
 
     // The whole exchange, as the model was given it, so an answer can be
     // checked against what it actually read rather than what it says it read.
@@ -1609,6 +1616,11 @@ void
 AssistantPanel::Update()
 {
     ReapAbandonedRequests();
+    // The app draws only on demand, so keep frames coming until the list lands.
+    if(m_model_catalog.Poll())
+    {
+        RenderScheduler::GetInstance().RequestRender();
+    }
     if(m_pending.valid())
     {
         RenderScheduler::GetInstance().RequestRender();

@@ -291,6 +291,15 @@ struct EventSearchTestPeer
     }
 };
 
+// Chunk size used when a track splits a fetch into requests. Shrinking it makes a
+// short trace span several chunks.
+struct TrackItemTestPeer
+{
+    TrackItem& v;
+    uint64_t ChunkDuration() const { return v.m_chunk_duration_ns; }
+    void     SetChunkDuration(uint64_t duration_ns) { v.m_chunk_duration_ns = duration_ns; }
+};
+
 // FlameTrackItem: only the non-capture accessors move here. The render-path
 // rect capture and its reader accessors stay #ifdef'd in the class (geometry
 // only exists during draw).
@@ -394,6 +403,18 @@ struct TimelineViewTestPeer
             if(flame != nullptr) return flame;
         }
         return nullptr;
+    }
+
+    // All displayed tracks of any type, in track order.
+    std::vector<TrackItem*> DisplayedTracks() const
+    {
+        std::vector<TrackItem*> tracks;
+        if(!v.m_tracks) return tracks;
+        for(TrackItem* track : *v.m_tracks)
+        {
+            if(track != nullptr && track->IsDisplayed()) tracks.push_back(track);
+        }
+        return tracks;
     }
 
     // All displayed flame tracks, in track order. Tests scan this for a track

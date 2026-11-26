@@ -165,6 +165,27 @@ TEST_CASE("A hostname beginning with 127 is not trusted as loopback",
     CHECK(result.error.find("plain http") != std::string::npos);
 }
 
+TEST_CASE("A reply too large to read is not asked for twice", "[assistant][chat]")
+{
+    // Past the reply cap httplib stops reading and reports a read error. The
+    // endpoint has run the request by then, so posting it again would run it twice.
+    constexpr size_t OVERSIZED_REPLY_BYTES = 9 * 1024 * 1024;
+    LocalServer      server;
+    std::atomic<int> posts{ 0 };
+    server.Http().Post("/v1/chat/completions",
+                       [&posts](const httplib::Request&, httplib::Response& response) {
+                           ++posts;
+                           response.set_content(std::string(OVERSIZED_REPLY_BYTES, 'x'),
+                                                JSON_TYPE);
+                       });
+    server.Start();
+
+    AssistantChatCall         call;
+    const AssistantChatResult result = call.Send(ChatRequest(server.Url("/v1"), "model"));
+    CHECK_FALSE(result.ok);
+    CHECK(posts == 1);
+}
+
 TEST_CASE("The model list is the data ids, sorted, without repeats or unusable names",
           "[assistant][models]")
 {

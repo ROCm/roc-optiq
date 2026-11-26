@@ -98,8 +98,8 @@ constexpr size_t ASSISTANT_MAX_TOOL_CALLS_PER_ROUND = 16;
 constexpr int ASSISTANT_RETRY_WAIT_SECONDS      = 2;
 constexpr int ASSISTANT_RETRY_WAIT_MAX_SECONDS  = 10;
 constexpr int ASSISTANT_RETRY_POLL_MILLISECONDS = 100;
-// A connection that failed later than this most likely timed out, or the
-// endpoint was already working: retrying would double the wait and the bill.
+// A write that failed later than this most likely timed out, and trying again
+// would only double the wait.
 constexpr int ASSISTANT_RETRY_FAST_FAILURE_SECONDS = 10;
 
 // Stock OpenAI: the key is a bearer token and the model is named in the body.
@@ -963,24 +963,20 @@ ResponseError(int status, const std::string& body)
 }
 
 // Seconds to wait before trying a request that started at "started" once more,
-// or 0 when the outcome would only repeat. A throttle or a gateway failure
-// waits as long as a numeric Retry-After asks, up to the cap. Of the transport
-// failures only a connection that broke straight away is retried: a timeout, a
-// refused connection, a DNS or a TLS failure would fail the same way again.
+// or 0 when it should not be. A throttle or a gateway failure waits as long as
+// a numeric Retry-After asks, up to the cap. Of the transport failures only a
+// write that failed straight away is retried: once the request is out the
+// endpoint may be running it, and httplib reports any later failure as a read.
 int
 RetryWaitSeconds(const httplib::Result&                       response,
                  const std::chrono::steady_clock::time_point& started)
 {
     if(!response)
     {
-        const httplib::Error error = response.error();
-        const bool           reset = error == httplib::Error::Read ||
-                                     error == httplib::Error::Write ||
-                                     error == httplib::Error::ConnectionClosed ||
-                                     error == httplib::Error::Unknown;
-        const bool fast = std::chrono::steady_clock::now() - started <
-                          std::chrono::seconds(ASSISTANT_RETRY_FAST_FAILURE_SECONDS);
-        return (reset && fast) ? ASSISTANT_RETRY_WAIT_SECONDS : 0;
+        const bool unsent = response.error() == httplib::Error::Write;
+        const bool fast   = std::chrono::steady_clock::now() - started <
+                            std::chrono::seconds(ASSISTANT_RETRY_FAST_FAILURE_SECONDS);
+        return (unsent && fast) ? ASSISTANT_RETRY_WAIT_SECONDS : 0;
     }
     if(response->status != ASSISTANT_HTTP_TOO_MANY_REQUESTS &&
        response->status != ASSISTANT_HTTP_BAD_GATEWAY &&

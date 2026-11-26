@@ -107,8 +107,8 @@ void AssistantRedactKey(const std::string& api_token, std::string& text);
  * panel can walk away from a request - on quit, or when the user clears the
  * conversation - instead of waiting out the read timeout.
  *
- * A throttle (429), a gateway failure (502, 503, 504) or a connection that
- * drops straight away is tried once more after a short wait, which Cancel()
+ * A throttle (429), a gateway failure (502, 503, 504) or a request whose write
+ * failed straight away is tried once more after a short wait, which Cancel()
  * also cuts short. A peer that resets the connection while the request is
  * still being written fails the request rather than raising SIGPIPE.
  */

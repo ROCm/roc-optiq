@@ -550,6 +550,26 @@ if(BUILD_TESTING)
     target_link_libraries(${ASSISTANT_TEST_NAME} PRIVATE json spdlog
                           Catch2::Catch2WithMain)
     add_test(NAME ${ASSISTANT_TEST_NAME} COMMAND ${ASSISTANT_TEST_NAME})
+
+    # The endpoint client against an HTTP server on loopback: model lists, the
+    # key's header, refused responses, and cancellation. Needs cpp-httplib,
+    # which only an assistant build has.
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+        set(ASSISTANT_CLIENT_TEST_NAME ${TARGET_NAME}-assistant-client-tests)
+        add_executable(${ASSISTANT_CLIENT_TEST_NAME}
+            src/view/test/rocprofvis_ai_client_tests.cpp
+            src/view/src/agenticprofiling/rocprofvis_ai_client.cpp)
+        target_include_directories(${ASSISTANT_CLIENT_TEST_NAME} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc)
+        target_link_libraries(${ASSISTANT_CLIENT_TEST_NAME} PRIVATE cpp-httplib json spdlog
+                              Catch2::Catch2WithMain)
+        if(MSVC)
+            set_source_files_properties(src/view/test/rocprofvis_ai_client_tests.cpp
+                                        PROPERTIES COMPILE_OPTIONS "/bigobj")
+        endif()
+        add_test(NAME ${ASSISTANT_CLIENT_TEST_NAME} COMMAND ${ASSISTANT_CLIENT_TEST_NAME})
+    endif()
 endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)

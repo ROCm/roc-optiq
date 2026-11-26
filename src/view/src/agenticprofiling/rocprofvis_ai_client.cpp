@@ -1095,6 +1095,37 @@ HasApiToken(const AssistantChatRequest& request)
            std::string::npos;
 }
 
+// Lower-cases the scheme of an origin and of the URL it starts, and returns
+// why the origin cannot be used, or empty when it can. The chat request and the
+// model lookup both come through here before anything is logged or connected.
+std::string
+NormalizeOrigin(std::string& origin, std::string& url)
+{
+    // cpp-httplib only recognises a lower-case scheme, while the key check is
+    // case-blind. Normalising keeps the two in step.
+    const size_t      scheme_size = origin.find("://");
+    const std::string scheme =
+        Core::String::to_lower_copy(origin.substr(0, scheme_size));
+    if(scheme != "http" && scheme != "https")
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+    origin.replace(0, scheme_size, scheme);
+    url.replace(0, scheme_size, scheme);
+
+    // An @ in the origin is userinfo. cpp-httplib could not connect with it,
+    // and refusing it here keeps a pasted key out of the log and error text.
+    if(origin.find('@') != std::string::npos)
+    {
+        return ASSISTANT_URL_CREDENTIALS_ERROR;
+    }
+    if(!OriginIsWellFormed(origin))
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+    return std::string();
+}
+
 // Works out the address to post to and checks it is one we may use. Returns an
 // empty string on success, or the reason the request cannot go out.
 std::string
@@ -1116,28 +1147,11 @@ ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_
     {
         return ASSISTANT_BAD_URL_ERROR;
     }
-
-    // cpp-httplib only recognises a lower-case scheme, while the key check
-    // below is case-blind. Normalising keeps the two in step.
-    const size_t      scheme_size = endpoint_out.origin.find("://");
-    const std::string scheme =
-        Core::String::to_lower_copy(endpoint_out.origin.substr(0, scheme_size));
-    if(scheme != "http" && scheme != "https")
+    const std::string origin_error =
+        NormalizeOrigin(endpoint_out.origin, endpoint_out.url);
+    if(!origin_error.empty())
     {
-        return ASSISTANT_BAD_URL_ERROR;
-    }
-    endpoint_out.origin.replace(0, scheme_size, scheme);
-    endpoint_out.url.replace(0, scheme_size, scheme);
-
-    // An @ in the origin is userinfo. cpp-httplib could not connect with it,
-    // and refusing it here keeps a pasted key out of the log and error text.
-    if(endpoint_out.origin.find('@') != std::string::npos)
-    {
-        return ASSISTANT_URL_CREDENTIALS_ERROR;
-    }
-    if(!OriginIsWellFormed(endpoint_out.origin))
-    {
-        return ASSISTANT_BAD_URL_ERROR;
+        return origin_error;
     }
     if(HasApiToken(request) && !OriginMayCarryToken(endpoint_out.origin))
     {
@@ -1397,14 +1411,19 @@ FetchModelCatalog(const std::string& endpoint_url, const std::string& api_token,
     const model_catalog_finish_t finish{ request };
     const std::string            base_url = Core::String::trim_copy(endpoint_url);
     const EndpointFlavour        flavour  = FlavourFromUrl(base_url);
-    const std::string            url      = ModelCatalogUrl(base_url, flavour);
+    std::string                  url      = ModelCatalogUrl(base_url, flavour);
     std::string                  origin;
     std::string                  path;
-    if(url.empty() || !SplitUrl(url, origin, path))
+    if(url.empty() || !SplitUrl(url, origin, path) ||
+       !NormalizeOrigin(origin, url).empty())
     {
         return std::vector<std::string>();
     }
 
+#ifdef __linux__
+    // As in Send(): before the client, whose destructor can write a TLS close_notify.
+    const ScopedSigpipeBlock sigpipe_block;
+#endif
     httplib::Client client(origin);
     if(!client.is_valid())
     {
@@ -1414,6 +1433,9 @@ FetchModelCatalog(const std::string& endpoint_url, const std::string& api_token,
     client.set_read_timeout(ASSISTANT_CATALOG_READ_TIMEOUT_SECONDS);
     // Not followed, for the reason Send() gives: the key could go to another host.
     client.set_follow_location(false);
+#ifdef SO_NOSIGPIPE
+    client.set_socket_options(SuppressSigpipe);
+#endif
 
     const std::string      token = Core::String::trim_copy(api_token);
     const httplib::Headers headers =
@@ -1460,6 +1482,15 @@ FetchModelCatalog(const std::string& endpoint_url, const std::string& api_token,
     }
 
     std::vector<std::string> models = ParseModelCatalog(body);
+    // A name quoting the key would put it on screen and, once picked, in the
+    // settings file, so it is not offered.
+    models.erase(std::remove_if(models.begin(), models.end(),
+                                [&token](const std::string& name) {
+                                    std::string shown = name;
+                                    AssistantRedactKey(token, shown);
+                                    return shown != name;
+                                }),
+                 models.end());
     spdlog::info("Assistant endpoint lists {} models at {}", models.size(), loggable);
     return models;
 }

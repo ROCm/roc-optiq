@@ -256,6 +256,28 @@ TEST_CASE("An OpenAI-style URL lists beside its chat route with a bearer key",
           std::vector<std::string>{ "openai/gpt-4o" });
 }
 
+TEST_CASE("A listed name that quotes the key is not offered", "[assistant][models]")
+{
+    LocalServer server;
+    ServeList(server.Http(), "/v1/models",
+              R"({"data":[{"id":"gpt-4o"},{"id":"echo-sk-test-0123456789"}]})");
+    server.Start();
+
+    CHECK(ListFrom(server.Url("/v1"), "sk-test-0123456789") ==
+          std::vector<std::string>{ "gpt-4o" });
+}
+
+TEST_CASE("An upper-case scheme is listed like a lower-case one", "[assistant][models]")
+{
+    LocalServer server;
+    ServeList(server.Http(), "/v1/models", R"({"data":[{"id":"gpt-4o"}]})");
+    server.Start();
+
+    // cpp-httplib takes only a lower-case scheme, and gives no client for another.
+    const std::string url = "HTTP" + server.Url("/v1").substr(std::string("http").size());
+    CHECK(ListFrom(url) == std::vector<std::string>{ "gpt-4o" });
+}
+
 TEST_CASE(
     "No list comes from an error, a redirect, a body that is not one, or a huge one",
     "[assistant][models]")

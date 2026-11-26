@@ -186,6 +186,29 @@ TEST_CASE("A reply too large to read is not asked for twice", "[assistant][chat]
     CHECK(posts == 1);
 }
 
+TEST_CASE("A long provider error is cut on a character boundary", "[assistant][chat]")
+{
+    // The error reads "The endpoint returned HTTP 400: " and then the message,
+    // and is cut at 500 bytes, which here falls inside the two-byte "é".
+    const std::string prefix  = "The endpoint returned HTTP 400: ";
+    const std::string message = std::string(499 - prefix.size(), 'x') + "\xC3\xA9" +
+                                std::string(100, 'y');
+    LocalServer       server;
+    server.Http().Post("/v1/chat/completions",
+                       [message](const httplib::Request&, httplib::Response& response) {
+                           const std::string body =
+                               R"({"error":{"message":")" + message + R"("}})";
+                           response.status = 400;
+                           response.set_content(body, JSON_TYPE);
+                       });
+    server.Start();
+
+    AssistantChatCall         call;
+    const AssistantChatResult result = call.Send(ChatRequest(server.Url("/v1"), "model"));
+    CHECK_FALSE(result.ok);
+    CHECK(result.error == prefix + std::string(499 - prefix.size(), 'x') + "...");
+}
+
 TEST_CASE("The model list is the data ids, sorted, without repeats or unusable names",
           "[assistant][models]")
 {

@@ -267,6 +267,8 @@ private:
     void PinTurnTrace();
     // What the tools may touch on the trace the turn is pinned to.
     AssistantToolContext MakeToolContext() const;
+    // The context a tool call runs under: the trace's, with the turn's limits.
+    AssistantToolContext MakeToolCallContext(const std::string& project_id);
     std::string          CurrentProjectId() const;
     std::string BuildUserPrompt(const std::string& question, bool include_briefing);
     bool                 NeedsBriefing();
@@ -345,7 +347,9 @@ private:
     std::string m_turn_endpoint_url;
     std::string m_turn_model;
     std::string m_turn_api_token;
-    FetchWait   m_fetch_wait;
+    // What this turn's tools have used up, handed to them with each call.
+    AssistantTurnLimits m_turn_limits;
+    FetchWait           m_fetch_wait;
 
     EventManager::SubscriptionToken m_tab_closed_token;
     EventManager::SubscriptionToken m_summary_event_token;

@@ -335,6 +335,14 @@ AssistantPanel::MakeToolContext() const
     return MakeAssistantToolContext(m_turn_project_id);
 }
 
+AssistantToolContext
+AssistantPanel::MakeToolCallContext(const std::string& project_id)
+{
+    AssistantToolContext context = MakeAssistantToolContext(project_id);
+    context.turn_limits          = &m_turn_limits;
+    return context;
+}
+
 std::string
 AssistantPanel::CurrentProjectId() const
 {
@@ -512,7 +520,7 @@ AssistantPanel::ResetTurn()
     CancelOwnedFetch();
     AbandonPendingRequest();
     ResetAssistantPcRead();
-    ResetAssistantScriptOffers();
+    m_turn_limits = AssistantTurnLimits();
     // A request still unwinding reads its own copy of these, never the members.
     m_turn_endpoint_url.clear();
     m_turn_model.clear();
@@ -597,13 +605,6 @@ AssistantPanel::CancelPendingRequest()
     if(m_call != nullptr)
     {
         m_call->Cancel();
-    }
-    for(AbandonedRequest& abandoned : m_abandoned)
-    {
-        if(abandoned.call != nullptr && !abandoned.cancel.valid())
-        {
-            abandoned.call->Cancel();
-        }
     }
     if(m_pending.valid())
     {
@@ -797,8 +798,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     }
 
     // The turn state is already clean: every way a turn ends goes through
-    // ResetTurn. Starts this turn's allowance of pinned notes.
-    BeginAssistantUiTurn();
+    // ResetTurn. The limits start afresh regardless.
+    m_turn_limits = AssistantTurnLimits();
 
     if(TryStartSummaryWarmup(question))
     {
@@ -1203,7 +1204,8 @@ AssistantPanel::RunNextTool()
     }
 
     const AssistantToolStartResult started =
-        StartAssistantTool(MakeToolContext(), call.name, call.arguments);
+        StartAssistantTool(MakeToolCallContext(m_turn_project_id), call.name,
+                           call.arguments);
     if(!started.status_line.empty())
     {
         m_status = started.status_line;
@@ -1392,7 +1394,7 @@ AssistantPanel::PollToolFetch()
     const std::string          fetch_project_id = m_fetch_wait.fetch.project_id.empty()
                                                       ? m_turn_project_id
                                                       : m_fetch_wait.fetch.project_id;
-    const AssistantToolContext context = MakeAssistantToolContext(fetch_project_id);
+    const AssistantToolContext context = MakeToolCallContext(fetch_project_id);
     if(context.data_provider == nullptr)
     {
         // Warmup has no pending tool call, so FinishCurrentTool would wrongly

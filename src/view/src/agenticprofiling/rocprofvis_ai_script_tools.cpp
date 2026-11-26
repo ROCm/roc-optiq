@@ -49,11 +49,16 @@ constexpr uint32_t ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS = 300;
 // its working out instead of its result.
 constexpr size_t ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS = 8000;
 
-// Set once an offer went unanswered or was declined, until the turn ends. A
-// model steered by text in the trace may ignore being told not to offer again,
-// and a second offer landing in the editor the user is still reading is how an
-// unreviewed script gets run.
-bool g_script_offers_closed = false;
+// No further offer this turn, once one went unanswered or was declined. A model
+// steered by text in the trace may ignore being told not to offer again.
+void
+CloseScriptOffers(const AssistantToolContext& context)
+{
+    if(context.turn_limits != nullptr)
+    {
+        context.turn_limits->script_offers_closed = true;
+    }
+}
 
 AssistantToolStartResult
 ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
@@ -73,7 +78,7 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                               " characters.",
                           "Script too long");
     }
-    if(g_script_offers_closed)
+    if(context.turn_limits == nullptr || context.turn_limits->script_offers_closed)
     {
         return DoneResult("A script was already offered this turn and the user did "
                           "not run it, so another cannot be offered until they ask "
@@ -174,7 +179,7 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
         // Nobody answered. Declined rather than cleared: the text stays in the
         // editor and must not go on to read as the user's own.
         actions.RejectScriptProposal();
-        g_script_offers_closed = true;
+        CloseScriptOffers(context);
     }
     else
     {
@@ -185,7 +190,7 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
     {
         // Their call, and not a failure. Said plainly so the model moves on
         // rather than offering the same script again.
-        g_script_offers_closed = true;
+        CloseScriptOffers(context);
         return "The user chose not to run the script, or stopped it before it "
                "finished. Do not offer it again unless they ask. Answer with "
                "what you have, or read the data with the other tools.";
@@ -232,12 +237,6 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
         "\n... truncated. Have the script report totals rather than rows ...");
 }
 
-void
-ResetAssistantScriptOffers()
-{
-    g_script_offers_closed = false;
-}
-
 #else
 
 // Scripting is not built in, so the tool never reaches the model. The
@@ -266,10 +265,6 @@ FinishAssistantScriptFetch(const AssistantToolContext&)
 {
     return "This build has no script support.";
 }
-
-void
-ResetAssistantScriptOffers()
-{}
 
 #endif  // ROCPROFVIS_ENABLE_SCRIPTING
 

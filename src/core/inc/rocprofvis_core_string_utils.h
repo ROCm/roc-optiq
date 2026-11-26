@@ -101,6 +101,39 @@ namespace String
         return s;
     }
 
+    // ---- UTF-8 boundaries ----
+
+    // Whether a cut at pos would split a UTF-8 character: the byte there
+    // continues one rather than starting it.
+    inline bool is_utf8_continuation(const std::string& s, size_t pos)
+    {
+        constexpr unsigned char UTF8_CONTINUATION_MASK = 0xC0;
+        constexpr unsigned char UTF8_CONTINUATION_BITS = 0x80;
+        return pos < s.size() &&
+               (static_cast<unsigned char>(s[pos]) & UTF8_CONTINUATION_MASK) ==
+                   UTF8_CONTINUATION_BITS;
+    }
+
+    // The nearest character boundary at or before pos, where s can be cut short.
+    inline size_t utf8_floor(const std::string& s, size_t pos)
+    {
+        while(pos > 0 && is_utf8_continuation(s, pos))
+        {
+            --pos;
+        }
+        return pos;
+    }
+
+    // The nearest character boundary at or after pos, where a tail can start.
+    inline size_t utf8_ceil(const std::string& s, size_t pos)
+    {
+        while(pos < s.size() && is_utf8_continuation(s, pos))
+        {
+            ++pos;
+        }
+        return pos;
+    }
+
 }  // namespace String
 }  // namespace Core
 }  // namespace RocProfVis

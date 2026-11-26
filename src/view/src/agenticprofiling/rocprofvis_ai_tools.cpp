@@ -211,8 +211,11 @@ StartLinkedTool(const AssistantToolContext& context, const AssistantToolEntry& e
     {
         return DoneResult(error, "Unknown link");
     }
-    const AssistantToolContext linked  = MakeAssistantToolContext(link.other.path);
-    const std::string          problem = LinkedTraceProblem(linked, link);
+    AssistantToolContext linked = MakeAssistantToolContext(link.other.path);
+    // The limits belong to the turn, whichever trace a call reads.
+    linked.turn_limits = context.turn_limits;
+
+    const std::string problem = LinkedTraceProblem(linked, link);
     if(!problem.empty())
     {
         return DoneResult(problem, "Linked trace unavailable");
@@ -346,13 +349,7 @@ TrimAssistantText(std::string text, size_t max_chars, const char* truncation_not
 {
     if(text.size() > max_chars)
     {
-        // Back to the start of a UTF-8 character, so none is cut in half.
-        size_t cut = max_chars;
-        while(cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
-        {
-            --cut;
-        }
-        text.resize(cut);
+        text.resize(Core::String::utf8_floor(text, max_chars));
         text += truncation_note;
     }
     return text;

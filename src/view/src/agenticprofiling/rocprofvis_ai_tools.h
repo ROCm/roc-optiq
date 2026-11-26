@@ -74,12 +74,25 @@ enum class AssistantFetchKind
 // RootView either way, but DataModel() is the system model and is merely empty
 // on a compute trace, so a tool that reads it without checking is_compute
 // reports a trace with no tracks rather than failing.
+// Limits that hold for one turn, whatever text in the trace talks the model
+// into. The panel owns them and starts them afresh with every turn.
+struct AssistantTurnLimits
+{
+    size_t notes_pinned = 0;
+    // Set once an offer went unanswered or was declined. A second offer landing
+    // in the editor the user is still reading is how an unreviewed script runs.
+    bool script_offers_closed = false;
+};
+
 struct AssistantToolContext
 {
     DataProvider*      data_provider      = nullptr;
     TimelineSelection* timeline_selection = nullptr;
     TraceView*         trace_view         = nullptr;
-    bool               is_compute         = false;
+    // The running turn's limits, set for the turn's own tool calls. A tool that
+    // a limit guards refuses without them.
+    AssistantTurnLimits* turn_limits = nullptr;
+    bool                 is_compute  = false;
     // Two runs opened side by side in one tab, which every tool here would read
     // as a single trace.
     bool is_compare = false;

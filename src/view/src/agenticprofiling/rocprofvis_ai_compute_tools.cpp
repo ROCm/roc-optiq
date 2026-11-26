@@ -79,10 +79,6 @@ constexpr double ASSISTANT_METRIC_MAX_FIXED = 1e15;
 constexpr size_t      ASSISTANT_KERNEL_NAME_CHARS      = 200;
 constexpr size_t      ASSISTANT_KERNEL_NAME_TAIL_CHARS = 60;
 constexpr const char* ASSISTANT_KERNEL_NAME_GAP        = " ... ";
-// The top two bits of a byte that continues a UTF-8 character, rather than
-// starting one.
-constexpr unsigned char UTF8_CONTINUATION_MASK = 0xC0;
-constexpr unsigned char UTF8_CONTINUATION_BITS = 0x80;
 
 // Instructions one kernel_pc_samples call lists, most-sampled first.
 constexpr size_t ASSISTANT_PC_DEFAULT_INSTRUCTIONS = 10;
@@ -236,19 +232,6 @@ Model(const AssistantToolContext& context)
     return context.data_provider->ComputeModel();
 }
 
-// Whether a cut at pos would split a UTF-8 character.
-bool
-InsideUtf8Character(const std::string& text, size_t pos)
-{
-    bool inside = false;
-    if(pos < text.size())
-    {
-        const unsigned char byte = static_cast<unsigned char>(text[pos]);
-        inside = (byte & UTF8_CONTINUATION_MASK) == UTF8_CONTINUATION_BITS;
-    }
-    return inside;
-}
-
 // A kernel name as the listings print it: whole when it is short enough, else
 // its head and tail either side of ASSISTANT_KERNEL_NAME_GAP.
 std::string
@@ -258,16 +241,10 @@ ShortKernelName(const std::string& name)
     {
         return name;
     }
-    size_t head_end   = ASSISTANT_KERNEL_NAME_CHARS - ASSISTANT_KERNEL_NAME_TAIL_CHARS;
-    size_t tail_begin = name.size() - ASSISTANT_KERNEL_NAME_TAIL_CHARS;
-    while(head_end > 0 && InsideUtf8Character(name, head_end))
-    {
-        --head_end;
-    }
-    while(tail_begin < name.size() && InsideUtf8Character(name, tail_begin))
-    {
-        ++tail_begin;
-    }
+    const size_t head_end = Core::String::utf8_floor(
+        name, ASSISTANT_KERNEL_NAME_CHARS - ASSISTANT_KERNEL_NAME_TAIL_CHARS);
+    const size_t tail_begin =
+        Core::String::utf8_ceil(name, name.size() - ASSISTANT_KERNEL_NAME_TAIL_CHARS);
     return name.substr(0, head_end) + ASSISTANT_KERNEL_NAME_GAP + name.substr(tail_begin);
 }
 

@@ -130,9 +130,7 @@ constexpr size_t ASSISTANT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 // Longest provider error shown, in bytes. text.size() counts bytes, and toasts
 // size to their text, so a page of it would draw one wider than the screen.
-constexpr size_t        ASSISTANT_MAX_ERROR_BYTES = 500;
-constexpr unsigned char UTF8_CONTINUATION_MASK    = 0xC0;
-constexpr unsigned char UTF8_CONTINUATION_BITS    = 0x80;
+constexpr size_t ASSISTANT_MAX_ERROR_BYTES = 500;
 
 // Blanking a shorter key could mangle ordinary words in the message.
 constexpr size_t ASSISTANT_MIN_REDACTED_KEY_BYTES = 8;
@@ -765,13 +763,7 @@ ClampErrorText(std::string text)
 {
     if(text.size() > ASSISTANT_MAX_ERROR_BYTES)
     {
-        size_t cut = ASSISTANT_MAX_ERROR_BYTES;
-        while(cut > 0 && (static_cast<unsigned char>(text[cut]) &
-                          UTF8_CONTINUATION_MASK) == UTF8_CONTINUATION_BITS)
-        {
-            --cut;
-        }
-        text.resize(cut);
+        text.resize(Core::String::utf8_floor(text, ASSISTANT_MAX_ERROR_BYTES));
         text += ASSISTANT_TRUNCATION_MARK;
     }
     return text;

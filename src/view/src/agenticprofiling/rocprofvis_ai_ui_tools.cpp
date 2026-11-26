@@ -44,10 +44,6 @@ constexpr size_t ASSISTANT_MAX_NOTES_PER_TURN   = 5;
 constexpr uint64_t ASSISTANT_TAB_REF_OFFSET      = 14695981039346656037ULL;
 constexpr uint64_t ASSISTANT_TAB_REF_PRIME       = 1099511628211ULL;
 
-// A per-turn limit that holds even when text in the trace talks the model out
-// of its prompt. BeginAssistantUiTurn resets it.
-size_t g_notes_pinned = 0;
-
 // Stable for one project id without sending its full path to the model. The
 // mapping is recomputed from the open tabs, so closing another tab cannot
 // silently redirect an earlier ref.
@@ -326,7 +322,8 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult("annotate needs time_ns, title, and text.",
                           "Missing arguments");
     }
-    if(g_notes_pinned >= ASSISTANT_MAX_NOTES_PER_TURN)
+    AssistantTurnLimits* limits = context.turn_limits;
+    if(limits == nullptr || limits->notes_pinned >= ASSISTANT_MAX_NOTES_PER_TURN)
     {
         return DoneResult("This turn has already pinned " +
                               std::to_string(ASSISTANT_MAX_NOTES_PER_TURN) +
@@ -367,7 +364,7 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult("Could not pin a note on this trace.", "Note failed");
     }
-    ++g_notes_pinned;
+    ++limits->notes_pinned;
 
     std::ostringstream out;
     out << "Pinned a note titled \"" << title << "\" at "
@@ -844,13 +841,6 @@ const AssistantToolEntry k_shared_ui_tool_handlers[] = {
 };
 
 }  // namespace
-
-// Starts a turn's allowance for the tools above.
-void
-BeginAssistantUiTurn()
-{
-    g_notes_pinned = 0;
-}
 
 // The UI half of the tool set, for StartAssistantTool to search.
 AssistantToolTable

@@ -75,14 +75,6 @@ AssistantToolTable GetAssistantSharedUiToolHandlers();
 // through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
 
-// Forgets that a script offer went unanswered or was declined, so the next turn
-// may offer one again.
-void ResetAssistantScriptOffers();
-
-// Tells the UI tools a turn is starting. Resets the per-turn count of pinned
-// notes, so that limit holds even if text in the trace steers the model.
-void BeginAssistantUiTurn();
-
 // Formats the compute metric values that just landed in the assistant's store.
 // Reached through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantComputeFetch(const AssistantToolContext& context,

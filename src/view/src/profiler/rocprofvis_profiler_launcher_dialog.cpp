@@ -1003,7 +1003,7 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
 
     // ===== Command line arguments (lead - they read as a one-liner) =====
     LaunchSubHeader("COMMAND LINE ARGUMENTS",
-                    "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
+                    "Split on spaces when launched. Quote a value that contains spaces.");
 
     bool        add_arg = false;
     const float add_w   = LaunchActionButtonWidth("Add");

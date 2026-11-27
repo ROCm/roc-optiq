@@ -112,7 +112,10 @@ ExtraArguments::Argv(std::vector<std::string>& argv_out) const
 {
     for(std::string const& entry : argv)
     {
-        argv_out.push_back(entry);
+        for(std::string const& arg : SplitArguments(entry))
+        {
+            argv_out.push_back(arg);
+        }
     }
 }
 

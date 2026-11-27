@@ -482,10 +482,11 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
 
     if(current_pool == nullptr)
     {
+        std::unique_ptr<MemoryPool> new_pool;
         try
         {
-            current_pool =
-                new MemoryPool(static_cast<uint32_t>(size), type, m_mem_block_size);
+            new_pool = std::make_unique<MemoryPool>(static_cast<uint32_t>(size), type,
+                                                    m_mem_block_size);
         }
         catch(const std::bad_alloc&)
         {
@@ -494,17 +495,14 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
             return nullptr;
         }
         auto& inner_map = m_object_pools[pool_idetifier];
-        auto [inner_it, inserted] = inner_map.emplace(current_pool->m_base, current_pool);
+        auto [inner_it, inserted] = inner_map.emplace(new_pool->m_base, new_pool.get());
         if(inserted)
         {
+            // m_object_pools owns the pool from here on and CleanUp frees it.
+            current_pool = new_pool.release();
             m_current_pool[type][pool_idetifier] = current_pool;
             m_lru_storage_memory_used += size * current_pool->m_bitmask.Size();
             first_zero_bit = current_pool->m_pos++;
-        }
-        else
-        {
-            delete current_pool;
-            current_pool = nullptr;
         }
     }
     if(current_pool != nullptr)
@@ -572,7 +570,15 @@ MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTime
     void*  ptr   = Allocate(sizeof(Event), kRocProfVisObjectTypeEvent, owner);
     if(ptr)
     {
-        event = new(ptr) Event(id, start_ts, end_ts);
+        try
+        {
+            event = new(ptr) Event(id, start_ts, end_ts);
+        }
+        catch(...)
+        {
+            FreeSlot(ptr, owner, nullptr);
+            throw;
+        }
     }
     return event;
 }
@@ -586,7 +592,15 @@ MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t i
     void*   ptr    = Allocate(sizeof(Sample), kRocProfVisObjectTypeSample, owner);
     if(ptr)
     {
-        sample = new(ptr) Sample(type, id, timestamp);
+        try
+        {
+            sample = new(ptr) Sample(type, id, timestamp);
+        }
+        catch(...)
+        {
+            FreeSlot(ptr, owner, nullptr);
+            throw;
+        }
     }
     return sample;
 }
@@ -601,7 +615,15 @@ MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_
     void*      ptr    = Allocate(sizeof(SampleLOD), kRocProfVisObjectTypeSampleLOD, owner);
     if(ptr)
     {
-        sample = new(ptr) SampleLOD(type, id, timestamp, children);
+        try
+        {
+            sample = new(ptr) SampleLOD(type, id, timestamp, children);
+        }
+        catch(...)
+        {
+            FreeSlot(ptr, owner, nullptr);
+            throw;
+        }
     }
     return sample;
 
@@ -613,7 +635,12 @@ MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
     if(!handle->IsDeletable()) return;
 
     std::lock_guard<std::mutex> lock(m_pool_mutex);
+    FreeSlot(handle, owner, handle);
+}
 
+void
+MemoryManager::FreeSlot(void* ptr, SegmentTimeline* owner, Handle* resident)
+{
     uint64_t pool_idetifier = uint64_t(owner);
 
     if(m_short_tracks.find(owner) != m_short_tracks.end())
@@ -628,8 +655,6 @@ MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
             pool_idetifier = kShortTracksMemoryPoolIdentifier;
         }
     }
-
-    void* ptr = handle;
 
     auto owner_it = m_object_pools.find(pool_idetifier);
     if(owner_it == m_object_pools.end())
@@ -666,7 +691,10 @@ MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
         return;
     }
 
-    handle->~Handle();
+    if(resident)
+    {
+        resident->~Handle();
+    }
     uint64_t index = (static_cast<char*>(ptr) - base) / pool->m_size;
     pool->m_bitmask.Clear(index);
 

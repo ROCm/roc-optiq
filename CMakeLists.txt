@@ -537,6 +537,16 @@ if(BUILD_TESTING)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
 
+    # View utilities (time formatting, paths) are plain functions with no UI or trace.
+    set(UTILS_TEST_NAME ${TARGET_NAME}-utils-tests)
+    add_executable(${UTILS_TEST_NAME}
+        src/view/test/rocprofvis_utils_tests.cpp
+        src/view/src/rocprofvis_utils.cpp)
+    target_include_directories(${UTILS_TEST_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${UTILS_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+    add_test(NAME ${UTILS_TEST_NAME} COMMAND ${UTILS_TEST_NAME})
+
     # The trace link store and run diff behind compare_traces need no GPU,
     # trace, UI, endpoint, or feature define, so every test build covers them.
     set(ASSISTANT_TEST_NAME ${TARGET_NAME}-assistant-tests)

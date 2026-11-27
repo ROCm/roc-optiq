@@ -694,8 +694,6 @@ AssistantPanel::RenderHeaderCard()
                               : provider->model.empty()
                                   ? std::string(ASSISTANT_DEFAULT_MODEL)
                                   : provider->model;
-    const std::string endpoint =
-        configured ? DisplayEndpoint(provider->endpoint_url) : std::string();
 
     // With the key the chat request would use, so the list is what it can reach.
     if(configured && !m_models_requested)
@@ -764,7 +762,8 @@ AssistantPanel::RenderHeaderCard()
         }
         else
         {
-            SetTooltipStyled("%s\n%s", model.c_str(), endpoint.c_str());
+            SetTooltipStyled("%s\n%s", model.c_str(),
+                             DisplayEndpoint(provider->endpoint_url).c_str());
         }
     }
 
@@ -772,7 +771,7 @@ AssistantPanel::RenderHeaderCard()
     // on their own lines because both are per-tab.
     if(configured)
     {
-        RenderContextChip(model, endpoint);
+        RenderContextChip(model, provider->endpoint_url);
     }
     else
     {
@@ -1230,7 +1229,7 @@ AssistantPanel::RenderContextTooltip(const Conversation& conversation,
 
     ImGui::TextUnformatted(model.c_str());
     ImGui::PushStyleColor(ImGuiCol_Text, dim);
-    ImGui::TextWrapped("%s", endpoint.c_str());
+    ImGui::TextWrapped("%s", DisplayEndpoint(endpoint).c_str());
     ImGui::TextUnformatted("Click the model name to change these.");
     ImGui::PopStyleColor();
 

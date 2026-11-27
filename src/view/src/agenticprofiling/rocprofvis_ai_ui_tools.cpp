@@ -804,9 +804,10 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     }
     out << ".";
     AssistantToolStartResult result = DoneResult(out.str(), "Moved the view");
-    // Settled only when the view went where it was sent and every event named
-    // was marked. Anything short of that the model may want to correct.
-    result.settled = has_range && !range_dropped && marked == targets.size();
+    // Settled only when the view went where it was sent, every event named was
+    // marked, and a row read or loaded details vouch for the focal one.
+    result.settled = has_range && !range_dropped && marked == targets.size() &&
+                     (!have_focus || FindAssistantEvent(context, focus.second).seen);
     return result;
 }
 

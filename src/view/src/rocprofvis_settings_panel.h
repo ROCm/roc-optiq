@@ -61,7 +61,7 @@ private:
     void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
-    // True once the edited URL has left the origin the stored key was saved for.
+    // True when OK will treat the edited URL as another host and remove the key.
     bool AssistantOriginChanged() const;
     // Looks up the models of the endpoint as this page has it, with the key OK
     // would save. `saved_settings` is true only before editing or after

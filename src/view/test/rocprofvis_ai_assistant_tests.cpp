@@ -427,5 +427,6 @@ TEST_CASE("A saved endpoint URL keeps only a plausible API version from its quer
     CHECK(AssistantStorableUrl(base + "?api-version=sk-0123456789abcdef0123456789") ==
           base);
     CHECK(AssistantStorableUrl(base + "?api-version=a%2Fb") == base);
-    CHECK(AssistantStorableUrl(base + "?subscription-key=0123456789abcdef") == base);
+    const std::string query = "?subscription-key=0123456789abcdef";  // gitleaks:allow
+    CHECK(AssistantStorableUrl(base + query) == base);
 }

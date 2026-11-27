@@ -1296,6 +1296,8 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
             AppendToolReply(m_pending_calls[m_next_call_index],
                             ASSISTANT_SKIPPED_TOOL_REPLY);
             ++m_next_call_index;
+            // A call that never ran was not carried out as asked.
+            m_batch_settled = false;
         }
         m_stop_tool_queue = false;
     }

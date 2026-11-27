@@ -169,9 +169,9 @@ TEST_CASE("A reply too large to read is not asked for twice", "[assistant][chat]
 {
     // Past the reply cap httplib stops reading and reports a read error. The
     // endpoint has run the request by then, so posting it again would run it twice.
-    constexpr size_t OVERSIZED_REPLY_BYTES = 9 * 1024 * 1024;
-    LocalServer      server;
-    std::atomic<int> posts{ 0 };
+    static constexpr size_t OVERSIZED_REPLY_BYTES = 9 * 1024 * 1024;
+    LocalServer             server;
+    std::atomic<int>        posts{ 0 };
     server.Http().Post("/v1/chat/completions",
                        [&posts](const httplib::Request&, httplib::Response& response) {
                            ++posts;
@@ -230,7 +230,7 @@ TEST_CASE("The key is blanked in the form it is sent in, when it is long enough"
 TEST_CASE("The key stays out of the request body and out of what comes back",
           "[assistant][key]")
 {
-    const std::string key = "sk-test-0123456789";
+    const std::string key = "sk-test-0123456789";  // gitleaks:allow
     LocalServer       server;
     std::atomic<bool> key_in_body{ false };
     server.Http().Post("/echo/chat/completions",

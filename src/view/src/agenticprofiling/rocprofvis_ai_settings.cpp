@@ -610,18 +610,26 @@ SettingsPanel::ApplyAssistantTokenEdits()
     DiscardAssistantTokenEdits();
 }
 
-// True when the endpoint being edited no longer points at the origin it had
-// when the dialog opened. One that had no usable URL then was tied to no host,
-// so giving it one is not a change.
+// True when OK will treat the edited URL as another host and remove the stored
+// key: the same test ApplyAssistantTokenEdits makes, on the URL OK will keep.
 bool
 SettingsPanel::AssistantOriginChanged() const
 {
-    const std::string provider_name = ActiveAssistantProviderName();
-    const std::string initial_origin =
-        AssistantProviderOrigin(m_usersettings_initial.assistant, provider_name);
-    return !initial_origin.empty() &&
-           AssistantProviderOrigin(m_usersettings.assistant, provider_name) !=
-               initial_origin;
+    const AssistantSettings& assistant = m_usersettings.assistant;
+    if(assistant.active >= assistant.providers.size())
+    {
+        return false;
+    }
+    const AssistantProvider& provider = assistant.providers[assistant.active];
+    for(const AssistantProvider& saved : m_usersettings_initial.assistant.providers)
+    {
+        if(saved.name == provider.name)
+        {
+            return !AssistantEndpointsShareOrigin(
+                AssistantStorableUrl(provider.endpoint_url), saved.endpoint_url);
+        }
+    }
+    return false;
 }
 
 void

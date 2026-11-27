@@ -462,8 +462,3 @@ Source-file discovery follows instruction/source correlations for the selected
 kernel. Source-line and correlation queries exclude NULL or zero line numbers;
 correlation rows include the owning source-file UUID for cross-file UI
 navigation.
-
-The authoritative model-layer reference is
-[`.agents/DATABASE.md`](../../.agents/DATABASE.md). Controller and UI behavior
-is documented in [`.agents/CONTROLLER.md`](../../.agents/CONTROLLER.md) and
-[`.agents/UI.md`](../../.agents/UI.md).

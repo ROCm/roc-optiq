@@ -270,6 +270,9 @@ bool QueryManager::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {
         return false;
     DbInstance* instance = (DbInstance*)TrackPropertiesAt(track)->track_indentifiers.db_instance;
     ROCPROFVIS_ASSERT_MSG_RETURN(instance, ERROR_NODE_KEY_CANNOT_BE_NULL, true);
+    // Without a histogram there is nothing to rule the range out, so let the query run.
+    if (TraceProperties()->histogram_bucket_size == 0)
+        return false;
     uint64_t start_bucket =
         (start - TraceProperties()->db_inst_start_time[instance->GuidIndex()]) / TraceProperties()->histogram_bucket_size;
 

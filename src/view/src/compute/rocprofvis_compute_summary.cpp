@@ -31,6 +31,8 @@ constexpr float       TABLE_PANEL_MIN_WIDTH            = 800.0f;
 constexpr float       CHART_PANEL_MIN_WIDTH            = 700.0f;
 constexpr float       TABLE_PANEL_FLEX_GROW            = 2.0f;
 constexpr float       CHART_PANEL_FLEX_GROW            = 1.0f;
+// Width:height of the roofline card before the window height is known.
+constexpr float       SUMMARY_ROOFLINE_FALLBACK_ASPECT = 2.0f;
 constexpr const char* DISPLAY_STRING_METRICS[]{ "Invocation(s)", "Total Duration",
                                                 "Min Duration",  "Max Duration",
                                                 "Mean Duration", "Median Duration" };
@@ -53,16 +55,6 @@ PushPlotChrome(SettingsManager& settings)
 }
 
 }  // namespace
-
-TabItem
-ComputeSummaryView::CreateTabItem(
-    DataProvider& data_provider,
-    const std::shared_ptr<ComputeSelection>& compute_selection)
-{
-    return RocWidget::CreateTabItem(
-        "Summary View", TAB_ID,
-        std::make_shared<ComputeSummaryView>(data_provider, compute_selection));
-}
 
 ComputeSummaryView::ComputeSummaryView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
@@ -169,10 +161,13 @@ ComputeSummaryView::Render()
     ImGui::Spacing();
     if(m_roofline)
     {
-        const float avail  = ImGui::GetContentRegionAvail().x;
-        const float aspect = ImGui::GetWindowWidth() / ImGui::GetWindowHeight();
+        const float avail    = ImGui::GetContentRegionAvail().x;
+        const float window_h = ImGui::GetWindowHeight();
+        const float aspect   = window_h > 0.0f ? ImGui::GetWindowWidth() / window_h
+                                               : SUMMARY_ROOFLINE_FALLBACK_ASPECT;
+        const float roofline_h = aspect > 0.0f ? avail / aspect : avail;
         // Roofline paints its own card; just give it a sized region.
-        ImGui::BeginChild("roofline_container", ImVec2(avail, avail / aspect));
+        ImGui::BeginChild("roofline_container", ImVec2(avail, roofline_h));
         m_roofline->Render();
         ImGui::EndChild();
     }
@@ -320,9 +315,13 @@ ComputeTopKernels::Update()
                                 m_kernels.size());
                             m_kernel_pie.metric_sets[metric].slices.resize(
                                 m_kernels.size());
-                            float value = static_cast<float>(
-                                              m_kernels[i]->dispatch_metrics[metric]) /
-                                          dispatch_metrics_total[metric];
+                            float value =
+                                dispatch_metrics_total[metric] != 0
+                                    ? static_cast<float>(
+                                          m_kernels[i]->dispatch_metrics[metric]) /
+                                          static_cast<float>(
+                                              dispatch_metrics_total[metric])
+                                    : 0.0f;
                             m_kernel_pie.metric_sets[metric].pct_values[i] = value;
                             value *= 360.0f;
                             m_kernel_pie.metric_sets[metric].slices[i] =
@@ -609,7 +608,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         }
         if(ImPlot::IsPlotHovered())
         {
-            RenderPlotTooltip(m_kernel_bar.selected_metric, time_format);
+            RenderPlotTooltip(m_kernel_pie.selected_metric, time_format);
         }
         ImPlot::EndPlot();
     }

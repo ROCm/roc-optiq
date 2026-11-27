@@ -37,13 +37,20 @@ ComputeSelection::SelectWorkload(uint32_t workload_id)
     m_selected_workload_id = workload_id;
     SendWorkloadSelectionChanged();
 
-    // reset kernel selection when workload changes
-    // select first kernel of the workload by default
+    // A workload change selects its busiest kernel, the top of the kernel list.
     const std::vector<const KernelInfo*> kernel_info_list =
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
-    const uint32_t kernel_id = kernel_info_list.empty()
-                                   ? INVALID_SELECTION_ID
-                                   : kernel_info_list[0]->id;
+    uint32_t kernel_id = INVALID_SELECTION_ID;
+    uint64_t busiest   = 0;
+    for(const KernelInfo* kernel : kernel_info_list)
+    {
+        const uint64_t duration = kernel->dispatch_metrics[KernelInfo::DurationTotal];
+        if(kernel_id == INVALID_SELECTION_ID || duration > busiest)
+        {
+            kernel_id = kernel->id;
+            busiest   = duration;
+        }
+    }
 
     // A workload change also changes the kernel context, even when the new
     // workload happens to use the same kernel ID (or both workloads are empty).
@@ -51,6 +58,23 @@ ComputeSelection::SelectWorkload(uint32_t workload_id)
     // workload.
     m_selected_kernel_id = kernel_id;
     SendKernelSelectionChanged();
+}
+
+void
+ComputeSelection::Select(uint32_t workload_id, uint32_t kernel_id)
+{
+    const bool workload_changed = workload_id != m_selected_workload_id;
+    const bool kernel_changed   = workload_changed || kernel_id != m_selected_kernel_id;
+    m_selected_workload_id      = workload_id;
+    m_selected_kernel_id        = kernel_id;
+    if(workload_changed)
+    {
+        SendWorkloadSelectionChanged();
+    }
+    if(kernel_changed)
+    {
+        SendKernelSelectionChanged();
+    }
 }
 
 uint32_t

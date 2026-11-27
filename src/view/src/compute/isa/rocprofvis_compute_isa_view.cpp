@@ -14,7 +14,6 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
 {
@@ -40,30 +39,6 @@ pc_sampling_request_id(PcSamplingLayer layer)
     return DataProvider::FETCH_PC_SAMPLING_ISA_REQUEST_ID;
 }
 
-constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
-    "This database file has no ISA lines, so ISA View is inactive.";
-
-TabItem
-ComputeIsaView::CreateTabItem(DataProvider& data_provider)
-{
-    return RocWidget::CreateTabItem("ISA View", TAB_ID,
-                                    std::make_shared<ComputeIsaView>(data_provider));
-}
-
-TabItem
-ComputeIsaView::CreateTabItem(DataProvider& data_provider, bool has_isa_lines)
-{
-    if(has_isa_lines)
-    {
-        return CreateTabItem(data_provider);
-    }
-
-    TabItem tab            = RocWidget::CreateTabItem("ISA View", TAB_ID, nullptr);
-    tab.m_enabled          = false;
-    tab.m_disabled_tooltip = ISA_VIEW_DISABLED_TOOLTIP;
-    return tab;
-}
-
 ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 : RocWidget()
 , m_settings(SettingsManager::GetInstance())
@@ -84,8 +59,6 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
     m_horizontal_split_container->SetSplit(0.5f);
     m_horizontal_split_container->ShowSplitter(true);
 
-    SubscribeToEvents();
-
     m_data_provider.SetFetchPcSamplingCallback(
         [this](const std::string&, PcSamplingLayer layer, uint32_t kernel_id,
                uint64_t source_file_uuid, uint32_t generation, uint64_t request_token,
@@ -98,36 +71,51 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 ComputeIsaView::~ComputeIsaView()
 {
     m_data_provider.SetFetchPcSamplingCallback(nullptr);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
-        m_kernel_selection_changed_token);
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
-        m_workload_selection_changed_token);
 }
 
 void
-ComputeIsaView::SubscribeToEvents()
+ComputeIsaView::SetSelectedWorkload(uint32_t workload_id)
 {
-    auto workload_changed = [this](std::shared_ptr<RocEvent> e) {
-        auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
-        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
-            SelectWorkload(event->GetId());
-        }
-    };
-    m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged), workload_changed);
+    m_selected_workload_id = workload_id;
+    if(m_follow_selection)
+    {
+        SelectWorkload(workload_id);
+    }
+}
 
-    auto kernel_changed = [this](std::shared_ptr<RocEvent> e) {
-        auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
-        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
-        {
-            LoadData(event->GetId());
-        }
-    };
-    m_kernel_selection_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kComputeKernelSelectionChanged), kernel_changed);
+void
+ComputeIsaView::SetSelectedKernel(uint32_t kernel_id)
+{
+    m_selected_kernel_id = kernel_id;
+    if(m_follow_selection)
+    {
+        LoadData(kernel_id);
+    }
+}
+
+void
+ComputeIsaView::ShowKernel(uint32_t workload_id, uint32_t kernel_id)
+{
+    const bool showing = !m_follow_selection && workload_id == m_current_workload_id &&
+                         kernel_id == m_current_kernel_id;
+    m_follow_selection = false;
+    if(!showing)
+    {
+        SelectWorkload(workload_id);
+        LoadData(kernel_id);
+    }
+}
+
+void
+ComputeIsaView::FollowSelection()
+{
+    if(m_follow_selection)
+    {
+        return;
+    }
+    m_follow_selection = true;
+    SelectWorkload(m_selected_workload_id);
+    LoadData(m_selected_kernel_id);
 }
 
 void
@@ -779,6 +767,77 @@ ComputeIsaView::RenderSourceFileDropdown()
        ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
     {
         SetTooltipStyled("%s", selected_file_it->first.c_str());
+    }
+}
+
+ComputeIsaPane::ComputeIsaPane(const IKernelCompare& compare, DataProvider& data_provider,
+                               bool has_isa_lines)
+: ComputeSidedPane(compare)
+, m_isa_view(has_isa_lines ? std::make_shared<ComputeIsaView>(data_provider) : nullptr)
+{}
+
+const char*
+ComputeIsaPane::Title() const
+{
+    return "ISA";
+}
+
+bool
+ComputeIsaPane::IsAvailable() const
+{
+    return m_isa_view != nullptr;
+}
+
+void
+ComputeIsaPane::RenderBody(bool)
+{
+    if(m_isa_view)
+    {
+        m_isa_view->Render();
+    }
+}
+
+void
+ComputeIsaPane::Update()
+{
+    if(m_isa_view)
+    {
+        m_isa_view->Update();
+    }
+}
+
+void
+ComputeIsaPane::OnWorkloadSelected(uint32_t workload_id)
+{
+    if(m_isa_view)
+    {
+        m_isa_view->SetSelectedWorkload(workload_id);
+    }
+}
+
+void
+ComputeIsaPane::OnKernelSelected(uint32_t kernel_id)
+{
+    if(m_isa_view)
+    {
+        m_isa_view->SetSelectedKernel(kernel_id);
+    }
+}
+
+void
+ComputeIsaPane::ApplyCompare(bool)
+{
+    if(m_isa_view)
+    {
+        if(ShownSide() == CompareSide::kB)
+        {
+            m_isa_view->ShowKernel(m_compare.CompareWorkloadId(),
+                                   m_compare.CompareKernelId());
+        }
+        else
+        {
+            m_isa_view->FollowSelection();
+        }
     }
 }
 

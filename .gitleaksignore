@@ -1,0 +1,10 @@
+# Copyright Advanced Micro Devices, Inc.
+# SPDX-License-Identifier: MIT
+#
+# One-off gitleaks false positives. Each line is a finding fingerprint:
+# commit:file:rule:line
+# See .github/scan_tools_configs/gitleaks.toml.
+
+# Ask Optiq unit tests. Dummy key and subscription-key fixtures, not credentials.
+9004ee29262f5f5b41db4e735f5a6b0e4c36c0f0:src/view/test/rocprofvis_ai_client_tests.cpp:generic-api-key:233
+9004ee29262f5f5b41db4e735f5a6b0e4c36c0f0:src/view/test/rocprofvis_ai_assistant_tests.cpp:generic-api-key:430

@@ -691,7 +691,7 @@ AssistantPanel::RenderHeaderCard()
     // Aligning to the frame padding centers the icon and title on the buttons.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ASSISTANT_HEADER_BUTTON_PADDING);
     ImGui::AlignTextToFramePadding();
-    PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
+    PanelIcon(ICON_SPARKLE, Colors::kAccent, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     const float title_x = ImGui::GetCursorPosX();
     ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
@@ -1432,7 +1432,7 @@ AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
     }
     else
     {
-        PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
+        PanelIcon(ICON_SPARKLE, Colors::kAccent, &settings);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
         PanelFieldLabel("Optiq", false, &settings);
     }
@@ -1888,8 +1888,8 @@ AssistantPanel::RenderComposer()
 
     ImGui::SameLine(0.0f, gap);
     // ICON_ARROW_IN_BOX reads as "import" (it is the Import-from-Basic glyph), so
-    // a document icon is used here to mean "write the conversation out to a file".
-    if(IconButton(ICON_DOCUMENT, settings.GetFontManager().GetFont(FontType::kIcon),
+    // the export icon is used here to mean "write the conversation out to a file".
+    if(IconButton(ICON_EXPORT, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size), "Export the conversation to a file", false,
                   ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),

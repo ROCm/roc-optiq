@@ -318,7 +318,7 @@ ScriptEditor::RenderHeaderCard()
 
     // One compact row: title + dim subtitle share the line with the actions.
     ImGui::AlignTextToFramePadding();
-    PanelIcon(awaiting_decision ? ICON_COMPASS : ICON_EDIT,
+    PanelIcon(awaiting_decision ? ICON_SPARKLE : ICON_EDIT,
               awaiting_decision ? Colors::kAccent : Colors::kTextDim, &settings,
               header_icon_size);
     ImGui::SameLine(0.0f, gap);
@@ -423,7 +423,7 @@ ScriptEditor::RenderHeaderCard()
         LoadFromFile();
     }
     ImGui::SameLine(0.0f, actions_gap);
-    if(IconButton(ICON_DOCUMENT, icon_font, ImVec2(icon_size, icon_size),
+    if(IconButton(ICON_SAVE, icon_font, ImVec2(icon_size, icon_size),
                   "Save this script to a .py file", false, ImVec2(0.0f, 0.0f),
                   settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),
@@ -451,7 +451,7 @@ ScriptEditor::RenderProposalBanner()
     BeginPanelCard("##script_proposal", PanelCardTone::kPanel, SCRIPT_CARD_PADDING, true,
                    &settings);
     ImGui::AlignTextToFramePadding();
-    PanelIcon(ICON_COMPASS, Colors::kAccent, &settings,
+    PanelIcon(ICON_SPARKLE, Colors::kAccent, &settings,
               ImGui::GetFontSize() * SCRIPT_HEADER_ICON_SCALE);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::AlignTextToFramePadding();

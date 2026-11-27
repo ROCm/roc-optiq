@@ -109,10 +109,12 @@ jobs:
           run_experimental=false
           cmake_args=""
           crypto_backend="OpenSSL"
+
           if [[ "$EVENT_NAME" == "schedule" || "$EXP_TOGGLE" == "true" ]]; then
             run_experimental=true
             cmake_args="-DROCPROFVIS_ENABLE_EXPERIMENTAL=ON"
           fi
+          
           if [[ -n "${EXP_CONFIG//[[:space:]]/}" ]]; then
             run_experimental=true
             if ! jq -e 'type == "object" and ([.[] | type] | all(. == "string" or . == "boolean"))' <<< "$EXP_CONFIG" > /dev/null; then
@@ -135,6 +137,7 @@ jobs:
               fi
             done < <(jq -r 'to_entries[] | [.key, (.value | if type == "boolean" then (if . then "ON" else "OFF" end) else . end)] | @tsv' <<< "$EXP_CONFIG")
           fi
+
           {
             echo "run-experimental=$run_experimental"
             echo "exp-cmake-args=${cmake_args# }"

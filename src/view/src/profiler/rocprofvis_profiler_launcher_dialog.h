@@ -16,11 +16,12 @@
 // when remote support is built. Remove this guard when the remote feature
 // graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+#    include "remote/rocprofvis_remote_file_browser.h"
+#    include "remote/rocprofvis_remote_trace_orchestrator.h"
+#    include "remote/rocprofvis_ssh_connection_store.h"
+#    include "remote/rocprofvis_ssh_fetch.h"
+#    include "remote/rocprofvis_ssh_settings_dialog.h"
 #include "remote/rocprofvis_ssh_uri.h"
-#include "remote/rocprofvis_ssh_connection_store.h"
-#include "remote/rocprofvis_ssh_settings_dialog.h"
-#include "remote/rocprofvis_ssh_fetch.h"
-#include "remote/rocprofvis_remote_file_browser.h"
 #endif
 #include <memory>
 #include <string>
@@ -85,12 +86,16 @@ private:
 
     void OnLaunchClicked();
     void OnCancelClicked();
+    // The form error from the last Launch click, else the run's error outcome
+    // message; empty when there is neither.
+    std::string LastRunError() const;
     // Hides the window without tearing down an in-flight or finished run, so
     // "View Last Run" still works on reopen. The session is replaced only by a
     // new Launch, or destroyed with the dialog.
     void Hide();
     // Reacts to run-state edges reported by the orchestrator: appends the
-    // completion/failure/cancel epilogue lines and sets m_error_message.
+    // completion/failure/cancel epilogue lines and, while the window is
+    // hidden, the settle notification.
     void HandleStateTransition(rocprofvis_profiler_state_t new_state);
     void RebuildComposedOutput();
     void RefreshExecutionCache();
@@ -190,13 +195,13 @@ private:
     // The dialog drives it (Launch/Cancel/Update) and reads state back via its
     // getters; it never touches the underlying sessions directly. Hide() does
     // not Close() it, so a last run remains viewable after the window is closed.
-    ProfilerLaunchOrchestrator m_orchestrator;
+    ProfilerLaunchOrchestrator m_profile_orchestrator;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // TEMPORARY (remote/SSH): SSH connection authoring. The connection config is
     // owned here as a shared RemoteUri (edited via the on-demand
     // SshSettingsDialog) and handed to the orchestrator at launch, mirroring the
-    // SshTestDialog pattern.
+    // SshFileDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
     SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
@@ -204,6 +209,12 @@ private:
     // Shared remote file/directory picker for the Target section's Browse
     // buttons; created lazily on first remote browse (see EnsureRemoteFileBrowser).
     std::unique_ptr<RemoteFileBrowser>     m_remote_file_browser;
+    // The current remote run's trace downloader, shared with the run (which
+    // starts the auto-open download on it). Open Trace downloads on it too.
+    std::shared_ptr<RemoteTraceOrchestrator> m_download_orchestrator;
+    // Whether the downloader's current failure has been shown, so each failed
+    // download is reported once.
+    bool                                   m_download_failure_reported;
     bool                                   m_remote_show_progress_popup;
     FileStat::Snapshot                     m_remote_last_progress;
 #endif
@@ -261,6 +272,8 @@ private:
     std::string m_run_summary;
     std::string m_process_output_raw;
     std::string m_process_output_stripped;
+    // Why the last Launch click was rejected before a run started. Run
+    // failures are the orchestrator's outcome instead.
     std::string m_error_message;
 
     std::vector<WarningMessage> m_messages;

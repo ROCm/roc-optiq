@@ -23,6 +23,7 @@ RemoteTraceOrchestrator::RemoteTraceOrchestrator(
 , m_running(false)
 , m_authenticated(false)
 , m_status_message()
+, m_local_path()
 {
     m_status_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kRemoteStatusChanged),
@@ -138,6 +139,20 @@ RemoteTraceOrchestrator::BrowsePath()
 }
 
 bool
+RemoteTraceOrchestrator::SetSession(std::unique_ptr<SshSession> session)
+{
+    bool adopted = false;
+    if(!m_running && session && session->IsAuthenticated())
+    {
+        m_authenticated = true;
+        m_session       = std::move(session);
+        m_phase         = Phase::Idle;
+        adopted         = true;
+    }
+    return adopted;
+}
+
+bool
 RemoteTraceOrchestrator::DownloadPath()
 {
     if(m_running)
@@ -153,6 +168,19 @@ RemoteTraceOrchestrator::DownloadPath()
         return m_phase != Phase::Failed;
     }
     return Start();
+}
+
+void
+RemoteTraceOrchestrator::Cancel()
+{
+    // A workflow that already ended (Done or Failed) keeps its outcome.
+    if(m_running && m_session)
+    {
+        m_session->CancelActiveOperation();
+        m_phase          = Phase::Idle;
+        m_running        = false;
+        m_status_message = "Cancelled.";
+    }
 }
 
 bool
@@ -183,6 +211,17 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
                 break;
             default: Fail("SSH operation failed."); break;
         }
+        return;
+    }
+
+    // Cancel() stops this operation's events before they arrive, so this is a
+    // cancel from an external source, such as the connection's bridge. It ends
+    // the workflow like Cancel() does.
+    if(status == kRPVControllerSshCancelled)
+    {
+        m_phase          = Phase::Idle;
+        m_running        = false;
+        m_status_message = "Cancelled.";
         return;
     }
 
@@ -252,7 +291,9 @@ RemoteTraceOrchestrator::AdvanceAfterExecute()
         m_status_message =
             std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
         m_phase = Phase::Downloading;
-        if(m_session->StartDownload() == 0)
+        m_local_path = m_uri->GetLocalResultPathString();
+        if(m_session->StartDownload(m_uri->GetRemoteResultPathString().c_str(),
+                                    m_local_path.c_str()) == 0)
         {
             Fail("Result database download could not be started.");
         }
@@ -271,9 +312,9 @@ RemoteTraceOrchestrator::AdvanceAfterDownload()
     m_running        = false;
     m_status_message = "Done.";
 
-    if(m_uri && m_on_open_file)
+    if(m_on_open_file)
     {
-        m_on_open_file(m_uri->GetLocalResultPathString());
+        m_on_open_file(m_local_path);
     }
 }
 

@@ -801,7 +801,14 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
             }
             case kRPVControllerSystemNumNodes:
             {
-                result = m_topology_root->GetUInt64(kRPVControllerSystemNumNodes, 0, value);
+                if(m_topology_root)
+                {
+                    result = m_topology_root->GetUInt64(kRPVControllerSystemNumNodes, 0, value);
+                }
+                else
+                {
+                    result = kRocProfVisResultNotLoaded;
+                }
                 break;
             }
             case kRPVControllerSystemGetHistogramBucketsNumber:
@@ -896,7 +903,14 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
             case kRPVControllerSystemNumNodes:
             case kRPVControllerSystemNodeIndexed:         
             {
-                result = m_topology_root->GetObject(kRPVControllerSystemNodeIndexed, index, value);
+                if(m_topology_root)
+                {
+                    result = m_topology_root->GetObject(kRPVControllerSystemNodeIndexed, index, value);
+                }
+                else
+                {
+                    result = kRocProfVisResultNotLoaded;
+                }
                 break;
             }
             default:

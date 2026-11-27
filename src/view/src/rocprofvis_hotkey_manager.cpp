@@ -355,39 +355,53 @@ HotkeyManager::StringToKeyChord(const std::string& str)
     if(str.empty() || str == "None")
         return ImGuiKey_None;
 
-    ImGuiKeyChord chord     = 0;
-    std::string   remaining = str;
-
-    if(remaining.substr(0, 5) == "Ctrl+")
+    // Modifiers may appear in any order, plus at most one named key. Any other
+    // token makes the whole string invalid.
+    ImGuiKeyChord mods  = 0;
+    ImGuiKey      key   = ImGuiKey_None;
+    bool          valid = true;
+    size_t        start = 0;
+    while(valid)
     {
-        chord |= ImGuiMod_Ctrl;
-        remaining = remaining.substr(5);
-    }
-    if(remaining.substr(0, 6) == "Shift+")
-    {
-        chord |= ImGuiMod_Shift;
-        remaining = remaining.substr(6);
-    }
-    if(remaining.substr(0, 4) == "Alt+")
-    {
-        chord |= ImGuiMod_Alt;
-        remaining = remaining.substr(4);
-    }
-
-    if(!remaining.empty())
-    {
-        for(int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k)
+        size_t      end   = str.find('+', start);
+        std::string token = str.substr(start, end == std::string::npos
+                                                  ? std::string::npos
+                                                  : end - start);
+        if(token == "Ctrl")
         {
-            const char* name = ImGui::GetKeyName(static_cast<ImGuiKey>(k));
-            if(name && remaining == name)
-            {
-                chord |= k;
-                return chord;
-            }
+            mods |= ImGuiMod_Ctrl;
         }
+        else if(token == "Shift")
+        {
+            mods |= ImGuiMod_Shift;
+        }
+        else if(token == "Alt")
+        {
+            mods |= ImGuiMod_Alt;
+        }
+        else if(token.empty() || key != ImGuiKey_None)
+        {
+            valid = false;
+        }
+        else
+        {
+            for(int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_ReservedForModCtrl; ++k)
+            {
+                ImGuiKey candidate = static_cast<ImGuiKey>(k);
+                if(token == ImGui::GetKeyName(candidate))
+                {
+                    key = candidate;
+                    break;
+                }
+            }
+            valid = (key != ImGuiKey_None);
+        }
+        if(end == std::string::npos)
+            break;
+        start = end + 1;
     }
 
-    return chord;
+    return valid ? (mods | key) : ImGuiKey_None;
 }
 
 }  // namespace View

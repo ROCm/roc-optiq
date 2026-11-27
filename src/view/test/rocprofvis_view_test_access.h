@@ -32,6 +32,16 @@
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#    include "agenticprofiling/rocprofvis_ai_trace_links.h"
+// Dropping a conversation destroys its TextSelects, which needs the full type.
+#    include "textselect.hpp"
+#endif
+
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -281,6 +291,15 @@ struct EventSearchTestPeer
     }
 };
 
+// Chunk size used when a track splits a fetch into requests. Shrinking it makes a
+// short trace span several chunks.
+struct TrackItemTestPeer
+{
+    TrackItem& v;
+    uint64_t ChunkDuration() const { return v.m_chunk_duration_ns; }
+    void     SetChunkDuration(uint64_t duration_ns) { v.m_chunk_duration_ns = duration_ns; }
+};
+
 // FlameTrackItem: only the non-capture accessors move here. The render-path
 // rect capture and its reader accessors stay #ifdef'd in the class (geometry
 // only exists during draw).
@@ -384,6 +403,18 @@ struct TimelineViewTestPeer
             if(flame != nullptr) return flame;
         }
         return nullptr;
+    }
+
+    // All displayed tracks of any type, in track order.
+    std::vector<TrackItem*> DisplayedTracks() const
+    {
+        std::vector<TrackItem*> tracks;
+        if(!v.m_tracks) return tracks;
+        for(TrackItem* track : *v.m_tracks)
+        {
+            if(track != nullptr && track->IsDisplayed()) tracks.push_back(track);
+        }
+        return tracks;
     }
 
     // All displayed flame tracks, in track order. Tests scan this for a track
@@ -497,6 +528,49 @@ struct SummaryTopEventsTestPeer
         if(v.m_selected_idx.has_value()) v.ToggleSelectEvent(v.m_selected_idx.value());
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+struct AssistantPanelTestPeer
+{
+    AssistantPanel& v;
+    bool            HasConversation(const std::string& project_id) const
+    {
+        return v.m_conversations.count(project_id) > 0;
+    }
+    size_t LineCount(const std::string& project_id) const
+    {
+        const std::unordered_map<
+            std::string, std::unique_ptr<AssistantPanel::Conversation>>::const_iterator
+            it = v.m_conversations.find(project_id);
+        return it == v.m_conversations.end() ? 0 : it->second->lines.size();
+    }
+    // Puts a user line in a trace's conversation without sending anything.
+    void AddUserLine(const std::string& project_id, const std::string& text)
+    {
+        AssistantPanel::ChatLine line;
+        line.speaker = AssistantPanel::Speaker::kUser;
+        line.text    = text;
+        v.ConversationFor(project_id).lines.push_back(line);
+    }
+    void DropConversation(const std::string& project_id)
+    {
+        v.m_conversations.erase(project_id);
+    }
+    const std::string& ViewProjectId() const { return v.m_view_project_id; }
+};
+
+struct TraceLinkStoreTestPeer
+{
+    TraceLinkStore&    v;
+    const std::string& Path() const { return v.m_file_path; }
+    // Points the store at another file and reloads from it.
+    void UsePath(const std::string& path)
+    {
+        v.m_file_path = path;
+        v.Load();
+    }
+};
+#endif
 
 }  // namespace View
 }  // namespace RocProfVis

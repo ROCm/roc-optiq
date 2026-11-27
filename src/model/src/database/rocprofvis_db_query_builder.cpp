@@ -340,6 +340,10 @@ namespace DataModel
 
 
     const char* Builder::IntToTypeEnum(int val, std::vector<std::string>& lookup) {
+        if (val < 0 || static_cast<size_t>(val) >= lookup.size())
+        {
+            return UNKNOWN_TYPE_ENUM;
+        }
         return lookup[val].c_str();
     }
 
@@ -351,7 +355,7 @@ namespace DataModel
                 return static_cast<uint8_t>(i);
             }
         }
-        return 0;
+        return static_cast<uint8_t>(lookup.size());
     }
 
 }  // namespace DataModel

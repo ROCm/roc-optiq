@@ -310,6 +310,7 @@ class Builder
         static constexpr const char* COUNTER_VALUE_TYPE_SERVICE_NAME = "value_type";
 
         static constexpr const char* NOT_APLICABLE = "N/A";
+        static constexpr const char* UNKNOWN_TYPE_ENUM = "UNKNOWN";
 
         inline static std::vector<std::string> mem_alloc_types = {
             "ALLOC", "FREE", "REALLOC", "RECLAIM"

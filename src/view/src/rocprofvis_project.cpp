@@ -362,9 +362,21 @@ Project::OpenCompare(const std::string&              project_id,
 bool
 Project::JsonValidForLoad(jt::Json& json)
 {
-    jt::Json& general = json[JSON_KEY_GROUP_GENERAL];
-    return general[JSON_KEY_GENERAL_TRACE_PATH].isString() ||
-           general[JSON_KEY_GENERAL_COMPARE_FILES].isArray();
+    jt::Json& general       = json[JSON_KEY_GROUP_GENERAL];
+    jt::Json& compare_files = general[JSON_KEY_GENERAL_COMPARE_FILES];
+    if(compare_files.isArray())
+    {
+        // jt getters abort on a type mismatch, so reject non-string entries here.
+        for(jt::Json& entry : compare_files.getArray())
+        {
+            if(!entry.isString())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    return general[JSON_KEY_GENERAL_TRACE_PATH].isString();
 }
 
 void

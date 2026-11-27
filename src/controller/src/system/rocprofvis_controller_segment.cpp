@@ -114,7 +114,7 @@ bool Segment::Insert(double timestamp, uint8_t level, Handle* event)
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
 {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
     double last_timestamp = std::max(m_end_timestamp, m_max_timestamp);
     if(m_start_timestamp <= end && last_timestamp >= start)
     {
@@ -123,7 +123,6 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
             lru_params->m_ctx->GetMemoryManager()->AddLRUReference(
                 lru_params->m_owner, this, lru_params->m_array_id);
         }
-        result = kRocProfVisResultSuccess;
         for(auto& level : m_entries)
         {
             auto&                              entries = level.second;
@@ -330,7 +329,7 @@ SegmentTimeline::GetContext() {
 rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
 {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
-    rocprofvis_result_t result = kRocProfVisResultOutOfRange;
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
     std::map<double, std::unique_ptr<Segment>>::iterator lower = m_segments.end();
     for(auto it = m_segments.begin(); it != m_segments.end(); ++it)
     {
@@ -364,11 +363,6 @@ rocprofvis_result_t SegmentTimeline::FetchSegments(double start, double end, voi
         result = func(start, end, *lower->second.get(), user_ptr, this);
         if(result == kRocProfVisResultSuccess)
         {
-            ++lower;
-        }
-        else if(result == kRocProfVisResultOutOfRange)
-        {
-            result = kRocProfVisResultSuccess;
             ++lower;
         }
         else

@@ -21,6 +21,8 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <new>
+#include <stdexcept>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -368,8 +370,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                     future, kRPVControllerFutureResult, 0, &future_result);
                 spdlog::info("Get future result: {0}", future_result);
                 REQUIRE(result == kRocProfVisResultSuccess);
-                REQUIRE((future_result == kRocProfVisResultSuccess ||
-                         future_result == kRocProfVisResultOutOfRange));
+                REQUIRE(future_result == kRocProfVisResultSuccess);
 
                 uint64_t num_results = 0;
                 result               = rocprofvis_controller_get_uint64(
@@ -681,6 +682,334 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
             rocprofvis_controller_array_free(array);
             rocprofvis_controller_future_free(future);
+        }
+    }
+
+    // Fetches a range after the end of every track and graph. An empty area of a
+    // track is not an error: the fetch succeeds and returns no entries.
+    // Fixture Reads: m_controller
+    SECTION("Empty Track Range")
+    {
+        auto fetch_and_check_empty = [](rocprofvis_controller_future_t* future,
+                                        rocprofvis_controller_array_t*  array) {
+            rocprofvis_result_t result = rocprofvis_controller_future_wait(future, FLT_MAX);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t future_result = 0;
+            result = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult,
+                                                      0, &future_result);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(future_result == kRocProfVisResultSuccess);
+
+            uint64_t num_results = 0;
+            result = rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries,
+                                                      0, &num_results);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(num_results == 0);
+        };
+
+        uint64_t            num_tracks = 0;
+        rocprofvis_result_t result     = rocprofvis_controller_get_uint64(
+            m_controller, kRPVControllerSystemNumTracks, 0, &num_tracks);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_tracks > 0);
+
+        for(uint64_t track_idx = 0; track_idx < num_tracks; track_idx++)
+        {
+            rocprofvis_handle_t* track_handle = nullptr;
+            result = rocprofvis_controller_get_object(
+                m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(track_handle);
+
+            double max_time = 0;
+            result          = rocprofvis_controller_get_double(
+                track_handle, kRPVControllerTrackMaxTimestamp, 0, &max_time);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(array != nullptr);
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_track_fetch_async(
+                m_controller, (rocprofvis_controller_track_t*) track_handle,
+                max_time + 1e9, max_time + 2e9, future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            fetch_and_check_empty(future, array);
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+
+        rocprofvis_handle_t* timeline_handle = nullptr;
+        result = rocprofvis_controller_get_object(m_controller, kRPVControllerSystemTimeline,
+                                                  0, &timeline_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(timeline_handle);
+
+        uint64_t num_graphs = 0;
+        result              = rocprofvis_controller_get_uint64(
+            timeline_handle, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(num_graphs > 0);
+
+        for(uint64_t graph_idx = 0; graph_idx < num_graphs; graph_idx++)
+        {
+            rocprofvis_handle_t* graph_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                timeline_handle, kRPVControllerTimelineGraphIndexed, graph_idx, &graph_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(graph_handle);
+
+            double graph_end_ts = 0;
+            result              = rocprofvis_controller_get_double(
+                graph_handle, kRPVControllerGraphEndTimestamp, 0, &graph_end_ts);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(array != nullptr);
+            REQUIRE(future != nullptr);
+
+            result = rocprofvis_controller_graph_fetch_async(
+                m_controller, graph_handle, graph_end_ts + 1e9, graph_end_ts + 2e9, 1000,
+                future, array);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            fetch_and_check_empty(future, array);
+
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+        }
+    }
+
+    // Finds an LOD segment of an event graph that covers no track segment, followed
+    // later by one that holds events. The segments between them are fetched first,
+    // so a fetch across all of them is split into an empty range and a range with
+    // events. That fetch must succeed and return the events.
+    // Must run before any other section fetches graphs at the LOD it picks.
+    // Fixture Reads: m_controller
+    SECTION("Graph Range With Empty LOD Segment")
+    {
+        struct GraphFetchResult
+        {
+            uint64_t m_result      = kRocProfVisResultUnknownError;
+            uint64_t m_num_entries = 0;
+        };
+        auto fetch_graph = [this](rocprofvis_handle_t* graph_handle, double start,
+                                  double end, uint32_t pixels) {
+            GraphFetchResult                fetch;
+            rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(array != nullptr);
+            REQUIRE(future != nullptr);
+            REQUIRE(rocprofvis_controller_graph_fetch_async(m_controller, graph_handle,
+                                                            start, end, pixels, future,
+                                                            array) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult,
+                                                     0, &fetch.m_result) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries,
+                                                     0, &fetch.m_num_entries) ==
+                    kRocProfVisResultSuccess);
+            rocprofvis_controller_array_free(array);
+            rocprofvis_controller_future_free(future);
+            return fetch;
+        };
+
+        rocprofvis_handle_t* timeline_handle = nullptr;
+        rocprofvis_result_t  result          = rocprofvis_controller_get_object(
+            m_controller, kRPVControllerSystemTimeline, 0, &timeline_handle);
+        REQUIRE(result == kRocProfVisResultSuccess);
+        REQUIRE(timeline_handle);
+
+        uint64_t num_graphs = 0;
+        result              = rocprofvis_controller_get_uint64(
+            timeline_handle, kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        bool found = false;
+        for(uint64_t graph_idx = 0; graph_idx < num_graphs && !found; graph_idx++)
+        {
+            rocprofvis_handle_t* graph_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                timeline_handle, kRPVControllerTimelineGraphIndexed, graph_idx, &graph_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            rocprofvis_handle_t* track_handle = nullptr;
+            result                            = rocprofvis_controller_get_object(
+                graph_handle, kRPVControllerGraphTrack, 0, &track_handle);
+            REQUIRE(result == kRocProfVisResultSuccess);
+
+            uint64_t track_type = 0;
+            result              = rocprofvis_controller_get_uint64(
+                track_handle, kRPVControllerTrackType, 0, &track_type);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            if(track_type != kRPVControllerTrackTypeEvents)
+            {
+                continue;
+            }
+
+            double track_start = 0;
+            double track_end   = 0;
+            REQUIRE(rocprofvis_controller_get_double(track_handle,
+                                                     kRPVControllerTrackMinTimestamp, 0,
+                                                     &track_start) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_get_double(track_handle,
+                                                     kRPVControllerTrackMaxTimestamp, 0,
+                                                     &track_end) ==
+                    kRocProfVisResultSuccess);
+            const double track_duration = track_end - track_start;
+            constexpr double kSegmentDuration = RocProfVis::Controller::kSegmentDuration;
+
+            rocprofvis_controller_array_t*  events = rocprofvis_controller_array_alloc(0);
+            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+            REQUIRE(events != nullptr);
+            REQUIRE(future != nullptr);
+            REQUIRE(rocprofvis_controller_track_fetch_async(
+                        m_controller, (rocprofvis_controller_track_t*) track_handle,
+                        track_start, track_end, future, events) ==
+                    kRocProfVisResultSuccess);
+            REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                    kRocProfVisResultSuccess);
+
+            uint64_t num_events = 0;
+            REQUIRE(rocprofvis_controller_get_uint64(events, kRPVControllerArrayNumEntries,
+                                                     0, &num_events) ==
+                    kRocProfVisResultSuccess);
+
+            // A track segment is fetched by an LOD range if it starts at or before
+            // the range end and its latest event ends at or after the range start.
+            const size_t num_track_segments =
+                static_cast<size_t>(std::ceil(track_duration / kSegmentDuration)) + 1;
+            std::vector<double> segment_max_end(num_track_segments, -DBL_MAX);
+            std::vector<double> event_starts;
+            for(uint64_t i = 0; i < num_events; i++)
+            {
+                rocprofvis_handle_t* event = nullptr;
+                REQUIRE(rocprofvis_controller_get_object(
+                            events, kRPVControllerArrayEntryIndexed, i, &event) ==
+                        kRocProfVisResultSuccess);
+                double event_start = 0;
+                double event_end   = 0;
+                rocprofvis_controller_get_double(event, kRPVControllerEventStartTimestamp, 0,
+                                                 &event_start);
+                rocprofvis_controller_get_double(event, kRPVControllerEventEndTimestamp, 0,
+                                                 &event_end);
+                event_starts.push_back(event_start);
+                size_t first = static_cast<size_t>(
+                    std::floor((event_start - track_start) / kSegmentDuration));
+                size_t last = static_cast<size_t>(
+                    std::floor((event_end - track_start) / kSegmentDuration));
+                for(size_t s = first; s <= last && s < num_track_segments; s++)
+                {
+                    segment_max_end[s] = std::max(segment_max_end[s], event_end);
+                }
+            }
+            rocprofvis_controller_array_free(events);
+            rocprofvis_controller_future_free(future);
+            std::sort(event_starts.begin(), event_starts.end());
+            for(size_t s = 1; s < num_track_segments; s++)
+            {
+                segment_max_end[s] = std::max(segment_max_end[s], segment_max_end[s - 1]);
+            }
+
+            auto lod_range_is_empty = [&](double range_start, double range_end) {
+                size_t last = std::min(
+                    static_cast<size_t>(
+                        std::floor((range_end - track_start) / kSegmentDuration)),
+                    num_track_segments - 1);
+                return segment_max_end[last] < range_start;
+            };
+
+            for(uint32_t lod = 5; lod >= 1 && !found; lod--)
+            {
+                const double lod_scale    = std::pow(10.0, lod);
+                const double lod_duration =
+                    RocProfVis::Controller::kScalableSegmentDuration * lod_scale;
+                if(lod_duration * 3 >= track_duration)
+                {
+                    continue;
+                }
+                // Graph::Fetch picks the lowest LOD at which the range fits in ten
+                // times the pixel count, so this resolves any range to this LOD.
+                auto pixels_for = [lod_scale](double start, double end) {
+                    return static_cast<uint32_t>(
+                        std::max(1.0, std::round((end - start) / (5 * lod_scale))));
+                };
+                const uint64_t num_lod_segments =
+                    static_cast<uint64_t>(std::ceil(track_duration / lod_duration));
+                for(uint64_t i = 0; i + 2 < num_lod_segments; i++)
+                {
+                    double empty_start = track_start + (i * lod_duration);
+                    if(!lod_range_is_empty(empty_start, empty_start + lod_duration))
+                    {
+                        continue;
+                    }
+                    auto next_event = std::lower_bound(
+                        event_starts.begin(), event_starts.end(), empty_start + lod_duration);
+                    if(next_event == event_starts.end())
+                    {
+                        break;
+                    }
+                    uint64_t data_index = static_cast<uint64_t>(
+                        std::floor((*next_event - track_start) / lod_duration));
+                    if(data_index < i + 2 || data_index >= num_lod_segments)
+                    {
+                        continue;
+                    }
+                    double valid_start = empty_start + lod_duration;
+                    double data_start  = track_start + (data_index * lod_duration);
+                    double data_end    = data_start + lod_duration;
+                    // Middle segments that cover no track segment would stay invalid
+                    // if empty ranges fail, and merge with the empty segment.
+                    if(lod_range_is_empty(valid_start, data_start))
+                    {
+                        continue;
+                    }
+                    found = true;
+                    spdlog::info("Graph {}: LOD {} empty segment {} at {}, data segment {} "
+                                 "at {}",
+                                 graph_idx, lod, i, empty_start, data_index, data_start);
+
+                    // Marks the segments between the empty one and the data one valid,
+                    // so the fetch across all of them is split into two ranges.
+                    double valid_fetch_start = valid_start + (0.25 * lod_duration);
+                    double valid_fetch_end   = data_start - (0.25 * lod_duration);
+                    GraphFetchResult valid =
+                        fetch_graph(graph_handle, valid_fetch_start, valid_fetch_end,
+                                    pixels_for(valid_fetch_start, valid_fetch_end));
+                    spdlog::info("Middle segments alone: result {} entries {}",
+                                 valid.m_result, valid.m_num_entries);
+
+                    double           all_fetch_start = empty_start + (0.25 * lod_duration);
+                    GraphFetchResult all =
+                        fetch_graph(graph_handle, all_fetch_start, data_end,
+                                    pixels_for(all_fetch_start, data_end));
+                    spdlog::info("All segments: result {} entries {}", all.m_result,
+                                 all.m_num_entries);
+
+                    GraphFetchResult data = fetch_graph(graph_handle, data_start, data_end,
+                                                        pixels_for(data_start, data_end));
+                    spdlog::info("Data segment alone: result {} entries {}", data.m_result,
+                                 data.m_num_entries);
+
+                    CHECK(valid.m_result == kRocProfVisResultSuccess);
+                    CHECK(all.m_result == kRocProfVisResultSuccess);
+                    CHECK(all.m_num_entries > 0);
+                    CHECK(data.m_result == kRocProfVisResultSuccess);
+                    CHECK(data.m_num_entries > 0);
+                    break;
+                }
+            }
+        }
+        if(!found)
+        {
+            FAIL("No event graph has an empty LOD segment followed by one with events");
         }
     }
 
@@ -1571,8 +1900,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                         future, kRPVControllerFutureResult, 0, &future_result);
                     spdlog::trace("Get future result: {0}", future_result);
                     REQUIRE(result == kRocProfVisResultSuccess);
-                    REQUIRE((future_result == kRocProfVisResultSuccess ||
-                             future_result == kRocProfVisResultOutOfRange));
+                    REQUIRE(future_result == kRocProfVisResultSuccess);
 
                     uint64_t num_results = 0;
                     result               = rocprofvis_controller_get_uint64(
@@ -3805,6 +4133,81 @@ TEST_CASE("JobSystem Job polling contract unchanged")
     job.Execute();
     REQUIRE(job.Wait(0.0f) == kRocProfVisResultSuccess);
     REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+}
+
+TEST_CASE("CallCatchingExceptions turns exceptions into results")
+{
+    using RocProfVis::Controller::CallCatchingExceptions;
+
+    REQUIRE(CallCatchingExceptions([]() { return kRocProfVisResultCancelled; }) ==
+            kRocProfVisResultCancelled);
+    REQUIRE(CallCatchingExceptions([]() -> rocprofvis_result_t {
+                throw std::bad_alloc();
+            }) == kRocProfVisResultMemoryAllocError);
+    REQUIRE(CallCatchingExceptions([]() -> rocprofvis_result_t {
+                throw std::out_of_range("test");
+            }) == kRocProfVisResultUnknownError);
+    REQUIRE(CallCatchingExceptions([]() -> rocprofvis_result_t { throw 42; }) ==
+            kRocProfVisResultUnknownError);
+}
+
+// An exception thrown by a job body must fail the job instead of terminating the
+// process.
+TEST_CASE("JobSystem Job exception fails the job")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+    using RocProfVis::Controller::JobSystem;
+
+    SECTION("standard exception")
+    {
+        Job job([](Future*) -> rocprofvis_result_t { throw std::runtime_error("test"); },
+                nullptr);
+        job.Execute();
+        REQUIRE(job.GetResult() == kRocProfVisResultUnknownError);
+    }
+
+    SECTION("out of memory")
+    {
+        Job job([](Future*) -> rocprofvis_result_t { throw std::bad_alloc(); }, nullptr);
+        job.Execute();
+        REQUIRE(job.GetResult() == kRocProfVisResultMemoryAllocError);
+    }
+
+    SECTION("non-standard exception")
+    {
+        Job job([](Future*) -> rocprofvis_result_t { throw 42; }, nullptr);
+        job.Execute();
+        REQUIRE(job.GetResult() == kRocProfVisResultUnknownError);
+    }
+
+    // Every worker thread gets a throwing job, and a later job must still run.
+    SECTION("worker threads keep running")
+    {
+        const unsigned num_jobs = std::max(1u, std::thread::hardware_concurrency()) * 2;
+        std::vector<Job*> jobs;
+        for(unsigned i = 0; i < num_jobs; i++)
+        {
+            jobs.push_back(JobSystem::Get().IssueJob(
+                [](Future*) -> rocprofvis_result_t { throw std::runtime_error("test"); },
+                nullptr));
+        }
+        for(Job* job : jobs)
+        {
+            REQUIRE(job != nullptr);
+            REQUIRE(job->Wait(FLT_MAX) == kRocProfVisResultSuccess);
+            REQUIRE(job->GetResult() == kRocProfVisResultUnknownError);
+            delete job;
+        }
+
+        Job* job = JobSystem::Get().IssueJob(
+            [](Future*) -> rocprofvis_result_t { return kRocProfVisResultSuccess; },
+            nullptr);
+        REQUIRE(job != nullptr);
+        REQUIRE(job->Wait(FLT_MAX) == kRocProfVisResultSuccess);
+        REQUIRE(job->GetResult() == kRocProfVisResultSuccess);
+        delete job;
+    }
 }
 
 // Lost-wakeup stress test for Job::Wait(FLT_MAX). Races many worker/waiter

@@ -44,9 +44,6 @@ rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& ar
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
             uint64_t            index  = 0;
             result                     = graph.Fetch(pixels, start, end, array, index, future);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess ||
-                              result == kRocProfVisResultOutOfRange ||
-                              result == kRocProfVisResultCancelled);
             return result;
         }, &future));
 

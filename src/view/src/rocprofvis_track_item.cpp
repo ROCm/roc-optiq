@@ -1078,8 +1078,7 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     }
 
     // If the request was successful, extract the points from the data
-    if(response_code == kRocProfVisResultSuccess ||
-       response_code == kRocProfVisResultOutOfRange)
+    if(response_code == kRocProfVisResultSuccess)
     {
         ExtractPointsFromData();
     }

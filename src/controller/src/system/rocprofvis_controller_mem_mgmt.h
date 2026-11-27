@@ -178,6 +178,11 @@ namespace RocProfVis
 
             void            ManageLRU();
             void*           Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimeline *owner);
+            /* Returns the pool slot at `ptr` to its pool, freeing the pool once it is empty.
+               Caller must hold m_pool_mutex.
+               @param resident: the object living in the slot, destroyed first; nullptr
+                                if its constructor threw and the slot holds no object. */
+            void            FreeSlot(void* ptr, SegmentTimeline* owner, Handle* resident);
             void            CleanUp();
             static void     UpdateSizeLimit();
             void            LockTimelines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock);

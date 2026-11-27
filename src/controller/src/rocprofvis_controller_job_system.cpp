@@ -13,6 +13,21 @@ namespace RocProfVis
 namespace Controller
 {
 
+void LogOutOfMemoryException()
+{
+    spdlog::error("Operation failed: out of memory");
+}
+
+void LogStandardException(const char* what)
+{
+    spdlog::error("Operation failed: {}", what);
+}
+
+void LogUnknownException()
+{
+    spdlog::error("Operation failed with an unknown exception");
+}
+
 Job::Job(JobFunction function, Future* future)
 : m_function(function)
 , m_result(kRocProfVisResultPending)
@@ -28,7 +43,8 @@ Job::~Job()
 
 void Job::Execute()
 {
-    rocprofvis_result_t result = m_function(m_future);
+    rocprofvis_result_t result =
+        CallCatchingExceptions([this]() { return m_function(m_future); });
     std::lock_guard<std::mutex> lock(m_mutex);
     m_result = result;
     m_condition_variable.notify_all();

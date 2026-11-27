@@ -1662,10 +1662,16 @@ ProfilerHub::CatalogTextAnywhere(const char* table, uint64_t row_id, const char*
 void
 ProfilerHub::RemapFilterIds(DbInstance* instance, source_filter_ids& filter)
 {
+    // Remap incoming filter identifiers so they are valid for the selected source
+    // instance. Filters may originate from another database where numeric ids differ.
+    // When a unique semantic match cannot be found in this instance, disable that
+    // specific filter to avoid applying an incorrect id.
     if(instance == nullptr) return;
     const uint32_t       guid    = instance->GuidIndex();
     const InformationCatalog& catalog = CachedTables(guid)->Catalog();
 
+    // Agent remap: if the exact id is not present on this source, match by stable
+    // attributes ("type" and "type_index"), optionally constrained by node.
     if(filter.has_agent && filter.agent != 0 &&
        !IdentifierOnSource(instance, trace_identifier_t::agent, filter.agent))
     {
@@ -1693,6 +1699,8 @@ ProfilerHub::RemapFilterIds(DbInstance* instance, source_filter_ids& filter)
                 if(id != UINT64_MAX) add_unique_id(matches, id);
             }
         }
+        // Accept only an unambiguous remap. Zero or multiple matches means the
+        // original id cannot be safely translated for this source.
         if(matches.size() == 1)
         {
             filter.agent = matches[0];

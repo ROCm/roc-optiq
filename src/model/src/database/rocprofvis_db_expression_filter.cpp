@@ -78,7 +78,7 @@ namespace DataModel
             case Type::Sub: return lhs - rhs;
             case Type::Mul: return lhs * rhs;
             case Type::Div: return rhs != 0.0 ? lhs / rhs : 0.0;
-            case Type::Mod: return rhs != 0.0 ? (size_t)lhs % (size_t)rhs : 0.0;
+            case Type::Mod: return rhs != 0.0 ? std::fmod(lhs, rhs) : 0.0;
             default: return 0.0;
             }
         }

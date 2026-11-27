@@ -616,7 +616,7 @@ TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
     REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
     engine.BeginStage(0);
     engine.Feed("[database][info] Database: /run/terrible_path.db path.db/rocpd-1234-0.db\n");
-    engine.Feed("|  RocPD database  |  File: /run/terrible_path.db path.db/summary-copy.db\n");
+    engine.Feed("|  RocPD database  |  File: /run/terrible_path.db path.db/summary-copy.db  |\n");
     engine.EndStage("");
 
     std::string value;
@@ -624,6 +624,29 @@ TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
     // The rule table is the only reader of this log, so a tool that prints
     // both labels must resolve to the database line.
     CHECK(value == "/run/terrible_path.db path.db/rocpd-1234-0.db");
+}
+
+TEST_CASE("The shipped rocprof-sys rules read a summary File: row", "[profiler][rules]")
+{
+    ProfilerStageSpec stage;
+    stage.tool = kRPVProfilerToolRocprofSysRun;
+    std::string artifact_key;
+    ProfilerScrapeRules::Apply(stage, artifact_key);
+
+    ProfilerScrapeEngine engine;
+    REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+    engine.BeginStage(0);
+    // No Database: line, so the summary row is the only labelled match. A miss
+    // there falls through to the bare sweep, which keeps the token before the
+    // first space.
+    engine.Feed("[rocprof-sys] Opening /tmp/decoy.db\n");
+    engine.Feed("|  RocPD database  |  File: "
+                "'/run/terrible_path.db path.db/summary-copy.db'  |\n");
+    engine.EndStage("");
+
+    std::string value;
+    REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
+    CHECK(value == "/run/terrible_path.db path.db/summary-copy.db");
 }
 
 TEST_CASE("The shipped rocprofv3 rules read the result file line", "[profiler][rules]")

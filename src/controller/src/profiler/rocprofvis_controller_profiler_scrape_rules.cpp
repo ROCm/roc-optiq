@@ -56,9 +56,15 @@ constexpr RuleRow kComputeAnalyze[] = {
 // a bare-token sweep for a tool that labels neither. Collapsing the first two
 // into one alternation would let a later summary line outrank the database
 // line.
+//
+// The summary box is a '|' delimited row, so a labelled path may be followed
+// by a closing '|'. A rule that requires the path to end the line misses that
+// row, and the bare sweep that then wins stops at the first space.
 constexpr RuleRow kRocprofSysTrace[] = {
-    {kKeyTraceDb, R"(Database:\s*'?(\S.*?\.[dD][bB])'?\s*$)", 1, ScrapePolicy::kLastMatch},
-    {kKeyTraceDb, R"(File:\s*'?(\S.*?\.[dD][bB])'?\s*$)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(Database:\s*'?(\S.*?\.[dD][bB])'?(?:\s*\|)?\s*$)", 1,
+     ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(File:\s*'?(\S.*?\.[dD][bB])'?(?:\s*\|)?\s*$)", 1,
+     ScrapePolicy::kLastMatch},
     {kKeyTraceDb, R"(([^\s'"]+\.[dD][bB])\b)", 1, ScrapePolicy::kLastMatch},
 };
 

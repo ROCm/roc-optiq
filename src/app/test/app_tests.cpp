@@ -21,6 +21,7 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <unordered_set>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -2884,6 +2885,141 @@ void RegisterAppTests(ImGuiTestEngine* e)
         restore();
 
         IM_CHECK(rows_after != rows_before);
+    };
+
+    // A column filter that matches no rows keeps the header and filter row, and
+    // must not size the scroll area as if the table had 2^64 rows.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_empty_filter_scroll");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        InfiniteScrollTable* table = AnalysisViewTestPeer{*av}.EventTablePtr();
+        IM_CHECK(table != nullptr);
+        if (table == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        InfiniteScrollTableTestPeer peer{*table};
+
+        const bool details_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+        const bool sidebar_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_sidebar;
+        tv->SetSidebarViewVisibility(true);
+        std::string tab_label;
+        av->SelectTab("Event Table", tab_label);
+        ctx->Yield(3);
+
+        auto drain_event_table = [&]()
+        {
+            ctx->Yield(3);
+            for (int i = 0; i < 200 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto restore = [&]()
+        {
+            peer.SetColumnFilter("duration", "");
+            drain_event_table();
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_visible);
+            tv->SetSidebarViewVisibility(sidebar_visible);
+            ctx->Yield(3);
+        };
+        // Height of what this table's ImGui table window laid out last frame. A
+        // runaway spacer overflows ImGui's float-to-int truncation of the content
+        // size, so it shows up here as a huge or negative height, not as scroll.
+        auto table_content_height = [&]() -> std::optional<float>
+        {
+            const std::string& name = peer.WidgetName();
+            for (ImGuiWindow* w : ctx->UiContext->Windows)
+            {
+                if (!w->WasActive) continue;
+                const char* found = strstr(w->Name, name.c_str());
+                if (found && strstr(found, "/infinite_scroll_table_"))
+                    return w->DC.CursorMaxPos.y - w->DC.CursorStartPos.y;
+            }
+            return std::nullopt;
+        };
+
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60; i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) break;
+            ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to fill the event table");
+            restore();
+            return;
+        }
+        sel->UnselectAllTracks();
+        drain_event_table();
+
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        SetRefWindow(ctx, sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+        ImGuiID button = 0;
+        for (FlameTrackItem* flame : flames)
+        {
+            button = TrackButtonId(sidebar_items, flame->GetName());
+            if (button != 0) break;
+        }
+        if (button == 0)
+        {
+            ctx->LogWarning("SKIP: no flame track row button found in the sidebar");
+            restore();
+            return;
+        }
+        CtrlClick(ctx, button);
+        drain_event_table();
+
+        const TablesModel& tables = dp->DataModel().GetTables();
+        if (tables.GetTableTotalRowCount(TableType::kEventTable) == 0)
+        {
+            ctx->LogWarning("SKIP: event table is empty, nothing to filter out");
+            restore();
+            return;
+        }
+        if (!peer.FilterRowShown())
+        {
+            ctx->LogWarning("SKIP: event table is not in basic filter mode");
+            restore();
+            return;
+        }
+
+        const bool     filter_set = peer.SetColumnFilter("duration", "< 0");
+        drain_event_table();
+        const uint64_t rows_after = tables.GetTableTotalRowCount(TableType::kEventTable);
+        const std::optional<float> content = table_content_height();
+        const float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+        restore();
+
+        IM_CHECK(filter_set);
+        IM_CHECK(rows_after == 0);
+        IM_CHECK(content.has_value());
+        if (!content.has_value()) return;
+        // Header plus filter row only.
+        IM_CHECK_GE(*content, 0.0f);
+        IM_CHECK_LT(*content, row_height * 10.0f);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_event_search_multi_substring");

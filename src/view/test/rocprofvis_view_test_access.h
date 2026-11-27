@@ -15,6 +15,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_multi_track_table.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
@@ -91,6 +92,12 @@ struct AnalysisViewTestPeer
     const AnalysisView& v;
     EventsView*   EventsViewPtr() const { return v.m_events_view.get(); }
     TrackDetails* TrackDetailsPtr() const { return v.m_track_details.get(); }
+    // The pooled Event Table, or the A source's table in compare mode.
+    InfiniteScrollTable* EventTablePtr() const
+    {
+        if(v.m_event_group.tables.empty()) return nullptr;
+        return v.m_event_group.tables.front().get();
+    }
 };
 
 // TrackDetails holds one DetailItem per selected track (emplace_front on select,
@@ -288,6 +295,24 @@ struct EventSearchTestPeer
     {
         const InfiniteScrollTable& t = v;
         return t.m_data_provider.IsRequestPending(t.m_request_id);
+    }
+};
+
+// The basic filter row's per-column inputs. SetColumnFilter is what typing into
+// the column's box and pressing Enter does; the request goes out on the next render.
+struct InfiniteScrollTableTestPeer
+{
+    InfiniteScrollTable& v;
+    bool FilterRowShown() const { return v.m_display_filter_row; }
+    // The table's child window, and the ImGui table window inside it, are named under this.
+    const std::string& WidgetName() const { return v.m_widget_name; }
+    bool SetColumnFilter(const std::string& column, const std::string& text)
+    {
+        auto it = v.m_filter_row_inputs.find(column);
+        if(it == v.m_filter_row_inputs.end()) return false;
+        it->second.input     = text;
+        v.m_filter_requested = true;
+        return true;
     }
 };
 

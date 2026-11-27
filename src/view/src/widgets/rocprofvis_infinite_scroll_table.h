@@ -58,6 +58,7 @@ public:
     };
 
     friend struct EventSearchTestPeer;
+    friend struct InfiniteScrollTableTestPeer;
 
 protected:
     enum TimeColumns

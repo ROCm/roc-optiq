@@ -455,6 +455,22 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
+        const bool show_no_data_text = table_data.empty() && !show_loading_indicator;
+
+        // An empty table with a filter row keeps only its header and filter row,
+        // so the no-data text below them isn't drawn over by the column lines.
+        ImVec2 table_size = outer_size;
+        if(show_no_data_text && m_display_filter_row)
+        {
+            float header_rows_height =
+                row_height + ImGui::GetFrameHeight() + row_padding_v;
+            if(m_horizontal_scroll)
+            {
+                header_rows_height += style.ScrollbarSize;
+            }
+            table_size.y = std::min(outer_size.y, header_rows_height);
+        }
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
         // Filter row is enabled: render when columns are present regardless of data.
@@ -464,7 +480,7 @@ InfiniteScrollTable::Render()
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",
                                  static_cast<int>(column_names.size()), table_flags,
-                                 outer_size))
+                                 table_size))
             {
                 if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
                 {
@@ -703,7 +719,9 @@ InfiniteScrollTable::Render()
                 clipper.End();
 
                 float bottom_spacer_height =
-                    (float) (total_row_count - (end_row + 1)) * row_height;
+                    total_row_count > end_row + 1
+                        ? (float) (total_row_count - (end_row + 1)) * row_height
+                        : 0.0f;
                 if(bottom_spacer_height > 0.0f)
                 {
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, bottom_spacer_height);
@@ -790,12 +808,13 @@ InfiniteScrollTable::Render()
             ImGui::PopStyleVar();
             RenderContextMenu();
         }
-        else if(!m_no_data_text.empty() && !show_loading_indicator &&
-                ImGui::GetContentRegionAvail().y > ImGui::GetTextLineHeight())
+        if(show_no_data_text && !m_no_data_text.empty() &&
+           ImGui::GetContentRegionAvail().y > ImGui::GetTextLineHeight())
         {
             CenterNextTextItem(m_no_data_text.c_str());
-            ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
-                                 0.5f);
+            ImGui::SetCursorPosY(
+                ImGui::GetCursorPosY() +
+                (ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeight()) * 0.5f);
             ImGui::TextDisabled("%s", m_no_data_text.c_str());
         }
         ImGui::PopStyleColor();

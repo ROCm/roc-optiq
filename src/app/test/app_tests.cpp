@@ -21,6 +21,7 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <unordered_set>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -32,6 +33,11 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#    include "agenticprofiling/rocprofvis_ai_tools.h"
+#    include "agenticprofiling/rocprofvis_ai_trace_links.h"
+#endif
 using namespace RocProfVis::View;
 
 namespace
@@ -331,6 +337,91 @@ struct TabStateGuard
         if(ctx) ctx->Yield(3);
     }
 };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+// Points the trace link store at a scratch file for one test and restores the
+// user's own afterwards, so a test never writes their links.
+struct ScratchTraceLinks
+{
+    std::string saved_path;
+    explicit ScratchTraceLinks(const std::string& scratch_path)
+    : saved_path(TraceLinkStoreTestPeer{ AssistantTraceLinks() }.Path())
+    {
+        std::error_code ec;
+        std::filesystem::remove(scratch_path, ec);
+        TraceLinkStoreTestPeer{ AssistantTraceLinks() }.UsePath(scratch_path);
+    }
+    ~ScratchTraceLinks()
+    {
+        TraceLinkStoreTestPeer{ AssistantTraceLinks() }.UsePath(saved_path);
+    }
+};
+
+// Opens the Ask Optiq panel for one test, so it draws and picks the
+// conversation for the tab in front, and puts it back as it was.
+struct AssistantPanelOpen
+{
+    bool was_visible;
+    AssistantPanelOpen()
+    : was_visible(*AssistantPanel::GetInstance()->VisiblePtr())
+    {
+        *AssistantPanel::GetInstance()->VisiblePtr() = true;
+    }
+    ~AssistantPanelOpen() { *AssistantPanel::GetInstance()->VisiblePtr() = was_visible; }
+};
+
+// Keeps a test's in-memory edits to the assistant settings from outliving it.
+struct AssistantSettingsRestore
+{
+    AssistantSettings saved;
+    AssistantSettingsRestore()
+    : saved(SettingsManager::GetInstance().GetUserSettings().assistant)
+    {}
+    ~AssistantSettingsRestore()
+    {
+        SettingsManager::GetInstance().GetUserSettings().assistant = saved;
+    }
+};
+
+// Whether Preferences is open on the Assistant page, the only page that draws
+// the URL field. Cancels the dialog if it is open at all.
+bool
+CancelAssistantSettings(ImGuiTestContext* ctx)
+{
+    ctx->SetRef("//Settings");
+    const bool on_assistant_page = ctx->ItemExists("**/##assistant_url");
+    if(ctx->ItemExists("**/Cancel"))
+    {
+        ctx->ItemClick("**/Cancel");
+    }
+    ctx->SetRef("Main Window");
+    return on_assistant_page;
+}
+
+bool
+AssistantTraceReady(const std::string& project_id)
+{
+    const AssistantToolContext context = MakeAssistantToolContext(project_id);
+    return context.data_provider != nullptr &&
+           context.data_provider->GetState() == ProviderState::kReady;
+}
+
+// Copies through shared-read streams, which works while SQLite still holds the
+// source open; a plain copy_file can hit a sharing violation on Windows.
+bool
+CopyFileShared(const std::filesystem::path& from, const std::filesystem::path& to)
+{
+    std::ifstream in(from, std::ios::binary);
+    std::ofstream out(to, std::ios::binary | std::ios::trunc);
+    if(!in || !out)
+    {
+        return false;
+    }
+    out << in.rdbuf();
+    out.close();
+    return !out.fail();
+}
+#endif
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -2796,6 +2887,141 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(rows_after != rows_before);
     };
 
+    // A column filter that matches no rows keeps the header and filter row, and
+    // must not size the scroll area as if the table had 2^64 rows.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_empty_filter_scroll");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        InfiniteScrollTable* table = AnalysisViewTestPeer{*av}.EventTablePtr();
+        IM_CHECK(table != nullptr);
+        if (table == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        InfiniteScrollTableTestPeer peer{*table};
+
+        const bool details_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+        const bool sidebar_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_sidebar;
+        tv->SetSidebarViewVisibility(true);
+        std::string tab_label;
+        av->SelectTab("Event Table", tab_label);
+        ctx->Yield(3);
+
+        auto drain_event_table = [&]()
+        {
+            ctx->Yield(3);
+            for (int i = 0; i < 200 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto restore = [&]()
+        {
+            peer.SetColumnFilter("duration", "");
+            drain_event_table();
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_visible);
+            tv->SetSidebarViewVisibility(sidebar_visible);
+            ctx->Yield(3);
+        };
+        // Height of what this table's ImGui table window laid out last frame. A
+        // runaway spacer overflows ImGui's float-to-int truncation of the content
+        // size, so it shows up here as a huge or negative height, not as scroll.
+        auto table_content_height = [&]() -> std::optional<float>
+        {
+            const std::string& name = peer.WidgetName();
+            for (ImGuiWindow* w : ctx->UiContext->Windows)
+            {
+                if (!w->WasActive) continue;
+                const char* found = strstr(w->Name, name.c_str());
+                if (found && strstr(found, "/infinite_scroll_table_"))
+                    return w->DC.CursorMaxPos.y - w->DC.CursorStartPos.y;
+            }
+            return std::nullopt;
+        };
+
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60; i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) break;
+            ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to fill the event table");
+            restore();
+            return;
+        }
+        sel->UnselectAllTracks();
+        drain_event_table();
+
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        SetRefWindow(ctx, sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+        ImGuiID button = 0;
+        for (FlameTrackItem* flame : flames)
+        {
+            button = TrackButtonId(sidebar_items, flame->GetName());
+            if (button != 0) break;
+        }
+        if (button == 0)
+        {
+            ctx->LogWarning("SKIP: no flame track row button found in the sidebar");
+            restore();
+            return;
+        }
+        CtrlClick(ctx, button);
+        drain_event_table();
+
+        const TablesModel& tables = dp->DataModel().GetTables();
+        if (tables.GetTableTotalRowCount(TableType::kEventTable) == 0)
+        {
+            ctx->LogWarning("SKIP: event table is empty, nothing to filter out");
+            restore();
+            return;
+        }
+        if (!peer.FilterRowShown())
+        {
+            ctx->LogWarning("SKIP: event table is not in basic filter mode");
+            restore();
+            return;
+        }
+
+        const bool     filter_set = peer.SetColumnFilter("duration", "< 0");
+        drain_event_table();
+        const uint64_t rows_after = tables.GetTableTotalRowCount(TableType::kEventTable);
+        const std::optional<float> content = table_content_height();
+        const float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+        restore();
+
+        IM_CHECK(filter_set);
+        IM_CHECK(rows_after == 0);
+        IM_CHECK(content.has_value());
+        if (!content.has_value()) return;
+        // Header plus filter row only.
+        IM_CHECK_GE(*content, 0.0f);
+        IM_CHECK_LT(*content, row_height * 10.0f);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_event_search_multi_substring");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2899,6 +3125,85 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(result == Project::OpenResult::Failed);
         IM_CHECK(message.find(expected_path) != std::string::npos);
         IM_CHECK(still_missing);
+    };
+
+    // AIPROFVIS-651: an event or sample spanning a chunk boundary comes back in both
+    // chunks, and only one copy may be kept. The sample trace fits in one 30 s chunk,
+    // so each track is refetched in many small chunks to put boundaries inside it.
+    t = IM_REGISTER_TEST(e, "app", "sys_track_chunk_boundary_dedup");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+
+        constexpr double kChunks = 64.0;
+        constexpr float  kWidth  = 100000.0f;
+
+        size_t event_tracks  = 0;
+        size_t sample_tracks = 0;
+        size_t duplicates    = 0;
+        for (TrackItem* track : TimelineViewTestPeer{*tlv}.DisplayedTracks())
+        {
+            const RawTrackData* before = tlm.GetTrackData(track->GetID());
+            if (before == nullptr || !track->AllDataReady() || track->HasPendingRequests())
+                continue;
+            const double   start_ts    = before->GetStartTs();
+            const double   end_ts      = before->GetEndTs();
+            const uint64_t prior_group = before->GetDataGroupID();
+            if (end_ts <= start_ts) continue;
+
+            TrackItemTestPeer peer{*track};
+            const uint64_t    orig_chunk = peer.ChunkDuration();
+            peer.SetChunkDuration(
+                std::max<uint64_t>(1, static_cast<uint64_t>((end_ts - start_ts) / kChunks)));
+            track->RequestData(start_ts, end_ts, kWidth);
+
+            const RawTrackData* after = nullptr;
+            for (int i = 0; i < 600; i++)
+            {
+                ctx->Yield();
+                after = tlm.GetTrackData(track->GetID());
+                if (after && after->GetDataGroupID() != prior_group &&
+                    !track->HasPendingRequests() && track->AllDataReady())
+                    break;
+                after = nullptr;
+            }
+            peer.SetChunkDuration(orig_chunk);
+            IM_CHECK(after != nullptr);
+            if (after == nullptr) break;
+
+            if (const RawTrackEventData* events = dynamic_cast<const RawTrackEventData*>(after))
+            {
+                std::unordered_set<uint64_t> ids;
+                for (const TraceEvent& event : events->GetData())
+                    if (!ids.insert(event.m_id.uuid).second) duplicates++;
+                if (!events->GetData().empty()) event_tracks++;
+            }
+            else if (const RawTrackSampleData* samples =
+                         dynamic_cast<const RawTrackSampleData*>(after))
+            {
+                std::unordered_set<double> timestamps;
+                for (const TraceCounter& sample : samples->GetData())
+                    if (!timestamps.insert(sample.m_start_ts).second) duplicates++;
+                if (!samples->GetData().empty()) sample_tracks++;
+            }
+
+            // Drop the small-chunk data so the timeline refetches it normally.
+            track->ReleaseData();
+        }
+        ctx->Yield(5);
+
+        ctx->LogInfo("Checked %zu event and %zu sample tracks, %zu duplicates",
+                     event_tracks, sample_tracks, duplicates);
+        IM_CHECK(event_tracks > 0);
+        IM_CHECK(duplicates == 0);
     };
 
     // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
@@ -3021,4 +3326,248 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(arg_count > 0);
         IM_CHECK(have_named_arg);
     };
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Each open trace keeps its own Ask Optiq conversation, a link lets one
+    // trace's read tools reach the other, and closing a trace takes its
+    // conversation with it. Drives the tools directly, so no endpoint is needed.
+    t           = IM_REGISTER_TEST(e, "app", "sys_assistant_linked_traces");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        namespace fs   = std::filesystem;
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if(app == nullptr)
+        {
+            return;
+        }
+        TabContainer* tc = AppWindowTestPeer{ *app }.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if(tc == nullptr)
+        {
+            return;
+        }
+        TabStateGuard tab_guard(ctx, tc);
+
+        const fs::path sample("sample/rocpd-transpose.db");
+        if(!fs::exists(sample))
+        {
+            ctx->LogWarning("SKIP: sample/rocpd-transpose.db not found");
+            return;
+        }
+
+        // A second system trace at its own path: the sample copied with its
+        // write-ahead log, so the copy holds the same capture.
+        std::error_code ec;
+        const fs::path  dir = fs::temp_directory_path() / "rocprofvis_assistant_links";
+        fs::create_directories(dir, ec);
+        const fs::path copy = dir / "run2" / sample.filename();
+        fs::create_directories(copy.parent_path(), ec);
+        if(!CopyFileShared(sample, copy))
+        {
+            ctx->LogWarning("SKIP: could not copy the sample db");
+            return;
+        }
+        fs::path sample_wal = sample;
+        sample_wal += "-wal";
+        fs::path copy_wal = copy;
+        copy_wal += "-wal";
+        fs::remove(copy_wal, ec);
+        if(fs::exists(sample_wal))
+        {
+            CopyFileShared(sample_wal, copy_wal);
+        }
+
+        const std::string id_a = fs::weakly_canonical(sample).string();
+        const std::string id_b = fs::weakly_canonical(copy).string();
+        if(app->GetProject(id_a) == nullptr)
+        {
+            ctx->LogWarning("SKIP: start the UI tests with rocpd-transpose.db");
+            return;
+        }
+
+        ScratchTraceLinks      scratch_links((dir / "trace_links.json").string());
+        AssistantPanelOpen     panel_open;
+        AssistantPanelTestPeer peer{ *AssistantPanel::GetInstance() };
+
+        app->OpenFile(id_b);
+        for(int i = 0;
+            i < 3000 && !(AssistantTraceReady(id_a) && AssistantTraceReady(id_b)); i++)
+        {
+            ctx->Yield();
+        }
+        IM_CHECK(AssistantTraceReady(id_a));
+        IM_CHECK(AssistantTraceReady(id_b));
+
+        // The conversation on screen follows the tab, and each keeps its own lines.
+        tc->SetActiveTab(id_b);
+        ctx->Yield(3);
+        IM_CHECK(peer.ViewProjectId() == id_b);
+        peer.AddUserLine(id_a, "about run 1");
+        IM_CHECK(peer.LineCount(id_a) == 1);
+        IM_CHECK(peer.LineCount(id_b) == 0);
+        tc->SetActiveTab(id_a);
+        ctx->Yield(3);
+        IM_CHECK(peer.ViewProjectId() == id_a);
+        IM_CHECK(peer.LineCount(id_a) == 1);
+        peer.DropConversation(id_a);
+
+        // Duplicate visible names are ambiguous, but the listed tab ref picks
+        // one without exposing its full path to the model.
+        AssistantToolStartResult result =
+            StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab",
+                               "{\"name\":\"rocpd-transpose.db\"}");
+        IM_CHECK(result.content.find("Nothing matches") != std::string::npos);
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab", "{}");
+        const size_t first_ref      = result.content.find("ref=");
+        const size_t second_ref     = first_ref == std::string::npos
+                                          ? std::string::npos
+                                          : result.content.find("ref=", first_ref + 4);
+        const size_t second_ref_end = second_ref == std::string::npos
+                                          ? std::string::npos
+                                          : result.content.find(' ', second_ref + 4);
+        IM_CHECK(second_ref != std::string::npos);
+        IM_CHECK(second_ref_end != std::string::npos);
+        if(second_ref == std::string::npos || second_ref_end == std::string::npos)
+        {
+            return;
+        }
+        const std::string target_ref =
+            result.content.substr(second_ref + 4, second_ref_end - second_ref - 4);
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "switch_tab",
+                                    "{\"name\":\"" + target_ref + "\"}");
+        IM_CHECK(result.stop_tool_queue);
+        ctx->Yield(3);
+        IM_CHECK(app->GetCurrentProject() != nullptr);
+        IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
+
+        // Extra JSON fields are accepted by the endpoint parser. A stale trace
+        // link must not redirect a compute handler into a system data model.
+        AssistantToolContext compute_context;
+        compute_context.is_compute = true;
+#    ifdef ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
+        result = StartAssistantTool(compute_context, "compute_overview",
+                                    "{\"trace\":\"stale-link\"}");
+        IM_CHECK(result.content.find(
+                     "Linked-trace reads are available only for system traces") !=
+                 std::string::npos);
+#    else
+        result = StartAssistantTool(compute_context, "compute_overview", "{}");
+        IM_CHECK(result.content.find(
+                     "this build of Ask Optiq reads system traces only") !=
+                 std::string::npos);
+#    endif
+
+        // Link the sample as the baseline of its copy.
+        TraceLinkMember baseline;
+        baseline.path  = id_a;
+        baseline.label = "run1";
+        TraceLinkMember target;
+        target.path  = id_b;
+        target.label = "run2";
+        IM_CHECK(AssistantTraceLinks().Link(baseline, target) ==
+                 TraceLinkResult::kLinked);
+        const std::vector<TraceLink> links = AssistantTraceLinks().LinksOf(id_b);
+        IM_CHECK(links.size() == 1);
+        if(links.size() != 1)
+        {
+            return;
+        }
+        const std::string ref = links[0].group_id;
+        IM_CHECK(
+            BuildAssistantLinkBlock(MakeAssistantToolContext(id_b)).find("ref=" + ref) !=
+            std::string::npos);
+
+        // The copy reads the sample's tracks through the link, labelled as such.
+        result = StartAssistantTool(MakeAssistantToolContext(id_b), "list_tracks",
+                                    "{\"trace\":\"" + ref + "\"}");
+        IM_CHECK(!result.pending);
+        IM_CHECK(result.fetch.project_id == id_a);
+        IM_CHECK(result.content.find("[read from linked trace " + ref) !=
+                 std::string::npos);
+        IM_CHECK(result.content.find("track_id=") != std::string::npos);
+
+        // UI tools stay on their own trace, and an unknown ref names what is linked.
+        result =
+            StartAssistantTool(MakeAssistantToolContext(id_b), "goto",
+                               "{\"trace\":\"" + ref + "\",\"start_ns\":0,\"end_ns\":1}");
+        IM_CHECK(result.content.find("only applies to the tools that read data") !=
+                 std::string::npos);
+        result = StartAssistantTool(MakeAssistantToolContext(id_b), "list_tracks",
+                                    "{\"trace\":\"link-none\"}");
+        IM_CHECK(result.content.find("No linked trace matches") != std::string::npos);
+
+        // Two copies of one capture compare as unchanged once both summaries load.
+        result =
+            StartAssistantTool(MakeAssistantToolContext(id_b), "compare_traces", "{}");
+        for(int i = 0; i < 3000 && result.pending; i++)
+        {
+            ctx->Yield();
+            result = StartAssistantTool(MakeAssistantToolContext(id_b), "compare_traces",
+                                        "{}");
+        }
+        IM_CHECK(!result.pending);
+        IM_CHECK(result.content.find("baseline: ") != std::string::npos);
+        IM_CHECK(result.content.find("span_ns: ") != std::string::npos);
+        IM_CHECK(result.content.find("(0, 0.0%)") != std::string::npos);
+        IM_CHECK(result.content.find("new in target") == std::string::npos);
+        IM_CHECK(result.content.find("gone from target") == std::string::npos);
+
+        // Closing the copy drops its conversation; the link stays and reports
+        // the trace as closed.
+        IM_CHECK(peer.HasConversation(id_b));
+        tc->RemoveTab(id_b);
+        ctx->Yield(3);
+        IM_CHECK(!peer.HasConversation(id_b));
+        result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
+                                    "{\"trace\":\"" + ref + "\"}");
+        IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+
+    // The model name in the Ask Optiq header, and the pill that stands in for it
+    // before an endpoint is set, open Preferences on the Assistant page.
+    t           = IM_REGISTER_TEST(e, "app", "common_assistant_header_opens_settings");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        AssistantPanelOpen       panel_open;
+        AssistantSettingsRestore settings_restore;
+        ctx->Yield(3);
+        ctx->SetRef("Main Window");
+
+        // A placeholder URL draws the model name. Cancel does not save, and
+        // AssistantSettingsRestore puts the previous endpoint back.
+        AssistantSettings& assistant =
+            SettingsManager::GetInstance().GetUserSettings().assistant;
+        if(assistant.active >= assistant.providers.size())
+        {
+            assistant.providers.push_back(MakeDefaultAssistantProvider());
+            assistant.active = assistant.providers.size() - 1;
+        }
+        assistant.providers[assistant.active].endpoint_url = "http://127.0.0.1:1";
+        ctx->Yield(3);
+
+        // The right end shows the context size, or token counts once the
+        // endpoint has reported them. Neither is a link.
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeR);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
+
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeL);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
+        ctx->Yield(3);
+
+        // With no endpoint, a pill in the same place leads to the same page.
+        for(AssistantProvider& provider : assistant.providers)
+        {
+            provider.endpoint_url.clear();
+        }
+        ctx->Yield(3);
+        IM_CHECK(!ctx->ItemExists("**/##assistant_context_chip"));
+        IM_CHECK(ctx->ItemExists("**/##assistant_setup_chip"));
+        ctx->ItemClick("**/##assistant_setup_chip");
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
+    };
+#endif
 }

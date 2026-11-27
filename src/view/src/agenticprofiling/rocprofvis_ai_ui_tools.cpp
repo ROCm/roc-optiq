@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 // The tools that change Optiq rather than read it. Every body here goes through
-// OptiqActions and none of them touch a request id. All but one answer in the
-// same call: switch_tab waits for the tab bar to bring a newly chosen trace
-// forward. Adding a capability belongs in rocprofvis_ai_actions.h as one method,
-// not as wiring inside a tool here.
+// OptiqActions and answers in the same call, so none of them park a fetch or
+// touch a request id. Adding a capability belongs in rocprofvis_ai_actions.h as
+// one method, not as wiring inside a tool here.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cmath>
+#include <cstdint>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -35,9 +36,25 @@ namespace
 constexpr size_t ASSISTANT_MAX_HIGHLIGHTS      = 12;
 constexpr size_t ASSISTANT_MAX_NEXT_STEPS      = 3;
 constexpr size_t ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
-// A chosen trace comes forward within a couple of frames. This only bounds a
-// switch that never lands, such as one to a tab closed in the meantime.
-constexpr uint32_t ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS = 5;
+constexpr uint64_t ASSISTANT_TAB_REF_OFFSET      = 14695981039346656037ULL;
+constexpr uint64_t ASSISTANT_TAB_REF_PRIME       = 1099511628211ULL;
+
+// Stable for one project id without sending its full path to the model. The
+// mapping is recomputed from the open tabs, so closing another tab cannot
+// silently redirect an earlier ref.
+std::string
+TabRef(const std::string& project_id)
+{
+    uint64_t hash = ASSISTANT_TAB_REF_OFFSET;
+    for(unsigned char c : project_id)
+    {
+        hash ^= c;
+        hash *= ASSISTANT_TAB_REF_PRIME;
+    }
+    std::ostringstream out;
+    out << "tab_" << std::hex << std::setw(16) << std::setfill('0') << hash;
+    return out.str();
+}
 
 // Every UI-facing thing a tool does goes through here.
 OptiqActions
@@ -308,13 +325,15 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
 {
     OptiqActions                   actions       = Actions(context);
     const std::vector<std::string> trace_tabs    = actions.ListTabs();
+    const std::vector<std::string> trace_tab_ids = actions.ListTabIds();
     const std::vector<std::string> analysis_tabs = actions.ListAnalysisTabs();
 
     std::ostringstream out;
     out << "trace_tabs:";
-    for(const std::string& tab : trace_tabs)
+    for(size_t i = 0; i < trace_tabs.size(); ++i)
     {
-        out << "\n  " << tab;
+        out << "\n  ref=" << TabRef(trace_tab_ids[i]) << " name=\"" << trace_tabs[i]
+            << "\"";
     }
     out << "\nactive_trace_tab: " << actions.ActiveTab() << "\n";
     if(!analysis_tabs.empty())
@@ -327,7 +346,7 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
         out << "\nactive_details_tab: " << actions.ActiveAnalysisTab() << "\n";
     }
 
-    const std::string name = JsonUtils::GetString(args, "name", "");
+    std::string name = JsonUtils::GetString(args, "name", "");
     if(name.empty())
     {
         return DoneResult(out.str(), "Listed tabs");
@@ -335,26 +354,53 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
 
     // Details tabs are the ones people usually mean by name, so try those
     // first; trace tabs are file names and rarely collide.
-    std::string selected_label;
-    if(actions.SelectAnalysisTab(name, selected_label))
+    std::string selected;
+    if(actions.SelectAnalysisTab(name, selected))
     {
-        return DoneResult("Opened the " + selected_label + " tab in the details panel.",
+        return DoneResult("Opened the " + selected + " tab in the details panel.",
                           "Switched tabs");
     }
-    // The trace in front changes only when the tab bar next draws, so the call
-    // waits for that instead of answering now: the panel re-pins the turn and
-    // drops the rest of the batch by the trace in front.
-    std::string selected_id;
-    if(actions.SelectTab(name, selected_id, selected_label))
+    // A ref is unambiguous even when two paths have the same basename. The
+    // labels remain accepted when they name exactly one tab.
+    const std::string ref_prefix = "tab_";
+    if(name.compare(0, ref_prefix.size(), ref_prefix) == 0)
     {
-        AssistantToolStartResult result;
-        result.pending          = true;
-        result.started_fetch    = true;
-        result.fetch.kind       = AssistantFetchKind::kTabSwitch;
-        result.fetch.project_id = selected_id;
-        result.content          = "Switched to trace " + selected_label + ".";
-        result.status_line      = "Switching tabs...";
-        result.timeout_seconds  = ASSISTANT_TAB_SWITCH_TIMEOUT_SECONDS;
+        const std::string* matched_id = nullptr;
+        for(const std::string& tab_id : trace_tab_ids)
+        {
+            if(TabRef(tab_id) != name)
+            {
+                continue;
+            }
+            if(matched_id != nullptr)
+            {
+                matched_id = nullptr;  // A hash collision is ambiguous.
+                break;
+            }
+            matched_id = &tab_id;
+        }
+        if(matched_id != nullptr)
+        {
+            name = *matched_id;
+        }
+    }
+    std::string selected_id;
+    if(actions.SelectTab(name, selected_id, selected))
+    {
+        if(selected_id == context.project_id)
+        {
+            return DoneResult("Trace " + selected + " is already in front.",
+                              "Switched tabs");
+        }
+        // The turn stays with its own trace, so say where the user went rather
+        // than let the model think it can now read the other one.
+        AssistantToolStartResult result =
+            DoneResult("Switched the user to trace " + selected +
+                           ". This conversation stays with " + context.trace_name +
+                           ", so read and change nothing more here; questions about " +
+                           selected + " continue in its own conversation.",
+                       "Switched tabs");
+        result.stop_tool_queue = true;
         return result;
     }
 

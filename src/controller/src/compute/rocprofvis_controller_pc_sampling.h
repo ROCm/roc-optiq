@@ -100,8 +100,8 @@ private:
         uint64_t total_count             = 0;
         std::optional<uint64_t> issue_count;
         std::optional<uint64_t> stall_count;
-        double   active_thread_percent   = 0.0;
-        double   wave_occupancy_percent = 0.0;
+        std::optional<double>   active_thread_percent;
+        std::optional<double>   wave_occupancy_percent;
         uint64_t dispatch_uuid           = 0;
     };
     struct PcSampleStallReason

@@ -1,7 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_ssh_test_dialog.h"
+#include "rocprofvis_ssh_file_dialog.h"
 #include "rocprofvis_appwindow.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -13,7 +13,7 @@ namespace RocProfVis
 namespace View
 {
 
-SshTestDialog::SshTestDialog(AppWindow* app_window)
+SshFileDialog::SshFileDialog(AppWindow* app_window)
 : m_app_window(app_window)
 , m_uri(std::make_shared<RemoteUri>())
 , m_settings_dialog(nullptr)
@@ -31,7 +31,7 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 }
 
 void
-SshTestDialog::ApplySelectedConnection()
+SshFileDialog::ApplySelectedConnection()
 {
     const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);
     if(cfg)
@@ -44,7 +44,7 @@ SshTestDialog::ApplySelectedConnection()
     }
 }
 
-SshTestDialog::~SshTestDialog()
+SshFileDialog::~SshFileDialog()
 {
     // Destroy the orchestrator (which owns the monitored SshSession) before the
     // shared RemoteUri reference held here is released, mirroring the prior
@@ -53,12 +53,13 @@ SshTestDialog::~SshTestDialog()
 }
 
 void
-SshTestDialog::Show()
+SshFileDialog::Show()
 {
     if(m_connection_store.Get(m_selected_connection_id) == nullptr)
     {
-        m_selected_connection_id =
-            m_connection_store.Empty() ? std::string() : m_connection_store.List().front().id;
+        m_selected_connection_id = m_connection_store.Empty()
+                                       ? std::string()
+                                       : m_connection_store.List().front().id;
     }
     ApplySelectedConnection();
 
@@ -78,15 +79,16 @@ SshTestDialog::Show()
 }
 
 void
-SshTestDialog::OpenBrowser()
+SshFileDialog::OpenBrowser()
 {
     // Seeded with the last opened trace so the browser starts in its folder.
-    m_file_browser.Open(m_uri->GetRemoteResultPathString(), RemoteFileBrowser::PickMode::kFile,
+    m_file_browser.Open(m_uri->GetRemoteResultPathString(),
+                        RemoteFileBrowser::PickMode::kFile,
                         [this](const std::string& path) { StartDownload(path); });
 }
 
 void
-SshTestDialog::OpenConnectionSettings()
+SshFileDialog::OpenConnectionSettings()
 {
     m_settings_dialog = std::make_unique<SshSettingsDialog>(
         m_connection_store, m_selected_connection_id,
@@ -94,7 +96,7 @@ SshTestDialog::OpenConnectionSettings()
 }
 
 void
-SshTestDialog::StartDownload(const std::string& remote_path)
+SshFileDialog::StartDownload(const std::string& remote_path)
 {
     m_uri->SetRemoteResultPathString(remote_path.c_str());
     m_failure_reported    = false;
@@ -109,19 +111,17 @@ SshTestDialog::StartDownload(const std::string& remote_path)
     {
         m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(m_uri, nullptr);
     }
-    m_orchestrator->SetOnOpenFile(
-        [this](const std::string& local_path)
+    m_orchestrator->SetOnOpenFile([this](const std::string& local_path) {
+        if(m_app_window)
         {
-            if(m_app_window)
-            {
-                m_app_window->OpenFile(local_path);
-            }
-        });
+            m_app_window->OpenFile(local_path);
+        }
+    });
     m_orchestrator->DownloadPath();
 }
 
 void
-SshTestDialog::Render()
+SshFileDialog::Render()
 {
     m_file_browser.Render();
 
@@ -148,7 +148,7 @@ SshTestDialog::Render()
 }
 
 void
-SshTestDialog::RenderProgressPopup()
+SshFileDialog::RenderProgressPopup()
 {
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if(!ssh_session)
@@ -168,11 +168,12 @@ SshTestDialog::RenderProgressPopup()
         }
     }
 
-    // The popup has no button of its own, so it closes when the download ends
-    // either way; a failure is reported as a notification.
-    RenderRemoteDownloadPopup("Remote Download", m_last_progress.name.c_str(),
-                              m_last_progress.downloaded, m_last_progress.size, !downloading,
-                              m_show_progress_popup);
+    if(RenderRemoteDownloadPopup("Remote Download", m_last_progress.name.c_str(),
+                                 m_last_progress.downloaded, m_last_progress.size,
+                                 !downloading, m_show_progress_popup))
+    {
+        m_orchestrator->Cancel();
+    }
 }
 
 }  // namespace View

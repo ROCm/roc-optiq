@@ -16,19 +16,17 @@ namespace View
 {
 
 RemoteProfilerSession::RemoteProfilerSession(
-    std::shared_ptr<RemoteUri> uri, bool fetch_trace,
-    std::function<void(const std::string&)> on_open_file)
+    std::shared_ptr<RemoteUri> uri, bool produces_trace)
 : m_uri(std::move(uri))
-, m_on_open_file(std::move(on_open_file))
 , m_session(nullptr)
-, m_fetch_trace(fetch_trace)
-, m_produced_trace(false)
+, m_produces_trace(produces_trace)
 , m_remote_status_token(EventManager::InvalidSubscriptionToken)
 , m_profiler_status_token(EventManager::InvalidSubscriptionToken)
 , m_phase(Phase::Idle)
 , m_running(false)
 , m_status_message()
 , m_profiler_state(kRPVProfilerStateIdle)
+, m_trace_path_result(kRocProfVisResultPending)
 {
     m_remote_status_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kRemoteStatusChanged),
@@ -100,7 +98,7 @@ RemoteProfilerSession::Launch(const ProfilerLaunchSpec& spec)
         return false;
     }
 
-    m_produced_trace = false;
+    m_trace_path_result = kRocProfVisResultPending;
 
     // Build the profiler config (same fields as local) and tag it as an SSH
     // launch so the controller selects the SshProfilerExecutor.
@@ -171,9 +169,6 @@ RemoteProfilerSession::OnRemoteStatus(uint64_t operation_id, uint64_t status,
         {
             case Phase::Connecting:     Fail("SSH connection failed."); break;
             case Phase::Authenticating: Fail("SSH authentication failed."); break;
-            case Phase::Downloading:
-                Fail("Trace download failed. Check the remote output path.");
-                break;
             default: Fail("SSH operation failed."); break;
         }
         return;
@@ -199,16 +194,6 @@ RemoteProfilerSession::OnRemoteStatus(uint64_t operation_id, uint64_t status,
             // Connection is live + authenticated and the SshSession is now idle;
             // launch the remote profiler on it.
             StartProfiler();
-            break;
-
-        case Phase::Downloading:
-            m_phase          = Phase::Done;
-            m_running        = false;
-            m_status_message = "Done.";
-            if(m_uri && m_on_open_file)
-            {
-                m_on_open_file(m_uri->GetLocalResultPathString());
-            }
             break;
 
         default:
@@ -259,13 +244,8 @@ RemoteProfilerSession::OnProfilerStatus(uint64_t operation_id, rocprofvis_profil
 
     m_profiler_state = state;
 
-    if(state == kRPVProfilerStateCompleted)
-    {
-        // Profiler done and the exec channel is closed; the connection is idle
-        // again, so it is safe to start the download on the SshSession.
-        StartDownload();
-    }
-    else if(state == kRPVProfilerStateFailed)
+    // Completed is finished by Update(), once the worker has returned.
+    if(state == kRPVProfilerStateFailed)
     {
         Fail("Remote profiler failed.");
     }
@@ -276,7 +256,34 @@ RemoteProfilerSession::OnProfilerStatus(uint64_t operation_id, rocprofvis_profil
 }
 
 void
-RemoteProfilerSession::StartDownload()
+RemoteProfilerSession::Update()
+{
+    // The profiler reports Completed before its worker returns; the connection
+    // and the output are only final once the future has resolved.
+    if(m_phase == Phase::Profiling && m_profiler_state == kRPVProfilerStateCompleted &&
+       m_future != nullptr &&
+       rocprofvis_controller_future_wait(m_future, 0) != kRocProfVisResultTimeout)
+    {
+        FinishProfiling();
+    }
+}
+
+std::unique_ptr<SshSession>
+RemoteProfilerSession::TakeSession()
+{
+    std::unique_ptr<SshSession> session;
+    if(m_session && m_phase == Phase::Done)
+    {
+        // The worker has finished with the connection; free the profiler objects
+        // before it changes hands so nothing else refers to it.
+        Close();
+        session = std::move(m_session);
+    }
+    return session;
+}
+
+void
+RemoteProfilerSession::FinishProfiling()
 {
     // The monitor reaps the (now terminal) profiler op on its own; drop our
     // reference so further status callbacks are ignored.
@@ -288,36 +295,30 @@ RemoteProfilerSession::StartDownload()
         return;
     }
 
-    // The controller scraped the remote path as the profiler printed it. A
-    // failed read must clear any path already on the URI: it outlives a run,
-    // and the next download must not fetch the previous run's file.
-    std::string             path;
-    rocprofvis_result_t const result =
-        m_fetch_trace ? GetTraceFilePath(path) : kRocProfVisResultNotSupported;
-    if(result == kRocProfVisResultNotSupported)
+    // The controller scraped the remote path as the profiler printed it. It is
+    // read even when the trace is not auto-opened, so Open Trace can download it
+    // later. A run not meant to write a trace has none to find. A path that
+    // cannot be read leaves a completed run completed, as for a local run: the
+    // trace is opened by hand. The URI outlives a run, so a missing path must
+    // clear it, or the next download would fetch the previous run's file.
+    std::string path;
+    m_trace_path_result =
+        m_produces_trace ? GetTraceFilePath(path) : kRocProfVisResultNotSupported;
+    if(m_trace_path_result == kRocProfVisResultSuccess && !path.empty())
+    {
+        m_uri->GetRemoteResultPath() = std::move(path);
+    }
+    else
     {
         m_uri->GetRemoteResultPath().clear();
-        m_phase   = Phase::Done;
-        m_running = false;
-        return;
+        if(m_trace_path_result == kRocProfVisResultSuccess)
+        {
+            m_trace_path_result = kRocProfVisResultNotAvailable;
+        }
     }
-    if(result != kRocProfVisResultSuccess || path.empty())
-    {
-        m_uri->GetRemoteResultPath().clear();
-        Fail("Could not determine remote trace path from profiler output.");
-        return;
-    }
-
-    m_uri->GetRemoteResultPath() = std::move(path);
-    m_status_message =
-        std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
-    m_phase = Phase::Downloading;
-    if(m_session->StartDownload() == 0)
-    {
-        Fail("Trace download could not be started.");
-        return;
-    }
-    m_produced_trace = true;
+    m_phase          = Phase::Done;
+    m_running        = false;
+    m_status_message = "Done.";
 }
 
 void
@@ -339,7 +340,9 @@ RemoteProfilerSession::Fail(const std::string& message)
         Cancel();
     }
 
-    if(m_profiler_state == kRPVProfilerStateRunning || m_profiler_state == kRPVProfilerStateIdle)
+    // A failure after the profiler reported Completed must not be reported as
+    // completed; only a cancel keeps its own state.
+    if(m_profiler_state != kRPVProfilerStateCancelled)
     {
         m_profiler_state = kRPVProfilerStateFailed;
     }

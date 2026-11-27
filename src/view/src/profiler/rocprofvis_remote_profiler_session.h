@@ -23,42 +23,40 @@ class RemoteUri;
 
 // Drives a remote profiling workflow as a non-blocking state machine:
 //
-//   connect -> authenticate -> launch remote profiler -> download trace -> open
+//   connect -> authenticate -> launch remote profiler
 //
-// Connection/auth/download run on an owned SshSession (so prompts / host-key
-// requests surface via RenderSshAuthModal and download progress via the
-// session's FileStat). The remote profiler exec runs through the profiler C API
-// (rocprofvis_profiler_launch_remote_async) on the SAME connection - so the
-// SshSession must be idle while the profiler op runs, and the download only
-// starts after the profiler reports Completed.
+// Connection/auth run on an owned SshSession (so prompts / host-key requests
+// surface via RenderSshAuthModal). The remote profiler exec runs through the
+// profiler C API (rocprofvis_profiler_launch_remote_async) on the SAME
+// connection - so the SshSession must be idle while the profiler op runs. Once
+// profiling completes and the profiler's worker has finished with the
+// connection, the remote trace path is stored in the URI, and the connection
+// can be handed over (TakeSession) to download it.
 //
-// All phase transitions happen on the main thread inside event dispatch
+// All phase transitions happen on the main thread, inside event dispatch
 // (kRemoteStatusChanged for SSH ops, kProfilerStatusChanged for the profiler
-// op); there is no worker thread here.
+// op) or Update(); there is no worker thread here.
 class RemoteProfilerSession : public ProfilerSessionBase
 {
 public:
     // The remote workflow runs as a sequential phase machine. The dialog maps
-    // the current phase to the console status badge (so "Completed" only shows
-    // once the trace has been downloaded, not when remote profiling finishes).
+    // the current phase to the console status badge.
     enum class Phase
     {
         Idle,
         Connecting,
         Authenticating,
         Profiling,
-        Downloading,
         Done,
         Failed,
     };
 
-    // on_open_file is invoked with the local trace path once downloaded.
-    // The remote path itself comes from the controller's scrape of the
-    // profiler's output. A run that produces no trace file, or one launched
-    // with fetch_trace false, finishes without downloading.
-    RemoteProfilerSession(std::shared_ptr<RemoteUri>               uri,
-                          bool                                    fetch_trace,
-                          std::function<void(const std::string&)> on_open_file);
+    // Once profiling completes, the remote trace path comes from the
+    // controller's scrape of the profiler's output and is stored as the URI's
+    // result path. A run with no trace path clears it and still ends Done.
+    // @param produces_trace: whether the run is expected to write a trace file;
+    // when false, the path is not looked for.
+    RemoteProfilerSession(std::shared_ptr<RemoteUri> uri, bool produces_trace);
     ~RemoteProfilerSession() override;
 
     // Begins the workflow (connect phase). Profiler parameters mirror the local
@@ -66,12 +64,13 @@ public:
     // be created.
     bool Launch(const ProfilerLaunchSpec& spec) override;
 
+    /*
+     * Per-frame poll. Finishes the run (Phase::Done) once the profiler has
+     * reported Completed and its worker has returned, which no event reports.
+     */
+    void Update();
+
     bool                        IsRunning() const { return m_running; }
-    // True only while the trace download phase is active. The dialog uses this
-    // to drive the download-progress; relying on the FileStat snapshot
-    // reaching downloaded==size is unreliable for small/fast transfers that jump
-    // straight to the Completed status.
-    bool                        IsDownloading() const { return m_phase == Phase::Downloading; }
     const std::string&          GetStatusMessage() const { return m_status_message; }
     // Cached profiler state tracked across the phase machine (distinct from the
     // base GetState(), which reads the live controller state).
@@ -80,27 +79,35 @@ public:
     // Current workflow phase, used by the dialog to drive the status badge.
     Phase GetPhase() const { return m_phase; }
 
-    // True once this run named a trace file and the download was started.
-    // False when the run produces no trace file, so callers must not derive a
-    // local cache path (that creates an empty directory).
-    bool ProducedTraceFile() const { return m_produced_trace; }
+    // Why the finished run has, or lacks, a remote trace path: Success,
+    // NotSupported (the run writes no trace) or NotAvailable (no path was found
+    // in its output). Pending until the run is Done.
+    rocprofvis_result_t GetTracePathResult() const { return m_trace_path_result; }
 
-    // Accessor used by the dialog to render the auth modal / download progress.
+    // Accessor used by the dialog to render the auth modal.
     SshSession* GetSession() { return m_session.get(); }
+
+    /*
+     * Hands over the run's authenticated SshSession once the run is Done (the
+     * profiler's worker has finished with it), freeing the profiler objects
+     * first. Returns null otherwise, keeping the session for this run's own
+     * teardown.
+     */
+    std::unique_ptr<SshSession> TakeSession();
 
 private:
     void OnRemoteStatus(uint64_t operation_id, uint64_t status, rocprofvis_result_t result);
     void OnProfilerStatus(uint64_t operation_id, rocprofvis_profiler_state_t state);
 
     void StartProfiler();
-    void StartDownload();
+    // Stores the remote trace path the controller scraped from the run.
+    void FinishProfiling();
+
     void Fail(const std::string& message);
 
-    std::shared_ptr<RemoteUri>              m_uri;
-    std::function<void(const std::string&)> m_on_open_file;
-    std::unique_ptr<SshSession>             m_session;
-    bool                                    m_fetch_trace;
-    bool                                    m_produced_trace;
+    std::shared_ptr<RemoteUri>  m_uri;
+    std::unique_ptr<SshSession> m_session;
+    bool                        m_produces_trace;
 
     EventManager::SubscriptionToken m_remote_status_token;
     EventManager::SubscriptionToken m_profiler_status_token;
@@ -109,6 +116,7 @@ private:
     bool                        m_running;
     std::string                 m_status_message;
     rocprofvis_profiler_state_t m_profiler_state;
+    rocprofvis_result_t         m_trace_path_result;
 };
 
 }  // namespace View

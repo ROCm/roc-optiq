@@ -218,6 +218,7 @@ enum class ConsoleStatusLevel
     kIdle,     // idle / cancelled
     kRunning,  // any in-progress phase
     kSuccess,  // completed
+    kWarning,  // completed with warnings, ex: trace file could not be found
     kError,    // failed
 };
 

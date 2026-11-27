@@ -32,6 +32,10 @@ on:
         description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
         type: string
         default: ''
+      enable_ui_tests:
+        description: 'Build + run the Dear ImGui UI tests?'
+        type: boolean
+        default: false
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -80,6 +84,10 @@ on:
         description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
         type: string
         default: ''
+      enable_ui_tests:
+        description: 'Build + run the Dear ImGui UI tests?'
+        type: boolean
+        default: false
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -99,6 +107,9 @@ env:
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
   CMAKE_ARGS: ${{ inputs.cmake_args }}
+  ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
+  CTEST_PREFIX: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'xvfb-run -a' || '' }}
+  BUILD_TARGETS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'all package' || 'package' }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
   # S3 uploads are never allowed with the 'none' bucket env
   UPLOAD_TO_S3: ${{ (inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true') && inputs.s3_bucket_env != 'none' && 'true' || 'false' }}
@@ -201,6 +212,8 @@ jobs:
           cmake -B ${{ env.BUILD_DIR }} \
             --preset "${CMAKE_CONFIG_PRESET}" \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
+            -DROCPROFVIS_ENABLE_UI_TESTS="${ENABLE_UI_TESTS}" \
+            -DROCPROFVIS_UI_TEST_BACKEND=opengl \
             ${CMAKE_ARGS} \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND="${CRYPTO_BACKEND}" \

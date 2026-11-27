@@ -29,7 +29,6 @@ constexpr const char* END_TS_COLUMN_NAME         = "end";
 constexpr const char* DURATION_COLUMN_NAME       = "duration";
 constexpr const char* FILTER_INPUT_PLACEHOLDER = "Filter";
 constexpr const char* FILTER_OPERATORS         = "> < = >= <= !=";
-constexpr const char* NO_MATCHING_ROWS_TEXT    = "No rows match the current filter.";
 
 constexpr float MIN_COLUMN_WIDTH_EM     = 6.0f;
 constexpr float MAX_COLUMN_FIT_WIDTH_EM = 40.0f;
@@ -456,6 +455,22 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
+        const bool show_no_data_text = table_data.empty() && !show_loading_indicator;
+
+        // An empty table with a filter row keeps only its header and filter row,
+        // so the no-data text below them isn't drawn over by the column lines.
+        ImVec2 table_size = outer_size;
+        if(show_no_data_text && m_display_filter_row)
+        {
+            float header_rows_height =
+                row_height + ImGui::GetFrameHeight() + row_padding_v;
+            if(m_horizontal_scroll)
+            {
+                header_rows_height += style.ScrollbarSize;
+            }
+            table_size.y = std::min(outer_size.y, header_rows_height);
+        }
+
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
         // Filter row is enabled: render when columns are present regardless of data.
@@ -465,7 +480,7 @@ InfiniteScrollTable::Render()
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",
                                  static_cast<int>(column_names.size()), table_flags,
-                                 outer_size))
+                                 table_size))
             {
                 if(m_skip_data_fetch && ImGui::GetScrollY() > 0.0f)
                 {
@@ -789,35 +804,17 @@ InfiniteScrollTable::Render()
                     }
                 }
                 ImGui::EndTable();  // End BeginTable
-
-                if(total_row_count == 0 && table_data.empty() && !show_loading_indicator)
-                {
-                    const bool  filtered = table_params && !table_params->m_filter.empty();
-                    const char* message  = filtered ? NO_MATCHING_ROWS_TEXT
-                                                    : m_no_data_text.c_str();
-                    if(*message)
-                    {
-                        ImVec2 table_min = ImGui::GetItemRectMin();
-                        ImVec2 table_max = ImGui::GetItemRectMax();
-                        ImVec2 text_size = ImGui::CalcTextSize(message);
-                        ImVec2 text_pos(
-                            std::max(table_min.x,
-                                     (table_min.x + table_max.x - text_size.x) * 0.5f),
-                            (table_min.y + table_max.y - text_size.y) * 0.5f);
-                        ImGui::GetWindowDrawList()->AddText(
-                            text_pos, ImGui::GetColorU32(ImGuiCol_TextDisabled), message);
-                    }
-                }
             }
             ImGui::PopStyleVar();
             RenderContextMenu();
         }
-        else if(!m_no_data_text.empty() && !show_loading_indicator &&
-                ImGui::GetContentRegionAvail().y > ImGui::GetTextLineHeight())
+        if(show_no_data_text && !m_no_data_text.empty() &&
+           ImGui::GetContentRegionAvail().y > ImGui::GetTextLineHeight())
         {
             CenterNextTextItem(m_no_data_text.c_str());
-            ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
-                                 0.5f);
+            ImGui::SetCursorPosY(
+                ImGui::GetCursorPosY() +
+                (ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeight()) * 0.5f);
             ImGui::TextDisabled("%s", m_no_data_text.c_str());
         }
         ImGui::PopStyleColor();

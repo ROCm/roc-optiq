@@ -357,6 +357,14 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         uint32_t end_index = (uint32_t) ceil(
             (end - GetStartTimestamp()) / kSegmentDuration);
 
+        // Segments marked processed below are only cleared after their fetch, so
+        // nothing between marking and fetching may throw. Reserving up front keeps
+        // push_back from allocating.
+        if(end_index > start_index)
+        {
+            fetch_ranges.reserve(end_index - start_index);
+        }
+
         {
             std::unique_lock lock(*GetSegments()->GetMutex());
             m_state_changed.wait(lock, [&] {

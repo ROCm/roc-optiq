@@ -559,6 +559,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                 std::vector<std::pair<uint32_t, uint32_t>> fetch_ranges;
                 uint32_t start_index = (uint32_t)floor((start - min_ts) / segment_duration);
                 uint32_t end_index = (uint32_t)ceil((end - min_ts) / segment_duration);
+                // Segments marked processed below are only cleared after their
+                // fetch, so nothing between marking and fetching may throw.
+                // Reserving up front keeps push_back from allocating.
+                fetch_ranges.reserve(end_index - start_index);
                 {
                     std::unique_lock lock(*it->second.GetMutex());
                     m_cv.wait(lock, [&] {

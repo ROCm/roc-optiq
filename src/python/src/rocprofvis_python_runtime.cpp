@@ -175,9 +175,9 @@ char const* const SAFE_BUILTIN_NAMES[] = {
  * closes the published routes without an AST rewrite. Names, not values: the
  * screen cannot know what an expression evaluates to, and does not try.
  *
- * This raises the cost of an escape; it does not make one impossible. See the
- * threat model in .agents/SCRIPTING.md - approval before a run is the boundary
- * that matters, and this is defence behind it.
+ * This raises the cost of an escape; it does not make one impossible.
+ * Approval before a run is the boundary that matters, and this is defence
+ * behind it.
  */
 char const* const SOURCE_SCREEN_SOURCE = R"PY(
 import ast

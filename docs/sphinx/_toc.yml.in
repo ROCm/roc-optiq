@@ -27,6 +27,11 @@ subtrees:
   - file: how-to/customize-views
     title: Customize ROCm Optiq
 
+- caption: Tutorials
+  entries:
+  - file: tutorials/video-tutorials
+    title: Video tutorials
+
 - caption: Reference
   entries:
   - file: reference/cli-support

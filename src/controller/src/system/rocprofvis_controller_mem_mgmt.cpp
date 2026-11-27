@@ -495,7 +495,7 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
             return nullptr;
         }
         auto& inner_map = m_object_pools[pool_idetifier];
-        auto [inner_it, inserted] = inner_map.emplace(new_pool->m_base, new_pool.get());
+        bool inserted = inner_map.emplace(new_pool->m_base, new_pool.get()).second;
         if(inserted)
         {
             // m_object_pools owns the pool from here on and CleanUp frees it.
@@ -570,15 +570,7 @@ MemoryManager::NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTime
     void*  ptr   = Allocate(sizeof(Event), kRocProfVisObjectTypeEvent, owner);
     if(ptr)
     {
-        try
-        {
-            event = new(ptr) Event(id, start_ts, end_ts);
-        }
-        catch(...)
-        {
-            FreeSlot(ptr, owner, nullptr);
-            throw;
-        }
+        event = new(ptr) Event(id, start_ts, end_ts);
     }
     return event;
 }
@@ -592,15 +584,7 @@ MemoryManager::NewSample(rocprofvis_controller_primitive_type_t type, uint64_t i
     void*   ptr    = Allocate(sizeof(Sample), kRocProfVisObjectTypeSample, owner);
     if(ptr)
     {
-        try
-        {
-            sample = new(ptr) Sample(type, id, timestamp);
-        }
-        catch(...)
-        {
-            FreeSlot(ptr, owner, nullptr);
-            throw;
-        }
+        sample = new(ptr) Sample(type, id, timestamp);
     }
     return sample;
 }

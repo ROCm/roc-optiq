@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller.h"
+#include "compute/rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_core.h"
 #include <algorithm>
 #include <catch2/catch_session.hpp>
@@ -40,6 +41,35 @@ main(int argc, char** argv)
     rocprofvis_core_enable_log(log_file.c_str(), spdlog::level::trace);
 
     return session.run();
+}
+
+TEST_CASE("Free compute controller invokes its destructor", "[controller][lifecycle]")
+{
+    class DestructionTrackedComputeTrace : public RocProfVis::Controller::ComputeTrace
+    {
+    public:
+        explicit DestructionTrackedComputeTrace(bool& destroyed)
+        : ComputeTrace("")
+        , m_destroyed(destroyed)
+        {}
+
+        ~DestructionTrackedComputeTrace() override
+        {
+            m_destroyed = true;
+        }
+
+    private:
+        bool& m_destroyed;
+    };
+
+    bool destroyed = false;
+    DestructionTrackedComputeTrace* trace = new DestructionTrackedComputeTrace(destroyed);
+    rocprofvis_controller_free((rocprofvis_controller_t*) trace);
+    CHECK(destroyed);
+    if(!destroyed)
+    {
+        delete trace;
+    }
 }
 
 struct RocProfVisControllerFixture

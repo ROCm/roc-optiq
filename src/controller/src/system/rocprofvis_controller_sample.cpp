@@ -2,23 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_sample.h"
-#include "rocprofvis_controller_track.h"
-#include "rocprofvis_controller_reference.h"
 
 namespace RocProfVis
 {
 namespace Controller
 {
 
-typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
-
-Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp)
+Sample::Sample(uint64_t id, double timestamp)
 : Handle(__kRPVControllerSamplePropertiesFirst, __kRPVControllerSamplePropertiesLast)
 , m_data(0)
 , m_end_timestamp(0)
 , m_timestamp(timestamp)
 {
-    (void) type;
     (void) id;
 }
 
@@ -30,11 +25,16 @@ Sample& Sample::operator=(Sample&& other)
     return *this;
 }
 
-Sample::~Sample() {}
-
-rocprofvis_controller_object_type_t Sample::GetType(void) 
+rocprofvis_result_t
+Sample::GetInclusiveMemoryUsage(uint64_t* value) const
 {
-    return kRPVControllerObjectTypeSample;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        *value = sizeof(Sample);
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
 }
 
 rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t index,
@@ -49,25 +49,24 @@ rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t i
             case kRPVControllerCommonMemoryUsageInclusive:
             case kRPVControllerCommonMemoryUsageExclusive:
             {
-                *value = sizeof(Sample);
-                result = kRocProfVisResultSuccess;
+                result = GetInclusiveMemoryUsage(value);
                 break;
             }
             case kRPVControllerSampleId:
             {
-                *value = static_cast<uint64_t>(m_timestamp);
+                *value = GetId();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleType:
             {
-                *value = kRPVControllerPrimitiveTypeDouble;
+                *value = GetValueType();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleNumChildren:
             {
-                *value = 0;
+                *value = GetNumberOfChildren();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -128,19 +127,19 @@ rocprofvis_result_t Sample::GetDouble(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerSampleTimestamp:
             {
-                *value = m_timestamp;
+                *value = GetTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleValue:
             {
-                *value = m_data;
+                *value = GetValue();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSampleEndTimestamp:
             {
-                *value = m_end_timestamp;
+                *value = GetEndTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -201,13 +200,13 @@ rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t i
     {
         case kRPVControllerSampleValue:
         {
-            m_data = value;
+            SetValue(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerSampleEndTimestamp:
         {
-            m_end_timestamp = value;
+            SetEndTimestamp(value);
             result = kRocProfVisResultSuccess;
             break;
         }

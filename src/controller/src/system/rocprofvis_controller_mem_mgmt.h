@@ -128,7 +128,7 @@ namespace RocProfVis
 
             MemoryManager(uint64_t id);
             void Init(size_t num_objects);
-            bool IsShuttingDown();
+            [[nodiscard]] bool IsShuttingDown();
 
             virtual ~MemoryManager();
 
@@ -138,17 +138,20 @@ namespace RocProfVis
                                 read into. */
             void                AddLRUReference(SegmentTimeline* owner, Segment* reference,
                                                 uint64_t array_id);
+            // Waits for active eviction passes, then removes the owner's LRU tracking.
+            // Call before destroying a registered owner, after its fetches have finished.
+            void                RemoveLRUOwner(SegmentTimeline* owner);
 
-            rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
-                                                   rocprofvis_owner_type_t type);
-            rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
-                                                    rocprofvis_owner_type_t type);
+            [[nodiscard]] rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
+                                                                  rocprofvis_owner_type_t type);
+            [[nodiscard]] rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
+                                                                   rocprofvis_owner_type_t type);
             void                Configure(double weight);
 
-            void                Delete(Handle* handle, SegmentTimeline* owner);
-            Event*              NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTimeline* owner);
-            Sample*             NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, SegmentTimeline* owner);
-            SampleLOD*          NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
+            void                        Delete(Handle* handle, SegmentTimeline* owner);
+            [[nodiscard]] Event*        NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTimeline* owner);
+            [[nodiscard]] Sample*       NewSample(uint64_t id, double timestamp, SegmentTimeline* owner);
+            [[nodiscard]] SampleLOD*    NewSampleLOD(uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
             
             
 
@@ -161,6 +164,9 @@ namespace RocProfVis
             std::thread                                                 m_lru_thread;
             std::mutex                                                  m_lru_mutex;
             std::mutex                                                  m_lru_cond_mutex;
+            // Protects owner and LRU metadata lifetimes for the entire eviction pass.
+            // Acquire before m_lru_mutex; removal takes an exclusive lock before erasing.
+            std::shared_mutex                                           m_eviction_pass_mutex;
             std::mutex                                                  m_lru_inuse_mutex[kRocProfVisNumberOfOwnerTypes];
             std::atomic<bool>                                           m_lru_mgmt_shutdown;
             bool                                                        m_lru_configured;

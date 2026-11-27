@@ -94,6 +94,54 @@ jobs:
             echo "mac-os-versions=${{ env.MAC_CI_OS_VERSIONS }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Scheduled runs and the enable_ci_experimental toggle turn on every
+      # experimental feature through the ROCPROFVIS_ENABLE_EXPERIMENTAL CMake
+      # umbrella, so this file never lists individual features. experimental_config
+      # adds or overrides single variables on top of that.
+      - name: Set experimental build options
+        id: setup-experimental
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXP_TOGGLE: ${{ inputs.enable_ci_experimental }}
+          EXP_CONFIG: ${{ inputs.experimental_config }}
+        run: |
+          set -euo pipefail
+          run_experimental=false
+          cmake_args=""
+          crypto_backend="OpenSSL"
+          if [[ "$EVENT_NAME" == "schedule" || "$EXP_TOGGLE" == "true" ]]; then
+            run_experimental=true
+            cmake_args="-DROCPROFVIS_ENABLE_EXPERIMENTAL=ON"
+          fi
+          if [[ -n "${EXP_CONFIG//[[:space:]]/}" ]]; then
+            run_experimental=true
+            if ! jq -e 'type == "object" and ([.[] | type] | all(. == "string" or . == "boolean"))' <<< "$EXP_CONFIG" > /dev/null; then
+              echo "::error::experimental_config must be a JSON object whose values are strings or booleans"
+              exit 1
+            fi
+            while IFS=$'\t' read -r key value; do
+              if [[ ! "$key" =~ ^(ROCPROFVIS_[A-Z0-9_]+|CRYPTO_BACKEND)$ ]]; then
+                echo "::error::experimental_config key '$key' must be CRYPTO_BACKEND or start with ROCPROFVIS_"
+                exit 1
+              fi
+              if [[ ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                echo "::error::experimental_config value '$value' for '$key' has unsupported characters"
+                exit 1
+              fi
+              if [[ "$key" == "CRYPTO_BACKEND" ]]; then
+                crypto_backend="$value"
+              else
+                cmake_args="$cmake_args -D$key=$value"
+              fi
+            done < <(jq -r 'to_entries[] | [.key, (.value | if type == "boolean" then (if . then "ON" else "OFF" end) else . end)] | @tsv' <<< "$EXP_CONFIG")
+          fi
+          {
+            echo "run-experimental=$run_experimental"
+            echo "exp-cmake-args=${cmake_args# }"
+            echo "exp-crypto-backend=$crypto_backend"
+          } >> "$GITHUB_OUTPUT"
+          echo "Experimental CI: $run_experimental | crypto: $crypto_backend | cmake args: ${cmake_args# }"
+
   ci-windows:
     name: Windows CI
     needs: setup

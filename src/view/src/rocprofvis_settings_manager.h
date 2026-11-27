@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_font_manager.h"
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <list>
 #include <map>
@@ -132,6 +133,9 @@ typedef struct UserSettings
 typedef struct InternalSettings
 {
     std::list<std::string> recent_files;
+    // The Welcome page tip the next launch shows, so each launch starts on a
+    // new one. An index into the page's tip list, wrapped on use.
+    uint32_t next_welcome_tip = 0;
 } InternalSettings;
 
 // Deliberately holds no path to a profiler binary. Which binary runs is chosen
@@ -336,8 +340,9 @@ constexpr const char* JSON_KEY_SETTINGS_CATEGORY_TRACKS        = "tracks";
 constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR       = "decorator";
 constexpr const char* JSON_KEY_SETTINGS_TRACKS_DECORATOR_WIDTH = "decorator_width";
 
-constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES = "recent_files";
-constexpr size_t      MAX_RECENT_FILES                       = 5;
+constexpr const char* JSON_KEY_SETTINGS_INTERNAL_RECENT_FILES     = "recent_files";
+constexpr const char* JSON_KEY_SETTINGS_INTERNAL_NEXT_WELCOME_TIP = "next_welcome_tip";
+constexpr size_t      MAX_RECENT_FILES                            = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_EXIT =
     "dont_ask_before_exit";

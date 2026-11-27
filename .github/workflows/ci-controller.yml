@@ -114,7 +114,7 @@ jobs:
             run_experimental=true
             cmake_args="-DROCPROFVIS_ENABLE_EXPERIMENTAL=ON"
           fi
-          
+
           if [[ -n "${EXP_CONFIG//[[:space:]]/}" ]]; then
             run_experimental=true
             if ! jq -e 'type == "object" and ([.[] | type] | all(. == "string" or . == "boolean"))' <<< "$EXP_CONFIG" > /dev/null; then

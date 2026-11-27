@@ -15,8 +15,6 @@ namespace DataModel
 Trace::Trace()
 {
     m_db = nullptr;
-    m_parameters.trace_duration = 0;
-    m_parameters.metadata_loaded=false;
 }
 
 rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data, rocprofvis_dm_string_t config_path)

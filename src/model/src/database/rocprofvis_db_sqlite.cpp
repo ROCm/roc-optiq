@@ -537,8 +537,10 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
         int                cols = sqlite3_column_count(stmt);
         std::vector<std::string> col_names_strorage;
         std::vector<char*> col_names;
+        int step_rc = SQLITE_DONE;
+        bool stopped_by_callback = false;
 
-        while(sqlite3_step(stmt) == SQLITE_ROW)
+        while((step_rc = sqlite3_step(stmt)) == SQLITE_ROW)
         {
             if (col_names.size() == 0)
             {
@@ -570,12 +572,23 @@ int SqliteDatabase::Sqlite3Exec(sqlite3* db, const char* query,
                 rc = callback(user_data, cols, stmt, col_names.data());
                 if(rc != 0)
                 {
+                    stopped_by_callback = true;
                     break;
                 }
             }
         }
 
-        sqlite3_finalize(stmt);
+        // An interrupted, corrupt, busy or I/O-failed scan ends the loop the same way a
+        // finished one does, so only SQLITE_DONE means every row was delivered.
+        if(!stopped_by_callback && step_rc != SQLITE_DONE)
+        {
+            rc = step_rc;
+        }
+        int finalize_rc = sqlite3_finalize(stmt);
+        if(rc == SQLITE_OK && finalize_rc != SQLITE_OK)
+        {
+            rc = finalize_rc;
+        }
     }
     sqlite3_mutex_leave(sqlite3_db_mutex(db));
     if(callback_params->future != nullptr)
@@ -615,7 +628,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance,
     int rc = Sqlite3Exec(conn, query, (RpvSqliteCallback)params->callback, params);
     if(rc != SQLITE_OK)
     {
-        if (rc == SQLITE_ABORT)
+        if (rc == SQLITE_ABORT || (rc & 0xff) == SQLITE_INTERRUPT)
         {
             result = kRocProfVisDmResultDbAbort;
         } else

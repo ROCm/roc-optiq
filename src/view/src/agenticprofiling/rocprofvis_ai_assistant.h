@@ -284,7 +284,7 @@ private:
     // the right amount instead of guessing and overflowing.
     float m_composer_height;
 
-    // Every open trace's conversation, keyed by Project::GetID(). Held by
+    // Every open trace's conversation, keyed by ProjectItem::GetID(). Held by
     // pointer so a TextSelect callback can keep its conversation's address.
     std::unordered_map<std::string, std::unique_ptr<Conversation>> m_conversations;
     // The trace whose conversation is on screen. Read while drawing, after the

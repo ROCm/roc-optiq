@@ -3,7 +3,7 @@
 
 #include "rocprofvis_presets.h"
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "icons/rocprovfis_icon_defines.h"
@@ -365,8 +365,8 @@ PresetBrowser::Render()
                                       "Recall Preset"))
                         {
                             PresetManager::Result result = PresetManager::Error;
-                            const Project*        project =
-                                AppWindow::GetInstance()->GetCurrentProject();
+                            const ProjectItem*        project =
+                                AppWindow::GetInstance()->GetCurrentItem();
                             if(project)
                             {
                                 result = m_presets.LoadPreset(project->GetID(),
@@ -390,8 +390,8 @@ PresetBrowser::Render()
                                       "Overwrite Preset"))
                         {
                             PresetManager::Result result = PresetManager::Error;
-                            const Project*        project =
-                                AppWindow::GetInstance()->GetCurrentProject();
+                            const ProjectItem*        project =
+                                AppWindow::GetInstance()->GetCurrentItem();
                             if(project)
                             {
                                 result = m_presets.SavePreset(project->GetID(),
@@ -468,7 +468,7 @@ PresetBrowser::Render()
                    ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive))))
             {
                 PresetManager::Result result = PresetManager::Error;
-                const Project* project = AppWindow::GetInstance()->GetCurrentProject();
+                const ProjectItem* project = AppWindow::GetInstance()->GetCurrentItem();
                 if(project)
                 {
                     result = m_presets.SavePreset(project->GetID(), m_text_input, false);
@@ -517,7 +517,7 @@ PresetBrowser::Render()
                    ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive))))
             {
                 bool           result  = false;
-                const Project* project = AppWindow::GetInstance()->GetCurrentProject();
+                const ProjectItem* project = AppWindow::GetInstance()->GetCurrentItem();
                 if(project)
                 {
                     m_presets.ResetComponents(project->GetID());

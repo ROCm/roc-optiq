@@ -15,7 +15,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
@@ -50,7 +50,7 @@ namespace View
 
 struct ProjectTestPeer
 {
-    const Project& v;
+    const ProjectItem& v;
     std::string OpenErrorMessage() const { return v.m_open_error_message; }
 };
 

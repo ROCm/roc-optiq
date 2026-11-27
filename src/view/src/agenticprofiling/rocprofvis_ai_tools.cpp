@@ -31,7 +31,7 @@
 #include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_json_utils.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_trace_view.h"
@@ -388,20 +388,20 @@ MakeAssistantToolContext(const std::string& project_id)
     {
         return context;
     }
-    Project* project = app->GetProject(project_id);
+    ProjectItem* project = app->GetItem(project_id);
     if(project == nullptr)
     {
         return context;
     }
 
     context.trace_name  = project->GetName();
-    context.is_compute  = project->GetTraceType() == Project::Compute;
+    context.is_compute  = project->GetTraceType() == ProjectItem::Compute;
     RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
     if(root_view != nullptr)
     {
         context.data_provider = root_view->GetDataProvider();
     }
-    if(project->GetTraceType() == Project::System)
+    if(project->GetTraceType() == ProjectItem::System)
     {
         TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
         context.trace_view    = trace_view;
@@ -412,7 +412,7 @@ MakeAssistantToolContext(const std::string& project_id)
         context.is_compare = context.data_provider != nullptr &&
                              context.data_provider->DataModel().HasCompareSources();
     }
-    const Project* in_front = app->GetCurrentProject();
+    const ProjectItem* in_front = app->GetCurrentItem();
     context.in_front        = in_front != nullptr && in_front->GetID() == project_id;
     return context;
 }

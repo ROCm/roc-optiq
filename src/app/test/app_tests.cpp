@@ -5,7 +5,7 @@
 #include "imgui_te_context.h"
 #include "imgui.h"
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_analysis_view.h"
@@ -44,7 +44,7 @@ namespace
     TraceView* GetTraceViewOrSkip(ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
+        ProjectItem* project = app->GetCurrentItem();
         // A null project means the db never opened (a real regression); fail hard.
         // A non-null project of the wrong view type is an expected wrong-db skip.
         IM_CHECK_RETV(project != nullptr, nullptr);
@@ -60,7 +60,7 @@ namespace
     ComputeView* GetComputeViewOrSkip(ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
+        ProjectItem* project = app->GetCurrentItem();
         IM_CHECK_RETV(project != nullptr, nullptr);
         ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
         if (cv == nullptr)
@@ -2451,16 +2451,16 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Open DB_A; afterward its project must exist.
         app->OpenFile(db_a);
         ctx->Yield(3);
-        IM_CHECK(app->GetProject(id_a) != nullptr);
+        IM_CHECK(app->GetItem(id_a) != nullptr);
 
         // Open DB_B as a second, active tab so the later switch back to DB_A is
         // actually observable.
         app->OpenFile(db_b);
         ctx->Yield(3);
-        IM_CHECK(app->GetProject(id_b) != nullptr);
-        IM_CHECK(app->GetCurrentProject() != nullptr);
-        if (app->GetCurrentProject() == nullptr) return;
-        IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
+        IM_CHECK(app->GetItem(id_b) != nullptr);
+        IM_CHECK(app->GetCurrentItem() != nullptr);
+        if (app->GetCurrentItem() == nullptr) return;
+        IM_CHECK(app->GetCurrentItem()->GetID() == id_b);
 
         // Write a temp .rpv pointing at DB_A by absolute path, so it resolves
         // back to DB_A's id no matter where the .rpv lives. Escape the path so
@@ -2485,12 +2485,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // Opening the .rpv must switch back to the existing DB_A tab instead of
         // opening a duplicate.
-        IM_CHECK(app->GetCurrentProject() != nullptr);
-        if (app->GetCurrentProject() == nullptr) return;
-        IM_CHECK(app->GetCurrentProject()->GetID() == id_a);
+        IM_CHECK(app->GetCurrentItem() != nullptr);
+        if (app->GetCurrentItem() == nullptr) return;
+        IM_CHECK(app->GetCurrentItem()->GetID() == id_a);
 
         // No project should be keyed at the .rpv path itself.
-        IM_CHECK(app->GetProject(rpv_path.string()) == nullptr);
+        IM_CHECK(app->GetItem(rpv_path.string()) == nullptr);
 
         // Remove the temp .rpv and dismiss the dedup popup so it can't cover
         // later tests. tab_guard restores the tab set on scope exit.
@@ -2931,8 +2931,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
     // AIPROFVIS-297: opening a .rpv whose referenced trace is gone must fail with a
     // message naming the missing trace, and must not create a file at that path.
-    // AppWindow::OpenFile discards the Project it built on a failed open, so the test
-    // owns the Project and calls Open() directly to read the error off it.
+    // AppWindow::OpenFile discards the ProjectItem it built on a failed open, so the test
+    // owns the ProjectItem and calls Open() directly to read the error off it.
     t = IM_REGISTER_TEST(e, "app", "sys_project_missing_source_db_error");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2965,9 +2965,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
                 << escaped << "\"}}";
         }
 
-        Project     proj;
+        ProjectItem proj;
         std::string path   = rpv_path.string();
-        const Project::OpenResult result = proj.Open(path);
+        const ProjectItem::OpenResult result = proj.Open(path);
         const std::string message = ProjectTestPeer{proj}.OpenErrorMessage();
 
         // OpenProject resolves the trace through weakly_canonical, so match the
@@ -2986,7 +2986,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->PopupCloseAll();
         ctx->Yield(2);
 
-        IM_CHECK(result == Project::OpenResult::Failed);
+        IM_CHECK(result == ProjectItem::OpenResult::Failed);
         IM_CHECK(message.find(expected_path) != std::string::npos);
         IM_CHECK(still_missing);
     };
@@ -3243,7 +3243,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         const std::string id_a = fs::weakly_canonical(sample).string();
         const std::string id_b = fs::weakly_canonical(copy).string();
-        if(app->GetProject(id_a) == nullptr)
+        if(app->GetItem(id_a) == nullptr)
         {
             ctx->LogWarning("SKIP: start the UI tests with rocpd-transpose.db");
             return;
@@ -3301,8 +3301,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
                                     "{\"name\":\"" + target_ref + "\"}");
         IM_CHECK(result.stop_tool_queue);
         ctx->Yield(3);
-        IM_CHECK(app->GetCurrentProject() != nullptr);
-        IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
+        IM_CHECK(app->GetCurrentItem() != nullptr);
+        IM_CHECK(app->GetCurrentItem()->GetID() == id_b);
 
         // Extra JSON fields are accepted by the endpoint parser. A stale trace
         // link must not redirect a compute handler into a system data model.

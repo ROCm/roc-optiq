@@ -37,7 +37,7 @@ struct TraceFingerprint
     bool Matches(const TraceFingerprint& other) const;
 };
 
-// One trace in a link group, named by Project::GetID().
+// One trace in a link group, named by ProjectItem::GetID().
 struct TraceLinkMember
 {
     std::string      path;

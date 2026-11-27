@@ -5,7 +5,7 @@
 
 #include "imgui.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_stickynote.h"
 #include <string>
 #include <vector>
@@ -19,12 +19,12 @@ constexpr double INVALID_TIME_NS = std::numeric_limits<double>::lowest();
 
 class AnnotationsManager;
 
-class AnnotationsManagerProjectSettings : public ProjectSetting
+class AnnotationsManagerProjectItemSettings : public ProjectItemSetting
 {
 public:
-    AnnotationsManagerProjectSettings(const std::string&  project_id,
+    AnnotationsManagerProjectItemSettings(const std::string&  project_id,
                                       AnnotationsManager& annotations_view);
-    ~AnnotationsManagerProjectSettings() override;
+    ~AnnotationsManagerProjectItemSettings() override;
 
     void ToJson() override;
     void FromJson();
@@ -57,7 +57,7 @@ public:
 private:
     std::vector<StickyNote>           m_sticky_notes;
     bool                              m_show_annotations;
-    AnnotationsManagerProjectSettings m_project_settings;
+    AnnotationsManagerProjectItemSettings m_project_settings;
 };
 
 }  // namespace View

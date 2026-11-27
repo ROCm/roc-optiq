@@ -94,8 +94,6 @@ public:
     // tree/chain buttons.
     void SetFlowArrowsVisible(bool visible);
     void SetFlowRenderChained(bool chained);
-    // Zooms the visible window, as opposed to just selecting a range.
-    void ZoomToRange(double start_ns, double end_ns);
     // Pins a sticky note on the timeline. Persisted with the project.
     bool AddNote(double time_ns, const std::string& title, const std::string& text,
                  double v_min, double v_max, uint64_t track_id);
@@ -108,8 +106,10 @@ public:
     // The Script tab, reached the same way as the rest of the details panel so
     // the assistant never holds a widget of its own.
     bool           ProposeScript(const std::string& source);
+    bool           ScriptHasUnsavedDraft() const;
     ScriptApproval ScriptProposalState() const;
     void           ClearScriptProposal();
+    void           RejectScriptProposal();
 #    endif
 
     void             ResetView();

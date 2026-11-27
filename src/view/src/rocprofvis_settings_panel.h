@@ -61,6 +61,8 @@ private:
     void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
+    // True when OK will treat the edited URL as another host and remove the key.
+    bool AssistantOriginChanged() const;
     // Looks up the models of the endpoint as this page has it, with the key OK
     // would save. `saved_settings` is true only before editing or after
     // OK/Cancel, when the stored key is known to belong to this URL.
@@ -101,6 +103,10 @@ private:
     std::vector<std::string> m_assistant_orphaned_providers;
     bool                     m_assistant_show_token  = false;
     bool                     m_assistant_clear_token = false;
+    // Credential-store answers, asked once per dialog open rather than per
+    // frame because asking is a blocking OS call; -1 = not asked yet.
+    int  m_assistant_token_stored    = -1;
+    bool m_assistant_store_available = false;
 #endif
 };
 

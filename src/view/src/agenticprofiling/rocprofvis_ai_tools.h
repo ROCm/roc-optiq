@@ -74,12 +74,25 @@ enum class AssistantFetchKind
 // RootView either way, but DataModel() is the system model and is merely empty
 // on a compute trace, so a tool that reads it without checking is_compute
 // reports a trace with no tracks rather than failing.
+// Limits that hold for one turn, whatever text in the trace talks the model
+// into. The panel owns them and starts them afresh with every turn.
+struct AssistantTurnLimits
+{
+    size_t notes_pinned = 0;
+    // Set once an offer went unanswered or was declined. A second offer landing
+    // in the editor the user is still reading is how an unreviewed script runs.
+    bool script_offers_closed = false;
+};
+
 struct AssistantToolContext
 {
     DataProvider*      data_provider      = nullptr;
     TimelineSelection* timeline_selection = nullptr;
     TraceView*         trace_view         = nullptr;
-    bool               is_compute         = false;
+    // The running turn's limits, set for the turn's own tool calls. A tool that
+    // a limit guards refuses without them.
+    AssistantTurnLimits* turn_limits = nullptr;
+    bool                 is_compute  = false;
     // Two runs opened side by side in one tab, which every tool here would read
     // as a single trace.
     bool is_compare = false;
@@ -115,6 +128,20 @@ struct AssistantFetchState
     // the scope asked for.
     std::string summary_level;
     uint64_t    summary_id = INVALID_UINT64_INDEX;
+    // kernel_triage: name the standard tables that came back empty.
+    bool        compute_triage = false;
+    // track_statistics read the window the track's own pill shows. The two
+    // share a slot, so numbers for any other window are handed back once read.
+    bool        covers_pill_window = false;
+    // A table read's sort: the model's sort_by (may be empty), the tool's own
+    // default column, and the index sent - for AssistantFetchNeedsRerun.
+    std::string sort_by;
+    std::string sort_default;
+    uint64_t    sort_column = 0;
+    // A track table read refused because the UI was loading a table of this
+    // controller type; the panel waits for that table, not the idle request id.
+    bool                               waits_for_ui_table = false;
+    rocprofvis_controller_table_type_t ui_table_type      = kRPVControllerTableTypeEvents;
     // The trace whose provider the requests went to. A read of a linked trace
     // makes it differ from the conversation's own, and request ids repeat in
     // every provider, so polling the wrong one would format another trace's
@@ -147,6 +174,9 @@ struct AssistantToolStartResult
     // A trace switch is a barrier: later calls in the same batch were planned
     // for a tab state that has not landed yet, so they receive skipped replies.
     bool stop_tool_queue = false;
+    // An action carried out exactly as asked, with nothing in its reply to
+    // react to. A batch of only these and an offer of next steps is the last.
+    bool settled = false;
     // How long the panel waits before calling this a timeout. Zero takes the
     // default, which suits a query; a tool waiting on the user needs longer.
     uint32_t                 timeout_seconds = 0;
@@ -203,6 +233,35 @@ AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,
 // so the panel asks here rather than polling the data provider. Always false
 // when scripting is not built in.
 bool AssistantScriptFetchPending(const AssistantToolContext& context);
+
+// Whether the user pressed Run on the offer and the script is still running.
+// Always false when scripting is not built in.
+bool AssistantScriptRunning(const AssistantToolContext& context);
+
+// Whether a table read that has landed was sorted by the wrong column, because
+// the index it sent was resolved against the header an earlier read left in
+// the slot. The panel runs the tool again when it was. Always false for a
+// fetch that is not a table read, and for one that failed.
+bool AssistantFetchNeedsRerun(const AssistantToolContext& context,
+                              const AssistantFetchState&  fetch);
+
+// Whether a track_statistics read is void. The track pills share the slot: a
+// change of selection or view marks it stale, and the pill of a drawn track
+// then cancels the request and issues its own under the same id. in_flight is
+// whether that id is still pending; once it clears, anything short of ready
+// was dropped.
+bool AssistantTrackStatisticsDropped(const AssistantToolContext& context,
+                                     uint64_t track_id, bool in_flight);
+
+// Hands the statistics slot back to the track's pill when a track_statistics
+// read is given up in flight.
+void ReleaseAssistantTrackStatistics(const AssistantToolContext& context,
+                                     uint64_t                    track_id);
+
+// Whether an event_details read that landed lost its event to a change of
+// selection, which clears the event model. The panel then runs it again.
+bool AssistantEventDetailsDropped(const AssistantToolContext& context,
+                                  const AssistantFetchState&  fetch);
 
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,

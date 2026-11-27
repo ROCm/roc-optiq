@@ -5,6 +5,7 @@
 
 #include "imgui.h"
 #include "json.h"
+#include "rocprofvis_assistant_url.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_font_manager.h"
 #include <array>
@@ -462,6 +463,9 @@ public:
     // settings JSON. Guarded because these are the only users of SecretStore
     // outside remote; the provider URL and model above stay compiled either way,
     // so a settings file survives a build that has the assistant switched off.
+    // A key is saved with the origin of the provider's URL and handed back only
+    // while the URL still has that origin, so an edited URL cannot carry it to
+    // another host.
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     bool HasAssistantToken(const std::string& provider_name) const;
     bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
@@ -513,7 +517,9 @@ private:
     void SerializeProfilerSettings(jt::Json& json);
     void DeserializeProfilerSettings(jt::Json& json);
     void SerializeAssistantSettings(jt::Json& json);
-    void DeserializeAssistantSettings(jt::Json& json);
+    // True when a saved URL held something AssistantStorableUrl drops, which
+    // the file then still holds.
+    bool DeserializeAssistantSettings(jt::Json& json);
     // The endpoint name is the credential-store key, so it has to be unique.
     void MakeAssistantProviderNamesUnique();
     void SerializeAppWindowSettings(jt::Json& json);
@@ -529,8 +535,9 @@ private:
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
     ProfilerSettings   m_profilersettings;
-    // Provider name -> token, used only when no OS credential store exists.
-    std::map<std::string, std::string> m_assistant_token_session;
+    // Provider name -> origin and token, held only when no OS credential store
+    // exists or a write to it failed. Mutable: a const read may add the origin.
+    mutable std::map<std::string, std::string> m_assistant_token_session;
 
     std::filesystem::path m_json_path;
 };

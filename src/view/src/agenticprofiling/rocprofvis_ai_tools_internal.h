@@ -100,6 +100,9 @@ AssistantToolStartResult DoneResult(const std::string& content,
 uint64_t JsonU64(const jt::Json& json, const std::string& key,
                  uint64_t default_value);
 
+// The same for a value already in hand, such as one entry of an id array.
+uint64_t JsonU64Value(const jt::Json& value, uint64_t default_value);
+
 // Narrows a JSON number to an id, rejecting anything a uint64_t cannot hold.
 uint64_t JsonU64FromDouble(double value, uint64_t default_value);
 
@@ -128,6 +131,20 @@ ResolveAssistantLink(const AssistantToolContext& context, const std::string& ref
 // Why a linked trace cannot be read right now, or empty when it can.
 std::string
 LinkedTraceProblem(const AssistantToolContext& linked, const TraceLink& link);
+
+// What memory already holds about an event: its loaded details, else a row the
+// assistant read. No query, so it can confirm an event but never rule one out.
+struct AssistantEventSighting
+{
+    bool seen = false;
+    // The event's own start and end, when what was found carries them.
+    bool   has_span = false;
+    double start_ns = 0.0;
+    double end_ns   = 0.0;
+};
+
+AssistantEventSighting
+FindAssistantEvent(const AssistantToolContext& context, uint64_t event_uuid);
 
 }  // namespace View
 }  // namespace RocProfVis

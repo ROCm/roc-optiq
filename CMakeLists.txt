@@ -181,6 +181,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_timeline_arrow.cpp 
     src/view/src/rocprofvis_events_view.cpp 
     src/view/src/rocprofvis_settings_manager.cpp
+    src/view/src/rocprofvis_assistant_url.cpp
     src/view/src/rocprofvis_font_manager.cpp 
     src/view/src/rocprofvis_annotations.cpp
     src/view/src/rocprofvis_settings_panel.cpp
@@ -537,13 +538,15 @@ if(BUILD_TESTING)
     target_link_libraries(${ISA_DATA_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${ISA_DATA_TEST_NAME} COMMAND ${ISA_DATA_TEST_NAME})
 
-    # The trace link store and run diff behind compare_traces need no GPU,
-    # trace, UI, endpoint, or feature define, so every test build covers them.
+    # The trace link store, the run diff behind compare_traces, and what of an
+    # endpoint URL may be saved need no GPU, trace, UI, endpoint, or feature
+    # define, so every test build covers them.
     set(ASSISTANT_TEST_NAME ${TARGET_NAME}-assistant-tests)
     add_executable(${ASSISTANT_TEST_NAME}
         src/view/test/rocprofvis_ai_assistant_tests.cpp
         src/view/src/agenticprofiling/rocprofvis_ai_trace_compare.cpp
         src/view/src/agenticprofiling/rocprofvis_ai_trace_links.cpp
+        src/view/src/rocprofvis_assistant_url.cpp
         src/view/src/rocprofvis_json_utils.cpp)
     target_include_directories(${ASSISTANT_TEST_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)

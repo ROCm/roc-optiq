@@ -211,8 +211,11 @@ StartLinkedTool(const AssistantToolContext& context, const AssistantToolEntry& e
     {
         return DoneResult(error, "Unknown link");
     }
-    const AssistantToolContext linked  = MakeAssistantToolContext(link.other.path);
-    const std::string          problem = LinkedTraceProblem(linked, link);
+    AssistantToolContext linked = MakeAssistantToolContext(link.other.path);
+    // The limits belong to the turn, whichever trace a call reads.
+    linked.turn_limits = context.turn_limits;
+
+    const std::string problem = LinkedTraceProblem(linked, link);
     if(!problem.empty())
     {
         return DoneResult(problem, "Linked trace unavailable");
@@ -289,7 +292,14 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
     {
         return default_value;
     }
-    jt::Json& value = mutable_json[key];
+    return JsonU64Value(mutable_json[key], default_value);
+}
+
+// The same for one value, so id array entries are read by the same rules.
+uint64_t
+JsonU64Value(const jt::Json& json_value, uint64_t default_value)
+{
+    jt::Json& value = const_cast<jt::Json&>(json_value);
     if(value.isLong())
     {
         const long long raw = value.getLong();
@@ -339,7 +349,7 @@ TrimAssistantText(std::string text, size_t max_chars, const char* truncation_not
 {
     if(text.size() > max_chars)
     {
-        text.resize(max_chars);
+        text.resize(Core::String::utf8_floor(text, max_chars));
         text += truncation_note;
     }
     return text;

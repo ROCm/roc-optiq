@@ -16,6 +16,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "imgui.h"
@@ -289,6 +290,15 @@ SplitMessageLines(const std::string& text)
     return lines;
 }
 
+// The endpoint as a hover card may show it: no userinfo, query or fragment,
+// since the settings hold a key pasted into the URL until OK is pressed.
+std::string
+DisplayEndpoint(const std::string& url)
+{
+    const std::string kept = AssistantStorableUrl(url);
+    return kept.substr(0, kept.find('?'));
+}
+
 // A trace the link menu can offer: open, loaded, and read as one trace.
 bool
 CanLinkTrace(const AssistantToolContext& context)
@@ -367,7 +377,7 @@ OpenAssistantSettings()
 }  // namespace
 
 void
-AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t track_id)
+AssistantPanel::RenderActivityChart(const std::string& project_id, ChatLine& line)
 {
     // The card's frame and title are already drawn, so an empty chart says why
     // rather than leaving a blank box.
@@ -387,6 +397,7 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
         ImGui::TextDisabled("This chart's trace is still loading.");
         return;
     }
+    const uint64_t track_id = line.track_id;
 
     // Bin count follows the column width, so bars stay legible when the dock is
     // dragged narrow.
@@ -396,8 +407,20 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
                      static_cast<float>(ASSISTANT_CHART_MIN_BINS),
                      static_cast<float>(ASSISTANT_CHART_MAX_BINS)));
 
-    const std::vector<double> bins =
-        GetAssistantActivityBins(context, track_id, bin_count);
+    // Cutting the strip sums every minimap row, twice, so it is kept until the
+    // bin count changes. An empty one is a trace still loading: asked again.
+    if(line.chart_bin_count != bin_count || line.chart_bins.empty())
+    {
+        line.chart_bin_count = bin_count;
+        line.chart_bins      = GetAssistantActivityBins(context, track_id, bin_count);
+        line.chart_rows.clear();
+        if(!line.chart_bins.empty() && track_id == INVALID_UINT64_INDEX)
+        {
+            line.chart_rows =
+                GetAssistantActivityRows(context, bin_count, ASSISTANT_CHART_ROWS);
+        }
+    }
+    const std::vector<double>& bins = line.chart_bins;
     if(bins.empty())
     {
         // Empty means the trace has no minimap, or this track has no row in it.
@@ -446,8 +469,7 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
         return;
     }
 
-    const std::vector<AssistantActivityRow> rows =
-        GetAssistantActivityRows(context, bin_count, ASSISTANT_CHART_ROWS);
+    const std::vector<AssistantActivityRow>& rows = line.chart_rows;
     if(rows.empty())
     {
         return;
@@ -740,7 +762,8 @@ AssistantPanel::RenderHeaderCard()
         }
         else
         {
-            SetTooltipStyled("%s\n%s", model.c_str(), provider->endpoint_url.c_str());
+            SetTooltipStyled("%s\n%s", model.c_str(),
+                             DisplayEndpoint(provider->endpoint_url).c_str());
         }
     }
 
@@ -1206,7 +1229,7 @@ AssistantPanel::RenderContextTooltip(const Conversation& conversation,
 
     ImGui::TextUnformatted(model.c_str());
     ImGui::PushStyleColor(ImGuiCol_Text, dim);
-    ImGui::TextWrapped("%s", endpoint.c_str());
+    ImGui::TextWrapped("%s", DisplayEndpoint(endpoint).c_str());
     ImGui::TextUnformatted("Click the model name to change these.");
     ImGui::PopStyleColor();
 
@@ -1381,7 +1404,7 @@ AssistantPanel::RenderTranscript()
 
 void
 AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
-                                  const ChatLine& line)
+                                  ChatLine& line)
 {
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = settings.GetDefaultStyle();
@@ -1400,23 +1423,27 @@ AssistantPanel::RenderMessageCard(Conversation& conversation, size_t index,
 
     if(line.speaker == Speaker::kChart)
     {
-        const std::string chart_project =
-            line.project_id.empty() ? m_view_project_id : line.project_id;
-        std::string title = "Timeline overview";
-        if(chart_project != m_view_project_id)
+        // A card scrolled out of view draws nothing.
+        if(BeginPanelCard("##chart_card", PanelCardTone::kPanel, ASSISTANT_CARD_PADDING,
+                          true, &settings))
         {
-            const AssistantToolContext source = MakeAssistantToolContext(chart_project);
-            if(!source.trace_name.empty())
+            const std::string chart_project =
+                line.project_id.empty() ? m_view_project_id : line.project_id;
+            std::string title = "Timeline overview";
+            if(chart_project != m_view_project_id)
             {
-                title += " of " + source.trace_name;
+                const AssistantToolContext source =
+                    MakeAssistantToolContext(chart_project);
+                if(!source.trace_name.empty())
+                {
+                    title += " of " + source.trace_name;
+                }
             }
+            PanelIcon(ICON_CHART_BAR, Colors::kAccent, &settings);
+            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            PanelFieldLabel(title.c_str(), false, &settings);
+            RenderActivityChart(chart_project, line);
         }
-        BeginPanelCard("##chart_card", PanelCardTone::kPanel, ASSISTANT_CARD_PADDING,
-                       true, &settings);
-        PanelIcon(ICON_CHART_BAR, Colors::kAccent, &settings);
-        ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-        PanelFieldLabel(title.c_str(), false, &settings);
-        RenderActivityChart(chart_project, line.track_id);
         EndPanelCard();
         ImGui::PopID();
         return;
@@ -1507,9 +1534,10 @@ AssistantPanel::RenderSelectableMessage(Conversation& conversation, size_t index
     const ImVec2 message_spacing = ImGui::GetStyle().ItemSpacing;
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(message_spacing.x, 0.0f));
-    ImGui::BeginChild("##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
-                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                          ImGuiWindowFlags_NoScrollWithMouse);
+    const bool text_visible = ImGui::BeginChild(
+        "##message_text", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY,
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse);
     // Scoped to the text so the copy menu below keeps the theme's text color.
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     for(const std::string& line : conversation.message_lines[index])
@@ -1537,11 +1565,20 @@ AssistantPanel::RenderSelectableMessage(Conversation& conversation, size_t index
             }
         }
     }
-    select->update();
+    // update() word-wraps the whole message, so a clipped one skips it. Mouse
+    // frames still run, so a drag that ends off screen releases its state.
+    const bool update_select = text_visible || select->hasSelection() ||
+                               ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+                               ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    if(update_select)
+    {
+        select->update();
+    }
     // update() copies on Ctrl+C but does not report it. The same chord in the
     // same window fires on the same press.
-    bool copied_selection =
-        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) && select->hasSelection();
+    bool copied_selection = update_select &&
+                            ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C) &&
+                            select->hasSelection();
 
     PushContextMenuStyles();
     if(ImGui::BeginPopupContextWindow("##message_copy"))
@@ -1663,8 +1700,11 @@ AssistantPanel::RenderSuggestedActions()
 
     if(clicked >= 0)
     {
+        // Send the step without losing a question the user was still typing.
+        std::string draft  = std::move(conversation.input);
         conversation.input = conversation.next_steps[static_cast<size_t>(clicked)];
         SendCurrentInput(false);
+        conversation.input = std::move(draft);
     }
 
     ImGui::Spacing();
@@ -1867,13 +1907,34 @@ AssistantPanel::RenderComposer()
     InputTextStringWithHint("##assistant_input", hint.c_str(), conversation.input,
                             input_flags);
     const bool submitted = ImGui::IsItemFocused() &&
-                           ImGui::IsKeyPressed(ImGuiKey_Enter) &&
+                           (ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) &&
                            !ImGui::GetIO().KeyShift && !Busy() && can_ask;
 
     ImGui::SameLine(0.0f, gap);
-    ImGui::BeginDisabled(Busy() || !can_ask || conversation.input.empty());
-    const bool send = AccentButton("Send", ImVec2(ASSISTANT_SEND_WIDTH, 0.0f), &settings);
-    ImGui::EndDisabled();
+    bool send = false;
+    bool stop = false;
+    if(busy_here)
+    {
+        // Stop takes Send's place, so the second click of a double-click on
+        // Send lands on it and must not end the turn the first one started.
+        const bool double_click =
+            ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
+            ImGui::GetIO().MouseClickedLastCount[ImGuiMouseButton_Left] > 1;
+        stop = ColoredButton("Stop", settings.GetColor(Colors::kButton),
+                             settings.GetColor(Colors::kButtonHovered),
+                             settings.GetColor(Colors::kButtonActive),
+                             settings.GetColor(Colors::kTextMain),
+                             "Stop this answer and keep the conversation",
+                             ImVec2(ASSISTANT_SEND_WIDTH, 0.0f)) &&
+               !double_click;
+    }
+    else
+    {
+        ImGui::BeginDisabled(Busy() || !can_ask || conversation.input.empty());
+        send = AccentButton("Send", ImVec2(ASSISTANT_SEND_WIDTH, 0.0f), &settings);
+        ImGui::EndDisabled();
+    }
 
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(conversation.lines.empty());
@@ -1902,8 +1963,8 @@ AssistantPanel::RenderComposer()
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(conversation.lines.empty() && conversation.input.empty() &&
                          !busy_here);
-    // Clearing is the panel's only way to stop a turn, so the tooltip says so
-    // while one runs here. A turn on another trace is left running.
+    // Clearing also stops a turn running here, so the tooltip says so while one
+    // runs. A turn on another trace is left running.
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size),
                   busy_here ? "Stop this answer and clear the conversation"
@@ -1922,7 +1983,11 @@ AssistantPanel::RenderComposer()
     // the transcript has to leave above the composer.
     m_composer_height = ImGui::GetCursorPosY() - start_y;
 
-    if(send || submitted)
+    if(stop)
+    {
+        StopTurn();
+    }
+    else if(send || submitted)
     {
         SendCurrentInput(false);
     }

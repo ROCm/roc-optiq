@@ -30,8 +30,8 @@ namespace RocProfVis
 {
 namespace View
 {
-// Send() attaches the tool schema, which lives with the tools. No request here
-// offers tools, so the schema is never read.
+// Send() attaches the tool schema, which lives with the tools. A request here
+// that offers tools sends an empty one, which the test endpoints never read.
 jt::Json
 BuildAssistantToolsJson(bool)
 {
@@ -165,6 +165,158 @@ TEST_CASE("A hostname beginning with 127 is not trusted as loopback",
     CHECK(result.error.find("plain http") != std::string::npos);
 }
 
+TEST_CASE("A reply too large to read is not asked for twice", "[assistant][chat]")
+{
+    // Past the reply cap httplib stops reading and reports a read error. The
+    // endpoint has run the request by then, so posting it again would run it twice.
+    static constexpr size_t OVERSIZED_REPLY_BYTES = 9 * 1024 * 1024;
+    LocalServer             server;
+    std::atomic<int>        posts{ 0 };
+    server.Http().Post("/v1/chat/completions",
+                       [&posts](const httplib::Request&, httplib::Response& response) {
+                           ++posts;
+                           response.set_content(std::string(OVERSIZED_REPLY_BYTES, 'x'),
+                                                JSON_TYPE);
+                       });
+    server.Start();
+
+    AssistantChatCall         call;
+    const AssistantChatResult result = call.Send(ChatRequest(server.Url("/v1"), "model"));
+    CHECK_FALSE(result.ok);
+    CHECK(posts == 1);
+}
+
+TEST_CASE("A long provider error is cut on a character boundary", "[assistant][chat]")
+{
+    // The error reads "The endpoint returned HTTP 400: " and then the message,
+    // and is cut at 500 bytes, which here falls inside the two-byte "é".
+    const std::string prefix  = "The endpoint returned HTTP 400: ";
+    const std::string message = std::string(499 - prefix.size(), 'x') + "\xC3\xA9" +
+                                std::string(100, 'y');
+    LocalServer       server;
+    server.Http().Post("/v1/chat/completions",
+                       [message](const httplib::Request&, httplib::Response& response) {
+                           const std::string body =
+                               R"({"error":{"message":")" + message + R"("}})";
+                           response.status = 400;
+                           response.set_content(body, JSON_TYPE);
+                       });
+    server.Start();
+
+    AssistantChatCall         call;
+    const AssistantChatResult result = call.Send(ChatRequest(server.Url("/v1"), "model"));
+    CHECK_FALSE(result.ok);
+    CHECK(result.error == prefix + std::string(499 - prefix.size(), 'x') + "...");
+}
+
+TEST_CASE("The key is blanked in the form it is sent in, when it is long enough",
+          "[assistant][key]")
+{
+    // Trimmed the way the auth header trims it, and every copy goes.
+    std::string text = "rejected sk-test-0123456789; sk-test-0123456789 is revoked";
+    AssistantRedactKey(" sk-test-0123456789\n", text);
+    CHECK(text == "rejected [key]; [key] is revoked");
+
+    // A key this short could be an ordinary word, so it is left alone.
+    std::string words = "a short reply";
+    AssistantRedactKey("short", words);
+    CHECK(words == "a short reply");
+
+    std::string blank = "nothing to blank";
+    AssistantRedactKey(" \n", blank);
+    CHECK(blank == "nothing to blank");
+}
+
+TEST_CASE("The key stays out of the request body and out of what comes back",
+          "[assistant][key]")
+{
+    const std::string key = "sk-test-0123456789";  // gitleaks:allow
+    LocalServer       server;
+    std::atomic<bool> key_in_body{ false };
+    server.Http().Post("/echo/chat/completions",
+                       [key, &key_in_body](const httplib::Request& request,
+                                           httplib::Response&      response) {
+                           key_in_body = request.body.find(key) != std::string::npos;
+                           response.set_content(Completion("your key is " + key),
+                                                JSON_TYPE);
+                       });
+    server.Http().Post("/refuse/chat/completions",
+                       [key](const httplib::Request&, httplib::Response& response) {
+                           const std::string body =
+                               R"({"error":{"message":"invalid key )" + key + R"("}})";
+                           response.status = 401;
+                           response.set_content(body, JSON_TYPE);
+                       });
+    server.Start();
+
+    AssistantChatRequest echo = ChatRequest(server.Url("/echo"), "model");
+    echo.api_token            = key;
+    echo.messages.front().content = "my key is " + key;
+    AssistantChatCall         echo_call;
+    const AssistantChatResult echoed = echo_call.Send(echo);
+    CHECK(echoed.ok);
+    CHECK_FALSE(key_in_body);
+    CHECK(echoed.reply == "your key is [key]");
+
+    AssistantChatRequest refuse = ChatRequest(server.Url("/refuse"), "model");
+    refuse.api_token            = key;
+    AssistantChatCall         refuse_call;
+    const AssistantChatResult refused = refuse_call.Send(refuse);
+    CHECK_FALSE(refused.ok);
+    CHECK(refused.error == "The endpoint returned HTTP 401: invalid key [key]");
+}
+
+TEST_CASE("Only plain http to a host off this machine is cleartext", "[assistant][url]")
+{
+    CHECK(AssistantUrlIsCleartext("http://example.com/v1"));
+    CHECK(AssistantUrlIsCleartext(" HTTP://Example.com:8080/v1 "));
+    // Neither a name that starts with 127 nor a short form of an address is
+    // taken as loopback.
+    CHECK(AssistantUrlIsCleartext("http://127.attacker.example/v1"));
+    CHECK(AssistantUrlIsCleartext("http://127.1/v1"));
+    CHECK_FALSE(AssistantUrlIsCleartext("https://example.com/v1"));
+    CHECK_FALSE(AssistantUrlIsCleartext("http://localhost:11434"));
+    CHECK_FALSE(AssistantUrlIsCleartext("http://127.0.0.1:8080/v1"));
+    CHECK_FALSE(AssistantUrlIsCleartext("http://[::1]:8080/v1"));
+}
+
+TEST_CASE("An inline harmony call is a tool call, and to= in prose is not",
+          "[assistant][chat]")
+{
+    const std::string call_text = R"(<|channel|>commentary to=functions.list_tracks )"
+                                  R"(<|constrain|>json<|message|>{\"limit\":5})";
+    const std::string prose =
+        "Pass --to=json, set goto=x, or open https://h.example/?to=a&to=b.";
+    LocalServer server;
+    server.Http().Post("/call/chat/completions",
+                       [call_text](const httplib::Request&, httplib::Response& response) {
+                           response.set_content(Completion(call_text), JSON_TYPE);
+                       });
+    server.Http().Post("/prose/chat/completions",
+                       [prose](const httplib::Request&, httplib::Response& response) {
+                           response.set_content(Completion(prose), JSON_TYPE);
+                       });
+    server.Start();
+
+    AssistantChatRequest call_request = ChatRequest(server.Url("/call"), "model");
+    call_request.enable_tools         = true;
+    AssistantChatCall         call;
+    const AssistantChatResult called = call.Send(call_request);
+    REQUIRE(called.ok);
+    REQUIRE(called.tool_calls.size() == 1);
+    CHECK(called.tool_calls[0].name == "list_tracks");
+    CHECK(called.tool_calls[0].arguments == R"({"limit":5})");
+    CHECK(called.reply.empty());
+
+    AssistantChatRequest prose_request = ChatRequest(server.Url("/prose"), "model");
+    prose_request.enable_tools         = true;
+    AssistantChatCall         prose_call;
+    const AssistantChatResult answered = prose_call.Send(prose_request);
+    CHECK(answered.ok);
+    CHECK(answered.tool_calls.empty());
+    CHECK(answered.reply == prose);
+}
+
 TEST_CASE("The model list is the data ids, sorted, without repeats or unusable names",
           "[assistant][models]")
 {
@@ -254,6 +406,28 @@ TEST_CASE("An OpenAI-style URL lists beside its chat route with a bearer key",
           std::vector<std::string>{ "openai/gpt-4o" });
     CHECK(ListFrom(server.Url("/api/v1/chat/completions"), "secret") ==
           std::vector<std::string>{ "openai/gpt-4o" });
+}
+
+TEST_CASE("A listed name that quotes the key is not offered", "[assistant][models]")
+{
+    LocalServer server;
+    ServeList(server.Http(), "/v1/models",
+              R"({"data":[{"id":"gpt-4o"},{"id":"echo-sk-test-0123456789"}]})");
+    server.Start();
+
+    CHECK(ListFrom(server.Url("/v1"), "sk-test-0123456789") ==
+          std::vector<std::string>{ "gpt-4o" });
+}
+
+TEST_CASE("An upper-case scheme is listed like a lower-case one", "[assistant][models]")
+{
+    LocalServer server;
+    ServeList(server.Http(), "/v1/models", R"({"data":[{"id":"gpt-4o"}]})");
+    server.Start();
+
+    // cpp-httplib takes only a lower-case scheme, and gives no client for another.
+    const std::string url = "HTTP" + server.Url("/v1").substr(std::string("http").size());
+    CHECK(ListFrom(url) == std::vector<std::string>{ "gpt-4o" });
 }
 
 TEST_CASE(

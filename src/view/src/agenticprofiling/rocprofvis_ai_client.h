@@ -56,11 +56,11 @@ struct AssistantChatRequest
     bool compute_tools = false;
 };
 
-// What came back, or why nothing did.
+// What came back, or why nothing did. A call that was cancelled says neither,
+// with ok false and no error: whoever cancelled it discards the result unread.
 struct AssistantChatResult
 {
-    bool                           ok        = false;
-    bool                           cancelled = false;
+    bool                           ok = false;
     std::string                    reply;
     std::string                    error;
     std::string                    finish_reason;
@@ -73,6 +73,22 @@ struct AssistantChatResult
     bool has_cached_tokens = false;
     int  cached_tokens     = 0;
 };
+
+// Lower-cased "scheme://host[:port]" of an endpoint URL, or empty when it has
+// no scheme separator. What a stored key is bound to.
+std::string AssistantUrlOrigin(const std::string& url);
+
+// True when the URL is plain http to a host that is not loopback, i.e. the
+// conversation would cross the network unencrypted.
+bool AssistantUrlIsCleartext(const std::string& url);
+
+// Overwrites the whole buffer of a copy of the key before it is emptied or
+// freed, so the bytes do not sit in released memory.
+void AssistantWipeSecret(std::string& text);
+
+// Blanks every copy of the key in text, in the trimmed form it is sent in.
+// A key too short to tell from ordinary words is left alone.
+void AssistantRedactKey(const std::string& api_token, std::string& text);
 
 /**
  * @brief One POST to an OpenAI chat-completions endpoint, which the caller can
@@ -90,6 +106,11 @@ struct AssistantChatResult
  * if the server is wedged. Cancel() closes the socket out from under it, so the
  * panel can walk away from a request - on quit, or when the user clears the
  * conversation - instead of waiting out the read timeout.
+ *
+ * A throttle (429), a gateway failure (502, 503, 504) or a request whose write
+ * failed straight away is tried once more after a short wait, which Cancel()
+ * also cuts short. A peer that resets the connection while the request is
+ * still being written fails the request rather than raising SIGPIPE.
  */
 class AssistantChatCall
 {
@@ -98,6 +119,8 @@ public:
     AssistantChatResult Send(const AssistantChatRequest& request);
 
     // Aborts the request in flight, if any. Safe to call from another thread.
+    // Can block until a connect in progress gives up - DNS, the TCP connect and
+    // the TLS handshake - so do not call it from a thread that must not stall.
     void Cancel();
 
 private:

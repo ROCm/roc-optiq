@@ -3,13 +3,15 @@
 
 // Tools that read the trace, and the formatters that turn what they read into
 // text. Request ids and result slots are shared with the normal UI, so every
-// body here checks IsRequestPending before issuing a query and reports whether
-// it started the fetch; the panel needs that to know the rows are its own.
+// tool here checks IsRequestPending around its query (the table tools in
+// FetchStartedResult) and reports whether it started the fetch; the panel
+// needs that to know the rows are its own.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -64,7 +66,8 @@ constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
  * first, but that reads the header off a table nothing has fetched into yet, so
  * the very first call has no header to search and lands here. A fallback that
  * names the wrong column does not fail - the controller sorts by whatever is at
- * that index, so the tool answers confidently about the wrong row.
+ * that index - so AssistantFetchNeedsRerun has the read run again; getting it
+ * right here saves that second query.
  *
  * COUNT EVERY COLUMN, INCLUDING THE ONES NOT PRINTED. These index the table's
  * own header, and FormatTableSnapshot drops the "__" service columns on the way
@@ -100,6 +103,11 @@ constexpr uint64_t ASSISTANT_MAX_OFFSET = 1000000;
 // The summary's remainder row, which totals every name past its top list and
 // is not an event of its own.
 constexpr const char* ASSISTANT_SUMMARY_REMAINDER_NAME = "Others";
+
+// What get_summary answers when the summary loaded with nothing in it.
+constexpr const char* ASSISTANT_EMPTY_SUMMARY_REPLY =
+    "The summary loaded and holds no kernel, memory or thread activity. Use "
+    "top_events or track_events to see what this trace does hold.";
 
 // Names compare_traces lists per event family when not told otherwise, and the
 // most it will list. Every row is two runs' figures, so a page costs double.
@@ -619,10 +627,42 @@ FindTopEventsSpec(const std::string& category)
     return nullptr;
 }
 
+// The line that tells the model a read without track_ids did not cover every
+// track, so it does not report a subset as the whole trace. Empty when it did.
+std::string
+TrackCapNote(size_t used, size_t total)
+{
+    if(total <= used)
+    {
+        return std::string();
+    }
+    return "tracks: first " + std::to_string(used) + " of " + std::to_string(total) +
+           " - pass track_ids to read the others\n";
+}
+
+// The tracks: line for a read that took the timeline selection. A selection
+// that holds every track with the operation narrows nothing, so only the cap
+// can earn a line then.
+std::string
+SelectedTracksNote(size_t used, size_t selected, size_t total)
+{
+    if(selected >= total)
+    {
+        return TrackCapNote(used, total);
+    }
+    const std::string count = used < selected ? "the first " + std::to_string(used) +
+                                                    " of the " + std::to_string(selected) +
+                                                    " selected"
+                                              : "the " + std::to_string(used) + " selected";
+    return "tracks: " + count + ", of " + std::to_string(total) +
+           " in all - pass track_ids to read the others\n";
+}
+
 // Prefers the selected tracks that carry an operation, else every such track.
+// note_out is set when that leaves some of them out.
 std::vector<uint64_t>
 TracksForOperation(const AssistantToolContext&     context,
-                   rocprofvis_dm_event_operation_t op)
+                   rocprofvis_dm_event_operation_t op, std::string& note_out)
 {
     std::vector<uint64_t> selected;
     if(context.timeline_selection != nullptr)
@@ -640,17 +680,10 @@ TracksForOperation(const AssistantToolContext&     context,
            track->track_type == kRPVControllerTrackTypeEvents)
         {
             matching.push_back(track_id);
-            if(matching.size() >= ASSISTANT_MAX_TRACKS)
-            {
-                return matching;
-            }
         }
     }
-    if(!matching.empty())
-    {
-        return matching;
-    }
 
+    std::vector<uint64_t>               every;
     const std::vector<const TrackInfo*> tracks =
         context.data_provider->DataModel().GetTimeline().GetTrackList();
     for(const TrackInfo* track : tracks)
@@ -667,19 +700,26 @@ TracksForOperation(const AssistantToolContext&     context,
         {
             continue;
         }
-        matching.push_back(track->id);
-        if(matching.size() >= ASSISTANT_MAX_TRACKS)
-        {
-            break;
-        }
+        every.push_back(track->id);
     }
+
+    // The cap is applied last, so the note can count the tracks it left out.
+    const size_t total = every.size();
+    if(matching.empty())
+    {
+        matching.swap(every);
+    }
+    const size_t candidates = matching.size();
+    matching.resize(std::min(candidates, ASSISTANT_MAX_TRACKS));
+    note_out = SelectedTracksNote(matching.size(), candidates, total);
     return matching;
 }
 
 // Lists the tracks of one kind, for a tool the model called without track ids.
+// note_out is set when the cap left some of them out.
 std::vector<uint64_t>
 TracksOfType(const AssistantToolContext&        context,
-             rocprofvis_controller_track_type_t wanted)
+             rocprofvis_controller_track_type_t wanted, std::string& note_out)
 {
     std::vector<uint64_t>               tracks;
     const std::vector<const TrackInfo*> all =
@@ -691,11 +731,10 @@ TracksOfType(const AssistantToolContext&        context,
             continue;
         }
         tracks.push_back(track->id);
-        if(tracks.size() >= ASSISTANT_MAX_TRACKS)
-        {
-            break;
-        }
     }
+    const size_t total = tracks.size();
+    tracks.resize(std::min(total, ASSISTANT_MAX_TRACKS));
+    note_out = TrackCapNote(tracks.size(), total);
     return tracks;
 }
 
@@ -720,19 +759,36 @@ KeepTracksOfType(const AssistantToolContext& context, const std::vector<uint64_t
 
 // Explicit start_ns/end_ns win, else the user's selection, else the whole
 // trace. Search passes prefer_selection false to match its "Whole Trace" default.
-void
+// Returns where the window came from, for WindowFromArgs to print.
+std::string
 TimeRangeFromArgs(const AssistantToolContext& context, const jt::Json& args,
                   double& start_ns, double& end_ns, bool prefer_selection = true)
 {
+    std::string source = "whole trace";
     if(prefer_selection)
     {
         SelectedOrFullTimeRange(context, start_ns, end_ns);
+        if(context.timeline_selection != nullptr &&
+           context.timeline_selection->HasValidTimeRangeSelection())
+        {
+            source = "timeline selection - goto sets this; pass start_ns/end_ns for "
+                     "another window";
+        }
     }
     else
     {
         const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
         start_ns                      = timeline.GetStartTime();
         end_ns                        = timeline.GetEndTime();
+    }
+
+    // Appended up front; a window that is usable replaces the whole source.
+    jt::Json& mutable_args = const_cast<jt::Json&>(args);
+    if((mutable_args.contains("start_ns") && !mutable_args["start_ns"].isNull()) ||
+       (mutable_args.contains("end_ns") && !mutable_args["end_ns"].isNull()))
+    {
+        source += " - the start_ns/end_ns you passed were incomplete or outside the "
+                  "trace and were ignored";
     }
 
     const double requested_start = JsonUtils::GetDouble(args, "start_ns", -1.0);
@@ -742,7 +798,7 @@ TimeRangeFromArgs(const AssistantToolContext& context, const jt::Json& args,
     if(!std::isfinite(requested_start) || !std::isfinite(requested_end) ||
        requested_start < 0.0 || requested_end <= requested_start)
     {
-        return;
+        return source;
     }
 
     // Keep the window inside the trace. A range the model invented out past the
@@ -755,23 +811,52 @@ TimeRangeFromArgs(const AssistantToolContext& context, const jt::Json& args,
     const double clamped_end   = std::min(requested_end, trace_end);
     if(clamped_end <= clamped_start)
     {
-        return;
+        return source;
     }
     start_ns = clamped_start;
     end_ns   = clamped_end;
+    return clamped_start != requested_start || clamped_end != requested_end
+               ? "requested, clamped to the trace"
+               : "requested";
+}
+
+// Resolves a read's window and returns the line that leads its result: the
+// window in raw nanoseconds, as the rows are, and where it came from. A window
+// that cannot be used is replaced rather than refused, and the selection may be
+// one a goto left behind, so a result must name what it covered.
+std::string
+WindowFromArgs(const AssistantToolContext& context, const jt::Json& args,
+               double& start_ns, double& end_ns, bool prefer_selection = true)
+{
+    const std::string source =
+        TimeRangeFromArgs(context, args, start_ns, end_ns, prefer_selection);
+    return "window_ns: " + nanosecond_to_str(start_ns) + " .. " +
+           nanosecond_to_str(end_ns) + " (" + source + ")\n";
 }
 
 // Track ids named by the model, filtered to tracks that exist and carry the
-// requested operation. Falls back to selection-or-all when none are named.
+// requested operation. Falls back to selection-or-all when none are named, and
+// says so in note_out when that is not every track.
 std::vector<uint64_t>
 TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
                rocprofvis_dm_event_operation_t op, bool require_op,
-               std::string& error_out)
+               std::string& error_out, std::string& note_out)
 {
-    jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    if(!mutable_args.contains("track_ids") || !mutable_args["track_ids"].isArray())
+    jt::Json&  mutable_args = const_cast<jt::Json&>(args);
+    const bool present =
+        mutable_args.contains("track_ids") && !mutable_args["track_ids"].isNull();
+    // Present but not an array is a mistake, not "every track": reading them
+    // all would be reported as a read of the track that was named.
+    if(present && !mutable_args["track_ids"].isArray())
     {
-        return require_op ? TracksForOperation(context, op) : std::vector<uint64_t>();
+        error_out = "track_ids must be an array of track ids from list_tracks.";
+        return std::vector<uint64_t>();
+    }
+    // An empty array names no track, the same as leaving the argument out.
+    if(!present || mutable_args["track_ids"].getArray().empty())
+    {
+        return require_op ? TracksForOperation(context, op, note_out)
+                          : std::vector<uint64_t>();
     }
 
     std::vector<jt::Json>& entries = mutable_args["track_ids"].getArray();
@@ -783,20 +868,13 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
     const TimelineModel&  timeline = context.data_provider->DataModel().GetTimeline();
     std::vector<uint64_t> tracks;
     tracks.reserve(std::min(entries.size(), ASSISTANT_MAX_TRACKS));
-    for(jt::Json& entry : entries)
+    for(size_t i = 0; i < entries.size(); ++i)
     {
-        uint64_t track_id = INVALID_UINT64_INDEX;
-        if(entry.isLong() && entry.getLong() >= 0)
-        {
-            track_id = static_cast<uint64_t>(entry.getLong());
-        }
-        else if(entry.isDouble())
-        {
-            track_id = JsonU64FromDouble(entry.getDouble(), INVALID_UINT64_INDEX);
-        }
+        const uint64_t track_id = JsonU64Value(entries[i], INVALID_UINT64_INDEX);
         if(track_id == INVALID_UINT64_INDEX)
         {
-            error_out = "Every track_ids entry must be a non-negative number.";
+            error_out =
+                "Every track_ids entry must be a non-negative track id from list_tracks.";
             return std::vector<uint64_t>();
         }
 
@@ -814,8 +892,20 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
         tracks.push_back(track_id);
         if(tracks.size() >= ASSISTANT_MAX_TRACKS)
         {
+            // Ids past the cap are not read, so the result has to say so.
+            if(i + 1 < entries.size())
+            {
+                note_out = TrackCapNote(tracks.size(), entries.size());
+            }
             break;
         }
+    }
+    // Every named track lacked the operation. Reported as an error, because an
+    // empty list reads to the caller as no track in the trace carrying it.
+    if(tracks.empty())
+    {
+        error_out = "None of those track_ids carry that kind of event. list_tracks "
+                    "shows each track's ops.";
     }
     return tracks;
 }
@@ -845,10 +935,17 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
     }
     out << "\n";
 
-    const size_t row_count = std::min(data.size(), limit);
+    // Rows are numbered by their place in the whole result. Counted from the
+    // page, a read with an offset is told rows it has seen are still to come.
+    const std::shared_ptr<TableRequestParams> params = tables.GetTableParams(type);
+    const uint64_t offset    = params ? params->m_start_row : 0;
+    const size_t   row_count = std::min(data.size(), limit);
+    std::string    rows      = out.str();
+    size_t         shown     = 0;
     for(size_t row = 0; row < row_count; ++row)
     {
-        out << (row + 1) << ".";
+        std::ostringstream line;
+        line << (offset + row + 1) << ".";
         for(size_t column_index : columns)
         {
             if(column_index >= data[row].size())
@@ -857,17 +954,46 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
             }
             const std::string& name  = header[column_index];
             const char*        quote = ColumnNeedsQuoting(name) ? "\"" : "";
-            out << " " << name << "=" << quote << data[row][column_index] << quote;
+            line << " " << name << "=" << quote << data[row][column_index] << quote;
         }
-        out << "\n";
+        line << "\n";
+        const std::string text = line.str();
+        // Wide rows fill the result before the row limit does, so stop on a
+        // whole one. The first always prints, so paging by offset cannot stall.
+        if(row > 0 && rows.size() + text.size() > ASSISTANT_MAX_RESULT_CHARS)
+        {
+            break;
+        }
+        rows += text;
+        ++shown;
     }
 
-    const uint64_t total = tables.GetTableTotalRowCount(type);
-    if(total > row_count)
+    // Added after the trim, so it survives a first row too long to fit.
+    const uint64_t     total = tables.GetTableTotalRowCount(type);
+    const uint64_t     end   = offset + shown;
+    const bool         more  = total > end || shown < row_count;
+    std::ostringstream footer;
+    if(shown == 0)
     {
-        out << "... " << (total - row_count) << " more rows not shown\n";
+        footer << "rows: 0";
+        if(offset > 0)
+        {
+            footer << " at offset " << offset << ", which is past the end of the "
+                   << total << " in this result";
+        }
+        footer << "\n";
     }
-    return TrimResult(out.str());
+    else if(offset > 0 || more)
+    {
+        footer << "rows " << (offset + 1) << "-" << end << " of "
+               << std::max<uint64_t>(total, offset + row_count);
+        if(more)
+        {
+            footer << " - pass offset=" << end << " for the next page";
+        }
+        footer << "\n";
+    }
+    return TrimResult(std::move(rows)) + footer.str();
 }
 
 // For an empty read, names the filter columns the table does not have. Such a
@@ -904,6 +1030,28 @@ MissingFilterColumnsNote(const TablesModel& tables, TableType type,
     return out.str();
 }
 
+// Says so when the sort_by the model passed is not a column of the rows that
+// landed, so the first row is not reported as the largest of something the
+// read was never sorted by.
+std::string
+UnknownSortColumnNote(const TablesModel& tables, const AssistantFetchState& fetch)
+{
+    const std::vector<std::string>& header = tables.GetTableHeader(fetch.table_type);
+    if(fetch.sort_by.empty() || header.empty() ||
+       ResolveAssistantSortColumn(tables, fetch.table_type, fetch.sort_by,
+                                  ASSISTANT_SORT_COLUMN_UNKNOWN) !=
+           ASSISTANT_SORT_COLUMN_UNKNOWN)
+    {
+        return std::string();
+    }
+    return "note: sort_by=\"" + fetch.sort_by +
+           "\" is not a column of this result; rows are " +
+           (fetch.sort_column < header.size()
+                ? "sorted by " + header[static_cast<size_t>(fetch.sort_column)]
+                : std::string("not sorted")) +
+           "\n";
+}
+
 // Names a track type for the model, using the same words the UI does.
 const char*
 TrackTypeName(TrackInfo::TrackType type)
@@ -919,19 +1067,57 @@ TrackTypeName(TrackInfo::TrackType type)
     }
 }
 
+// An entry no reply filled. FetchEvent records one for any uuid it is asked
+// about, so this is what a uuid the trace lacks looks like.
+bool
+EventEntryIsEmpty(const EventInfo& event)
+{
+    return event.basic_info.name.empty() && event.args.empty() &&
+           event.ext_info.empty() && event.flow_info.empty() &&
+           event.call_stack_info.empty();
+}
+
+// Says how many entries a capped list left out, so that a list cut short is
+// not read as the whole of it.
+void
+AppendOmittedNote(std::ostringstream& out, size_t total, size_t cap)
+{
+    if(total > cap)
+    {
+        out << "  ... " << (total - cap) << " more not shown\n";
+    }
+}
+
 // Renders one event's arguments, flow links, and call stack as text.
 std::string
 FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
 {
     const EventInfo* event =
         context.data_provider->DataModel().GetEvents().GetEvent(event_id);
+    // Gone altogether means a change of selection cleared it while it loaded,
+    // more often than the panel was willing to ask again.
     if(event == nullptr)
     {
+        return "The details were cleared before they could be read, because the "
+               "selection changed while they loaded. That says nothing about the "
+               "event - call event_details again.";
+    }
+    if(EventEntryIsEmpty(*event))
+    {
+        // Take the empty entry back out, or a later goto would read it as an
+        // event at time zero. Not while it is selected: the events view holds
+        // a pointer to a selected entry.
+        if(context.timeline_selection == nullptr ||
+           !context.timeline_selection->EventSelected(event_id))
+        {
+            context.data_provider->DataModel().GetEvents().RemoveEvent(event_id);
+        }
         return "No details came back for that event_uuid. Check the __uuid value.";
     }
 
     std::ostringstream out;
-    out << "event_uuid: " << event_id << "\n";
+    // Quoted like every uuid the model is expected to pass back as a string.
+    out << "event_uuid: \"" << event_id << "\"\n";
     if(!event->basic_info.name.empty())
     {
         out << "name: " << event->basic_info.name << "\n";
@@ -960,6 +1146,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->args.size(), ASSISTANT_MAX_EVENT_ARGS);
     }
 
     if(!event->ext_info.empty())
@@ -974,6 +1161,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->ext_info.size(), ASSISTANT_MAX_EXT_ROWS);
     }
 
     if(!event->flow_info.empty())
@@ -982,7 +1170,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
         size_t shown = 0;
         for(const EventFlowData& flow : event->flow_info)
         {
-            out << "  uuid=" << flow.id.uuid << " track_id=" << flow.track_id
+            out << "  uuid=\"" << flow.id.uuid << "\" track_id=" << flow.track_id
                 << " start_ns=" << flow.start_timestamp
                 << " end_ns=" << flow.end_timestamp << " name=\"" << flow.name << "\"\n";
             if(++shown >= ASSISTANT_MAX_FLOW_ROWS)
@@ -990,6 +1178,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->flow_info.size(), ASSISTANT_MAX_FLOW_ROWS);
     }
 
     if(!event->call_stack_info.empty())
@@ -1009,6 +1198,7 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
                 break;
             }
         }
+        AppendOmittedNote(out, event->call_stack_info.size(), ASSISTANT_MAX_CALL_STACK);
     }
 
     if(event->args.empty() && event->ext_info.empty() && event->flow_info.empty() &&
@@ -1311,8 +1501,10 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
 
 // Renders the statistics the analysis model computed for one track.
 std::string
-FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
+FormatTrackStatistics(const AssistantToolContext& context,
+                      const AssistantFetchState&  fetch)
 {
+    const uint64_t   track_id = fetch.track_id;
     const TrackInfo* track =
         context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
     if(track == nullptr)
@@ -1334,6 +1526,12 @@ FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
     for(const AnalysisTrackStatistics::Stat& stat : stats->stats)
     {
         out << stat.name << ": " << stat.FullValue() << "\n";
+    }
+    // The track's pill draws whatever this slot holds until the range next
+    // changes. Stale makes a drawn track ask again for its own window.
+    if(!fetch.covers_pill_window)
+    {
+        stats->state = AnalysisTrackStatistics::kStale;
     }
     return out.str();
 }
@@ -1492,24 +1690,73 @@ PendingResult(uint64_t request_id, const AssistantFetchState& fetch,
                          started_fetch);
 }
 
+// Picks the column index a table read sorts by, and records what was asked for
+// so AssistantFetchNeedsRerun can check that index once the header lands.
+uint64_t
+RecordSort(const TablesModel& tables, AssistantFetchState& fetch, const jt::Json& args,
+           const char* default_name, uint64_t default_index)
+{
+    fetch.sort_by      = JsonUtils::GetString(args, "sort_by", "");
+    fetch.sort_default = default_name;
+    fetch.sort_column  = ResolveAssistantSortColumnNamed(
+        tables, fetch.table_type, fetch.sort_by, fetch.sort_default, default_index);
+    return fetch.sort_column;
+}
+
 // The tail every table-backed tool shares. A refused fetch is only a failure
 // when nothing is in flight: otherwise a request the UI or another tool started
 // answers this one too, and waiting on it beats issuing a duplicate that the
-// shared request id would drop.
+// shared request id would drop. The tools rely on this rather than checking
+// first, so FetchTable must stay free of side effects when it refuses.
+//
+// scope leads the result with the window and tracks the read covered.
+// serialized_type is for the track tables, which FetchTrackTable also refuses
+// while the UI is loading a table of the same controller type under its own
+// request id. That is busy, not failed, so the panel waits for that table.
 AssistantToolStartResult
 FetchStartedResult(const AssistantToolContext& context, uint64_t request_id,
                    const AssistantFetchState& fetch, const std::string& tool_name,
-                   bool queued)
+                   bool queued, const std::string& scope,
+                   const rocprofvis_controller_table_type_t* serialized_type = nullptr)
 {
-    if(!queued && !context.data_provider->IsRequestPending(request_id))
+    const bool own_busy  = context.data_provider->IsRequestPending(request_id);
+    const bool type_busy = serialized_type != nullptr &&
+                           context.data_provider->IsTableRequestPending(*serialized_type);
+    if(!queued && !own_busy && !type_busy)
     {
         return DoneResult("Could not queue the " + tool_name + " fetch.", "Fetch failed");
     }
-    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), queued);
+    AssistantToolStartResult result =
+        PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), queued);
+    result.content = scope;
+    if(queued)
+    {
+        // A fetch that fails leaves the slot as the previous call wrote it.
+        // Dropping the params marks it unanswered until this one lands, and
+        // keeps the header for the next call to resolve a sort_by against.
+        context.data_provider->DataModel().GetTables().SetTableParams(fetch.table_type,
+                                                                      nullptr);
+    }
+    else if(!own_busy)
+    {
+        result.fetch.waits_for_ui_table = true;
+        result.fetch.ui_table_type      = *serialized_type;
+    }
+    return result;
 }
 
 }  // namespace
 
+// True after a successful summary request even when the trace had no activity
+// to put in it. That empty result must not be fetched again in a loop.
+static bool
+AssistantSummaryCurrent(const AssistantToolContext& context)
+{
+    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
+    return model.GetRevision() != 0 &&
+           context.data_provider->DataModel().GetTopology().GetRevision() ==
+               model.GetRevision();
+}
 
 // Builds the short trace description the model sees before it asks anything.
 std::string
@@ -1551,17 +1798,16 @@ BuildAssistantBriefing(const AssistantToolContext& context)
         }
     }
 
-    SettingsManager& settings    = SettingsManager::GetInstance();
-    const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
     if(context.timeline_selection != nullptr)
     {
         double start_ns = 0.0;
         double end_ns   = 0.0;
         if(context.timeline_selection->GetSelectedTimeRange(start_ns, end_ns))
         {
-            out << "selected_range: "
-                << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
-                << nanosecond_to_formatted_str(end_ns, time_format, true) << "\n";
+            // Raw nanoseconds, like every tool argument and result, so the
+            // model can pass the selection on without converting it.
+            out << "selected_range_ns: " << nanosecond_to_str(start_ns) << " .. "
+                << nanosecond_to_str(end_ns) << "\n";
         }
         std::vector<uint64_t> track_ids;
         if(context.timeline_selection->GetSelectedTracks(track_ids) && !track_ids.empty())
@@ -1570,6 +1816,19 @@ BuildAssistantBriefing(const AssistantToolContext& context)
         }
     }
 
+    // Zero totals would read as a trace in which nothing ran, so they are only
+    // printed for a summary that holds something. An empty one is still loaded.
+    if(!AssistantSummaryLoaded(context))
+    {
+        out << (AssistantSummaryCurrent(context)
+                    ? "summary: loaded, and it holds no kernel, memory or thread "
+                      "activity. Use top_events or track_events to see what this "
+                      "trace does hold.\n"
+                    : "summary: not loaded yet, so this briefing has no totals. Call "
+                      "get_summary, which loads it, before saying anything about how "
+                      "much time the trace holds.\n");
+        return out.str();
+    }
     // Headline numbers only. The top events and counters are left out so the
     // model has to fetch them rather than answer from the briefing alone.
     const SummaryModel& model = context.data_provider->DataModel().GetSummary();
@@ -1608,17 +1867,6 @@ AssistantSummaryLoaded(const AssistantToolContext& context)
                 0 ||
             SummaryCategoryTotalNs(model, summary, kRPVAnalysisSummaryCategoryThread) >
                 0);
-}
-
-// True after a successful summary request even when the trace had no activity
-// to put in it. That empty result must not be fetched again in a loop.
-static bool
-AssistantSummaryCurrent(const AssistantToolContext& context)
-{
-    const SummaryModel& model = context.data_provider->DataModel().GetSummary();
-    return model.GetRevision() != 0 &&
-           context.data_provider->DataModel().GetTopology().GetRevision() ==
-               model.GetRevision();
 }
 
 // Returns one track's activity, or the whole trace's, normalized to its peak.
@@ -1780,19 +2028,18 @@ ToolGetSummary(const AssistantToolContext& context, const jt::Json& args,
                               summary_fetch.summary_id)),
                           "Read summary");
     }
+    // Loaded with nothing in it: asking again would fetch the same nothing.
+    if(AssistantSummaryCurrent(context))
+    {
+        return DoneResult(ASSISTANT_EMPTY_SUMMARY_REPLY, "Summary empty");
+    }
     if(context.data_provider->FetchSummary())
     {
         return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
                              "Loading summary...", true);
     }
-    if(context.data_provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
-    {
-        return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
-                             "Loading summary...", false);
-    }
-    // The fetch was refused and nothing is in flight, so the summary really
-    // is empty. Formatting it anyway would hand the model a page of zeroes
-    // that reads like a measurement.
+    // Refused with nothing in flight, which was checked on the way in. Formatting
+    // the empty model would hand over zeroes that read like a measurement.
     return DoneResult("The summary could not be loaded for this trace. "
                       "Use top_events or track_events instead.",
                       "Summary unavailable");
@@ -1804,7 +2051,8 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::
     const std::vector<const TrackInfo*> tracks =
         context.data_provider->DataModel().GetTimeline().GetTrackList();
     std::ostringstream out;
-    size_t             shown = 0;
+    size_t             shown   = 0;
+    size_t             omitted = 0;
     for(const TrackInfo* track : tracks)
     {
         if(track == nullptr)
@@ -1817,6 +2065,12 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::
            track->topology.type != TrackInfo::SampledThread &&
            track->topology.type != TrackInfo::Counter)
         {
+            continue;
+        }
+        // Counted past the cap, so the reply can say how much it left out.
+        if(shown >= ASSISTANT_MAX_LIST_TRACKS)
+        {
+            ++omitted;
             continue;
         }
         out << "track_id=" << track->id << " type=" << TrackTypeName(track->topology.type)
@@ -1838,17 +2092,21 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::
         }
         out << "\n";
         ++shown;
-        if(shown >= ASSISTANT_MAX_LIST_TRACKS)
-        {
-            out << "... additional tracks omitted\n";
-            break;
-        }
     }
     if(shown == 0)
     {
         return DoneResult("No queue/thread tracks found.", "No tracks");
     }
-    return DoneResult(TrimResult(out.str()), "Listed tracks");
+    // Added after the trim, so a long listing cannot cut it off.
+    std::string omitted_note;
+    if(omitted > 0)
+    {
+        omitted_note = "... " + std::to_string(omitted) +
+                       " more tracks not listed. trace_overview ranks the busiest "
+                       "tracks, and rows from search_events carry the __trackId of the "
+                       "track they sit on.\n";
+    }
+    return DoneResult(TrimResult(out.str()) + omitted_note, "Listed tracks");
 }
 
 AssistantToolStartResult
@@ -1867,8 +2125,9 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
     const size_t limit = RowLimitFromArgs(args);
 
     std::string track_error;
+    std::string track_note;
     const std::vector<uint64_t> tracks =
-        TracksFromArgs(context, args, spec->op, true, track_error);
+        TracksFromArgs(context, args, spec->op, true, track_error, track_note);
     if(!track_error.empty())
     {
         return DoneResult(track_error, "Bad track_ids");
@@ -1891,17 +2150,13 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
 
     double start_ns = 0.0;
     double end_ns   = 0.0;
-    TimeRangeFromArgs(context, args, start_ns, end_ns);
+    const std::string scope =
+        WindowFromArgs(context, args, start_ns, end_ns) + track_note;
 
     const uint64_t request_id = DataProvider::ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
-    const AssistantFetchState fetch =
+    AssistantFetchState fetch =
         TableFetch(AssistantFetchKind::kTopEvents, TableType::kAssistantTopEventsTable,
                    limit);
-    if(context.data_provider->IsRequestPending(request_id))
-    {
-        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                             false);
-    }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
@@ -1909,12 +2164,10 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
             spec->controller_type, tracks, start_ns, end_ns, nullptr, filter.c_str(),
             group_by.c_str(), "", OffsetFromArgs(args),
             static_cast<uint64_t>(limit),
-            ResolveAssistantSortColumnNamed(
-                tables, TableType::kAssistantTopEventsTable,
-                JsonUtils::GetString(args, "sort_by", ""), "Duration",
-                ASSISTANT_DURATION_COLUMN),
+            RecordSort(tables, fetch, args, "DurationTotal", ASSISTANT_DURATION_COLUMN),
             AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending))));
-    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued, scope,
+                              &spec->controller_type);
 }
 
 AssistantToolStartResult
@@ -2009,17 +2262,12 @@ ToolEventInstances(const AssistantToolContext& context, const jt::Json& args,
     // could return nothing while that event ran hundreds of times just outside
     // the window - indistinguishable, to the model, from an event that does not
     // exist.
-    TimeRangeFromArgs(context, args, start_ns, end_ns, false);
+    const std::string scope = WindowFromArgs(context, args, start_ns, end_ns, false);
 
     const uint64_t request_id = DataProvider::ASSISTANT_SUMMARY_INSTANCE_TABLE_REQUEST_ID;
     AssistantFetchState fetch =
         TableFetch(AssistantFetchKind::kEventInstances, slot, limit);
     fetch.filter_columns = AssistantFilterColumns(args);
-    if(context.data_provider->IsRequestPending(request_id))
-    {
-        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                             false);
-    }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
     EventSearchRequestParams params(
@@ -2038,14 +2286,11 @@ ToolEventInstances(const AssistantToolContext& context, const jt::Json& args,
         // the user at is whichever comes back first - so a default of column 0
         // ascending handed back an instance picked by name or id, with no
         // relation to duration, while the model described it as the outlier.
-        ResolveAssistantSortColumnNamed(tables, slot,
-                                        JsonUtils::GetString(args, "sort_by", ""),
-                                        "duration",
-                                        duration_column),
+        RecordSort(tables, fetch, args, "duration", duration_column),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending));
     params.m_filter   = filter;
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
-    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued, scope);
 }
 
 AssistantToolStartResult
@@ -2254,17 +2499,20 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
                                        : DataProvider::ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
     const rocprofvis_controller_track_type_t wanted =
         events ? kRPVControllerTrackTypeEvents : kRPVControllerTrackTypeSamples;
+    const rocprofvis_controller_table_type_t table_type =
+        events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples;
 
     std::string           track_error;
+    std::string           track_note;
     std::vector<uint64_t> tracks = TracksFromArgs(
-        context, args, kRocProfVisDmOperationDispatch, false, track_error);
+        context, args, kRocProfVisDmOperationDispatch, false, track_error, track_note);
     if(!track_error.empty())
     {
         return DoneResult(track_error, "Bad track_ids");
     }
     if(tracks.empty())
     {
-        tracks = TracksOfType(context, wanted);
+        tracks = TracksOfType(context, wanted, track_note);
     }
     else
     {
@@ -2298,43 +2546,48 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     const size_t limit = RowLimitFromArgs(args);
     double start_ns = 0.0;
     double end_ns   = 0.0;
-    TimeRangeFromArgs(context, args, start_ns, end_ns);
+    const std::string scope =
+        WindowFromArgs(context, args, start_ns, end_ns) + track_note;
 
     AssistantFetchState fetch = TableFetch(AssistantFetchKind::kDataTable, type, limit);
+    const TablesModel& tables = context.data_provider->DataModel().GetTables();
     if(group_by.empty())
     {
         fetch.filter_columns = AssistantFilterColumns(args);
+        // Ask for the column by name; the index is only a first guess for the
+        // first query of a session, before any header has been read. A sample
+        // table has no id and its first column (node) is the same on every
+        // row, so samples go in time order.
+        RecordSort(tables, fetch, args, events ? "id" : "start", events ? 0u : 1u);
     }
-    if(context.data_provider->IsRequestPending(request_id))
+    else
     {
-        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                             false);
+        // A grouped result leads with the group column whatever header the slot
+        // held before, so only a sort_by the model named is looked up.
+        fetch.sort_by      = JsonUtils::GetString(args, "sort_by", "");
+        fetch.sort_default = group_by;
+        fetch.sort_column  = ResolveAssistantSortColumn(tables, type, fetch.sort_by, 0);
     }
 
-    const TablesModel& tables = context.data_provider->DataModel().GetTables();
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
         TrackTableRequestParams(
-            events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
+            table_type,
             tracks, start_ns, end_ns, nullptr, filter.c_str(), group_by.c_str(), "",
             OffsetFromArgs(args), static_cast<uint64_t>(limit),
-            // Ask for the column by name, keeping the index only for the first
-            // query of a session, before any header has been read. "id" is
-            // column 0 of the event table today; naming it means a reordered
-            // table sorts by the same thing rather than silently by whatever
-            // moved into that slot. A sample table without an "id" column falls
-            // through to the index unchanged.
-            ResolveAssistantSortColumnNamed(
-                tables, type, JsonUtils::GetString(args, "sort_by", ""), "id", 0),
+            fetch.sort_column,
             AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
-    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued, scope,
+                              &table_type);
 }
 
 AssistantToolStartResult
 ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                  const std::string& tool_name)
 {
-    const uint64_t event_uuid =
-        JsonU64(args, "event_uuid", JsonU64(args, "event_id", 0));
+    // __uuid is how the rows spell the column, so a call copied from one is
+    // read rather than sent back for a rename.
+    const uint64_t event_uuid = JsonU64(
+        args, "event_uuid", JsonU64(args, "__uuid", JsonU64(args, "event_id", 0)));
     if(event_uuid == 0)
     {
         return DoneResult(
@@ -2355,14 +2608,13 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                                                  RequestType::kFetchEventCallStack)
     };
 
-    const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
-    // FetchEvent seeds name/duration from loaded track data and chains the
-    // extended-data fetch; without a track id only the fetches below run.
-    bool extended = false;
-    if(track_id != INVALID_UINT64_INDEX)
-    {
-        extended = context.data_provider->FetchEvent(track_id, event_uuid);
-    }
+    const uint64_t track_id =
+        JsonU64(args, "track_id", JsonU64(args, "__trackId", INVALID_UINT64_INDEX));
+    // FetchEvent creates the event's model entry, which the flow and call stack
+    // replies are dropped without, and chains the extended-data fetch that
+    // carries the arguments. A track id only lets it seed the name and duration
+    // from loaded track data; without one the extended data fills them in.
+    const bool extended = context.data_provider->FetchEvent(track_id, event_uuid);
     const bool flow  = context.data_provider->FetchEventFlowDetails(event_uuid);
     const bool stack = context.data_provider->FetchEventCallStackData(event_uuid);
     if(!extended && !flow && !stack)
@@ -2409,11 +2661,18 @@ ToolTrackStatistics(const AssistantToolContext& context, const jt::Json& args,
 
     double start_ns = 0.0;
     double end_ns   = 0.0;
-    TimeRangeFromArgs(context, args, start_ns, end_ns);
+    const std::string scope = WindowFromArgs(context, args, start_ns, end_ns);
 
     AssistantFetchState fetch;
     fetch.kind     = AssistantFetchKind::kTrackStatistics;
     fetch.track_id = track_id;
+    // The pill asks for the selected range, and for the view when there is none.
+    double selected_start = 0.0;
+    double selected_end   = 0.0;
+    fetch.covers_pill_window =
+        context.timeline_selection != nullptr &&
+        context.timeline_selection->GetSelectedTimeRange(selected_start, selected_end) &&
+        selected_start == start_ns && selected_end == end_ns;
 
     const uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
         static_cast<uint32_t>(track_id), 0, 0,
@@ -2433,7 +2692,10 @@ ToolTrackStatistics(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult("Could not queue the track statistics fetch.",
                           "Fetch failed");
     }
-    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), true);
+    AssistantToolStartResult result =
+        PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), true);
+    result.content = scope;
+    return result;
 }
 
 AssistantToolStartResult
@@ -2452,8 +2714,14 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
             "search_events needs terms, e.g. {\"terms\":[\"gemm\"]}.",
             "Missing terms");
     }
+    // Terms past the cap are not searched, which changes what matches, so the
+    // result has to say so.
+    std::string terms_note;
     if(terms.size() > ASSISTANT_MAX_SEARCH_TERMS)
     {
+        terms_note = "terms: only the first " +
+                     std::to_string(ASSISTANT_MAX_SEARCH_TERMS) + " of " +
+                     std::to_string(terms.size()) + " were searched\n";
         terms.resize(ASSISTANT_MAX_SEARCH_TERMS);
     }
 
@@ -2501,17 +2769,13 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     const size_t limit = RowLimitFromArgs(args);
     double start_ns = 0.0;
     double end_ns   = 0.0;
-    TimeRangeFromArgs(context, args, start_ns, end_ns, false);
+    const std::string scope =
+        WindowFromArgs(context, args, start_ns, end_ns, false) + terms_note;
 
     const uint64_t      request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
     AssistantFetchState fetch      = TableFetch(
         AssistantFetchKind::kDataTable, TableType::kAssistantSearchTable, limit);
     fetch.filter_columns = AssistantFilterColumns(args);
-    if(context.data_provider->IsRequestPending(request_id))
-    {
-        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                             false);
-    }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
     EventSearchRequestParams params(
@@ -2520,13 +2784,11 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
         static_cast<uint64_t>(limit),
         // "__uuid" is column 1 of the search table today - see the note on
         // track rows for why the name leads and the index only trails.
-        ResolveAssistantSortColumnNamed(tables, TableType::kAssistantSearchTable,
-                                        JsonUtils::GetString(args, "sort_by", ""),
-                                        "__uuid", 1),
+        RecordSort(tables, fetch, args, "__uuid", 1),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending));
     params.m_filter   = filter;
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(params));
-    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued, scope);
 }
 
 // One run's figures for compare_traces: an event family's summary list, with
@@ -2643,13 +2905,14 @@ ToolCompareTraces(const AssistantToolContext& context, const jt::Json& args,
             return PendingResult(DataProvider::SUMMARY_REQUEST_ID, fetch,
                                  AssistantToolStatusLabel(tool_name), false);
         }
-        const bool queued = provider->FetchSummary();
-        if(queued || provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
+        if(provider->FetchSummary())
         {
+            // Owned, so a stopped turn cancels it, but not started_fetch: the
+            // tool runs again once it lands instead of formatting it.
             AssistantToolStartResult waiting =
                 PendingResult(DataProvider::SUMMARY_REQUEST_ID, fetch,
                               AssistantToolStatusLabel(tool_name), false);
-            waiting.owns_requests = queued;
+            waiting.owns_requests = true;
             return waiting;
         }
         return DoneResult("The summary of " + side->trace_name +
@@ -2733,6 +2996,152 @@ GetAssistantDataToolHandlers()
     return table;
 }
 
+// Resolves the names the way the tool did, but against the header that landed,
+// so a second run sends this same index and is not asked for a third.
+bool
+AssistantFetchNeedsRerun(const AssistantToolContext& context,
+                         const AssistantFetchState&  fetch)
+{
+    // Only the table tools record a default sort column.
+    if(context.data_provider == nullptr || fetch.sort_default.empty())
+    {
+        return false;
+    }
+    const TablesModel& tables = context.data_provider->DataModel().GetTables();
+    // No params means the read failed and the header is an earlier call's.
+    if(!tables.GetTableParams(fetch.table_type) ||
+       tables.GetTableHeader(fetch.table_type).empty())
+    {
+        return false;
+    }
+    const uint64_t wanted = ResolveAssistantSortColumnNamed(
+        tables, fetch.table_type, fetch.sort_by, fetch.sort_default,
+        ASSISTANT_SORT_COLUMN_UNKNOWN);
+    return wanted != ASSISTANT_SORT_COLUMN_UNKNOWN && wanted != fetch.sort_column;
+}
+
+// A change of selection or view marks every track stale. In flight that is
+// already final: the reply is discarded, or a pill replaces the request. Once
+// the request has cleared, anything short of ready means the reply was dropped.
+bool
+AssistantTrackStatisticsDropped(const AssistantToolContext& context, uint64_t track_id,
+                                bool in_flight)
+{
+    if(context.data_provider == nullptr)
+    {
+        return false;
+    }
+    const TrackInfo* track =
+        context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
+    if(track == nullptr)
+    {
+        return false;
+    }
+    const AnalysisTrackStatistics* stats =
+        context.data_provider->DataModel().GetAnalysis().RegisterTrack(*track);
+    return stats != nullptr &&
+           (in_flight ? stats->state < AnalysisTrackStatistics::kRequested
+                      : stats->state != AnalysisTrackStatistics::kReady);
+}
+
+// A cancelled request never lands, which would leave the slot waiting on it
+// and the pill blank. Stale makes a drawn track ask again for its own window.
+void
+ReleaseAssistantTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
+{
+    if(context.data_provider == nullptr)
+    {
+        return;
+    }
+    const TrackInfo* track =
+        context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
+    if(track == nullptr)
+    {
+        return;
+    }
+    const AnalysisTrackStatistics* stats =
+        context.data_provider->DataModel().GetAnalysis().RegisterTrack(*track);
+    if(stats != nullptr)
+    {
+        stats->state = AnalysisTrackStatistics::kStale;
+    }
+}
+
+// FetchEvent leaves an entry for every uuid it is asked about, so one that is
+// gone once the replies have landed was cleared along with the selection.
+bool
+AssistantEventDetailsDropped(const AssistantToolContext& context,
+                             const AssistantFetchState&  fetch)
+{
+    return fetch.kind == AssistantFetchKind::kEventDetails &&
+           context.data_provider != nullptr &&
+           context.data_provider->DataModel().GetEvents().GetEvent(fetch.event_id) ==
+               nullptr;
+}
+
+AssistantEventSighting
+FindAssistantEvent(const AssistantToolContext& context, uint64_t event_uuid)
+{
+    AssistantEventSighting sighting;
+    if(context.data_provider == nullptr)
+    {
+        return sighting;
+    }
+    const EventInfo* event =
+        context.data_provider->DataModel().GetEvents().GetEvent(event_uuid);
+    if(event != nullptr && !EventEntryIsEmpty(*event))
+    {
+        sighting.seen     = true;
+        sighting.start_ns = event->basic_info.start_ts;
+        sighting.end_ns   = event->basic_info.start_ts + event->basic_info.duration;
+        sighting.has_span = sighting.end_ns > sighting.start_ns;
+        return sighting;
+    }
+
+    // The slots whose rows are events. Top events and samples carry no uuid.
+    const TableType slots[] = { TableType::kAssistantEventTable,
+                                TableType::kAssistantSearchTable,
+                                TableType::kAssistantSummaryKernelTable,
+                                TableType::kAssistantSummaryMemoryTable,
+                                TableType::kAssistantSummaryThreadTable };
+    const TablesModel& tables = context.data_provider->DataModel().GetTables();
+    const std::string  wanted = std::to_string(event_uuid);
+    for(const TableType slot : slots)
+    {
+        const std::vector<std::string>& header = tables.GetTableHeader(slot);
+        const size_t uuid_column =
+            static_cast<size_t>(std::find(header.begin(), header.end(), "__uuid") -
+                                header.begin());
+        // A grouped read, or a slot nothing has landed in, has no such column.
+        if(uuid_column == header.size())
+        {
+            continue;
+        }
+        const size_t start_column = static_cast<size_t>(
+            std::find(header.begin(), header.end(), "start") - header.begin());
+        const size_t end_column = static_cast<size_t>(
+            std::find(header.begin(), header.end(), "end") - header.begin());
+        const bool has_span_columns =
+            start_column < header.size() && end_column < header.size();
+        for(const std::vector<std::string>& row : tables.GetTableData(slot))
+        {
+            if(uuid_column >= row.size() || row[uuid_column] != wanted)
+            {
+                continue;
+            }
+            sighting.seen = true;
+            if(has_span_columns && start_column < row.size() && end_column < row.size())
+            {
+                sighting.start_ns = std::strtod(row[start_column].c_str(), nullptr);
+                sighting.end_ns   = std::strtod(row[end_column].c_str(), nullptr);
+                sighting.has_span = sighting.end_ns > sighting.start_ns;
+            }
+            return sighting;
+        }
+    }
+    return sighting;
+}
+
 // Formats the rows of a fetch that has landed, by the kind of fetch it was.
 std::string
 FinishAssistantFetch(const AssistantToolContext& context,
@@ -2749,11 +3158,24 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         if(!AssistantSummaryLoaded(context))
         {
-            return "The summary could not be loaded for this trace. "
-                   "Use top_events or track_events instead.";
+            return AssistantSummaryCurrent(context)
+                       ? ASSISTANT_EMPTY_SUMMARY_REPLY
+                       : "The summary could not be loaded for this trace. "
+                         "Use top_events or track_events instead.";
         }
         return TrimResult(
             FormatRequestedSummary(context, fetch.summary_level, fetch.summary_id));
+    }
+    // FetchStartedResult dropped the slot's params and only a reply that
+    // succeeds puts them back, so a slot still without them holds an earlier
+    // call's rows.
+    if((fetch.kind == AssistantFetchKind::kTopEvents ||
+        fetch.kind == AssistantFetchKind::kEventInstances ||
+        fetch.kind == AssistantFetchKind::kDataTable) &&
+       !context.data_provider->DataModel().GetTables().GetTableParams(fetch.table_type))
+    {
+        return "The query failed, so no rows were read. This is a failed read, not an "
+               "empty result - try again or narrow the window.";
     }
     if(fetch.kind == AssistantFetchKind::kTopEvents)
     {
@@ -2763,15 +3185,17 @@ FinishAssistantFetch(const AssistantToolContext& context,
         if(tables.GetTableData(fetch.table_type).empty() &&
            tables.GetTableHeader(fetch.table_type).empty())
         {
-            return "top_events returned no rows for the current tracks and time range.";
+            return "top_events returned no rows for that window and those tracks.";
         }
-        return FormatTableSnapshot(tables, fetch.table_type, limit);
+        return FormatTableSnapshot(tables, fetch.table_type, limit) +
+               UnknownSortColumnNote(tables, fetch);
     }
     if(fetch.kind == AssistantFetchKind::kEventInstances ||
        fetch.kind == AssistantFetchKind::kDataTable)
     {
         const TablesModel& tables = context.data_provider->DataModel().GetTables();
         return FormatTableSnapshot(tables, fetch.table_type, limit) +
+               UnknownSortColumnNote(tables, fetch) +
                MissingFilterColumnsNote(tables, fetch.table_type, fetch.filter_columns);
     }
     if(fetch.kind == AssistantFetchKind::kEventDetails)
@@ -2780,7 +3204,7 @@ FinishAssistantFetch(const AssistantToolContext& context,
     }
     if(fetch.kind == AssistantFetchKind::kTrackStatistics)
     {
-        return FormatTrackStatistics(context, fetch.track_id);
+        return FormatTrackStatistics(context, fetch);
     }
     if(fetch.kind == AssistantFetchKind::kComputeMetrics)
     {

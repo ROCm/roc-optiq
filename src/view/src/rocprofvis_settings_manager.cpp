@@ -614,11 +614,17 @@ SettingsManager::LoadSettingsJson()
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
-        DeserializeAssistantSettings(result.second);
+        const bool assistant_url_cleaned = DeserializeAssistantSettings(result.second);
         DeserializeAppWindowSettings(result.second);
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         MigrateLegacyAssistantToken();
 #endif
+        // The file held a key inside an assistant URL. Rewritten now, as just
+        // read, so the key does not stay on disk until the next save.
+        if(assistant_url_cleaned)
+        {
+            SaveSettingsJson();
+        }
     }
     else
     {
@@ -1188,6 +1194,7 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
 }
 
 // The API keys are deliberately absent: those live in the credential store.
+// The URL is filtered here too, since Preferences may hold a half-typed one.
 void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
@@ -1197,7 +1204,8 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
     {
         jt::Json& entry = as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS][i++];
         entry[JSON_KEY_SETTINGS_ASSISTANT_NAME]         = provider.name;
-        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = provider.endpoint_url;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] =
+            AssistantStorableUrl(provider.endpoint_url);
         entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
     }
     as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE] =
@@ -1209,7 +1217,7 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
  * Makes every endpoint name distinct, and gives an unnamed one a name.
  *
  * The name is the credential-store key, so two endpoints sharing one would
- * share a key: the token entered for one host would be posted to the other's.
+ * share an entry: saving a key for one would overwrite the other's.
  * Nothing in the UI creates a duplicate, but a hand-edited settings file can,
  * and that is exactly the case where the mistake is invisible. Suffixing is
  * better than dropping the endpoint, which would silently lose a configuration.
@@ -1244,7 +1252,7 @@ SettingsManager::MakeAssistantProviderNamesUnique()
     }
 }
 
-void
+bool
 SettingsManager::DeserializeAssistantSettings(jt::Json& json)
 {
     jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
@@ -1297,6 +1305,23 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
         m_usersettings.assistant.providers.push_back(provider);
     }
 
+    // An older or hand-edited file may hold a key in the URL. Dropped from
+    // memory here, so use matches storage, and the caller rewrites the file.
+    bool url_cleaned = false;
+    for(AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        const std::string storable = AssistantStorableUrl(provider.endpoint_url);
+        if(storable != provider.endpoint_url)
+        {
+            spdlog::warn("Removed credentials or query parameters from the saved URL "
+                         "of assistant endpoint \"{}\". Put its key in Edit > "
+                         "Preferences > Assistant.",
+                         provider.name);
+            provider.endpoint_url = storable;
+            url_cleaned           = true;
+        }
+    }
+
     m_usersettings.assistant.active = 0;
     if(as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].isLong())
     {
@@ -1307,6 +1332,7 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
             m_usersettings.assistant.active = static_cast<size_t>(active);
         }
     }
+    return url_cleaned;
 }
 
 const AssistantProvider*

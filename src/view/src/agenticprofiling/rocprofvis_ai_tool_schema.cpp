@@ -127,8 +127,9 @@ AddScopeParams(jt::Json& params)
 }
 
 // The structured stand-in for a SQL query: filters, sort, paging, grouping.
+// Only the track tables honour group_by.
 void
-AddQueryParams(jt::Json& params)
+AddQueryParams(jt::Json& params, bool with_group_by = false)
 {
     jt::Json filter_item = ObjectParams();
     AddParam(filter_item, "column", "string",
@@ -155,8 +156,13 @@ AddQueryParams(jt::Json& params)
     AddParam(params, "limit", "integer", "Rows to return (default 20, max 200).");
     AddParam(params, "offset", "integer",
              "Rows to skip. Use with limit to page through a big result.");
-    AddParam(params, "group_by", "string",
-             "Optional column to aggregate rows by, e.g. name.");
+    if(with_group_by)
+    {
+        AddParam(params, "group_by", "string",
+                 "Optional column to aggregate rows by, e.g. name. Returns one row "
+                 "per value with its count and the average, min and max duration "
+                 "(value for samples). No sums.");
+    }
 }
 
 // The linked trace a read tool can look at instead of this one.
@@ -235,8 +241,8 @@ MakeAssistantToolsJson()
             "that line's level and id to see the same breakdown for one device, "
             "process or thread, without running a query.\n"
             "Each top list keeps only the busiest names plus an Others row; use "
-            "top_events for a full ranking. Call this first when the briefing is "
-            "empty or its totals are 0.",
+            "top_events for a full ranking. Call this first when the briefing "
+            "says the summary is not loaded.",
             summary_params);
 
     jt::Json top_params = ObjectParams();
@@ -273,7 +279,9 @@ MakeAssistantToolsJson()
         MakeStringEnum({ "trace", "node", "processor", "process", "thread" });
     AddParam(inst_params, "id", "integer",
              "Sub-metric id from a get_summary sub_metrics line, paired with level.");
-    AddScopeParams(inst_params);
+    AddParam(inst_params, "start_ns", "number",
+             "Window start in nanoseconds. Defaults to the whole trace.");
+    AddParam(inst_params, "end_ns", "number", "Window end in nanoseconds.");
     AddQueryParams(inst_params);
     AddTraceParam(inst_params);
     inst_params["required"][0] = "name";
@@ -325,7 +333,8 @@ MakeAssistantToolsJson()
              "event's own start and end from its row, not a wider window around "
              "it: the timeline merges neighbouring events into one bar until it "
              "is zoomed in far enough, and a merged bar cannot be selected. "
-             "Optional - omitted, the event's own span is looked up instead.");
+             "Optional for an event whose row you read last or whose "
+             "event_details you loaded: its own span is used instead.");
     AddParam(goto_params, "end_ns", "number", "Range end in nanoseconds.");
     AddParam(goto_params, "track_id", "integer",
              "__trackId of the event. Pass it whenever you pass event_uuid; without "
@@ -345,10 +354,6 @@ MakeAssistantToolsJson()
              "columns. They stay highlighted while the user reads, and the first "
              "one gets selected so its flow arrows and call stack expand.");
     goto_params["properties"]["events"]["items"] = goto_event_item;
-    AddParam(goto_params, "zoom", "boolean",
-             "Also zoom the timeline to the range, not just select it. Use this "
-             "when the range is small enough that the user would have to zoom in "
-             "by hand.");
 
     AddTool(tools, 5, "goto",
             "Point the UI at what you are talking about: move the timeline to a "
@@ -363,7 +368,7 @@ MakeAssistantToolsJson()
 
     jt::Json track_events_params = ObjectParams();
     AddScopeParams(track_events_params);
-    AddQueryParams(track_events_params);
+    AddQueryParams(track_events_params, true);
     AddTraceParam(track_events_params);
     AddTool(tools, 6, "track_events",
             "Read raw events off specific timeline tracks. This is the closest thing "
@@ -374,7 +379,7 @@ MakeAssistantToolsJson()
 
     jt::Json track_samples_params = ObjectParams();
     AddScopeParams(track_samples_params);
-    AddQueryParams(track_samples_params);
+    AddQueryParams(track_samples_params, true);
     AddTraceParam(track_samples_params);
     AddTool(tools, 7, "track_samples",
             "Read counter/PMC samples off specific counter tracks over a window. "
@@ -394,8 +399,8 @@ MakeAssistantToolsJson()
     event_details_params["required"][0] = "event_uuid";
     AddTool(tools, 8, "event_details",
             "Drill into one event: its arguments, extended data, flow links to and "
-            "from other events, and its call stack. Use after track_events or "
-            "top_events gives you a __uuid.",
+            "from other events, and its call stack. Use after event_instances, "
+            "search_events or track_events gives you a __uuid.",
             event_details_params);
 
     jt::Json track_stats_params = ObjectParams();
@@ -511,7 +516,8 @@ MakeAssistantToolsJson()
     note_params["required"][2] = "text";
     AddTool(tools, 15, "annotate",
             "Pin a sticky note on the timeline. Notes are saved with the project. "
-            "Only call this when the user asked you to leave a note.\n"
+            "Only call this when the user asked you to leave a note. A turn may "
+            "pin at most five, and a long title or text is cut to fit.\n"
             "The note goes at an absolute timestamp, and the user can pan, zoom "
             "or change the selection between your turns - so a number you "
             "worked out earlier may no longer be where they are looking. The "
@@ -628,9 +634,13 @@ MakeAssistantToolsJson()
     AddTool(tools, 22, "run_analysis_script",
             "Offer a Python script that analyses this trace. It does not run on "
             "its own: the editor opens with your source and the user presses Run "
-            "or Reject, so write it to be read as well as executed - clear names, "
-            "and a comment where the intent is not obvious. You get back what it "
-            "computed, or that they declined.\n"
+            "or Reject. Once approved it runs inside Optiq with the user's own "
+            "permissions, and they are told so, which makes their reading of it "
+            "the safeguard - so write it to be read as well as executed: clear "
+            "names, and a comment where the intent is not obvious. You get back "
+            "what it computed, or that they declined. An offer that is declined "
+            "or left unanswered is the last one that turn, and a script is not "
+            "offered over the user's own unsaved work in the Script tab.\n"
             "Use it when the answer needs arithmetic across many rows - gaps "
             "between events, totals, percentiles, overlap between two tracks, "
             "per-name rollups, call-depth analysis - because one script costs a "

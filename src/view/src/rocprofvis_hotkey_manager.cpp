@@ -147,9 +147,10 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
     if(key != ImGuiKey_None && io.KeyCtrl && !(mod_flags & ImGuiMod_Ctrl))
         return false;
 
-    // Shift/Alt may legitimately combine with keyboard actions (e.g. Speed
-    // Boost), so only suppress when another action explicitly owns the
-    // more-specific variant.
+    // An extra Shift/Alt may only combine with a keyboard action when a hold
+    // action is bound to it (e.g. Speed Boost); any other extra modifier
+    // blocks the chord, the same as Ctrl. Even then, suppress when another
+    // action explicitly owns the more-specific variant.
     if(key != ImGuiKey_None)
     {
         ImGuiKeyChord extra_mods = 0;
@@ -158,6 +159,17 @@ HotkeyManager::IsKeyChordPressed(ImGuiKeyChord chord, bool repeat) const
 
         if(extra_mods != 0)
         {
+            ImGuiKeyChord hold_mods = 0;
+            for(size_t i = 0; i < kHotkeyActionCount; ++i)
+            {
+                if(kActionTable[i].type != ActionType::kHold)
+                    continue;
+                hold_mods |= m_bindings[i].primary & ImGuiMod_Mask_;
+                hold_mods |= m_bindings[i].alternate & ImGuiMod_Mask_;
+            }
+            if((extra_mods & ~hold_mods) != 0)
+                return false;
+
             for(size_t i = 0; i < kHotkeyActionCount; ++i)
             {
                 ImGuiKeyChord candidates[2] = {m_bindings[i].primary,

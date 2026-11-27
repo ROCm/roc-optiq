@@ -53,9 +53,9 @@ public:
 
     // Once profiling completes, the remote trace path comes from the
     // controller's scrape of the profiler's output and is stored as the URI's
-    // result path. A run that produces no trace file clears it.
+    // result path. A run with no trace path clears it and still ends Done.
     // @param produces_trace: whether the run is expected to write a trace file;
-    // when false, finding none is not a failure.
+    // when false, the path is not looked for.
     RemoteProfilerSession(std::shared_ptr<RemoteUri> uri, bool produces_trace);
     ~RemoteProfilerSession() override;
 
@@ -78,6 +78,11 @@ public:
 
     // Current workflow phase, used by the dialog to drive the status badge.
     Phase GetPhase() const { return m_phase; }
+
+    // Why the finished run has, or lacks, a remote trace path: Success,
+    // NotSupported (the run writes no trace) or NotAvailable (no path was found
+    // in its output). Pending until the run is Done.
+    rocprofvis_result_t GetTracePathResult() const { return m_trace_path_result; }
 
     // Accessor used by the dialog to render the auth modal.
     SshSession* GetSession() { return m_session.get(); }
@@ -111,6 +116,7 @@ private:
     bool                        m_running;
     std::string                 m_status_message;
     rocprofvis_profiler_state_t m_profiler_state;
+    rocprofvis_result_t         m_trace_path_result;
 };
 
 }  // namespace View

@@ -1016,6 +1016,24 @@ SettingsManager::GetEventLevelSpacing() const
     return EVENT_LEVEL_SPACING;
 }
 
+// Parses a saved binding, leaving it unbound when the string is malformed or
+// does not suit the action: press actions need a key, hold actions are
+// modifiers only.
+static ImGuiKeyChord
+parse_hotkey_chord(const HotkeyActionInfo& info, const std::string& str)
+{
+    ImGuiKeyChord chord       = HotkeyManager::StringToKeyChord(str);
+    bool          has_key     = (chord & ~ImGuiMod_Mask_) != ImGuiKey_None;
+    bool          fits_action = info.type == ActionType::kPress ? has_key : !has_key;
+    bool          unparsed    = chord == ImGuiKey_None && !str.empty() && str != "None";
+    if(unparsed || (chord != ImGuiKey_None && !fits_action))
+    {
+        spdlog::warn("Ignoring invalid hotkey \"{}\" for {}", str, info.key);
+        chord = ImGuiKey_None;
+    }
+    return chord;
+}
+
 void
 SettingsManager::SerializeHotkeySettings(jt::Json& json)
 {
@@ -1060,13 +1078,11 @@ SettingsManager::DeserializeHotkeySettings(jt::Json& json)
         HotkeyBinding binding = info.default_binding;
         if(value["primary"].isString())
         {
-            binding.primary = HotkeyManager::StringToKeyChord(
-                value["primary"].getString());
+            binding.primary = parse_hotkey_chord(info, value["primary"].getString());
         }
         if(value["alternate"].isString())
         {
-            binding.alternate = HotkeyManager::StringToKeyChord(
-                value["alternate"].getString());
+            binding.alternate = parse_hotkey_chord(info, value["alternate"].getString());
         }
 
         hk_mgr.SetBinding(action_id, binding);
@@ -1302,6 +1318,18 @@ SettingsManager::GetActiveAssistantProvider() const
         return nullptr;
     }
     return &providers[m_usersettings.assistant.active];
+}
+
+void
+SettingsManager::SetActiveAssistantModel(const std::string& model)
+{
+    std::vector<AssistantProvider>& providers = m_usersettings.assistant.providers;
+    if(model.empty() || m_usersettings.assistant.active >= providers.size())
+    {
+        return;
+    }
+    providers[m_usersettings.assistant.active].model = model;
+    SaveSettingsJson();
 }
 
 void

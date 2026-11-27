@@ -44,6 +44,11 @@ struct Notification
 
     std::string uid;  // Unique identifier for ImGui rendering
 
+    // Stays up like a persistent notification until the user closes it.
+    bool is_dismissible = false;
+    // Times this message was shown while already on screen, including the first.
+    uint32_t repeat_count = 1;
+
     // Calculate current opacity based on the notification's state and time
     float GetOpacity(double current_time) const;
 
@@ -63,11 +68,17 @@ public:
     NotificationManager(const NotificationManager&) = delete;
     void operator=(const NotificationManager&)      = delete;
 
+    // Timed: fades out after the duration (m_default_duration if not given).
     void Show(const std::string& message,
               NotificationLevel  level = NotificationLevel::Info);
     void Show(const std::string& message, NotificationLevel level, double duration);
+    // Persistent: stays until Hide(id) is called.
     void ShowPersistent(const std::string& id, const std::string& message,
                         NotificationLevel level = NotificationLevel::Info);
+    // Dismissible: stays until the user clicks its close button. Showing a message
+    // already on screen at the same level bumps its repeat count instead of stacking.
+    void ShowDismissible(const std::string& message,
+                         NotificationLevel  level = NotificationLevel::Info);
     void UpdateProgress(const std::string& id, uint64_t pct, const std::string& message);
     void Hide(const std::string& id);
     void ClearAll();

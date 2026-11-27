@@ -53,14 +53,27 @@ SettingsPanel::~SettingsPanel() {}
 void
 SettingsPanel::Show()
 {
+    ShowAtCategory(Display);
+}
+
+void
+SettingsPanel::ShowAtCategory(Category category)
+{
     m_should_open             = true;
-    m_category                = Display;
+    m_category                = category;
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
+    m_hotkeys_changed         = false;
+    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+    {
+        m_hotkeys_initial[i] =
+            HotkeyManager::GetInstance().GetBinding(static_cast<HotkeyActionId>(i));
+    }
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     DiscardAssistantTokenEdits();
     m_assistant_show_token = false;
+    RequestAssistantModels(true);
 #endif
 }
 
@@ -238,7 +251,11 @@ SettingsPanel::Render()
                 m_settings.ApplyUserSettings(temp_currentsettings, false);
                 if(m_hotkeys_changed)
                 {
-                    HotkeyManager::GetInstance().ResetAllBindings();
+                    for(size_t i = 0; i < kHotkeyActionCount; ++i)
+                    {
+                        HotkeyManager::GetInstance().SetBinding(
+                            static_cast<HotkeyActionId>(i), m_hotkeys_initial[i]);
+                    }
                     m_hotkeys_changed = false;
                 }
                 m_settings_changed = true;
@@ -250,6 +267,13 @@ SettingsPanel::Render()
                 m_should_open = false;
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                 DiscardAssistantTokenEdits();
+                // Cancel restored the saved endpoint, so restore its list. OK
+                // already looked the draft up with only the key typed for it;
+                // never hand an old stored key to a newly accepted URL here.
+                if(!m_settings_confirmed)
+                {
+                    RequestAssistantModels(true);
+                }
 #endif
                 ImGui::CloseCurrentPopup();
             }
@@ -480,7 +504,7 @@ SettingsPanel::RenderOtherSettings()
     if(ImGui::Button("Browse"))
     {
         AppWindow::GetInstance()->ShowPathPickerDialog(
-            "Chose Directory", m_usersettings.remote_cache_path,
+            "Choose Directory", m_usersettings.remote_cache_path,
             [this](std::string path) { m_usersettings.remote_cache_path = path; });
     }
     ImGui::TextUnformatted("Closing options");

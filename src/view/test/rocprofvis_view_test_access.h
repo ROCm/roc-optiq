@@ -15,6 +15,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_multi_track_table.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
@@ -91,6 +92,12 @@ struct AnalysisViewTestPeer
     const AnalysisView& v;
     EventsView*   EventsViewPtr() const { return v.m_events_view.get(); }
     TrackDetails* TrackDetailsPtr() const { return v.m_track_details.get(); }
+    // The pooled Event Table, or the A source's table in compare mode.
+    InfiniteScrollTable* EventTablePtr() const
+    {
+        if(v.m_event_group.tables.empty()) return nullptr;
+        return v.m_event_group.tables.front().get();
+    }
 };
 
 // TrackDetails holds one DetailItem per selected track (emplace_front on select,
@@ -291,6 +298,33 @@ struct EventSearchTestPeer
     }
 };
 
+// The basic filter row's per-column inputs. SetColumnFilter is what typing into
+// the column's box and pressing Enter does; the request goes out on the next render.
+struct InfiniteScrollTableTestPeer
+{
+    InfiniteScrollTable& v;
+    bool FilterRowShown() const { return v.m_display_filter_row; }
+    // The table's child window, and the ImGui table window inside it, are named under this.
+    const std::string& WidgetName() const { return v.m_widget_name; }
+    bool SetColumnFilter(const std::string& column, const std::string& text)
+    {
+        auto it = v.m_filter_row_inputs.find(column);
+        if(it == v.m_filter_row_inputs.end()) return false;
+        it->second.input     = text;
+        v.m_filter_requested = true;
+        return true;
+    }
+};
+
+// Chunk size used when a track splits a fetch into requests. Shrinking it makes a
+// short trace span several chunks.
+struct TrackItemTestPeer
+{
+    TrackItem& v;
+    uint64_t ChunkDuration() const { return v.m_chunk_duration_ns; }
+    void     SetChunkDuration(uint64_t duration_ns) { v.m_chunk_duration_ns = duration_ns; }
+};
+
 // FlameTrackItem: only the non-capture accessors move here. The render-path
 // rect capture and its reader accessors stay #ifdef'd in the class (geometry
 // only exists during draw).
@@ -394,6 +428,18 @@ struct TimelineViewTestPeer
             if(flame != nullptr) return flame;
         }
         return nullptr;
+    }
+
+    // All displayed tracks of any type, in track order.
+    std::vector<TrackItem*> DisplayedTracks() const
+    {
+        std::vector<TrackItem*> tracks;
+        if(!v.m_tracks) return tracks;
+        for(TrackItem* track : *v.m_tracks)
+        {
+            if(track != nullptr && track->IsDisplayed()) tracks.push_back(track);
+        }
+        return tracks;
     }
 
     // All displayed flame tracks, in track order. Tests scan this for a track

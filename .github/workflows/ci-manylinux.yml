@@ -28,38 +28,10 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
-      enable_remote:
-        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
-        type: boolean
-        default: false
-      enable_profiler:
-        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
-        type: boolean
-        default: false
-      enable_agentic_profiling:
-        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
-        type: boolean
-        default: false
-      enable_scripting:
-        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
-        type: boolean
-        default: false
-      enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
-        type: boolean
-        default: false
-      enable_trace_compare:
-        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
-        type: boolean
-        default: false
-      enable_multi_window:
-        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
-        type: boolean
-        default: false
-      enable_profiler_hub:
-        description: 'Build with Profiler Hub trace support (ROCPROFVIS_ENABLE_PROFILER_HUB)'
-        type: boolean
-        default: false
+      cmake_args:
+        description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
+        type: string
+        default: ''
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -108,38 +80,10 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
-      enable_remote:
-        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
-        type: boolean
-        default: false
-      enable_profiler:
-        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
-        type: boolean
-        default: false
-      enable_agentic_profiling:
-        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
-        type: boolean
-        default: false
-      enable_scripting:
-        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
-        type: boolean
-        default: false
-      enable_vendor_python:
-        description: 'Bundle a pinned CPython with scripting builds (ROCPROFVIS_ENABLE_VENDOR_PYTHON). Off links the build machine Python.'
-        type: boolean
-        default: false
-      enable_trace_compare:
-        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
-        type: boolean
-        default: false
-      enable_multi_window:
-        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
-        type: boolean
-        default: false
-      enable_profiler_hub:
-        description: 'Build with Profiler Hub trace support (ROCPROFVIS_ENABLE_PROFILER_HUB)'
-        type: boolean
-        default: false
+      cmake_args:
+        description: 'Extra CMake flags, space separated (e.g. -DROCPROFVIS_ENABLE_EXPERIMENTAL=ON)'
+        type: string
+        default: ''
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -162,14 +106,7 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
-  ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
-  ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
-  ENABLE_VENDOR_PYTHON: ${{ (inputs.enable_vendor_python == true || inputs.enable_vendor_python == 'true') && 'ON' || 'OFF' }}
-  ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
-  ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
-  ENABLE_PROFILER_HUB: ${{ (inputs.enable_profiler_hub == true || inputs.enable_profiler_hub == 'true') && 'ON' || 'OFF' }}
+  CMAKE_ARGS: ${{ inputs.cmake_args }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
   S3_ROOT_DIRECTORY: 'v5/rocm/extras/rocoptiq'
 
@@ -207,7 +144,7 @@ jobs:
           echo "LD_LIBRARY_PATH=/opt/openssl-3/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
       - name: Select Embeddable Python
-        if: env.ENABLE_SCRIPTING == 'ON' && env.ENABLE_VENDOR_PYTHON == 'OFF'
+        if: contains(inputs.cmake_args, 'ENABLE_VENDOR_PYTHON=OFF')
         run: |
           # /opt/python/cp3xx on PATH is the static manylinux CPython. It has an
           # interpreter and no libpython, so FindPython3 Development.Embed fails.
@@ -236,27 +173,32 @@ jobs:
           echo "Python3_ROOT_DIR=${SHARED_PY}" >> "${GITHUB_ENV}"
           echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
+      - name: Set nightly package version
+        if: inputs.s3_bucket_env == 'nightly'
+        run: |
+          # Embed the date in the DEB/RPM version (e.g. 1.2.3.4~20261116-1)
+          # before packaging so package managers can order successive
+          # nightlies. The '~' sorts below the plain version, so a later stable
+          # build still upgrades a nightly.
+          BUILD_TIMESTAMP="$(date -u '+%Y%m%d')"
+          echo "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION_SUFFIX=~${BUILD_TIMESTAMP}" >> "$GITHUB_ENV"
+
       - name: Build, Make, and Verify Installation
         env:
           CMAKE_CONFIG_PRESET: ${{ inputs.cmake_config_preset }}
           CRYPTO_BACKEND: ${{ inputs.crypto_backend }}
         run: |
-          cmake -B "${BUILD_DIR}" \
+          cmake -B ${{ env.BUILD_DIR }} \
             --preset "${CMAKE_CONFIG_PRESET}" \
-            -DROCPROFVIS_ENABLE_INTERNAL_BANNER="${ENABLE_INTERNAL_BANNER}" \
-            -DROCPROFVIS_ENABLE_REMOTE="${ENABLE_REMOTE}" \
-            -DROCPROFVIS_ENABLE_PROFILER="${ENABLE_PROFILER}" \
-            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING="${ENABLE_AGENTIC_PROFILING}" \
-            -DROCPROFVIS_ENABLE_SCRIPTING="${ENABLE_SCRIPTING}" \
-            -DROCPROFVIS_ENABLE_VENDOR_PYTHON="${ENABLE_VENDOR_PYTHON}" \
-            -DROCPROFVIS_ENABLE_TRACE_COMPARE="${ENABLE_TRACE_COMPARE}" \
-            -DROCPROFVIS_MULTI_WINDOW="${ENABLE_MULTI_WINDOW}" \
-            -DROCPROFVIS_ENABLE_PROFILER_HUB="${ENABLE_PROFILER_HUB}" \
+            -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
+            ${CMAKE_ARGS} \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND="${CRYPTO_BACKEND}" \
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
             ${Python3_ROOT_DIR:+-DPython3_ROOT_DIR="${Python3_ROOT_DIR}"} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
+            ${PACKAGE_VERSION_SUFFIX:+-DROCPROFVIS_PACKAGE_VERSION_SUFFIX="${PACKAGE_VERSION_SUFFIX}"} \
             -DROCM_PACKAGE_NAME="amdrocm${ROCM_VERSION}-roc-optiq" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"
           cmake --build "${BUILD_DIR}" --parallel 4 --target package
@@ -319,7 +261,7 @@ jobs:
             nightly)
               echo "S3_BUCKET=${{ secrets.AWS_NIGHTLY_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_NIGHTLY_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
-              echo "BUILD_TIMESTAMP=$(date -u '+%Y%m%d')" >> "$GITHUB_ENV"
+              echo "S3_PACKAGES_ROOT=packages/unsigned" >> "$GITHUB_ENV"
               ;;
             rc)
               echo "S3_BUCKET=${{ secrets.AWS_RC_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
@@ -359,13 +301,9 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_BASE=$(basename "${DEB_SRC}")
-          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            DEB_NAME="$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
-          else
-            DEB_NAME="${DEB_BASE}"
-          fi
-          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
+          # The version, including any nightly release, is already in the name
+          DEB_NAME=$(basename "${DEB_SRC}")
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/${S3_PACKAGES_ROOT:-packages}/deb"
           aws s3 cp \
             "${DEB_SRC}" \
             "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
@@ -375,12 +313,7 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_BASE=$(basename "${DEB_SRC}")
-          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            DEB_NAME="$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
-          else
-            DEB_NAME="${DEB_BASE}"
-          fi
+          DEB_NAME=$(basename "${DEB_SRC}")
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
@@ -411,7 +344,7 @@ jobs:
           EOF
 
           cd ..
-          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/${S3_PACKAGES_ROOT:-packages}/deb"
           aws s3 cp --recursive deb-repo/dists \
             "${S3_DEB_BASE}/dists/" \
             --no-progress
@@ -420,24 +353,34 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
-          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//' | sed 's/\.\([^.]*\.rpm\)$/\.'"${BUILD_TIMESTAMP}"'\.\1/')"
-          else
-            RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
-          fi
-          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
+          # Nightly builds carry no distro tag; strip it from other builds.
+          RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
+          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/${S3_PACKAGES_ROOT:-packages}/rpm/x86_64"
 
           # Use the renamed file so repodata <location href> matches the S3 key
           mkdir -p rpm-repo
           cp "${RPM_SRC}" "rpm-repo/${RPM_NAME}"
-          createrepo_c rpm-repo/
+          # Match ROCm core: no sqlite DBs and unhashed metadata filenames, so
+          # each run overwrites the previous metadata instead of leaving a
+          # stale <sha256>-* set behind (the CI role cannot delete from S3).
+          MD_OPTS="--no-database --simple-md-filenames"
+          createrepo_c ${MD_OPTS} rpm-repo/
 
+          # Publish only the current build's metadata, like the DEB repo.
+          # Nightly packages are re-indexed when they are signed, so the
+          # published repo keeps the history.
           aws s3 cp \
             "rpm-repo/${RPM_NAME}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
             --no-progress
+          # Upload repomd.xml last so it never points at metadata that has
+          # not been uploaded yet.
           aws s3 cp --recursive rpm-repo/repodata \
             "${S3_RPM_PREFIX}/repodata/" \
+            --exclude "repomd.xml" \
+            --no-progress
+          aws s3 cp rpm-repo/repodata/repomd.xml \
+            "${S3_RPM_PREFIX}/repodata/repomd.xml" \
             --no-progress
 
       - name: Upload Tarball to S3

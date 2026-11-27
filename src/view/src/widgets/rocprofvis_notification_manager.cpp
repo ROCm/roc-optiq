@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_notification_manager.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_render_scheduler.h"
@@ -65,7 +66,7 @@ Notification::IsExpired(double current_time) const
 // --- NotificationManager Method Implementations ---
 
 NotificationManager::NotificationManager()
-: m_default_duration(1.5f)
+: m_default_duration(4.0f)
 , m_default_fade_duration(0.25f)
 , m_next_uid(0)
 {}
@@ -117,6 +118,32 @@ NotificationManager::ShowPersistent(const std::string& id, const std::string& me
         auto& n = m_notifications.back();
         n.uid = "##note_" + std::to_string(++m_next_uid);
     }
+}
+
+void
+NotificationManager::ShowDismissible(const std::string& message, NotificationLevel level)
+{
+    auto it = std::find_if(m_notifications.begin(), m_notifications.end(),
+                           [&](const Notification& n) {
+                               return n.is_dismissible && !n.is_hiding &&
+                                      n.level == level && n.message == message;
+                           });
+    if(it != m_notifications.end())
+    {
+        it->repeat_count++;
+        it->start_time = ImGui::GetTime();  // Fade in again to draw the eye
+        return;
+    }
+
+    m_notifications.push_back({ "", message, level, 0, "", ImGui::GetTime(),
+                                0.0f,  // duration is irrelevant until dismissed
+                                m_default_fade_duration,
+                                true,   // is_persistent
+                                false,  // is_hiding
+                                0.0 });
+    auto& n          = m_notifications.back();
+    n.uid            = "##note_" + std::to_string(++m_next_uid);
+    n.is_dismissible = true;
 }
 
 void
@@ -211,6 +238,26 @@ NotificationManager::Render()
         text_color.w      = opacity;
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
         ImGui::TextUnformatted(notification.message.c_str());
+        if(notification.repeat_count > 1)
+        {
+            ImGui::SameLine();
+            ImGui::Text("(x%u)", notification.repeat_count);
+        }
+        if(notification.is_dismissible)
+        {
+            ImGui::SameLine();
+            if(IconButton(ICON_X_CIRCLED,
+                          SettingsManager::GetInstance().GetFontManager().GetFont(
+                              FontType::kIcon),
+                          ImVec2(0, 0), "Dismiss", true, ImVec2(0, 0),
+                          IM_COL32(0, 0, 0, 0), IM_COL32(0, 0, 0, 0),
+                          IM_COL32(0, 0, 0, 0), nullptr, ImGui::GetFontSize()) &&
+               !notification.is_hiding)
+            {
+                notification.is_hiding = true;
+                notification.hide_time = current_time;
+            }
+        }
         if(display_progress)
         {
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram,

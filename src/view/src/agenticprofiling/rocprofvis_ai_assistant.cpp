@@ -118,6 +118,7 @@ AssistantPanel::AssistantPanel()
 , m_turn_is_compute(false)
 , m_tab_closed_token(EventManager::InvalidSubscriptionToken)
 , m_summary_event_token(EventManager::InvalidSubscriptionToken)
+, m_models_requested(false)
 {
     m_widget_name = GenUniqueName("AssistantPanel");
 
@@ -174,6 +175,12 @@ bool
 AssistantPanel::Busy() const
 {
     return m_phase != Phase::kIdle || m_pending.valid();
+}
+
+AssistantModelCatalog&
+AssistantPanel::ModelCatalog()
+{
+    return m_model_catalog;
 }
 
 AssistantPanel::Conversation&
@@ -398,6 +405,10 @@ AssistantPanel::ResetTurn()
     m_fetch_wait      = FetchWait();
     m_status.clear();
     m_queued_question.clear();
+    m_turn_endpoint_url.clear();
+    m_turn_model.clear();
+    std::fill(m_turn_api_token.begin(), m_turn_api_token.end(), '\0');
+    m_turn_api_token.clear();
 }
 
 // Cancels without destroying the std::async future. A future's destructor may
@@ -495,9 +506,7 @@ AssistantPanel::CancelPendingRequest()
 void
 AssistantPanel::StartHttpRequest()
 {
-    SettingsManager&         settings = SettingsManager::GetInstance();
-    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
-    if(provider == nullptr)
+    if(m_turn_endpoint_url.empty())
     {
         ResetTurn();
         AppendLine(Speaker::kStatus,
@@ -505,13 +514,10 @@ AssistantPanel::StartHttpRequest()
         return;
     }
 
-    AssistantProvider endpoint = *provider;
-    ApplyAssistantEndpointDefaults(endpoint);
-
     AssistantChatRequest request;
-    request.endpoint_url = endpoint.endpoint_url;
-    request.model        = endpoint.model;
-    settings.GetAssistantToken(endpoint.name, request.api_token);
+    request.endpoint_url  = m_turn_endpoint_url;
+    request.model         = m_turn_model;
+    request.api_token     = m_turn_api_token;
     request.enable_tools  = !m_force_final;
     request.compute_tools = m_turn_is_compute;
 
@@ -625,7 +631,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     if(provider == nullptr || provider->endpoint_url.empty())
     {
         AppendLine(Speaker::kStatus,
-                   "Set the assistant URL in Edit > Preferences > Assistant.");
+                   "Set the assistant URL from the header pill, or in "
+                   "Edit > Preferences > Assistant.");
         NotificationManager::GetInstance().Show(
             "Assistant URL is not set", NotificationLevel::Warning);
         return;
@@ -636,6 +643,15 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     {
         return;
     }
+
+    // Preferences edits apply live so their preview can redraw, but this turn
+    // must not switch host, model, or key between tool rounds. Pin all three
+    // before a summary warmup can defer the first request.
+    AssistantProvider endpoint = *provider;
+    ApplyAssistantEndpointDefaults(endpoint);
+    m_turn_endpoint_url = endpoint.endpoint_url;
+    m_turn_model        = endpoint.model;
+    settings.GetAssistantToken(endpoint.name, m_turn_api_token);
 
     conversation.next_steps.clear();
 
@@ -1045,7 +1061,12 @@ AssistantPanel::RunNextTool()
 
     const AssistantToolCall& call = m_pending_calls[m_next_call_index];
     SetStatus(AssistantToolStatusLabel(call.name));
-    spdlog::info("Assistant tool {} ({})", call.name, call.id);
+    // A tool kept waiting on a busy shared request re-runs every frame, so only
+    // its first run is logged.
+    if(m_fetch_retries == 0)
+    {
+        spdlog::info("Assistant tool {} ({})", call.name, call.id);
+    }
 
     const AssistantToolStartResult started =
         StartAssistantTool(MakeToolContext(), call.name, call.arguments);
@@ -1355,6 +1376,11 @@ void
 AssistantPanel::Update()
 {
     ReapAbandonedRequests();
+    // The app draws only on demand, so keep frames coming until the list lands.
+    if(m_model_catalog.Poll())
+    {
+        RenderScheduler::GetInstance().RequestRender();
+    }
     if(m_pending.valid())
     {
         RenderScheduler::GetInstance().RequestRender();

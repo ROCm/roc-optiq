@@ -6,6 +6,7 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -17,14 +18,8 @@ namespace View
 class SettingsPanel
 {
 public:
-    SettingsPanel(SettingsManager& settings);
-    ~SettingsPanel();
-
-    void Show();
-    void Render();
-
-private:
-    enum Category
+    // The pages of the dialog, in the order its list shows them.
+    enum Category : int
     {
         Display,
         Tracks,
@@ -36,6 +31,15 @@ private:
         Other,
     };
 
+    SettingsPanel(SettingsManager& settings);
+    ~SettingsPanel();
+
+    void Show();
+    // Opens the dialog on the given page.
+    void ShowAtCategory(Category category);
+    void Render();
+
+private:
     void RenderDisplayOptions();
     void RenderTrackOptions();
     void RenderUnitOptions();
@@ -57,6 +61,10 @@ private:
     void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
+    // Looks up the models of the endpoint as this page has it, with the key OK
+    // would save. `saved_settings` is true only before editing or after
+    // OK/Cancel, when the stored key is known to belong to this URL.
+    void RequestAssistantModels(bool saved_settings = false);
 #endif
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
@@ -80,6 +88,9 @@ private:
     HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
     bool           m_rebinding_primary = true;
     bool           m_hotkeys_changed   = false;
+
+    // Bindings in effect when the panel opened, restored on Cancel.
+    std::array<HotkeyBinding, kHotkeyActionCount> m_hotkeys_initial;
 
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     // Key edits are held here and applied on OK, like every other page. The

@@ -21,6 +21,7 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <unordered_set>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -368,6 +369,34 @@ struct AssistantPanelOpen
     }
     ~AssistantPanelOpen() { *AssistantPanel::GetInstance()->VisiblePtr() = was_visible; }
 };
+
+// Keeps a test's in-memory edits to the assistant settings from outliving it.
+struct AssistantSettingsRestore
+{
+    AssistantSettings saved;
+    AssistantSettingsRestore()
+    : saved(SettingsManager::GetInstance().GetUserSettings().assistant)
+    {}
+    ~AssistantSettingsRestore()
+    {
+        SettingsManager::GetInstance().GetUserSettings().assistant = saved;
+    }
+};
+
+// Whether Preferences is open on the Assistant page, the only page that draws
+// the URL field. Cancels the dialog if it is open at all.
+bool
+CancelAssistantSettings(ImGuiTestContext* ctx)
+{
+    ctx->SetRef("//Settings");
+    const bool on_assistant_page = ctx->ItemExists("**/##assistant_url");
+    if(ctx->ItemExists("**/Cancel"))
+    {
+        ctx->ItemClick("**/Cancel");
+    }
+    ctx->SetRef("Main Window");
+    return on_assistant_page;
+}
 
 bool
 AssistantTraceReady(const std::string& project_id)
@@ -2858,6 +2887,141 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(rows_after != rows_before);
     };
 
+    // A column filter that matches no rows keeps the header and filter row, and
+    // must not size the scroll area as if the table had 2^64 rows.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_empty_filter_scroll");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        InfiniteScrollTable* table = AnalysisViewTestPeer{*av}.EventTablePtr();
+        IM_CHECK(table != nullptr);
+        if (table == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        InfiniteScrollTableTestPeer peer{*table};
+
+        const bool details_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+        const bool sidebar_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_sidebar;
+        tv->SetSidebarViewVisibility(true);
+        std::string tab_label;
+        av->SelectTab("Event Table", tab_label);
+        ctx->Yield(3);
+
+        auto drain_event_table = [&]()
+        {
+            ctx->Yield(3);
+            for (int i = 0; i < 200 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto restore = [&]()
+        {
+            peer.SetColumnFilter("duration", "");
+            drain_event_table();
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_visible);
+            tv->SetSidebarViewVisibility(sidebar_visible);
+            ctx->Yield(3);
+        };
+        // Height of what this table's ImGui table window laid out last frame. A
+        // runaway spacer overflows ImGui's float-to-int truncation of the content
+        // size, so it shows up here as a huge or negative height, not as scroll.
+        auto table_content_height = [&]() -> std::optional<float>
+        {
+            const std::string& name = peer.WidgetName();
+            for (ImGuiWindow* w : ctx->UiContext->Windows)
+            {
+                if (!w->WasActive) continue;
+                const char* found = strstr(w->Name, name.c_str());
+                if (found && strstr(found, "/infinite_scroll_table_"))
+                    return w->DC.CursorMaxPos.y - w->DC.CursorStartPos.y;
+            }
+            return std::nullopt;
+        };
+
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60; i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) break;
+            ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to fill the event table");
+            restore();
+            return;
+        }
+        sel->UnselectAllTracks();
+        drain_event_table();
+
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        SetRefWindow(ctx, sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+        ImGuiID button = 0;
+        for (FlameTrackItem* flame : flames)
+        {
+            button = TrackButtonId(sidebar_items, flame->GetName());
+            if (button != 0) break;
+        }
+        if (button == 0)
+        {
+            ctx->LogWarning("SKIP: no flame track row button found in the sidebar");
+            restore();
+            return;
+        }
+        CtrlClick(ctx, button);
+        drain_event_table();
+
+        const TablesModel& tables = dp->DataModel().GetTables();
+        if (tables.GetTableTotalRowCount(TableType::kEventTable) == 0)
+        {
+            ctx->LogWarning("SKIP: event table is empty, nothing to filter out");
+            restore();
+            return;
+        }
+        if (!peer.FilterRowShown())
+        {
+            ctx->LogWarning("SKIP: event table is not in basic filter mode");
+            restore();
+            return;
+        }
+
+        const bool     filter_set = peer.SetColumnFilter("duration", "< 0");
+        drain_event_table();
+        const uint64_t rows_after = tables.GetTableTotalRowCount(TableType::kEventTable);
+        const std::optional<float> content = table_content_height();
+        const float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+        restore();
+
+        IM_CHECK(filter_set);
+        IM_CHECK(rows_after == 0);
+        IM_CHECK(content.has_value());
+        if (!content.has_value()) return;
+        // Header plus filter row only.
+        IM_CHECK_GE(*content, 0.0f);
+        IM_CHECK_LT(*content, row_height * 10.0f);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_event_search_multi_substring");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2998,6 +3162,85 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         IM_CHECK(result == Project::OpenResult::Failed);
         IM_CHECK(message.find("invalid or corrupted") != std::string::npos);
+    };
+
+    // AIPROFVIS-651: an event or sample spanning a chunk boundary comes back in both
+    // chunks, and only one copy may be kept. The sample trace fits in one 30 s chunk,
+    // so each track is refetched in many small chunks to put boundaries inside it.
+    t = IM_REGISTER_TEST(e, "app", "sys_track_chunk_boundary_dedup");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+
+        constexpr double kChunks = 64.0;
+        constexpr float  kWidth  = 100000.0f;
+
+        size_t event_tracks  = 0;
+        size_t sample_tracks = 0;
+        size_t duplicates    = 0;
+        for (TrackItem* track : TimelineViewTestPeer{*tlv}.DisplayedTracks())
+        {
+            const RawTrackData* before = tlm.GetTrackData(track->GetID());
+            if (before == nullptr || !track->AllDataReady() || track->HasPendingRequests())
+                continue;
+            const double   start_ts    = before->GetStartTs();
+            const double   end_ts      = before->GetEndTs();
+            const uint64_t prior_group = before->GetDataGroupID();
+            if (end_ts <= start_ts) continue;
+
+            TrackItemTestPeer peer{*track};
+            const uint64_t    orig_chunk = peer.ChunkDuration();
+            peer.SetChunkDuration(
+                std::max<uint64_t>(1, static_cast<uint64_t>((end_ts - start_ts) / kChunks)));
+            track->RequestData(start_ts, end_ts, kWidth);
+
+            const RawTrackData* after = nullptr;
+            for (int i = 0; i < 600; i++)
+            {
+                ctx->Yield();
+                after = tlm.GetTrackData(track->GetID());
+                if (after && after->GetDataGroupID() != prior_group &&
+                    !track->HasPendingRequests() && track->AllDataReady())
+                    break;
+                after = nullptr;
+            }
+            peer.SetChunkDuration(orig_chunk);
+            IM_CHECK(after != nullptr);
+            if (after == nullptr) break;
+
+            if (const RawTrackEventData* events = dynamic_cast<const RawTrackEventData*>(after))
+            {
+                std::unordered_set<uint64_t> ids;
+                for (const TraceEvent& event : events->GetData())
+                    if (!ids.insert(event.m_id.uuid).second) duplicates++;
+                if (!events->GetData().empty()) event_tracks++;
+            }
+            else if (const RawTrackSampleData* samples =
+                         dynamic_cast<const RawTrackSampleData*>(after))
+            {
+                std::unordered_set<double> timestamps;
+                for (const TraceCounter& sample : samples->GetData())
+                    if (!timestamps.insert(sample.m_start_ts).second) duplicates++;
+                if (!samples->GetData().empty()) sample_tracks++;
+            }
+
+            // Drop the small-chunk data so the timeline refetches it normally.
+            track->ReleaseData();
+        }
+        ctx->Yield(5);
+
+        ctx->LogInfo("Checked %zu event and %zu sample tracks, %zu duplicates",
+                     event_tracks, sample_tracks, duplicates);
+        IM_CHECK(event_tracks > 0);
+        IM_CHECK(duplicates == 0);
     };
 
     // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
@@ -3315,6 +3558,53 @@ void RegisterAppTests(ImGuiTestEngine* e)
         result = StartAssistantTool(MakeAssistantToolContext(id_a), "list_tracks",
                                     "{\"trace\":\"" + ref + "\"}");
         IM_CHECK(result.content.find("not open") != std::string::npos);
+    };
+
+    // The model name in the Ask Optiq header, and the pill that stands in for it
+    // before an endpoint is set, open Preferences on the Assistant page.
+    t           = IM_REGISTER_TEST(e, "app", "common_assistant_header_opens_settings");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        AssistantPanelOpen       panel_open;
+        AssistantSettingsRestore settings_restore;
+        ctx->Yield(3);
+        ctx->SetRef("Main Window");
+
+        // A placeholder URL draws the model name. Cancel does not save, and
+        // AssistantSettingsRestore puts the previous endpoint back.
+        AssistantSettings& assistant =
+            SettingsManager::GetInstance().GetUserSettings().assistant;
+        if(assistant.active >= assistant.providers.size())
+        {
+            assistant.providers.push_back(MakeDefaultAssistantProvider());
+            assistant.active = assistant.providers.size() - 1;
+        }
+        assistant.providers[assistant.active].endpoint_url = "http://127.0.0.1:1";
+        ctx->Yield(3);
+
+        // The right end shows the context size, or token counts once the
+        // endpoint has reported them. Neither is a link.
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeR);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
+
+        ctx->MouseMove("**/##assistant_context_chip", ImGuiTestOpFlags_MoveToEdgeL);
+        ctx->MouseClick();
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
+        ctx->Yield(3);
+
+        // With no endpoint, a pill in the same place leads to the same page.
+        for(AssistantProvider& provider : assistant.providers)
+        {
+            provider.endpoint_url.clear();
+        }
+        ctx->Yield(3);
+        IM_CHECK(!ctx->ItemExists("**/##assistant_context_chip"));
+        IM_CHECK(ctx->ItemExists("**/##assistant_setup_chip"));
+        ctx->ItemClick("**/##assistant_setup_chip");
+        ctx->Yield(3);
+        IM_CHECK(CancelAssistantSettings(ctx));
     };
 #endif
 }

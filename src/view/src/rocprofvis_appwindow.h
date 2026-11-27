@@ -115,6 +115,8 @@ public:
 #ifdef ROCPROFVIS_ENABLE_PROFILER
     void ShowProfilerLauncher();  // TEMPORARY (profiler launch)
 #endif
+    // Opens Preferences on the given page.
+    void ShowSettings(SettingsPanel::Category category);
 
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;

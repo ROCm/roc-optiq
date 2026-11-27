@@ -112,6 +112,13 @@ Output executable:
 
 CMake options worth knowing:
 
+- `ROCPROFVIS_ENABLE_EXPERIMENTAL` - umbrella that flips the default of
+  every in-development option below (profiler, remote, Ask Optiq,
+  scripting, trace compare, multi-window) to on; an explicit
+  `-DROCPROFVIS_ENABLE_<X>=OFF` still wins. CI experimental builds set only
+  this, so new in-development options need no workflow change. Add new ones
+  with `${ROCPROFVIS_EXPERIMENTAL_DEFAULT}` as the default.
+  `ROCPROFVIS_ENABLE_PROFILER_HUB` is intentionally excluded while unstable.
 - `ROCPROFVIS_ENABLE_INTERNAL_BANNER` - draws a watermark on internal builds.
 - `ROCPROFVIS_DEVELOPER_MODE` - enables extra menus, the Debug Window, and
   `ComputeTester`. Guarded with `#ifdef ROCPROFVIS_DEVELOPER_MODE` in code.
@@ -454,7 +461,7 @@ AppWindow (singleton, RocWidget)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
-+-- m_settings_panel        : SettingsPanel (modal, opened via menu)
++-- m_settings_panel        : SettingsPanel (modal, opened via menu or AppWindow::ShowSettings(category))
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
 +-- ProfilerLauncherDialog   : optional profiler UI
@@ -2427,6 +2434,11 @@ The modal Settings UI. Categories: `Display`, `Units`, `Other`,
 `Reset*Options()` pair. Reuse this rather than building per-feature
 preferences UI.
 
+`Show()` opens it on `Display`; `ShowAtCategory(category)` opens it on
+any page. Other widgets reach it through
+`AppWindow::ShowSettings(category)` rather than adding an opener per
+feature.
+
 ### `PresetManager` and `PresetComponent` (`rocprofvis_presets.{h,cpp}`)
 
 Save/load named layouts per trace project. Used by Compute views
@@ -2652,7 +2664,12 @@ Layered, transport at the bottom and the panel at the top:
 - `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
   OpenAI chat-completions endpoint over cpp-httplib, plus the reply
   parser (including a "harmony" inline tool-call fallback). Knows
-  nothing about traces.
+  nothing about traces. Also `AssistantModelCatalog`, the endpoint's
+  model list fetched on a worker thread: `{base}/models` beside the chat
+  route, or the host's `/v1/models` for an Azure-style gateway, with the
+  key in the chat request's own header and redirects refused. A
+  plain-http loopback URL with no path is a self-hosted server and gets
+  `/v1` for both chat and the list.
 - `rocprofvis_ai_tool_schema.{h,cpp}` - `BuildAssistantToolsJson`, the
   description of the tool set the model receives. Builds JSON out of
   string literals and touches no view state, which is what makes it
@@ -2838,6 +2855,11 @@ Integration points:
   `Update()` once a frame, reserves `DockedWidth()` on the right of the
   main view, and renders it with `RenderDocked()`. The View menu binds
   `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
+- The model name in the header pill opens Preferences on the Assistant
+  page (`AppWindow::ShowSettings(SettingsPanel::Assistant)`). With no
+  endpoint set, a `Not configured` pill takes its place and does the
+  same. When the endpoint lists models, the arrow beside the name opens
+  that list.
 - `TraceView` and `AnalysisView` expose the plain accessors
   `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into
@@ -3015,6 +3037,24 @@ Rules that are easy to get wrong here:
 - **The API key lives in `SecretStore`, never in settings JSON and
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
+  A draft URL receives the stored key only while it has the saved URL's
+  origin. Accepting another origin clears the old key before saving the
+  new URL; if that clear fails, the URL change is rejected.
+- **One model list, two pickers.** The panel owns the
+  `AssistantModelCatalog` and polls it in `Update()`, requesting a render
+  while a lookup runs, since the app draws on demand. The header asks for
+  the saved endpoint each time the panel opens; the settings page asks when
+  the dialog opens, after Cancel, and after the URL or key changes.
+  Preferences keeps the Model field a text field and adds an arrow only
+  when this URL listed models; the arrow on the header pill opens the
+  same list, saved through `SettingsManager::SetActiveAssistantModel`,
+  and is dimmed mid-turn so one answer stays on one model. The model
+  name itself still opens Preferences. Both lists take their width from
+  `AssistantPanel::ModelNameWidth()`, which measures the names again only
+  when the catalog's `Revision()`, the font face, or the size changes, so
+  neither picker measures the list every frame. A turn pins its endpoint,
+  model, and key before any summary warmup, so Preferences edits cannot
+  move later rounds of that answer to another host.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -3303,9 +3343,11 @@ normalizer. It owns a local `ProfilerSession` and, for SSH, a
 deferred teardown outlives the dialog's copy. `GetState()` reports a
 normalized `rocprofvis_profiler_state_t`; `GetRawOutput()` /
 `ConsumeOutputDirty()` expose stdout; `GetTracePath()` resolves the
-produced trace; `GetRemotePhaseBadge(...)` / `GetRemoteStatusMessage()`
-surface remote progress. `Update()` runs every frame to pump normalized
-state and output.
+produced trace; `GetRemotePhaseBadge(...)` surfaces remote progress.
+`GetOutcome()` returns the run's single `RunOutcome` (a
+`ConsoleStatusLevel` plus message): success, a warning, or an error with
+its reason, set when the run settles or fails to start.
+`Update()` runs every frame to pump normalized state and output.
 
 Local:
 
@@ -3361,10 +3403,16 @@ Key remote rules:
   The path is only requested when `LaunchRequest::auto_load_trace` is
   set, which the dialog clears when `IProfilerBackend::ProducesTrace` is
   false. NotSupported (no trace file for this tool) skips the
-  open/download. NotAvailable -> warning notification, manual open.
+  open/download. A path that does not resolve (NotAvailable) is a
+  warning, not a failure: the run still ends Completed (remote: phase
+  `Done`, reason in `GetTracePathResult()`) with a
+  `ConsoleStatusLevel::kWarning` outcome. The badge turns amber with
+  the reason, the console adds a `Warning:` line, the dialog shows a
+  warning notification.
 - Auto-open differs by path: local fires from the orchestrator's
-  terminal-state handler; remote fires from the download-complete
-  callback inside `RemoteProfilerSession`.
+  terminal-state handler; remote calls `DownloadPath()` on the run's
+  `RemoteTraceOrchestrator` once the run completes, and opens the file
+  from that downloader's `on_open_file` callback.
 
 ### 13.4 Async teardown for sessions
 
@@ -3966,7 +4014,7 @@ All under `agenticprofiling/`, compiled only with
   `agenticprofiling/rocprofvis_ai_tool_query.h` -> Model arguments to
   SQL fragments, via whitelists.
 - `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
-  `AssistantMessage`, `AssistantToolCall` ->
+  `AssistantMessage`, `AssistantToolCall`, `AssistantModelCatalog` ->
   `agenticprofiling/rocprofvis_ai_client.h`.
 - `AssistantSettings`, `AssistantProvider` ->
   `rocprofvis_settings_manager.h` -> Saved URL and model; the token

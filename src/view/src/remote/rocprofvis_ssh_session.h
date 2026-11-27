@@ -70,6 +70,9 @@ namespace View
         void CancelActiveOperation();
 
         bool IsConnected();
+        // True once an authenticate phase on this session's connection has
+        // completed. A connection the remote drops later is not detected here.
+        bool IsAuthenticated() const { return m_authenticated; }
         // True once the last phase's job is done with the connection. A failure
         // is reported before its job lets go of the connection, so wait for this
         // before starting another phase after one.
@@ -112,7 +115,7 @@ namespace View
         uint64_t Poll();
 
         // True for a remote status that ends a phase.
-        bool IsTerminalStatus(uint64_t status);
+        static bool IsTerminalStatus(uint64_t status);
 
         // Common registration: allocates a future, calls start_fn, and on
         // success registers a MonitorOperation. Returns the operation id or 0.
@@ -158,6 +161,7 @@ namespace View
         // (it persists while a request is pending), so this guards against
         // rebuilding the request every frame.
         bool                m_auth_request_built;
+        bool                m_authenticated;
         // See SetAuthModalSelfManaged: owner renders this session's auth modal
         // nested, so the centralized path skips it.
         bool                m_auth_modal_self_managed = false;

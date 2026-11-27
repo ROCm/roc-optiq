@@ -27,6 +27,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_settings_panel.h"
 #include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -43,6 +44,9 @@ namespace
 constexpr float  ASSISTANT_MIN_WIDTH      = 440.0f;
 constexpr float  ASSISTANT_MAX_WIDTH      = 900.0f;
 constexpr float  ASSISTANT_SPLITTER_WIDTH = 6.0f;
+// The panel never takes more than this share of the window, so a narrow window
+// still leaves the main view usable.
+constexpr float  ASSISTANT_MAX_WINDOW_SHARE = 0.5f;
 // Same padding the remote/profiler dialogs use.
 constexpr ImVec2 ASSISTANT_WINDOW_PADDING = ImVec2(14.0f, 12.0f);
 constexpr ImVec2 ASSISTANT_CARD_PADDING   = ImVec2(14.0f, 10.0f);
@@ -84,6 +88,14 @@ constexpr float ASSISTANT_CONTEXT_DIVIDER_GAP   = 8.0f;
 constexpr float ASSISTANT_CONTEXT_TIP_WIDTH     = 300.0f;
 constexpr float ASSISTANT_CONTEXT_TIP_BAR_H     = 6.0f;
 constexpr float ASSISTANT_CONTEXT_TIP_NUM_WIDTH = 72.0f;
+// The arrow after the model name when the endpoint lists others, as a fraction
+// of the pill's text height, and the rows its list shows before scrolling.
+constexpr float       ASSISTANT_MODEL_ARROW_SCALE     = 0.5f;
+constexpr float       ASSISTANT_MODEL_ARROW_GAP       = 5.0f;
+constexpr int         ASSISTANT_MODEL_MENU_ROWS       = 12;
+constexpr float       ASSISTANT_MODEL_MENU_MIN_WIDTH  = 240.0f;
+constexpr float       ASSISTANT_MODEL_MENU_MAX_SCREEN = 0.75f;
+constexpr const char* ASSISTANT_MODEL_POPUP           = "##assistant_models";
 // imgui.h does not publish IM_PI.
 constexpr float ASSISTANT_PI = 3.14159265f;
 
@@ -341,14 +353,38 @@ LinkTraces(const AssistantToolContext& baseline, const AssistantToolContext& tar
     }
 }
 
+// Where the model name in the header leads, set up or not.
+void
+OpenAssistantSettings()
+{
+    AppWindow* app = AppWindow::GetInstance();
+    if(app != nullptr)
+    {
+        app->ShowSettings(SettingsPanel::Assistant);
+    }
+}
+
 }  // namespace
 
 void
 AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t track_id)
 {
+    // The card's frame and title are already drawn, so an empty chart says why
+    // rather than leaving a blank box.
     const AssistantToolContext context = MakeAssistantToolContext(project_id);
     if(context.data_provider == nullptr)
     {
+        // Closing a trace drops its own conversation, so a chart that has lost
+        // its trace was read from a linked one.
+        ImGui::TextDisabled("This chart's trace is no longer open.");
+        return;
+    }
+
+    // A linked trace that was closed and opened again has no minimap until it
+    // has loaded, which is not the same as having no activity.
+    if(context.data_provider->GetState() == ProviderState::kLoading)
+    {
+        ImGui::TextDisabled("This chart's trace is still loading.");
         return;
     }
 
@@ -364,6 +400,11 @@ AssistantPanel::RenderActivityChart(const std::string& project_id, uint64_t trac
         GetAssistantActivityBins(context, track_id, bin_count);
     if(bins.empty())
     {
+        // Empty means the trace has no minimap, or this track has no row in it.
+        // Only the overview chart is the whole trace.
+        ImGui::TextDisabled(track_id == INVALID_UINT64_INDEX
+                                ? "No activity to show for this trace."
+                                : "No activity to show for this track.");
         return;
     }
 
@@ -506,8 +547,15 @@ AssistantPanel::RenderToolbarButton()
     ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Open the assistant. Configure the URL and key in "
-                         "Edit > Preferences > Assistant.");
+        if(GetInstance()->m_visible)
+        {
+            SetTooltipStyled("Close the assistant.");
+        }
+        else
+        {
+            SetTooltipStyled("Open the assistant. Configure the URL and key in "
+                             "Edit > Preferences > Assistant.");
+        }
     }
 }
 
@@ -521,7 +569,16 @@ AssistantPanel::Render()
 float
 AssistantPanel::DockedWidth() const
 {
-    return m_visible ? m_dock_width + ASSISTANT_SPLITTER_WIDTH : 0.0f;
+    return m_visible ? DockWidth() + ASSISTANT_SPLITTER_WIDTH : 0.0f;
+}
+
+// m_dock_width keeps the width the user dragged to, so it comes back once the
+// window is wide enough again.
+float
+AssistantPanel::DockWidth() const
+{
+    return std::min(m_dock_width,
+                    ImGui::GetMainViewport()->WorkSize.x * ASSISTANT_MAX_WINDOW_SHARE);
 }
 
 // Drag handle between the main view and the panel, matching the topology
@@ -543,8 +600,9 @@ AssistantPanel::RenderSplitter()
     }
     if(active)
     {
-        // Dragging left widens the panel, so the delta is negated.
-        m_dock_width = std::clamp(m_dock_width - ImGui::GetIO().MouseDelta.x,
+        // Dragging left widens the panel, so the delta is negated. It starts from
+        // the width on screen, so a panel the window has squeezed answers at once.
+        m_dock_width = std::clamp(DockWidth() - ImGui::GetIO().MouseDelta.x,
                                   ASSISTANT_MIN_WIDTH, ASSISTANT_MAX_WIDTH);
     }
 
@@ -559,6 +617,9 @@ AssistantPanel::RenderDocked()
 {
     if(!m_visible)
     {
+        // Reopening asks for the model list again, in case the endpoint could
+        // not be reached the last time.
+        m_models_requested = false;
         return;
     }
 
@@ -580,7 +641,7 @@ AssistantPanel::RenderDocked()
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
     // Only the transcript scrolls; the header and composer are pinned. ImGui
     // drops WindowPadding on a borderless child unless asked to keep it.
-    ImGui::BeginChild("##assistant_dock", ImVec2(m_dock_width, 0.0f),
+    ImGui::BeginChild("##assistant_dock", ImVec2(DockWidth(), 0.0f),
                       ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -611,6 +672,17 @@ AssistantPanel::RenderHeaderCard()
                               : provider->model.empty()
                                   ? std::string(ASSISTANT_DEFAULT_MODEL)
                                   : provider->model;
+
+    // With the key the chat request would use, so the list is what it can reach.
+    if(configured && !m_models_requested)
+    {
+        AssistantProvider endpoint = *provider;
+        ApplyAssistantEndpointDefaults(endpoint);
+        std::string token;
+        settings.GetAssistantToken(endpoint.name, token);
+        m_model_catalog.Request(endpoint.endpoint_url, token);
+        m_models_requested = true;
+    }
 
     const AssistantToolContext view     = MakeAssistantToolContext(m_view_project_id);
     const bool                 can_link = CanLinkTrace(view);
@@ -663,7 +735,8 @@ AssistantPanel::RenderHeaderCard()
     {
         if(!configured)
         {
-            SetTooltipStyled("Not configured. Edit > Preferences > Assistant.");
+            SetTooltipStyled("Not configured. Click the Not configured pill, or open "
+                             "Edit > Preferences > Assistant.");
         }
         else
         {
@@ -676,6 +749,10 @@ AssistantPanel::RenderHeaderCard()
     if(configured)
     {
         RenderContextChip(model, provider->endpoint_url);
+    }
+    else
+    {
+        RenderSetupChip();
     }
     if(!view.trace_name.empty())
     {
@@ -699,7 +776,8 @@ AssistantPanel::RenderHeaderCard()
     {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
-        ImGui::TextWrapped("Set the URL, model, and key in Edit > Preferences > Assistant.");
+        ImGui::TextWrapped("Set the URL, model, and key from the Not configured pill, "
+                           "or in Edit > Preferences > Assistant.");
         ImGui::PopStyleColor();
     }
 
@@ -791,10 +869,54 @@ AssistantPanel::RenderLinkMenu()
     PopContextMenuStyles();
 }
 
+// Stands in for the context pill until an endpoint is set, so the place the
+// model name will appear is also the way to set one.
+void
+AssistantPanel::RenderSetupChip()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const char*      label    = "Not configured";
+
+    ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kSmall));
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float chip_h = ImGui::GetTextLineHeight() + ASSISTANT_CONTEXT_CHIP_PAD_Y * 2.0f;
+    const float width =
+        ImGui::CalcTextSize(label).x + ASSISTANT_CONTEXT_CHIP_PAD_X * 2.0f;
+
+    const bool pressed = ImGui::InvisibleButton(
+        "##assistant_setup_chip", ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool hovered = ImGui::IsItemHovered();
+
+    ImDrawList*  draw = ImGui::GetWindowDrawList();
+    const ImVec2 chip_max(origin.x + width, origin.y + chip_h);
+    draw->AddRectFilled(origin, chip_max, settings.GetColor(Colors::kBgPanel),
+                        chip_h * 0.5f);
+    draw->AddRect(
+        origin, chip_max,
+        settings.GetColor(hovered ? Colors::kBorderColor : Colors::kPanelBorderSubtle),
+        chip_h * 0.5f);
+    draw->AddText(ImVec2(origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X,
+                         origin.y + ASSISTANT_CONTEXT_CHIP_PAD_Y),
+                  settings.GetColor(Colors::kTextDim), label);
+    ImGui::PopFont();
+
+    if(hovered)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        SetTooltipStyled("Open the Assistant settings to set the URL, model, and key.");
+    }
+    if(pressed)
+    {
+        OpenAssistantSettings();
+    }
+}
+
 /*
  * The pill under the title: the model, a ring for how full the kept history is,
  * the conversation's size against that budget, and - once the endpoint has
- * reported any - the tokens this conversation has used.
+ * reported any - the tokens this conversation has used. The model name opens
+ * its settings. The arrow beside it, when the endpoint lists models, opens
+ * that list.
  */
 void
 AssistantPanel::RenderContextChip(const std::string& model, const std::string& endpoint)
@@ -835,14 +957,23 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
                           ImGui::CalcTextSize(out_label).x;
     const float pads = ASSISTANT_CONTEXT_CHIP_PAD_X * 2.0f;
 
+    // An arrow after the name means the pill opens the endpoint's model list.
+    // Dimmed while an answer is on its way, which keeps a turn on one model.
+    const bool listed =
+        !m_model_catalog.Models().empty() && m_model_catalog.Url() == endpoint;
+    const bool  can_pick = listed && !Busy();
+    const float arrow_w  = text_h * ASSISTANT_MODEL_ARROW_SCALE;
+    const float picker_w = listed ? ASSISTANT_MODEL_ARROW_GAP + arrow_w : 0.0f;
+
     // A narrow dock drops the usage first, then the budget, then shortens the
     // model name. The ring and the conversation size always stay.
     std::string label       = model;
     bool        show_usage  = conversation.usage_reported;
     bool        show_budget = true;
     auto        total       = [&]() {
-        return pads + ImGui::CalcTextSize(label.c_str()).x + divider_w + context_w +
-               (show_budget ? budget_w : 0.0f) + (show_usage ? usage_w : 0.0f);
+        return pads + ImGui::CalcTextSize(label.c_str()).x + picker_w + divider_w +
+               context_w + (show_budget ? budget_w : 0.0f) +
+               (show_usage ? usage_w : 0.0f);
     };
     if(show_usage && total() > avail)
     {
@@ -854,14 +985,39 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     }
     if(total() > avail)
     {
-        label = ElideWithEllipsis(model,
-                                  std::max(0.0f, avail - (pads + divider_w + context_w)));
+        label = ElideWithEllipsis(
+            model, std::max(0.0f, avail - (pads + picker_w + divider_w + context_w)));
     }
     const float width = total();
 
-    ImGui::InvisibleButton("##assistant_context_chip",
-                           ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
+    const bool pressed = ImGui::InvisibleButton(
+        "##assistant_context_chip", ImVec2(width, chip_h + ASSISTANT_CONTEXT_CHIP_BELOW));
     const bool hovered = ImGui::IsItemHovered();
+    // The name opens Assistant settings. The arrow, drawn only when this
+    // endpoint listed models, opens that list. The rest of the pill reports
+    // and has its own hover card. Enter or Space on the focused pill has no
+    // pointer over the name, but it is still an activation of the name.
+    const float name_right =
+        origin.x + ASSISTANT_CONTEXT_CHIP_PAD_X + ImGui::CalcTextSize(label.c_str()).x;
+    const float name_hit_right =
+        name_right + (listed ? 0.0f : ASSISTANT_CONTEXT_DIVIDER_GAP);
+    const float mouse_x    = ImGui::GetIO().MousePos.x;
+    const bool  over_name  = hovered && mouse_x < name_hit_right;
+    const bool  over_arrow = listed && hovered && mouse_x >= name_right &&
+                             mouse_x <= name_right + picker_w;
+    if(over_name || (can_pick && over_arrow))
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    const bool mouse_click = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    if(pressed && can_pick && over_arrow && mouse_click)
+    {
+        ImGui::OpenPopup(ASSISTANT_MODEL_POPUP);
+    }
+    else if(pressed && (over_name || !mouse_click))
+    {
+        OpenAssistantSettings();
+    }
 
     ImDrawList*  draw     = ImGui::GetWindowDrawList();
     const float  center_y = origin.y + chip_h * 0.5f;
@@ -891,6 +1047,16 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     };
 
     run(label.c_str(), main);
+    if(listed)
+    {
+        x += ASSISTANT_MODEL_ARROW_GAP;
+        const float top    = center_y - arrow_w * 0.25f;
+        const float bottom = center_y + arrow_w * 0.25f;
+        draw->AddTriangleFilled(ImVec2(x, top), ImVec2(x + arrow_w, top),
+                                ImVec2(x + arrow_w * 0.5f, bottom),
+                                can_pick ? main : dim);
+        x += arrow_w;
+    }
     rule();
 
     const ImVec2 ring_center(x + ring_d * 0.5f, center_y);
@@ -929,12 +1095,95 @@ AssistantPanel::RenderContextChip(const std::string& model, const std::string& e
     }
     ImGui::PopFont();
 
-    if(hovered)
+    if(hovered && !ImGui::IsPopupOpen(ASSISTANT_MODEL_POPUP))
     {
         BeginTooltipStyled();
         RenderContextTooltip(conversation, load, fill, model, endpoint);
         EndTooltipStyled();
     }
+    RenderModelMenu(ImVec2(chip_min.x, chip_max.y + ASSISTANT_CONTEXT_CHIP_BELOW), model,
+                    endpoint);
+}
+
+float
+AssistantPanel::ModelNameWidth()
+{
+    ModelWidthCache& cache     = m_model_width_cache;
+    ImFont* const    font      = ImGui::GetFont();
+    const float      font_size = ImGui::GetFontSize();
+    if(cache.revision != m_model_catalog.Revision() || cache.font != font ||
+       cache.font_size != font_size)
+    {
+        cache.width = 0.0f;
+        for(const std::string& name : m_model_catalog.Models())
+        {
+            cache.width = std::max(cache.width, ImGui::CalcTextSize(name.c_str()).x);
+        }
+        cache.revision  = m_model_catalog.Revision();
+        cache.font      = font;
+        cache.font_size = font_size;
+    }
+    return cache.width;
+}
+
+// The model list under the pill, with the model in use checked. A pick is
+// saved like any setting, and the next request goes to it.
+void
+AssistantPanel::RenderModelMenu(const ImVec2& anchor, const std::string& model,
+                                const std::string& endpoint)
+{
+    if(!ImGui::IsPopupOpen(ASSISTANT_MODEL_POPUP))
+    {
+        return;
+    }
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float       max_h =
+        ImGui::GetTextLineHeightWithSpacing() * ASSISTANT_MODEL_MENU_ROWS +
+        style.WindowPadding.y * 2.0f;
+    const float text_w = ModelNameWidth();
+    const float max_w =
+        ImGui::GetMainViewport()->WorkSize.x * ASSISTANT_MODEL_MENU_MAX_SCREEN;
+    const float popup_w =
+        std::min(max_w, std::max(ASSISTANT_MODEL_MENU_MIN_WIDTH,
+                                 text_w + style.WindowPadding.x * 2.0f));
+    ImGui::SetNextWindowPos(anchor, ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(popup_w, 0.0f), ImVec2(popup_w, max_h));
+    PushContextMenuStyles();
+    if(ImGui::BeginPopup(ASSISTANT_MODEL_POPUP, ImGuiWindowFlags_HorizontalScrollbar))
+    {
+        if(m_model_catalog.Url() != endpoint || m_model_catalog.Models().empty())
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        // The names are drawn over the rows, not as their labels, so the row
+        // width alone sets how far the menu scrolls: the menu's full width, or
+        // the widest name when that is wider.
+        const float row_w = std::max(text_w, ImGui::GetContentRegionAvail().x);
+        for(size_t i = 0;
+            m_model_catalog.Url() == endpoint && i < m_model_catalog.Models().size(); ++i)
+        {
+            const std::string& name     = m_model_catalog.Models()[i];
+            const bool         selected = name == model;
+            ImGui::PushID(static_cast<int>(i));
+            const ImVec2 text_pos = ImGui::GetCursorScreenPos();
+            const bool   picked =
+                ImGui::Selectable("##model", selected, ImGuiSelectableFlags_None,
+                                  ImVec2(row_w, ImGui::GetTextLineHeight()));
+            ImGui::GetWindowDrawList()->AddText(
+                text_pos, ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
+            if(picked && !selected)
+            {
+                SettingsManager::GetInstance().SetActiveAssistantModel(name);
+            }
+            if(selected)
+            {
+                ImGui::SetItemDefaultFocus();
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndPopup();
+    }
+    PopContextMenuStyles();
 }
 
 // The pill's hover card: which endpoint answers, the history against its
@@ -958,6 +1207,7 @@ AssistantPanel::RenderContextTooltip(const Conversation& conversation,
     ImGui::TextUnformatted(model.c_str());
     ImGui::PushStyleColor(ImGuiCol_Text, dim);
     ImGui::TextWrapped("%s", endpoint.c_str());
+    ImGui::TextUnformatted("Click the model name to change these.");
     ImGui::PopStyleColor();
 
     ImGui::Spacing();
@@ -1652,9 +1902,13 @@ AssistantPanel::RenderComposer()
     ImGui::SameLine(0.0f, gap);
     ImGui::BeginDisabled(conversation.lines.empty() && conversation.input.empty() &&
                          !busy_here);
+    // Clearing is the panel's only way to stop a turn, so the tooltip says so
+    // while one runs here. A turn on another trace is left running.
     if(IconButton(ICON_TRASH_CAN, settings.GetFontManager().GetFont(FontType::kIcon),
-                  ImVec2(icon_size, icon_size), "Clear the conversation", false,
-                  ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
+                  ImVec2(icon_size, icon_size),
+                  busy_here ? "Stop this answer and clear the conversation"
+                            : "Clear the conversation",
+                  false, ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),
                   settings.GetColor(Colors::kButtonActive)))
     {

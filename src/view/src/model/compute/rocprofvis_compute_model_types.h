@@ -87,6 +87,20 @@ struct PcSampleStallReasonLookup
     std::string text;
 };
 
+// Sampled SDK issue/execution state, independent of the static ISA instruction type.
+struct InstructionSample
+{
+    uint64_t                pc_sample_state_uuid           = 0;
+    uint64_t                instruction_sample_lookup_uuid = 0;
+    std::optional<uint64_t> count;
+};
+
+struct InstructionSampleLookup
+{
+    uint64_t    instruction_sample_lookup_uuid = 0;
+    std::string text;
+};
+
 struct InstructionSourceLine
 {
     uint64_t instruction_uuid = 0;
@@ -145,6 +159,12 @@ enum class PcSamplingLayerState : uint32_t
 
 struct PcSamplingData
 {
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    inline static constexpr bool INSTRUCTION_SAMPLES_ENABLED = true;
+#else
+    inline static constexpr bool INSTRUCTION_SAMPLES_ENABLED = false;
+#endif
+
     std::vector<CodeObjectStore>            code_objects;
     std::unordered_map<uint64_t, std::string> instruction_type_lookup_map;
     std::vector<SourceFile>                 source_files;
@@ -152,9 +172,12 @@ struct PcSamplingData
     std::vector<PcSampleState>              pc_sample_states;
     std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
     std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
+    std::vector<InstructionSample>          instruction_samples;
+    std::vector<InstructionSampleLookup>    instruction_sample_lookups;
     // Completion is independent of row count: an empty successful query is loaded.
-    bool sample_states_loaded = false;
-    bool stall_details_loaded = false;
+    bool sample_states_loaded       = false;
+    bool stall_details_loaded       = false;
+    bool instruction_samples_loaded = false;
     PcSamplingLayerState isa_state    = PcSamplingLayerState::kNotRead;
     PcSamplingLayerState source_state = PcSamplingLayerState::kNotRead;
     PcSamplingLayerState stalls_state = PcSamplingLayerState::kNotRead;

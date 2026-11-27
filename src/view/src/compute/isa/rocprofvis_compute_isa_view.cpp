@@ -204,7 +204,7 @@ ComputeIsaView::ClearSelectionData()
     m_source.Reset();
     m_stalls         = {};
     m_sampling_data  = {};
-    m_sample_counts_loaded = false;
+    m_sampling_status = {};
     m_line_selection = {};
     ClearCodeData();
 }
@@ -365,12 +365,6 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         return;
     }
 
-    if(layer == PcSamplingLayer::kStalls &&
-       (!kernel_info->pc_sampling_data.sample_states_loaded ||
-        !kernel_info->pc_sampling_data.stall_details_loaded))
-    {
-        state.status = CodeLoadState::kFailed;
-    }
     if(layer == PcSamplingLayer::kSource)
     {
         m_source.selected_uuid = source_file_uuid;
@@ -381,6 +375,11 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         }
     }
     RefreshCodeWidgets(layer);
+    if(layer == PcSamplingLayer::kStalls &&
+       !m_sampling_status.IsComplete(PcSamplingData::INSTRUCTION_SAMPLES_ENABLED))
+    {
+        state.status = CodeLoadState::kFailed;
+    }
     UpdateWidgetLoadStates();
     if(state.status == CodeLoadState::kFailed)
     {
@@ -404,14 +403,32 @@ ComputeIsaView::NotifyLoadFailure(PcSamplingLayer layer)
             message = "Source code could not be loaded. Use Retry in the source pane.";
             break;
         case PcSamplingLayer::kStalls:
-            if(m_sample_counts_loaded)
+            if(!m_sampling_status.sample_states_loaded)
             {
-                message = "Stall data could not be loaded. Showing total samples only.";
-                level   = NotificationLevel::Warning;
+                message = "Sampling data could not be loaded.";
             }
             else
             {
-                message = "Sampling data could not be loaded.";
+                level = NotificationLevel::Warning;
+                if(PcSamplingData::INSTRUCTION_SAMPLES_ENABLED &&
+                   !m_sampling_status.stall_details_loaded &&
+                   !m_sampling_status.instruction_samples_loaded)
+                {
+                    message = "Stall details and issue-state counts could not be loaded. "
+                              "Use Refetch sampling data in the column menu.";
+                }
+                else if(!m_sampling_status.stall_details_loaded)
+                {
+                    message =
+                        "Stall details could not be loaded. Showing total samples only. "
+                        "Use Refetch sampling data in the column menu.";
+                }
+                else if(PcSamplingData::INSTRUCTION_SAMPLES_ENABLED &&
+                        !m_sampling_status.instruction_samples_loaded)
+                {
+                    message = "Issue-state counts could not be loaded. "
+                              "Use Refetch sampling data in the column menu.";
+                }
             }
             break;
     }
@@ -526,7 +543,8 @@ ComputeIsaView::RefreshCodeWidgets(PcSamplingLayer layer)
         }
         case PcSamplingLayer::kStalls:
         {
-            m_sample_counts_loaded = data.sample_states_loaded;
+            m_sampling_status = { data.sample_states_loaded, data.stall_details_loaded,
+                                  data.instruction_samples_loaded };
             m_sampling_data = IsaDataBuilder::PrepareSampling(data);
             m_isa.widget->UpdateSampling(m_sampling_data);
             m_source.widget->UpdateSampling(data, m_sampling_data);
@@ -558,25 +576,12 @@ ComputeIsaView::UpdateWidgetLoadStates()
     m_isa.widget->SetLoadState(m_isa.fetch.status);
     m_source.widget->SetLoadState(m_source.fetch.status);
 
-    using SamplingLoadState = SamplingStateRenderer::LoadState;
-
-    SamplingLoadState sampling_state = SamplingLoadState::kLoading;
-    if(m_stalls.status == CodeLoadState::kLoaded)
-    {
-        sampling_state = SamplingLoadState::kReady;
-    }
-    else if(m_sample_counts_loaded)
-    {
-        sampling_state = m_stalls.status == CodeLoadState::kLoading
-                             ? SamplingLoadState::kLoadingDetails
-                             : SamplingLoadState::kTotalsOnly;
-    }
-    else if(m_stalls.status == CodeLoadState::kFailed)
-    {
-        sampling_state = SamplingLoadState::kFailed;
-    }
-    m_isa.widget->SetSamplingLoadState(sampling_state);
-    m_source.widget->SetSamplingLoadState(sampling_state);
+    const SamplingLoadStates states =
+        m_sampling_status.Resolve(m_stalls.status == CodeLoadState::kLoading,
+                                  m_stalls.status == CodeLoadState::kFailed,
+                                  PcSamplingData::INSTRUCTION_SAMPLES_ENABLED);
+    m_isa.widget->SetSamplingLoadStates(states);
+    m_source.widget->SetSamplingLoadStates(states);
 }
 
 void

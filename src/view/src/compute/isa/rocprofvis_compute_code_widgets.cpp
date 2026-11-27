@@ -23,11 +23,14 @@ constexpr float       CODE_COLUMN_MIN_WIDTH_IN_CHARACTERS = 40.0f;
 
 static constexpr bool
 sampling_columns_match_renderer(int sampling_state, int wave_occupancy,
-                                int active_threads, int next_column)
+                                int active_threads, int issue_state_counts,
+                                int next_column)
 {
     using Metric = SamplingStateRenderer::Metric;
     return wave_occupancy == sampling_state + static_cast<int>(Metric::kWaveOccupancy) &&
            active_threads == sampling_state + static_cast<int>(Metric::kActiveThreads) &&
+           issue_state_counts ==
+               sampling_state + static_cast<int>(Metric::kIssueStateCounts) &&
            next_column == sampling_state + static_cast<int>(Metric::kCount);
 }
 
@@ -132,11 +135,10 @@ BaseCodeWidget::SetLoadState(CodeLoadState state)
 }
 
 void
-BaseCodeWidget::SetSamplingLoadState(SamplingStateRenderer::LoadState state)
+BaseCodeWidget::SetSamplingLoadStates(const SamplingLoadStates& states)
 {
-    m_sampling_renderer.SetLoadState(state);
-    if(state != SamplingStateRenderer::LoadState::kFailed &&
-       state != SamplingStateRenderer::LoadState::kTotalsOnly)
+    m_sampling_renderer.SetLoadStates(states);
+    if(!states.CanRetry())
     {
         m_retry_sampling = false;
     }
@@ -345,17 +347,18 @@ SourceCodeWidget::Render()
     }
 
     constexpr int columns_count = ColumnIndex(SourceColumn::kCount);
-    static_assert(columns_count == 5);
+    static_assert(columns_count == 6);
     static_assert(
         sampling_columns_match_renderer(ColumnIndex(SourceColumn::kSamplingState),
                                         ColumnIndex(SourceColumn::kWaveOccupancy),
                                         ColumnIndex(SourceColumn::kActiveThreads),
+                                        ColumnIndex(SourceColumn::kIssueStateCounts),
                                         ColumnIndex(SourceColumn::kSourceText)),
         "Source sampling columns must match the renderer's column layout.");
     CalculateLineNumberWidth(static_cast<size_t>(m_largest_line_number));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
-    if(!ImGui::BeginTable("SourceCodeSamplingColumns", columns_count,
+    if(!ImGui::BeginTable("SourceCodeSamplingIssueStates", columns_count,
                           m_table_flags | ImGuiTableFlags_Reorderable, ImVec2(0.0f, 0.0f),
                           CalculateTableInnerWidth()))
     {
@@ -491,18 +494,20 @@ IsaCodeWidget::Render()
     }
 
     constexpr int columns_count = ColumnIndex(IsaColumn::kCount);
-    static_assert(columns_count == 6);
-    static_assert(sampling_columns_match_renderer(ColumnIndex(IsaColumn::kSamplingState),
-                                                  ColumnIndex(IsaColumn::kWaveOccupancy),
-                                                  ColumnIndex(IsaColumn::kActiveThreads),
-                                                  ColumnIndex(IsaColumn::kOffset)),
-                  "ISA sampling columns must match the renderer's column layout.");
+    static_assert(columns_count == 7);
+    static_assert(
+        sampling_columns_match_renderer(ColumnIndex(IsaColumn::kSamplingState),
+                                        ColumnIndex(IsaColumn::kWaveOccupancy),
+                                        ColumnIndex(IsaColumn::kActiveThreads),
+                                        ColumnIndex(IsaColumn::kIssueStateCounts),
+                                        ColumnIndex(IsaColumn::kOffset)),
+        "ISA sampling columns must match the renderer's column layout.");
     CalculateLineNumberWidth(m_entries.size());
 
-    // A new layout ID prevents saved dropdown layouts from restoring column settings.
+    // A new layout ID prevents older column indices from restoring the wrong settings.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         m_settings.GetDefaultStyle().WindowPadding);
-    if(!ImGui::BeginTable("IsaCodeSamplingColumns", columns_count,
+    if(!ImGui::BeginTable("IsaCodeSamplingIssueStates", columns_count,
                           m_table_flags | ImGuiTableFlags_Reorderable, ImVec2(0.0f, 0.0f),
                           CalculateTableInnerWidth()))
     {

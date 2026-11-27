@@ -25,6 +25,7 @@
 
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
 bool        g_full_range = false;
+bool        g_use_profiler_hub = false;
 
 void
 ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
@@ -43,7 +44,9 @@ main(int argc, char** argv)
     auto cli = session.cli() |
                Opt(g_input_file, "input_file")["--input_file"]("Path to input file") |
                Opt(g_full_range, "full_range")["--full_range"](
-                   "Whether to load/query the full trace range or only a segment");
+                   "Whether to load/query the full trace range or only a segment") |
+               Opt(g_use_profiler_hub)["--use_profiler_hub"](
+                   "Let automatic detection open the trace with the profiler hub");
 
     // Now pass the new composite back to Catch2 so it uses that
     session.cli(cli);
@@ -335,7 +338,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
     {
         CheckMemoryFootprint(m_trace);
         PrintHeader("Open database %s", g_input_file.c_str());
-        m_db = rocprofvis_db_open_database(g_input_file.c_str(), kAutodetect);
+        m_db = rocprofvis_db_open_database(g_input_file.c_str(), kAutodetect,
+                                            g_use_profiler_hub);
         REQUIRE(nullptr != m_db);
         rocprofvis_dm_result_t bind_result =
             rocprofvis_dm_bind_trace_to_database(m_trace, m_db, nullptr);

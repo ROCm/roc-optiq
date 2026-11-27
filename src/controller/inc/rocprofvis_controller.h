@@ -17,7 +17,7 @@ extern "C"
 * @param filename File to open.
 * @returns A valid controller, initialized to load the trace or nullptr on error.
 */
-rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path);
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path, bool use_profiler_hub=false);
 
 /*
 * TEMPORARY (trace compare): remove this guard when the feature graduates.

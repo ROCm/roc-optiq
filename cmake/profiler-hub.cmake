@@ -8,7 +8,7 @@ set(PROFILER_HUB_SQLITE3_FROM_GIT OFF CACHE BOOL
 # HTTPS so anonymous clones work on CI runners, which have no SSH key.
 set(PROFILER_HUB_REPO    "https://github.com/ROCm/rocm-systems.git" CACHE STRING
     "Git URL for rocm-systems (override with an SSH URL if preferred)")
-set(PROFILER_HUB_TAG     "develop-optiq")
+set(PROFILER_HUB_TAG     "users/vstempen/profiler-integration-followup")
 set(PROFILER_HUB_SUBDIR  "profilers/profiler-hub")
 # The hub generates its RocPD schema headers from this directory of the same checkout.
 # Without it the hub falls back to its own schema clone, which can go stale.

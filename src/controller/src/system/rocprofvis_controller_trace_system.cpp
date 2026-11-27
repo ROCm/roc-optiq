@@ -46,7 +46,7 @@ struct DataModelFutureDeleter
 using DataModelFuturePtr = std::unique_ptr<void, DataModelFutureDeleter>;
 }
 
-SystemTrace::SystemTrace(const std::string& filename, const std::string& config_path)
+SystemTrace::SystemTrace(const std::string& filename, const std::string& config_path, bool use_profiler_hub)
 : Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast, filename)
 , m_timeline(nullptr)
 , m_event_table(nullptr)
@@ -55,10 +55,11 @@ SystemTrace::SystemTrace(const std::string& filename, const std::string& config_
 , m_mem_mgmt(nullptr)
 , m_topology_root(nullptr)
 , m_config_path(config_path)
+, m_use_profiler_hub(use_profiler_hub)
 {
 }
 
-SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
+SystemTrace::SystemTrace(const std::vector<std::string>& filenames, const std::string& config_path, bool use_profiler_hub)
 : Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast,
         filenames.empty() ? std::string() : filenames.front())
 , m_files(filenames)
@@ -68,6 +69,8 @@ SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
 , m_search_table(nullptr)
 , m_mem_mgmt(nullptr)
 , m_topology_root(nullptr)
+, m_config_path(config_path)
+, m_use_profiler_hub(use_profiler_hub)
 {
 
 }
@@ -212,11 +215,13 @@ SystemTrace::OpenRocpdDatabase(rocprofvis_dm_database_t& database)
         {
             file_ptrs.push_back(file.c_str());
         }
-        database = rocprofvis_db_open_database_multi(file_ptrs.data(), file_ptrs.size());
+        database = rocprofvis_db_open_database_multi(file_ptrs.data(), file_ptrs.size(),
+                                                     kAutodetect, m_use_profiler_hub);
     }
     else
     {
-        database = rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
+        database = rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect,
+                                               m_use_profiler_hub);
     }
 
     if(!database)

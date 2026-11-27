@@ -176,7 +176,7 @@ rocprofvis_result_t rocprofvis_controller_cleanup_trace_database(rocprofvis_hand
     }
     return result;
 }
-rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path)
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path, bool use_profiler_hub)
 {
     rocprofvis_controller_t* controller = nullptr;
     if(filename == nullptr)
@@ -201,7 +201,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
                 case kGoogleSqlite:
                 case kProfilerHub:
                 {
-                    trace = new RocProfVis::Controller::SystemTrace(filename, config_path!=nullptr?config_path:"");
+                    trace = new RocProfVis::Controller::SystemTrace(filename, config_path!=nullptr?config_path:"", use_profiler_hub && db_type == kProfilerHub);
                     break;
                 }
                 case kComputeSqlite:

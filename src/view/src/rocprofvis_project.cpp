@@ -239,7 +239,7 @@ Project::OpenTrace(std::string& file_path)
         std::shared_ptr<RocWidget> view         = nullptr;
         std::string config_path = get_application_config_path(true);
         rocprofvis_controller_t*   controller =
-            rocprofvis_controller_alloc(file_path.c_str(), config_path.c_str());
+            rocprofvis_controller_alloc(file_path.c_str(), config_path.c_str(), false);
         if(controller)
         {
             rocprofvis_controller_object_type_t type =

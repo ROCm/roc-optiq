@@ -156,6 +156,60 @@ ProfilerHub::HubYamlFiles(const std::string& filename, std::vector<std::string>&
     return !files.empty();
 }
 
+// True when the profiler hub can open @p file as a trace.
+static bool
+is_hub_trace_file(const std::string& file)
+{
+    ph_file_probe_t probe{};
+    return ph_probe_file(file.c_str(), &probe) == PH_RESULT_SUCCESS;
+}
+
+bool
+ProfilerHub::CanOpenAll(const std::vector<std::string>& files)
+{
+    return !files.empty() && std::all_of(files.begin(), files.end(), is_hub_trace_file);
+}
+
+ProfilerHub::ProfilerHub(rocprofvis_db_filename_t path,
+                         const std::vector<std::string>& files)
+: ProfilerHub(path)
+{
+    for(const std::string& file : files)
+    {
+        std::error_code error;
+        const bool      duplicate = std::any_of(
+            m_source_files.begin(), m_source_files.end(), [&](const std::string& known) {
+                return std::filesystem::equivalent(known, file, error);
+            });
+        if(duplicate)
+        {
+            continue;
+        }
+        if(!is_hub_trace_file(file))
+        {
+            spdlog::warn("ProfilerHub: '{}' is not supported by the profiler hub, "
+                         "skipping it",
+                         file);
+            continue;
+        }
+        m_source_files.push_back(file);
+    }
+    // The list is final. SourceFiles() must not resolve it again from Path().
+    std::call_once(m_source_files_once, [] {});
+}
+
+const std::vector<std::string>&
+ProfilerHub::SourceFiles()
+{
+    std::call_once(m_source_files_once, [this] {
+        if(!HubYamlFiles(Path(), m_source_files))
+        {
+            m_source_files.assign(1, Path());
+        }
+    });
+    return m_source_files;
+}
+
 rocprofvis_db_type_t
 ProfilerHub::Detect(rocprofvis_db_filename_t filename)
 {
@@ -185,6 +239,11 @@ ProfilerHub::Detect(rocprofvis_db_filename_t filename)
 rocprofvis_dm_result_t
 ProfilerHub::Open()
 {
+    if(SourceFiles().empty())
+    {
+        spdlog::error("ProfilerHub: none of the requested files is supported");
+        return kRocProfVisDmResultNotSupported;
+    }
     return kRocProfVisDmResultSuccess;
 }
 
@@ -196,15 +255,11 @@ ProfilerHub::IsSourceFile(rocprofvis_dm_charptr_t path)
     {
         return true;
     }
-    std::vector<std::string> files;
-    if(HubYamlFiles(Path(), files))
+    for(const std::string& file : SourceFiles())
     {
-        for(const std::string& file : files)
+        if(std::filesystem::equivalent(path, file, error))
         {
-            if(std::filesystem::equivalent(path, file, error))
-            {
-                return true;
-            }
+            return true;
         }
     }
     return false;
@@ -238,11 +293,7 @@ ProfilerHub::Cleanup(Future* future, bool rebuild)
         const rocprofvis_dm_db_bind_struct* binding = BindObject();
         if(binding != nullptr && !binding->config_path.empty())
         {
-            std::vector<std::string> files;
-            if(!HubYamlFiles(Path(), files))
-            {
-                files.push_back(Path());
-            }
+            const std::vector<std::string>& files = SourceFiles();
             std::vector<const char*> paths;
             paths.reserve(files.size());
             for(const std::string& file : files)
@@ -1118,11 +1169,7 @@ ProfilerHub::ReadTraceMetadata(Future* future)
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties,
                                     ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);
         TraceProperties()->trace_duration = 0;
-        std::vector<std::string> files;
-        if(!HubYamlFiles(Path(), files))
-        {
-            files.push_back(Path());
-        }
+        const std::vector<std::string>& files = SourceFiles();
         std::vector<const char*> paths;
         paths.reserve(files.size());
         for(const std::string& file : files)
@@ -2878,11 +2925,7 @@ ProfilerHub::SummarizeNameDurations(
         }
     }
 
-    std::vector<std::string> sources;
-    if(!HubYamlFiles(Path(), sources))
-    {
-        sources.emplace_back(Path());
-    }
+    const std::vector<std::string>& sources = SourceFiles();
     const rocprofvis_dm_db_bind_struct* binding = BindObject();
     const std::string cache_directory = SummaryCacheDirectory(
         binding != nullptr ? binding->config_path : std::string(), sources);

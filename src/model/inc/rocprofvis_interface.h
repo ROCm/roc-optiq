@@ -32,12 +32,14 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(rocprofvis_db_filename_t filena
  * 
  * @param filename path of the database file
  * @param type  type enumeration, kAutodetect for automatic detection 
+ * @param use_profiler_hub true to let automatic detection select the profiler hub
  * @return handler to database object
  * 
  ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database(
                                     rocprofvis_db_filename_t,
-                                    rocprofvis_db_type_t);
+                                    rocprofvis_db_type_t,
+                                    bool);
 
 /****************************************************************************************************
  * @brief Opens several trace files as a single combined (multinode) database.
@@ -46,14 +48,21 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
  * disk. Each file becomes a database instance whose instance index (0, 1, ...) matches
  * its position in the array. Used by the Compare feature.
  *
+ * When use_profiler_hub is true and the profiler hub can open every file, the files are
+ * opened with the profiler hub. Otherwise they are opened as a multinode rocprof database.
+ *
  * @param filenames array of database file paths
  * @param count number of entries in filenames
+ * @param type database type, currently not used for multiple files
+ * @param use_profiler_hub true to open the files with the profiler hub when it supports them all
  * @return handler to database object
  *
  ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                     rocprofvis_db_filename_t const*,
-                                    rocprofvis_dm_size_t);
+                                    rocprofvis_dm_size_t,
+                                    rocprofvis_db_type_t,
+                                    bool);
 
 /****************************************************************************************************
  * @brief Calculates size of memory used by database object

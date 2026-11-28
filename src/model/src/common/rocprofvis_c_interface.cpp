@@ -35,13 +35,14 @@
 rocprofvis_db_type_t rocprofvis_db_identify_type(
     rocprofvis_db_filename_t filename) {
     std::vector<std::string> multinode_files;
+    rocprofvis_db_type_t db_type = rocprofvis_db_type_t::kAutodetect;
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
-    rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+    db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
         return db_type;
 #endif
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
-    rocprofvis_db_type_t db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
+    db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
     if (db_type != rocprofvis_db_type_t::kAutodetect)
         return db_type;
     else

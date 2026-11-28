@@ -243,7 +243,10 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
     return controller;
 }
 #ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
-rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames, uint64_t count)
+rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
+                                                             uint64_t           count,
+                                                             char const* const  config_path,
+                                                             bool               use_profiler_hub)
 {
     rocprofvis_controller_t* controller = nullptr;
     if(filenames && count > 0)
@@ -269,7 +272,10 @@ rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* 
             }
             // Compare always produces a combined system trace.
             RocProfVis::Controller::Trace* trace =
-                all_supported ? new RocProfVis::Controller::SystemTrace(files) : nullptr;
+                all_supported ? new RocProfVis::Controller::SystemTrace(
+                                    files, config_path != nullptr ? config_path : "",
+                                    use_profiler_hub)
+                              : nullptr;
             if(trace && trace->Init() == kRocProfVisResultSuccess)
             {
                 controller = (rocprofvis_controller_t*) trace;

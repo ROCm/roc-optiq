@@ -313,8 +313,9 @@ Project::OpenCompare(const std::string&              project_id,
         file_ptrs.push_back(path.c_str());
     }
 
-    rocprofvis_controller_t* controller =
-        rocprofvis_controller_alloc_compare(file_ptrs.data(), file_ptrs.size());
+    std::string config_path = get_application_config_path(true);
+    rocprofvis_controller_t* controller = rocprofvis_controller_alloc_compare(
+        file_ptrs.data(), file_ptrs.size(), config_path.c_str(), false);
     if(controller)
     {
         std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();

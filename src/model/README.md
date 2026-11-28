@@ -50,13 +50,15 @@ Database interface
   
   `param` filename path of the database file <br />
   `param` type  type enumeration, kAutodetect for automatic detection  <br />
+  `param` use_profiler_hub true to let automatic detection select the profiler hub <br />
   `return` handler to database object <br />
   `note` Currently only old rocpd schema fully supported. Working on rocprof schema <br />
   
 ``` 
 rocprofvis_dm_database_t rocprofvis_db_open_database(
                                     rocprofvis_db_filename_t, 
-                                    rocprofvis_db_type_t);
+                                    rocprofvis_db_type_t,
+                                    bool);
 ```
 
 ---

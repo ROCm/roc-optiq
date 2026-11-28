@@ -17,7 +17,7 @@ ffi = FFI()
 trace = cffi_lib.lib.rocprofvis_dm_create_trace()
 if trace != None:
     print(args.input_rpd.encode('ascii'))
-    db = cffi_lib.lib.rocprofvis_db_open_database(args.input_rpd.encode('ascii'), cffi_lib.lib.kAutodetect)
+    db = cffi_lib.lib.rocprofvis_db_open_database(args.input_rpd.encode('ascii'), cffi_lib.lib.kAutodetect, False)
     if db != None:
         if cffi_lib.lib.rocprofvis_dm_bind_trace_to_database(trace, db) == cffi_lib.lib.kRocProfVisDmResultSuccess:
             object2wait = cffi_lib.lib.rocprofvis_db_future_alloc(db_progress)

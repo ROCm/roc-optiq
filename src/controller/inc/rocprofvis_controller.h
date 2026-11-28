@@ -17,7 +17,7 @@ extern "C"
 * @param filename File to open.
 * @returns A valid controller, initialized to load the trace or nullptr on error.
 */
-rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path);
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path, bool use_profiler_hub=false);
 
 /*
 * TEMPORARY (trace compare): remove this guard when the feature graduates.
@@ -29,10 +29,14 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
 * file's tracks are tagged with its source instance index (see kRPVControllerTrackInstanceId).
 * @param filenames Array of trace file paths.
 * @param count Number of entries in filenames.
+* @param config_path Application config directory passed to the trace. May be null.
+* @param use_profiler_hub true to open the files with the profiler hub when it supports them all.
 * @returns A valid controller, initialized to load the traces or nullptr on error.
 */
 rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
-                                                             uint64_t           count);
+                                                             uint64_t           count,
+                                                             char const* const  config_path,
+                                                             bool               use_profiler_hub = false);
 #endif
 
 /*

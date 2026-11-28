@@ -33,11 +33,21 @@
  ***************************************************************************************************/
 
 rocprofvis_db_type_t rocprofvis_db_identify_type(
-    rocprofvis_db_filename_t filename) {
+    rocprofvis_db_filename_t filename,
+    bool use_profiler_hub) {
     std::vector<std::string> multinode_files;
+rocprofvis_db_type_t       db_type = rocprofvis_db_type_t::kAutodetect;
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
-    rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+    db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
+        return db_type;
+#endif
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    if (use_profiler_hub)
+    {
+        db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
+    }
+    if (db_type != rocprofvis_db_type_t::kAutodetect)
         return db_type;
 #endif
     return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
@@ -58,12 +68,16 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(
 ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database(
                                         rocprofvis_db_filename_t filename, 
-                                        rocprofvis_db_type_t db_type){
+                                        rocprofvis_db_type_t db_type,
+                                        bool use_profiler_hub){
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
 #ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
-        db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
+        if (use_profiler_hub)
+        {
+            db_type = RocProfVis::DataModel::ProfilerHub::Detect(filename);
+        }
         if (db_type == rocprofvis_db_type_t::kAutodetect)
 #endif
         {
@@ -201,13 +215,20 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
 * multinode rocprof database directly from the provided file list. Each file becomes a
 * database instance whose instance index matches its position in the array.
 *
+* When m_use_profiler_hub is set and the profiler hub can open every file, the files are
+* opened by the profiler hub. Otherwise they are opened as a multinode rocprof database.
+*
 * @param filenames array of database file paths
 * @param count number of entries in filenames
+* @param db_type database type, currently not used for multiple files
+* @param m_use_profiler_hub true to open the files with the profiler hub when it supports them all
 *
 ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                         rocprofvis_db_filename_t const* filenames,
-                                        rocprofvis_dm_size_t count){
+                                        rocprofvis_dm_size_t count,
+                                        rocprofvis_db_type_t db_type,
+                                        bool use_profiler_hub){
     PROFILE;
     if (filenames == nullptr || count == 0)
     {
@@ -223,6 +244,29 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                      nullptr);
         files.push_back(filenames[i]);
     }
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    // The profiler hub opens the files only when it supports every one of them. A mix
+    // would leave some files off the timeline, so any other combination falls back to
+    // the rocprof engine below.
+    if (use_profiler_hub && RocProfVis::DataModel::ProfilerHub::CanOpenAll(files))
+    {
+        try {
+            RocProfVis::DataModel::Database* db =
+                new RocProfVis::DataModel::ProfilerHub(files.front().c_str(), files);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            }
+            delete db;
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                "Error! Failed to open combined database using profiler hub!", nullptr);
+        }
+        catch (const std::exception& ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    }
+#endif
     try {
         RocProfVis::DataModel::SystemDatabase* db =
             new RocProfVis::DataModel::RocprofDatabase(files.front().c_str(), files);
@@ -231,7 +275,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
         }
         else {
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open combined database!",
-                                                nullptr);
+                nullptr);
         }
     }
     catch (const std::exception& ex)

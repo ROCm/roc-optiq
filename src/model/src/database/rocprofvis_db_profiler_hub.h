@@ -11,6 +11,7 @@
 #include "rocprofvis_db_table_processor.h"
 #include <profiler-hub/c/profiler_hub.h>
 #include <profiler-hub/c/profiler_hub_types.h>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,12 @@ public:
     , m_table_processor{ TableProcessor(this), TableProcessor(this),
                          TableProcessor(this) }
     {}
+    // Database constructor for several files opened on the same timeline
+    // @param path - path reported as the trace path, normally the first of @p files
+    // @param files - files chosen to be opened together. Each one is probed, and only
+    //                the files the profiler hub supports are kept as source files.
+    //                Duplicates are ignored. Open() fails when none is supported.
+    ProfilerHub(rocprofvis_db_filename_t path, const std::vector<std::string>& files);
     // ProfilerHub destructor, must be defined as virtual to free resources of derived
     // classes
     virtual ~ProfilerHub() { Close(); }
@@ -55,6 +62,10 @@ public:
     rocprofvis_dm_result_t      Close() override;
     void                        InterruptQuery(void* connection) override {};
     static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
+    // @return true when @p files is not empty and the profiler hub can open every one
+    //         of them. Each file is probed as a trace file, not as a yaml manifest, which
+    //         matches how the multi file constructor treats its files.
+    static bool CanOpenAll(const std::vector<std::string>& files);
 
 protected:
     rocprofvis_dm_result_t BuildTableQuery(
@@ -149,7 +160,14 @@ protected:
                               int index) override;
 
 private:
+    // Reads a yaml manifest and returns the trace files it lists. Returns false when
+    // @p filename is not a usable manifest. Parses the file on every call, so
+    // instance code should use SourceFiles() instead.
     static bool HubYamlFiles(const std::string& filename, std::vector<std::string>& files);
+    // The trace files of this database: the files listed by the yaml manifest, or the
+    // opened path itself when it is not a manifest. Resolved once on first use.
+    // Thread safe. The reference stays valid for the life of the object.
+    const std::vector<std::string>& SourceFiles();
     void IdentificatorNamesUpdate(rocprofvis_dm_track_params_t& track_params);
     static bool RegionTracks(rocprofvis_dm_track_category_t category);
     static bool GpuTracks(rocprofvis_dm_track_category_t category);
@@ -175,6 +193,7 @@ private:
 
     rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(
         uint32_t stream_track_index, uint32_t db_instance);
+    rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
 
     rocprofvis_dm_track_category_t GetRegionTrackCategory() override
     {
@@ -182,6 +201,8 @@ private:
     }
 
     ph_ctx*            m_ph_trace;
+    std::once_flag           m_source_files_once;
+    std::vector<std::string> m_source_files;
     TableProcessor     m_table_processor[kRPVTableDataTypesNum];
     StringTable        m_db_files;
     string_index_map_t m_string_index_map;
@@ -238,6 +259,29 @@ private:
     // A track published from the hub source stored in an event's node field.
     // Correlation, call stack, and details use it to open that file.
     uint32_t TrackOnSource(uint32_t source_index);
+
+    // Node, agent, process, and thread ids are catalog row ids local to one
+    // trace. The event tables store the same row ids in their nid, pid, and tid
+    // columns, so a filter id belongs to a trace only if that trace has it.
+    enum class trace_identifier_t { node, agent, process, thread };
+    struct source_filter_ids
+    {
+        bool     has_node    = false;
+        bool     has_agent   = false;
+        bool     has_process = false;
+        bool     has_thread  = false;
+        uint64_t node        = 0;
+        uint64_t agent       = 0;
+        uint64_t process_id  = 0;
+        uint64_t thread_id   = 0;
+    };
+    bool IdentifierOnSource(DbInstance* instance, trace_identifier_t kind, uint64_t id);
+    const char* CatalogTextAnywhere(const char* table, uint64_t row_id, const char* column);
+    void RemapFilterIds(DbInstance* instance, source_filter_ids& filter);
+    // Rewrite ids to this trace. A node that belongs to another trace is left
+    // out so its rows stay with that trace's own summary.
+    std::vector<source_filter_ids> FiltersForSource(DbInstance*              instance,
+                                                    const source_filter_ids& filter);
 };
 
 }  // namespace DataModel

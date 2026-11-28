@@ -114,3 +114,17 @@ rocprofvis_view_set_drag_repair_enabled(bool enabled)
     settings.GetUserSettings().linux_drag_repair = enabled;
     settings.ApplyUserSettings(previous, true);
 }
+
+void
+rocprofvis_view_set_enable_profiler_hub(bool enabled)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    UserSettings     previous = settings.GetUserSettings();
+
+    if(previous.enable_profiler_hub != enabled)
+    {
+        spdlog::info("Profiler Hub setting changed from {} to {}", previous.enable_profiler_hub, enabled);
+        settings.GetUserSettings().enable_profiler_hub = enabled;
+        settings.ApplyUserSettings(previous, true);
+    }
+}

@@ -243,7 +243,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
     {
         CheckMemoryFootprint(m_trace);
         PrintHeader("Open database %s", g_input_file.c_str());
-        m_db = rocprofvis_db_open_database(g_input_file.c_str(), kAutodetect);
+        m_db = rocprofvis_db_open_database(g_input_file.c_str(), kAutodetect, false);
         REQUIRE(nullptr != m_db);
         rocprofvis_dm_result_t bind_result =
             rocprofvis_dm_bind_trace_to_database(m_trace, m_db, nullptr);

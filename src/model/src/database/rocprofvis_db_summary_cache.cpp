@@ -22,7 +22,7 @@ namespace
 {
 
 constexpr char     kSummaryMagic[4]          = {'P', 'H', 'U', '1'};
-constexpr uint32_t kSummaryVersion           = 1;
+constexpr uint32_t kSummaryVersion           = 3;
 constexpr uint32_t kSummaryQueryLimit        = 16u * 1024u * 1024u;
 constexpr uint32_t kSummaryNameLimit         = 1024u * 1024u;
 constexpr uint32_t kSummaryRowLimit          = 1000000u;

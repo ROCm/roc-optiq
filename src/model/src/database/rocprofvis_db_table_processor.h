@@ -5,8 +5,13 @@
 
 #include "rocprofvis_db.h"
 #include "json.h"
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <limits>
 #include <mutex>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <functional>
 #include <vector>
@@ -60,7 +65,8 @@ namespace DataModel
 
     typedef struct rocprofvis_db_compound_query_info {
         uint32_t track;
-        uint32_t guid_id;
+        // One statement is emitted once per guid. Every guid stays with it.
+        std::vector<uint32_t> guid_ids;
     } rocprofvis_db_compound_query_info;
 
 
@@ -163,6 +169,99 @@ namespace DataModel
         bool m_pending = false;
     };
 
+    // jsoncpp on MSVC parses an integer token above 2^31 as a double. A 64-bit
+    // query value is sent as {"lo","hi"} uint32 halves. Every uint32 is exact in
+    // a double, so a half that arrives as a double converts back unchanged.
+    inline bool ReadJsonUint32(jt::Json& json, uint32_t& val) {
+        if (json.isLong()) {
+            const long long number = json.getLong();
+            if (number < 0 || number > static_cast<long long>(UINT32_MAX)) return false;
+            val = static_cast<uint32_t>(number);
+            return true;
+        }
+        if (!json.isNumber()) return false;
+        const double number = json.getNumber();
+        if (!std::isfinite(number) || number < 0.0 || std::trunc(number) != number ||
+            number > static_cast<double>(UINT32_MAX))
+            return false;
+        val = static_cast<uint32_t>(number);
+        return static_cast<double>(val) == number;
+    }
+
+    template<typename T>
+    jt::Json JsonQueryValue(const T& val) {
+        if constexpr (std::is_integral_v<T> && sizeof(T) == sizeof(uint64_t)) {
+            uint64_t bits = 0;
+            if constexpr (std::is_signed_v<T>) {
+                const int64_t signed_val = static_cast<int64_t>(val);
+                std::memcpy(&bits, &signed_val, sizeof(bits));
+            } else {
+                bits = static_cast<uint64_t>(val);
+            }
+            jt::Json pair;
+            pair.setObject();
+            pair.getObject()["lo"] = jt::Json(static_cast<uint32_t>(bits));
+            pair.getObject()["hi"] = jt::Json(static_cast<uint32_t>(bits >> 32));
+            return pair;
+        } else {
+            return jt::Json(val);
+        }
+    }
+
+    template<typename T>
+    bool ReadJsonQueryValue(jt::Json& json, T& val) {
+        if constexpr (std::is_same_v<T, bool>) {
+            if (!json.isBool()) return false;
+            val = json.getBool();
+        } else if constexpr (std::is_same_v<T, float>) {
+            if (!json.isNumber()) return false;
+            val = static_cast<float>(json.getNumber());
+        } else if constexpr (std::is_same_v<T, double>) {
+            if (!json.isNumber()) return false;
+            val = json.getNumber();
+        } else if constexpr (std::is_integral_v<T> && sizeof(T) == sizeof(uint64_t)) {
+            // A 64-bit reader also receives 32-bit values written as plain numbers,
+            // e.g. uint32 track ids read into size_t.
+            if (!json.isObject()) {
+                uint32_t number = 0;
+                if (!ReadJsonUint32(json, number)) return false;
+                val = static_cast<T>(number);
+                return true;
+            }
+            if (!json.contains("lo") || !json.contains("hi")) return false;
+            uint32_t lo = 0;
+            uint32_t hi = 0;
+            if (!ReadJsonUint32(json["lo"], lo) || !ReadJsonUint32(json["hi"], hi)) return false;
+            const uint64_t bits = (static_cast<uint64_t>(hi) << 32) | lo;
+            if constexpr (std::is_signed_v<T>) {
+                int64_t signed_bits = 0;
+                std::memcpy(&signed_bits, &bits, sizeof(bits));
+                val = static_cast<T>(signed_bits);
+            } else {
+                val = static_cast<T>(bits);
+            }
+        } else if constexpr (std::is_integral_v<T>) {
+            // A uint32 above 2^31 also arrives as a double. It is exact, unlike a
+            // full 64-bit value. Packed track ids use the top bits and can land here.
+            if constexpr (std::is_unsigned_v<T> && sizeof(T) <= sizeof(uint32_t)) {
+                uint32_t number = 0;
+                if (!ReadJsonUint32(json, number) ||
+                    number > static_cast<uint32_t>(std::numeric_limits<T>::max()))
+                    return false;
+                val = static_cast<T>(number);
+            } else {
+                if (!json.isLong()) return false;
+                val = static_cast<T>(json.getLong());
+            }
+        } else if constexpr (std::is_same_v<T, std::string>) {
+            if (!json.isString()) return false;
+            val = json.getString();
+        } else {
+            return false;
+        }
+        return true;
+    }
+
     class ParamSerializer {
         jt::Json obj_;
     public:
@@ -185,7 +284,7 @@ namespace DataModel
 
         template<typename T>
         void set(const std::string& tag, const T& val) {
-            obj_.getObject()[tag] = jt::Json(val);
+            obj_.getObject()[tag] = JsonQueryValue(val);
         }
 
         // Set an array of values
@@ -194,7 +293,7 @@ namespace DataModel
             jt::Json arr;
             arr.setArray();
             for (const auto& v : values)
-                arr.getArray().push_back(jt::Json(v));
+                arr.getArray().push_back(JsonQueryValue(v));
             obj_.getObject()[tag] = std::move(arr);
         }
 
@@ -218,26 +317,7 @@ namespace DataModel
         template<typename T>
         bool get(const std::string& tag, T& val) {
             if (!json_.contains(tag)) return false;
-            jt::Json& j = json_[tag];
-            if constexpr (std::is_same_v<T, bool>) {
-                if (!j.isBool()) return false;
-                val = j.getBool();
-            } else if constexpr (std::is_same_v<T, float>) {
-                if (!j.isNumber()) return false;
-                val = static_cast<float>(j.getNumber());
-            } else if constexpr (std::is_same_v<T, double>) {
-                if (!j.isNumber()) return false;
-                val = j.getNumber();
-            } else if constexpr (std::is_integral_v<T>) {
-                if (!j.isLong()) return false;
-                val = static_cast<T>(j.getLong());
-            } else if constexpr (std::is_same_v<T, std::string>) {
-                if (!j.isString()) return false;
-                val = j.getString();
-            } else {
-                return false;
-            }
-            return true;
+            return ReadJsonQueryValue(json_[tag], val);
         }
 
         // Get an array of values
@@ -250,24 +330,7 @@ namespace DataModel
             values.clear();
             for (auto& elem : j.getArray()) {
                 T val;
-                if constexpr (std::is_same_v<T, bool>) {
-                    if (!elem.isBool()) return false;
-                    val = elem.getBool();
-                } else if constexpr (std::is_same_v<T, float>) {
-                    if (!elem.isNumber()) return false;
-                    val = static_cast<float>(elem.getNumber());
-                } else if constexpr (std::is_same_v<T, double>) {
-                    if (!elem.isNumber()) return false;
-                    val = elem.getNumber();
-                } else if constexpr (std::is_integral_v<T>) {
-                    if (!elem.isLong()) return false;
-                    val = static_cast<T>(elem.getLong());
-                } else if constexpr (std::is_same_v<T, std::string>) {
-                    if (!elem.isString()) return false;
-                    val = elem.getString();
-                } else {
-                    return false;
-                }
+                if (!ReadJsonQueryValue(elem, val)) return false;
                 values.push_back(val);
             }
             return true;

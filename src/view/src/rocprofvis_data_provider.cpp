@@ -1251,7 +1251,10 @@ DataProvider::HandleLoadTrackMetaData()
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 result = rocprofvis_controller_get_object(
                     stream, kRPVControllerStreamProcessor, 0, &processor);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if (result != kRocProfVisResultSuccess)
+                {
+                    processor = nullptr;
+                }
                 track_info.topology.type = TrackInfo::TrackType::Stream;
             }
             else if(thread)

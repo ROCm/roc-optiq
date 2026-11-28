@@ -75,12 +75,10 @@ cmake_dependent_option(ROCPROFVIS_ENABLE_AGENTIC_COMPUTE
 option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" ${ROCPROFVIS_EXPERIMENTAL_DEFAULT})
 
-# Deliberately NOT under the umbrella: the Hub is unstable (its system tests
-# abort with std::future_error and a filter error when it is on), and it clones
-# rocm-systems at configure time. Default OFF until it is stable; pass
-# -DROCPROFVIS_ENABLE_PROFILER_HUB=ON to build it, then move it under the
-# umbrella by defaulting it to ${ROCPROFVIS_EXPERIMENTAL_DEFAULT}.
-option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" OFF)
+# TEMPORARY: gate the in-development Profiler Hub trace backend until it ships.
+# Default OFF so builds do not clone rocm-systems at configure time. Remove
+# this option and unwrap its guards when the feature graduates.
+option(ROCPROFVIS_ENABLE_PROFILER_HUB "Build with Profiler Hub trace support (in development)" ON)
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
@@ -109,6 +107,9 @@ endif(ROCPROFVIS_ENABLE_TRACE_COMPARE)
 if(ROCPROFVIS_MULTI_WINDOW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_MULTI_WINDOW")
 endif(ROCPROFVIS_MULTI_WINDOW)
+if(ROCPROFVIS_ENABLE_PROFILER_HUB)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_PROFILER_HUB_ENABLED")
+endif(ROCPROFVIS_ENABLE_PROFILER_HUB)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)

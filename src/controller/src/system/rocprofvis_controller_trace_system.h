@@ -35,11 +35,11 @@ class TopologyNode;
 class SystemTrace : public Trace
 {
 public:
-    SystemTrace(const std::string& filename, const std::string& config_path);
+    SystemTrace(const std::string& filename, const std::string& config_path, bool use_profiler_hub);
 
     // Compare/combine: open several files as one trace. Each file becomes a source
     // instance whose index is exposed via kRPVControllerTrackInstanceId.
-    SystemTrace(const std::vector<std::string>& filenames);
+    SystemTrace(const std::vector<std::string>& filenames, const std::string& config_path, bool use_profiler_hub);
 
     virtual ~SystemTrace();
 
@@ -94,6 +94,7 @@ private:
     TopologyNode*                                  m_topology_root;  // null until the topology loads, and after a failed load
     std::array<std::mutex, kRPVDMTableNumUsecases> m_table_mutex;
     std::string                                    m_config_path;
+    bool                                           m_use_profiler_hub;
 
 private:
     rocprofvis_result_t LoadRocpd(Future* future);

@@ -18,8 +18,8 @@ struct RocprofV3Settings
     {
         kAggregateRuntimeTrace,
         kAggregateSysTrace,
-        _kAggregateTraceLast,
-        kBasicHipTrace = _kAggregateTraceLast,
+        kAggregateTraceLast,
+        kBasicHipTrace = kAggregateTraceLast,
         kBasicMarkerTrace,
         kBasicKernelTrace,
         kBasicMemoryCopyTrace,
@@ -32,15 +32,27 @@ struct RocprofV3Settings
         kBasicRocDecodeTrace,
         kBasicHIPEventTrace,
         kBasicHIPFILETrace,
-        _kTracingLast,
+        kTracingLast,
+    };
+    enum WindowUnit : uint32_t
+    {
+        kNanoseconds,
+        kMicroseconds,
+        kMilliseconds,
+        kSeconds,
+        kMinutes,
+        kHours,
+        kWindowUnitLast,
     };
 
-    std::bitset<_kTracingLast> collection_tracing;
-    std::string                collection_counters;
+    std::bitset<kTracingLast> collection_tracing;
+    std::string               collection_counters;
 
-    uint32_t window_delay;
-    uint32_t window_duration;
-    uint32_t window_repeat;
+    bool       window_enabled;
+    uint32_t   window_delay;
+    uint32_t   window_duration;
+    uint32_t   window_repeat;
+    WindowUnit window_unit;
 
     TargetSpec     target;
     ExtraArguments extra_arguments;
@@ -69,7 +81,8 @@ public:
 
     TargetSpec const& GetTarget(rocprofvis_profiler_operation_t operation) const override;
     ExtraArguments& GetExtraArguments(rocprofvis_profiler_operation_t operation) override;
-    std::vector<std::string>& GetProfilerRecentTargets(LaunchConfig const& config) override;
+    std::vector<std::string>& GetProfilerRecentTargets(
+        LaunchConfig const& config) override;
     bool  RenderTargetSection(LaunchConfig const&   config,
                               TargetBrowseFn const& on_browse) override;
     float MinWidth() const override;

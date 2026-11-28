@@ -6,34 +6,11 @@
 #include "rocprofvis_json_utils.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_settings_manager.h"
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
 namespace View
 {
-
-namespace
-{
-// An enum stored as its integer value. Anything outside [0, last] - a corrupted
-// profile, or one written by a newer build - falls back to the default rather
-// than being cast into a value the launch would act on.
-int
-EnumFromInt(int value, int last, int fallback, char const* key)
-{
-    int result = fallback;
-    if(value >= 0 && value <= last)
-    {
-        result = value;
-    }
-    else
-    {
-        spdlog::warn("Ignoring unknown {} value {} in a saved launch profile", key,
-                     value);
-    }
-    return result;
-}
-}  // namespace
 
 // ==================================================================================
 // RocprofComputeSettings JSON
@@ -46,13 +23,11 @@ RocprofComputeSettings::FromJson(jt::Json const& json)
     jt::Json&              j = const_cast<jt::Json&>(json);
 
     // Profile
-    s.profile_overwrite = JsonUtils::GetBool(j, "profile_overwrite", false);
-    s.profile_roofline  = static_cast<Roofline>(
-        EnumFromInt(JsonUtils::GetInt(j, "profile_roofline", kRooflineEnabledInclusive),
-                    kRooflineDisabled, kRooflineEnabledInclusive, "profile_roofline"));
-    s.profile_pc_sampling = static_cast<PcSamplingMethod>(
-        EnumFromInt(JsonUtils::GetInt(j, "profile_pc_sampling", kPcSamplingDisabled),
-                    kPcSamplingHostTrap, kPcSamplingDisabled, "profile_pc_sampling"));
+    s.profile_overwrite   = JsonUtils::GetBool(j, "profile_overwrite", false);
+    s.profile_roofline    = static_cast<Roofline>(JsonUtils::GetEnum(
+        j, "profile_roofline", kRooflineEnabledInclusive, kRooflineLast));
+    s.profile_pc_sampling = static_cast<PcSamplingMethod>(JsonUtils::GetEnum(
+        j, "profile_pc_sampling", kPcSamplingDisabled, kPcSamplingLast));
     if(j.contains("profile_target"))
     {
         s.profile_target = TargetSpec::FromJson(j["profile_target"]);

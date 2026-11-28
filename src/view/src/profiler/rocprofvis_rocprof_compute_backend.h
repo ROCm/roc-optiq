@@ -13,17 +13,19 @@ namespace View
 
 struct RocprofComputeSettings
 {
-    enum PcSamplingMethod
+    enum PcSamplingMethod : uint32_t
     {
         kPcSamplingDisabled,
         kPcSamplingStochastic,
         kPcSamplingHostTrap,
+        kPcSamplingLast
     };
-    enum Roofline
+    enum Roofline : uint32_t
     {
         kRooflineEnabledInclusive,
         kRooflineEnabledExclusive,
         kRooflineDisabled,
+        kRooflineLast,
     };
 
     // Profile

@@ -27,8 +27,13 @@ struct TracingProp
     const char* json_key;
     bool        default_value;
 };
+struct WindowUnitProp
+{
+    const char* display_name;
+    const char* argv;
+};
 
-constexpr std::array<TracingProp, RocprofV3Settings::Tracing::_kTracingLast>
+constexpr std::array<TracingProp, RocprofV3Settings::Tracing::kTracingLast>
     TRACING_PROPS = {
         { { "Runtime Trace",
             "Collects tracing data for HIP runtime API, marker (ROCTx) API, RCCL API, "
@@ -93,6 +98,13 @@ constexpr std::array<TracingProp, RocprofV3Settings::Tracing::_kTracingLast>
           { "HIP FILE Trace", "Collects traces for hipFILE APIs.", "--hipfile-trace",
             "collection_hipfile_trace", false } }
     };
+constexpr std::array<WindowUnitProp, RocprofV3Settings::WindowUnit::kWindowUnitLast>
+    WINDOWUNIT_PROPS = { { { "Nanoseconds", "nsec" },
+                           { "Microseconds", "usec" },
+                           { "Milliseconds", "msec" },
+                           { "Seconds", "sec" },
+                           { "Minutes", "min" },
+                           { "Hours", "hour" } } };
 }  // namespace
 
 RocprofV3Settings
@@ -101,7 +113,7 @@ RocprofV3Settings::FromJson(jt::Json const& json)
     RocprofV3Settings s;
     jt::Json&         j = const_cast<jt::Json&>(json);
 
-    for(size_t i = 0; i < _kTracingLast; ++i)
+    for(size_t i = 0; i < kTracingLast; ++i)
     {
         s.collection_tracing[i] = JsonUtils::GetBool(j, TRACING_PROPS[i].json_key,
                                                      TRACING_PROPS[i].default_value);
@@ -119,12 +131,15 @@ RocprofV3Settings::FromJson(jt::Json const& json)
     }
     s.collection_counters = JsonUtils::GetString(j, "collection_counters", "");
 
+    s.window_enabled = JsonUtils::GetBool(j, "window_enabled", false);
     s.window_delay =
         static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_delay", 0), 0));
     s.window_duration =
         static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_duration", 0), 0));
     s.window_repeat =
-        static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_repeat", 1), 0));
+        static_cast<uint32_t>(std::max(JsonUtils::GetInt(j, "window_repeat", 0), 0));
+    s.window_unit = static_cast<WindowUnit>(
+        JsonUtils::GetEnum(j, "window_unit", kSeconds, kWindowUnitLast));
 
     if(j.contains("target"))
     {
@@ -143,15 +158,17 @@ RocprofV3Settings::ToJson() const
 {
     jt::Json p;
 
-    for(size_t i = 0; i < _kTracingLast; ++i)
+    for(size_t i = 0; i < kTracingLast; ++i)
     {
         p[TRACING_PROPS[i].json_key] = collection_tracing[i];
     }
     p["collection_counters"] = collection_counters;
 
+    p["window_enabled"]  = window_enabled;
     p["window_delay"]    = window_delay;
     p["window_duration"] = window_duration;
     p["window_repeat"]   = window_repeat;
+    p["window_unit"]     = static_cast<int>(window_unit);
 
     p["target"]          = target.ToJson();
     p["extra_arguments"] = extra_arguments.ToJson();
@@ -248,8 +265,12 @@ float
 RocprofV3Backend::MinWidth() const
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-    return ImGui::CalcTextSize("TraceMemory Allocation TraceDuration (s)888").x +
-           2.0f * ImGui::GetTextLineHeight() + ImGui::GetFrameHeight() +
+    return ImGui::CalcTextSize("TraceMemory Allocation TraceDuration").x +
+           ImGui::CalcTextSize(
+               WINDOWUNIT_PROPS[static_cast<size_t>(RocprofV3Settings::kMicroseconds)]
+                   .display_name)
+               .x +
+           2.0f * (ImGui::GetTextLineHeight() + ImGui::GetFrameHeight()) +
            4.0f * style.FramePadding.x + 5.0f * style.ItemSpacing.x + style.IndentSpacing;
 }
 
@@ -337,7 +358,7 @@ RocprofV3Backend::FlattenToExecution(
         argv_out.push_back("--output-directory");
         argv_out.push_back(m_settings.target.output_directory);
     }
-    for(size_t i = 0; i < RocprofV3Settings::_kTracingLast; i++)
+    for(size_t i = 0; i < RocprofV3Settings::kTracingLast; i++)
     {
         if(m_settings.collection_tracing[i])
         {
@@ -349,12 +370,15 @@ RocprofV3Backend::FlattenToExecution(
         argv_out.push_back("--pmc");
         argv_out.push_back(m_settings.collection_counters);
     }
-    if(m_settings.window_duration)
+    if(m_settings.window_enabled)
     {
         argv_out.push_back("--collection-period");
         argv_out.push_back(std::to_string(m_settings.window_delay) + ":" +
                            std::to_string(m_settings.window_duration) + ":" +
                            std::to_string(m_settings.window_repeat));
+        argv_out.push_back("--collection-period-unit");
+        argv_out.push_back(
+            WINDOWUNIT_PROPS[static_cast<size_t>(m_settings.window_unit)].argv);
     }
     m_settings.extra_arguments.Argv(argv_out);
     m_settings.target.Argv(true, argv_out);
@@ -432,8 +456,8 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
                                    : ImGui::GetStyle().Alpha *
                                          ImGui::GetStyle().DisabledAlpha);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-        for(size_t i = RocprofV3Settings::_kAggregateTraceLast;
-            i < RocprofV3Settings::_kTracingLast; i++)
+        for(size_t i = RocprofV3Settings::kAggregateTraceLast;
+            i < RocprofV3Settings::kTracingLast; i++)
         {
             bool set = m_settings.collection_tracing[i];
             if(ImGui::Checkbox(TRACING_PROPS[i].display_name, &set))
@@ -456,7 +480,7 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
         }
         else
         {
-            for(size_t i = 0; i < RocprofV3Settings::_kTracingLast; i++)
+            for(size_t i = 0; i < RocprofV3Settings::kTracingLast; i++)
             {
                 if(m_settings.collection_tracing[i])
                 {
@@ -488,15 +512,26 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
     ImGui::EndGroup();
     ImGui::SameLine(0.0f, style.ItemSpacing.x + style.IndentSpacing);
     ImGui::BeginGroup();
-    float input_width = ImGui::CalcTextSize("888").x + 2.0f * style.FramePadding.x;
+    float input_width =
+        ImGui::CalcTextSize(
+            WINDOWUNIT_PROPS[static_cast<size_t>(RocprofV3Settings::kMicroseconds)]
+                .display_name)
+            .x +
+        ImGui::GetFrameHeight() + 2.0f * style.FramePadding.x;
     LaunchSubHeader("TRACE WINDOW");
+    changed |= ToggleSwitch("Enabled", &m_settings.window_enabled);
+    HelpMarker("--collection-period", "The collection period is the time interval during "
+                                      "which the profiling data is collected.");
+    ImGui::BeginDisabled(!m_settings.window_enabled);
     ImGui::BeginGroup();
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Delay (s)");
+    ImGui::TextUnformatted("Delay");
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Duration (s)");
+    ImGui::TextUnformatted("Duration");
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Repeat");
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Unit");
     ImGui::EndGroup();
     ImGui::SameLine();
     ImGui::BeginGroup();
@@ -507,8 +542,7 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
         m_settings.window_delay = static_cast<uint32_t>(std::max(i_val, 0));
         changed                 = true;
     }
-    HelpMarker("--collection-period",
-               "Time in seconds before the data collection begins.");
+    HelpMarker("--collection-period", "Time before the data collection begins.");
     ImGui::SetNextItemWidth(input_width);
     i_val = m_settings.window_duration;
     if(ImGui::InputInt("##Duration", &i_val, 0))
@@ -516,7 +550,7 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
         m_settings.window_duration = static_cast<uint32_t>(std::max(i_val, 0));
         changed                    = true;
     }
-    HelpMarker("--collection-period", "Duration of data collection in seconds.");
+    HelpMarker("--collection-period", "Duration of data collection.");
     ImGui::SetNextItemWidth(input_width);
     i_val = m_settings.window_repeat;
     if(ImGui::InputInt("##Repeat", &i_val, 0))
@@ -527,7 +561,26 @@ RocprofV3Backend::RenderProfilingOptions(rocprofvis_profiler_operation_t operati
     HelpMarker("--collection-period",
                "Number of times the data collection cycle runs. 0 repeats it until "
                "the application exits.");
+    ImGui::SetNextItemWidth(input_width);
+    if(ImGui::BeginCombo(
+           "##Unit",
+           WINDOWUNIT_PROPS[static_cast<size_t>(m_settings.window_unit)].display_name))
+    {
+        for(size_t i = 0; i < RocprofV3Settings::kWindowUnitLast; i++)
+        {
+            if(ImGui::Selectable(WINDOWUNIT_PROPS[i].display_name,
+                                 static_cast<size_t>(m_settings.window_unit) == i))
+            {
+                m_settings.window_unit = static_cast<RocprofV3Settings::WindowUnit>(i);
+                changed                = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    HelpMarker("--collection-period-unit",
+               "Change the unit of time used in --collection-period");
     ImGui::EndGroup();
+    ImGui::EndDisabled();
     ImGui::EndGroup();
     return changed;
 }

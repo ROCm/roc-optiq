@@ -56,10 +56,24 @@ constexpr RuleRow kComputeAnalyze[] = {
 // a bare-token sweep for a tool that labels neither. Collapsing the first two
 // into one alternation would let a later summary line outrank the database
 // line.
+//
+// The summary box is a '|' delimited row, so a labelled path may be followed
+// by a closing '|'. A rule that requires the path to end the line misses that
+// row, and the bare sweep that then wins stops at the first space.
 constexpr RuleRow kRocprofSysTrace[] = {
-    {kKeyTraceDb, R"(Database:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
-    {kKeyTraceDb, R"(File:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
-    {kKeyTraceDb, R"(([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(Database:\s*'?(\S.*?\.[dD][bB])'?(?:\s*\|)?\s*$)", 1,
+     ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(File:\s*'?(\S.*?\.[dD][bB])'?(?:\s*\|)?\s*$)", 1,
+     ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(([^\s'"]+\.[dD][bB])\b)", 1, ScrapePolicy::kLastMatch},
+};
+
+// rocprofv3. rocpd output (the default format) is written per process and
+// named with "Opened result file:" as each database is created. The path is
+// followed by a "(UUID=...)" suffix on the same line.
+constexpr RuleRow kRocprofV3[] = {
+    {kKeyTraceDb, R"(Opened result file:\s*(\S.*?\.[dD][bB])(?:\s+\(UUID=[^)]*\))?\s*$)", 1,
+     ScrapePolicy::kLastMatch},
 };
 
 struct RuleSet
@@ -96,8 +110,10 @@ constexpr RuleSet kRuleSets[] = {
     // is the one that knows not to expect it.
     {kRPVProfilerToolRocprofSysInstrument, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
      kRocprofSysTrace, std::size(kRocprofSysTrace)},
-    // rocprof-sys-avail is a probe and rocprofv3 is not wired up. Both run for
-    // their exit code and are absent on purpose.
+    {kRPVProfilerToolRocprofV3, kRPVProfilerOperationDefault, 0, 0, 0, kKeyTraceDb,
+     kRocprofV3, std::size(kRocprofV3)},
+    // rocprof-sys-avail is a probe. It runs for its exit code and is absent on
+    // purpose.
 };
 
 bool version_at_least(RuleSet const& set, uint32_t major, uint32_t minor, uint32_t patch)

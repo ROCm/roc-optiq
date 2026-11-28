@@ -13,17 +13,19 @@ namespace View
 
 struct RocprofComputeSettings
 {
-    enum PcSamplingMethod
+    enum PcSamplingMethod : uint32_t
     {
         kPcSamplingDisabled,
         kPcSamplingStochastic,
         kPcSamplingHostTrap,
+        kPcSamplingLast
     };
-    enum Roofline
+    enum Roofline : uint32_t
     {
         kRooflineEnabledInclusive,
         kRooflineEnabledExclusive,
         kRooflineDisabled,
+        kRooflineLast,
     };
 
     // Profile
@@ -62,11 +64,10 @@ public:
 
     TargetSpec const& GetTarget(rocprofvis_profiler_operation_t operation) const override;
     ExtraArguments&   GetExtraArguments(rocprofvis_profiler_operation_t operation) override;
-    std::vector<std::string>& GetRecentTargets(
-        rocprofvis_profiler_tool_t      tool,
-        rocprofvis_profiler_operation_t operation) override;
+    std::vector<std::string>& GetProfilerRecentTargets(LaunchConfig const& config) override;
     bool RenderTargetSection(LaunchConfig const&   config,
                              TargetBrowseFn const& on_browse) override;
+    float MinWidth() const override;
 
     void FlattenToExecution(LaunchConfig const&                               config,
                             std::vector<std::pair<std::string, std::string>>& env_out,

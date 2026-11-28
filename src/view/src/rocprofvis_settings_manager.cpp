@@ -8,6 +8,7 @@
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "remote/rocprofvis_secret_store.h"
 #endif
+#include "profiler/rocprofvis_launch_config.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
@@ -345,13 +346,12 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
-// Joins the parts of a recent-targets key; profiler ids contain no ':'.
-inline constexpr const char* RECENT_TARGETS_KEY_SEPARATOR = ":";
-inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
-inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
-inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
-inline constexpr float       COMPACT_SCROLLBAR_SIZE      = 10.0f;
-inline constexpr float       COMPACT_SCROLLBAR_ROUNDING  = 5.0f;
+inline constexpr const char* PROFILER_RECENT_TARGETS_LOCAL_ID = "local";
+inline constexpr float       COMPACT_EVENT_HEIGHT             = 6.0f;
+inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN      = 6.0f;
+inline constexpr float       EVENT_LEVEL_SPACING              = 1.0f;
+inline constexpr float       COMPACT_SCROLLBAR_SIZE           = 10.0f;
+inline constexpr float       COMPACT_SCROLLBAR_ROUNDING       = 5.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -1108,21 +1108,22 @@ SettingsManager::GetProfilerSettings()
 }
 
 std::vector<std::string>&
-SettingsManager::GetRecentTargets(std::string const&                             profiler_id,
-                                  std::optional<rocprofvis_profiler_tool_t>      tool,
-                                  std::optional<rocprofvis_profiler_operation_t> operation)
+SettingsManager::GetProfilerRecentTargets(ConnectionType             connection_type,
+                                          std::string const&         ssh_connection_id,
+                                          std::string const&         profiler_id,
+                                          rocprofvis_profiler_tool_t tool,
+                                          rocprofvis_profiler_operation_t operation)
 {
-    std::string key = profiler_id;
-    if(tool.has_value())
-    {
-        key += RECENT_TARGETS_KEY_SEPARATOR + std::to_string(static_cast<int>(tool.value()));
-    }
-    if(operation.has_value())
-    {
-        key += RECENT_TARGETS_KEY_SEPARATOR +
-               std::to_string(static_cast<int>(operation.value()));
-    }
-    return m_profilersettings.recent_targets[key];
+    return m_profilersettings
+        .recent_targets[connection_type == ConnectionType::kLocal
+                            ? std::string(PROFILER_RECENT_TARGETS_LOCAL_ID)
+                            : ssh_connection_id][profiler_id][tool][operation];
+}
+
+void
+SettingsManager::RemoveProfilerRecentTargets(std::string const& connection_id)
+{
+    m_profilersettings.recent_targets.erase(connection_id);
 }
 
 void
@@ -1136,19 +1137,38 @@ SettingsManager::SerializeProfilerSettings(jt::Json& json)
     {
         presets[entry.first] = entry.second;
     }
-    ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
+    ps["last_profiler_id"]       = m_profilersettings.last_profiler_id;
     ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
 
-    jt::Json& recent = ps["recent_targets"];
+    jt::Json& recent = ps[JSON_KEY_SETTINGS_PROFILER_RECENT_TARGETS];
     recent.setObject();
-    for(std::pair<std::string const, std::vector<std::string>> const& entry :
+    for(std::pair<std::string const, ProfilerTargetsByProfiler> const& connection :
         m_profilersettings.recent_targets)
     {
-        jt::Json& list = recent[entry.first];
-        list.setArray();
-        for(std::string const& target : entry.second)
+        for(std::pair<std::string const, ProfilerTargetsByTool> const& profiler :
+            connection.second)
         {
-            list.getArray().push_back(target);
+            for(std::pair<rocprofvis_profiler_tool_t const,
+                          ProfilerTargetsByOperation> const& tool : profiler.second)
+            {
+                for(std::pair<rocprofvis_profiler_operation_t const,
+                              std::vector<std::string>> const& operation : tool.second)
+                {
+                    if(!operation.second.empty())
+                    {
+                        jt::Json& list =
+                            recent[connection.first][profiler.first]
+                                  [std::to_string(static_cast<uint32_t>(tool.first))]
+                                  [std::to_string(
+                                      static_cast<uint32_t>(operation.first))];
+                        list.setArray();
+                        for(std::string const& target : operation.second)
+                        {
+                            list.getArray().push_back(target);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1176,13 +1196,53 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     {
         m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
     }
-    if(ps["recent_targets"].isObject())
+    if(ps[JSON_KEY_SETTINGS_PROFILER_RECENT_TARGETS].isObject())
     {
         m_profilersettings.recent_targets.clear();
-        for(std::pair<std::string const, jt::Json>& entry : ps["recent_targets"].getObject())
+        for(std::pair<std::string const, jt::Json>& connection :
+            ps[JSON_KEY_SETTINGS_PROFILER_RECENT_TARGETS].getObject())
         {
-            m_profilersettings.recent_targets[entry.first] =
-                JsonUtils::GetStringArray(ps["recent_targets"], entry.first);
+            if(connection.second.isObject())
+            {
+                for(std::pair<std::string const, jt::Json>& profiler :
+                    connection.second.getObject())
+                {
+                    if(profiler.second.isObject())
+                    {
+                        DeserializeProfilerRecentTargets(connection.first, profiler.first,
+                                                         profiler.second);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void
+SettingsManager::DeserializeProfilerRecentTargets(std::string const& connection_id,
+                                                  std::string const& profiler_id,
+                                                  jt::Json&          json)
+{
+    // Only keys naming a known tool and operation are read.
+    for(uint32_t tool = kRPVProfilerToolNone; tool < __kRPVProfilerToolLast; ++tool)
+    {
+        std::string const tool_key = std::to_string(tool);
+        if(json.contains(tool_key) && json[tool_key].isObject())
+        {
+            for(uint32_t operation = kRPVProfilerOperationDefault;
+                operation < __kRPVProfilerOperationLast; ++operation)
+            {
+                std::vector<std::string> targets =
+                    JsonUtils::GetStringArray(json[tool_key], std::to_string(operation));
+                if(!targets.empty())
+                {
+                    m_profilersettings
+                        .recent_targets[connection_id][profiler_id]
+                                       [static_cast<rocprofvis_profiler_tool_t>(tool)]
+                                       [static_cast<rocprofvis_profiler_operation_t>(
+                                           operation)] = std::move(targets);
+                }
+            }
         }
     }
 }

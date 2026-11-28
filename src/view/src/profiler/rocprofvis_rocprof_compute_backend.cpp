@@ -6,34 +6,11 @@
 #include "rocprofvis_json_utils.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_settings_manager.h"
-#include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
 namespace View
 {
-
-namespace
-{
-// An enum stored as its integer value. Anything outside [0, last] - a corrupted
-// profile, or one written by a newer build - falls back to the default rather
-// than being cast into a value the launch would act on.
-int
-EnumFromInt(int value, int last, int fallback, char const* key)
-{
-    int result = fallback;
-    if(value >= 0 && value <= last)
-    {
-        result = value;
-    }
-    else
-    {
-        spdlog::warn("Ignoring unknown {} value {} in a saved launch profile", key,
-                     value);
-    }
-    return result;
-}
-}  // namespace
 
 // ==================================================================================
 // RocprofComputeSettings JSON
@@ -46,13 +23,11 @@ RocprofComputeSettings::FromJson(jt::Json const& json)
     jt::Json&              j = const_cast<jt::Json&>(json);
 
     // Profile
-    s.profile_overwrite = JsonUtils::GetBool(j, "profile_overwrite", false);
-    s.profile_roofline  = static_cast<Roofline>(
-        EnumFromInt(JsonUtils::GetInt(j, "profile_roofline", kRooflineEnabledInclusive),
-                    kRooflineDisabled, kRooflineEnabledInclusive, "profile_roofline"));
-    s.profile_pc_sampling = static_cast<PcSamplingMethod>(
-        EnumFromInt(JsonUtils::GetInt(j, "profile_pc_sampling", kPcSamplingDisabled),
-                    kPcSamplingHostTrap, kPcSamplingDisabled, "profile_pc_sampling"));
+    s.profile_overwrite   = JsonUtils::GetBool(j, "profile_overwrite", false);
+    s.profile_roofline    = static_cast<Roofline>(JsonUtils::GetEnum(
+        j, "profile_roofline", kRooflineEnabledInclusive, kRooflineLast));
+    s.profile_pc_sampling = static_cast<PcSamplingMethod>(JsonUtils::GetEnum(
+        j, "profile_pc_sampling", kPcSamplingDisabled, kPcSamplingLast));
     if(j.contains("profile_target"))
     {
         s.profile_target = TargetSpec::FromJson(j["profile_target"]);
@@ -193,13 +168,23 @@ RocprofComputeBackend::GetExtraArguments(rocprofvis_profiler_operation_t operati
                                                      : m_settings.profile_extra_arguments;
 }
 
+float
+RocprofComputeBackend::MinWidth() const
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    return 2.0f * (style.FramePadding.x + ImGui::GetTextLineHeight()) +
+           5.0f * style.ItemSpacing.x + style.IndentSpacing + ToggleSwitchWidth() +
+           ImGui::CalcTextSize("OverwritePC samplingStochastic").x +
+           ImGui::GetFrameHeight();
+}
+
 bool
 RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
                                            TargetBrowseFn const& on_browse)
 {
     const bool                is_remote      = (config.connection == ConnectionType::kSsh);
     const bool                produces_trace = ProducesTrace(config);
-    std::vector<std::string>& recents        = GetRecentTargets(config.tool, config.operation);
+    std::vector<std::string>& recents        = GetProfilerRecentTargets(config);
 
     bool modified = false;
     if(config.operation == kRPVProfilerOperationAnalyze)
@@ -216,8 +201,7 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         workload.recents         = &recents;
         workload.recents_tooltip = "Recent workloads";
 
-        modified |= RenderTargetPathRow(workload, m_settings.analyze_target.path,
-                                        config.connection, on_browse,
+        modified |= RenderTargetPathRow(workload, m_settings.analyze_target.path, on_browse,
                                         TargetLabelColumnWidth("Workload"));
         modified |= RenderTargetAutoLoadRow(
             m_settings.analyze_target.auto_load_trace, produces_trace,
@@ -244,13 +228,13 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
         output.browse_title = "Choose Output Directory";
         output.kind         = Directory;
 
-        modified |= RenderTargetPathRow(program, m_settings.profile_target.path,
-                                        config.connection, on_browse, label_w);
+        modified |=
+            RenderTargetPathRow(program, m_settings.profile_target.path, on_browse, label_w);
         modified |=
             RenderTargetArgumentsRow(m_settings.profile_target.arguments, label_w);
         modified |=
-            RenderTargetPathRow(output, m_settings.profile_target.output_directory,
-                                config.connection, on_browse, label_w);
+            RenderTargetPathRow(output, m_settings.profile_target.output_directory, on_browse,
+                                label_w);
         modified |= RenderTargetAutoLoadRow(
             m_settings.profile_target.auto_load_trace, produces_trace,
             "Profile writes a workload folder. Run Analyze with \"ROCpd database\" "
@@ -261,10 +245,11 @@ RocprofComputeBackend::RenderTargetSection(LaunchConfig const&   config,
 
 // Profile (programs) and Analyze (workload folders) keep separate lists.
 std::vector<std::string>&
-RocprofComputeBackend::GetRecentTargets(rocprofvis_profiler_tool_t      tool,
-                                        rocprofvis_profiler_operation_t operation)
+RocprofComputeBackend::GetProfilerRecentTargets(LaunchConfig const& config)
 {
-    return SettingsManager::Get().GetRecentTargets(Id(), tool, operation);
+    return SettingsManager::Get().GetProfilerRecentTargets(
+        config.connection, config.ssh_connection_ref, Id(), kRPVProfilerToolNone,
+        config.operation);
 }
 
 void

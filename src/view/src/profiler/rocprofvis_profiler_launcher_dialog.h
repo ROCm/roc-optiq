@@ -113,9 +113,6 @@ private:
         return false;
 #endif
     }
-    // Id of the run destination's launch environment: LOCAL_LAUNCH_ENVIRONMENT_ID,
-    // or the selected SSH connection's id (empty when none is selected).
-    std::string ActiveLaunchEnvironmentId() const;
     // Loads the active run destination's tools folder and Python environment
     // into m_config. Call whenever the destination changes; closes the
     // Environment window so unsaved edits cannot land on another destination.
@@ -175,6 +172,9 @@ private:
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
+    // Reloads the connection store and selects the first connection when the
+    // selected one has been deleted (from any dialog's store).
+    void ValidateSelectedConnection();
     // True when the bound connection has the host and user needed to connect.
     bool HasRemoteConnection() const;
     // Lazily constructs m_remote_file_browser (bound to the shared RemoteUri).

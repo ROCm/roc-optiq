@@ -36,18 +36,6 @@ constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 // Minimum height for the run-output console child.
 constexpr float kMinOutputConsoleHeight = 60.0f;
 
-// Wrapped tooltip shared by every launcher "(?)", attached to the last item.
-void LaunchHelpTooltip(const char* text)
-{
-    if (ImGui::BeginItemTooltip())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-        ImGui::TextUnformatted(text);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-}
-
 // Linear blend between two packed colors (t in [0,1]).
 ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 {
@@ -130,18 +118,12 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
 void
 HelpTip(const char* tooltip)
 {
-    ImGui::SameLine();
-    ImGui::PushFont(
-        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon));
-    ImGui::TextDisabled(ICON_QUESTION_MARK);
-    ImGui::PopFont();
-    LaunchHelpTooltip(tooltip);
+    HelpMarker([tooltip]() { ImGui::TextUnformatted(tooltip); });
 }
 
 void
-HelpMarker(char const* env_var, char const* desc)
+HelpMarker(const std::function<void()>& render_tooltip)
 {
-    // Frame-align so the "(?)" sits level with the field/toggle/label it follows.
     ImGui::SameLine();
     ImGui::PushFont(
         SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon));
@@ -150,12 +132,20 @@ HelpMarker(char const* env_var, char const* desc)
     if(ImGui::BeginItemTooltip())
     {
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-        ImGui::TextUnformatted(env_var);
-        ImGui::Separator();
-        ImGui::TextUnformatted(desc);
+        render_tooltip();
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+}
+
+void
+HelpMarker(char const* env_var, char const* desc)
+{
+    HelpMarker([env_var, desc]() {
+        ImGui::TextUnformatted(env_var);
+        ImGui::Separator();
+        ImGui::TextUnformatted(desc);
+    });
 }
 
 PillAction
@@ -301,16 +291,13 @@ TargetLabelColumnWidth(const char* widest_label)
 
 bool
 RenderTargetPathRow(TargetPathRow const& row, std::string& path,
-                    ConnectionType connection, TargetBrowseFn const& on_browse,
-                    float label_w)
+                    TargetBrowseFn const& on_browse, float label_w)
 {
     bool modified = false;
 
-    // Recents are local paths, so they are not offered for a remote host.
-    const bool is_remote        = (connection == ConnectionType::kSsh);
-    const bool has_recent = !is_remote && row.recents != nullptr && !row.recents->empty();
-    const float browse_w  = LaunchActionButtonWidth("Browse");
-    const float spacing   = ImGui::GetStyle().ItemSpacing.x;
+    const bool  has_recent = row.recents != nullptr && !row.recents->empty();
+    const float browse_w   = LaunchActionButtonWidth("Browse");
+    const float spacing    = ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::PushID(row.id);
 
@@ -318,8 +305,9 @@ RenderTargetPathRow(TargetPathRow const& row, std::string& path,
     ImGui::TextUnformatted(row.label);
     ImGui::SameLine(label_w);
 
-    ImGui::SetNextItemWidth(-(browse_w + spacing +
-                              (has_recent ? (ImGui::GetFrameHeight() + spacing) : 0.0f)));
+    ImGui::BeginGroup();
+    ImGui::SetNextItemWidth(
+        -(browse_w + spacing + (has_recent ? (ImGui::GetFrameHeight()) : 0.0f)));
     if(InputTextStringWithHint("##Path", row.hint, path))
     {
         modified = true;
@@ -329,7 +317,7 @@ RenderTargetPathRow(TargetPathRow const& row, std::string& path,
     // lines up with the other rows' Browse buttons.
     if (has_recent)
     {
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, 0.0f);
         if(ImGui::ArrowButton("##Recent", ImGuiDir_Down))
         {
             ImGui::OpenPopup("RecentPopup");
@@ -338,27 +326,35 @@ RenderTargetPathRow(TargetPathRow const& row, std::string& path,
         {
             ImGui::SetTooltip("%s", row.recents_tooltip);
         }
-        if(ImGui::BeginPopup("RecentPopup"))
+    }
+    ImGui::EndGroup();
+
+    if(ImGui::IsPopupOpen("RecentPopup"))
+    {
+        ImGui::SetNextWindowPos(
+            ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
+        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 0.0f));
+    }
+    if(ImGui::BeginPopup("RecentPopup"))
+    {
+        for(std::string const& recent : *row.recents)
         {
-            for(std::string const& recent : *row.recents)
+            std::string short_name = recent;
+            if(short_name.size() > 48)
             {
-                std::string short_name = recent;
-                if (short_name.size() > 48)
-                {
-                    short_name = "..." + short_name.substr(short_name.size() - 45);
-                }
-                if (ImGui::Selectable(short_name.c_str(), false))
-                {
-                    path     = recent;
-                    modified          = true;
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s", recent.c_str());
-                }
+                short_name = "..." + short_name.substr(short_name.size() - 45);
             }
-            ImGui::EndPopup();
+            if(ImGui::Selectable(short_name.c_str(), false))
+            {
+                path     = recent;
+                modified = true;
+            }
+            if(ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", recent.c_str());
+            }
         }
+        ImGui::EndPopup();
     }
 
     ImGui::SameLine();
@@ -432,7 +428,7 @@ RenderPythonEnvironmentSection(std::string& python_environment, ConnectionType c
     row.browse_title = "Choose Python Virtual Environment";
     row.kind         = Directory;
 
-    return RenderTargetPathRow(row, python_environment, connection, on_browse,
+    return RenderTargetPathRow(row, python_environment, on_browse,
                                ToolLocationLabelColumnWidth());
 }
 
@@ -741,6 +737,9 @@ RenderSavedProfileBar(LaunchPresetManager& preset_mgr, std::string const& profil
                               : "Update the selected config");
     }
 
+    ImVec2 save_preset_pos =
+        ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y);
+
     // Overflow menu keeps the less-common actions out of the toolbar.
     ImGui::SameLine();
     if (ImGui::Button("More...##Preset"))
@@ -750,7 +749,12 @@ RenderSavedProfileBar(LaunchPresetManager& preset_mgr, std::string const& profil
 
     bool open_save_as = false;
     bool do_reset     = false;
-    if (ImGui::BeginPopup("ProfileMenu"))
+    if(ImGui::IsPopupOpen("ProfileMenu"))
+    {
+        ImGui::SetNextWindowPos(
+            ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
+    }
+    if(ImGui::BeginPopup("ProfileMenu"))
     {
         if (ImGui::MenuItem("Save As New Config..."))
         {
@@ -783,12 +787,16 @@ RenderSavedProfileBar(LaunchPresetManager& preset_mgr, std::string const& profil
         config_reset = true;
     }
 
-    // Save-As popup
+        // Save-As popup
     SettingsManager& settings = SettingsManager::Get();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                         settings.GetDefaultStyle().WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         settings.GetDefaultStyle().ItemSpacing);
+    if (ImGui::IsPopupOpen("SavePresetPopup"))
+    {
+        ImGui::SetNextWindowPos(save_preset_pos);
+    }
     if (ImGui::BeginPopup("SavePresetPopup"))
     {
         ImGui::TextUnformatted("Save configuration");

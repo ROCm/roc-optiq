@@ -82,6 +82,24 @@ std::string GetString(const jt::Json& j, const std::string& key, const std::stri
     return def;
 }
 
+uint32_t GetEnum(const jt::Json& j, const std::string& key, uint32_t def, uint32_t last)
+{
+    jt::Json& mj = const_cast<jt::Json&>(j);
+    if(!mj.contains(key))
+    {
+        return def;
+    }
+    jt::Json& v = mj[key];
+    if(v.getType() == jt::Json::Long && v.getLong() >= 0 && v.getLong() < last)
+    {
+        return static_cast<uint32_t>(v.getLong());
+    }
+    else
+    {
+        return def;
+    }
+}
+
 jt::Json BoolMapToJson(const std::map<std::string, bool>& m)
 {
     jt::Json obj;

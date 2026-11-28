@@ -4,6 +4,7 @@
 #include "rocprofvis_ssh_connection_store.h"
 #include "rocprofvis_profiles_document.h"
 #include "rocprofvis_secret_store.h"
+#include "rocprofvis_settings_manager.h"
 
 namespace RocProfVis
 {
@@ -183,6 +184,8 @@ void SshConnectionStore::Remove(const std::string& id)
             erase_secrets(id);
             ProfilesDocument::Get().RemoveLaunchEnvironment(id);
             Persist();
+            SettingsManager::Get().RemoveProfilerRecentTargets(id);
+            SettingsManager::Get().SaveProfilerSettings();
             return;
         }
     }

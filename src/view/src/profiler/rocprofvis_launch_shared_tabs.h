@@ -60,6 +60,10 @@ float ToggleSwitchWidth();
 
 void HelpTip(const char* tooltip);
 
+// A dimmed "(?)" marker whose tooltip body is drawn by `render_tooltip`,
+// wrapped at the shared launcher tooltip width.
+void HelpMarker(const std::function<void()>& render_tooltip);
+
 void HelpMarker(char const* env_var, char const* desc);
 
 // Result of interacting with an EditablePill.
@@ -115,11 +119,11 @@ struct TargetPathRow
 
 /**
  * Renders a labelled path input with a Browse button and an optional recents
- * dropdown (local mode only). Browse calls `on_browse`, and is disabled when
- * that is empty. Returns true if the path was edited or picked from the recents
- * this frame; a Browse pick lands later and is reported by the handler.
+ * dropdown. Browse calls `on_browse`, and is disabled when that is empty.
+ * Returns true if the path was edited or picked from the recents this frame; a
+ * Browse pick lands later and is reported by the handler.
  */
-bool RenderTargetPathRow(TargetPathRow const& row, std::string& path, ConnectionType connection,
+bool RenderTargetPathRow(TargetPathRow const& row, std::string& path,
                          TargetBrowseFn const& on_browse, float label_w);
 
 /**

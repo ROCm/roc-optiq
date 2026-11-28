@@ -59,10 +59,10 @@ struct ExtraArguments
     static ExtraArguments FromJson(jt::Json const& json);
 
     /*
-     * Appends each entry as one argument, verbatim: nothing is split on
-     * whitespace or unquoted. This is the override hatch: a backend calls it last
-     * among the profiler's own flags, still ahead of TargetSpec::Argv, since
-     * tokens past the "--" separator belong to the target.
+     * Appends each entry word-split with SplitArguments, so one entry can hold
+     * several flags and values. Quoted text stays one argument. A backend calls
+     * this last among the profiler's own flags, still ahead of TargetSpec::Argv,
+     * since tokens past the "--" separator belong to the target.
      */
     void Argv(std::vector<std::string>& argv_out) const;
 };

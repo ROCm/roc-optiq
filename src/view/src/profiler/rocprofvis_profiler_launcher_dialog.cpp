@@ -9,6 +9,7 @@
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_rocprof_compute_backend.h"
 #include "rocprofvis_rocprof_sys_backend.h"
+#include "rocprofvis_rocprofv3_backend.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_auth_modal.h"
@@ -97,6 +98,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
 {
     m_backends.push_back(std::make_unique<RocprofSysBackend>());
     m_backends.push_back(std::make_unique<RocprofComputeBackend>());
+    m_backends.push_back(std::make_unique<RocprofV3Backend>());
 
     SyncToolWithBackend();
     for(std::unique_ptr<IProfilerBackend>& backend : m_backends)
@@ -182,6 +184,10 @@ void ProfilerLauncherDialog::Render()
         return;
     }
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    ValidateSelectedConnection();
+#endif
+
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSizeConstraints(ImVec2(24.0f, 10.0f) * ImGui::GetFrameHeight(),
@@ -233,12 +239,13 @@ void ProfilerLauncherDialog::Render()
         m_container->GetMutableAt(CONTAINER_MESSAGE_ITEM_IDX)->m_visible = message_height;
         m_container->GetMutableAt(CONTAINER_STATUSBAR_ITEM_IDX)->m_height =
             (ImGui::GetContentRegionAvail().y - body_height) / 2.0f;
+        float backend_min_width = 0.0f;
+        for(std::unique_ptr<IProfilerBackend>& backend : m_backends)
+        {
+            backend_min_width = std::max(backend_min_width, backend->MinWidth());
+        }
         m_configure_container->SetMinLeftWidth(
-            2.0f * (style.FramePadding.x + ImGui::GetTextLineHeight()) +
-            4.0f * (style.WindowPadding.x + style.ItemSpacing.x) + style.ItemSpacing.x +
-            style.IndentSpacing + ToggleSwitchWidth() +
-            ImGui::CalcTextSize("OverwritePC samplingStochastic").x +
-            ImGui::GetFrameHeight());
+            4.0f * style.WindowPadding.x + backend_min_width);
         m_configure_container->SetMinRightWidth(
             2.0f * style.ItemSpacing.x + 2.0f * style.FramePadding.x +
             ImGui::CalcTextSize("Command PreviewCopy").x + 4.0f * style.WindowPadding.x);
@@ -593,12 +600,6 @@ void ProfilerLauncherDialog::RenderToolbar()
                     SwitchBackend(static_cast<int>(i));
                 }
             }
-            // Placeholders for the profilers this launcher is designed to grow into.
-            // Disabled until their backends land; listed so the intended scope
-            // (rocprof-sys, rocprof-compute, rocprofv3) is visible.
-            ImGui::BeginDisabled();
-            ImGui::Selectable("rocprofv3 (coming soon)", false);
-            ImGui::EndDisabled();
             ImGui::EndCombo();
         }
         ImGui::PopItemWidth();
@@ -892,11 +893,13 @@ ProfilerLauncherDialog::RenderToolLocationsWindow()
                 m_config.tool_directory     = m_environment_edit.tool_directory;
                 m_config.python_environment = m_environment_edit.python_environment;
                 m_execution_cache_dirty     = true;
-                const std::string id        = ActiveLaunchEnvironmentId();
-                if(!id.empty())
-                {
-                    ProfilesDocument::Get().SetLaunchEnvironment(id, m_environment_edit);
-                }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+                ProfilesDocument::Get().SetLaunchEnvironment(
+                    m_config.connection, m_selected_connection_id, m_environment_edit);
+#else
+                ProfilesDocument::Get().SetLaunchEnvironment(ConnectionType::kLocal,
+                                                             std::string(), m_environment_edit);
+#endif
                 open = false;
             }
         }
@@ -1000,7 +1003,7 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
 
     // ===== Command line arguments (lead - they read as a one-liner) =====
     LaunchSubHeader("COMMAND LINE ARGUMENTS",
-                    "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
+                    "Split on spaces when launched. Quote a value that contains spaces.");
 
     bool        add_arg = false;
     const float add_w   = LaunchActionButtonWidth("Add");
@@ -1218,6 +1221,8 @@ void ProfilerLauncherDialog::RenderRemoteSection()
         if (ImGui::Button((host_chip + "##profiler_connection").c_str(),
                          ImVec2(-FLT_MIN, 0.0f)))
         {
+            // Pick up connections added or deleted from other dialogs' stores.
+            m_connection_store.Load();
             m_ssh_settings_dialog = std::make_unique<SshSettingsDialog>(
                 m_connection_store, m_selected_connection_id,
                 [this](const std::string& id)
@@ -1537,8 +1542,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
         m_run_end_time         = 0.0;
 
         SaveToSettings();
-        AddRecentPath(backend->GetRecentTargets(m_config.tool, m_config.operation),
-                      target.path);
+        AddRecentPath(backend->GetProfilerRecentTargets(m_config), target.path);
     }
     // On failure the run's outcome carries the reason, shown by LastRunError().
 }
@@ -1959,28 +1963,16 @@ void ProfilerLauncherDialog::LoadFromSettings()
     }
 }
 
-std::string
-ProfilerLauncherDialog::ActiveLaunchEnvironmentId() const
-{
-    std::string id = LOCAL_LAUNCH_ENVIRONMENT_ID;
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(IsSshMode())
-    {
-        id = m_selected_connection_id;
-    }
-#endif
-    return id;
-}
-
 void
 ProfilerLauncherDialog::ApplyLaunchEnvironment()
 {
-    LaunchEnvironment environment;
-    const std::string id = ActiveLaunchEnvironmentId();
-    if(!id.empty())
-    {
-        environment = ProfilesDocument::Get().GetLaunchEnvironment(id);
-    }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    const LaunchEnvironment environment = ProfilesDocument::Get().GetLaunchEnvironment(
+        m_config.connection, m_selected_connection_id);
+#else
+    const LaunchEnvironment environment =
+        ProfilesDocument::Get().GetLaunchEnvironment(ConnectionType::kLocal, std::string());
+#endif
     m_config.tool_directory      = environment.tool_directory;
     m_config.python_environment  = environment.python_environment;
     m_execution_cache_dirty      = true;
@@ -2009,6 +2001,21 @@ void ProfilerLauncherDialog::ApplySelectedConnection()
     else
     {
         m_remote_uri->SetConnection(SshConnectionConfig());
+    }
+}
+
+void ProfilerLauncherDialog::ValidateSelectedConnection()
+{
+    // The open settings dialog holds a reference to the store, so wait for it to close.
+    if(!m_ssh_settings_dialog && !m_selected_connection_id.empty() &&
+       !ProfilesDocument::Get().SshConnections().contains(m_selected_connection_id))
+    {
+        m_connection_store.Load();
+        m_selected_connection_id = m_connection_store.Empty()
+                                       ? std::string()
+                                       : m_connection_store.List().front().id;
+        ApplySelectedConnection();
+        ApplyLaunchEnvironment();
     }
 }
 

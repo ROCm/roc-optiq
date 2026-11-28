@@ -24,6 +24,7 @@ bool        GetBool(const jt::Json& j, const std::string& key, bool def);
 int32_t     GetInt(const jt::Json& j, const std::string& key, int32_t def);
 double      GetDouble(const jt::Json& j, const std::string& key, double def);
 std::string GetString(const jt::Json& j, const std::string& key, const std::string& def);
+uint32_t    GetEnum(const jt::Json& j, const std::string& key, uint32_t def, uint32_t last);
 
 // map<string,bool> <-> JSON object helpers (used by checkbox-group settings).
 jt::Json                    BoolMapToJson(const std::map<std::string, bool>& m);

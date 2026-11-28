@@ -18,10 +18,13 @@
 *       kComputeSqlite = 4
 * 
 * @param filename path of the database file
+* @param use_profiler_hub true to let profile hub probe the file
 * @return database type enumeration
 * 
 ***************************************************************************************************/
-rocprofvis_db_type_t rocprofvis_db_identify_type(rocprofvis_db_filename_t filename);
+rocprofvis_db_type_t rocprofvis_db_identify_type(
+                                    rocprofvis_db_filename_t filename, 
+                                    bool use_profiler_hub);
 /****************************************************************************************************
  * @brief Opens database of provided path and type
  *      kAutodetect = 0, 
@@ -32,7 +35,7 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(rocprofvis_db_filename_t filena
  * 
  * @param filename path of the database file
  * @param type  type enumeration, kAutodetect for automatic detection 
- * @param use_profiler_hub true to let automatic detection select the profiler hub
+ * @param use_profiler_hub true to let profile hub probe the database files
  * @return handler to database object
  * 
  ***************************************************************************************************/

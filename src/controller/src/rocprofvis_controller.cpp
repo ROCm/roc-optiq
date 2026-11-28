@@ -188,7 +188,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
         try
         {
             RocProfVis::Controller::Trace* trace = nullptr;
-            const rocprofvis_db_type_t db_type = rocprofvis_db_identify_type(filename);
+            const rocprofvis_db_type_t db_type = rocprofvis_db_identify_type(filename, use_profiler_hub);
             spdlog::info("rocprofvis_controller_alloc '{}' identify_type={}", filename,
                          static_cast<int>(db_type));
             switch(db_type)
@@ -261,7 +261,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* 
                 // Compare combines the inputs through the multinode rocprof engine, so
                 // every file must be a rocprof trace (reject legacy rocpd / compute / etc).
                 if(filenames[i] == nullptr ||
-                   rocprofvis_db_identify_type(filenames[i]) != kRocprofSqlite)
+                   rocprofvis_db_identify_type(filenames[i], use_profiler_hub) != kRocprofSqlite)
                 {
                     spdlog::error("Compare: unsupported or missing trace '{}'",
                                   filenames[i] ? filenames[i] : "(null)");

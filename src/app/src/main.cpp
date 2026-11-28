@@ -106,8 +106,10 @@ main(int argc, char** argv)
 
     rocprofvis_imgui_backend_preference_t    backend_pref = kRPVBackendAuto;
     rocprofvis_view_file_dialog_preference_t fd_pref      = kRocProfVisViewFileDialog_Auto;
+    bool use_profiler_hub = false;
     if(!RocProfVis::App::parse_backend_preference(cli_parser, backend_pref) ||
-       !RocProfVis::App::parse_file_dialog_preference(cli_parser, fd_pref))
+       !RocProfVis::App::parse_file_dialog_preference(cli_parser, fd_pref) ||
+       !RocProfVis::App::parse_profiler_hub_preference(cli_parser, use_profiler_hub))
     {
         return 1;
     }
@@ -210,6 +212,15 @@ main(int argc, char** argv)
 
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
                 configure_drag_repair(cli_parser);
+#endif
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+                // Apply only when the flag was passed. A later launch without it
+                // keeps the value saved in the settings file.
+                if(cli_parser.WasOptionFound("profiler-hub"))
+                {
+                    rocprofvis_view_set_enable_profiler_hub(use_profiler_hub);
+                }
 #endif
 
                 backend.m_config(&backend, window);

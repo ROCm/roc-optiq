@@ -718,7 +718,7 @@ SettingsManager::SettingsManager()
         TrackSettings{ TrackDecoratorMode::kTrackType, TRACK_DECORATOR_WIDTH_DEFAULT },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
-        AssistantSettings{}, false,
+        AssistantSettings{}, false, false,
         get_default_remote_cache_path() })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
@@ -907,6 +907,7 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
     os[JSON_KEY_SETTINGS_OTHER_DONT_ASK_BEFORE_TAB_CLOSE] =
         m_usersettings.dont_ask_before_tab_closing;
     os[JSON_KEY_SETTINGS_OTHER_LINUX_DRAG_REPAIR] = m_usersettings.linux_drag_repair;
+    os[JSON_KEY_SETTINGS_OTHER_ENABLE_PROFILER_HUB] = m_usersettings.enable_profiler_hub;
     os[JSON_KEY_SETTINGS_OTHER_REMOTE_CACHE_PATH] = m_usersettings.remote_cache_path;
     os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_MAX_ENTRIES] =
         m_usersettings.log_viewer_max_entries;
@@ -976,6 +977,11 @@ SettingsManager::DeserializeOtherSettings(jt::Json& json)
     {
         m_usersettings.log_viewer.visible =
             os[JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE].getBool();
+    }
+    if(os[JSON_KEY_SETTINGS_OTHER_ENABLE_PROFILER_HUB].isBool())
+    {
+        m_usersettings.enable_profiler_hub =
+            os[JSON_KEY_SETTINGS_OTHER_ENABLE_PROFILER_HUB].getBool();
     }
 }
 

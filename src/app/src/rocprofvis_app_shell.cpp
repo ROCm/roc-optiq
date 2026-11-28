@@ -112,6 +112,16 @@ add_common_cli_options(CLIParser& cli_parser)
         true);
     result &= cli_parser.AddOption("h", "help", "Show this help message and exit",
                                    false);
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    result &= cli_parser.AddOption(
+        "p", "profiler-hub",
+        "Open traces with the profiler hub: 'on'|'off'. Saved to the "
+        "application settings, so it only needs to be passed when changing "
+        "it (default: off)",
+        true);
+#endif
+
     return result;
 }
 
@@ -203,6 +213,33 @@ parse_file_dialog_preference(const CLIParser&                          cli_parse
             valid = false;
         }
     }
+    return valid;
+}
+
+bool
+parse_profiler_hub_preference(const CLIParser& cli_parser, bool& use_profiler_hub)
+{
+    bool valid = true;
+    use_profiler_hub = false;
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    if(cli_parser.WasOptionFound("profiler-hub"))
+    {
+        const std::string value = cli_parser.GetOptionValue("profiler-hub");
+        if(value == "on" || value == "1" || value == "true" || value == "yes")
+        {
+            use_profiler_hub = true;
+        }
+        else if(value == "off" || value == "0" || value == "false" || value == "no")
+        {
+            use_profiler_hub = false;
+        }
+        else
+        {
+            spdlog::error("Invalid --profiler-hub value '{}'. Valid options: on, off", value);
+            valid = false;
+        }
+    }
+#endif
     return valid;
 }
 

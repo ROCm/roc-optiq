@@ -126,6 +126,7 @@ typedef struct UserSettings
     // --drag-repair and ignored on other platforms. See
     // raise_dragged_viewport_after_release() in rocprofvis_platform_helpers.cpp.
     bool        linux_drag_repair;
+    bool        enable_profiler_hub;
     std::string remote_cache_path;
 } UserSettings;
 
@@ -364,7 +365,9 @@ constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_USE_REGEX =
     "log_viewer_use_regex";
 constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_RELATIVE_TIME =
     "log_viewer_relative_time";
-constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE = "log_viewer_visible";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_LOG_VIEWER_VISIBLE  = "log_viewer_visible";
+constexpr const char* JSON_KEY_SETTINGS_OTHER_ENABLE_PROFILER_HUB = "enable_profiler_hub";
+
 // All six severity levels enabled (bits 0..5).
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 

@@ -238,8 +238,11 @@ Project::OpenTrace(std::string& file_path)
         TraceType                  trace_type   = Undefined;
         std::shared_ptr<RocWidget> view         = nullptr;
         std::string config_path = get_application_config_path(true);
-        rocprofvis_controller_t*   controller =
-            rocprofvis_controller_alloc(file_path.c_str(), config_path.c_str(), false);
+
+        bool enable_profiler_hub =
+            SettingsManager::GetInstance().GetUserSettings().enable_profiler_hub;
+        rocprofvis_controller_t* controller = rocprofvis_controller_alloc(
+            file_path.c_str(), config_path.c_str(), enable_profiler_hub);
         if(controller)
         {
             rocprofvis_controller_object_type_t type =

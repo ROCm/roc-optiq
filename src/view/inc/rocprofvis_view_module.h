@@ -76,3 +76,6 @@ rocprofvis_view_set_drag_repair_enabled(bool enabled);
 
 bool
 rocprofvis_view_wants_continuous_render();
+
+void
+rocprofvis_view_set_enable_profiler_hub(bool enabled);

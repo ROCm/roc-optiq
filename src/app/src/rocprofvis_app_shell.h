@@ -57,6 +57,9 @@ bool
 parse_file_dialog_preference(const CLIParser&                          cli_parser,
                              rocprofvis_view_file_dialog_preference_t& file_dialog_pref);
 
+bool
+parse_profiler_hub_preference(const CLIParser& cli_parser, bool& use_profiler_hub);
+
 void
 glfw_error_callback(int error, const char* description);
 
